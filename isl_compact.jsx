@@ -74,7 +74,7 @@ function createAgent(player, isHome) {
         [PERS.BAL]:['Stay focused.','Read the game.','Solid performance needed.']
       };
       const t=thoughts[this.personality]||thoughts[PERS.BAL];
-      if(Math.random()<0.3) return t[Math.floor(Math.random()*t.length)];
+      if(Math.random()<0.3) return pick(t);
       if(state.scoreDiff<0&&min>70) return 'We NEED to score! Push forward!';
       if(state.scoreDiff>0&&min>80) return 'Hold on! Defend this lead!';
       return null;
@@ -93,18 +93,18 @@ function createAIManager(homeTeam, awayTeam) {
   const captA=activeA.reduce((b,a)=>a.player.mental>b.player.mental?a:b,activeA[0]);
   if(captH)captH.isCaptain=true;
   if(captA)captA.isCaptain=true;
-  const stadium=homeTeam.stadium||STADIUMS[Math.floor(Math.random()*STADIUMS.length)];
+  const stadium=homeTeam.stadium||pick(STADIUMS);
   const wxOpts=PLANET_WX[stadium.planet]||Object.values(WX);
-  const weather=wxOpts[Math.floor(Math.random()*wxOpts.length)];
+  const weather=pick(wxOpts);
   const tactics=['high_press','possession','counter_attack','park_the_bus','gegenpress','tiki_taka'];
-  const homeTactics=homeTeam.tactics?.toLowerCase().replace(' ','_')||tactics[Math.floor(Math.random()*tactics.length)];
-  const awayTactics=awayTeam.tactics?.toLowerCase().replace(' ','_')||tactics[Math.floor(Math.random()*tactics.length)];
-  const ref={name:REFS[Math.floor(Math.random()*REFS.length)],leniency:30+Math.random()*70,strictness:Math.random()*100};
+  const homeTactics=homeTeam.tactics?.toLowerCase().replace(' ','_')||pick(tactics);
+  const awayTactics=awayTeam.tactics?.toLowerCase().replace(' ','_')||pick(tactics);
+  const ref={name:pick(REFS),leniency:30+Math.random()*70,strictness:Math.random()*100};
   const homeM={name:homeTeam.manager?.name||'Manager Alpha',emotion:MGER_EMO.CALM,personality:homeTeam.manager?.personality||'Aggressive',team:homeTeam};
   const awayM={name:awayTeam.manager?.name||'Manager Beta',emotion:MGER_EMO.CALM,personality:awayTeam.manager?.personality||'Calculated',team:awayTeam};
   const temp=Math.round(-50+Math.random()*120);
   const times=['Morning','Afternoon','Evening','Night','Dawn','Dusk'];
-  const timeOfDay=times[Math.floor(Math.random()*times.length)];
+  const timeOfDay=pick(times);
 
   return {
     homeAgents:allH, awayAgents:allA,
@@ -154,7 +154,7 @@ function createAIManager(homeTeam, awayTeam) {
       if(Math.random()>0.1) return null;
       const mgr=isHome?homeM:awayM;
       const shouts=[`${mgr.name} urges more intensity!`,`${mgr.name} screaming instructions!`,`${mgr.name} demands a goal!`];
-      return {commentary:shouts[Math.floor(Math.random()*shouts.length)]};
+      return {commentary:pick(shouts)};
     }
   };
 }
@@ -210,6 +210,7 @@ const TEAMS = {
   }
 };
 
+const POS_ORDER={'GK':0,'DF':1,'MF':2,'FW':3};
 const rnd=(min,max)=>Math.random()*(max-min)+min;
 const rndI=(min,max)=>Math.floor(rnd(min,max+1));
 const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
@@ -244,7 +245,7 @@ const MatchSimulator = () => {
   const toastRef=useRef(null);
 
   useEffect(()=>{if(evtLogRef.current)evtLogRef.current.scrollTop=evtLogRef.current.scrollHeight;},[matchState.events]);
-  useEffect(()=>{return()=>clearInterval(intervalRef.current);},[]);
+  useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
 
   const getActive=(team,active)=>team.players.filter(p=>active.includes(p.name));
@@ -459,6 +460,8 @@ const MatchSimulator = () => {
         if(newMin>70){
           const hs=aim.managerTacticalShout(true,newMin,prev.score[0]-prev.score[1]);
           if(hs)interventions.push({minute:newMin,commentary:`📣 ${hs.commentary}`,team:prev.homeTeam.shortName,type:'manager_shout',momentumChange:[0,0]});
+          const as=aim.managerTacticalShout(false,newMin,prev.score[1]-prev.score[0]);
+          if(as)interventions.push({minute:newMin,commentary:`📣 ${as.commentary}`,team:prev.awayTeam.shortName,type:'manager_shout',momentumChange:[0,0]});
         }
         aim.updateManagerEmotion({},prev.score[0],prev.score[1]);
       }
@@ -521,14 +524,12 @@ const MatchSimulator = () => {
   const startSecondHalf=()=>{
     setHtReport(null);
     setMatchState(p=>({...p,minute:46,isPlaying:true,isPaused:false}));
-    intervalRef.current=setInterval(simulateMinute,speed);
   };
   const startMatch=()=>{
     if(matchState.isPlaying)return;
     let mgr=aiRef.current;
     if(!mgr){mgr=createAIManager(matchState.homeTeam,matchState.awayTeam);aiRef.current=mgr;setAiManager(mgr);}
     setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
-    intervalRef.current=setInterval(simulateMinute,speed);
     setShowBetting(false);
   };
   const pauseMatch=()=>{clearInterval(intervalRef.current);setMatchState(p=>({...p,isPlaying:false}));};
@@ -668,11 +669,10 @@ const MatchSimulator = () => {
     <div className="p-2 border-l-2 mb-2" style={{borderColor:isThought?C.red:C.purple,backgroundColor:C.abyss}}>
       <div className="flex items-center gap-2 mb-1">
         {isThought?<span className="text-lg">{item.emoji}</span>:<span className="text-xs font-bold" style={{color:C.purple}}>{item.user}</span>}
-        {!isThought&&<span className="text-xs font-bold" style={{color:C.purple}}>{item.user}</span>}
         <span className="text-xs" style={{opacity:0.5}}>{item.minute}'</span>
       </div>
       {isThought&&<span className="text-xs font-bold">{item.player}</span>}
-      <div className="text-xs italic mt-1" style={{opacity:0.85}}>"{isThought?item.text:item.text}"</div>
+      <div className="text-xs italic mt-1" style={{opacity:0.85}}>"{item.text}"</div>
       {!isThought&&<div className="text-xs mt-1" style={{opacity:0.5}}>♥️{item.likes} 🔁{item.retweets}</div>}
     </div>
   );
@@ -1101,7 +1101,7 @@ const MatchSimulator = () => {
                   return p?<PlayerRow key={i} player={p} stats={ms.playerStats} isActive={true} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName}/>:null;
                 })}
                 <div className="text-xs font-bold mt-2 mb-1" style={{opacity:0.7}}>BENCH</div>
-                {team.players.filter(p=>!ms.activePlayers[k].includes(p.name)).sort((a,b)=>({'GK':0,'DF':1,'MF':2,'FW':3}[a.position]-{'GK':0,'DF':1,'MF':2,'FW':3}[b.position])).map((p,i)=>(
+                {team.players.filter(p=>!ms.activePlayers[k].includes(p.name)).sort((a,b)=>POS_ORDER[a.position]-POS_ORDER[b.position]).map((p,i)=>(
                   <PlayerRow key={i} player={p} stats={ms.playerStats} isActive={false} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName}/>
                 ))}
               </div>
@@ -1147,9 +1147,9 @@ const MatchSimulator = () => {
                 <span style={{color:C.purple}}>{credits} coins</span>
               </div>
               <div className="grid grid-cols-3 gap-1.5 mb-2">
-                <BetBtn type="homeWin" odds={getOdds().homeWin} label={matchState.homeTeam.shortName+' WIN'} color={C.red}/>
-                <BetBtn type="draw" odds={getOdds().draw} label="DRAW"/>
-                <BetBtn type="awayWin" odds={getOdds().awayWin} label={matchState.awayTeam.shortName+' WIN'}/>
+                <BetBtn type="homeWin" odds={odds.homeWin} label={matchState.homeTeam.shortName+' WIN'} color={C.red}/>
+                <BetBtn type="draw" odds={odds.draw} label="DRAW"/>
+                <BetBtn type="awayWin" odds={odds.awayWin} label={matchState.awayTeam.shortName+' WIN'}/>
               </div>
               <div className="grid grid-cols-2 gap-1.5 mb-3">
                 <BetBtn type="btts" odds="1.75" label="BTTS YES"/>
