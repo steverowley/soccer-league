@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw } from "lucide-react";
+import TEAMS from "./teams.js";
 
 const C = {
   abyss:'#111111', ash:'#1F1F1F', dust:'#E3E0D5',
@@ -158,57 +159,6 @@ function createAIManager(homeTeam, awayTeam) {
     }
   };
 }
-
-const TEAMS = {
-  mars:{
-    name:"Mars United FC",shortName:"MRS",color:"#FF6B6B",
-    formation:"4-4-2",tactics:"High Press",
-    manager:{name:"Commander Rex",personality:"Aggressive"},
-    stadium:{name:'Olympus Mons Arena',planet:'Mars',capacity:'89,000'},
-    players:[
-      {name:"Red Giant",position:"GK",attacking:28,defending:86,technical:72,athletic:74,mental:82,starter:true},
-      {name:"Phobos Wall",position:"DF",attacking:50,defending:81,technical:68,athletic:72,mental:77,starter:true},
-      {name:"Dust Storm",position:"DF",attacking:46,defending:83,technical:70,athletic:71,mental:78,starter:true},
-      {name:"Iron Crater",position:"DF",attacking:44,defending:80,technical:65,athletic:73,mental:75,starter:true},
-      {name:"Mars Rock",position:"DF",attacking:48,defending:79,technical:67,athletic:70,mental:76,starter:true},
-      {name:"Red Vortex",position:"MF",attacking:68,defending:58,technical:80,athletic:76,mental:79,starter:true},
-      {name:"Olympus Rush",position:"MF",attacking:72,defending:55,technical:78,athletic:78,mental:77,starter:true},
-      {name:"Gravity Shift",position:"MF",attacking:65,defending:60,technical:75,athletic:72,mental:80,starter:true},
-      {name:"Solar Striker",position:"FW",attacking:87,defending:34,technical:74,athletic:84,mental:70,starter:true},
-      {name:"Meteor Blaze",position:"FW",attacking:85,defending:36,technical:72,athletic:82,mental:68,starter:true},
-      {name:"Red Nova",position:"FW",attacking:83,defending:38,technical:76,athletic:80,mental:72,starter:true},
-      {name:"Crater Keeper",position:"GK",attacking:28,defending:85,technical:70,athletic:72,mental:80,starter:false},
-      {name:"Phobos Flare",position:"FW",attacking:80,defending:32,technical:70,athletic:79,mental:66,starter:false},
-      {name:"Olympus Wall",position:"DF",attacking:36,defending:79,technical:62,athletic:70,mental:73,starter:false},
-      {name:"Ares Hawk",position:"MF",attacking:70,defending:52,technical:72,athletic:74,mental:74,starter:false},
-      {name:"Rust Runner",position:"FW",attacking:78,defending:30,technical:68,athletic:77,mental:64,starter:false}
-    ]
-  },
-  saturn:{
-    name:"Saturn Rings United",shortName:"SAT",color:"#9A5CF4",
-    formation:"4-3-3",tactics:"Possession",
-    manager:{name:"Tactician Prime",personality:"Calculated"},
-    stadium:{name:'Cassini Division Field',planet:'Saturn Rings',capacity:'65,000'},
-    players:[
-      {name:"Orion Shield",position:"GK",attacking:28,defending:86,technical:70,athletic:73,mental:84,starter:true},
-      {name:"Titan Wall",position:"DF",attacking:50,defending:80,technical:75,athletic:72,mental:78,starter:true},
-      {name:"Enceladus Ice",position:"DF",attacking:46,defending:82,technical:73,athletic:70,mental:80,starter:true},
-      {name:"Rhea Fortress",position:"DF",attacking:48,defending:81,technical:76,athletic:71,mental:77,starter:true},
-      {name:"Mimas Rock",position:"DF",attacking:44,defending:79,technical:72,athletic:74,mental:76,starter:true},
-      {name:"Cassian Nova",position:"MF",attacking:65,defending:58,technical:82,athletic:76,mental:81,starter:true},
-      {name:"Helios Prime",position:"MF",attacking:68,defending:60,technical:85,athletic:72,mental:82,starter:true},
-      {name:"Stellar Flow",position:"MF",attacking:70,defending:56,technical:84,athletic:74,mental:79,starter:true},
-      {name:"Lyra Cosmos",position:"FW",attacking:88,defending:35,technical:76,athletic:83,mental:72,starter:true},
-      {name:"Ring Runner",position:"FW",attacking:86,defending:38,technical:74,athletic:85,mental:70,starter:true},
-      {name:"Aurora Blast",position:"FW",attacking:84,defending:36,technical:75,athletic:84,mental:71,starter:true},
-      {name:"Nebula Net",position:"GK",attacking:26,defending:84,technical:68,athletic:71,mental:82,starter:false},
-      {name:"Gas Giant",position:"MF",attacking:63,defending:55,technical:78,athletic:70,mental:75,starter:false},
-      {name:"Orbit Guard",position:"DF",attacking:42,defending:77,technical:70,athletic:68,mental:74,starter:false},
-      {name:"Comet Strike",position:"FW",attacking:82,defending:34,technical:72,athletic:81,mental:68,starter:false},
-      {name:"Rings Edge",position:"MF",attacking:66,defending:60,technical:80,athletic:73,mental:76,starter:false}
-    ]
-  }
-};
 
 const POS_ORDER={'GK':0,'DF':1,'MF':2,'FW':3};
 const rnd=(min,max)=>Math.random()*(max-min)+min;
