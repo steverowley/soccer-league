@@ -175,7 +175,7 @@ const MatchSimulator = () => {
     redCards:{home:0,away:0},
     activePlayers:{home:TEAMS.mars.players.filter(p=>p.starter).map(p=>p.name),away:TEAMS.saturn.players.filter(p=>p.starter).map(p=>p.name)},
     substitutionsUsed:{home:0,away:0},
-    aiThoughts:[],socialFeed:[],
+    aiThoughts:[],socialFeed:[],lastEventType:null,
   });
   const [matchState,setMatchState]=useState(initState());
   const [speed,setSpeed]=useState(1000);
@@ -266,32 +266,107 @@ const MatchSimulator = () => {
     return posts;
   };
 
-  const genEvent=(min,homeTeam,awayTeam,momentum,possession,playerStats,score,activePlayers,substitutionsUsed,aiInfluence,aim)=>{
+  const genEvent=(min,homeTeam,awayTeam,momentum,possession,playerStats,score,activePlayers,substitutionsUsed,aiInfluence,aim,chaosLevel=0,lastEventType=null)=>{
     if(Math.random()>0.35)return null;
+
+    // --- Weather modifiers ---
+    const wx=aim?.weather;
+    const wxGkPen   = wx===WX.MAG   ? 25 : 0;   // magnetic storm: GK gloves malfunction
+    const wxStatPen = wx===WX.SOLAR ? 15 : 0;   // solar flare: all rolls reduced
+    const wxShotBoost = wx===WX.ZERO ? 0.10 : 0; // zero gravity: more shot chances
+    const wxDustFail  = wx===WX.DUST ? 12 : 0;   // dust storm: passing harder
+
+    // --- Chaos events (blaseball energy: the game admits something is wrong) ---
+    if(chaosLevel>70&&Math.random()<0.04){
+      const refName=aim?.referee?.name||'The referee';
+      const CHAOS=[
+        `⚡ COSMIC ANOMALY detected at pitch level. The match continues regardless.`,
+        `🌌 ${refName} consults their notes. The notes contain only the word "SOON".`,
+        `🪐 A nearby planetary alignment scrambles all comms for four seconds. Everyone keeps playing.`,
+        `🔮 The stadium announcer reads from a prepared card: "This was always going to happen."`,
+        `⚡ A player briefly occupies two positions simultaneously. VAR is unavailable in this galaxy.`,
+        `👁️ Someone in the crowd knows something. They are not saying anything.`,
+        `🌀 The pitch tilts ${rndI(1,8)}° for exactly one minute. Officials log it as "acceptable variance".`,
+      ];
+      return{minute:min,type:'chaos_event',team:pick([homeTeam,awayTeam]).shortName,commentary:pick(CHAOS),momentumChange:[0,0],isChaos:true};
+    }
+
     const posTeam=Math.random()*100<possession[0]?homeTeam:awayTeam;
     const defTeam=posTeam===homeTeam?awayTeam:homeTeam;
     const isHome=posTeam===homeTeam;
     const posActive=isHome?activePlayers.home:activePlayers.away;
     const defActive=isHome?activePlayers.away:activePlayers.home;
     const scoreDiff=isHome?(score[0]-score[1]):(score[1]-score[0]);
-    let roll=Math.random();
+
+    // --- Roll with momentum + weather + chain modifiers ---
+    const momTeam=isHome?momentum[0]:momentum[1];
+    const momBoost=momTeam>5?0.08:momTeam>3?0.04:0;
+    const chainBoost=lastEventType==='shot'?0.04:lastEventType==='corner'?0.02:0;
+    let roll=Math.max(0,Math.random()-momBoost-chainBoost-wxShotBoost);
     if(aiInfluence){const td=isHome?aiInfluence.home:aiInfluence.away;if(td.SHOOT>3)roll*=0.7;if(td.ATTACK>5)roll*=0.8;}
     if(scoreDiff<0&&min>=80)roll*=0.5;
+
+    // --- Personality-driven events (12%) ---
     if(aim&&Math.random()<0.12){
       const agents=isHome?aim.activeHomeAgents:aim.activeAwayAgents;
       const agent=pick(agents.filter(a=>a.fatigue<95));
       if(agent){
-        if(agent.personality===PERS.AGG&&Math.random()<0.4){const card=aim.shouldGiveCard(60+Math.random()*40);return{minute:min,type:'foul',team:posTeam.shortName,player:agent.player.name,cardType:card,commentary:card?`${agent.player.name} goes in HARD! ${card==='red'?'🟥 RED CARD!':'🟨 Yellow!'}`:`Crunching tackle from ${agent.player.name}!`,isPersonalityEvent:true,momentumChange:card?[3,-5]:[2,-2]};}
-        if(agent.personality===PERS.SEL&&agent.player.position==='FW'&&Math.random()<0.3)return{minute:min,type:'shot',team:posTeam.shortName,player:agent.player.name,outcome:'miss',commentary:`${agent.player.name} shoots from distance... WAY OVER! Selfish!`,isPersonalityEvent:true,momentumChange:[-3,2]};
-        if(agent.personality===PERS.CRE&&Math.random()<0.25){const win=Math.random()<0.3;return{minute:min,type:win?'goal':'creative_fail',team:posTeam.shortName,player:agent.player.name,outcome:win?'goal':'miss',isGoal:win,commentary:win?`${agent.player.name} tries something OUTRAGEOUS... WHAT A GOAL! ✨🚀`:`${agent.player.name} loses the ball! Too creative!`,isPersonalityEvent:true,momentumChange:win?[15,-10]:[-2,3]};}
-        if(agent.personality===PERS.LAZ&&agent.fatigue>50&&Math.random()<0.2){agent.fatigue-=5;return{minute:min,type:'lazy_moment',team:posTeam.shortName,player:agent.player.name,commentary:`${agent.player.name} has stopped running... lazy play!`,isPersonalityEvent:true,momentumChange:[-2,4]};}
-        if(agent.personality===PERS.WRK&&agent.fatigue>70&&Math.random()<0.25){agent.fatigue+=5;return{minute:min,type:'workhorse_tackle',team:posTeam.shortName,player:agent.player.name,commentary:`${agent.player.name} is EVERYWHERE despite exhaustion! 💪`,isPersonalityEvent:true,momentumChange:[5,-3]};}
-        if(agent.personality===PERS.TEAM&&Math.random()<0.12){const fw=agents.find(a=>a!==agent&&a.player.position==='FW');if(fw){const goal=Math.random()<0.4;return{minute:min,type:'shot',team:posTeam.shortName,player:fw.player.name,assister:agent.player.name,outcome:goal?'goal':'save',isGoal:goal,commentary:goal?`Beautiful from ${agent.player.name}! ${fw.player.name} scores! ⚽`:`Unselfish play from ${agent.player.name}! Saved.`,isPersonalityEvent:true,momentumChange:goal?[12,-8]:[3,-2]};}}
+        if(agent.personality===PERS.AGG&&Math.random()<0.4){
+          const card=aim.shouldGiveCard(60+Math.random()*40);
+          const aggComm=card==='red'
+            ?pick([`🟥 ${agent.player.name} goes in TWO-FOOTED! Straight red, no debate!`,`🟥 VIOLENT CONDUCT! ${agent.player.name} is GONE!`])
+            :card==='yellow'
+            ?pick([`🟨 ${agent.player.name} goes in hard — booked!`,`🟨 Reckless from ${agent.player.name}. Lucky it's only yellow.`])
+            :pick([`Crunching tackle from ${agent.player.name}! Ref lets it go.`,`${agent.player.name} leaves a mark. No card — just pain.`]);
+          return{minute:min,type:'foul',team:posTeam.shortName,player:agent.player.name,cardType:card,commentary:aggComm,isPersonalityEvent:true,momentumChange:card?[3,-5]:[2,-2]};
+        }
+        if(agent.personality===PERS.SEL&&agent.player.position==='FW'&&Math.random()<0.3)
+          return{minute:min,type:'shot',team:posTeam.shortName,player:agent.player.name,outcome:'miss',commentary:pick([`${agent.player.name} shoots from distance... WAY OVER! Selfish!`,`${agent.player.name} ignores three open teammates. Blazes over.`,`SELFISH! ${agent.player.name} had options. Chose glory. Found none.`,`${agent.player.name} tries his luck from 40 yards. No.`]),isPersonalityEvent:true,momentumChange:[-3,2]};
+        if(agent.personality===PERS.CRE&&Math.random()<0.25){
+          const win=Math.random()<0.3;
+          return{minute:min,type:win?'goal':'creative_fail',team:posTeam.shortName,player:agent.player.name,outcome:win?'goal':'miss',isGoal:win,
+            commentary:win
+              ?pick([`${agent.player.name} tries something OUTRAGEOUS... WHAT A GOAL! ✨🚀`,`${agent.player.name} — a move nobody has attempted in this solar system. And it WORKS.`,`SCORPION KICK? BACKHEEL? Nobody agrees. The ball is in. That's all that matters. ✨`])
+              :pick([`${agent.player.name} loses the ball! Too creative by half.`,`Visionary or reckless? Today: reckless. ${agent.player.name} gives it away.`,`${agent.player.name} attempts the impossible. The impossible wins.`]),
+            isPersonalityEvent:true,momentumChange:win?[15,-10]:[-2,3]};
+        }
+        if(agent.personality===PERS.LAZ&&agent.fatigue>50&&Math.random()<0.2){
+          agent.fatigue-=5;
+          return{minute:min,type:'lazy_moment',team:posTeam.shortName,player:agent.player.name,commentary:pick([`${agent.player.name} has stopped running. Nobody is surprised.`,`${agent.player.name} takes a moment to appreciate the view. Mid-match.`,`Tactical stroll from ${agent.player.name}. The manager is apoplectic.`,`${agent.player.name} jogs while everyone else sprints. Classic.`]),isPersonalityEvent:true,momentumChange:[-2,4]};
+        }
+        if(agent.personality===PERS.WRK&&agent.fatigue>70&&Math.random()<0.25){
+          agent.fatigue+=5;
+          return{minute:min,type:'workhorse_tackle',team:posTeam.shortName,player:agent.player.name,commentary:pick([`${agent.player.name} is EVERYWHERE despite exhaustion! 💪`,`Running on fumes — ${agent.player.name} refuses to stop!`,`${agent.player.name}: how is this person still running?! 💪`,`${agent.player.name} makes their 14th tackle. On fumes. Incredible.`]),isPersonalityEvent:true,momentumChange:[5,-3]};
+        }
+        if(agent.personality===PERS.TEAM&&Math.random()<0.12){
+          const fw=agents.find(a=>a!==agent&&a.player.position==='FW');
+          if(fw){
+            const goal=Math.random()<0.4;
+            return{minute:min,type:'shot',team:posTeam.shortName,player:fw.player.name,assister:agent.player.name,outcome:goal?'goal':'save',isGoal:goal,
+              commentary:goal
+                ?pick([`Beautiful from ${agent.player.name}! ${fw.player.name} finishes! ⚽`,`ASSISTS ARE AN ART FORM. ${agent.player.name} proves it. ${fw.player.name} tucks it away!`])
+                :pick([`Unselfish ball from ${agent.player.name}! ${fw.player.name} denied!`,`${agent.player.name} finds ${fw.player.name}... great save keeps it out!`]),
+              isPersonalityEvent:true,momentumChange:goal?[12,-8]:[3,-2]};
+          }
+        }
+        if(agent.personality===PERS.CAU&&Math.random()<0.15){
+          return{minute:min,type:'defense',team:posTeam.shortName,player:agent.player.name,outcome:'success',commentary:pick([`${agent.player.name} holds their position. Quietly effective.`,`${agent.player.name} snuffs out the threat before it starts.`,`No heroics from ${agent.player.name} — just the right play.`]),isPersonalityEvent:true,momentumChange:isHome?[0,-1]:[-1,0]};
+        }
       }
     }
-    if(aim&&Math.random()<0.03){const controversies=['missed_penalty','wrong_penalty','missed_foul'];const type=pick(controversies);if(type==='wrong_penalty')return{minute:min,type:'penalty',team:posTeam.shortName,isPenalty:true,commentary:`⚠️ CONTROVERSY! ${aim.referee.name} points to spot... that's NEVER a penalty!`,isControversial:true,momentumChange:[8,-12]};if(type==='missed_penalty')return{minute:min,type:'missed_penalty_call',team:posTeam.shortName,commentary:`⚠️ PENALTY SHOUT! Clear foul... ${aim.referee.name} waves it away!`,isControversial:true,momentumChange:[-5,5]};}
+
+    // --- Controversy events (3%) ---
+    if(aim&&Math.random()<0.03){
+      const type=pick(['missed_penalty','wrong_penalty','missed_foul']);
+      if(type==='wrong_penalty')return{minute:min,type:'penalty',team:posTeam.shortName,isPenalty:true,commentary:pick([`⚠️ CONTROVERSY! ${aim.referee.name} points to the spot... that is NEVER a penalty!`,`⚠️ What is ${aim.referee.name} DOING?! Nobody touched him!`,`⚠️ Penalty given! The away bench erupts! This is outrageous!`]),isControversial:true,momentumChange:[8,-12]};
+      if(type==='missed_penalty')return{minute:min,type:'missed_penalty_call',team:posTeam.shortName,commentary:pick([`⚠️ PENALTY SHOUT! ${aim.referee.name} waves it away — disgraceful!`,`⚠️ Clear foul in the box! ${aim.referee.name} unmoved. Astonishing.`,`⚠️ HOW IS THAT NOT A PENALTY?! Arms everywhere!`]),isControversial:true,momentumChange:[-5,5]};
+    }
+
+    // --- Standard event branches ---
     let player,defender,outcome,commentary,momentumChange=[0,0];
+
     if(roll<0.05){
+      // FOUL / CARD / PENALTY
       player=getPlayer(defTeam,defActive,'defending');
       const atk=getPlayer(posTeam,posActive,'attacking');
       if(!player||!atk)return null;
@@ -300,65 +375,154 @@ const MatchSimulator = () => {
       let card=aim?aim.shouldGiveCard(sev):(sev>85?'red':sev>60?'yellow':null);
       if(card==='yellow'&&playerStats[player.name]?.yellowCard)card='red';
       if(inBox){const pseq=genPenaltySeq(min,atk,player,posTeam,defTeam,card,aim);return{minute:min,type:'penalty_sequence',team:posTeam.shortName,player:atk.name,defender:player.name,outcome:'penalty',commentary:'🚨 PENALTY SEQUENCE...',momentumChange:isHome?[3,0]:[0,3],cardType:card,isPenalty:true,penaltySequence:pseq.sequence,penaltyTaker:pseq.penaltyTaker,isRedCard:pseq.isRed,isYellowCard:pseq.isYellow};}
-      commentary=card==='red'?`RED CARD! ${player.name} is sent off!`:card==='yellow'?`${player.name} yellow card for foul on ${atk.name}`:`Foul by ${player.name} on ${atk.name}`;
+      commentary=card==='red'
+        ?pick([`🟥 RED CARD! ${player.name} is SENT OFF!`,`🟥 STRAIGHT RED! ${player.name} — see you in the tunnel!`,`🟥 ${player.name} GONE! Incredible scenes!`])
+        :card==='yellow'
+        ?pick([`🟨 ${player.name} booked for a foul on ${atk.name}`,`🟨 Yellow card — ${player.name} won't be happy.`,`🟨 ${player.name}: reckless challenge. Booked.`])
+        :pick([`Foul by ${player.name} on ${atk.name}. Free kick.`,`${player.name} brings down ${atk.name}.`,`Clumsy foul from ${player.name}.`,`${player.name} clips ${atk.name}. Ref blows.`]);
       momentumChange=isHome?[1,0]:[0,1];if(card==='red')momentumChange=isHome?[2,0]:[0,2];
       return{minute:min,type:'foul',team:defTeam.shortName,player:player.name,outcome:card||'foul',commentary,momentumChange,cardType:card};
     }
+
     if(roll<0.20){
+      // SHOT
       player=getPlayer(posTeam,posActive,'attacking','FW')||getPlayer(posTeam,posActive,'attacking');
       const gk=getPlayer(defTeam,defActive,'defending','GK');
       if(!player||!gk)return null;
-      const atkRoll=player.attacking*0.7+player.technical*0.3+formBonus(player.name,playerStats)+(aim?aim.getAgentByName(player.name)?.getDecisionBonus()||0:0)+rnd(-15,15);
-      const gkRoll=gk.defending*0.7+gk.mental*0.3+formBonus(gk.name,playerStats)+rnd(-15,15);
+      const atkRoll=(player.attacking*0.7+player.technical*0.3+formBonus(player.name,playerStats)+(aim?aim.getAgentByName(player.name)?.getDecisionBonus()||0:0)+rnd(-15,15))-wxStatPen;
+      const gkRoll=(gk.defending*0.7+gk.mental*0.3+formBonus(gk.name,playerStats)+rnd(-15,15))-wxGkPen;
       const net=atkRoll-gkRoll;
-      if(net>10&&Math.random()<0.05){outcome='own_goal';commentary=`😱 OWN GOAL! ${gk.name} fumbles it in!`;return{minute:min,type:'shot',team:defTeam.shortName,player:gk.name,outcome,commentary,momentumChange:isHome?[-5,5]:[5,-5],isGoal:true,animation:{type:'goal',color:defTeam.color}};}
-      if(net>15){outcome='goal';const assists=[' Clinical finish!','! Stunning strike! 🚀','! What a player! ⭐'];commentary=`⚽ GOAL! ${player.name}${pick(assists)}`;return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,assister:null,outcome,commentary,momentumChange:isHome?[5,0]:[0,5],isGoal:true,animation:{type:'goal',color:posTeam.color}};}
-      if(net>5){outcome='saved';commentary=`GREAT SAVE by ${gk.name}! ${player.name} denied!`;return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,outcome,commentary,momentumChange:isHome?[2,0]:[0,2],animation:{type:'saved',color:defTeam.color}};}
-      outcome='miss';commentary=`${player.name} blazes over! Chance gone!`;
+
+      // Own goal
+      if(net>10&&Math.random()<0.05){
+        outcome='own_goal';
+        commentary=pick([`😱 OWN GOAL! ${gk.name} fumbles it in!`,`😱 CATASTROPHE! ${gk.name} puts it past his own keeper!`,`😱 Oh no — own goal from ${gk.name}!`]);
+        return{minute:min,type:'shot',team:defTeam.shortName,player:gk.name,outcome,commentary,momentumChange:isHome?[-5,5]:[5,-5],isGoal:true,animation:{type:'goal',color:defTeam.color}};
+      }
+      // Zero gravity: near-miss curves back in
+      if(wx===WX.ZERO&&net>5&&net<=15&&Math.random()<0.28){
+        outcome='goal';
+        return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,outcome,commentary:pick([`⚽ ${player.name}'s shot drifts WIDE... then curves back in! ZERO GRAVITY GOAL! 🌌`,`⚽ ORBITAL! The ball escapes the atmosphere — and comes back IN! ${player.name}! 🌌`]),momentumChange:isHome?[5,0]:[0,5],isGoal:true,animation:{type:'goal',color:posTeam.color},isWeatherGoal:true};
+      }
+      if(net>15){
+        outcome='goal';
+        commentary=pick([`⚽ GOAL! ${player.name}! Clinical finish!`,`⚽ ${player.name} SCORES! Absolute beauty! 🚀`,`⚽ Unstoppable! ${player.name} makes it look easy!`,`⚽ ${player.name} — STUNNING strike! What a hit! ⭐`,`⚽ GET IN! ${player.name} fires it home!`,`⚽ ${player.name}! Pure quality! The keeper had no chance! 💫`]);
+        return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,assister:null,outcome,commentary,momentumChange:isHome?[5,0]:[0,5],isGoal:true,animation:{type:'goal',color:posTeam.color}};
+      }
+      if(net>5){
+        // Magnetic storm: gloves malfunction, save becomes goal
+        if(wx===WX.MAG&&Math.random()<0.28){
+          outcome='goal';
+          return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,outcome:'goal',commentary:pick([`⚽ ${gk.name}'s gloves MALFUNCTION in the magnetic storm! It rolls in! 🧲`,`⚽ MAGNETIC INTERFERENCE! ${gk.name} drops it — ${player.name} can't believe it! 🧲`]),momentumChange:isHome?[5,0]:[0,5],isGoal:true,animation:{type:'goal',color:posTeam.color},isWeatherGoal:true};
+        }
+        outcome='saved';
+        commentary=pick([`GREAT SAVE by ${gk.name}! ${player.name} denied!`,`${gk.name} gets down LOW! Brilliant stop!`,`INCREDIBLE from ${gk.name}! Fingertips away!`,`${player.name} thought he had it — ${gk.name} says NO!`,`Breathtaking save! ${gk.name} is unbeatable today!`,`${gk.name} to the rescue! Keeps his side in it!`]);
+        return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,outcome,commentary,momentumChange:isHome?[2,0]:[0,2],animation:{type:'saved',color:defTeam.color}};
+      }
+      outcome='miss';
+      commentary=wx===WX.SOLAR&&Math.random()<0.4
+        ?pick([`${player.name} fires — BLINDED by the solar flare! Miles off!`,`${player.name} can barely see through the plasma discharge. Shot goes wide.`])
+        :pick([`${player.name} blazes over! Chance gone!`,`${player.name} drags it WIDE! He'll be furious!`,`So close! ${player.name} clips the post!`,`${player.name} fires straight at nobody... skies it completely!`,`What a MISS! ${player.name} had that all day!`,`${player.name} snatches at it — over the bar!`,`${player.name} gets the technique all wrong. Not his best moment.`]);
       return{minute:min,type:'shot',team:posTeam.shortName,player:player.name,defender:gk.name,outcome,commentary,momentumChange:isHome?[1,0]:[0,1]};
     }
+
     if(roll<0.40){
+      // ATTACK / DRIBBLE
       player=getPlayer(posTeam,posActive,'attacking');
       defender=getPlayer(defTeam,defActive,'defending');
       if(!player||!defender)return null;
       const net=player.attacking*0.7+player.athletic*0.3+rnd(-15,15)-(defender.defending*0.7+defender.athletic*0.3+rnd(-15,15));
-      if(net>20){outcome='breakthrough';commentary=`${player.name} BREAKS THROUGH! Surging run!`;momentumChange=isHome?[3,0]:[0,3];}
-      else if(net>0){outcome='success';commentary=`${player.name} advances past ${defender.name}`;momentumChange=isHome?[1,0]:[0,1];}
-      else{outcome='intercepted';commentary=`${defender.name} intercepts ${player.name}`;momentumChange=isHome?[-1,0]:[0,-1];}
+      if(net>20){
+        outcome='breakthrough';
+        commentary=pick([`${player.name} BREAKS THROUGH! Surging run!`,`${player.name} is in on goal! DANGER!`,`${player.name} splits the defence! 1-on-1!`,`Nobody catching ${player.name} now! Sensational pace!`,`${player.name} gone clear! The defence appeals in vain!`]);
+        momentumChange=isHome?[3,0]:[0,3];
+      } else if(net>0){
+        outcome='success';
+        commentary=pick([`${player.name} advances past ${defender.name}`,`${player.name} beats ${defender.name}`,`Neat skill from ${player.name}`,`${player.name} ghosts past ${defender.name}`]);
+        momentumChange=isHome?[1,0]:[0,1];
+      } else {
+        outcome='intercepted';
+        commentary=pick([`${defender.name} intercepts ${player.name}`,`${defender.name} reads it perfectly`,`Great positioning from ${defender.name}`,`${player.name} runs into a wall — ${defender.name} is immovable`]);
+        momentumChange=isHome?[-1,0]:[0,-1];
+      }
       return{minute:min,type:'attack',team:posTeam.shortName,player:player.name,defender:defender.name,outcome,commentary,momentumChange};
     }
+
     if(roll<0.48){
+      // CORNER
       player=getPlayer(posTeam,posActive,'technical');
       const gk=getPlayer(defTeam,defActive,'defending','GK');
       const header=getPlayer(posTeam,posActive,'athletic');
       if(!player||!gk||!header)return null;
-      const net=header.attacking*0.5+header.athletic*0.5+rnd(-20,20)-(gk.defending*0.7+gk.athletic*0.3+rnd(-20,20));
-      if(net>20){outcome='goal';commentary=`GOAL! ${header.name} heads in from the corner! ⚽`;return{minute:min,type:'corner_goal',team:posTeam.shortName,player:header.name,outcome,commentary,momentumChange:isHome?[3,0]:[0,3],isGoal:true,animation:{type:'goal',color:posTeam.color}};}
-      if(net>10){outcome='saved';commentary=`Corner from ${player.name}! ${gk.name} punches clear!`;return{minute:min,type:'corner',team:posTeam.shortName,player:player.name,defender:gk.name,outcome,commentary,momentumChange:isHome?[1,0]:[0,1]};}
-      outcome='cleared';commentary=`Corner kick cleared by ${defTeam.shortName}`;momentumChange=[0,0];
+      const net=header.attacking*0.5+header.athletic*0.5+rnd(-20,20)-(gk.defending*0.7+gk.athletic*0.3+rnd(-20,20))-wxGkPen;
+      if(net>20){
+        outcome='goal';
+        commentary=pick([`GOAL! ${header.name} heads in from the corner! ⚽`,`${header.name} POWERS home the header! ⚽`,`CORNER CONVERTED! ${header.name} rises highest! ⚽`,`${header.name} meets it perfectly — GOAL! ⚽`]);
+        return{minute:min,type:'corner_goal',team:posTeam.shortName,player:header.name,outcome,commentary,momentumChange:isHome?[3,0]:[0,3],isGoal:true,animation:{type:'goal',color:posTeam.color}};
+      }
+      if(net>10){
+        outcome='saved';
+        commentary=pick([`Corner from ${player.name}! ${gk.name} punches clear!`,`${gk.name} claims the corner confidently!`,`Dangerous delivery — ${gk.name} tips it away!`,`${gk.name} gets a fist to it!`]);
+        return{minute:min,type:'corner',team:posTeam.shortName,player:player.name,defender:gk.name,outcome,commentary,momentumChange:isHome?[1,0]:[0,1]};
+      }
+      outcome='cleared';
+      commentary=pick([`Corner kick cleared by ${defTeam.shortName}`,`Headed away! ${defTeam.shortName} survive`,`${defTeam.shortName} scramble it clear!`,`Blocked! ${defTeam.shortName} hold firm`]);
+      momentumChange=[0,0];
+
     } else if(roll<0.52){
+      // INJURY
       player=Math.random()<0.5?getPlayer(posTeam,posActive,'athletic'):getPlayer(defTeam,defActive,'athletic');
       if(!player)return null;
       const inHome=posActive.includes(player.name);
       const tm=inHome?posTeam:defTeam;
-      return{minute:min,type:'injury',team:tm.shortName,player:player.name,outcome:'injured',commentary:`${player.name} is down injured! Medics on!`,momentumChange:[0,0],isInjury:true};
+      commentary=wx===WX.PLASMA&&Math.random()<0.5
+        ?pick([`${player.name} collapses! The plasma winds have taken their toll!`,`${player.name} is DOWN — plasma exposure? Medics sprint on!`])
+        :pick([`${player.name} is down injured! Medics on!`,`${player.name} pulls up! Looks serious.`,`${player.name} takes a knock — stays down.`,`${player.name} is in trouble. Trainer called onto the pitch.`]);
+      return{minute:min,type:'injury',team:tm.shortName,player:player.name,outcome:'injured',commentary,momentumChange:[0,0],isInjury:true};
+
     } else if(roll<0.70){
+      // DEFENSE / TACKLE
       defender=getPlayer(defTeam,defActive,'defending','DF');
       player=getPlayer(posTeam,posActive,'attacking');
       if(!defender||!player)return null;
       const net=(defender.defending+defender.athletic)/2+rnd(-20,20)-((player.technical+player.athletic)/2+rnd(-20,20));
-      if(net>20){outcome='clean_tackle';commentary=`Perfect tackle from ${defender.name}!`;momentumChange=isHome?[0,-2]:[-2,0];}
-      else if(net>0){outcome='success';commentary=`${defender.name} wins the ball`;momentumChange=isHome?[0,-1]:[-1,0];}
-      else{outcome='failed';commentary=`${player.name} evades ${defender.name}`;momentumChange=isHome?[1,0]:[0,1];}
+      if(net>20){
+        outcome='clean_tackle';
+        commentary=pick([`Perfect tackle from ${defender.name}!`,`${defender.name} THUNDERS in! Ball won cleanly!`,`Textbook defending from ${defender.name}!`,`${defender.name} times it perfectly — ball and all!`]);
+        momentumChange=isHome?[0,-2]:[-2,0];
+      } else if(net>0){
+        outcome='success';
+        commentary=pick([`${defender.name} wins the ball`,`${defender.name} gets in the way`,`Solid defensive work from ${defender.name}`,`${defender.name} holds his ground`]);
+        momentumChange=isHome?[0,-1]:[-1,0];
+      } else {
+        outcome='failed';
+        commentary=pick([`${player.name} evades ${defender.name}`,`${player.name} dances past ${defender.name}`,`${player.name} leaves ${defender.name} for dead`,`${defender.name} dives in — ${player.name} skips away`]);
+        momentumChange=isHome?[1,0]:[0,1];
+      }
       return{minute:min,type:'defense',team:defTeam.shortName,player:defender.name,defender:player.name,outcome,commentary,momentumChange};
+
     } else {
+      // PASSING / POSSESSION
       player=getPlayer(posTeam,posActive,'technical');
       defender=getPlayer(defTeam,defActive,'defending');
       if(!player||!defender)return null;
-      const net=(player.technical+player.mental)/2+rnd(-20,20)-((defender.defending+defender.mental)/2+rnd(-20,20));
-      if(net>10){outcome='good_pass';commentary=`${player.name} with a precise pass`;momentumChange=isHome?[1,0]:[0,1];}
-      else if(net>-10){outcome='continue';commentary=`${player.name} keeps possession`;momentumChange=[0,0];}
-      else{outcome='intercepted';commentary=`${defender.name} reads the play`;momentumChange=isHome?[0,-1]:[-1,0];}
+      const net=(player.technical+player.mental)/2+rnd(-20,20)-((defender.defending+defender.mental)/2+rnd(-20,20))-(wxStatPen*0.5);
+      const dustThreshold=-10+wxDustFail;
+      if(net>10){
+        outcome='good_pass';
+        commentary=pick([`${player.name} with a precise pass`,`${player.name} picks out a teammate`,`${player.name} plays it through the lines`,`Neat footwork from ${player.name}`,`${player.name} finds space and uses it`]);
+        momentumChange=isHome?[1,0]:[0,1];
+      } else if(net>dustThreshold){
+        outcome='continue';
+        commentary=pick([`${player.name} keeps possession`,`${player.name} holds up the ball`,`${player.name} shields it well`,`${player.name} keeps it simple`]);
+        momentumChange=[0,0];
+      } else {
+        outcome='intercepted';
+        commentary=wx===WX.DUST&&Math.random()<0.4
+          ?pick([`${player.name}'s pass lost in the dust storm!`,`Visibility near-zero — ${player.name} plays it straight to ${defender.name}!`])
+          :pick([`${defender.name} reads the play`,`${defender.name} sniffs it out!`,`Clever positioning from ${defender.name}`,`${defender.name} anticipates — intercepts!`]);
+        momentumChange=isHome?[0,-1]:[-1,0];
+      }
     }
     return{minute:min,type:'play',team:posTeam.shortName,player:player?.name,defender:defender?.name,outcome,commentary,momentumChange:momentumChange||[0,0]};
   };
@@ -415,9 +579,10 @@ const MatchSimulator = () => {
         }
         aim.updateManagerEmotion({},prev.score[0],prev.score[1]);
       }
-      const event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim);
+      const chaosLevel=(()=>{let c=0;const diff=Math.abs(prev.score[0]-prev.score[1]);if(diff===0)c+=30;else if(diff===1)c+=20;if(newMin>80)c+=25;else if(newMin>70)c+=15;c+=prev.events.filter(e=>e.cardType).length*8;c+=(prev.redCards.home||0)*20+(prev.redCards.away||0)*20;return Math.min(100,c);})();
+      const event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType);
       if(!event){
-        return{...prev,minute:newMin,stoppageTime:newStop,events:[...prev.events,...interventions].filter(Boolean),aiThoughts:newThoughts.slice(-30),socialFeed:newSocial.slice(-20)};
+        return{...prev,minute:newMin,stoppageTime:newStop,events:[...prev.events,...interventions].filter(Boolean),aiThoughts:newThoughts.slice(-30),socialFeed:newSocial.slice(-20),lastEventType:prev.lastEventType};
       }
       const socialPosts=genSocial(event,newMin,prev);
       newSocial=[...newSocial,...socialPosts].slice(-20);
@@ -467,7 +632,7 @@ const MatchSimulator = () => {
       if(event.penaltySequence){allEvents=[...allEvents,...event.penaltySequence];}
       else{allEvents=[...allEvents,event];}
       const isKey=event.isGoal&&event.animation?.type==='goal';
-      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-100),currentAnimation:event.animation||null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial};
+      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-100),currentAnimation:event.animation||null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType};
     });
   };
 
