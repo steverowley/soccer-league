@@ -295,7 +295,7 @@ const MatchSimulator = () => {
     return{sequence:seq};
   };
 
-  const genPenaltySeq=(min,atk,def,team,defTeam,cardType,aim)=>{
+  const genPenaltySeq=(min,atk,def,team,defTeam,cardType,aim,gk)=>{
     const seq=[];
     const incidents=[`💥 CONTACT! ${def.name} brings down ${atk.name} in the box!`,`⚠️ HANDBALL! ${def.name}'s arm is up... penalty!`,`🚨 CHALLENGE! ${def.name} lunges at ${atk.name}!`];
     seq.push({minute:min,type:'penalty_incident',commentary:pick(incidents),team:defTeam.shortName,momentumChange:[0,0]});
@@ -304,10 +304,22 @@ const MatchSimulator = () => {
     const awarded=[`👉 PENALTY to ${team.shortName}!`,`🎯 NO DOUBT! Penalty awarded!`,`🚨 PENALTY! ${team.shortName} have a golden chance!`];
     seq.push({minute:min,type:'penalty_awarded',commentary:pick(awarded),team:team.shortName,momentumChange:[0,0]});
     let taker=atk;
-    if(aim){const agents=aim.activeHomeAgents.concat(aim.activeAwayAgents);const takers=agents.filter(a=>a.canTakePenalty&&a.canTakePenalty()&&(a.player.name!==atk.name));if(takers.length){const best=takers.sort((a,b)=>(b.penaltyAbility||0)-(a.penaltyAbility||0))[0];taker=best.player;seq.push({minute:min,type:'penalty_taker_change',commentary:`👀 ${taker.name} takes the ball. Designated taker.`,team:team.shortName,momentumChange:[0,0]});}}
-    const tension=[`⏸️ ${taker.name} places the ball... the crowd holds its breath...`,`😰 Absolute silence... ${taker.name} composes himself...`,`⚡ The tension is UNBEARABLE!`];
+    if(aim){const agents=aim.activeHomeAgents.concat(aim.activeAwayAgents);const takers=agents.filter(a=>a.canTakePenalty&&a.canTakePenalty()&&(a.player.name!==atk.name));if(takers.length){const best=takers.sort((a,b)=>(b.penaltyAbility||0)-(a.penaltyAbility||0))[0];taker=best.player;seq.push({minute:min,type:'penalty_taker_change',commentary:`👀 ${taker.name} takes the ball — designated taker steps forward.`,team:team.shortName,momentumChange:[0,0]});}}
+    const tension=[`⏸️ ${taker.name} places the ball... the crowd holds its breath...`,`😰 Absolute silence in the stadium... ${taker.name} composes himself...`,`⚡ The tension is UNBEARABLE! Nobody is breathing!`];
     seq.push({minute:min,type:'penalty_tension',commentary:pick(tension),team:team.shortName,momentumChange:[0,0]});
-    return{sequence:seq,penaltyTaker:taker,isRed:cardType==='red',isYellow:cardType==='yellow'};
+    // Run-up
+    seq.push({minute:min,type:'penalty_runup',commentary:pick([`${taker.name} begins his run-up...`,`Three steps back. ${taker.name} focuses.`,`${taker.name} eyes the corner. Steps forward.`]),team:team.shortName,momentumChange:[0,0]});
+    // Resolve the kick: taker mental + ability vs GK defending
+    const takerMental=(aim?.getAgentByName(taker.name)?.player?.mental)||taker.mental||70;
+    const gkDef=gk?.defending||70;
+    const scored=Math.random()<Math.min(0.85,0.50+takerMental/250+(100-gkDef)/400);
+    const gkSaved=!scored&&Math.random()<0.65;
+    const outcomeComm=scored
+      ?pick([`⚽ PENALTY GOAL! ${taker.name} sends the keeper the WRONG WAY!`,`⚽ ${taker.name} steps up and BURIES IT! Top corner!`,`⚽ CONVERTED! ${taker.name} — ice cold from the spot!`,`⚽ ${taker.name} with the PERFECT penalty! No chance for ${gk?.name||'the keeper'}!`])
+      :gkSaved
+        ?pick([`SAVED! ${gk?.name||'The keeper'} DIVES THE RIGHT WAY! What a stop!`,`${gk?.name||'The goalkeeper'} GUESSES RIGHT — penalty saved! Incredible!`,`HERO! ${gk?.name||'The keeper'} keeps it out! The stadium ERUPTS!`])
+        :pick([`${taker.name} HITS THE POST! Off the woodwork!`,`${taker.name} blazes it OVER THE BAR! Unbelievable miss!`,`The penalty goes WIDE! ${taker.name} crumbles to his knees!`]);
+    return{sequence:seq,isGoal:scored,outcomeCommentary:outcomeComm,penaltyTaker:taker,isRed:cardType==='red',isYellow:cardType==='yellow'};
   };
 
   const genSocial=(event,min,ms)=>{
@@ -320,7 +332,7 @@ const MatchSimulator = () => {
       if(Math.random()<0.6)posts.push({minute:min,user:'@ISL_Updates',text:`⚽ GOAL! ${event.player} (${min}')`,likes:rndI(500,2000),retweets:rndI(150,600)});
     }
     if(event.isControversial)posts.push({minute:min,user:'@GalacticFootyFan',text:pick(['⚠️ ROBBERY! That\'s NEVER a penalty! 😡','CORRUPTION! 💸','Are you KIDDING?! Disgraceful!']),likes:rndI(800,3000),retweets:rndI(300,1200)});
-    if(event.cardType==='red')posts.push({minute:min,user:'@CosmicFootyNews',text:`🟥 BREAKING: ${event.player} SENT OFF! 10 men!`,likes:rndI(500,2000),retweets:rndI(200,700)});
+    if(event.cardType==='red')posts.push({minute:min,user:'@CosmicFootyNews',text:`🟥 BREAKING: ${event.foulerName||event.player} SENT OFF! 10 men!`,likes:rndI(500,2000),retweets:rndI(200,700)});
     return posts;
   };
 
@@ -432,7 +444,22 @@ const MatchSimulator = () => {
       const sev=rnd(0,100);
       let card=aim?aim.shouldGiveCard(sev):(sev>85?'red':sev>60?'yellow':null);
       if(card==='yellow'&&playerStats[player.name]?.yellowCard)card='red';
-      if(inBox){const pseq=genPenaltySeq(min,atk,player,posTeam,defTeam,card,aim);return{minute:min,type:'penalty_sequence',team:posTeam.shortName,player:atk.name,defender:player.name,outcome:'penalty',commentary:'🚨 PENALTY SEQUENCE...',momentumChange:isHome?[3,0]:[0,3],cardType:card,isPenalty:true,penaltySequence:pseq.sequence,penaltyTaker:pseq.penaltyTaker,isRedCard:pseq.isRed,isYellowCard:pseq.isYellow};}
+      if(inBox){
+        const penGk=getPlayer(defTeam,defActive,'defending','GK');
+        const pseq=genPenaltySeq(min,atk,player,posTeam,defTeam,card,aim,penGk);
+        return{minute:min,type:'penalty_sequence',team:posTeam.shortName,
+          player:pseq.penaltyTaker.name,   // taker → goal credit
+          foulerName:player.name,          // fouler → card credit
+          foulerTeam:defTeam.shortName,    // fouler's team → for active player removal
+          defender:penGk?.name,
+          outcome:pseq.isGoal?'goal':'saved',
+          commentary:pseq.outcomeCommentary,
+          momentumChange:isHome?[pseq.isGoal?6:1,0]:[0,pseq.isGoal?6:1],
+          cardType:card,isPenalty:true,isGoal:pseq.isGoal,
+          animation:pseq.isGoal?{type:'goal',color:posTeam.color}:null,
+          penaltySequence:pseq.sequence,penaltyTaker:pseq.penaltyTaker,
+          isRedCard:pseq.isRed,isYellowCard:pseq.isYellow};
+      }
       commentary=card==='red'
         ?pick([`🟥 RED CARD! ${player.name} is SENT OFF!`,`🟥 STRAIGHT RED! ${player.name} — see you in the tunnel!`,`🟥 ${player.name} GONE! Incredible scenes!`])
         :card==='yellow'
@@ -752,7 +779,7 @@ const MatchSimulator = () => {
       if(event.isGoal&&event.player&&aim){const a=aim.getAgentByName(event.player);if(a)a.triggerEmotion('goal_scored');}
       if(event.outcome==='miss'&&event.player&&aim){const a=aim.getAgentByName(event.player);if(a)a.triggerEmotion('shot_missed');}
       if(event.cardType==='yellow'&&event.player&&aim){const a=aim.getAgentByName(event.player);if(a)a.triggerEmotion('yellow_card');}
-      if(event.cardType==='red'&&event.player&&aim){const a=aim.getAgentByName(event.player);if(a)a.triggerEmotion('red_card');}
+      if(event.cardType==='red'&&aim){const a=aim.getAgentByName(event.foulerName||event.player);if(a)a.triggerEmotion('red_card');}
       if(aim)aim.updateManagerEmotion(event,prev.score[0],prev.score[1]);
       const newScore=[...prev.score];
       if(event.isGoal){if(event.team===prev.homeTeam.shortName)newScore[0]++;else newScore[1]++;}
@@ -764,12 +791,13 @@ const MatchSimulator = () => {
       const mDiff=newMom[0]-newMom[1];
       const newPoss=[Math.max(30,Math.min(70,basePoss+mDiff)),0];
       newPoss[1]=100-newPoss[0];
-      if(event.cardType==='red'&&event.player){
-        const isH=event.team===prev.homeTeam.shortName;
+      if(event.cardType==='red'){
+        // Penalty events: the fouler (defender) is tracked separately from the goal scorer
+        const redP=event.foulerName||event.player;
+        const redTeam=event.foulerTeam||(event.team===prev.homeTeam.shortName?prev.homeTeam.shortName:prev.awayTeam.shortName);
+        const isH=redTeam===prev.homeTeam.shortName;
         const key=isH?'home':'away';
-        newActive[key]=newActive[key].filter(n=>n!==event.player);
-        newRedCards[key]=(newRedCards[key]||0)+1;
-        event.substituteInfo={out:event.player,in:null};
+        if(redP){newActive[key]=newActive[key].filter(n=>n!==redP);newRedCards[key]=(newRedCards[key]||0)+1;event.substituteInfo={out:redP,in:null};}
       }
       if(event.isInjury&&event.player){
         const isH=event.team===prev.homeTeam.shortName;
@@ -785,11 +813,12 @@ const MatchSimulator = () => {
       if(event.assister)newStats[event.assister]={...newStats[event.assister],assists:(newStats[event.assister]?.assists||0)+1};
       if(event.outcome==='saved'&&event.defender)newStats[event.defender]={...newStats[event.defender],saves:(newStats[event.defender]?.saves||0)+1};
       if(event.type==='defense'&&event.outcome==='clean_tackle'&&event.player)newStats[event.player]={...newStats[event.player],tackles:(newStats[event.player]?.tackles||0)+1};
-      if(event.cardType==='yellow'&&event.player)newStats[event.player]={...newStats[event.player],yellowCard:true};
-      if(event.cardType==='red'&&event.player)newStats[event.player]={...newStats[event.player],redCard:true};
+      const cardP=event.foulerName||event.player;
+      if(event.cardType==='yellow'&&cardP)newStats[cardP]={...newStats[cardP],yellowCard:true};
+      if(event.cardType==='red'&&cardP)newStats[cardP]={...newStats[cardP],redCard:true};
       if(event.isInjury&&event.player)newStats[event.player]={...newStats[event.player],injured:true};
       let allEvents=[...prev.events,...interventions];
-      if(event.penaltySequence){allEvents=[...allEvents,...event.penaltySequence];}
+      if(event.penaltySequence){const{penaltySequence,...penEvt}=event;allEvents=[...allEvents,...penaltySequence,penEvt];}
       else if(event.counterSequence){const{counterSequence,...finalEvt}=event;allEvents=[...allEvents,...counterSequence,finalEvt];}
       else if(event.confrontationSequence){const{confrontationSequence,...baseEvt}=event;allEvents=[...allEvents,baseEvt,...confrontationSequence];}
       else{allEvents=[...allEvents,event];}
