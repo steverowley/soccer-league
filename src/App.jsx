@@ -728,6 +728,7 @@ const MatchSimulator = () => {
     const result=resolveContest(taker,takerAgent,gk||{},gkAgent,{type:'penalty',weather:aim?.weather});
     const scored=result.outcome==='goal';
     const outcomeComm=buildCommentary('penalty',{attacker:taker.name,defender:gk?.name||'the keeper'},result.outcome,result.flavour,ctx);
+    seq.push({minute:min,type:'penalty_shot',commentary:outcomeComm,team:team.shortName,isGoal:scored,outcome:result.outcome,momentumChange:[0,0]});
     return{sequence:seq,isGoal:scored,outcomeCommentary:outcomeComm,penaltyTaker:taker,isRed:cardType==='red',isYellow:cardType==='yellow'};
   };
 
