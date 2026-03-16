@@ -176,6 +176,7 @@ const MatchSimulator = () => {
     activePlayers:{home:TEAMS.mars.players.filter(p=>p.starter).map(p=>p.name),away:TEAMS.saturn.players.filter(p=>p.starter).map(p=>p.name)},
     substitutionsUsed:{home:0,away:0},
     aiThoughts:[],socialFeed:[],lastEventType:null,
+    managerSentOff:{home:false,away:false},
   });
   const [matchState,setMatchState]=useState(initState());
   const [speed,setSpeed]=useState(1000);
@@ -235,6 +236,107 @@ const MatchSimulator = () => {
       if(score>maxScore){maxScore=score;best={...p,team:(home.players.includes(p)?home:away).name,teamColor:(home.players.includes(p)?home:away).color,stats:s};}
     });
     return best;
+  };
+
+  const genFreekickSeq=(min,taker,gk,posTeam,defTeam,aim)=>{
+    const seq=[];
+    const takerAgent=aim?.getAgentByName(taker.name);
+    const isCreative=takerAgent?.personality===PERS.CRE;
+    const wallSize=rndI(3,7);
+    seq.push({minute:min,type:'freekick_setup',team:posTeam.shortName,player:taker.name,
+      commentary:pick([`📐 Free kick to ${posTeam.shortName}! Wall forming...`,`📐 ${taker.name} places the ball. Referee measures the distance.`,`📐 ${defTeam.shortName} organise their wall. ${taker.name} waits patiently.`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'freekick_wall',team:posTeam.shortName,
+      commentary:pick([`🧱 ${wallSize}-man wall set by ${defTeam.shortName}. ${gk?.name||'The keeper'} bellows instructions.`,`${gk?.name||'The keeper'} organises the ${wallSize}-man wall — peering over them.`,`${wallSize} bodies in the wall. Everybody holds their breath.`]),momentumChange:[0,0]});
+    if(isCreative&&Math.random()<0.45){
+      seq.push({minute:min,type:'freekick_trick',team:posTeam.shortName,player:taker.name,
+        commentary:pick([`${taker.name} motions to a teammate... something unconventional is brewing.`,`TWO PLAYERS over the ball! This could be unusual!`,`${taker.name} whispers something. The wall looks nervous.`]),momentumChange:[0,0]});
+    }
+    // Resolve
+    const tech=taker.technical||70;const men=taker.mental||70;const gkDef=gk?.defending||70;
+    const confBonus=takerAgent?.confidence>70?8:0;
+    const tkRoll=tech*0.6+men*0.4+confBonus+rnd(-20,20);
+    const gkRoll=gkDef*0.7+rnd(-15,15)+(isCreative?-5:0);
+    const net=tkRoll-gkRoll;
+    const isGoal=net>28;const isSaved=!isGoal&&net>10;const isPost=!isGoal&&!isSaved&&Math.random()<0.18;
+    const outcomeCommentary=isGoal
+      ?pick([`⚽ FREE KICK GOAL! ${taker.name} curls it into the top corner!`,`⚽ DIRECT FREE KICK! ${taker.name} — absolutely unstoppable!`,`⚽ SENSATIONAL from ${taker.name}! Bends it around the wall!`,`⚽ ${taker.name} with the PERFECT strike! ${gk?.name||'Keeper'} had no chance!`])
+      :isSaved?pick([`${gk?.name||'Keeper'} dives brilliantly — FREE KICK SAVED!`,`${gk?.name||'The keeper'} tips it over! Great free kick, better save!`,`${gk?.name||'Keeper'} gets a strong hand to it — parried away!`])
+      :isPost?pick([`🏗️ THE POST! ${taker.name} was AGONISINGLY close!`,`Off the woodwork and away! ${taker.name} can't believe it!`])
+      :pick([`${taker.name}'s free kick drifts harmlessly wide.`,`Over the wall... and over the bar. Close but not close enough.`,`${taker.name} fires — straight into the wall! Rebounds clear.`]);
+    return{sequence:seq,isGoal,outcomeCommentary};
+  };
+
+  const genCelebrationSeq=(min,scorer,team,mgrName,mgrEmotion)=>{
+    const seq=[];
+    seq.push({minute:min,type:'celebration',team,player:scorer,
+      commentary:pick([`🎉 ${scorer} WHEELS AWAY! Arms wide, face to the sky!`,`🎉 ${scorer} SLIDES ON HIS KNEES! The crowd is ELECTRIC!`,`🎉 ${scorer} sprints to the corner flag — nothing but joy!`,`🎉 ${scorer} points to someone in the stands. This one is personal.`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'celebration_pile',team,
+      commentary:pick([`Teammates FLOOD in from every direction!`,`The whole bench is off the seat — players sprinting on!`,`Bodies piling onto ${scorer}! Beautiful chaos!`,`Everyone wants a piece of ${scorer}! Pure elation!`]),momentumChange:[0,0]});
+    if(mgrName){
+      const mgrComm=mgrEmotion===MGER_EMO.JUB
+        ?pick([`${mgrName} RACES down the touchline! Fists pumping!`,`${mgrName} turns to the crowd, arms raised — this is HIS moment too.`,`${mgrName} embraces the coaching staff! Eyes glistening!`])
+        :pick([`${mgrName} applauds from the technical area.`,`${mgrName} nods calmly. As if they knew all along.`,`${mgrName} points back to the halfway line immediately. There's more to do.`]);
+      seq.push({minute:min,type:'celebration_manager',team,commentary:mgrComm,momentumChange:[0,0]});
+    }
+    seq.push({minute:min,type:'celebration_restart',team,
+      commentary:pick([`${team} restart. The opposition have a mountain to climb.`,`Ball placed on the centre spot. Game resumes.`,`Play restarts. But the energy in the stadium has completely shifted.`]),momentumChange:[0,0]});
+    return{sequence:seq};
+  };
+
+  const genVARSeq=(min,scorer,team,ref,overturned)=>{
+    const seq=[];
+    const refName=ref?.name||'The referee';
+    seq.push({minute:min,type:'var_check',team,
+      commentary:pick([`🖥️ WAIT — VAR is checking! Play suspended!`,`🖥️ VAR REVIEW IN PROGRESS! ${refName} has a finger to his earpiece.`,`🖥️ The goal is being checked! Was everything in order?`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'var_review',team,
+      commentary:pick([`🔍 Multiple camera angles being studied...`,`⏳ The wait is agonising. Nobody in the stadium moves.`,`🔍 Checking for offside... position of feet... handball in build-up...`,`🔍 Frame by frame. Millimetres could decide this.`]),momentumChange:[0,0]});
+    if(overturned){
+      seq.push({minute:min,type:'var_decision',team,isVAROverturned:true,
+        commentary:pick([`❌ GOAL DISALLOWED! VAR overturns! The goal does NOT stand!`,`❌ NO GOAL! Offside by a toenail! The celebrations are ERASED!`,`❌ DISALLOWED! Handball in the build-up! Heartbreak for ${scorer}!`,`❌ VAR SAYS NO! ${refName} waves it away — no goal!`]),momentumChange:[0,0]});
+      seq.push({minute:min,type:'var_reaction',team,
+        commentary:pick([`😱 ${scorer} is DEVASTATED. Sinks to their knees.`,`The ${team} bench erupts in fury! Arguments everywhere!`,`${refName} is surrounded by protesting players. Order barely restored.`,`Disbelief etched on every face. The stadium is stunned to silence.`]),momentumChange:[0,0]});
+    } else {
+      seq.push({minute:min,type:'var_decision',team,isVARConfirmed:true,
+        commentary:pick([`✅ GOAL CONFIRMED! VAR backs the referee — it COUNTS!`,`✅ IT STANDS! No infringement found! ${scorer} CAN celebrate!`,`✅ GOOD GOAL! VAR finds nothing wrong! The stadium ERUPTS!`]),momentumChange:[0,0]});
+    }
+    return{sequence:seq};
+  };
+
+  const genSiegeSeq=(min,team,defTeam,clutchName)=>{
+    const seq=[];
+    seq.push({minute:min,type:'siege_start',team,
+      commentary:pick([`⏱️ SIEGE MODE! ${team} throwing everyone forward!`,`⏱️ ALL OUT ATTACK from ${team}! They WILL NOT surrender!`,`⏱️ Bodies everywhere! ${team} in DESPERATE territory!`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'siege_pressure',team,
+      commentary:pick([`Corner after corner! ${defTeam} cannot clear their lines!`,`Scrambles! Headers! Last-ditch blocks! Complete chaos in the box!`,`${defTeam} defending for their lives — bodies thrown at everything!`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'siege_chance',team,player:clutchName,
+      commentary:pick([`${clutchName} RISES — blocked on the line! SO CLOSE!`,`${clutchName} fires — off the crossbar! AGONY!`,`${clutchName} gets a touch — agonisingly wide!`,`Half-chance for ${clutchName}! JUST over!`]),momentumChange:[0,0]});
+    return{sequence:seq};
+  };
+
+  const genManagerSentOffSeq=(min,managerName,refName,team)=>{
+    const seq=[];
+    seq.push({minute:min,type:'manager_protest',team,
+      commentary:pick([`${managerName} STORMS toward the fourth official!`,`${managerName} is absolutely LIVID on the touchline!`,`${managerName} cannot contain himself — erupts from the technical area!`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'manager_warning',team,
+      commentary:pick([`🟨 ${managerName} shown a yellow card! One more and he's in the stands!`,`${refName} issues a final warning to ${managerName}. He does not take it well.`,`${managerName} gets right in ${refName}'s face. Dangerous territory.`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'manager_sentoff',team,
+      commentary:pick([`🟥 ${managerName} TO THE STANDS! ${refName} has seen enough!`,`🟥 INCREDIBLE! ${managerName} is DISMISSED! Ordered from the technical area!`,`🟥 ${managerName} GONE! He went too far and now he pays for it!`]),momentumChange:[0,0]});
+    seq.push({minute:min,type:'manager_sentoff_reaction',team,
+      commentary:pick([`${managerName} refuses to move. Coaching staff have to intervene.`,`${managerName} points at ${refName} as he leaves. Still furious.`,`The assistant takes the clipboard. The team looks rattled — and fired up.`,`${managerName} mouths something back from the tunnel entrance.`]),momentumChange:[0,0]});
+    return{sequence:seq};
+  };
+
+  const genComebackSeq=(min,scorer,captainName,team)=>{
+    const seq=[];
+    seq.push({minute:min,type:'comeback_eruption',team,player:scorer,
+      commentary:pick([`📢 THE COMEBACK IS ON! ${team} have LIFE!`,`🔥 BELIEVE! ${scorer} and ${team} refuse to die!`,`⚡ FROM THE GRAVE! ${team} are BACK in this match!`,`🌋 ERUPTION! The stadium shakes — ${team} are coming!`]),momentumChange:[0,0]});
+    if(captainName){
+      seq.push({minute:min,type:'comeback_captain',team,player:captainName,
+        commentary:pick([`${captainName} rallies — "WE GO AGAIN! ONE MORE!"`,`${captainName} runs to each teammate. Every single one. Eyes wild.`,`The captain's armband has never felt heavier. ${captainName} feels every gram.`,`${captainName}: "We've been here before. Finish it."`]),momentumChange:[0,0]});
+    }
+    seq.push({minute:min,type:'comeback_momentum',team,
+      commentary:pick([`The atmosphere has completely transformed. ${team} sense it.`,`You could see the belief spreading through the ${team} players.`,`${team} looking like a different team suddenly. Unstoppable energy.`]),momentumChange:[0,0]});
+    return{sequence:seq};
   };
 
   const genCounterSeq=(min,counterPlayer,counterGk,counterTeam,supportPlayer)=>{
@@ -466,13 +568,27 @@ const MatchSimulator = () => {
         ?pick([`🟨 ${player.name} booked for a foul on ${atk.name}`,`🟨 Yellow card — ${player.name} won't be happy.`,`🟨 ${player.name}: reckless challenge. Booked.`])
         :pick([`Foul by ${player.name} on ${atk.name}. Free kick.`,`${player.name} brings down ${atk.name}.`,`Clumsy foul from ${player.name}.`,`${player.name} clips ${atk.name}. Ref blows.`]);
       momentumChange=isHome?[1,0]:[0,1];if(card==='red')momentumChange=isHome?[2,0]:[0,2];
-      const foulEvt={minute:min,type:'foul',team:defTeam.shortName,player:player.name,outcome:card||'foul',commentary,momentumChange,cardType:card};
+      const foulEvt={minute:min,type:'foul',team:defTeam.shortName,player:player.name,outcome:card||'foul',commentary,momentumChange:[0,0],cardType:card};
       // Red card sparks a confrontation
       if(card==='red'&&Math.random()<0.40){
         const cSeq=genConfrontationSeq(min,player,atk,aim?.referee,Math.random()<0.25);
-        return{...foulEvt,confrontationSequence:cSeq.sequence};
+        return{...foulEvt,momentumChange:isHome?[2,0]:[0,2],confrontationSequence:cSeq.sequence};
       }
-      return foulEvt;
+      // Outside box: free kick sequence (50% chance, not for red cards which already have confrontation)
+      if(card!=='red'&&Math.random()<0.50){
+        const fkTaker=getPlayer(posTeam,posActive,'technical')||atk;
+        const fkGk=getPlayer(defTeam,defActive,'defending','GK');
+        const fkSeq=genFreekickSeq(min,fkTaker,fkGk,posTeam,defTeam,aim);
+        return{minute:min,type:'freekick_sequence',team:posTeam.shortName,
+          player:fkTaker.name,foulerName:player.name,foulerTeam:defTeam.shortName,
+          cardType:card,isGoal:fkSeq.isGoal,outcome:fkSeq.isGoal?'goal':'miss',
+          commentary:fkSeq.outcomeCommentary,
+          animation:fkSeq.isGoal?{type:'goal',color:posTeam.color}:null,
+          momentumChange:isHome?[fkSeq.isGoal?6:1,0]:[0,fkSeq.isGoal?6:1],
+          freekickSequence:[foulEvt,...fkSeq.sequence]};
+      }
+      momentumChange=isHome?[1,0]:[0,1];
+      return{...foulEvt,momentumChange};
     }
 
     if(roll<0.20){
@@ -700,6 +816,8 @@ const MatchSimulator = () => {
       const newActive={...prev.activePlayers};
       let newSubsUsed={...prev.substitutionsUsed};
       let newRedCards={...prev.redCards};
+      const newStats={...prev.playerStats};
+      let newManagerSentOff={...prev.managerSentOff};
       if(aim){
         const gs={minute:newMin,scoreDiff:prev.score[0]-prev.score[1],score:prev.score,possession:prev.possession,momentum:prev.momentum};
         aiInfluence=aim.getDecisionInfluence(gs);
@@ -739,7 +857,7 @@ const MatchSimulator = () => {
               commentary:pick([`🦁 ${awayCpt.player.name} demands MORE from his side! Not giving up!`,`💪 ${awayCpt.player.name} — the captain's armband means everything right now.`,`🔥 ${awayCpt.player.name} grabs the team by the collar. Push!`]),
               momentumChange:[0,4]});
           }
-          // Desperate manager substitution: losing badly, manager emotional, subs remaining
+          // Desperate manager substitution
           if(aim.homeManager.emotion===MGER_EMO.DESP&&prev.substitutionsUsed.home<3&&Math.random()<0.12){
             const mostTired=aim.activeHomeAgents.filter(a=>a.player.position!=='GK'&&!prev.playerStats[a.player.name]?.redCard).sort((a,b)=>b.fatigue-a.fatigue)[0];
             if(mostTired){
@@ -747,6 +865,7 @@ const MatchSimulator = () => {
               if(sub.substitute){
                 newActive.home=sub.newActive;newSubsUsed.home=(newSubsUsed.home||0)+1;
                 aim.handleSubstitution(mostTired.player.name,sub.substitute,true);
+                newStats[sub.substitute]={...newStats[sub.substitute],subbedOnMinute:newMin,subbedOn:true};
                 interventions.push({minute:newMin,type:'desperate_sub',team:prev.homeTeam.shortName,player:sub.substitute,
                   commentary:pick([`🔄 ${aim.homeManager.name} MUST CHANGE THIS — ${mostTired.player.name} off, ${sub.substitute} ON!`,`🔄 Tactical emergency from ${aim.homeManager.name}! ${sub.substitute} thrown into the fire!`]),
                   momentumChange:[3,0]});
@@ -760,11 +879,42 @@ const MatchSimulator = () => {
               if(sub.substitute){
                 newActive.away=sub.newActive;newSubsUsed.away=(newSubsUsed.away||0)+1;
                 aim.handleSubstitution(mostTired.player.name,sub.substitute,false);
+                newStats[sub.substitute]={...newStats[sub.substitute],subbedOnMinute:newMin,subbedOn:true};
                 interventions.push({minute:newMin,type:'desperate_sub',team:prev.awayTeam.shortName,player:sub.substitute,
                   commentary:pick([`🔄 ${aim.awayManager.name} MUST CHANGE THIS — ${mostTired.player.name} off, ${sub.substitute} ON!`,`🔄 Tactical emergency from ${aim.awayManager.name}! ${sub.substitute} thrown into the fire!`]),
                   momentumChange:[0,3]});
               }
             }
+          }
+          // Late-game siege (min 85+, losing team throws everyone forward)
+          const hasSiege=prev.events.slice(-25).some(e=>e.type==='siege_start');
+          if(!hasSiege){
+            const hDiff=prev.score[0]-prev.score[1];
+            if(newMin>=85&&hDiff<0&&Math.random()<0.22){
+              const clutchH=aim.activeHomeAgents.find(a=>a.isClutch)?.player.name||aim.activeHomeAgents[0]?.player.name||'The captain';
+              const sSeq=genSiegeSeq(newMin,prev.homeTeam.shortName,prev.awayTeam.shortName,clutchH);
+              interventions=[...interventions,...sSeq.sequence];
+              aim.activeHomeAgents.forEach(a=>a.updateConfidence(5));
+            }
+            if(newMin>=85&&hDiff>0&&Math.random()<0.22){
+              const clutchA=aim.activeAwayAgents.find(a=>a.isClutch)?.player.name||aim.activeAwayAgents[0]?.player.name||'The captain';
+              const sSeq=genSiegeSeq(newMin,prev.awayTeam.shortName,prev.homeTeam.shortName,clutchA);
+              interventions=[...interventions,...sSeq.sequence];
+              aim.activeAwayAgents.forEach(a=>a.updateConfidence(5));
+            }
+          }
+          // Manager sent off
+          if(!prev.managerSentOff?.home&&aim.homeManager.emotion===MGER_EMO.ANG&&Math.random()<0.05){
+            const mSeq=genManagerSentOffSeq(newMin,aim.homeManager.name,aim.referee.name,prev.homeTeam.shortName);
+            interventions=[...interventions,...mSeq.sequence];
+            newManagerSentOff.home=true;
+            aim.activeHomeAgents.forEach(a=>a.updateConfidence(-4));
+          }
+          if(!prev.managerSentOff?.away&&aim.awayManager.emotion===MGER_EMO.ANG&&Math.random()<0.05){
+            const mSeq=genManagerSentOffSeq(newMin,aim.awayManager.name,aim.referee.name,prev.awayTeam.shortName);
+            interventions=[...interventions,...mSeq.sequence];
+            newManagerSentOff.away=true;
+            aim.activeAwayAgents.forEach(a=>a.updateConfidence(-4));
           }
         }
         aim.updateManagerEmotion({},prev.score[0],prev.score[1]);
@@ -799,16 +949,7 @@ const MatchSimulator = () => {
         const key=isH?'home':'away';
         if(redP){newActive[key]=newActive[key].filter(n=>n!==redP);newRedCards[key]=(newRedCards[key]||0)+1;event.substituteInfo={out:redP,in:null};}
       }
-      if(event.isInjury&&event.player){
-        const isH=event.team===prev.homeTeam.shortName;
-        const team=isH?prev.homeTeam:prev.awayTeam;
-        const key=isH?'home':'away';
-        const sub=makeSub(team,event.player,newActive[key],prev.substitutionsUsed[key],prev.playerStats);
-        newActive[key]=sub.newActive;
-        if(sub.substitute){event.substituteInfo={out:event.player,in:sub.substitute};newSubsUsed[key]++;if(aim)aim.handleSubstitution(event.player,sub.substitute,isH);}
-        else event.substituteInfo={out:event.player,in:null};
-      }
-      const newStats={...prev.playerStats};
+      // Stats update
       if(event.isGoal&&event.player)newStats[event.player]={...newStats[event.player],goals:(newStats[event.player]?.goals||0)+1};
       if(event.assister)newStats[event.assister]={...newStats[event.assister],assists:(newStats[event.assister]?.assists||0)+1};
       if(event.outcome==='saved'&&event.defender)newStats[event.defender]={...newStats[event.defender],saves:(newStats[event.defender]?.saves||0)+1};
@@ -817,13 +958,61 @@ const MatchSimulator = () => {
       if(event.cardType==='yellow'&&cardP)newStats[cardP]={...newStats[cardP],yellowCard:true};
       if(event.cardType==='red'&&cardP)newStats[cardP]={...newStats[cardP],redCard:true};
       if(event.isInjury&&event.player)newStats[event.player]={...newStats[event.player],injured:true};
+      if(event.isInjury&&event.player){
+        const isH=event.team===prev.homeTeam.shortName;const key=isH?'home':'away';
+        const sub=makeSub(isH?prev.homeTeam:prev.awayTeam,event.player,newActive[key],prev.substitutionsUsed[key],prev.playerStats);
+        newActive[key]=sub.newActive;
+        if(sub.substitute){event.substituteInfo={out:event.player,in:sub.substitute};newSubsUsed[key]++;if(aim)aim.handleSubstitution(event.player,sub.substitute,isH);newStats[sub.substitute]={...newStats[sub.substitute],subbedOnMinute:newMin,subbedOn:true};}
+        else event.substituteInfo={out:event.player,in:null};
+      }
+      // Build allEvents with all sequence types
       let allEvents=[...prev.events,...interventions];
       if(event.penaltySequence){const{penaltySequence,...penEvt}=event;allEvents=[...allEvents,...penaltySequence,penEvt];}
+      else if(event.freekickSequence){const{freekickSequence,...fkEvt}=event;allEvents=[...allEvents,...freekickSequence,fkEvt];}
       else if(event.counterSequence){const{counterSequence,...finalEvt}=event;allEvents=[...allEvents,...counterSequence,finalEvt];}
       else if(event.confrontationSequence){const{confrontationSequence,...baseEvt}=event;allEvents=[...allEvents,baseEvt,...confrontationSequence];}
       else{allEvents=[...allEvents,event];}
-      const isKey=event.isGoal&&event.animation?.type==='goal';
-      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-100),currentAnimation:event.animation||null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType};
+      // Post-goal: VAR + celebration + comeback + hat trick + sub impact
+      let varOverturned=false;
+      if(event.isGoal&&aim){
+        const isHome=event.team===prev.homeTeam.shortName;
+        const mgr=isHome?aim.homeManager:aim.awayManager;
+        const prevDiff=isHome?(prev.score[0]-prev.score[1]):(prev.score[1]-prev.score[0]);
+        // VAR review (8% of goals)
+        if(Math.random()<0.08){
+          const overturned=Math.random()<0.30;
+          const vSeq=genVARSeq(newMin,event.player,event.team,aim.referee,overturned);
+          allEvents=[...allEvents,...vSeq.sequence];
+          if(overturned){if(isHome)newScore[0]--;else newScore[1]--;varOverturned=true;}
+        }
+        if(!varOverturned){
+          // Celebration
+          const celebSeq=genCelebrationSeq(newMin,event.player,event.team,mgr?.name,mgr?.emotion);
+          allEvents=[...allEvents,...celebSeq.sequence];
+          // Comeback (equaliser or lead after 2+ down)
+          const newDiff=isHome?(newScore[0]-newScore[1]):(newScore[1]-newScore[0]);
+          if(newDiff>=0&&prevDiff<=-2){
+            const cptAgent=(isHome?aim.activeHomeAgents:aim.activeAwayAgents).find(a=>a.isCaptain);
+            const cbSeq=genComebackSeq(newMin,event.player,cptAgent?.player?.name,event.team);
+            allEvents=[...allEvents,...cbSeq.sequence];
+            (isHome?aim.activeHomeAgents:aim.activeAwayAgents).forEach(a=>a.updateConfidence(8));
+          }
+          // Hat trick
+          if((newStats[event.player]?.goals||0)===3){
+            allEvents=[...allEvents,{minute:newMin,type:'hat_trick',team:event.team,player:event.player,
+              commentary:pick([`🎩 HAT TRICK! ${event.player} completes the treble! HISTORY!`,`🎩 THREE GOALS for ${event.player}! Legendary performance!`,`🎩 ${event.player} has his HAT TRICK! This is extraordinary!`]),momentumChange:[0,0]}];
+            (isHome?aim.activeHomeAgents:aim.activeAwayAgents).forEach(a=>a.updateConfidence(6));
+          }
+          // Sub impact (scored within 10 mins of coming on)
+          const subbedMin=newStats[event.player]?.subbedOnMinute;
+          if(subbedMin&&newMin-subbedMin<=10){
+            allEvents=[...allEvents,{minute:newMin,type:'sub_impact',team:event.team,player:event.player,
+              commentary:pick([`⚡ ${event.player} — on for just ${newMin-subbedMin} minutes and ALREADY on the scoresheet!`,`⚡ IMPACT SUBSTITUTION! ${event.player} proves the manager RIGHT immediately!`,`⚡ Off the bench and straight into the history books! ${event.player}!`]),momentumChange:[0,0]}];
+          }
+        }
+      }
+      const isKey=event.isGoal&&!varOverturned&&event.animation?.type==='goal';
+      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff};
     });
   };
 
