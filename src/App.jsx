@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings } from "lucide-react";
 import TEAMS from "./teams.js";
+import { AgentSystem, COMMENTATOR_PROFILES } from "./agents.js";
 
 const C = {
   abyss:'#111111', ash:'#1F1F1F', dust:'#E3E0D5',
@@ -194,10 +195,46 @@ const MatchSimulator = () => {
   const [selectedPlayer,setSelectedPlayer]=useState(null);
   const betsRef=useRef([]);
   const toastRef=useRef(null);
+  const [apiKey,setApiKey]=useState(()=>localStorage.getItem('isi_api_key')||'');
+  const [showApiKeyModal,setShowApiKeyModal]=useState(false);
+  const [agentFeed,setAgentFeed]=useState([]);
+  const [htLlmQuotes,setHtLlmQuotes]=useState(null);
+  const agentSystemRef=useRef(null);
+  const lastEventCountRef=useRef(0);
 
   useEffect(()=>{if(evtLogRef.current)evtLogRef.current.scrollTop=evtLogRef.current.scrollHeight;},[matchState.events]);
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
+
+  // Agent event processing: watch for new events and trigger LLM calls
+  useEffect(()=>{
+    const sys=agentSystemRef.current;
+    if(!sys||!matchState.events.length)return;
+    const newEvents=matchState.events.slice(lastEventCountRef.current);
+    lastEventCountRef.current=matchState.events.length;
+    const allAgents=aiManager?[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents]:[];
+    const gameState={minute:matchState.minute,score:matchState.score};
+    for(const event of newEvents){
+      if(!event)continue;
+      sys.processEvent(event,gameState,allAgents).then(results=>{
+        if(results.length)setAgentFeed(prev=>[...prev,...results].slice(-80));
+      });
+    }
+  },[matchState.events]);
+
+  // Halftime: generate LLM quotes when htReport appears
+  useEffect(()=>{
+    if(!htReport){setHtLlmQuotes(null);return;}
+    const sys=agentSystemRef.current;
+    if(!sys)return;
+    setHtLlmQuotes(null);
+    sys.generateHalftimeQuote(true,htReport.score,htReport.goals||[]).then(q=>{
+      if(q)setHtLlmQuotes(prev=>({...prev||{},home:q}));
+    });
+    sys.generateHalftimeQuote(false,htReport.score,htReport.goals||[]).then(q=>{
+      if(q)setHtLlmQuotes(prev=>({...prev||{},away:q}));
+    });
+  },[!!htReport]);
 
   const getActive=(team,active)=>team.players.filter(p=>active.includes(p.name));
   const teamStats=(team,active)=>{
@@ -1511,12 +1548,20 @@ const MatchSimulator = () => {
     if(matchState.isPlaying)return;
     let mgr=aiRef.current;
     if(!mgr){mgr=createAIManager(matchState.homeTeam,matchState.awayTeam);aiRef.current=mgr;setAiManager(mgr);}
+    if(apiKey&&!agentSystemRef.current){
+      agentSystemRef.current=new AgentSystem(apiKey,{
+        homeTeam:matchState.homeTeam,awayTeam:matchState.awayTeam,
+        referee:mgr.referee,homeManager:mgr.homeManager,awayManager:mgr.awayManager,
+        homeTactics:mgr.homeTactics,awayTactics:mgr.awayTactics,
+        stadium:mgr.stadium,weather:mgr.weather
+      });
+    }
     setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
     setShowBetting(false);
   };
   const pauseMatch=()=>{clearInterval(intervalRef.current);setMatchState(p=>({...p,isPlaying:false}));};
   const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));intervalRef.current=setInterval(simulateMinute,speed);}};
-  const resetMatch=()=>{clearInterval(intervalRef.current);aiRef.current=null;setAiManager(null);setMatchState(initState());setShowBetting(true);setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);setHtReport(null);setSelectedPlayer(null);};
+  const resetMatch=()=>{clearInterval(intervalRef.current);aiRef.current=null;agentSystemRef.current=null;lastEventCountRef.current=0;setAiManager(null);setMatchState(initState());setShowBetting(true);setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);setHtReport(null);setSelectedPlayer(null);setAgentFeed([]);setHtLlmQuotes(null);};
 
   const getOdds=()=>{
     const hStats=teamStats(matchState.homeTeam,matchState.activePlayers.home);
@@ -1659,6 +1704,72 @@ const MatchSimulator = () => {
     </div>
   );
 
+  const AgentCard=({item})=>{
+    const borderColor=item.type==='commentator'?item.color:item.type==='player_thought'?item.color:item.type==='manager'?item.color:item.type==='referee'?'#FFD700':C.purple;
+    const label=item.type==='commentator'?`${item.name} • ${item.role}`:item.type==='player_thought'?`${item.name} (inner thought)`:item.type==='manager'?`${item.name}`:item.type==='referee'?`${item.name} • Referee`:'Agent';
+    return(
+      <div className="p-2 border-l-2 mb-2" style={{borderColor,backgroundColor:C.abyss}}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-base">{item.emoji}</span>
+          <span className="text-xs font-bold" style={{color:borderColor}}>{label}</span>
+          <span className="text-xs ml-auto" style={{opacity:0.4}}>{item.minute}'</span>
+        </div>
+        <div className="text-xs italic" style={{opacity:0.9}}>"{item.text}"</div>
+      </div>
+    );
+  };
+
+  const ApiKeyModal=()=>{
+    const [draft,setDraft]=useState(apiKey);
+    const [testing,setTesting]=useState(false);
+    const [testResult,setTestResult]=useState(null);
+    const save=()=>{
+      localStorage.setItem('isi_api_key',draft);
+      setApiKey(draft);
+      setShowApiKeyModal(false);
+    };
+    const test=async()=>{
+      setTesting(true);setTestResult(null);
+      try{
+        const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':draft,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:10,messages:[{role:'user',content:'ping'}]})});
+        setTestResult(r.ok?'✅ Connected!':'❌ Invalid key');
+      }catch{setTestResult('❌ Request failed');}
+      setTesting(false);
+    };
+    return(
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{backgroundColor:'rgba(0,0,0,0.92)'}}>
+        <div className="w-full max-w-md border p-6" style={{...bdr(C.purple,C.ash)}}>
+          <h2 className="text-xl font-bold mb-1" style={{color:C.purple}}>⚙️ AGENT CONFIGURATION</h2>
+          <p className="text-xs mb-4" style={{opacity:0.6}}>Paste your Anthropic API key to enable LLM-powered agents. Your key is stored in <code>localStorage</code> and never leaves your browser.</p>
+          <div className="mb-3">
+            <label className="text-xs font-bold mb-1 block" style={{color:C.purple}}>ANTHROPIC API KEY</label>
+            <input type="password" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="sk-ant-..." className="w-full p-3 border text-sm font-mono" style={{backgroundColor:C.abyss,borderColor:C.dust,color:C.dust}}/>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <button onClick={test} disabled={testing||!draft} className="px-4 py-2 border text-sm" style={bdr(C.dust,C.abyss)}>{testing?'Testing...':'Test Key'}</button>
+            {testResult&&<span className="text-sm self-center">{testResult}</span>}
+          </div>
+          <div className="mb-4 p-3 border text-xs" style={bdr(C.dust,C.abyss)}>
+            <div className="font-bold mb-2" style={{color:C.purple}}>ACTIVE AGENTS</div>
+            {COMMENTATOR_PROFILES.map(p=>(
+              <div key={p.id} className="flex items-center gap-2 mb-1">
+                <span>{p.emoji}</span><span style={{color:p.color}}>{p.name}</span><span style={{opacity:0.5}}>— {p.role}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 mb-1"><span>🧑‍💼</span><span>Managers</span><span style={{opacity:0.5}}>— Touchline reactions</span></div>
+            <div className="flex items-center gap-2 mb-1"><span>⚖️</span><span>Referee</span><span style={{opacity:0.5}}>— Decision explanations</span></div>
+            <div className="flex items-center gap-2"><span>💭</span><span>Players</span><span style={{opacity:0.5}}>— Inner monologue</span></div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} disabled={!draft} className="flex-1 py-2 font-bold border" style={{backgroundColor:C.purple,color:C.abyss,borderColor:C.purple}}>SAVE &amp; ENABLE AGENTS</button>
+            <button onClick={()=>setShowApiKeyModal(false)} className="px-4 py-2 border" style={bdr(C.dust,C.abyss)}>CANCEL</button>
+          </div>
+          {apiKey&&<button onClick={()=>{localStorage.removeItem('isi_api_key');setApiKey('');setShowApiKeyModal(false);}} className="mt-2 w-full py-1 text-xs border" style={{borderColor:C.red,color:C.red,backgroundColor:C.abyss}}>CLEAR KEY &amp; DISABLE AGENTS</button>}
+        </div>
+      </div>
+    );
+  };
+
   const BetBtn=({type,odds,label,sub,color=C.purple})=>(
     <button onClick={()=>placeBet(type,betAmount,odds)} disabled={betAmount<=0}
       className="p-3 border w-full" style={{...bdr(color,C.abyss),opacity:betAmount<=0?0.5:1,cursor:betAmount<=0?'not-allowed':'pointer'}}>
@@ -1742,10 +1853,13 @@ const MatchSimulator = () => {
       )}
 
       <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-4">
+        <div className="text-center mb-4 relative">
+          <button onClick={()=>setShowApiKeyModal(true)} className="absolute right-0 top-0 p-2 border" style={bdr(apiKey?C.purple:C.dust,C.abyss)} title="Configure AI Agents">
+            <Settings size={14} style={{color:apiKey?C.purple:undefined}}/>
+          </button>
           <h1 className="text-2xl font-bold" style={{color:C.dust}}>INTERGALACTIC SOCCER LEAGUE</h1>
           <p className="text-xs" style={{opacity:0.6}}>MATCH SIMULATION</p>
-          {aiManager&&<div className="text-xs mt-1" style={{color:C.purple}}>🤖 AI AGENTS ACTIVE</div>}
+          {aiManager&&<div className="text-xs mt-1" style={{color:C.purple}}>🤖 AI AGENTS ACTIVE{apiKey&&agentSystemRef.current?' • 🧠 LLM AGENTS LIVE':apiKey?' • 🔑 KEY SET (start match to activate)':' • ⚙️ SET API KEY FOR LLM AGENTS'}</div>}
         </div>
 
         {aiManager&&!showBetting&&(
@@ -2053,6 +2167,7 @@ const MatchSimulator = () => {
         </div>
 
         {ms.isPlaying&&aiManager&&(
+          <>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="border p-2" style={bdr(C.purple)}>
               <div className="text-xs font-bold mb-2" style={{color:C.purple}}>🧠 AI THOUGHTS</div>
@@ -2069,6 +2184,33 @@ const MatchSimulator = () => {
               </div>
             </div>
           </div>
+          {agentSystemRef.current&&(
+            <div className="border p-2 mb-3" style={bdr(C.purple)}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="text-xs font-bold" style={{color:C.purple}}>🎙️ LIVE AGENT COMMENTARY</div>
+                <div className="flex gap-2 ml-auto text-xs" style={{opacity:0.6}}>
+                  {COMMENTATOR_PROFILES.map(p=><span key={p.id}>{p.emoji}{p.name.split('-')[0]}</span>)}
+                  <span>🧑‍💼 Mgr</span><span>⚖️ Ref</span><span>💭 Players</span>
+                </div>
+              </div>
+              <div className="space-y-1 h-56 overflow-y-auto" style={{scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
+                {agentFeed.length===0&&<div className="text-xs text-center py-10" style={{opacity:0.5}}>Agents are watching… significant events will trigger commentary.</div>}
+                {[...agentFeed].reverse().map((item,i)=><AgentCard key={i} item={item}/>)}
+              </div>
+            </div>
+          )}
+          {!agentSystemRef.current&&apiKey&&(
+            <div className="border p-3 mb-3 text-center text-xs" style={bdr(C.dust)}>
+              <span style={{opacity:0.5}}>API key set — agents will activate on next KICK OFF</span>
+            </div>
+          )}
+          {!apiKey&&(
+            <div className="border p-3 mb-3 text-center" style={bdr(C.dust)}>
+              <div className="text-xs mb-2" style={{opacity:0.6}}>Commentators, managers, referee, and players can be powered by Claude AI</div>
+              <button onClick={()=>setShowApiKeyModal(true)} className="px-4 py-1.5 border text-xs font-bold" style={bdr(C.purple,C.abyss)}>⚙️ SET API KEY TO ENABLE AGENTS</button>
+            </div>
+          )}
+          </>
         )}
 
         <div className="grid grid-cols-2 gap-2 mb-3">
@@ -2114,10 +2256,10 @@ const MatchSimulator = () => {
                   <span style={{color:C.purple}}>{g.minute}'</span><span className="font-bold">{g.player}</span><span style={{opacity:0.5}}>{g.team}</span>
                 </div>))}</div>}
               <div className="grid grid-cols-2 gap-2 mb-3">
-                {[[C.red,htReport.homeManager,htReport.homeQuote],[C.purple,htReport.awayManager,htReport.awayQuote]].map(([col,name,quote])=>(
+                {[[C.red,htReport.homeManager,htLlmQuotes?.home||htReport.homeQuote,!htLlmQuotes?.home&&agentSystemRef.current],[C.purple,htReport.awayManager,htLlmQuotes?.away||htReport.awayQuote,!htLlmQuotes?.away&&agentSystemRef.current]].map(([col,name,quote,isLoading])=>(
                   <div key={name} className="p-2 border" style={bdr(col,C.abyss)}>
-                    <div className="text-xs font-bold mb-1" style={{color:col}}>🎙️ {name}</div>
-                    <div className="text-xs italic" style={{opacity:0.8}}>"{quote}"</div>
+                    <div className="text-xs font-bold mb-1 flex items-center gap-1" style={{color:col}}>🎙️ {name}{agentSystemRef.current&&<span style={{opacity:0.5,fontSize:9}}>AI</span>}</div>
+                    {isLoading?<div className="text-xs" style={{opacity:0.4}}>Generating...</div>:<div className="text-xs italic" style={{opacity:0.8}}>"{quote}"</div>}
                   </div>
                 ))}
               </div>
@@ -2145,6 +2287,7 @@ const MatchSimulator = () => {
       )}
 
       <PlayerCard sp={selectedPlayer}/>
+      {showApiKeyModal&&<ApiKeyModal/>}
 
       <style>{`
         @keyframes goalPulse{0%{opacity:1;transform:scale(0.5);}50%{opacity:1;transform:scale(1.5);}100%{opacity:0;transform:scale(0.8);}}
