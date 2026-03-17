@@ -197,30 +197,89 @@ const MatchSimulator = () => {
   const toastRef=useRef(null);
   const [apiKey,setApiKey]=useState(()=>localStorage.getItem('isi_api_key')||'');
   const [showApiKeyModal,setShowApiKeyModal]=useState(false);
-  const [agentFeed,setAgentFeed]=useState([]);
+  const [commentaryFeed,setCommentaryFeed]=useState([]);
+  const [homeManagerFeed,setHomeManagerFeed]=useState([]);
+  const [awayManagerFeed,setAwayManagerFeed]=useState([]);
+  const [homeThoughtsFeed,setHomeThoughtsFeed]=useState([]);
+  const [awayThoughtsFeed,setAwayThoughtsFeed]=useState([]);
   const [htLlmQuotes,setHtLlmQuotes]=useState(null);
   const agentSystemRef=useRef(null);
   const lastEventCountRef=useRef(0);
+  const lastThoughtsCountRef=useRef(0);
 
-  useEffect(()=>{if(evtLogRef.current)evtLogRef.current.scrollTop=evtLogRef.current.scrollHeight;},[matchState.events]);
+  useEffect(()=>{if(evtLogRef.current)evtLogRef.current.scrollTop=0;},[commentaryFeed]);
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
 
-  // Agent event processing: watch for new events and trigger LLM calls
+  // Route a single LLM result to the correct feed
+  const routeAgentResult=(r)=>{
+    if(!r)return;
+    if(r.type==='commentator'||r.type==='referee'){
+      setCommentaryFeed(p=>[...p,r].slice(-120));
+    }else if(r.type==='player_thought'){
+      if(r.isHome)setHomeThoughtsFeed(p=>[...p,r].slice(-60));
+      else setAwayThoughtsFeed(p=>[...p,r].slice(-60));
+    }else if(r.type==='manager'){
+      if(r.isHome)setHomeManagerFeed(p=>[...p,r].slice(-40));
+      else setAwayManagerFeed(p=>[...p,r].slice(-40));
+    }
+  };
+
+  // Classify and route a procedural (no-LLM) event to the correct feed
+  const routeFallbackEvent=(event,homeShortName)=>{
+    if(!event||!event.commentary)return;
+    const isHome=event.team===homeShortName;
+    const managerTypes=['team_talk','manager_shout','desperate_sub','manager_sentoff','siege_start'];
+    const thoughtTypes=['captain_rally'];
+    const skipTypes=['social','penalty_incident','penalty_injury_concern','penalty_red_card',
+      'penalty_yellow_card','penalty_reaction','penalty_awarded','penalty_taker_change',
+      'penalty_tension','var_check','var_decision'];
+    if(skipTypes.some(t=>event.type===t))return;
+    if(managerTypes.includes(event.type)){
+      const item={type:'manager',isHome,text:event.commentary,minute:event.minute,emoji:'🧑‍💼',name:isHome?aiManager?.homeManager?.name||'Manager':aiManager?.awayManager?.name||'Manager',color:isHome?matchState.homeTeam.color:matchState.awayTeam.color};
+      if(isHome)setHomeManagerFeed(p=>[...p,item].slice(-40));
+      else setAwayManagerFeed(p=>[...p,item].slice(-40));
+    }else if(thoughtTypes.includes(event.type)){
+      const item={type:'player_thought',isHome,text:event.commentary,minute:event.minute,emoji:'💭',name:event.player||'Player',color:isHome?matchState.homeTeam.color:matchState.awayTeam.color};
+      if(isHome)setHomeThoughtsFeed(p=>[...p,item].slice(-60));
+      else setAwayThoughtsFeed(p=>[...p,item].slice(-60));
+    }else{
+      setCommentaryFeed(p=>[...p,{type:'commentary',text:event.commentary,minute:event.minute,isGoal:event.isGoal,cardType:event.cardType}].slice(-120));
+    }
+  };
+
+  // Agent event processing: watch for new events, trigger LLM or route fallback
   useEffect(()=>{
-    const sys=agentSystemRef.current;
-    if(!sys||!matchState.events.length)return;
+    if(!matchState.events.length)return;
     const newEvents=matchState.events.slice(lastEventCountRef.current);
     lastEventCountRef.current=matchState.events.length;
+    const sys=agentSystemRef.current;
     const allAgents=aiManager?[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents]:[];
     const gameState={minute:matchState.minute,score:matchState.score};
     for(const event of newEvents){
       if(!event)continue;
-      sys.processEvent(event,gameState,allAgents).then(results=>{
-        if(results.length)setAgentFeed(prev=>[...prev,...results].slice(-80));
-      });
+      if(sys){
+        sys.queueEvent(event,gameState,allAgents).then(results=>{results.forEach(routeAgentResult);});
+      }else{
+        routeFallbackEvent(event,matchState.homeTeam.shortName);
+      }
     }
   },[matchState.events]);
+
+  // Route procedural player thoughts (no-LLM fallback) to team panels
+  useEffect(()=>{
+    if(agentSystemRef.current)return; // LLM handles thoughts
+    const thoughts=matchState.aiThoughts||[];
+    if(thoughts.length<=lastThoughtsCountRef.current)return;
+    const newThoughts=thoughts.slice(lastThoughtsCountRef.current);
+    lastThoughtsCountRef.current=thoughts.length;
+    for(const t of newThoughts){
+      const isHome=matchState.homeTeam.players.some(p=>p.name===t.player);
+      const item={type:'player_thought',isHome,text:t.text,minute:t.minute,emoji:t.emoji,name:t.player,color:isHome?matchState.homeTeam.color:matchState.awayTeam.color};
+      if(isHome)setHomeThoughtsFeed(p=>[...p,item].slice(-60));
+      else setAwayThoughtsFeed(p=>[...p,item].slice(-60));
+    }
+  },[matchState.aiThoughts]);
 
   // Halftime: generate LLM quotes when htReport appears
   useEffect(()=>{
@@ -1561,7 +1620,7 @@ const MatchSimulator = () => {
   };
   const pauseMatch=()=>{clearInterval(intervalRef.current);setMatchState(p=>({...p,isPlaying:false}));};
   const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));intervalRef.current=setInterval(simulateMinute,speed);}};
-  const resetMatch=()=>{clearInterval(intervalRef.current);aiRef.current=null;agentSystemRef.current=null;lastEventCountRef.current=0;setAiManager(null);setMatchState(initState());setShowBetting(true);setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);setHtReport(null);setSelectedPlayer(null);setAgentFeed([]);setHtLlmQuotes(null);};
+  const resetMatch=()=>{clearInterval(intervalRef.current);aiRef.current=null;agentSystemRef.current=null;lastEventCountRef.current=0;lastThoughtsCountRef.current=0;setAiManager(null);setMatchState(initState());setShowBetting(true);setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);setAwayThoughtsFeed([]);setHtLlmQuotes(null);};
 
   const getOdds=()=>{
     const hStats=teamStats(matchState.homeTeam,matchState.activePlayers.home);
@@ -1860,7 +1919,7 @@ const MatchSimulator = () => {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-4 relative">
           <button onClick={()=>setShowApiKeyModal(true)} className="absolute right-0 top-0 p-2 border" style={bdr(apiKey?C.purple:C.dust,C.abyss)} title="Configure AI Agents">
             <Settings size={14} style={{color:apiKey?C.purple:undefined}}/>
@@ -2100,125 +2159,221 @@ const MatchSimulator = () => {
           </div>
         </div>
 
-        <div className="border mb-3 p-3" style={bdr(C.dust)}>
-          <div className="text-xs font-bold mb-2 text-center" style={{color:C.purple}}>⚽ LIVE PITCH</div>
-          <div className="relative h-32 border-2" style={{backgroundColor:'#1a4d2e',borderColor:C.dust,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.05) 19px,rgba(255,255,255,0.05) 20px)'}}>
-            <div className="absolute left-1/2 top-0 bottom-0 w-px" style={{backgroundColor:C.dust,opacity:0.3}}/>
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border-2" style={{borderColor:C.dust,opacity:0.3}}/>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-10 border-2 border-l-0" style={{borderColor:ms.homeTeam.color,backgroundColor:`${ms.homeTeam.color}20`}}/>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-10 border-2 border-r-0" style={{borderColor:ms.awayTeam.color,backgroundColor:`${ms.awayTeam.color}20`}}/>
-            <div className="absolute top-1/2 -translate-y-1/2 text-lg transition-all duration-1000" style={{left:`calc(${ms.possession[0]}% - 12px)`}}>⚽</div>
-            {aiManager&&[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion!=='neutral').slice(0,4).map((a,i)=>(
-              <div key={i} className="absolute text-xs" style={{left:`${a.isHome?10+i*12:55+i*10}%`,top:`${20+i*20}%`,title:a.emotion}}>
-                {a.emotion==='ecstatic'?'😄':a.emotion==='frustrated'?'😤':a.emotion==='anxious'?'😰':a.emotion==='proud'?'😊':'😡'}
-                <span className="text-xs">{a.player.name.split(' ')[0]}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between text-xs mt-1" style={{opacity:0.6}}>
-            <span style={{color:ms.homeTeam.color}}>{ms.homeTeam.shortName} {ms.possession[0]>55?'⚔️':''}</span>
-            <span>{ms.possession[0]>55?`${ms.homeTeam.shortName} ATTACKING`:ms.possession[0]<45?`${ms.awayTeam.shortName} ATTACKING`:'MIDFIELD BATTLE'}</span>
-            <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔️':''} {ms.awayTeam.shortName}</span>
-          </div>
-        </div>
+        {/* ── 3-column live feeds ──────────────────────────────────────────────── */}
+        {aiManager&&(
+          <div className="grid gap-3 mb-3" style={{gridTemplateColumns:'1fr 1.4fr 1fr'}}>
 
-        {ms.mvp&&<div className="border p-3 mb-3 flex items-center gap-3" style={bdr(C.purple)}>
-          <div className="text-3xl">⭐</div>
-          <div className="flex-1">
-            <div className="text-xs font-bold" style={{color:C.purple}}>MATCH MVP</div>
-            <div className="text-xl font-bold" style={{color:ms.mvp.teamColor}}>{ms.mvp.name}</div>
-            <div className="text-xs" style={{opacity:0.6}}>{ms.mvp.position} &bull; {ms.mvp.team}</div>
-          </div>
-          <div className="flex gap-3 text-xs text-center">
-            {ms.mvp.stats.goals>0&&<div><div>⚽</div><div className="font-bold">{ms.mvp.stats.goals}</div></div>}
-            {ms.mvp.stats.assists>0&&<div><div>👟</div><div className="font-bold">{ms.mvp.stats.assists}</div></div>}
-            {ms.mvp.stats.saves>0&&<div><div>✋</div><div className="font-bold">{ms.mvp.stats.saves}</div></div>}
-          </div>
-        </div>}
-
-        <div className="border mb-3" style={bdr(C.dust)}>
-          <div className="p-2 font-bold text-sm border-b" style={{backgroundColor:C.abyss,borderColor:C.dust,color:C.purple}}>📋 MATCH EVENTS</div>
-          <div ref={evtLogRef} className="p-2 h-48 overflow-y-auto space-y-1 text-xs" style={{scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
-            {ms.events.length===0?<div className="text-center py-16" style={{opacity:0.5}}>Press PLAY to start</div>:
-            (()=>{
-              const filtered=ms.events.filter(e=>e&&e.commentary&&e.type!=='ai_thought');
-              const grouped=[];let curPen=null;
-              filtered.forEach(e=>{
-                const isPen=e.type&&e.type.startsWith('penalty_');
-                if(isPen){if(!curPen)curPen={minute:e.minute,thread:[],isPenaltyThread:true};curPen.thread.push(e);}
-                else{if(curPen){grouped.push(curPen);curPen=null;}grouped.push(e);}
-              });
-              if(curPen)grouped.push(curPen);
-              return grouped.map((item,i)=>{
-                if(item.isPenaltyThread)return(
-                  <div key={i} className="border-l-4 pl-2 py-1" style={{borderColor:C.red,backgroundColor:`${C.red}08`}}>
-                    <div className="font-bold mb-1" style={{color:C.red}}>{item.minute}' 🚨 PENALTY SEQUENCE</div>
-                    {item.thread.map((e,j)=>{
-                      const icons={penalty_incident:'💥',penalty_injury_concern:'😰',penalty_red_card:'🟥',penalty_yellow_card:'🟨',penalty_reaction:'😡',penalty_awarded:'👉',penalty_taker_change:'👀',penalty_tension:'⏸️'};
-                      const icon=e.type==='penalty_shot'?(e.isGoal?'⚽':e.outcome==='saved'?'✋':'😱'):(icons[e.type]||'▸');
-                      return<div key={j} className="flex gap-2 mb-1"><span>{icon}</span><span className={e.type==='penalty_shot'?'font-bold':''}>{e.commentary}</span></div>;
-                    })}
-                  </div>
-                );
-                return(
-                  <div key={i} className="p-1.5 border flex gap-2" style={{borderColor:item.isGoal?C.purple:item.cardType==='red'?C.red:C.dust,backgroundColor:item.isGoal?`${C.purple}20`:item.cardType==='red'?`${C.red}10`:C.abyss}}>
-                    <div className="font-bold min-w-8" style={{color:C.purple}}>{item.minute}'</div>
-                    <div>
-                      <div>{item.commentary}</div>
-                      {item.substituteInfo&&<div className="text-xs mt-0.5" style={{opacity:0.7,color:C.purple}}>{item.substituteInfo.in?`↓${item.substituteInfo.out} ↑${item.substituteInfo.in}`:<span style={{color:C.red}}>No replacement</span>}</div>}
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </div>
-
-        {ms.isPlaying&&aiManager&&(
-          <>
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="border p-2" style={bdr(C.purple)}>
-              <div className="text-xs font-bold mb-2" style={{color:C.purple}}>🧠 AI THOUGHTS</div>
-              <div className="space-y-1 h-48 overflow-y-auto" style={{scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
-                {(ms.aiThoughts||[]).slice(-12).reverse().map((t,i)=><FeedCard key={i} item={t} isThought={true}/>)}
-                {!ms.aiThoughts?.length&&<div className="text-xs text-center py-8" style={{opacity:0.5}}>No thoughts yet...</div>}
-              </div>
-            </div>
-            <div className="border p-2" style={bdr(C.purple)}>
-              <div className="text-xs font-bold mb-2" style={{color:C.purple}}>📱 GALACTIC SOCIAL</div>
-              <div className="space-y-1 h-48 overflow-y-auto" style={{scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
-                {(ms.socialFeed||[]).slice(-10).reverse().map((p,i)=><FeedCard key={i} item={p} isThought={false}/>)}
-                {!ms.socialFeed?.length&&<div className="text-xs text-center py-8" style={{opacity:0.5}}>No posts yet...</div>}
-              </div>
-            </div>
-          </div>
-          {agentSystemRef.current&&(
-            <div className="border p-2 mb-3" style={bdr(C.purple)}>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="text-xs font-bold" style={{color:C.purple}}>🎙️ LIVE AGENT COMMENTARY</div>
-                <div className="flex gap-2 ml-auto text-xs" style={{opacity:0.6}}>
-                  {COMMENTATOR_PROFILES.map(p=><span key={p.id}>{p.emoji}{p.name.split('-')[0]}</span>)}
-                  <span>🧑‍💼 Mgr</span><span>⚖️ Ref</span><span>💭 Players</span>
+            {/* ── LEFT: Home Team ─────────────────────────────────────── */}
+            <div className="flex flex-col gap-2">
+              <div className="border p-2" style={bdr(ms.homeTeam.color,C.ash)}>
+                <div className="text-sm font-bold truncate" style={{color:ms.homeTeam.color}}>{ms.homeTeam.name}</div>
+                <div className="text-xs mt-0.5" style={{opacity:0.6}}>{aiManager.homeFormation} • {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span>{EMO_ICON[aiManager.homeManager.emotion]||'😐'}</span>
+                  <span className="text-xs font-bold" style={{color:ms.homeTeam.color}}>{aiManager.homeManager.name}</span>
+                  <span className="text-xs ml-auto" style={{opacity:0.5}}>{ms.substitutionsUsed.home}/3 subs</span>
                 </div>
               </div>
-              <div className="space-y-1 h-56 overflow-y-auto" style={{scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
-                {agentFeed.length===0&&<div className="text-xs text-center py-10" style={{opacity:0.5}}>Agents are watching… significant events will trigger commentary.</div>}
-                {[...agentFeed].reverse().map((item,i)=><AgentCard key={i} item={item}/>)}
+              <div className="border" style={bdr(ms.homeTeam.color)}>
+                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:ms.homeTeam.color,color:ms.homeTeam.color}}>🧑‍💼 MANAGER</div>
+                <div className="p-2 overflow-y-auto" style={{height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} ${C.abyss}`}}>
+                  {homeManagerFeed.length===0
+                    ?<div className="text-xs text-center py-8" style={{opacity:0.4}}>Watching from the touchline...</div>
+                    :[...homeManagerFeed].reverse().map((item,i)=>(
+                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.homeTeam.color}30`}}>
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className="text-xs font-bold" style={{color:ms.homeTeam.color}}>{item.emoji} {item.name}</span>
+                          <span className="text-xs ml-auto" style={{opacity:0.4}}>{item.minute}'</span>
+                        </div>
+                        <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+              <div className="border" style={bdr(`${ms.homeTeam.color}80`,C.abyss)}>
+                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:`${ms.homeTeam.color}80`,color:ms.homeTeam.color}}>💭 PLAYER THOUGHTS</div>
+                <div className="p-2 overflow-y-auto" style={{height:'220px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} ${C.abyss}`}}>
+                  {homeThoughtsFeed.length===0
+                    ?<div className="text-xs text-center py-10" style={{opacity:0.4}}>Quiet minds...</div>
+                    :[...homeThoughtsFeed].reverse().map((item,i)=>(
+                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.homeTeam.color}25`}}>
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span>{item.emoji}</span>
+                          <span className="text-xs font-bold truncate" style={{color:item.color||ms.homeTeam.color}}>{item.name}</span>
+                          <span className="text-xs ml-auto shrink-0" style={{opacity:0.4}}>{item.minute}'</span>
+                        </div>
+                        <div className="text-xs italic leading-relaxed" style={{opacity:0.85}}>"{item.text}"</div>
+                      </div>
+                    ))
+                  }
+                </div>
               </div>
             </div>
-          )}
-          {!agentSystemRef.current&&apiKey&&(
-            <div className="border p-3 mb-3 text-center text-xs" style={bdr(C.dust)}>
-              <span style={{opacity:0.5}}>API key set — agents will activate on next KICK OFF</span>
+
+            {/* ── CENTRE: Pitch + Commentary ──────────────────────────── */}
+            <div className="flex flex-col gap-2">
+              <div className="border p-2" style={bdr(C.dust)}>
+                <div className="text-xs font-bold mb-1.5 text-center" style={{color:C.purple}}>⚽ LIVE PITCH</div>
+                <div className="relative border-2" style={{height:'88px',backgroundColor:'#1a4d2e',borderColor:C.dust,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.05) 19px,rgba(255,255,255,0.05) 20px)'}}>
+                  <div className="absolute left-1/2 top-0 bottom-0 w-px" style={{backgroundColor:C.dust,opacity:0.3}}/>
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full border-2" style={{borderColor:C.dust,opacity:0.3}}/>
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-8 border-2 border-l-0" style={{borderColor:ms.homeTeam.color,backgroundColor:`${ms.homeTeam.color}20`}}/>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-8 border-2 border-r-0" style={{borderColor:ms.awayTeam.color,backgroundColor:`${ms.awayTeam.color}20`}}/>
+                  <div className="absolute top-1/2 -translate-y-1/2 text-lg transition-all duration-1000" style={{left:`calc(${ms.possession[0]}% - 10px)`}}>⚽</div>
+                  {[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion!=='neutral').slice(0,4).map((a,i)=>(
+                    <div key={i} className="absolute text-xs" style={{left:`${a.isHome?8+i*10:52+i*10}%`,top:`${15+i*20}%`}}>
+                      {a.emotion==='ecstatic'?'😄':a.emotion==='frustrated'?'😤':a.emotion==='anxious'?'😰':a.emotion==='proud'?'😊':'😡'}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs mt-1" style={{opacity:0.6}}>
+                  <span style={{color:ms.homeTeam.color}}>{ms.homeTeam.shortName}{ms.possession[0]>55?' ⚔️':''}</span>
+                  <span>{ms.possession[0]>55?'ATTACKING':ms.possession[0]<45?`${ms.awayTeam.shortName} ATTACKING`:'MIDFIELD'}</span>
+                  <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔️ ':''}{ms.awayTeam.shortName}</span>
+                </div>
+              </div>
+
+              {ms.mvp&&(
+                <div className="border p-2 flex items-center gap-2" style={bdr(C.purple,`${C.purple}15`)}>
+                  <div className="text-2xl">⭐</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs" style={{color:C.purple}}>MATCH MVP</div>
+                    <div className="text-sm font-bold truncate" style={{color:ms.mvp.teamColor}}>{ms.mvp.name}</div>
+                    <div className="text-xs" style={{opacity:0.5}}>{ms.mvp.position} • {ms.mvp.team}</div>
+                  </div>
+                  <div className="flex gap-2 text-xs shrink-0">
+                    {ms.mvp.stats.goals>0&&<span>⚽{ms.mvp.stats.goals}</span>}
+                    {ms.mvp.stats.assists>0&&<span>👟{ms.mvp.stats.assists}</span>}
+                    {ms.mvp.stats.saves>0&&<span>✋{ms.mvp.stats.saves}</span>}
+                  </div>
+                </div>
+              )}
+
+              <div className="border flex-1" style={bdr(C.purple)}>
+                <div className="px-2 py-1.5 border-b flex items-center gap-2" style={{borderColor:C.purple,backgroundColor:`${C.purple}10`}}>
+                  <span className="text-xs font-bold" style={{color:C.purple}}>🎙️ COMMENTARY</span>
+                  {agentSystemRef.current&&(
+                    <div className="flex gap-1.5 ml-auto">
+                      {COMMENTATOR_PROFILES.map(p=><span key={p.id} className="text-sm" title={`${p.name} • ${p.role}`}>{p.emoji}</span>)}
+                      <span className="text-sm" title="Referee">⚖️</span>
+                    </div>
+                  )}
+                  {!agentSystemRef.current&&apiKey&&(
+                    <span className="ml-auto text-xs" style={{opacity:0.5}}>key set — next kick off</span>
+                  )}
+                  {!agentSystemRef.current&&!apiKey&&(
+                    <button onClick={()=>setShowApiKeyModal(true)} className="ml-auto text-xs border px-2 py-0.5" style={bdr(C.purple,C.abyss)}>⚙️ ENABLE AI</button>
+                  )}
+                </div>
+                <div ref={evtLogRef} className="p-2 overflow-y-auto" style={{height:'360px',scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
+                  {commentaryFeed.length===0&&(
+                    <div className="text-xs text-center py-20" style={{opacity:0.4}}>
+                      {ms.minute===0?'Press PLAY to begin':'Agents are watching...'}
+                    </div>
+                  )}
+                  {[...commentaryFeed].reverse().map((item,i)=>{
+                    if(item.type==='commentator'){
+                      return(
+                        <div key={i} className="mb-3 border-l-2 pl-2" style={{borderColor:item.color}}>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-sm">{item.emoji}</span>
+                            <span className="text-xs font-bold" style={{color:item.color}}>{item.name}</span>
+                            <span className="text-xs" style={{color:item.color,opacity:0.55}}>{item.role}</span>
+                            <span className="text-xs ml-auto" style={{opacity:0.35}}>{item.minute}'</span>
+                          </div>
+                          <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                        </div>
+                      );
+                    }
+                    if(item.type==='referee'){
+                      return(
+                        <div key={i} className="mb-3 border-l-2 pl-2" style={{borderColor:'#FFD700'}}>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-sm">⚖️</span>
+                            <span className="text-xs font-bold" style={{color:'#FFD700'}}>{item.name}</span>
+                            <span className="text-xs ml-auto" style={{opacity:0.35}}>{item.minute}'</span>
+                          </div>
+                          <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                        </div>
+                      );
+                    }
+                    const bc=item.isGoal?C.purple:item.cardType==='red'?C.red:item.cardType==='yellow'?'#FFD700':C.dust;
+                    return(
+                      <div key={i} className="mb-2 border-l-2 pl-2" style={{borderColor:bc,backgroundColor:item.isGoal?`${C.purple}10`:item.cardType==='red'?`${C.red}08`:undefined}}>
+                        <div className="flex gap-2 text-xs">
+                          <span className="font-bold shrink-0" style={{color:C.purple}}>{item.minute}'</span>
+                          <span className="leading-relaxed" style={{opacity:0.9}}>{item.text}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          )}
-          {!apiKey&&(
-            <div className="border p-3 mb-3 text-center" style={bdr(C.dust)}>
-              <div className="text-xs mb-2" style={{opacity:0.6}}>Commentators, managers, referee, and players can be powered by Claude AI</div>
-              <button onClick={()=>setShowApiKeyModal(true)} className="px-4 py-1.5 border text-xs font-bold" style={bdr(C.purple,C.abyss)}>⚙️ SET API KEY TO ENABLE AGENTS</button>
+
+            {/* ── RIGHT: Away Team ─────────────────────────────────────── */}
+            <div className="flex flex-col gap-2">
+              <div className="border p-2" style={bdr(ms.awayTeam.color,C.ash)}>
+                <div className="text-sm font-bold truncate" style={{color:ms.awayTeam.color}}>{ms.awayTeam.name}</div>
+                <div className="text-xs mt-0.5" style={{opacity:0.6}}>{aiManager.awayFormation} • {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span>{EMO_ICON[aiManager.awayManager.emotion]||'😐'}</span>
+                  <span className="text-xs font-bold" style={{color:ms.awayTeam.color}}>{aiManager.awayManager.name}</span>
+                  <span className="text-xs ml-auto" style={{opacity:0.5}}>{ms.substitutionsUsed.away}/3 subs</span>
+                </div>
+              </div>
+              <div className="border" style={bdr(ms.awayTeam.color)}>
+                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:ms.awayTeam.color,color:ms.awayTeam.color}}>🧑‍💼 MANAGER</div>
+                <div className="p-2 overflow-y-auto" style={{height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} ${C.abyss}`}}>
+                  {awayManagerFeed.length===0
+                    ?<div className="text-xs text-center py-8" style={{opacity:0.4}}>Watching from the touchline...</div>
+                    :[...awayManagerFeed].reverse().map((item,i)=>(
+                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.awayTeam.color}30`}}>
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className="text-xs font-bold" style={{color:ms.awayTeam.color}}>{item.emoji} {item.name}</span>
+                          <span className="text-xs ml-auto" style={{opacity:0.4}}>{item.minute}'</span>
+                        </div>
+                        <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+              <div className="border" style={bdr(`${ms.awayTeam.color}80`,C.abyss)}>
+                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:`${ms.awayTeam.color}80`,color:ms.awayTeam.color}}>💭 PLAYER THOUGHTS</div>
+                <div className="p-2 overflow-y-auto" style={{height:'220px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} ${C.abyss}`}}>
+                  {awayThoughtsFeed.length===0
+                    ?<div className="text-xs text-center py-10" style={{opacity:0.4}}>Quiet minds...</div>
+                    :[...awayThoughtsFeed].reverse().map((item,i)=>(
+                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.awayTeam.color}25`}}>
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span>{item.emoji}</span>
+                          <span className="text-xs font-bold truncate" style={{color:item.color||ms.awayTeam.color}}>{item.name}</span>
+                          <span className="text-xs ml-auto shrink-0" style={{opacity:0.4}}>{item.minute}'</span>
+                        </div>
+                        <div className="text-xs italic leading-relaxed" style={{opacity:0.85}}>"{item.text}"</div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
             </div>
-          )}
-          </>
+
+          </div>
+        )}
+
+        {/* ── Pre-match AI prompt ─────────────────────────────────────────────── */}
+        {!aiManager&&!apiKey&&(
+          <div className="border p-3 mb-3 text-center" style={bdr(C.dust)}>
+            <div className="text-xs mb-2" style={{opacity:0.6}}>Commentators, managers &amp; players can be powered by Claude AI</div>
+            <button onClick={()=>setShowApiKeyModal(true)} className="px-4 py-1.5 border text-xs font-bold" style={bdr(C.purple,C.abyss)}>⚙️ SET API KEY TO ENABLE AGENTS</button>
+          </div>
+        )}
+        {!aiManager&&apiKey&&(
+          <div className="border p-2 mb-3 text-center text-xs" style={bdr(C.dust)}>
+            <span style={{opacity:0.5}}>🔑 API key set — LLM agents activate on KICK OFF</span>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-2 mb-3">
