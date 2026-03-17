@@ -69,7 +69,9 @@ export class AgentSystem {
     this.refHistory           = [];
 
     this._lastCallTime = 0;
-    this._cooldownMs   = 1500; // minimum ms between event batches
+    this._cooldownMs   = 1500;
+    this._eventQueue   = [];
+    this._draining     = false;
   }
 
   // ── Shared helpers ─────────────────────────────────────────────────────────
@@ -98,11 +100,15 @@ export class AgentSystem {
     const userMsg = [
       this._ctx(gameState),
       `Event: "${event.commentary}"`,
-      event.isGoal        ? '[GOAL SCORED]'           : '',
-      event.cardType === 'red'    ? '[RED CARD]'      : '',
-      event.cardType === 'yellow' ? '[YELLOW CARD]'   : '',
-      event.type === 'injury'     ? '[INJURY]'        : '',
-      event.isControversial       ? '[CONTROVERSIAL]' : '',
+      event.isGoal              ? '[GOAL SCORED]'       : '',
+      event.cardType === 'red'  ? '[RED CARD]'          : '',
+      event.cardType === 'yellow' ? '[YELLOW CARD]'     : '',
+      event.type === 'injury'   ? '[INJURY]'            : '',
+      event.isControversial     ? '[CONTROVERSIAL]'     : '',
+      event.type === 'team_talk'     ? '[TEAM TALK]'    : '',
+      event.type === 'manager_shout' ? '[MANAGER SHOUT]': '',
+      event.type === 'captain_rally' ? '[CAPTAIN RALLY]': '',
+      event.type === 'desperate_sub' ? '[SUBSTITUTION]' : '',
       '\nGive your live commentary for this moment.',
     ].filter(Boolean).join(' ');
 
@@ -145,10 +151,11 @@ export class AgentSystem {
       const text = await this._call(system, [{ role: 'user', content: userMsg }], 80);
       if (!text) return null;
       return {
-        type:  'player_thought',
-        name:  player.name,
-        emoji: PERS_EMOJI[agent?.personality] || '💭',
-        color: isHome ? this.homeTeam.color : this.awayTeam.color,
+        type:   'player_thought',
+        isHome,
+        name:   player.name,
+        emoji:  PERS_EMOJI[agent?.personality] || '💭',
+        color:  isHome ? this.homeTeam.color : this.awayTeam.color,
         text,
         minute: gameState.minute,
       };
@@ -187,6 +194,7 @@ export class AgentSystem {
       if (history.length > 10) history.splice(0, 2);
       return {
         type:  'manager',
+        isHome,
         name:  mgr.name,
         emoji: '🧑‍💼',
         color: isHome ? this.homeTeam.color : this.awayTeam.color,
@@ -266,64 +274,104 @@ export class AgentSystem {
     } catch { return null; }
   }
 
-  // ── Main event processor ───────────────────────────────────────────────────
+  // ── Event classification ───────────────────────────────────────────────────
 
-  async processEvent(event, gameState, allAgents) {
-    // Cooldown check — avoids hammering on TURBO speed
-    const now = Date.now();
-    if (now - this._lastCallTime < this._cooldownMs) return [];
+  _classifyEvent(event) {
+    if (event.isGoal || event.cardType === 'red') return 'full';
+    if (event.cardType === 'yellow' || event.type === 'injury' || event.isControversial) return 'medium';
+    if (['team_talk', 'manager_shout', 'captain_rally', 'desperate_sub',
+         'manager_sentoff', 'siege_start'].includes(event.type)) return 'manager';
+    // Sub-events of sequences and social posts are skipped
+    if (event.type && (
+      event.type.startsWith('penalty_') ||
+      event.type.startsWith('var_') ||
+      event.type === 'social'
+    )) return 'skip';
+    return 'minor';
+  }
 
-    // Only process genuinely significant moments
-    const isSignificant = event.isGoal
-      || event.cardType === 'red'
-      || event.cardType === 'yellow'
-      || event.type === 'injury'
-      || event.isControversial;
-    if (!isSignificant) return [];
+  // ── Internal event processor ───────────────────────────────────────────────
 
-    this._lastCallTime = now;
+  async _processEventDirect(event, gameState, allAgents) {
+    const tier = this._classifyEvent(event);
+    if (tier === 'skip') return [];
 
     const results  = [];
     const promises = [];
     const push     = r => { if (r) results.push(r); };
 
-    // ─ Commentator(s): 2 for goals/reds, 1 otherwise
-    const useTwoCasters = event.isGoal || event.cardType === 'red';
-    const shuffled = [...COMMENTATOR_PROFILES].sort(() => Math.random() - 0.5);
-    const castIds  = useTwoCasters
-      ? [shuffled[0].id, shuffled[1].id]
-      : [shuffled[0].id];
+    const isHomeEvent = event.team === this.homeTeam.shortName;
 
-    for (const id of castIds) {
-      promises.push(this.generateCommentary(id, event, gameState).then(push));
+    // ─ Commentators
+    const numCasters = tier === 'full' ? 3 : tier === 'medium' ? 2 : 1;
+    const shuffled = [...COMMENTATOR_PROFILES].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < numCasters; i++) {
+      promises.push(this.generateCommentary(shuffled[i].id, event, gameState).then(push));
     }
 
-    // ─ Player inner thought (goals and cards)
-    if (event.player && (event.isGoal || event.cardType)) {
+    // ─ Player inner thought
+    const wantThought = tier === 'full' || tier === 'medium' ||
+      (tier === 'minor' && event.player && Math.random() < 0.3);
+    if (wantThought && event.player) {
       const agent = allAgents?.find(a => a.player.name === event.player);
       if (agent) {
-        promises.push(
-          this.generatePlayerThought(agent.player, agent, event, gameState).then(push),
-        );
+        promises.push(this.generatePlayerThought(agent.player, agent, event, gameState).then(push));
       }
     }
 
-    // ─ Manager reactions (both for goals; scoring manager only for cards)
-    if (event.isGoal) {
-      const isHomeGoal = event.team === this.homeTeam.shortName;
-      promises.push(this.generateManagerReaction(isHomeGoal,  event, gameState).then(push));
-      promises.push(this.generateManagerReaction(!isHomeGoal, event, gameState).then(push));
-    } else if (event.cardType === 'red') {
-      const isHomeTeam = event.team === this.homeTeam.shortName;
-      promises.push(this.generateManagerReaction(isHomeTeam, event, gameState).then(push));
+    // ─ Manager reactions
+    if (tier === 'full') {
+      // Both managers react to goals and red cards
+      promises.push(this.generateManagerReaction(isHomeEvent,  event, gameState).then(push));
+      promises.push(this.generateManagerReaction(!isHomeEvent, event, gameState).then(push));
+    } else if (tier === 'medium') {
+      // Relevant manager reacts
+      promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
+    } else if (tier === 'manager') {
+      // Intervention events — the acting manager reacts
+      promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
     }
 
-    // ─ Referee (cards and controversial calls)
+    // ─ Referee for cards and controversial calls
     if (event.cardType || event.isControversial) {
       promises.push(this.generateRefDecision(event, gameState).then(push));
     }
 
     await Promise.allSettled(promises);
     return results;
+  }
+
+  // ── Queued event processor (public API) ───────────────────────────────────
+
+  queueEvent(event, gameState, allAgents) {
+    return new Promise(resolve => {
+      this._eventQueue.push({ event, gameState, allAgents, resolve });
+      if (!this._draining) this._drainQueue();
+    });
+  }
+
+  async _drainQueue() {
+    if (this._draining) return;
+    this._draining = true;
+    while (this._eventQueue.length) {
+      const { event, gameState, allAgents, resolve } = this._eventQueue.shift();
+      const now  = Date.now();
+      const wait = this._cooldownMs - (now - this._lastCallTime);
+      if (wait > 0) await new Promise(r => setTimeout(r, wait));
+      this._lastCallTime = Date.now();
+      try {
+        const results = await this._processEventDirect(event, gameState, allAgents);
+        resolve(results);
+      } catch {
+        resolve([]);
+      }
+    }
+    this._draining = false;
+  }
+
+  // ── Legacy processEvent (kept for halftime compatibility) ──────────────────
+
+  async processEvent(event, gameState, allAgents) {
+    return this.queueEvent(event, gameState, allAgents);
   }
 }
