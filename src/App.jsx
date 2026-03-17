@@ -1736,10 +1736,11 @@ const MatchSimulator = () => {
         await client.messages.create({model:'claude-haiku-4-5-20251001',max_tokens:5,messages:[{role:'user',content:'hi'}]});
         setTestResult('✅ Connected!');
       }catch(e){
-        const msg=e?.message||'';
-        if(msg.includes('401')||msg.includes('authentication')||msg.includes('API key'))setTestResult('❌ Invalid key — check console.anthropic.com');
+        const msg=e?.message||String(e);
+        console.error('API test error:',e);
+        if(msg.includes('401')||msg.toLowerCase().includes('authentication')||msg.toLowerCase().includes('api key'))setTestResult('❌ Invalid key — check console.anthropic.com');
         else if(msg.includes('403'))setTestResult('❌ Permission denied — check key permissions');
-        else setTestResult('❌ '+msg.slice(0,60));
+        else setTestResult('❌ '+msg);
       }
       setTesting(false);
     };
@@ -1752,10 +1753,10 @@ const MatchSimulator = () => {
             <label className="text-xs font-bold mb-1 block" style={{color:C.purple}}>ANTHROPIC API KEY</label>
             <input type="password" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="sk-ant-..." className="w-full p-3 border text-sm font-mono" style={{backgroundColor:C.abyss,borderColor:C.dust,color:C.dust}}/>
           </div>
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-1">
             <button onClick={test} disabled={testing||!draft} className="px-4 py-2 border text-sm" style={bdr(C.dust,C.abyss)}>{testing?'Testing...':'Test Key'}</button>
-            {testResult&&<span className="text-sm self-center">{testResult}</span>}
           </div>
+          {testResult&&<div className="mb-3 p-2 border text-xs font-mono break-all" style={{borderColor:testResult.startsWith('✅')?'#00cc66':C.red,color:testResult.startsWith('✅')?'#00cc66':C.red,backgroundColor:C.abyss}}>{testResult}</div>}
           <div className="mb-4 p-3 border text-xs" style={bdr(C.dust,C.abyss)}>
             <div className="font-bold mb-2" style={{color:C.purple}}>ACTIVE AGENTS</div>
             {COMMENTATOR_PROFILES.map(p=>(
