@@ -1733,7 +1733,7 @@ const MatchSimulator = () => {
       try{
         const {default:Anthropic}=await import('@anthropic-ai/sdk');
         const client=new Anthropic({apiKey:draft,dangerouslyAllowBrowser:true});
-        await client.messages.create({model:'claude-haiku-4-5',max_tokens:5,messages:[{role:'user',content:'hi'}]});
+        await client.messages.create({model:'claude-haiku-4-5-20251001',max_tokens:5,messages:[{role:'user',content:'hi'}]});
         setTestResult('✅ Connected!');
       }catch(e){
         const msg=e?.message||'';
