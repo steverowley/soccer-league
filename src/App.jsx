@@ -1731,9 +1731,16 @@ const MatchSimulator = () => {
     const test=async()=>{
       setTesting(true);setTestResult(null);
       try{
-        const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':draft,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:10,messages:[{role:'user',content:'ping'}]})});
-        setTestResult(r.ok?'✅ Connected!':'❌ Invalid key');
-      }catch{setTestResult('❌ Request failed');}
+        const {default:Anthropic}=await import('@anthropic-ai/sdk');
+        const client=new Anthropic({apiKey:draft,dangerouslyAllowBrowser:true});
+        await client.messages.create({model:'claude-haiku-4-5',max_tokens:5,messages:[{role:'user',content:'hi'}]});
+        setTestResult('✅ Connected!');
+      }catch(e){
+        const msg=e?.message||'';
+        if(msg.includes('401')||msg.includes('authentication')||msg.includes('API key'))setTestResult('❌ Invalid key — check console.anthropic.com');
+        else if(msg.includes('403'))setTestResult('❌ Permission denied — check key permissions');
+        else setTestResult('❌ '+msg.slice(0,60));
+      }
       setTesting(false);
     };
     return(
