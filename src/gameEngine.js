@@ -897,8 +897,300 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
   return _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum);
 }
 
-// Stub for Part 3 — replaced next commit
-function _genEventPart3() { return null; }
+// ── genEvent Part 3: attack + corner + injury + defense + passing ─────────────
+function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum) {
+  let player, defender, outcome, commentary, momentumChange = [0, 0];
+
+  if (roll < 0.40) {
+    // ATTACK / DRIBBLE
+    player   = getPlayer(posTeam, posActive, 'attacking');
+    defender = getPlayer(defTeam, defActive, 'defending');
+    if (!player || !defender) return null;
+    const net = player.attacking * 0.7 + player.athletic * 0.3 + rnd(-15, 15)
+              - (defender.defending * 0.7 + defender.athletic * 0.3 + rnd(-15, 15));
+    if (net > 20) {
+      if (Math.random() < 0.22) {
+        const skills = ['rabona', 'nutmeg', 'elastico', 'heel flick', 'step-over sequence', 'Cruyff turn', 'shoulder drop'];
+        const skill  = pick(skills);
+        return { minute: min, type: 'skill_moment', team: posTeam.shortName, player: player.name, defender: defender.name,
+          commentary: pick([
+            `✨ ${player.name} with the ${skill}! ${defender.name} absolutely FROZEN! The crowd erupts!`,
+            `✨ MAGIC from ${player.name}! The ${skill} leaves ${defender.name} in another dimension!`,
+            `✨ Ooh! ${player.name} — ${skill}! The cheer is IMMEDIATE!`,
+            `✨ Did you see THAT? ${player.name} with the ${skill} — ${defender.name} doesn't know which way he went!`,
+            `✨ ${player.name} shows off the full repertoire — ${skill} — and ${defender.name} is on the floor!`,
+          ]), momentumChange: isHome ? [3, 0] : [0, 3] };
+      }
+      outcome = 'breakthrough';
+      commentary = pick([
+        phase === 'dying' && `${player.name} SURGES FORWARD in injury time! The whole stadium on its feet!`,
+        scoreDiff < 0    && `${player.name} DRIVES at the defence — they NEED something here!`,
+        `${player.name} BREAKS THROUGH! Surging run!`,
+        `${player.name} is in on goal! DANGER!`,
+        `${player.name} splits the defence! 1-on-1!`,
+        `Nobody catching ${player.name} now! Sensational pace!`,
+        `${player.name} gone clear! The defence appeals in vain!`,
+        `${player.name} found a crack — and burst right through it!`,
+        `${player.name} leaves three defenders in his wake — UNSTOPPABLE!`,
+        `Space opened up. ${player.name} was there to exploit it immediately.`,
+        `That is a devastating run! ${player.name} in FULL FLIGHT!`,
+      ].filter(Boolean));
+      momentumChange = isHome ? [3, 0] : [0, 3];
+    } else if (net > 0) {
+      outcome = 'success';
+      commentary = pick([
+        `${player.name} advances past ${defender.name}`,
+        `${player.name} beats ${defender.name}`,
+        `Neat skill from ${player.name}`,
+        `${player.name} ghosts past ${defender.name}`,
+        `${player.name} with a clever touch — past ${defender.name}.`,
+        `${defender.name} had him closed down — ${player.name} found a way through.`,
+        `Clever from ${player.name} — draws the defender and slips by.`,
+        `${player.name} holds off ${defender.name} and drives forward.`,
+      ]);
+      momentumChange = isHome ? [1, 0] : [0, 1];
+    } else {
+      outcome = 'intercepted';
+      commentary = pick([
+        `${defender.name} intercepts ${player.name}`,
+        `${defender.name} reads it perfectly`,
+        `Great positioning from ${defender.name}`,
+        `${player.name} runs into a wall — ${defender.name} is immovable`,
+        `${defender.name} was always going to win that — brilliant reading of the game.`,
+        `${player.name} tried to force it — ${defender.name} had it read all along.`,
+        `${defender.name} closes down brilliantly — no room for ${player.name}.`,
+      ]);
+      momentumChange = isHome ? [-1, 0] : [0, -1];
+      if (Math.random() < 0.15) {
+        const cPlayer  = getPlayer(defTeam, defActive, 'athletic');
+        const cSupport = getPlayer(defTeam, defActive, 'technical');
+        const cGk      = getPlayer(posTeam, posActive, 'defending', 'GK');
+        if (cPlayer && cGk) {
+          const cSeq      = genCounterSeq(min, cPlayer, cGk, defTeam, cSupport);
+          const cAtkAgent = aim?.getAgentByName(cPlayer.name);
+          const cGkAgent  = aim?.getAgentByName(cGk.name);
+          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx });
+          const cGoal     = cResult.outcome === 'goal';
+          const cIsHome   = defTeam === homeTeam;
+          const intEvt    = { minute: min, type: 'attack', team: posTeam.shortName, player: player.name, defender: defender.name, outcome: 'intercepted', commentary, momentumChange: [0, 0] };
+          const cComm     = buildCommentary('shot', { attacker: cPlayer.name, defender: cGk.name }, cResult.outcome, cResult.flavour, matchCtx(cPlayer.name));
+          return { minute: min, type: 'counter_sequence', team: defTeam.shortName, player: cPlayer.name, outcome: cGoal ? 'goal' : 'saved', isGoal: cGoal, commentary: cComm, momentumChange: cIsHome ? [cGoal ? 8 : -1, 0] : [0, cGoal ? 8 : -1], animation: cGoal ? { type: 'goal', color: defTeam.color } : null, counterSequence: [intEvt, ...cSeq.sequence] };
+        }
+      }
+    }
+    return { minute: min, type: 'attack', team: posTeam.shortName, player: player.name, defender: defender.name, outcome, commentary, momentumChange };
+  }
+
+  if (roll < 0.48) {
+    // CORNER
+    player        = getPlayer(posTeam, posActive, 'technical');
+    const gk      = getPlayer(defTeam, defActive, 'defending', 'GK');
+    const header  = getPlayer(posTeam, posActive, 'athletic');
+    if (!player || !gk || !header) return null;
+    const wxGkPen = wx === WX.MAG ? 25 : 0;
+    const net     = header.attacking * 0.5 + header.athletic * 0.5 + rnd(-20, 20)
+                  - (gk.defending * 0.7 + gk.athletic * 0.3 + rnd(-20, 20)) - wxGkPen;
+    if (net > 20) {
+      commentary = pick([
+        phase === 'dying' && `⚽ CORNER — AND IT'S IN! ${header.name} with a DRAMATIC late header!`,
+        `⚽ GOAL! ${header.name} heads in from the corner!`,
+        `⚽ ${header.name} POWERS home the header!`,
+        `⚽ CORNER CONVERTED! ${header.name} rises highest!`,
+        `⚽ ${header.name} meets it perfectly — GOAL!`,
+        `⚽ From the corner — header — GOAL! ${header.name} all alone at the back post!`,
+        `⚽ ${player.name}'s delivery is perfect — ${header.name} doesn't even need to jump!`,
+        `⚽ Set-piece delivery — ${header.name} at the far post — SCORE!`,
+      ].filter(Boolean));
+      return { minute: min, type: 'corner_goal', team: posTeam.shortName, player: header.name, outcome: 'goal', commentary, momentumChange: isHome ? [3, 0] : [0, 3], isGoal: true, animation: { type: 'goal', color: posTeam.color } };
+    }
+    if (net > 10) {
+      commentary = pick([
+        `Corner from ${player.name}! ${gk.name} punches clear!`,
+        `${gk.name} claims the corner confidently!`,
+        `Dangerous delivery — ${gk.name} tips it away!`,
+        `${gk.name} gets a fist to it!`,
+        `${gk.name} rises above the crowd — catches it cleanly. Comfortable.`,
+        `Corner well-taken — but ${gk.name} was always going to claim it.`,
+        `${gk.name} punches under pressure! The defence relieved.`,
+      ]);
+      return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary, momentumChange: isHome ? [1, 0] : [0, 1] };
+    }
+    commentary = pick([
+      `Corner kick cleared by ${defTeam.shortName}`,
+      `Headed away! ${defTeam.shortName} survive`,
+      `${defTeam.shortName} scramble it clear!`,
+      `Blocked! ${defTeam.shortName} hold firm`,
+      `Punched clear — hacked away! ${defTeam.shortName} ride the pressure.`,
+      `Out for a throw. Corner comes to nothing.`,
+      `${defTeam.shortName} bodies on the line — cleared!`,
+    ]);
+    momentumChange = [0, 0];
+
+  } else if (roll < 0.52) {
+    // INJURY
+    player = Math.random() < 0.5 ? getPlayer(posTeam, posActive, 'athletic') : getPlayer(defTeam, defActive, 'athletic');
+    if (!player) return null;
+    const inHome = posActive.includes(player.name);
+    const tm     = inHome ? posTeam : defTeam;
+    if (Math.random() < 0.30) {
+      return { minute: min, type: 'injury_scare', team: tm.shortName, player: player.name,
+        commentary: pick([
+          `😬 ${player.name} goes down clutching his leg... everybody stops. Physio sprints on.`,
+          `⚠️ ${player.name} takes a knock — waves the physio away. Brave soul.`,
+          `😬 ${player.name} is down! Tense few moments... but he's back on his feet.`,
+          `${player.name} pulls up momentarily — plays on. Relief all round.`,
+          `⚠️ ${player.name} stumbles — the crowd holds its breath. He's okay. Play continues.`,
+          `😬 Collision! ${player.name} needs treatment... thank goodness, he's back up.`,
+        ]), momentumChange: [0, 0] };
+    }
+    commentary = wx === WX.PLASMA && Math.random() < 0.5
+      ? pick([`${player.name} collapses! The plasma winds have taken their toll!`, `${player.name} is DOWN — plasma exposure? Medics sprint on!`])
+      : pick([
+          `${player.name} is down injured! Medics on!`,
+          `${player.name} pulls up! Looks serious.`,
+          `${player.name} takes a knock — stays down.`,
+          `${player.name} is in trouble. Trainer called onto the pitch.`,
+          `${player.name} writhes in pain — this looks bad.`,
+          `All play stops. ${player.name} needs attention.`,
+        ]);
+    return { minute: min, type: 'injury', team: tm.shortName, player: player.name, outcome: 'injured', commentary, momentumChange: [0, 0], isInjury: true };
+
+  } else if (roll < 0.70) {
+    // DEFENSE / TACKLE
+    defender = getPlayer(defTeam, defActive, 'defending', 'DF');
+    player   = getPlayer(posTeam, posActive, 'attacking');
+    if (!defender || !player) return null;
+    const net = (defender.defending + defender.athletic) / 2 + rnd(-20, 20)
+              - ((player.technical + player.athletic) / 2 + rnd(-20, 20));
+    if (net > 20) {
+      outcome = 'clean_tackle';
+      commentary = pick([
+        phase === 'dying' && `VITAL TACKLE! ${defender.name} denies ${player.name} with everything he has!`,
+        `Perfect tackle from ${defender.name}!`,
+        `${defender.name} THUNDERS in! Ball won cleanly!`,
+        `Textbook defending from ${defender.name}!`,
+        `${defender.name} times it perfectly — ball and all!`,
+        `LAST DITCH! ${defender.name} slides in and takes the ball cleanly!`,
+        `${defender.name} — a masterclass in defending. Never in doubt.`,
+        `Superb from ${defender.name} — anticipates the pass and nicks it!`,
+        `${defender.name} absolutely dominates ${player.name} in that challenge.`,
+      ].filter(Boolean));
+      momentumChange = isHome ? [0, -2] : [-2, 0];
+    } else if (net > 0) {
+      outcome = 'success';
+      commentary = pick([
+        `${defender.name} wins the ball`,
+        `${defender.name} gets in the way`,
+        `Solid defensive work from ${defender.name}`,
+        `${defender.name} holds his ground`,
+        `${defender.name} positioned well — gets a foot in.`,
+        `Good awareness from ${defender.name} — clears the danger.`,
+        `${defender.name} with a quiet, effective intervention.`,
+      ]);
+      momentumChange = isHome ? [0, -1] : [-1, 0];
+    } else {
+      outcome = 'failed';
+      commentary = pick([
+        `${player.name} evades ${defender.name}`,
+        `${player.name} dances past ${defender.name}`,
+        `${player.name} leaves ${defender.name} for dead`,
+        `${defender.name} dives in — ${player.name} skips away`,
+        `${defender.name} had no answer — ${player.name} too quick.`,
+        `${player.name} — too sharp. ${defender.name} can only watch.`,
+        `${player.name} feints — ${defender.name} commits — gone.`,
+      ]);
+      momentumChange = isHome ? [1, 0] : [0, 1];
+    }
+    return { minute: min, type: 'defense', team: defTeam.shortName, player: defender.name, defender: player.name, outcome, commentary, momentumChange };
+
+  } else {
+    // PASSING / POSSESSION
+    player   = getPlayer(posTeam, posActive, 'technical');
+    defender = getPlayer(defTeam, defActive, 'defending');
+    if (!player || !defender) return null;
+    const wxStatPen     = wx === WX.SOLAR ? 15 : 0;
+    const net           = (player.technical + player.mental) / 2 + rnd(-20, 20)
+                        - ((defender.defending + defender.mental) / 2 + rnd(-20, 20)) - (wxStatPen * 0.5);
+    const dustThreshold = -10 + wxDustFail;
+
+    // GK distribution (15%)
+    if (Math.random() < 0.15) {
+      const distGk = getPlayer(posTeam, posActive, 'defending', 'GK');
+      if (distGk) {
+        const isLong     = Math.random() < 0.4;
+        const distTarget = getPlayer(posTeam, posActive, 'technical');
+        return { minute: min, type: 'gk_distribution', team: posTeam.shortName, player: distGk.name,
+          commentary: isLong
+            ? pick([`${distGk.name} launches it long — punts it deep into the mixer.`, `Long ball from ${distGk.name}! Bypassing the press entirely.`, `${distGk.name} drives a goal kick forward — looking for the target man.`])
+            : pick([`${distGk.name} plays it short — building patiently from the back.`, `${distGk.name} rolls it out to the full-back. Calm head.`, `${distGk.name} distributes confidently to ${distTarget?.name || 'a teammate'}. Under no pressure.`]),
+          momentumChange: [0, 0] };
+      }
+    }
+
+    // Atmosphere moment (8%, not in dying phase)
+    if (Math.random() < 0.08 && phase !== 'dying') {
+      const atmComms = [
+        phase === 'early'   && `📣 Still early — but the atmosphere is already building. Both sets of fans finding their voice.`,
+        phase === 'midgame' && Math.abs(scoreDiff) === 0 && `📣 All square and the crowd is RIGHT into this. Every touch greeted with noise.`,
+        phase === 'late'    && `📣 The atmosphere has shifted. You can feel it. Something is building here.`,
+        `📣 A chant ripples around the stadium — both ends now in full voice.`,
+        `📣 Flags waving in the away end. The visitors are making themselves heard.`,
+        `🎵 Low hum turning into a roar. The crowd can sense something brewing.`,
+        `📣 The announcer reads out a score from another game. Groans from one side. Cheers from the other.`,
+        `📣 The crowd collectively holds its breath on every touch now. The tension is building.`,
+        `🎵 An old terrace chant starts somewhere up in the stands. Spreads. Everyone joins in.`,
+      ].filter(Boolean);
+      return { minute: min, type: 'atmosphere_moment', team: posTeam.shortName, commentary: pick(atmComms), momentumChange: [0, 0] };
+    }
+
+    if (net > 10) {
+      outcome = 'good_pass';
+      commentary = pick([
+        phase === 'early' && `${player.name} with an early probe through the lines. Testing the shape.`,
+        scoreDiff > 1     && `${player.name} keeping it — no risks needed. The lead is comfortable.`,
+        `${player.name} with a precise pass`,
+        `${player.name} picks out a teammate`,
+        `${player.name} plays it through the lines`,
+        `Neat footwork from ${player.name}`,
+        `${player.name} finds space and uses it`,
+        `Lovely touch from ${player.name} — the move continues.`,
+        `${player.name} plays the one-two — comes out the other side.`,
+        `Sharp combination — ${player.name} threads the needle.`,
+        `Simple but effective — ${player.name} plays it forward with purpose.`,
+      ].filter(Boolean));
+      momentumChange = isHome ? [1, 0] : [0, 1];
+    } else if (net > dustThreshold) {
+      outcome = 'continue';
+      commentary = pick([
+        `${player.name} keeps possession`,
+        `${player.name} holds up the ball`,
+        `${player.name} shields it well`,
+        `${player.name} keeps it simple`,
+        `Controlled possession. ${player.name} in no rush.`,
+        `${player.name} recycles — looking for an angle.`,
+        `Patient build-up. ${player.name} holds it under pressure.`,
+        `${player.name} links the play — nothing on yet, waits.`,
+      ]);
+      momentumChange = [0, 0];
+    } else {
+      outcome = 'intercepted';
+      commentary = wx === WX.DUST && Math.random() < 0.4
+        ? pick([`${player.name}'s pass lost in the dust storm!`, `Visibility near-zero — ${player.name} plays it straight to ${defender.name}!`])
+        : pick([
+            `${defender.name} reads the play`,
+            `${defender.name} sniffs it out!`,
+            `Clever positioning from ${defender.name}`,
+            `${defender.name} anticipates — intercepts!`,
+            `${defender.name} was always in position — ${player.name} never had a chance.`,
+            `That pass was there to be stolen — ${defender.name} obliges.`,
+            `${defender.name} gets a foot in — ball won!`,
+            `Telegraphed — ${defender.name} picks it off with ease.`,
+          ]);
+      momentumChange = isHome ? [0, -1] : [-1, 0];
+    }
+  }
+  return { minute: min, type: 'play', team: posTeam.shortName, player: player?.name, defender: defender?.name, outcome, commentary, momentumChange: momentumChange || [0, 0] };
+}
 
 // ── genSocial ─────────────────────────────────────────────────────────────────
 export function genSocial(event, min, ms) {
