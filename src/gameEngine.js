@@ -657,6 +657,106 @@ export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, c
   return { sequence: seq, isGoal: scored, outcomeCommentary: outcomeComm, penaltyTaker: taker, isRed: cardType === 'red', isYellow: cardType === 'yellow' };
 }
 
+// ── genEvent — Part 1: setup + chaos + personality ────────────────────────────
+export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerStats, score, activePlayers, substitutionsUsed, aiInfluence, aim, chaosLevel = 0, lastEventType = null) {
+  if (Math.random() > 0.35) return null;
+
+  // Weather modifiers
+  const wx          = aim?.weather;
+  const wxGkPen     = wx === WX.MAG   ? 25 : 0;
+  const wxStatPen   = wx === WX.SOLAR ? 15 : 0;
+  const wxShotBoost = wx === WX.ZERO  ? 0.10 : 0;
+  const wxDustFail  = wx === WX.DUST  ? 12 : 0;
+
+  // Chaos events
+  if (chaosLevel > 70 && Math.random() < 0.04) {
+    const refName = aim?.referee?.name || 'The referee';
+    const CHAOS = [
+      `⚡ COSMIC ANOMALY detected at pitch level. The match continues regardless.`,
+      `🌌 ${refName} consults their notes. The notes contain only the word "SOON".`,
+      `🪐 A nearby planetary alignment scrambles all comms for four seconds. Everyone keeps playing.`,
+      `🔮 The stadium announcer reads from a prepared card: "This was always going to happen."`,
+      `⚡ A player briefly occupies two positions simultaneously. VAR is unavailable in this galaxy.`,
+      `👁️ Someone in the crowd knows something. They are not saying anything.`,
+      `🌀 The pitch tilts ${rndI(1, 8)}° for exactly one minute. Officials log it as "acceptable variance".`,
+    ];
+    return { minute: min, type: 'chaos_event', team: pick([homeTeam, awayTeam]).shortName, commentary: pick(CHAOS), momentumChange: [0, 0], isChaos: true };
+  }
+
+  const posTeam  = Math.random() * 100 < possession[0] ? homeTeam : awayTeam;
+  const defTeam  = posTeam === homeTeam ? awayTeam : homeTeam;
+  const isHome   = posTeam === homeTeam;
+  const posActive = isHome ? activePlayers.home : activePlayers.away;
+  const defActive = isHome ? activePlayers.away : activePlayers.home;
+  const scoreDiff = isHome ? (score[0] - score[1]) : (score[1] - score[0]);
+  const phase     = min <= 25 ? 'early' : min <= 65 ? 'midgame' : min <= 82 ? 'late' : 'dying';
+  const matchCtx  = (pName) => ({ min, scoreDiff, playerGoals: playerStats[pName]?.goals || 0 });
+
+  // Momentum + weather + chain roll
+  const momTeam   = isHome ? momentum[0] : momentum[1];
+  const momBoost  = momTeam > 5 ? 0.08 : momTeam > 3 ? 0.04 : 0;
+  const chainBoost = lastEventType === 'shot' ? 0.04 : lastEventType === 'corner' ? 0.02 : 0;
+  let roll = Math.max(0, Math.random() - momBoost - chainBoost - wxShotBoost);
+  if (aiInfluence) { const td = isHome ? aiInfluence.home : aiInfluence.away; if (td.SHOOT > 3) roll *= 0.7; if (td.ATTACK > 5) roll *= 0.8; }
+  if (scoreDiff < 0 && min >= 80) roll *= 0.5;
+
+  // Personality-driven events (12%)
+  if (aim && Math.random() < 0.12) {
+    const agents = isHome ? aim.activeHomeAgents : aim.activeAwayAgents;
+    const agent  = pick(agents.filter(a => a.fatigue < 95));
+    if (agent) {
+      if (agent.personality === PERS.AGG && Math.random() < 0.4) {
+        const card    = aim.shouldGiveCard(60 + Math.random() * 40);
+        const aggComm = card === 'red'
+          ? pick([`🟥 ${agent.player.name} goes in TWO-FOOTED! Straight red, no debate!`, `🟥 VIOLENT CONDUCT! ${agent.player.name} is GONE!`])
+          : card === 'yellow'
+          ? pick([`🟨 ${agent.player.name} goes in hard — booked!`, `🟨 Reckless from ${agent.player.name}. Lucky it's only yellow.`])
+          : pick([`Crunching tackle from ${agent.player.name}! Ref lets it go.`, `${agent.player.name} leaves a mark. No card — just pain.`]);
+        return { minute: min, type: 'foul', team: posTeam.shortName, player: agent.player.name, cardType: card, commentary: aggComm, isPersonalityEvent: true, momentumChange: card ? [3, -5] : [2, -2] };
+      }
+      if (agent.personality === PERS.SEL && agent.player.position === 'FW' && Math.random() < 0.3)
+        return { minute: min, type: 'shot', team: posTeam.shortName, player: agent.player.name, outcome: 'miss', commentary: pick([`${agent.player.name} shoots from distance... WAY OVER! Selfish!`, `${agent.player.name} ignores three open teammates. Blazes over.`, `SELFISH! ${agent.player.name} had options. Chose glory. Found none.`, `${agent.player.name} tries his luck from 40 yards. No.`]), isPersonalityEvent: true, momentumChange: [-3, 2] };
+      if (agent.personality === PERS.CRE && Math.random() < 0.25) {
+        const win = Math.random() < 0.3;
+        return { minute: min, type: win ? 'goal' : 'creative_fail', team: posTeam.shortName, player: agent.player.name, outcome: win ? 'goal' : 'miss', isGoal: win,
+          commentary: win
+            ? pick([`${agent.player.name} tries something OUTRAGEOUS... WHAT A GOAL! ✨🚀`, `${agent.player.name} — a move nobody has attempted in this solar system. And it WORKS.`, `SCORPION KICK? BACKHEEL? Nobody agrees. The ball is in. That's all that matters. ✨`])
+            : pick([`${agent.player.name} loses the ball! Too creative by half.`, `Visionary or reckless? Today: reckless. ${agent.player.name} gives it away.`, `${agent.player.name} attempts the impossible. The impossible wins.`]),
+          isPersonalityEvent: true, momentumChange: win ? [15, -10] : [-2, 3] };
+      }
+      if (agent.personality === PERS.LAZ && agent.fatigue > 50 && Math.random() < 0.2) {
+        agent.fatigue -= 5;
+        return { minute: min, type: 'lazy_moment', team: posTeam.shortName, player: agent.player.name, commentary: pick([`${agent.player.name} has stopped running. Nobody is surprised.`, `${agent.player.name} takes a moment to appreciate the view. Mid-match.`, `Tactical stroll from ${agent.player.name}. The manager is apoplectic.`, `${agent.player.name} jogs while everyone else sprints. Classic.`]), isPersonalityEvent: true, momentumChange: [-2, 4] };
+      }
+      if (agent.personality === PERS.WRK && agent.fatigue > 70 && Math.random() < 0.25) {
+        agent.fatigue += 5;
+        return { minute: min, type: 'workhorse_tackle', team: posTeam.shortName, player: agent.player.name, commentary: pick([`${agent.player.name} is EVERYWHERE despite exhaustion! 💪`, `Running on fumes — ${agent.player.name} refuses to stop!`, `${agent.player.name}: how is this person still running?! 💪`, `${agent.player.name} makes their 14th tackle. On fumes. Incredible.`]), isPersonalityEvent: true, momentumChange: [5, -3] };
+      }
+      if (agent.personality === PERS.TEAM && Math.random() < 0.12) {
+        const fw = agents.find(a => a !== agent && a.player.position === 'FW');
+        if (fw) {
+          const goal = Math.random() < 0.4;
+          return { minute: min, type: 'shot', team: posTeam.shortName, player: fw.player.name, assister: agent.player.name, outcome: goal ? 'goal' : 'save', isGoal: goal,
+            commentary: goal
+              ? pick([`Beautiful from ${agent.player.name}! ${fw.player.name} finishes! ⚽`, `ASSISTS ARE AN ART FORM. ${agent.player.name} proves it. ${fw.player.name} tucks it away!`])
+              : pick([`Unselfish ball from ${agent.player.name}! ${fw.player.name} denied!`, `${agent.player.name} finds ${fw.player.name}... great save keeps it out!`]),
+            isPersonalityEvent: true, momentumChange: goal ? [12, -8] : [3, -2] };
+        }
+      }
+      if (agent.personality === PERS.CAU && Math.random() < 0.15) {
+        return { minute: min, type: 'defense', team: posTeam.shortName, player: agent.player.name, outcome: 'success', commentary: pick([`${agent.player.name} holds their position. Quietly effective.`, `${agent.player.name} snuffs out the threat before it starts.`, `No heroics from ${agent.player.name} — just the right play.`]), isPersonalityEvent: true, momentumChange: isHome ? [0, -1] : [-1, 0] };
+      }
+    }
+  }
+
+  // genEvent continues in Part 2 (controversy + foul/shot) and Part 3 (attack/corner/injury/defense/passing)
+  // Export the shared locals so Part 2/3 can be spliced in via genEventFull
+  return _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum);
+}
+
+// Stub — replaced in full by 3b/3c commits
+function _genEventBranches() { return null; }
+
 // ── genSocial ─────────────────────────────────────────────────────────────────
 export function genSocial(event, min, ms) {
   const posts = [];
