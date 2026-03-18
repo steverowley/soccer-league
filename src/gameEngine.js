@@ -207,3 +207,467 @@ export function calcMVP(stats, home, away) {
   });
   return best;
 }
+
+// ── resolveContest ────────────────────────────────────────────────────────────
+export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {}) {
+  const { type = 'shot', weather = WX.CLEAR, isClutch = false } = ctx;
+  const atkStat = type === 'freekick' ? (atkPlayer.technical || 70) * 0.6 + (atkPlayer.mental || 70) * 0.4
+    : type === 'penalty' ? (atkPlayer.technical || 70) * 0.5 + (atkPlayer.mental || 70) * 0.5
+    : type === 'header'  ? (atkPlayer.athletic  || 70) * 0.7 + (atkPlayer.mental || 70) * 0.3
+    : type === 'tackle'  ? (atkPlayer.defending || 70) * 0.8 + (atkPlayer.athletic || 70) * 0.2
+    : (atkPlayer.attacking || 70) * 0.6 + (atkPlayer.athletic || 70) * 0.4;
+  const defStat = type === 'tackle'
+    ? (defPlayer?.attacking || 70) * 0.6 + (defPlayer?.athletic || 70) * 0.4
+    : (defPlayer?.defending || 70) * 0.7 + (defPlayer?.mental   || 70) * 0.3;
+  const flavour = []; let atkMod = 0, defMod = 0;
+  if (atkAgent) {
+    if (atkAgent.confidence > 75)  { atkMod += 8;  flavour.push('confident'); }
+    else if (atkAgent.confidence < 30) { atkMod -= 5; flavour.push('low_confidence'); }
+    if (atkAgent.fatigue > 80)     { atkMod -= 12; flavour.push('exhausted'); }
+    else if (atkAgent.fatigue > 65){ atkMod -= 5;  flavour.push('tired'); }
+    if (atkAgent.emotion === 'ecstatic')                         { atkMod += 10; flavour.push('ecstatic'); }
+    else if (atkAgent.emotion === 'anxious' || atkAgent.emotion === 'nervous') { atkMod -= 8; flavour.push('anxious'); }
+    else if (atkAgent.emotion === 'devastated')                  { atkMod -= 8; flavour.push('devastated'); }
+    if (isClutch && atkAgent.isClutch) { atkMod += 14; flavour.push('clutch'); }
+    if (atkAgent.personality === PERS.CRE) { atkMod += 3; flavour.push('creative'); }
+    if (atkAgent.personality === PERS.AGG)   atkMod += 2;
+  }
+  if (defAgent) {
+    if (defAgent.confidence < 30)  defMod -= 8;
+    if (defAgent.fatigue > 80)     defMod -= 10;
+    if (defAgent.emotion === 'devastated' || defAgent.emotion === 'anxious') defMod -= 5;
+  }
+  if (weather === WX.RAIN || weather === WX.STORM) { atkMod -= 5; defMod -= 3; }
+  if (weather === WX.WIND) atkMod -= 8;
+  const atkRoll = atkStat + atkMod + rnd(-20, 20);
+  const defRoll = defStat + defMod + rnd(-15, 15);
+  const net = atkRoll - defRoll;
+  let outcome;
+  if (type === 'penalty') {
+    const prob   = Math.min(0.85, 0.50 + net / 250);
+    const scored = Math.random() < prob;
+    const saved  = !scored && Math.random() < 0.65;
+    outcome = scored ? 'goal' : saved ? 'saved' : 'miss';
+  } else if (type === 'tackle') {
+    outcome = net > 10 ? 'won' : net > -10 ? 'contested' : 'lost';
+  } else {
+    const threshold = type === 'freekick' ? 28 : 25;
+    const isPost    = net <= threshold && net > 12 && Math.random() < 0.15;
+    outcome = net > threshold ? 'goal' : isPost ? 'post' : net > 8 ? 'saved' : 'miss';
+  }
+  return { outcome, margin: net, flavour };
+}
+
+// ── buildCommentary ───────────────────────────────────────────────────────────
+export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
+  const atk = actors.attacker || 'The player';
+  const def = actors.defender || 'the keeper';
+  const exhausted = flavour.includes('exhausted');
+  const clutch    = flavour.includes('clutch');
+  const anxious   = flavour.includes('anxious');
+  const ecstatic  = flavour.includes('ecstatic');
+  const confident = flavour.includes('confident');
+  const creative  = flavour.includes('creative');
+  const low_conf  = flavour.includes('low_confidence');
+  const { min = 45, scoreDiff = 0, playerGoals = 0 } = ctx;
+  const phase      = min <= 25 ? 'early' : min <= 65 ? 'midgame' : min <= 82 ? 'late' : 'dying';
+  const desperate  = scoreDiff < -1 && min > 65;
+  const protecting = scoreDiff > 1;
+  const onFire     = playerGoals > 0;
+  const hatTrick   = playerGoals >= 2;
+  const T = {
+    shot: {
+      goal: [
+        hatTrick   && `⚽ HAT TRICK HUNT — AND ${atk} DELIVERS! The third! THE THIRD!`,
+        onFire     && `⚽ ${atk} cannot stop scoring today! Another one! What a performance!`,
+        onFire     && `⚽ His second of the game — ${atk} is absolutely on fire right now!`,
+        desperate  && `⚽ ${atk} DRAGS THEM BACK! The goal they were SCREAMING for!`,
+        protecting && `⚽ Game effectively over! ${atk} makes it a commanding lead!`,
+        phase === 'dying' && `⚽ AT THE DEATH! ${atk} BREAKS HEARTS! The stadium EXPLODES!`,
+        phase === 'early' && `⚽ EARLY GOAL! ${atk} has given them the PERFECT start!`,
+        phase === 'late'  && `⚽ AT THE CRUCIAL MOMENT — ${atk} delivers the lead!`,
+        clutch     && `⚽ CLUTCH MOMENT — ${atk} DELIVERS! That is what big players do!`,
+        exhausted  && `⚽ On fumes — but ${atk} still finds the net! Extraordinary!`,
+        ecstatic   && `⚽ ${atk} is UNSTOPPABLE right now! Everything is going in!`,
+        confident  && `⚽ ${atk} — oozing confidence! Knew exactly where that was going!`,
+        `⚽ GOAL! ${atk} fires past ${def}! Stunning finish!`,
+        `⚽ ${atk} — clinical! ${def} had no chance!`,
+        `⚽ ${atk} slots it home. Composed when it mattered.`,
+        `⚽ The net bulges! ${atk} puts it away with authority!`,
+        `⚽ BEAUTIFUL FINISH from ${atk}! ${def} is left rooted to the spot!`,
+        `⚽ In off the post — and ${atk} doesn't care HOW it goes in! GOAL!`,
+        `⚽ Oh, that is a wonderful strike. ${atk} — remember that name.`,
+        `⚽ ${atk} takes one touch, steps inside, and buries it. Effortless.`,
+        `⚽ Low and hard — ${def} gets a hand to it but can't stop it! ${atk} scores!`,
+      ].filter(Boolean),
+      saved: [
+        phase === 'dying' && `Agonising! ${atk} fires — ${def} SAVES THE DAY in stoppage time!`,
+        phase === 'dying' && `NO! ${def} throws himself at the effort — KEPT OUT! Agony for ${atk}!`,
+        desperate  && `${atk} gets a shot off — but ${def} absolutely REFUSES to be beaten!`,
+        onFire     && `${atk} tries to add to his tally — ${def} says NO this time!`,
+        protecting && `${def} comfortable — ${atk} didn't trouble him. Lead intact.`,
+        anxious    && `${atk} hesitates a fraction — ${def} reads the delay perfectly. Saved.`,
+        exhausted  && `${atk} just can't generate the power. ${def} grateful — comfortable stop.`,
+        low_conf   && `${atk} telegraphs it entirely. ${def} had it covered all along.`,
+        confident  && `${def} earns his fee — ${atk} looked certain to score there.`,
+        `${def} SAVES! Gets down brilliantly to deny ${atk}!`,
+        `Fingertips! ${def} barely gets there — magnificent stop!`,
+        `${def} reads it perfectly — never in doubt.`,
+        `Smothered! ${def} makes himself big — the shot is blocked!`,
+        `${atk} pulls the trigger — ${def} is in exactly the right place!`,
+        `Great technique from ${atk}, but ${def} is having none of it!`,
+        `${def} with two hands to it — pushed wide! Corner.`,
+        `${def} DIVES FULL STRETCH — denies ${atk} brilliantly!`,
+        `${atk} shoots first time — but ${def} reacts instantly. Incredible reflexes.`,
+      ].filter(Boolean),
+      miss: [
+        phase === 'dying' && `${atk} BLAZES OVER! Oh, that will haunt him! The clock is running out!`,
+        phase === 'early' && `${atk} lifts his head too early — dragged wide. Early chance gone.`,
+        desperate  && `${atk} rushes the effort in desperation — WIDE! The head drops.`,
+        onFire     && `Can't believe it — ${atk} was looking for more after scoring earlier. Blazes over.`,
+        anxious    && `${atk} rushes the shot — balloons it over. The pressure showing.`,
+        exhausted  && `The legs are gone. ${atk}'s effort drifts harmlessly wide.`,
+        `${atk} fires wide — so much promise, so little end product.`,
+        `Over the bar! ${atk} will be furious with that decision.`,
+        `${atk} pulls it wide. The chance is gone.`,
+        `Ballooned! ${atk} got it wrong — miles over.`,
+        `Wide of the post! ${atk} won't want to watch that back.`,
+        `${atk} hesitates — the moment passes. The shot is barely a shot.`,
+        `${atk} takes aim — and finds the advertising hoarding instead.`,
+        `So close — and yet. ${atk} can only shake his head slowly.`,
+        `The angle closed down. ${atk} couldn't find a way through.`,
+      ].filter(Boolean),
+      post: [
+        phase === 'dying' && `🏗️ THE POST IN INJURY TIME! ${atk} — oh, the AGONY!`,
+        `🏗️ THE WOODWORK! ${atk} was agonisingly close!`,
+        `Off the post! ${atk} can't believe it!`,
+        `THE BAR! ${atk} struck it perfectly — the goal just wouldn't come!`,
+        `🏗️ Ring of steel! The post denies ${atk}!`,
+        `🏗️ Off the frame! ${atk}'s effort rattles the woodwork and bounces clear!`,
+        `Post! Then bar! Then scrambled clear! ${atk} is DEVASTATED!`,
+        `That hit the post and came out. ${def} could barely watch.`,
+        `🏗️ THE UPRIGHT! ${atk}'s shot was goal-bound all the way — until the post said no.`,
+      ].filter(Boolean),
+    },
+    freekick: {
+      goal: [
+        phase === 'dying' && `⚽ FREE KICK GOAL IN STOPPAGE TIME! ${atk} picks the PERFECT moment!`,
+        desperate && `⚽ FREE KICK — and it's IN! ${atk} keeps the dream alive!`,
+        creative  && `⚽ GENIUS! ${atk} bends it around the wall — pure artistry!`,
+        confident && `⚽ ${atk} steps up without hesitation — top corner. No debate.`,
+        clutch    && `⚽ PRESSURE FREE KICK — and ${atk} nails it! Ice in the veins!`,
+        `⚽ DIRECT FREE KICK GOAL! ${atk} — unstoppable!`,
+        `⚽ ${atk} curls it over the wall and into the net! Spectacular!`,
+        `⚽ ${atk} goes low under the wall — nestles in the corner! Brilliant!`,
+        `⚽ FREE KICK — WHAT A STRIKE! ${atk} with perfect execution!`,
+        `⚽ The wall jumped. The ball went under. ${atk} doesn't care — GOAL!`,
+        `⚽ ${atk} whips it over the wall with incredible bend. ${def} rooted.`,
+      ].filter(Boolean),
+      saved: [
+        phase === 'dying' && `What a save! ${def} tips over the free kick with seconds remaining!`,
+        exhausted && `${atk} doesn't get enough on it — ${def} comfortable.`,
+        `${def} dives brilliantly — FREE KICK SAVED!`,
+        `${def} tips it over! Great free kick, better save!`,
+        `${def} gets his angles right — free kick kept out.`,
+        `Free kick — pushed wide by ${def}! Corner to ${atk}'s side.`,
+        `${def} guesses correctly — full stretch to turn it away!`,
+      ].filter(Boolean),
+      miss: [
+        anxious && `${atk} rushes it — straight into the wall.`,
+        `${atk}'s free kick drifts harmlessly wide.`,
+        `Over the wall... and over the bar. Close, but not close enough.`,
+        `${atk} catches the top of the wall — deflected away. No danger.`,
+        `Free kick — fizzes past the post. Impressive attempt, no goal.`,
+        `${atk} takes the free kick — the wall does its job. Blocked.`,
+      ].filter(Boolean),
+      post: [
+        `🏗️ THE POST! ${atk} was AGONISINGLY close from the free kick!`,
+        `🏗️ Inches away! The free kick from ${atk} crashes off the woodwork!`,
+      ],
+    },
+    penalty: {
+      goal: [
+        hatTrick  && `⚽ PENALTY — and ${atk} completes the hat-trick! Absolutely LEGENDARY!`,
+        desperate && `⚽ PENALTY! ${atk} sends them level! The place is SHAKING!`,
+        phase === 'dying' && `⚽ PENALTY SCORED IN INJURY TIME! ${atk}! The stadium is CARNAGE!`,
+        clutch    && `⚽ PENALTY — and ${atk} is ice cold! RIGHT in the corner!`,
+        confident && `⚽ ${atk} doesn't even look at the keeper. Straight down the middle. Goal.`,
+        ecstatic  && `⚽ ${atk} is on fire — and buries the penalty to prove it!`,
+        anxious   && `⚽ ${atk} stutters in the run-up... but gets away with it! GOAL!`,
+        `⚽ PENALTY SCORED! ${atk} sends ${def} the wrong way!`,
+        `⚽ ${atk} steps up and CONVERTS! Emphatic!`,
+        `⚽ ${atk} — no hesitation, no drama. Just a goal. Ruthless.`,
+        `⚽ Penalty tucks into the corner. ${atk} delivers.`,
+        `⚽ ${atk} picks his spot — and puts it away. Cool as you like.`,
+      ].filter(Boolean),
+      saved: [
+        phase === 'dying' && `PENALTY SAVED IN INJURY TIME! ${def} is the HERO! The whole team goes wild!`,
+        anxious  && `${atk}'s nerve goes at the last second — ${def} dives the right way! SAVED!`,
+        low_conf && `${atk} couldn't hide the doubt — ${def} reads it completely. Saved.`,
+        exhausted && `${atk} lacks conviction in the run-up — ${def} comfortable. Saved.`,
+        `${def} SAVES THE PENALTY! Dives brilliantly!`,
+        `${def} guesses right — penalty saved! Incredible!`,
+        `${def} GOES THE RIGHT WAY — denies ${atk}! Brilliant!`,
+        `${atk} chooses his corner — but ${def} has already chosen the same one. SAVED!`,
+        `${def} doesn't move until the last instant — then FLIES across. Saved.`,
+      ].filter(Boolean),
+      miss: [
+        anxious && `${atk} panics — blazes it over the bar! Absolute horror.`,
+        phase === 'dying' && `${atk} MISSES THE PENALTY IN INJURY TIME! Over the bar! The AGONY!`,
+        `${atk} sends it over the crossbar! Incredible miss!`,
+        `Wide of the post! ${atk} will be haunted by that.`,
+        `${atk} hits the side-netting — no goal! The keeper didn't even move.`,
+        `THE BAR saves the keeper! Penalty beats the man but not the woodwork!`,
+      ].filter(Boolean),
+    },
+    header: {
+      goal: [
+        phase === 'dying' && `⚽ HEADER AT THE DEATH! ${atk} rises and WINS IT for them!`,
+        desperate && `⚽ ${atk} HEADS THEM BACK IN IT! The fight is NOT over!`,
+        clutch    && `⚽ ${atk} rises at the crucial moment — HEADED HOME!`,
+        `⚽ HEADER! ${atk} rises highest — into the back of the net!`,
+        `⚽ Towering header from ${atk}! ${def} rooted to the spot!`,
+        `⚽ Bullet header! ${atk} gets ABOVE everyone — unstoppable!`,
+        `⚽ ${atk} attacks the ball and THUNDERS it home! Headers don't get better!`,
+      ].filter(Boolean),
+      saved: [
+        `${def} claws it away! What a header from ${atk} — even better save!`,
+        `${def} tips the header over the bar!`,
+        `${atk} gets good contact — but ${def} was perfectly positioned.`,
+        `Full-stretch from ${def} — the header turned behind!`,
+      ],
+      miss: [
+        `${atk} gets above everyone but glances it wide.`,
+        `Header from ${atk} — just over the crossbar!`,
+        `${atk} meets it at the far post — angles it wide. Should've done better.`,
+        `Too much power — ${atk}'s header clears the bar by a distance.`,
+      ],
+    },
+    tackle: {
+      won: [
+        phase === 'dying' && `CRUCIAL TACKLE! ${atk} wins it cleanly — what composure under pressure!`,
+        confident && `${atk} reads it perfectly — the ball is theirs! Clean as you like.`,
+        `${atk} times the tackle to perfection!`,
+        `Crunching challenge from ${atk} — ball won!`,
+        `${atk} arrives a fraction before ${def}. Quality defending.`,
+        `Superb from ${atk}! The tackle is clean — the crowd recognises it.`,
+        `${atk} slides in — and gets every bit of ball. Brilliant.`,
+      ].filter(Boolean),
+      contested: [
+        `Fifty-fifty! Both players want it — neither gives an inch.`,
+        `Contested ball — falls loose in midfield.`,
+        `Both go in together — the referee watches carefully. Play on.`,
+        `Battle for possession — nobody wins it cleanly.`,
+      ],
+      lost: [
+        exhausted && `${atk} lunges — but the legs aren't there. Beaten.`,
+        `${atk} mistimes it — ${def} skips past!`,
+        `${def} sees it coming a mile off — steps over and goes.`,
+        `${atk} dives in — ${def} rides the challenge with ease.`,
+      ].filter(Boolean),
+    },
+  };
+  const pool = T[type]?.[outcome];
+  if (!pool || pool.length === 0) return `${atk} — ${outcome}.`;
+  return pick(pool);
+}
+
+// ── Sequence generators ───────────────────────────────────────────────────────
+export function genFreekickSeq(min, taker, gk, posTeam, defTeam, aim, ctx = {}) {
+  const seq = [];
+  const takerAgent = aim?.getAgentByName(taker.name);
+  const isCreative = takerAgent?.personality === PERS.CRE;
+  const wallSize   = rndI(3, 7);
+  seq.push({ minute: min, type: 'freekick_setup', team: posTeam.shortName, player: taker.name,
+    commentary: pick([`📐 Free kick to ${posTeam.shortName}! Wall forming...`, `📐 ${taker.name} places the ball. Referee measures the distance.`, `📐 ${defTeam.shortName} organise their wall. ${taker.name} waits patiently.`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'freekick_wall', team: posTeam.shortName,
+    commentary: pick([`🧱 ${wallSize}-man wall set by ${defTeam.shortName}. ${gk?.name||'The keeper'} bellows instructions.`, `${gk?.name||'The keeper'} organises the ${wallSize}-man wall — peering over them.`, `${wallSize} bodies in the wall. Everybody holds their breath.`]), momentumChange: [0,0] });
+  if (isCreative && Math.random() < 0.45) {
+    seq.push({ minute: min, type: 'freekick_trick', team: posTeam.shortName, player: taker.name,
+      commentary: pick([`${taker.name} motions to a teammate... something unconventional is brewing.`, `TWO PLAYERS over the ball! This could be unusual!`, `${taker.name} whispers something. The wall looks nervous.`]), momentumChange: [0,0] });
+  }
+  const gkAgent = aim?.getAgentByName(gk?.name);
+  const result  = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'freekick', weather: aim?.weather });
+  const isGoal  = result.outcome === 'goal';
+  const outcomeCommentary = buildCommentary('freekick', { attacker: taker.name, defender: gk?.name || 'the keeper' }, result.outcome, result.flavour, ctx);
+  return { sequence: seq, isGoal, outcomeCommentary };
+}
+
+export function genCelebrationSeq(min, scorer, team, mgrName, mgrEmotion, scorerAgent) {
+  const seq = [];
+  const emo     = scorerAgent?.emotion;
+  const isClutch = scorerAgent?.isClutch;
+  const scorerComm = emo === 'ecstatic'
+    ? pick([`🎉 ${scorer} is in ANOTHER WORLD right now! Pure ecstasy!`, `🎉 ${scorer} SCREAMS to the sky — unstoppable! UNSTOPPABLE!`])
+    : (emo === 'anxious' || emo === 'nervous')
+      ? pick([`🎉 ${scorer} — RELIEF more than joy. The weight LIFTED.`, `🎉 ${scorer} drops to his knees. Tension released.`])
+      : isClutch
+        ? pick([`🎉 ${scorer} points to the armband — THIS is what clutch means!`, `🎉 ${scorer} roars at the crowd. They asked for a hero. Here he is.`])
+        : pick([`🎉 ${scorer} WHEELS AWAY! Arms wide, face to the sky!`, `🎉 ${scorer} SLIDES ON HIS KNEES! The crowd is ELECTRIC!`, `🎉 ${scorer} sprints to the corner flag — nothing but joy!`, `🎉 ${scorer} points to someone in the stands. This one is personal.`]);
+  seq.push({ minute: min, type: 'celebration', team, player: scorer, commentary: scorerComm, momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'celebration_pile', team,
+    commentary: pick([`Teammates FLOOD in from every direction!`, `The whole bench is off the seat — players sprinting on!`, `Bodies piling onto ${scorer}! Beautiful chaos!`, `Everyone wants a piece of ${scorer}! Pure elation!`]), momentumChange: [0,0] });
+  if (mgrName) {
+    const mgrComm = mgrEmotion === MGER_EMO.JUB
+      ? pick([`${mgrName} RACES down the touchline! Fists pumping!`, `${mgrName} turns to the crowd, arms raised — this is HIS moment too.`, `${mgrName} embraces the coaching staff! Eyes glistening!`])
+      : pick([`${mgrName} applauds from the technical area.`, `${mgrName} nods calmly. As if they knew all along.`, `${mgrName} points back to the halfway line immediately. There's more to do.`]);
+    seq.push({ minute: min, type: 'celebration_manager', team, commentary: mgrComm, momentumChange: [0,0] });
+  }
+  seq.push({ minute: min, type: 'celebration_restart', team,
+    commentary: pick([`${team} restart. The opposition have a mountain to climb.`, `Ball placed on the centre spot. Game resumes.`, `Play restarts. But the energy in the stadium has completely shifted.`]), momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genVARSeq(min, scorer, team, ref, overturned) {
+  const seq     = [];
+  const refName = ref?.name || 'The referee';
+  seq.push({ minute: min, type: 'var_check', team,
+    commentary: pick([`🖥️ WAIT — VAR is checking! Play suspended!`, `🖥️ VAR REVIEW IN PROGRESS! ${refName} has a finger to his earpiece.`, `🖥️ The goal is being checked! Was everything in order?`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'var_review', team,
+    commentary: pick([`🔍 Multiple camera angles being studied...`, `⏳ The wait is agonising. Nobody in the stadium moves.`, `🔍 Checking for offside... position of feet... handball in build-up...`, `🔍 Frame by frame. Millimetres could decide this.`]), momentumChange: [0,0] });
+  if (overturned) {
+    seq.push({ minute: min, type: 'var_decision', team, isVAROverturned: true,
+      commentary: pick([`❌ GOAL DISALLOWED! VAR overturns! The goal does NOT stand!`, `❌ NO GOAL! Offside by a toenail! The celebrations are ERASED!`, `❌ DISALLOWED! Handball in the build-up! Heartbreak for ${scorer}!`, `❌ VAR SAYS NO! ${refName} waves it away — no goal!`]), momentumChange: [0,0] });
+    seq.push({ minute: min, type: 'var_reaction', team,
+      commentary: pick([`😱 ${scorer} is DEVASTATED. Sinks to their knees.`, `The ${team} bench erupts in fury! Arguments everywhere!`, `${refName} is surrounded by protesting players. Order barely restored.`, `Disbelief etched on every face. The stadium is stunned to silence.`]), momentumChange: [0,0] });
+  } else {
+    seq.push({ minute: min, type: 'var_decision', team, isVARConfirmed: true,
+      commentary: pick([`✅ GOAL CONFIRMED! VAR backs the referee — it COUNTS!`, `✅ IT STANDS! No infringement found! ${scorer} CAN celebrate!`, `✅ GOOD GOAL! VAR finds nothing wrong! The stadium ERUPTS!`]), momentumChange: [0,0] });
+  }
+  return { sequence: seq };
+}
+
+export function genSiegeSeq(min, team, defTeam, clutchName) {
+  const seq = [];
+  seq.push({ minute: min, type: 'siege_start', team,
+    commentary: pick([`⏱️ SIEGE MODE! ${team} throwing everyone forward!`, `⏱️ ALL OUT ATTACK from ${team}! They WILL NOT surrender!`, `⏱️ Bodies everywhere! ${team} in DESPERATE territory!`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'siege_pressure', team,
+    commentary: pick([`Corner after corner! ${defTeam} cannot clear their lines!`, `Scrambles! Headers! Last-ditch blocks! Complete chaos in the box!`, `${defTeam} defending for their lives — bodies thrown at everything!`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'siege_chance', team, player: clutchName,
+    commentary: pick([`${clutchName} RISES — blocked on the line! SO CLOSE!`, `${clutchName} fires — off the crossbar! AGONY!`, `${clutchName} gets a touch — agonisingly wide!`, `Half-chance for ${clutchName}! JUST over!`]), momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genManagerSentOffSeq(min, managerName, refName, team) {
+  const seq = [];
+  seq.push({ minute: min, type: 'manager_protest', team,
+    commentary: pick([`${managerName} STORMS toward the fourth official!`, `${managerName} is absolutely LIVID on the touchline!`, `${managerName} cannot contain himself — erupts from the technical area!`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'manager_warning', team,
+    commentary: pick([`🟨 ${managerName} shown a yellow card! One more and he's in the stands!`, `${refName} issues a final warning to ${managerName}. He does not take it well.`, `${managerName} gets right in ${refName}'s face. Dangerous territory.`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'manager_sentoff', team,
+    commentary: pick([`🟥 ${managerName} TO THE STANDS! ${refName} has seen enough!`, `🟥 INCREDIBLE! ${managerName} is DISMISSED! Ordered from the technical area!`, `🟥 ${managerName} GONE! He went too far and now he pays for it!`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'manager_sentoff_reaction', team,
+    commentary: pick([`${managerName} refuses to move. Coaching staff have to intervene.`, `${managerName} points at ${refName} as he leaves. Still furious.`, `The assistant takes the clipboard. The team looks rattled — and fired up.`, `${managerName} mouths something back from the tunnel entrance.`]), momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genComebackSeq(min, scorer, captainName, team) {
+  const seq = [];
+  seq.push({ minute: min, type: 'comeback_eruption', team, player: scorer,
+    commentary: pick([`📢 THE COMEBACK IS ON! ${team} have LIFE!`, `🔥 BELIEVE! ${scorer} and ${team} refuse to die!`, `⚡ FROM THE GRAVE! ${team} are BACK in this match!`, `🌋 ERUPTION! The stadium shakes — ${team} are coming!`]), momentumChange: [0,0] });
+  if (captainName) {
+    seq.push({ minute: min, type: 'comeback_captain', team, player: captainName,
+      commentary: pick([`${captainName} rallies — "WE GO AGAIN! ONE MORE!"`, `${captainName} runs to each teammate. Every single one. Eyes wild.`, `The captain's armband has never felt heavier. ${captainName} feels every gram.`, `${captainName}: "We've been here before. Finish it."`]), momentumChange: [0,0] });
+  }
+  seq.push({ minute: min, type: 'comeback_momentum', team,
+    commentary: pick([`The atmosphere has completely transformed. ${team} sense it.`, `You could see the belief spreading through the ${team} players.`, `${team} looking like a different team suddenly. Unstoppable energy.`]), momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genCounterSeq(min, counterPlayer, counterGk, counterTeam, supportPlayer) {
+  const seq = [];
+  seq.push({ minute: min, type: 'counter_start', team: counterTeam.shortName, player: counterPlayer.name,
+    commentary: pick([`⚡ COUNTER ATTACK! ${counterPlayer.name} bursts forward at PACE!`, `💨 ${counterPlayer.name} GONE — the defence is wide OPEN!`, `🏃 LIGHTNING BREAK! ${counterPlayer.name} has acres of space!`, `⚡ Rapid counter-attack — ${counterPlayer.name} leads the charge!`]), momentumChange: [0,0] });
+  if (supportPlayer && supportPlayer.name !== counterPlayer.name && Math.random() < 0.55) {
+    seq.push({ minute: min, type: 'counter_pass', team: counterTeam.shortName, player: supportPlayer.name,
+      commentary: pick([`${supportPlayer.name} feeds ${counterPlayer.name} in stride!`, `Quick touch from ${supportPlayer.name} — ${counterPlayer.name} still running!`, `${counterPlayer.name} combines with ${supportPlayer.name}! Beautiful!`]), momentumChange: [0,0] });
+  }
+  seq.push({ minute: min, type: 'counter_1v1', team: counterTeam.shortName, player: counterPlayer.name,
+    commentary: pick([`ONE ON ONE! ${counterPlayer.name} faces ${counterGk?.name||'the keeper'}!`, `${counterPlayer.name} vs the last defender — THE CROWD RISES!`, `Just ${counterGk?.name||'the keeper'} to beat! Can ${counterPlayer.name} hold his nerve?!`]), momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genConfrontationSeq(min, fouler, fouled, ref, addCard, foulerAgent, fouledAgent) {
+  const seq     = [];
+  const refName = ref?.name || 'The referee';
+  const foulerAgg = foulerAgent?.personality === PERS.AGG;
+  const fouledEmo = fouledAgent?.emotion;
+  const openingComm = foulerAgg
+    ? pick([`🔥 ${fouler?.name||'The player'} NOT BACKING DOWN — that's in his DNA!`, `😡 ${fouler?.name||'The aggressor'} steps right up. Nobody moves.`])
+    : (fouledEmo === 'ecstatic' || fouledEmo === 'angry')
+      ? pick([`😤 ${fouled?.name||'The fouled player'} SNAPS — emotion pouring out!`, `🔥 ${fouled?.name||'The player'} has been waiting for this moment to boil over!`])
+      : pick([`😤 ${fouled?.name||'The fouled player'} gets straight in ${fouler?.name||'his face'}!`, `🔥 TEMPERS FLARE! Players from BOTH sides flood the pitch!`, `😡 ${fouler?.name||'The player'} gets an absolute EARFUL!`, `🌪️ Total chaos — the tunnel empties!`]);
+  seq.push({ minute: min, type: 'confrontation', commentary: openingComm, momentumChange: [0,0] });
+  if (Math.random() < 0.5) {
+    seq.push({ minute: min, type: 'confrontation_crowd',
+      commentary: pick([`📢 The stadium erupts! Objects rain from the stands!`, `🌀 Absolute MAYHEM on the pitch — everyone is involved!`, `📣 Bench staff spill onto the touchline!`]), momentumChange: [0,0] });
+  }
+  if (addCard) {
+    seq.push({ minute: min, type: 'confrontation_card', player: fouled?.name || '',
+      commentary: `🟨 ${fouled?.name||'A player'} booked for his reaction. Can't do that.`, momentumChange: [0,0] });
+  }
+  seq.push({ minute: min, type: 'confrontation_resolved',
+    commentary: pick([`🫷 ${refName} restores order. Eventually.`, `📋 ${refName} separates the players. Writes extensively. Play resumes.`, `🤝 ${refName} holds firm — the game continues, barely.`]), momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genNearMissSeq(min, player, gk, posTeam, defTeam) {
+  const seq = [];
+  seq.push({ minute: min, type: 'near_miss_setup', team: posTeam.shortName, player: player.name,
+    commentary: pick([`🔥 ${player.name} FIRES — this looks dangerous!`, `${player.name} gets a shot away — direct at goal!`, `${player.name} shoots! ${gk?.name||'The keeper'} can only parry—`, `${player.name} drives it goalward — ${gk?.name||'The keeper'} beaten but—`, `${player.name} gets the strike away — it's going in... isn't it?`]), momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'near_miss_scramble', team: posTeam.shortName,
+    commentary: pick([`🔥 SCRAMBLE IN THE BOX! Bodies everywhere — nobody can clear it!`, `Parried back out! ${defTeam.shortName} don't know where to look!`, `${gk?.name||'The keeper'} gets a hand to it — loose ball in a dangerous area!`, `Rebounds! Every touch could be a goal!`, `It's not cleared! Players diving in from all angles!`]), momentumChange: [0,0] });
+  const cleared = Math.random() < 0.6;
+  seq.push({ minute: min, type: 'near_miss_end', team: posTeam.shortName,
+    commentary: cleared
+      ? pick([`Cleared off the line! ${defTeam.shortName} SURVIVE by inches!`, `Last-ditch block! ${defTeam.shortName} scramble it away — just!`, `BOOTED CLEAR! ${defTeam.shortName} breathe again. Barely.`, `Final body on the line — ${defTeam.shortName} ride that out!`, `${defTeam.shortName} survive the scramble! They'll know nothing about it.`])
+      : pick([`${player.name} can't believe it — rolls agonisingly wide.`, `Rolling across the face of goal — and OUT! ${player.name} on his knees.`, `The whole bench had their arms up — just over the bar.`, `${player.name} gets a touch — but it creeps past the post!`, `Off the line... and out for a corner. ${player.name} stares at the sky.`]),
+    momentumChange: [0,0] });
+  return { sequence: seq };
+}
+
+export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, ctx = {}) {
+  const seq = [];
+  seq.push({ minute: min, type: 'penalty_incident', commentary: pick([`💥 CONTACT! ${def.name} brings down ${atk.name} in the box!`, `⚠️ HANDBALL! ${def.name}'s arm is up... penalty!`, `🚨 CHALLENGE! ${def.name} lunges at ${atk.name}!`]), team: defTeam.shortName, momentumChange: [0,0] });
+  if (cardType === 'red') {
+    seq.push({ minute: min, type: 'penalty_red_card',    commentary: `🟥 RED CARD! ${def.name} is SENT OFF!`,                      team: defTeam.shortName, player: def.name, cardType: 'red',    momentumChange: [0,0] });
+    seq.push({ minute: min, type: 'penalty_reaction',    commentary: `😡 ${defTeam.shortName} furious! Chaos on the pitch!`,        team: defTeam.shortName, momentumChange: [0,0] });
+  } else if (cardType === 'yellow') {
+    seq.push({ minute: min, type: 'penalty_yellow_card', commentary: `🟨 Yellow card for ${def.name}.`,                            team: defTeam.shortName, player: def.name, cardType: 'yellow', momentumChange: [0,0] });
+  }
+  seq.push({ minute: min, type: 'penalty_awarded', commentary: pick([`👉 PENALTY to ${team.shortName}!`, `🎯 NO DOUBT! Penalty awarded!`, `🚨 PENALTY! ${team.shortName} have a golden chance!`]), team: team.shortName, momentumChange: [0,0] });
+  let taker = atk;
+  if (aim) {
+    const agents  = aim.activeHomeAgents.concat(aim.activeAwayAgents);
+    const takers  = agents.filter(a => a.canTakePenalty && a.canTakePenalty() && a.player.name !== atk.name);
+    if (takers.length) {
+      const best = takers.sort((a, b) => (b.penaltyAbility || 0) - (a.penaltyAbility || 0))[0];
+      taker = best.player;
+      seq.push({ minute: min, type: 'penalty_taker_change', commentary: `👀 ${taker.name} takes the ball — designated taker steps forward.`, team: team.shortName, momentumChange: [0,0] });
+    }
+  }
+  seq.push({ minute: min, type: 'penalty_tension', commentary: pick([`⏸️ ${taker.name} places the ball... the crowd holds its breath...`, `😰 Absolute silence in the stadium... ${taker.name} composes himself...`, `⚡ The tension is UNBEARABLE! Nobody is breathing!`]), team: team.shortName, momentumChange: [0,0] });
+  seq.push({ minute: min, type: 'penalty_runup',   commentary: pick([`${taker.name} begins his run-up...`, `Three steps back. ${taker.name} focuses.`, `${taker.name} eyes the corner. Steps forward.`]), team: team.shortName, momentumChange: [0,0] });
+  const takerAgent = aim?.getAgentByName(taker.name);
+  const gkAgent    = aim?.getAgentByName(gk?.name);
+  const result     = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'penalty', weather: aim?.weather });
+  const scored     = result.outcome === 'goal';
+  const outcomeComm = buildCommentary('penalty', { attacker: taker.name, defender: gk?.name || 'the keeper' }, result.outcome, result.flavour, ctx);
+  seq.push({ minute: min, type: 'penalty_shot', commentary: outcomeComm, team: team.shortName, isGoal: scored, outcome: result.outcome, momentumChange: [0,0] });
+  return { sequence: seq, isGoal: scored, outcomeCommentary: outcomeComm, penaltyTaker: taker, isRed: cardType === 'red', isYellow: cardType === 'yellow' };
+}
+
+// ── genSocial ─────────────────────────────────────────────────────────────────
+export function genSocial(event, min, ms) {
+  const posts = [];
+  if (event.isGoal) {
+    const fan = event.team === ms.homeTeam.shortName ? '@MarsUltra' : '@SaturnSupporter';
+    const opp = event.team === ms.homeTeam.shortName ? '@SaturnSupporter' : '@MarsUltra';
+    posts.push({ minute: min, user: fan, text: pick([`GOOOOAL! ${event.player}! 🔥`, `${event.player} SCORES! ⚽`, `GET IN! ${event.player}! 💪`]), likes: rndI(200,1500), retweets: rndI(80,400) });
+    posts.push({ minute: min, user: opp, text: pick(['Devastating...','Wake up defense!','Not good enough! 💢']), likes: rndI(100,600), retweets: rndI(30,150) });
+    if (Math.random() < 0.6) posts.push({ minute: min, user: '@ISL_Updates', text: `⚽ GOAL! ${event.player} (${min}')`, likes: rndI(500,2000), retweets: rndI(150,600) });
+  }
+  if (event.isControversial) posts.push({ minute: min, user: '@GalacticFootyFan', text: pick(["⚠️ ROBBERY! That's NEVER a penalty! 😡",'CORRUPTION! 💸','Are you KIDDING?! Disgraceful!']), likes: rndI(800,3000), retweets: rndI(300,1200) });
+  if (event.cardType === 'red') posts.push({ minute: min, user: '@CosmicFootyNews', text: `🟥 BREAKING: ${event.foulerName||event.player} SENT OFF! 10 men!`, likes: rndI(500,2000), retweets: rndI(200,700) });
+  return posts;
+}
