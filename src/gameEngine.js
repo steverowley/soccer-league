@@ -754,8 +754,151 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   return _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum);
 }
 
-// Stub — replaced in full by 3b/3c commits
-function _genEventBranches() { return null; }
+// ── genEvent Part 2: controversy + foul + shot branches ──────────────────────
+function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum) {
+
+  // --- Controversy events (3%) ---
+  if (aim && Math.random() < 0.03) {
+    const type = pick(['missed_penalty', 'wrong_penalty', 'missed_foul']);
+    if (type === 'wrong_penalty')
+      return { minute: min, type: 'penalty', team: posTeam.shortName, isPenalty: true, commentary: pick([`⚠️ CONTROVERSY! ${aim.referee.name} points to the spot... that is NEVER a penalty!`, `⚠️ What is ${aim.referee.name} DOING?! Nobody touched him!`, `⚠️ Penalty given! The away bench erupts! This is outrageous!`]), isControversial: true, momentumChange: [8, -12] };
+    if (type === 'missed_penalty')
+      return { minute: min, type: 'missed_penalty_call', team: posTeam.shortName, commentary: pick([`⚠️ PENALTY SHOUT! ${aim.referee.name} waves it away — disgraceful!`, `⚠️ Clear foul in the box! ${aim.referee.name} unmoved. Astonishing.`, `⚠️ HOW IS THAT NOT A PENALTY?! Arms everywhere!`]), isControversial: true, momentumChange: [-5, 5] };
+  }
+
+  // --- Standard branches ---
+  let player, defender, outcome, commentary, momentumChange = [0, 0];
+
+  if (roll < 0.05) {
+    // FOUL / CARD / PENALTY
+    player = getPlayer(defTeam, defActive, 'defending');
+    const atk = getPlayer(posTeam, posActive, 'attacking');
+    if (!player || !atk) return null;
+    const inBox = Math.random() < 0.15;
+    const sev   = rnd(0, 100);
+    let card = aim ? aim.shouldGiveCard(sev) : (sev > 85 ? 'red' : sev > 60 ? 'yellow' : null);
+    if (card === 'yellow' && playerStats[player.name]?.yellowCard) card = 'red';
+    if (inBox) {
+      const penGk  = getPlayer(defTeam, defActive, 'defending', 'GK');
+      const pseq   = genPenaltySeq(min, atk, player, posTeam, defTeam, card, aim, penGk, matchCtx(atk.name));
+      return { minute: min, type: 'penalty_sequence', team: posTeam.shortName,
+        player: pseq.penaltyTaker.name, foulerName: player.name, foulerTeam: defTeam.shortName,
+        defender: penGk?.name, outcome: pseq.isGoal ? 'goal' : 'saved',
+        commentary: pseq.outcomeCommentary,
+        momentumChange: isHome ? [pseq.isGoal ? 6 : 1, 0] : [0, pseq.isGoal ? 6 : 1],
+        cardType: card, isPenalty: true, isGoal: pseq.isGoal,
+        animation: pseq.isGoal ? { type: 'goal', color: posTeam.color } : null,
+        penaltySequence: pseq.sequence, penaltyTaker: pseq.penaltyTaker,
+        isRedCard: pseq.isRed, isYellowCard: pseq.isYellow };
+    }
+    commentary = card === 'red'
+      ? pick([`🟥 RED CARD! ${player.name} is SENT OFF!`, `🟥 STRAIGHT RED! ${player.name} — see you in the tunnel!`, `🟥 ${player.name} GONE! Incredible scenes!`])
+      : card === 'yellow'
+      ? pick([`🟨 ${player.name} booked for a foul on ${atk.name}`, `🟨 Yellow card — ${player.name} won't be happy.`, `🟨 ${player.name}: reckless challenge. Booked.`])
+      : pick([`Foul by ${player.name} on ${atk.name}. Free kick.`, `${player.name} brings down ${atk.name}.`, `Clumsy foul from ${player.name}.`, `${player.name} clips ${atk.name}. Ref blows.`]);
+    momentumChange = isHome ? [1, 0] : [0, 1];
+    if (card === 'red') momentumChange = isHome ? [2, 0] : [0, 2];
+    const foulEvt = { minute: min, type: 'foul', team: defTeam.shortName, player: player.name, outcome: card || 'foul', commentary, momentumChange: [0, 0], cardType: card };
+    if (card === 'red' && Math.random() < 0.40) {
+      const cSeq = genConfrontationSeq(min, player, atk, aim?.referee, Math.random() < 0.25, aim?.getAgentByName(player.name), aim?.getAgentByName(atk.name));
+      return { ...foulEvt, momentumChange: isHome ? [2, 0] : [0, 2], confrontationSequence: cSeq.sequence };
+    }
+    if (card !== 'red' && Math.random() < 0.50) {
+      const fkTaker = getPlayer(posTeam, posActive, 'technical') || atk;
+      const fkGk    = getPlayer(defTeam, defActive, 'defending', 'GK');
+      const fkSeq   = genFreekickSeq(min, fkTaker, fkGk, posTeam, defTeam, aim, matchCtx(fkTaker.name));
+      return { minute: min, type: 'freekick_sequence', team: posTeam.shortName,
+        player: fkTaker.name, foulerName: player.name, foulerTeam: defTeam.shortName,
+        cardType: card, isGoal: fkSeq.isGoal, outcome: fkSeq.isGoal ? 'goal' : 'miss',
+        commentary: fkSeq.outcomeCommentary,
+        animation: fkSeq.isGoal ? { type: 'goal', color: posTeam.color } : null,
+        momentumChange: isHome ? [fkSeq.isGoal ? 6 : 1, 0] : [0, fkSeq.isGoal ? 6 : 1],
+        freekickSequence: [foulEvt, ...fkSeq.sequence] };
+    }
+    momentumChange = isHome ? [1, 0] : [0, 1];
+    return { ...foulEvt, momentumChange };
+  }
+
+  if (roll < 0.20) {
+    // SHOT
+    player = getPlayer(posTeam, posActive, 'attacking', 'FW') || getPlayer(posTeam, posActive, 'attacking');
+    const gk = getPlayer(defTeam, defActive, 'defending', 'GK');
+    if (!player || !gk) return null;
+
+    // Long-range speculative (18%)
+    if (Math.random() < 0.18) {
+      const lsNet  = (player.technical || 70) * 0.4 + (player.mental || 70) * 0.3 + rnd(-20, 20) - (gk.defending || 70) * 0.8 - 18;
+      const lsGoal = lsNet > 28;
+      const lsComm = lsGoal
+        ? pick([`⚽ FROM DISTANCE! ${player.name} unleashes an ABSOLUTE THUNDERBOLT!`, `⚽ YOU ARE JOKING! ${player.name} — from 40 yards! That is a WONDER GOAL!`, `⚽ ${player.name} shoots from RANGE — it flies into the TOP CORNER! The stadium erupts!`, `⚽ OUTRAGEOUS! ${player.name} scores from DISTANCE! Nobody saw that coming!`])
+        : pick([`${player.name} tries his luck from range — well held by ${gk.name}.`, `Speculative from ${player.name}! Drifts past the post.`, `${player.name} has a go from 35 yards — comfortably saved.`, `Ambitious from ${player.name}! Long-range effort straight at the keeper.`, `${player.name} strikes from distance — skews wide. Worth a try.`]);
+      return { minute: min, type: 'long_shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: lsGoal ? 'goal' : 'miss', isGoal: lsGoal, commentary: lsComm, momentumChange: isHome ? [lsGoal ? 5 : 1, 0] : [0, lsGoal ? 5 : 1], animation: lsGoal ? { type: 'goal', color: posTeam.color } : null };
+    }
+
+    const shooterAgent   = aim?.getAgentByName(player.name);
+    const gkAgent        = aim?.getAgentByName(gk.name);
+    const isClutchMoment = shooterAgent?.isClutch && min >= 80 && Math.abs(score[0] - score[1]) <= 1;
+    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment });
+    const formAdj        = formBonus(player.name, playerStats) - formBonus(gk.name, playerStats) + (aim?.getAgentByName(player.name)?.getDecisionBonus() || 0) - wxStatPen + wxGkPen;
+    const net            = shotResult.margin + formAdj;
+    const shotFlavour    = shotResult.flavour;
+
+    // Own goal
+    if (net > 10 && Math.random() < 0.05) {
+      return { minute: min, type: 'shot', team: defTeam.shortName, player: gk.name, outcome: 'own_goal', commentary: pick([`😱 OWN GOAL! ${gk.name} fumbles it in!`, `😱 CATASTROPHE! ${gk.name} puts it past his own keeper!`, `😱 Oh no — own goal from ${gk.name}!`]), momentumChange: isHome ? [-5, 5] : [5, -5], isGoal: true, animation: { type: 'goal', color: defTeam.color } };
+    }
+    // Zero gravity curve-back
+    if (wx === WX.ZERO && net > 5 && net <= 15 && Math.random() < 0.28) {
+      return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'goal', commentary: pick([`⚽ ${player.name}'s shot drifts WIDE... then curves back in! ZERO GRAVITY GOAL! 🌌`, `⚽ ORBITAL! The ball escapes the atmosphere — and comes back IN! ${player.name}! 🌌`]), momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, animation: { type: 'goal', color: posTeam.color }, isWeatherGoal: true };
+    }
+    if (net > 15) {
+      commentary = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'goal', shotFlavour, matchCtx(player.name));
+      return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, assister: null, outcome: 'goal', commentary, momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, isClutchGoal: isClutchMoment, animation: { type: 'goal', color: posTeam.color } };
+    }
+    if (net > 5) {
+      // Near-miss sequence (20%)
+      if (Math.random() < 0.20) {
+        const nmSeq = genNearMissSeq(min, player, gk, posTeam, defTeam);
+        return { minute: min, type: 'near_miss_sequence', team: posTeam.shortName, player: player.name, outcome: 'near_miss', commentary: nmSeq.sequence[nmSeq.sequence.length - 1].commentary, momentumChange: isHome ? [2, 0] : [0, 2], nearMissSequence: nmSeq.sequence };
+      }
+      // Magnetic storm glove malfunction
+      if (wx === WX.MAG && Math.random() < 0.28) {
+        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'goal', commentary: pick([`⚽ ${gk.name}'s gloves MALFUNCTION in the magnetic storm! It rolls in! 🧲`, `⚽ MAGNETIC INTERFERENCE! ${gk.name} drops it — ${player.name} can't believe it! 🧲`]), momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, animation: { type: 'goal', color: posTeam.color }, isWeatherGoal: true };
+      }
+      const saveComm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'saved', shotFlavour, matchCtx(player.name));
+      // Counter-attack (20%)
+      if (Math.random() < 0.20) {
+        const cPlayer  = getPlayer(defTeam, defActive, 'athletic');
+        const cSupport = getPlayer(defTeam, defActive, 'technical');
+        const cGk      = getPlayer(posTeam, posActive, 'defending', 'GK');
+        if (cPlayer && cGk) {
+          const cSeq        = genCounterSeq(min, cPlayer, cGk, defTeam, cSupport);
+          const cAtkAgent   = aim?.getAgentByName(cPlayer.name);
+          const cGkAgent    = aim?.getAgentByName(cGk.name);
+          const cIsClutch   = cAtkAgent?.isClutch && min >= 80;
+          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch });
+          const cGoal       = cResult.outcome === 'goal';
+          const cIsHome     = defTeam === homeTeam;
+          const savedSeqEvt = { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: saveComm, momentumChange: [0, 0] };
+          const cComm       = buildCommentary('shot', { attacker: cPlayer.name, defender: cGk.name }, cResult.outcome, cResult.flavour, matchCtx(cPlayer.name));
+          return { minute: min, type: 'counter_sequence', team: defTeam.shortName, player: cPlayer.name, outcome: cGoal ? 'goal' : 'saved', isGoal: cGoal, commentary: cComm, momentumChange: cIsHome ? [cGoal ? 8 : -1, 0] : [0, cGoal ? 8 : -1], animation: cGoal ? { type: 'goal', color: defTeam.color } : null, counterSequence: [savedSeqEvt, ...cSeq.sequence] };
+        }
+      }
+      return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: saveComm, momentumChange: isHome ? [2, 0] : [0, 2], animation: { type: 'saved', color: defTeam.color } };
+    }
+    // Miss
+    const missComm = wx === WX.SOLAR && Math.random() < 0.4
+      ? pick([`${player.name} fires — BLINDED by the solar flare! Miles off!`, `${player.name} can barely see through the plasma discharge. Shot wide.`])
+      : buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'miss', shotFlavour, matchCtx(player.name));
+    return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'miss', commentary: missComm, momentumChange: isHome ? [1, 0] : [0, 1] };
+  }
+
+  // Attack/dribble, corner, injury, defense, passing branches handled in Part 3
+  return _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum);
+}
+
+// Stub for Part 3 — replaced next commit
+function _genEventPart3() { return null; }
 
 // ── genSocial ─────────────────────────────────────────────────────────────────
 export function genSocial(event, min, ms) {
