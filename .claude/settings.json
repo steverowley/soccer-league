@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -qE '\\.(js|jsx|ts|tsx)$' && echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"DOCUMENTATION REMINDER: This project maintains a high standard of inline documentation. For any new or modified code, ensure: (1) every exported function has a JSDoc-style block comment explaining what it does, its parameters, return value, and any important edge cases; (2) every major code section/branch has a header comment explaining the logic and the WHY behind it (not just the what); (3) any new constants or enums include a comment describing each value and its mechanical effect on the game; (4) numeric thresholds, probability values, and magic numbers are annotated with what they represent. Match the style established in gameEngine.js, agents.js, simulateHelpers.js, constants.js, teams.js, and utils.js.\"}}' || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
