@@ -741,11 +741,13 @@ const MatchSimulator = ({
                   <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔ ':''}{ms.awayTeam.shortName}</span>
                 </div>
               </div>
-              {/* Commentary card — flex:1 consumes remaining centre-column height
-                  after the pitch visualization.  display:flex+flexDirection:column
-                  lets the scrollable feed div below also use flex:1 so it grows
-                  to match the side columns rather than being a fixed 400 px box. */}
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
+              {/* Commentary card — fixed height so the feed scrolls rather than
+                  growing to fit content. This pins the centre column's natural
+                  height, letting CSS Grid's default align-items:stretch make
+                  both side columns exactly as tall as the centre, so the
+                  Player Thoughts cards can use flex:1 to fill the leftover
+                  space without causing runaway column growth. */}
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(154,92,244,0.3)',backgroundColor:'rgba(154,92,244,0.06)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',display:'flex',alignItems:'center',gap:'8px'}}>
                   <span>Commentary</span>
                   {agentSystemRef.current&&(
@@ -761,10 +763,10 @@ const MatchSimulator = ({
                     <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'2px 8px',border:'1px solid rgba(154,92,244,0.5)',backgroundColor:'transparent',color:'#9A5CF4',cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
                   )}
                 </div>
-                {/* flex:1 lets the feed grow to fill whatever height the card
-                    occupies; minHeight:'400px' ensures a comfortable minimum
-                    when the side columns are short (pre-match / sparse feeds). */}
-                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',flex:1,minHeight:'400px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
+                {/* 400px — tall enough to show ~8-10 commentary entries before
+                    scrolling; also pins the centre column's total height so the
+                    side columns can use flex:1 on Player Thoughts to align. */}
+                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',height:'400px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
                   {commentaryFeed.length===0&&(
                     <div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'80px'}}>
                       {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
