@@ -665,7 +665,7 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',height:'600px'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',height:'600px',overflow:'hidden'}}>
             {/* 600px — explicit section height that gives all three columns a
                 definite block size. This is the only reliable way to make
                 height:100% on column wrappers and flex:1 on inner feed divs
@@ -681,7 +681,12 @@ const MatchSimulator = ({
                 shrink below their content size even when flex:1 is set.
                 Without minHeight:0 the feed divs grow to fit all entries,
                 overflowing the 600px boundary. minHeight:0 lets overflow:auto
-                take effect so content scrolls instead of expanding. */}
+                take effect so content scrolls instead of expanding.
+
+                overflow:hidden on this grid container is the final hard stop:
+                even if an inner flex item somehow escapes its allocated space,
+                the 600px clip prevents it from visually bleeding into the
+                squad-list section below. */}
             {/* ── HOME column ─────────────────────────────────────────── */}
             {/* height:100% works here because the parent grid has an explicit
                 height (600px), giving a definite reference for percentage
