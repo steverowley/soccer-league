@@ -71,7 +71,6 @@ a {
 .starfield {
   position: relative;
   background-color: var(--color-abyss);
-  overflow: hidden;
 }
 
 .starfield::before {
@@ -79,34 +78,35 @@ a {
   position: fixed;
   inset: 0;
   background-image:
-    radial-gradient(1px 1px at 5%   8%,  rgba(227,224,213,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 15%  22%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 25%  5%,  rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 35%  18%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 45%  9%,  rgba(227,224,213,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 55%  25%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 65%  3%,  rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 75%  15%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 85%  8%,  rgba(227,224,213,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 92%  20%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 10%  40%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 22%  55%, rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 38%  45%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 50%  60%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 62%  38%, rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 78%  50%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 88%  42%, rgba(227,224,213,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 3%   65%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 18%  72%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 30%  80%, rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 42%  68%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 58%  75%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 70%  85%, rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 82%  70%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 95%  78%, rgba(227,224,213,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 8%   90%, rgba(227,224,213,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 48%  92%, rgba(227,224,213,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 72%  95%, rgba(227,224,213,0.4) 0%, transparent 100%);
+    radial-gradient(2px 2px at 5%   8%,  rgba(227,224,213,0.6) 0%, transparent 100%),
+    radial-gradient(2px 2px at 15%  22%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 25%  5%,  rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 35%  18%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 45%  9%,  rgba(227,224,213,0.6) 0%, transparent 100%),
+    radial-gradient(2px 2px at 55%  25%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 65%  3%,  rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 75%  15%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 85%  8%,  rgba(227,224,213,0.6) 0%, transparent 100%),
+    radial-gradient(2px 2px at 92%  20%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 10%  40%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 22%  55%, rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 38%  45%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 50%  60%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 62%  38%, rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 78%  50%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 88%  42%, rgba(227,224,213,0.6) 0%, transparent 100%),
+    radial-gradient(2px 2px at 3%   65%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 18%  72%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 30%  80%, rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 42%  68%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 58%  75%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 70%  85%, rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 82%  70%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 95%  78%, rgba(227,224,213,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 8%   90%, rgba(227,224,213,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 48%  92%, rgba(227,224,213,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 72%  95%, rgba(227,224,213,0.4) 0%, transparent 100%);
+  background-repeat: no-repeat;
   pointer-events: none;
   z-index: 0;
 }
