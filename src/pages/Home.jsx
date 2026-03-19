@@ -98,7 +98,7 @@ export default function Home() {
           {/* Large logo — more prominent than the header logo */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
             <img
-              src={`${import.meta.env.BASE_URL}isl-logo.svg`}
+              src={`${import.meta.env.BASE_URL}isl-logo.png`}
               alt="Intergalactic Soccer League"
               style={{ width: 120, height: 'auto' }}
             />
