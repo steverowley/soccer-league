@@ -79,7 +79,7 @@ export default function Header() {
             the shield crest overlaps the divider — matching the design spec. */}
         <Link to="/" style={{ display: 'block', flexShrink: 0 }}>
           <img
-            src="/isl-logo.svg"
+            src={`${import.meta.env.BASE_URL}isl-logo.svg`}
             alt="Intergalactic Soccer League"
             style={{ width: 72, height: 'auto', display: 'block', marginBottom: '-12px' }}
           />
