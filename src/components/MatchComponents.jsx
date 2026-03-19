@@ -15,26 +15,61 @@ export const Stat = ({ label, a, b, homeColor, awayColor }) => (
   </div>
 );
 
+/**
+ * Single player row rendered inside the squad panel (On Pitch / Bench sections).
+ *
+ * Uses inline styles throughout so layout is consistent with the match
+ * simulator's inline-style-only approach — Tailwind utility classes are NOT
+ * used here because the component is rendered inside contexts where Tailwind
+ * purging may strip the classes at build time.
+ *
+ * Visual states:
+ *   - Active (on pitch): full opacity, name tinted in team colour, clickable
+ *     to open the PlayerCard detail modal.
+ *   - Inactive (bench / sent off): 50 % opacity, default cursor — the row is
+ *     not interactive.
+ *
+ * @param {Object}   props
+ * @param {Object}   props.player     - Player data object (name, position, stats)
+ * @param {Object}   props.stats      - Live match stats keyed by player name
+ * @param {boolean}  props.isActive   - True when the player is currently on pitch
+ * @param {string}   props.teamColor  - Hex team accent colour for name highlight
+ * @param {Array}    props.agents     - AI agent array for the team (may be null)
+ * @param {boolean}  props.isHome     - Whether this player belongs to the home team
+ * @param {string}   props.teamName   - Short team name shown in the PlayerCard modal
+ * @param {Function} props.onSelect   - Callback invoked with player data when clicked
+ * @returns {JSX.Element}
+ */
 export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, teamName, onSelect }) => {
   const s = stats[player.name] || {};
   const agent = agents?.find(a => a.player.name === player.name);
   const emo = agent?.emotion;
   return (
-    <div className="flex items-center justify-between p-1.5 border mb-1"
+    <div
       onClick={() => isActive && onSelect({ player, agent, stats: s, teamColor, teamName })}
-      style={{ borderColor: C.dust, backgroundColor: C.abyss, opacity: isActive ? 1 : 0.5, cursor: isActive ? 'pointer' : 'default' }}>
-      <div className="flex-1">
-        <div className="text-xs font-bold flex items-center gap-1" style={{ color: isActive ? teamColor : undefined }}>
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 16px',
+        borderBottom: `1px solid rgba(227,224,213,0.08)`,
+        backgroundColor: C.abyss,
+        opacity: isActive ? 1 : 0.5,
+        cursor: isActive ? 'pointer' : 'default',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: isActive ? teamColor : undefined }}>
           {s.subbedOn ? '🔺 ' : ''}{player.name}
-          {PERS_ICON[agent?.personality] ? <span className="opacity-60">{PERS_ICON[agent.personality]}</span> : null}
+          {PERS_ICON[agent?.personality] ? <span style={{ opacity: 0.6 }}>{PERS_ICON[agent.personality]}</span> : null}
         </div>
-        <div className="text-xs flex gap-2" style={{ opacity: 0.6 }}>
+        <div style={{ display: 'flex', gap: '8px', fontSize: '11px', opacity: 0.6, marginTop: '2px' }}>
           <span>{player.position}</span>
           {agent && <span>😊{Math.round(agent.confidence)}% 💨{Math.round(agent.fatigue)}%</span>}
           {emo && emo !== 'neutral' && <span style={{ color: C.purple }}>{emo}</span>}
         </div>
       </div>
-      <div className="flex gap-1 text-sm">
+      <div style={{ display: 'flex', gap: '4px', fontSize: '14px', flexShrink: 0 }}>
         {s.goals > 0 && <span>⚽{s.goals}</span>}
         {s.assists > 0 && <span>👟{s.assists}</span>}
         {s.saves > 0 && <span>✋{s.saves}</span>}
