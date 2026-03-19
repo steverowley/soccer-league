@@ -665,34 +665,30 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',height:'600px',overflow:'hidden'}}>
-            {/* 600px — explicit section height that gives all three columns a
-                definite block size. This is the only reliable way to make
-                height:100% on column wrappers and flex:1 on inner feed divs
-                work without circular CSS-Grid sizing dependencies.
-                Chosen so the centre column allocates ~400px to commentary
-                (600 minus the ~150px pitch card and 12px gap) and the side
-                columns allocate ~280px to Player Thoughts (600 minus team
-                info, manager shouts, and gaps). Both feed areas scroll once
-                content exceeds their allocated height.
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',height:'600px'}}>
+            {/* Layout contract for this section:
+                - grid height 600px gives all three columns a fixed block size.
+                - Each column wrapper has overflow:hidden so nothing bleeds out.
+                - Feed divs use explicit fixed heights (same pattern as Manager
+                  Shouts, which has always worked reliably) so overflowY:auto
+                  creates a real scroll context without any flex trickery.
 
-                IMPORTANT — minHeight:0 on every flex:1 card and feed div:
-                Flex items default to min-height:auto, meaning they refuse to
-                shrink below their content size even when flex:1 is set.
-                Without minHeight:0 the feed divs grow to fit all entries,
-                overflowing the 600px boundary. minHeight:0 lets overflow:auto
-                take effect so content scrolls instead of expanding.
+                  Heights chosen so both side columns and the centre column
+                  total ≈ 590px — safely inside the 600px clip:
+                    Side:   team-info(~84) + gap(12) + mgr-shouts(194) +
+                            gap(12) + thoughts-header(34) + 250px feed = ~586px
+                    Centre: pitch-card(~161) + gap(12) + commentary-header(34)
+                            + 380px feed = ~587px
 
-                overflow:hidden on this grid container is the final hard stop:
-                even if an inner flex item somehow escapes its allocated space,
-                the 600px clip prevents it from visually bleeding into the
-                squad-list section below. */}
+                  380px commentary — fits ~6–8 entries before scrolling.
+                  250px player-thoughts — fits ~3–4 entries before scrolling.
+                  160px manager-shouts (unchanged) — fits ~2 entries. */}
             {/* ── HOME column ─────────────────────────────────────────── */}
             {/* height:100% works here because the parent grid has an explicit
                 height (600px), giving a definite reference for percentage
                 resolution. flex:1 on the last card then reliably fills the
                 remaining column space. */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.homeTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.homeTeam.color,marginBottom:'4px'}}>{ms.homeTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.homeFormation} · {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
@@ -722,9 +718,9 @@ const MatchSimulator = ({
               {/* Player Thoughts — flex:1 so this card stretches to fill remaining column
                   height, keeping the home/away columns flush with the taller centre
                   column. minHeight preserves a sensible floor when content is sparse. */}
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Player Thoughts</div>
-                <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',height:'250px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :[...homeThoughtsFeed].reverse().map((item,i)=>(
@@ -743,7 +739,7 @@ const MatchSimulator = ({
             </div>
 
             {/* ── CENTRE: pitch + commentary ──────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px'}}>
                 <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
                 <div style={{position:'relative',height:'88px',backgroundColor:'#1a4d2e',border:'1px solid rgba(227,224,213,0.2)',backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.04) 19px,rgba(255,255,255,0.04) 20px)'}}>
@@ -765,7 +761,7 @@ const MatchSimulator = ({
                   inner feed div also use flex:1 to fill the card; overflow:hidden
                   clips any overflow so the card never grows past its share of
                   the 600px column height. */}
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(154,92,244,0.3)',backgroundColor:'rgba(154,92,244,0.06)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',display:'flex',alignItems:'center',gap:'8px'}}>
                   <span>Commentary</span>
                   {agentSystemRef.current&&(
@@ -784,7 +780,7 @@ const MatchSimulator = ({
                 {/* flex:1 fills whatever height the card has been allocated by
                     the 600px grid; overflowY:auto scrolls new entries rather
                     than expanding the div (and therefore the whole column). */}
-                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
+                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',height:'380px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
                   {commentaryFeed.length===0&&(
                     <div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'80px'}}>
                       {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
@@ -831,7 +827,7 @@ const MatchSimulator = ({
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.awayTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.awayTeam.color,marginBottom:'4px'}}>{ms.awayTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.awayFormation} · {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
@@ -860,9 +856,9 @@ const MatchSimulator = ({
               </div>
               {/* Player Thoughts — flex:1 stretches to fill remaining away-column
                   height, keeping the bottom edge aligned with the centre column. */}
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Player Thoughts</div>
-                <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',height:'250px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :[...awayThoughtsFeed].reverse().map((item,i)=>(
