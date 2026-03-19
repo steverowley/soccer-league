@@ -92,17 +92,13 @@ export default function Home() {
   return (
     <div>
       {/* ── HERO ──────────────────────────────────────────────────────────────── */}
-      <section style={{ textAlign: 'center', padding: '48px 24px 40px' }}>
+      {/* padding: 32px top — the header logo overhangs the divider by ~60px on
+          desktop so there is no need for large breathing room here; 32px gives
+          the H1 comfortable clearance while keeping the logo and headline in a
+          cohesive visual block. The hero logo is intentionally removed: the
+          overhanging header logo serves as the hero brand mark per the design. */}
+      <section style={{ textAlign: 'center', padding: '32px 0 40px' }}>
         <div className="container">
-
-          {/* Large logo — more prominent than the header logo */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-            <img
-              src={`${import.meta.env.BASE_URL}isl-logo.png`}
-              alt="Intergalactic Soccer League"
-              style={{ width: 120, height: 'auto' }}
-            />
-          </div>
 
           {/* H1 split across two lines to match the mockup layout */}
           <h1 style={{ marginBottom: '16px', lineHeight: 1.2 }}>
