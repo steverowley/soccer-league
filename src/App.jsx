@@ -20,11 +20,18 @@ import { rnd, rndI, pick } from "./utils.js";
 import { Stat, PlayerRow, FeedCard, AgentCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic } from "./simulateHelpers.js";
 
-const MatchSimulator = () => {
+const MatchSimulator = ({
+  homeTeamKey = 'mars',
+  awayTeamKey = 'saturn',
+  compact = false,
+  autoStart = false,
+  startDelay = 500,
+  onExpand = null,
+} = {}) => {
   const initState=()=>({
     minute:0,score:[0,0],possession:[50,50],momentum:[0,0],
     events:[],isPlaying:false,
-    homeTeam:TEAMS.mars,awayTeam:TEAMS.saturn,
+    homeTeam:TEAMS[homeTeamKey]||TEAMS.mars,awayTeam:TEAMS[awayTeamKey]||TEAMS.saturn,
     currentAnimation:null,isPaused:false,pauseCommentary:null,
     playerStats:{},mvp:null,stoppageTime:0,inStoppageTime:false,
     redCards:{home:0,away:0},
@@ -149,6 +156,25 @@ const MatchSimulator = () => {
     });
   },[!!htReport]);
 
+  // ── Auto-start effect ─────────────────────────────────────────────────────
+  // When the `autoStart` prop is true (used by compact match cards on the
+  // Matches page), kick off the simulation automatically after `startDelay` ms.
+  // The delay allows multiple card instances to stagger their starts so they
+  // don't all fire interval callbacks on the same tick, reducing jank.
+  // We intentionally skip the API key / AgentSystem setup here — compact cards
+  // run procedural commentary only (no LLM calls) to keep resource usage low.
+  useEffect(()=>{
+    if(!autoStart)return;
+    const timer=setTimeout(()=>{
+      const mgr=createAIManager(TEAMS[homeTeamKey]||TEAMS.mars,TEAMS[awayTeamKey]||TEAMS.saturn);
+      aiRef.current=mgr;
+      setAiManager(mgr);
+      setSpeed(200); // turbo — compact cards run fast
+      setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
+    },startDelay);
+    return()=>clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);// intentionally run once on mount only
 
   const simulateMinute=()=>{
     setMatchState(prev=>{
@@ -377,301 +403,310 @@ const MatchSimulator = () => {
   const odds=getOdds();
   const ms=matchState;
 
-  return(
-    <div className="min-h-screen p-4" style={{backgroundColor:C.abyss,color:C.dust,fontFamily:"'Space Mono',monospace",backgroundImage:`radial-gradient(1px 1px at 20px 30px,rgba(255,255,255,0.3),transparent),radial-gradient(1px 1px at 80px 80px,rgba(154,92,244,0.3),transparent),radial-gradient(2px 2px at 150px 50px,rgba(255,255,255,0.5),transparent)`,backgroundRepeat:'repeat',backgroundSize:'200px 200px'}}>
+  // ── Derived match statistics ───────────────────────────────────────────────
+  // Computed from the event log each render so the stats table always reflects
+  // the current state without needing extra state slices.
+  // Shot counts include both attempts that ended in goals and standalone shots.
+  // "On target" = saved by keeper OR converted to goal.
+  const sn=ms.homeTeam.shortName;
+  const asn=ms.awayTeam.shortName;
+  const homeShots=ms.events.filter(e=>e.team===sn&&(e.type==='shot'||e.isGoal)).length;
+  const awayShots=ms.events.filter(e=>e.team===asn&&(e.type==='shot'||e.isGoal)).length;
+  const homeSoT=ms.events.filter(e=>e.team===sn&&(e.isGoal||e.outcome==='saved')).length;
+  const awaySoT=ms.events.filter(e=>e.team===asn&&(e.isGoal||e.outcome==='saved')).length;
+  const homeCorners=ms.events.filter(e=>e.team===sn&&e.type==='corner').length;
+  const awayCorners=ms.events.filter(e=>e.team===asn&&e.type==='corner').length;
+  // Yellow card fouls: check both primary team and foulerTeam fields since the
+  // fouling player may be from the opposite team to the event's main team.
+  const homeYellows=ms.events.filter(e=>e.cardType==='yellow'&&(e.team===sn||e.foulerTeam===sn)).length;
+  const awayYellows=ms.events.filter(e=>e.cardType==='yellow'&&(e.team===asn||e.foulerTeam===asn)).length;
 
+  // ── Time display helpers ───────────────────────────────────────────────────
+  // Formats the clock string shown in the scoreboard and compact card header.
+  // Stoppage time is displayed as "45+N'" or "90+N'" per football convention.
+  const timeDisplay=ms.inStoppageTime
+    ?`${ms.minute>=90?90:45}+${Math.max(0,ms.minute>=90?ms.minute-90:ms.minute-45)}'`
+    :`${ms.minute}'`;
+  const periodLabel=ms.inStoppageTime?'Stoppage':ms.minute===0?'Pre-Match':ms.minute<45?'1st Half':ms.minute<90?'2nd Half':ms.mvp?'Full Time':'2nd Half';
+
+  // ── Compact card render ────────────────────────────────────────────────────
+  // Returned early when `compact={true}`.  Used by the Matches page to show
+  // multiple simultaneously-running simulations in a 2×2 grid.  Only renders
+  // the scoreboard, chaos meter, and commentary feed — no squad lists, stats,
+  // or modals — to keep each card lightweight.
+  if(compact){
+    return(
+      <div style={{border:'1px solid rgba(227,224,213,0.12)',backgroundColor:'#1F1F1F',display:'flex',flexDirection:'column',fontFamily:"'Space Mono',monospace",color:'#E3E0D5',height:'100%'}}>
+        {/* Scoreboard row: short-name | score·time·score | short-name */}
+        <div style={{padding:'12px 16px',backgroundColor:'#111',borderBottom:'1px solid rgba(227,224,213,0.07)'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',alignItems:'center',gap:'8px'}}>
+            <div style={{textAlign:'right',fontSize:'11px',fontWeight:700,color:ms.homeTeam.color,textTransform:'uppercase',letterSpacing:'0.05em'}}>{ms.homeTeam.shortName}</div>
+            <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'0 4px'}}>
+              <span style={{fontSize:'22px',fontWeight:700}}>{ms.score[0]}</span>
+              <div style={{textAlign:'center',minWidth:'38px'}}>
+                <div style={{fontSize:'10px',fontWeight:700,color:'#9A5CF4'}}>{timeDisplay}</div>
+                <div style={{fontSize:'8px',opacity:0.35,textTransform:'uppercase'}}>{periodLabel}</div>
+              </div>
+              <span style={{fontSize:'22px',fontWeight:700}}>{ms.score[1]}</span>
+            </div>
+            <div style={{textAlign:'left',fontSize:'11px',fontWeight:700,color:ms.awayTeam.color,textTransform:'uppercase',letterSpacing:'0.05em'}}>{ms.awayTeam.shortName}</div>
+          </div>
+        </div>
+
+        {/* Chaos meter strip with status tags */}
+        <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.05)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:'8px',opacity:0.35,marginBottom:'4px',textTransform:'uppercase'}}>
+            <span>😊 Calm</span><span>Tense</span><span>Mayhem 🔥</span>
+          </div>
+          <div style={{height:'3px',backgroundColor:'rgba(227,224,213,0.06)',position:'relative'}}>
+            <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,transition:'width 0.5s'}}/>
+          </div>
+          <div style={{display:'flex',gap:'4px',marginTop:'5px',flexWrap:'wrap'}}>
+            {ms.minute>80&&<span style={{fontSize:'8px',padding:'1px 5px',border:'1px solid rgba(224,82,82,0.4)',color:'#E05252'}}>LATE GAME</span>}
+            {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>0&&<span style={{fontSize:'8px',padding:'1px 5px',border:'1px solid rgba(255,165,0,0.35)',color:'#FFA500'}}>TIED</span>}
+            {(ms.redCards.home+ms.redCards.away)>0&&<span style={{fontSize:'8px',padding:'1px 5px',border:'1px solid rgba(224,82,82,0.4)',color:'#E05252'}}>RED CARDS</span>}
+          </div>
+        </div>
+
+        {/* Scrollable commentary feed — newest events at top */}
+        <div style={{flex:1,overflowY:'auto',padding:'6px 8px',minHeight:'180px',maxHeight:'240px',scrollbarWidth:'thin'}}>
+          {commentaryFeed.length===0
+            ?<div style={{textAlign:'center',padding:'40px 0',opacity:0.2,fontSize:'10px'}}>{ms.minute===0?'Starting...':'Watching...'}</div>
+            :[...commentaryFeed].reverse().slice(0,10).map((item,i)=><AgentCard key={i} item={item}/>)}
+        </div>
+
+        {/* Expand button — triggers onExpand prop from parent Matches page */}
+        {onExpand&&(
+          <div style={{padding:'7px 12px',borderTop:'1px solid rgba(227,224,213,0.05)'}}>
+            <button onClick={onExpand} style={{width:'100%',padding:'6px',backgroundColor:'transparent',border:'1px solid rgba(227,224,213,0.12)',color:'rgba(227,224,213,0.5)',fontFamily:"'Space Mono',monospace",fontSize:'9px',textTransform:'uppercase',letterSpacing:'0.09em',cursor:'pointer'}}>
+              View Full Match ↗
+            </button>
+          </div>
+        )}
+        <style>{`@keyframes goalPulse{0%{opacity:1;transform:scale(0.5);}50%{opacity:1;transform:scale(1.5);}100%{opacity:0;transform:scale(0.8);}}`}</style>
+      </div>
+    );
+  }
+
+  // ── Full match view render ─────────────────────────────────────────────────
+  // Rendered when compact={false} (the default).  Implements the ISL match
+  // page design: title → scoreboard → controls → officials/stadium →
+  // team-info/chaos → manager-feeds/pitch → thoughts/commentary →
+  // squad-lists → match-stats/previous-meetings → modals.
+  return(
+    <div style={{fontFamily:"'Space Mono',monospace",color:'#E3E0D5'}}>
+
+      {/* ── Goal-pause banner ────────────────────────────────────────────────── */}
+      {/* Shown fixed at the top of the viewport when a goal freezes the clock.
+          The user must click CONTINUE to resume — this gives them time to read
+          the commentary before the simulation moves on. */}
       {ms.isPaused&&ms.pauseCommentary&&(
-        <div className="fixed inset-x-0 top-0 z-50 p-4 text-center text-xl font-bold border-b" style={{backgroundColor:C.ash,borderColor:C.purple,color:C.purple,animation:'fadeIn 0.3s'}}>
+        <div style={{position:'fixed',top:0,left:0,right:0,zIndex:50,padding:'14px 24px',textAlign:'center',fontSize:'15px',fontWeight:700,backgroundColor:'#1F1F1F',borderBottom:'1px solid #9A5CF4',color:'#9A5CF4',animation:'fadeIn 0.3s'}}>
           {ms.pauseCommentary}
-          <button onClick={resumeMatch} className="ml-4 px-4 py-1 text-sm border" style={bdr(C.dust,C.abyss)}>▶ CONTINUE</button>
+          <button onClick={resumeMatch} style={{marginLeft:'16px',padding:'6px 14px',border:'1px solid rgba(227,224,213,0.4)',backgroundColor:'#111',color:'#E3E0D5',cursor:'pointer',fontFamily:"'Space Mono',monospace",fontSize:'12px',letterSpacing:'0.06em'}}>▶ CONTINUE</button>
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-4 relative">
-          <button onClick={()=>setShowApiKeyModal(true)} className="absolute right-0 top-0 p-2 border" style={bdr(apiKey?C.purple:C.dust,C.abyss)} title="Configure AI Agents">
-            <Settings size={14} style={{color:apiKey?C.purple:undefined}}/>
-          </button>
-          <h1 className="text-2xl font-bold" style={{color:C.dust}}>INTERGALACTIC SOCCER LEAGUE</h1>
-          <p className="text-xs" style={{opacity:0.6}}>MATCH SIMULATION</p>
-          {aiManager&&<div className="text-xs mt-1" style={{color:C.purple}}>🤖 AI AGENTS ACTIVE{apiKey&&agentSystemRef.current?' • 🧠 LLM AGENTS LIVE':apiKey?' • 🔑 KEY SET (start match to activate)':' • ⚙️ SET API KEY FOR LLM AGENTS'}</div>}
+      <div className="container" style={{paddingTop:'32px',paddingBottom:'60px'}}>
+        {/* ── Page title ───────────────────────────────────────────────── */}
+        <div className="page-hero" style={{paddingBottom:'24px'}}>
+          <h1 style={{color:'#E3E0D5',marginBottom:'8px'}}>
+            {ms.homeTeam.shortName} <span style={{color:'#9A5CF4'}}>vs</span> {ms.awayTeam.shortName}
+          </h1>
+          <div style={{display:'flex',justifyContent:'center',gap:'8px',flexWrap:'wrap'}}>
+            {ms.minute>80&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Late Game</span>}
+            {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span style={{padding:'4px 10px',backgroundColor:'#7A3ED4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Tied</span>}
+            {(ms.redCards.home+ms.redCards.away)>0&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Red Cards</span>}
+            {ms.mvp&&<span style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #9A5CF4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:'#9A5CF4'}}>Full Time</span>}
+          </div>
         </div>
 
-        {aiManager&&!showBetting&&(
-          <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
-            <div className="p-2 border" style={bdr(C.purple)}>
-              <div className="text-lg">{WX_ICON[aiManager.weather]||'🌌'}</div>
-              <div className="font-bold" style={{color:C.purple}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
-              <div style={{opacity:0.6}}>{aiManager.temperature}°C • {aiManager.timeOfDay}</div>
-              <div className="font-bold mt-1" style={{fontSize:10,opacity:0.8}}>📍{aiManager.stadium.name}</div>
-            </div>
-            <div className="p-2 border" style={bdr(C.dust)}>
-              <div className="text-lg">{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
-              <div className="font-bold">{aiManager.referee.name}</div>
-              <div style={{opacity:0.6}}>{aiManager.referee.leniency>70?'🟢 Lenient':aiManager.referee.leniency>40?'🟡 Fair':'🔴 Strict'}</div>
-            </div>
-            <div className="p-2 border" style={bdr(C.red)}>
-              <div className="text-lg">{EMO_ICON[aiManager.homeManager.emotion]||'😐'}</div>
-              <div className="font-bold" style={{color:C.red}}>{aiManager.homeManager.name}</div>
-              <div style={{opacity:0.6}}>{aiManager.homeFormation} • {aiManager.homeTactics.replace(/_/g,' ').toUpperCase().slice(0,10)}</div>
-            </div>
-            <div className="p-2 border" style={bdr(C.purple)}>
-              <div className="text-lg">{EMO_ICON[aiManager.awayManager.emotion]||'😐'}</div>
-              <div className="font-bold" style={{color:C.purple}}>{aiManager.awayManager.name}</div>
-              <div style={{opacity:0.6}}>{aiManager.awayFormation} • {aiManager.awayTactics.replace(/_/g,' ').toUpperCase().slice(0,10)}</div>
-            </div>
-          </div>
-        )}
-
-        {showBetting&&credits===0&&currentBets.length===0&&(
-          <div className="border p-6 text-center mb-4" style={bdr(C.red)}>
-            <div className="text-5xl mb-4">⚠️</div>
-            <h3 className="text-xl font-bold mb-2" style={{color:C.red}}>QUANTUM BANKRUPTCY</h3>
-            <p style={{opacity:0.7}}>The Intergalactic Banking Consortium offers emergency funding.</p>
-            <button onClick={()=>setCredits(100)} className="mt-4 px-6 py-2 font-bold border" style={{backgroundColor:C.purple,color:C.abyss,borderColor:C.purple}}>ACCEPT BAILOUT (+100 COINS)</button>
-          </div>
-        )}
-
-        {showBetting&&(credits>0||currentBets.length>0)&&(
-          <div className="border p-4 mb-4" style={bdr(C.purple)}>
-            <h2 className="text-xl font-bold text-center mb-4" style={{color:C.purple}}>⚡ QUANTUM BETTING TERMINAL ⚡</h2>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="p-3 border text-center" style={bdr(C.purple,C.abyss)}>
-                <div className="text-xs mb-1" style={{opacity:0.6}}>BALANCE</div>
-                <div className="text-3xl font-bold" style={{color:C.purple}}>{credits}</div>
-                <div className="text-xs" style={{opacity:0.6}}>Quantum Coins</div>
-              </div>
-              <div className="p-3 border" style={bdr(C.dust,C.abyss)}>
-                <div className="text-lg font-bold" style={{color:C.red}}>{ms.homeTeam.name}</div>
-                <div className="text-xs text-center" style={{opacity:0.5}}>vs</div>
-                <div className="text-lg font-bold" style={{color:C.purple}}>{ms.awayTeam.name}</div>
-              </div>
-            </div>
-            <div className="mb-4 p-3 border" style={bdr(C.dust,C.abyss)}>
-              <label className="text-sm font-bold mb-2 block" style={{color:C.purple}}>WAGER AMOUNT</label>
-              <div className="flex gap-2 items-center">
-                <input type="number" value={betAmount} onChange={e=>setBetAmount(Math.max(0,Math.min(credits,parseInt(e.target.value)||0)))}
-                  className="flex-1 p-2 text-center text-xl font-bold border" style={{backgroundColor:C.ash,borderColor:C.dust,color:C.dust}}/>
-                {[100,500].map(v=><button key={v} onClick={()=>setBetAmount(Math.min(credits,v))} className="px-3 py-2 border" style={bdr(C.dust,C.abyss)}>{v}</button>)}
-                <button onClick={()=>setBetAmount(credits)} className="px-3 py-2 border font-bold" style={{borderColor:C.red,color:C.red,backgroundColor:C.abyss}}>ALL IN</button>
-              </div>
-            </div>
-            <div className="mb-4">
-              <div className="text-sm font-bold mb-2" style={{color:C.purple}}>🏆 MATCH OUTCOME</div>
-              <div className="grid grid-cols-3 gap-2">
-                <BetBtn type="homeWin" odds={odds.homeWin} label={`${ms.homeTeam.shortName} WINS`} color={C.red} placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="draw" odds={odds.draw} label="DRAW" placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="awayWin" odds={odds.awayWin} label={`${ms.awayTeam.shortName} WINS`} placeBet={placeBet} betAmount={betAmount}/>
-              </div>
-            </div>
-            <div className="mb-4">
-              <div className="text-sm font-bold mb-2" style={{color:C.purple}}>⚽ GOALS</div>
-              <div className="grid grid-cols-2 gap-2">
-                <BetBtn type="over25" odds="1.85" label="OVER 2.5 GOALS" sub="3+ goals" placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="under25" odds="1.95" label="UNDER 2.5 GOALS" sub="0-2 goals" placeBet={placeBet} betAmount={betAmount}/>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <BetBtn type="btts" odds="1.75" label="BTTS YES" sub="Both score" placeBet={placeBet} betAmount={betAmount}/>
-              <BetBtn type="redCard" odds="3.5" label="RED CARD" sub="Any red" color={C.red} placeBet={placeBet} betAmount={betAmount}/>
-            </div>
-            <div className="mb-4">
-              <div className="text-sm font-bold mb-2" style={{color:'#FFA500'}}>🎯 EXACT SCORE</div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[['1-0',1,0],['0-1',0,1],['1-1',1,1],['2-1',2,1],['1-2',1,2],['2-0',2,0],['0-2',0,2],['2-2',2,2]].map(([l,h,a])=>(
-                  <BetBtn key={l} type={'score_'+h+'_'+a} odds={getScoreOdds(h,a)} label={l} color='#FFA500' placeBet={placeBet} betAmount={betAmount}/>
-                ))}
-              </div>
-            </div>
-            <div className="mb-4">
-              <div className="text-sm font-bold mb-2" style={{color:'#FFD700'}}>⭐ FIRST GOALSCORER</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[...ms.homeTeam.players.filter(p=>p.starter&&p.position==='FW').slice(0,3),
-                  ...ms.awayTeam.players.filter(p=>p.starter&&p.position==='FW').slice(0,3)].map(p=>{
-                  const ih=ms.homeTeam.players.includes(p);
-                  return <BetBtn key={p.name} type={'scorer_'+p.name} odds={getScorerOdds(p)} label={p.name} sub={p.position+' • '+(ih?ms.homeTeam.shortName:ms.awayTeam.shortName)} color={ih?C.red:C.purple} placeBet={placeBet} betAmount={betAmount}/>;
-                })}
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {betResult&&(
-          <div className="border p-4 mb-3" style={bdr(betResult.gain>0?C.purple:C.red,C.ash)}>
-            <div className="text-center mb-3">
-              <div className="text-2xl font-bold">{betResult.gain>0?'🎉 YOU WON!':'💸 BETTER LUCK NEXT TIME'}</div>
-              <div className="text-xs mt-1" style={{opacity:0.6}}>Final score: {betResult.finalScore[0]}–{betResult.finalScore[1]}{betResult.hadRed?' • 🟥 Red card shown':''}</div>
-            </div>
-            <div className="space-y-1.5 mb-3">
-              {betResult.bets.map((bet,i)=>(
-                <div key={i} className="flex items-center justify-between p-2 border" style={{borderColor:bet.won?'#00cc66':C.red,backgroundColor:bet.won?'#00cc6615':'#FF6B6B15'}}>
-                  <div className="flex items-center gap-2">
-                    <span>{bet.won?'✅':'❌'}</span>
-                    <div>
-                      <div className="text-xs font-bold">{betLabel(bet.type,ms)}</div>
-                      <div className="text-xs" style={{opacity:0.6}}>{bet.amount} coins @ {bet.odds}x</div>
-                    </div>
-                  </div>
-                  <div className="text-sm font-bold" style={{color:bet.won?'#00cc66':C.red}}>{bet.won?`+${bet.payout}`:`-${bet.amount}`}</div>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between pt-2 border-t text-sm" style={{borderColor:C.dust}}>
-              <span style={{opacity:0.7}}>{betResult.won}/{betResult.total} correct</span>
-              <span className="font-bold" style={{color:betResult.gain>0?C.purple:C.red}}>{betResult.gain>0?'NET: +'+betResult.gain:'NET: -'+betResult.bets.reduce((s,b)=>s+b.amount,0)} coins</span>
-            </div>
-            <button onClick={()=>setBetResult(null)} className="mt-3 w-full px-4 py-2 border text-sm font-bold" style={bdr(C.dust,C.abyss)}>DISMISS</button>
-          </div>
-        )}
-        {currentBets.length>0&&ms.minute>0&&(
-          <div className="border p-3 mb-3" style={bdr(C.purple)}>
-            <div className="text-xs font-bold mb-2" style={{color:C.purple}}>📋 LIVE WAGERS</div>
-            {currentBets.map((bet,i)=>{
-              const st=betStatus(bet,ms);
-              const sc=st==='winning'?'#00cc66':st==='losing'?C.red:'#FFA500';
-              const pot=Math.floor(bet.amount*bet.odds);
-              return <div key={i} className="flex items-center justify-between py-1.5 border-b text-xs" style={{borderColor:sc}}>
-                <span>{st==='winning'?'✅':st==='losing'?'❌':'⏳'} {betLabel(bet.type,ms)}</span>
-                <span style={{color:sc}}>{st==='winning'?'+'+pot:st==='losing'?'-'+bet.amount:'?'+pot}</span>
-              </div>;
-            })}
-            <div className="flex justify-between text-xs pt-1" style={{opacity:0.6}}>
-              <span>Potential</span>
-              <span style={{color:C.purple}}>{currentBets.filter(b=>betStatus(b,ms)==='winning').reduce((s,b)=>s+Math.floor(b.amount*b.odds),0)} coins</span>
-            </div>
-          </div>
-        )}
-        <div className="border p-4 mb-3 relative overflow-hidden" style={{...bdr(C.dust),boxShadow:`0 0 30px rgba(154,92,244,0.15)`}}>
+        {/* ── Scoreboard card ───────────────────────────────────────────── */}
+        <div className="card section" style={{position:'relative',overflow:'hidden'}}>
           {ms.currentAnimation?.type==='goal'&&(
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="text-8xl" style={{animation:'goalPulse 2s ease-out forwards'}}>⚽</div>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none',zIndex:10}}>
+              <div style={{fontSize:'96px',animation:'goalPulse 2s ease-out forwards'}}>⚽</div>
             </div>
           )}
           {ms.currentAnimation?.type==='saved'&&(
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="text-8xl" style={{animation:'goalPulse 2s ease-out forwards'}}>✋</div>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none',zIndex:10}}>
+              <div style={{fontSize:'96px',animation:'goalPulse 2s ease-out forwards'}}>✋</div>
             </div>
           )}
-          <div className="grid grid-cols-3 gap-2 items-center">
-            <div className="text-center">
-              <div className="text-2xl font-bold mb-1" style={{color:ms.homeTeam.color}}>{ms.homeTeam.shortName}</div>
-              <div className="text-5xl font-bold">{ms.score[0]}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:'16px',alignItems:'center'}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'13px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:ms.homeTeam.color,marginBottom:'8px',opacity:0.8}}>{ms.homeTeam.name}</div>
+              <div style={{fontSize:'72px',fontWeight:700,lineHeight:1,color:'#E3E0D5'}}>{ms.score[0]}</div>
             </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold mb-1" style={{color:C.purple}}>
-                {ms.inStoppageTime?`${ms.minute>=90?90:45}+${Math.max(0,(ms.minute>=90?ms.minute-90:ms.minute-45))}\'`:`${ms.minute}'`}
+            <div style={{textAlign:'center',minWidth:'120px'}}>
+              <div style={{fontSize:'28px',fontWeight:700,color:'#9A5CF4',marginBottom:'4px'}}>{timeDisplay}</div>
+              <div style={{fontSize:'11px',letterSpacing:'0.1em',textTransform:'uppercase',opacity:0.5,marginBottom:'10px'}}>{periodLabel}</div>
+              <div style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'11px'}}>
+                <span style={{color:ms.homeTeam.color}}>{ms.possession[0].toFixed(0)}%</span>
+                <div style={{flex:1,height:'4px',backgroundColor:'#111111',position:'relative'}}>
+                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${ms.possession[0]}%`,backgroundColor:ms.homeTeam.color}}/>
+                </div>
+                <span style={{color:ms.awayTeam.color}}>{ms.possession[1].toFixed(0)}%</span>
               </div>
-              <div className="flex justify-center gap-1 mb-1">
-                {[...Array(Math.min(6,Math.ceil(ms.minute/15)))].map((_,i)=><div key={i} className="w-1.5 h-1.5 rounded-full" style={{backgroundColor:C.purple}}/>)}
-              </div>
-              <div className="text-xs" style={{opacity:0.5}}>{ms.inStoppageTime?'STOPPAGE':ms.minute<45?'1ST HALF':ms.minute<90?'2ND HALF':'FT'}</div>
+              <div style={{fontSize:'10px',opacity:0.4,marginTop:'3px',textTransform:'uppercase',letterSpacing:'0.06em'}}>Possession</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold mb-1" style={{color:ms.awayTeam.color}}>{ms.awayTeam.shortName}</div>
-              <div className="text-5xl font-bold">{ms.score[1]}</div>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'13px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:ms.awayTeam.color,marginBottom:'8px',opacity:0.8}}>{ms.awayTeam.name}</div>
+              <div style={{fontSize:'72px',fontWeight:700,lineHeight:1,color:'#E3E0D5'}}>{ms.score[1]}</div>
             </div>
           </div>
+          {ms.mvp&&(
+            <div style={{marginTop:'20px',padding:'12px 16px',backgroundColor:'rgba(154,92,244,0.1)',border:'1px solid rgba(154,92,244,0.3)',display:'flex',alignItems:'center',gap:'12px'}}>
+              <div style={{fontSize:'20px'}}>⭐</div>
+              <div>
+                <div style={{fontSize:'10px',color:'#9A5CF4',textTransform:'uppercase',letterSpacing:'0.08em'}}>Match MVP</div>
+                <div style={{fontSize:'14px',fontWeight:700,color:ms.mvp.teamColor}}>{ms.mvp.name}</div>
+                <div style={{fontSize:'11px',opacity:0.5}}>{ms.mvp.position} · {ms.mvp.team}</div>
+              </div>
+              <div style={{marginLeft:'auto',display:'flex',gap:'16px',fontSize:'12px'}}>
+                {ms.mvp.stats.goals>0&&<span>⚽ {ms.mvp.stats.goals}</span>}
+                {ms.mvp.stats.assists>0&&<span>👟 {ms.mvp.stats.assists}</span>}
+                {ms.mvp.stats.saves>0&&<span>✋ {ms.mvp.stats.saves}</span>}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-2 mb-3 flex-wrap">
-          {!ms.isPlaying&&ms.minute===0&&<button onClick={startMatch} className="flex items-center gap-2 px-4 py-2 font-bold border" style={{backgroundColor:C.purple,color:C.abyss,borderColor:C.purple}}><Play size={16}/>KICK OFF</button>}
-          {ms.isPlaying&&<button onClick={pauseMatch} className="flex items-center gap-2 px-4 py-2 font-bold border" style={bdr(C.dust,C.ash)}><Pause size={16}/>PAUSE</button>}
-          {!ms.isPlaying&&ms.minute>0&&ms.minute<90&&!ms.mvp&&<button onClick={resumeMatch} className="flex items-center gap-2 px-4 py-2 font-bold border" style={{backgroundColor:C.purple,color:C.abyss,borderColor:C.purple}}><Play size={16}/>RESUME</button>}
-          <button onClick={resetMatch} className="flex items-center gap-2 px-4 py-2 border" style={bdr(C.dust,C.ash)}><RotateCcw size={16}/>RESET</button>
-          <div className="flex gap-1">
+        {/* ── Controls ──────────────────────────────────────────────────── */}
+        <div className="section" style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+          {!ms.isPlaying&&ms.minute===0&&(
+            <button onClick={startMatch} className="btn btn-tertiary" style={{display:'flex',alignItems:'center',gap:'8px'}}>
+              <Play size={14}/> Kick Off
+            </button>
+          )}
+          {ms.isPlaying&&(
+            <button onClick={pauseMatch} className="btn btn-primary" style={{display:'flex',alignItems:'center',gap:'8px'}}>
+              <Pause size={14}/> Pause
+            </button>
+          )}
+          {!ms.isPlaying&&ms.minute>0&&ms.minute<90&&!ms.mvp&&(
+            <button onClick={resumeMatch} className="btn btn-tertiary" style={{display:'flex',alignItems:'center',gap:'8px'}}>
+              <Play size={14}/> Resume
+            </button>
+          )}
+          <button onClick={resetMatch} className="btn btn-primary" style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            <RotateCcw size={14}/> Reset
+          </button>
+          <div style={{display:'flex',gap:'4px',marginLeft:'auto'}}>
+            {/* Speed selector — 2000ms=Slow … 200ms=Turbo */}
             {[['SLOW',2000],['NORMAL',1000],['FAST',500],['TURBO',200]].map(([label,spd])=>(
-              <button key={spd} onClick={()=>setSpeed(spd)} className="px-3 py-2 text-xs border" style={{...bdr(speed===spd?C.purple:C.dust,speed===spd?C.purple:C.abyss),color:speed===spd?C.abyss:C.dust}}>{label}</button>
+              <button key={spd} onClick={()=>setSpeed(spd)} className="btn" style={{
+                padding:'6px 12px',fontSize:'11px',
+                backgroundColor:speed===spd?'#9A5CF4':'#111111',
+                border:`1px solid ${speed===spd?'#9A5CF4':'rgba(227,224,213,0.3)'}`,
+                color:speed===spd?'#E3E0D5':'rgba(227,224,213,0.5)',
+              }}>{label}</button>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
-          <div className="p-2 border text-center" style={bdr(C.dust)}>
-            <div style={{opacity:0.6}}>PLAYERS</div>
-            <div className="font-bold"><span style={{color:ms.activePlayers.home.length<11?C.red:C.dust}}>{ms.activePlayers.home.length}</span> v <span style={{color:ms.activePlayers.away.length<11?C.red:C.dust}}>{ms.activePlayers.away.length}</span></div>
-          </div>
-          <div className="p-2 border" style={bdr(C.dust)}>
-            <div className="text-center" style={{opacity:0.6}}>POSSESSION</div>
-            <div className="flex items-center gap-1">
-              <span>{ms.possession[0].toFixed(0)}%</span>
-              <div className="flex-1 h-1.5" style={{backgroundColor:C.abyss}}>
-                <div className="h-full" style={{width:`${ms.possession[0]}%`,backgroundColor:ms.homeTeam.color}}/>
-              </div>
-              <span>{ms.possession[1].toFixed(0)}%</span>
-            </div>
-          </div>
-          <div className="p-2 border" style={bdr(C.dust)}>
-            <div className="text-center" style={{opacity:0.6}}>MOMENTUM</div>
-            <div className="flex items-center gap-1">
-              <span>{ms.momentum[0]>0?'+':''}{ms.momentum[0]}</span>
-              <div className="flex-1 h-1.5" style={{backgroundColor:C.abyss}}>
-                <div className="h-full" style={{width:`${50+ms.momentum[0]*5}%`,backgroundColor:ms.homeTeam.color}}/>
-              </div>
-              <span>{ms.momentum[1]>0?'+':''}{ms.momentum[1]}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="border mb-3 p-3" style={bdr(C.dust)}>
-          <div className="text-xs font-bold mb-1" style={{color:C.red}}>⚡ CHAOS METER ⚡</div>
-          <div className="flex justify-between text-xs mb-1" style={{opacity:0.6}}><span>😌 CALM</span><span style={{color:chaosColor,fontWeight:'bold'}}>{chaosLabel}</span><span>😱 MAYHEM</span></div>
-          <div className="h-5 border relative" style={{backgroundColor:C.abyss,borderColor:C.dust}}>
-            <div className="absolute left-0 top-0 bottom-0 transition-all" style={{width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`}}/>
-            <div className="absolute inset-0 flex items-center justify-center text-xs font-bold">{chaosLevel}%</div>
-          </div>
-          <div className="flex flex-wrap gap-1 mt-1 text-xs">
-            {ms.minute>80&&<span className="px-2 py-0.5 rounded" style={{backgroundColor:C.red}}>⏰ LATE GAME</span>}
-            {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span className="px-2 py-0.5 rounded" style={{backgroundColor:'#FFA500'}}>⚖️ TIED</span>}
-            {(ms.redCards.home+ms.redCards.away)>0&&<span className="px-2 py-0.5 rounded" style={{backgroundColor:'#FF0000'}}>🟥 RED CARDS</span>}
-          </div>
-        </div>
-
-        {/* ── 3-column live feeds ──────────────────────────────────────────────── */}
+        {/* ── Officials / Stadium / Weather ─────────────────────────────── */}
         {aiManager&&(
-          <div className="grid gap-3 mb-3" style={{gridTemplateColumns:'1fr 1.4fr 1fr'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'16px'}}>
+            <div className="card" style={{padding:'16px'}}>
+              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Referee</div>
+              <div style={{fontSize:'20px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
+              <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.referee.name}</div>
+              <div style={{fontSize:'11px',marginTop:'4px',color:aiManager.referee.leniency>70?'#A5D6A7':aiManager.referee.leniency>40?'#E3E0D5':'#E05252'}}>
+                {aiManager.referee.leniency>70?'Lenient':aiManager.referee.leniency>40?'Fair':'Strict'}
+              </div>
+            </div>
+            <div className="card" style={{padding:'16px'}}>
+              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Stadium</div>
+              <div style={{fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
+              <div style={{fontSize:'11px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
+            </div>
+            <div className="card" style={{padding:'16px'}}>
+              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Conditions</div>
+              <div style={{fontSize:'20px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
+              <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
+              <div style={{fontSize:'11px',opacity:0.5,marginTop:'4px'}}>{aiManager.temperature}°C · {aiManager.timeOfDay}</div>
+            </div>
+          </div>
+        )}
 
-            {/* ── LEFT: Home Team ─────────────────────────────────────── */}
-            <div className="flex flex-col gap-2">
-              <div className="border p-2" style={bdr(ms.homeTeam.color,C.ash)}>
-                <div className="text-sm font-bold truncate" style={{color:ms.homeTeam.color}}>{ms.homeTeam.name}</div>
-                <div className="text-xs mt-0.5" style={{opacity:0.6}}>{aiManager.homeFormation} • {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span>{EMO_ICON[aiManager.homeManager.emotion]||'😐'}</span>
-                  <span className="text-xs font-bold" style={{color:ms.homeTeam.color}}>{aiManager.homeManager.name}</span>
-                  <span className="text-xs ml-auto" style={{opacity:0.5}}>{ms.substitutionsUsed.home}/3 subs</span>
+        {/* ── Chaos meter + match stats ─────────────────────────────────── */}
+        <div className="card section">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+            <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Chaos Meter</div>
+            <div style={{fontSize:'11px',fontWeight:700,color:chaosColor}}>{chaosLabel}</div>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
+            <span>Calm</span><span>Tense</span><span>Mayhem</span>
+          </div>
+          {/* Chaos bar — width driven by chaosLevel 0–100 */}
+          <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'16px'}}>
+            <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'8px',fontSize:'12px',textAlign:'center'}}>
+            {[
+              ['Shots',homeShots,awayShots],
+              ['On Target',homeSoT,awaySoT],
+              ['Corners',homeCorners,awayCorners],
+              ['Yellows',homeYellows,awayYellows],
+            ].map(([label,h,a])=>(
+              <div key={label}>
+                <div style={{fontSize:'10px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'4px'}}>{label}</div>
+                <div style={{display:'flex',justifyContent:'center',gap:'8px'}}>
+                  <span style={{fontWeight:700,color:ms.homeTeam.color}}>{h}</span>
+                  <span style={{opacity:0.3}}>–</span>
+                  <span style={{fontWeight:700,color:ms.awayTeam.color}}>{a}</span>
                 </div>
               </div>
-              <div className="border" style={bdr(ms.homeTeam.color)}>
-                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:ms.homeTeam.color,color:ms.homeTeam.color}}>🧑‍💼 MANAGER</div>
-                <div className="p-2 overflow-y-auto" style={{height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} ${C.abyss}`}}>
+            ))}
+          </div>
+        </div>
+
+        {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
+        {aiManager&&(
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px'}}>
+
+            {/* ── HOME column ─────────────────────────────────────────── */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+              <div className="card" style={{padding:'12px',borderColor:ms.homeTeam.color}}>
+                <div style={{fontSize:'13px',fontWeight:700,color:ms.homeTeam.color,marginBottom:'4px'}}>{ms.homeTeam.name}</div>
+                <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.homeFormation} · {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
+                <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'6px',fontSize:'12px'}}>
+                  <span>{EMO_ICON[aiManager.homeManager.emotion]||'😐'}</span>
+                  <span style={{fontWeight:700,color:ms.homeTeam.color}}>{aiManager.homeManager.name}</span>
+                  <span style={{marginLeft:'auto',fontSize:'11px',opacity:0.5}}>{ms.substitutionsUsed.home}/3 subs</span>
+                </div>
+              </div>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Manager Shouts</div>
+                <div style={{padding:'8px',overflowY:'auto',height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeManagerFeed.length===0
-                    ?<div className="text-xs text-center py-8" style={{opacity:0.4}}>Watching from the touchline...</div>
+                    ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
                     :[...homeManagerFeed].reverse().map((item,i)=>(
-                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.homeTeam.color}30`}}>
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span className="text-xs font-bold" style={{color:ms.homeTeam.color}}>{item.emoji} {item.name}</span>
-                          <span className="text-xs ml-auto" style={{opacity:0.4}}>{item.minute}'</span>
+                      <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
+                          <span style={{fontWeight:700,color:ms.homeTeam.color}}>{item.emoji} {item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.4}}>{item.minute}'</span>
                         </div>
-                        <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                        <div style={{fontSize:'11px',opacity:0.85,lineHeight:1.5,fontStyle:'italic'}}>"{item.text}"</div>
                       </div>
                     ))
                   }
                 </div>
               </div>
-              <div className="border" style={bdr(`${ms.homeTeam.color}80`,C.abyss)}>
-                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:`${ms.homeTeam.color}80`,color:ms.homeTeam.color}}>💭 PLAYER THOUGHTS</div>
-                <div className="p-2 overflow-y-auto" style={{height:'220px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} ${C.abyss}`}}>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Player Thoughts</div>
+                <div style={{padding:'8px',overflowY:'auto',height:'200px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeThoughtsFeed.length===0
-                    ?<div className="text-xs text-center py-10" style={{opacity:0.4}}>Quiet minds...</div>
+                    ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :[...homeThoughtsFeed].reverse().map((item,i)=>(
-                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.homeTeam.color}25`}}>
-                        <div className="flex items-center gap-1 mb-0.5">
+                      <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
                           <span>{item.emoji}</span>
-                          <span className="text-xs font-bold truncate" style={{color:item.color||ms.homeTeam.color}}>{item.name}</span>
-                          <span className="text-xs ml-auto shrink-0" style={{opacity:0.4}}>{item.minute}'</span>
+                          <span style={{fontWeight:700,color:item.color||ms.homeTeam.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.4,flexShrink:0}}>{item.minute}'</span>
                         </div>
-                        <div className="text-xs italic leading-relaxed" style={{opacity:0.85}}>"{item.text}"</div>
+                        <div style={{fontSize:'11px',opacity:0.85,lineHeight:1.5,fontStyle:'italic'}}>"{item.text}"</div>
                       </div>
                     ))
                   }
@@ -679,99 +714,78 @@ const MatchSimulator = () => {
               </div>
             </div>
 
-            {/* ── CENTRE: Pitch + Commentary ──────────────────────────── */}
-            <div className="flex flex-col gap-2">
-              <div className="border p-2" style={bdr(C.dust)}>
-                <div className="text-xs font-bold mb-1.5 text-center" style={{color:C.purple}}>⚽ LIVE PITCH</div>
-                <div className="relative border-2" style={{height:'88px',backgroundColor:'#1a4d2e',borderColor:C.dust,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.05) 19px,rgba(255,255,255,0.05) 20px)'}}>
-                  <div className="absolute left-1/2 top-0 bottom-0 w-px" style={{backgroundColor:C.dust,opacity:0.3}}/>
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full border-2" style={{borderColor:C.dust,opacity:0.3}}/>
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-8 border-2 border-l-0" style={{borderColor:ms.homeTeam.color,backgroundColor:`${ms.homeTeam.color}20`}}/>
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-8 border-2 border-r-0" style={{borderColor:ms.awayTeam.color,backgroundColor:`${ms.awayTeam.color}20`}}/>
-                  <div className="absolute top-1/2 -translate-y-1/2 text-lg transition-all duration-1000" style={{left:`calc(${ms.possession[0]}% - 10px)`}}>⚽</div>
-                  {[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion!=='neutral').slice(0,4).map((a,i)=>(
-                    <div key={i} className="absolute text-xs" style={{left:`${a.isHome?8+i*10:52+i*10}%`,top:`${15+i*20}%`}}>
-                      {a.emotion==='ecstatic'?'😄':a.emotion==='frustrated'?'😤':a.emotion==='anxious'?'😰':a.emotion==='proud'?'😊':'😡'}
-                    </div>
-                  ))}
+            {/* ── CENTRE: pitch + commentary ──────────────────────────── */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+              <div className="card" style={{padding:'12px'}}>
+                <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
+                <div style={{position:'relative',height:'88px',backgroundColor:'#1a4d2e',border:'1px solid rgba(227,224,213,0.2)',backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.04) 19px,rgba(255,255,255,0.04) 20px)'}}>
+                  <div style={{position:'absolute',left:'50%',top:0,bottom:0,width:'1px',backgroundColor:'rgba(227,224,213,0.2)'}}/>
+                  <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:'36px',height:'36px',borderRadius:'50%',border:'1px solid rgba(227,224,213,0.2)'}}/>
+                  <div style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',width:'10px',height:'32px',border:`1px solid ${ms.homeTeam.color}`,borderLeft:'none',backgroundColor:`${ms.homeTeam.color}20`}}/>
+                  <div style={{position:'absolute',right:0,top:'50%',transform:'translateY(-50%)',width:'10px',height:'32px',border:`1px solid ${ms.awayTeam.color}`,borderRight:'none',backgroundColor:`${ms.awayTeam.color}20`}}/>
+                  {/* Ball moves with possession percentage */}
+                  <div style={{position:'absolute',top:'50%',transform:'translateY(-50%)',fontSize:'16px',transition:'left 1s',left:`calc(${ms.possession[0]}% - 8px)`}}>⚽</div>
                 </div>
-                <div className="flex justify-between text-xs mt-1" style={{opacity:0.6}}>
-                  <span style={{color:ms.homeTeam.color}}>{ms.homeTeam.shortName}{ms.possession[0]>55?' ⚔️':''}</span>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginTop:'6px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
+                  <span style={{color:ms.homeTeam.color}}>{ms.homeTeam.shortName}{ms.possession[0]>55?' ⚔':''}</span>
                   <span>{ms.possession[0]>55?'ATTACKING':ms.possession[0]<45?`${ms.awayTeam.shortName} ATTACKING`:'MIDFIELD'}</span>
-                  <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔️ ':''}{ms.awayTeam.shortName}</span>
+                  <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔ ':''}{ms.awayTeam.shortName}</span>
                 </div>
               </div>
-
-              {ms.mvp&&(
-                <div className="border p-2 flex items-center gap-2" style={bdr(C.purple,`${C.purple}15`)}>
-                  <div className="text-2xl">⭐</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs" style={{color:C.purple}}>MATCH MVP</div>
-                    <div className="text-sm font-bold truncate" style={{color:ms.mvp.teamColor}}>{ms.mvp.name}</div>
-                    <div className="text-xs" style={{opacity:0.5}}>{ms.mvp.position} • {ms.mvp.team}</div>
-                  </div>
-                  <div className="flex gap-2 text-xs shrink-0">
-                    {ms.mvp.stats.goals>0&&<span>⚽{ms.mvp.stats.goals}</span>}
-                    {ms.mvp.stats.assists>0&&<span>👟{ms.mvp.stats.assists}</span>}
-                    {ms.mvp.stats.saves>0&&<span>✋{ms.mvp.stats.saves}</span>}
-                  </div>
-                </div>
-              )}
-
-              <div className="border flex-1" style={bdr(C.purple)}>
-                <div className="px-2 py-1.5 border-b flex items-center gap-2" style={{borderColor:C.purple,backgroundColor:`${C.purple}10`}}>
-                  <span className="text-xs font-bold" style={{color:C.purple}}>🎙️ COMMENTARY</span>
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1}}>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(154,92,244,0.3)',backgroundColor:'rgba(154,92,244,0.06)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',display:'flex',alignItems:'center',gap:'8px'}}>
+                  <span>Commentary</span>
                   {agentSystemRef.current&&(
-                    <div className="flex gap-1.5 ml-auto">
-                      {COMMENTATOR_PROFILES.map(p=><span key={p.id} className="text-sm" title={`${p.name} • ${p.role}`}>{p.emoji}</span>)}
-                      <span className="text-sm" title="Referee">⚖️</span>
+                    <div style={{display:'flex',gap:'6px',marginLeft:'auto'}}>
+                      {COMMENTATOR_PROFILES.map(p=><span key={p.id} style={{fontSize:'13px'}} title={`${p.name} • ${p.role}`}>{p.emoji}</span>)}
+                      <span style={{fontSize:'13px'}} title="Referee">⚖️</span>
                     </div>
                   )}
                   {!agentSystemRef.current&&apiKey&&(
-                    <span className="ml-auto text-xs" style={{opacity:0.5}}>key set — next kick off</span>
+                    <span style={{marginLeft:'auto',fontSize:'10px',opacity:0.4}}>key set — next kick off</span>
                   )}
                   {!agentSystemRef.current&&!apiKey&&(
-                    <button onClick={()=>setShowApiKeyModal(true)} className="ml-auto text-xs border px-2 py-0.5" style={bdr(C.purple,C.abyss)}>⚙️ ENABLE AI</button>
+                    <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'2px 8px',border:'1px solid rgba(154,92,244,0.5)',backgroundColor:'transparent',color:'#9A5CF4',cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
                   )}
                 </div>
-                <div ref={evtLogRef} className="p-2 overflow-y-auto" style={{height:'360px',scrollbarWidth:'thin',scrollbarColor:`${C.purple} ${C.abyss}`}}>
+                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',height:'400px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
                   {commentaryFeed.length===0&&(
-                    <div className="text-xs text-center py-20" style={{opacity:0.4}}>
-                      {ms.minute===0?'Press PLAY to begin':'Agents are watching...'}
+                    <div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'80px'}}>
+                      {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
                     </div>
                   )}
                   {[...commentaryFeed].reverse().map((item,i)=>{
                     if(item.type==='commentator'){
                       return(
-                        <div key={i} className="mb-3 border-l-2 pl-2" style={{borderColor:item.color}}>
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-sm">{item.emoji}</span>
-                            <span className="text-xs font-bold" style={{color:item.color}}>{item.name}</span>
-                            <span className="text-xs" style={{color:item.color,opacity:0.55}}>{item.role}</span>
-                            <span className="text-xs ml-auto" style={{opacity:0.35}}>{item.minute}'</span>
+                        <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'8px'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
+                            <span style={{fontSize:'13px'}}>{item.emoji}</span>
+                            <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
+                            <span style={{color:item.color,opacity:0.5,fontSize:'10px'}}>{item.role}</span>
+                            <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
                           </div>
-                          <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                          <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
                         </div>
                       );
                     }
                     if(item.type==='referee'){
                       return(
-                        <div key={i} className="mb-3 border-l-2 pl-2" style={{borderColor:'#FFD700'}}>
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-sm">⚖️</span>
-                            <span className="text-xs font-bold" style={{color:'#FFD700'}}>{item.name}</span>
-                            <span className="text-xs ml-auto" style={{opacity:0.35}}>{item.minute}'</span>
+                        <div key={i} style={{marginBottom:'12px',borderLeft:'2px solid #FFD700',paddingLeft:'8px'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
+                            <span style={{fontSize:'13px'}}>⚖️</span>
+                            <span style={{fontWeight:700,color:'#FFD700'}}>{item.name}</span>
+                            <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
                           </div>
-                          <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                          <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
                         </div>
                       );
                     }
-                    const bc=item.isGoal?C.purple:item.cardType==='red'?C.red:item.cardType==='yellow'?'#FFD700':C.dust;
+                    const bc=item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.3)';
                     return(
-                      <div key={i} className="mb-2 border-l-2 pl-2" style={{borderColor:bc,backgroundColor:item.isGoal?`${C.purple}10`:item.cardType==='red'?`${C.red}08`:undefined}}>
-                        <div className="flex gap-2 text-xs">
-                          <span className="font-bold shrink-0" style={{color:C.purple}}>{item.minute}'</span>
-                          <span className="leading-relaxed" style={{opacity:0.9}}>{item.text}</span>
+                      <div key={i} style={{marginBottom:'8px',borderLeft:`2px solid ${bc}`,paddingLeft:'8px',backgroundColor:item.isGoal?'rgba(154,92,244,0.08)':item.cardType==='red'?'rgba(224,82,82,0.06)':undefined}}>
+                        <div style={{display:'flex',gap:'8px',fontSize:'11px',lineHeight:1.5}}>
+                          <span style={{fontWeight:700,color:'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
+                          <span style={{opacity:0.9}}>{item.text}</span>
                         </div>
                       </div>
                     );
@@ -780,47 +794,47 @@ const MatchSimulator = () => {
               </div>
             </div>
 
-            {/* ── RIGHT: Away Team ─────────────────────────────────────── */}
-            <div className="flex flex-col gap-2">
-              <div className="border p-2" style={bdr(ms.awayTeam.color,C.ash)}>
-                <div className="text-sm font-bold truncate" style={{color:ms.awayTeam.color}}>{ms.awayTeam.name}</div>
-                <div className="text-xs mt-0.5" style={{opacity:0.6}}>{aiManager.awayFormation} • {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
-                <div className="flex items-center gap-2 mt-1">
+            {/* ── AWAY column ─────────────────────────────────────────── */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+              <div className="card" style={{padding:'12px',borderColor:ms.awayTeam.color}}>
+                <div style={{fontSize:'13px',fontWeight:700,color:ms.awayTeam.color,marginBottom:'4px'}}>{ms.awayTeam.name}</div>
+                <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.awayFormation} · {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
+                <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'6px',fontSize:'12px'}}>
                   <span>{EMO_ICON[aiManager.awayManager.emotion]||'😐'}</span>
-                  <span className="text-xs font-bold" style={{color:ms.awayTeam.color}}>{aiManager.awayManager.name}</span>
-                  <span className="text-xs ml-auto" style={{opacity:0.5}}>{ms.substitutionsUsed.away}/3 subs</span>
+                  <span style={{fontWeight:700,color:ms.awayTeam.color}}>{aiManager.awayManager.name}</span>
+                  <span style={{marginLeft:'auto',fontSize:'11px',opacity:0.5}}>{ms.substitutionsUsed.away}/3 subs</span>
                 </div>
               </div>
-              <div className="border" style={bdr(ms.awayTeam.color)}>
-                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:ms.awayTeam.color,color:ms.awayTeam.color}}>🧑‍💼 MANAGER</div>
-                <div className="p-2 overflow-y-auto" style={{height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} ${C.abyss}`}}>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Manager Shouts</div>
+                <div style={{padding:'8px',overflowY:'auto',height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayManagerFeed.length===0
-                    ?<div className="text-xs text-center py-8" style={{opacity:0.4}}>Watching from the touchline...</div>
+                    ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
                     :[...awayManagerFeed].reverse().map((item,i)=>(
-                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.awayTeam.color}30`}}>
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span className="text-xs font-bold" style={{color:ms.awayTeam.color}}>{item.emoji} {item.name}</span>
-                          <span className="text-xs ml-auto" style={{opacity:0.4}}>{item.minute}'</span>
+                      <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
+                          <span style={{fontWeight:700,color:ms.awayTeam.color}}>{item.emoji} {item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.4}}>{item.minute}'</span>
                         </div>
-                        <div className="text-xs italic leading-relaxed" style={{opacity:0.9}}>"{item.text}"</div>
+                        <div style={{fontSize:'11px',opacity:0.85,lineHeight:1.5,fontStyle:'italic'}}>"{item.text}"</div>
                       </div>
                     ))
                   }
                 </div>
               </div>
-              <div className="border" style={bdr(`${ms.awayTeam.color}80`,C.abyss)}>
-                <div className="px-2 py-1.5 border-b text-xs font-bold" style={{borderColor:`${ms.awayTeam.color}80`,color:ms.awayTeam.color}}>💭 PLAYER THOUGHTS</div>
-                <div className="p-2 overflow-y-auto" style={{height:'220px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} ${C.abyss}`}}>
+              <div className="card" style={{padding:0,overflow:'hidden'}}>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Player Thoughts</div>
+                <div style={{padding:'8px',overflowY:'auto',height:'200px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayThoughtsFeed.length===0
-                    ?<div className="text-xs text-center py-10" style={{opacity:0.4}}>Quiet minds...</div>
+                    ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :[...awayThoughtsFeed].reverse().map((item,i)=>(
-                      <div key={i} className="mb-2 pb-1.5 border-b last:border-0" style={{borderColor:`${ms.awayTeam.color}25`}}>
-                        <div className="flex items-center gap-1 mb-0.5">
+                      <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
                           <span>{item.emoji}</span>
-                          <span className="text-xs font-bold truncate" style={{color:item.color||ms.awayTeam.color}}>{item.name}</span>
-                          <span className="text-xs ml-auto shrink-0" style={{opacity:0.4}}>{item.minute}'</span>
+                          <span style={{fontWeight:700,color:item.color||ms.awayTeam.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.4,flexShrink:0}}>{item.minute}'</span>
                         </div>
-                        <div className="text-xs italic leading-relaxed" style={{opacity:0.85}}>"{item.text}"</div>
+                        <div style={{fontSize:'11px',opacity:0.85,lineHeight:1.5,fontStyle:'italic'}}>"{item.text}"</div>
                       </div>
                     ))
                   }
@@ -831,37 +845,39 @@ const MatchSimulator = () => {
           </div>
         )}
 
-        {/* ── Pre-match AI prompt ─────────────────────────────────────────────── */}
+        {/* Pre-match prompt (no AI manager set up yet) */}
         {!aiManager&&!apiKey&&(
-          <div className="border p-3 mb-3 text-center" style={bdr(C.dust)}>
-            <div className="text-xs mb-2" style={{opacity:0.6}}>Commentators, managers &amp; players can be powered by Claude AI</div>
-            <button onClick={()=>setShowApiKeyModal(true)} className="px-4 py-1.5 border text-xs font-bold" style={bdr(C.purple,C.abyss)}>⚙️ SET API KEY TO ENABLE AGENTS</button>
+          <div className="card section" style={{textAlign:'center'}}>
+            <div style={{fontSize:'12px',opacity:0.5,marginBottom:'12px'}}>Commentators, managers &amp; players can be powered by Claude AI</div>
+            <button onClick={()=>setShowApiKeyModal(true)} className="btn btn-primary">⚙ Set API Key to Enable Agents</button>
           </div>
         )}
         {!aiManager&&apiKey&&(
-          <div className="border p-2 mb-3 text-center text-xs" style={bdr(C.dust)}>
-            <span style={{opacity:0.5}}>🔑 API key set — LLM agents activate on KICK OFF</span>
+          <div className="card section" style={{textAlign:'center',fontSize:'12px',opacity:0.5,padding:'12px'}}>
+            🔑 API key set — LLM agents activate on Kick Off
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {[['home',ms.homeTeam,aiManager?.homeAgents,ms.homeTeam.color],['away',ms.awayTeam,aiManager?.awayAgents,ms.awayTeam.color]].map(([k,team,agents,color])=>{
-            return(
-              <div key={k} className="border p-2" style={bdr(C.dust)}>
-                <div className="text-xs font-bold mb-1 text-center" style={{color}}>{team.name} • {ms.substitutionsUsed[k]}/3 Subs</div>
-                <div className="text-xs mb-2 text-center" style={{opacity:0.4}}>tap a player for stats</div>
-                <div className="text-xs font-bold mb-1" style={{opacity:0.7}}>ON PITCH</div>
+        {/* ── Squad lists ────────────────────────────────────────────────── */}
+        <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}}>
+          {[['home',ms.homeTeam,aiManager?.homeAgents,ms.homeTeam.color],['away',ms.awayTeam,aiManager?.awayAgents,ms.awayTeam.color]].map(([k,team,agents,color])=>(
+            <div key={k} className="card" style={{padding:0,overflow:'hidden'}}>
+              <div style={{padding:'10px 16px',borderBottom:'1px solid rgba(227,224,213,0.15)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color}}>
+                {team.name} · {ms.substitutionsUsed[k]}/3 Subs
+              </div>
+              <div style={{padding:'8px 0'}}>
+                <div style={{padding:'4px 16px',fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.08em'}}>On Pitch</div>
                 {ms.activePlayers[k].map((name,i)=>{
                   const p=team.players.find(x=>x.name===name);
                   return p?<PlayerRow key={i} player={p} stats={ms.playerStats} isActive={true} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName} onSelect={setSelectedPlayer}/>:null;
                 })}
-                <div className="text-xs font-bold mt-2 mb-1" style={{opacity:0.7}}>BENCH</div>
+                <div style={{padding:'4px 16px',fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.08em',marginTop:'8px'}}>Bench</div>
                 {team.players.filter(p=>!ms.activePlayers[k].includes(p.name)).sort((a,b)=>POS_ORDER[a.position]-POS_ORDER[b.position]).map((p,i)=>(
                   <PlayerRow key={i} player={p} stats={ms.playerStats} isActive={false} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName} onSelect={setSelectedPlayer}/>
                 ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
       </div>
