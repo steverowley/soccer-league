@@ -55,11 +55,15 @@ body {
 }
 
 /* ── Typography ────────────────────────────────────────────────────────── */
+/* Rules are in @layer base so Tailwind utility classes (text-2xl, etc.)   */
+/* can override them — unlayered CSS would win over @layer utilities.       */
 
-h1 { font-size: 40px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-h2 { font-size: 32px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-h3 { font-size: 28px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-p  { font-size: 16px; font-weight: 400; }
+@layer base {
+  h1 { font-size: 40px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  h2 { font-size: 32px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  h3 { font-size: 28px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  p  { font-size: 16px; font-weight: 400; }
+}
 
 a {
   color: inherit;
