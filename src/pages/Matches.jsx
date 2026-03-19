@@ -1,102 +1,86 @@
 // ── Matches.jsx ───────────────────────────────────────────────────────────────
-// Parent matches page — renders the ISL page hero and a 2×2 grid of live
-// compact match cards.  Each card runs its own MatchSimulator instance in
-// compact mode, auto-starting with a staggered delay so all four fixtures
-// kick off a few seconds apart rather than simultaneously.
+// Static holding page for the ISL matches section.
 //
-// Fixtures:
-//   Mars vs Saturn  |  Earth vs Jupiter
-//   Venus vs Neptune  |  Mercury vs Titan
+// The full 2×2 live-simulation grid has been temporarily replaced with a
+// holding page to avoid running four MatchSimulator instances on load (each
+// of which spins up game-engine state, timers, and optional AI agents).
 //
-// Clicking "View Full Match" on any card expands that fixture to the full
-// single-match view (full MatchSimulator render) inline, replacing the grid.
+// A single "Mars vs Saturn" button lets testers jump directly into that
+// fixture without triggering any of the other simulations.
+//
+// When the full matches listing is ready, restore the 2×2 grid from git
+// history and re-import the FIXTURES array.
 
 import { useState } from 'react';
 import MatchSimulator from '../App';
 
-// ── Fixture definitions ────────────────────────────────────────────────────────
-// Each entry maps to a compact MatchSimulator card in the 2×2 grid.
-// startDelay (ms) staggers the auto kick-offs so they don't all fire at once.
-const FIXTURES = [
-  { id: 'mars-saturn',    homeTeamKey: 'mars',    awayTeamKey: 'saturn',  startDelay: 500  },
-  { id: 'earth-jupiter',  homeTeamKey: 'earth',   awayTeamKey: 'jupiter', startDelay: 1500 },
-  { id: 'venus-neptune',  homeTeamKey: 'venus',   awayTeamKey: 'neptune', startDelay: 2500 },
-  { id: 'mercury-titan',  homeTeamKey: 'mercury', awayTeamKey: 'titan',   startDelay: 3500 },
-];
-
 /**
- * Matches page — ISL page hero + 2×2 grid of live compact match cards.
+ * Matches — static holding page with a single test fixture link.
  *
  * State:
- *   expandedId — the fixture id currently shown in full view, or null for grid.
+ *   showMatch {boolean} — when true, renders the Mars vs Saturn MatchSimulator
+ *                         below the hero; when false, only the hero is shown.
+ *
+ * No simulations run on mount.  The MatchSimulator is only instantiated after
+ * the user explicitly clicks the "Mars vs Saturn" button, keeping the page
+ * completely inert until then.
  *
  * @returns {JSX.Element}
  */
 export default function Matches() {
-  // ── Expanded match state ────────────────────────────────────────────────────
-  // When set to a fixture id the full MatchSimulator view replaces the grid.
-  // Null means show the 2×2 compact card grid.
-  const [expandedId, setExpandedId] = useState(null);
-
-  const expandedFixture = expandedId
-    ? FIXTURES.find(f => f.id === expandedId)
-    : null;
+  // ── Expanded match state ──────────────────────────────────────────────────
+  // Controls whether the Mars vs Saturn MatchSimulator is mounted.
+  // Kept as a simple boolean because only one fixture is available here.
+  const [showMatch, setShowMatch] = useState(false);
 
   return (
     <div style={{ paddingTop: '40px', paddingBottom: '60px' }}>
 
-      {/* ── Page hero ───────────────────────────────────────────────────────── */}
+      {/* ── Page hero ─────────────────────────────────────────────────────── */}
       {/* Mirrors the hero pattern used on all other ISL pages:
           H1 → .divider HR → subtitle.  The paddingTop of 40px on the outer
-          wrapper matches the container paddingTop used on Leagues and Teams so
-          the hero sits at the same distance from the header divider. */}
+          wrapper matches the container paddingTop used on Leagues and Teams. */}
       <div className="container">
         <div className="page-hero">
           <h1>Our Electrifying Matches</h1>
           <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
-          <p className="subtitle">Four simultaneous fixtures — live across the galaxy</p>
-          {expandedFixture && (
+          <p className="subtitle">Full match listings coming soon.</p>
+
+          {/* ── Navigation button ───────────────────────────────────────── */}
+          {/* When the match is open, show a Back button to dismiss it.
+              When closed, show the Mars vs Saturn entry point.
+              No other fixtures are exposed here while the page is static. */}
+          {showMatch ? (
             <button
               className="btn btn-primary"
-              onClick={() => setExpandedId(null)}
+              onClick={() => setShowMatch(false)}
               style={{ marginTop: '8px' }}
             >
-              ← Back to All Matches
+              ← Back to Matches
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowMatch(true)}
+              style={{ marginTop: '16px' }}
+            >
+              Mars vs Saturn
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Full match view (expanded) ─────────────────────────────────────── */}
-      {expandedFixture && (
+      {/* ── Full match view ───────────────────────────────────────────────── */}
+      {/* Only mounted when showMatch is true — avoids running the game engine
+          and any AI agents until the user explicitly requests the fixture.
+          The key prop is static ('mars-saturn') so React never accidentally
+          remounts the simulator while it is visible. */}
+      {showMatch && (
         <MatchSimulator
-          key={expandedFixture.id}
-          homeTeamKey={expandedFixture.homeTeamKey}
-          awayTeamKey={expandedFixture.awayTeamKey}
+          key="mars-saturn"
+          homeTeamKey="mars"
+          awayTeamKey="saturn"
         />
-      )}
-
-      {/* ── 2×2 compact card grid ──────────────────────────────────────────── */}
-      {!expandedFixture && (
-        <div className="container">
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '24px',
-          }}>
-            {FIXTURES.map(fixture => (
-              <MatchSimulator
-                key={fixture.id}
-                homeTeamKey={fixture.homeTeamKey}
-                awayTeamKey={fixture.awayTeamKey}
-                compact={true}
-                autoStart={true}
-                startDelay={fixture.startDelay}
-                onExpand={() => setExpandedId(fixture.id)}
-              />
-            ))}
-          </div>
-        </div>
       )}
 
     </div>
