@@ -1024,7 +1024,7 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
       `Out for a throw. Corner comes to nothing.`,
       `${defTeam.shortName} bodies on the line — cleared!`,
     ]);
-    momentumChange = [0, 0];
+    return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, outcome: 'cleared', commentary, momentumChange: [0, 0] };
 
   } else if (roll < 0.52) {
     // INJURY
