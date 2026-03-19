@@ -665,10 +665,15 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',alignItems:'stretch'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px'}}>
 
             {/* ── HOME column ─────────────────────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
+            {/* display:flex+flexDirection:column so the last card (Player Thoughts)
+                can use flex:1 to fill remaining height. CSS Grid's default
+                align-items:stretch makes this grid item's height equal to the
+                tallest column (the centre), which is the definite height that
+                flex children need for flex-grow to work. */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.homeTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.homeTeam.color,marginBottom:'4px'}}>{ms.homeTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.homeFormation} · {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
@@ -719,9 +724,7 @@ const MatchSimulator = ({
             </div>
 
             {/* ── CENTRE: pitch + commentary ──────────────────────────── */}
-            {/* height:100% lets this flex column fill its grid cell so the
-                commentary card's flex:1 can grow to match the tallest column. */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
               <div className="card" style={{padding:'12px'}}>
                 <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
                 <div style={{position:'relative',height:'88px',backgroundColor:'#1a4d2e',border:'1px solid rgba(227,224,213,0.2)',backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.04) 19px,rgba(255,255,255,0.04) 20px)'}}>
@@ -808,9 +811,7 @@ const MatchSimulator = ({
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
-            {/* height:100% mirrors the home column so Player Thoughts stretches
-                to align the bottom edge with the commentary feed. */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.awayTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.awayTeam.color,marginBottom:'4px'}}>{ms.awayTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.awayFormation} · {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
