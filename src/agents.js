@@ -1,8 +1,36 @@
+// ── agents.js ─────────────────────────────────────────────────────────────────
+// AI commentary and reaction system powered by the Claude API (claude-haiku).
+//
+// HOW IT FITS INTO THE GAME
+// ─────────────────────────
+// After every meaningful match event the simulation calls
+// agentSystem.queueEvent(event, gameState, allAgents).  This queues a Claude
+// API request that produces natural-language reactions from:
+//   • Up to 3 commentators (depending on event importance)
+//   • The relevant player (inner thought)
+//   • One or both managers
+//   • The referee (for cards and controversial calls)
+//
+// All requests are serialised through a 1.5-second cooldown queue so we never
+// hammer the API.  Each persona maintains its own short message history
+// (≤ 6 messages) so consecutive comments feel conversational.
+//
+// EVENT TIER SYSTEM
+// ─────────────────
+//  'full'    (goals, red cards)   → all 3 commentators + both managers + player thought
+//  'medium'  (yellow cards, injuries, controversial) → 2 commentators + 1 manager + player thought
+//  'manager' (tactical shouts, rallies, subs, siege) → 1 commentator + acting manager only
+//  'minor'   (everything else)    → 1 commentator + 30% chance of player thought
+//  'skip'    (penalty sub-steps, VAR sub-steps, social) → nothing generated
+
 import Anthropic from '@anthropic-ai/sdk';
 
 const _pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
-// ── Commentator Personalities ────────────────────────────────────────────────
+// ── Commentator Personalities ─────────────────────────────────────────────────
+// Three distinct on-air voices.  Each has a system-prompt that shapes how
+// Claude responds.  The colour field is used to tint that commentator's
+// feed in the UI.
 export const COMMENTATOR_PROFILES = [
   {
     id: 'nexus7',
@@ -10,6 +38,7 @@ export const COMMENTATOR_PROFILES = [
     emoji: '🤖',
     role: 'AI Analyst',
     color: '#4FC3F7',
+    // Clinical, data-driven, subtly robotic.  Occasionally "glitches".
     system: `You are Nexus-7, an advanced AI sports commentator on the Intergalactic Sports Network. Your voice is clinical, data-driven, and subtly robotic. You reference player biometric readings, expected goal values, probability percentages, and statistical anomalies. Occasionally your output glitches—a word repeats or a sentence trails off. You find biological athletes philosophically fascinating. Never exceed 2 sentences. No emojis.`,
   },
   {
@@ -18,6 +47,7 @@ export const COMMENTATOR_PROFILES = [
     emoji: '🎙️',
     role: 'Play-by-Play',
     color: '#FFD700',
+    // Bombastic veteran.  Catchphrase: "BY THE RINGS OF SATURN!"
     system: `You are Captain Vox, the most celebrated galactic soccer commentator in the known universe, 40 years behind the mic across 9 solar systems. You are bombastic, theatrical, and deeply passionate. You use sweeping cosmic metaphors and occasionally reference "the beautiful game as played on Old Earth." Your signature: "BY THE RINGS OF SATURN!" for truly incredible moments. 1-2 explosive sentences max.`,
   },
   {
@@ -26,11 +56,14 @@ export const COMMENTATOR_PROFILES = [
     emoji: '⚡',
     role: 'Color Analyst',
     color: '#A5D6A7',
+    // Ex-striker; sharp, direct, tactically astute.
     system: `You are Zara Bloom, former galactic soccer striker turned color analyst. You're sharp, direct, occasionally blunt. You read tactics and player psychology instantly and call out poor decisions ruthlessly — but give fair credit. Dry wit. 1-2 incisive sentences. No fluff or filler.`,
   },
 ];
 
-// ── Player Personality Descriptions ─────────────────────────────────────────
+// ── Player Personality Descriptions ──────────────────────────────────────────
+// Plain-English descriptions injected into each player-thought prompt so the
+// model stays in character for that personality archetype.
 const PERS_DESC = {
   selfish:     'ego-driven and stat-obsessed — always chasing personal glory',
   team_player: 'selfless and collaborative — always putting the team first',
@@ -47,8 +80,20 @@ const PERS_EMOJI = {
   creative: '✨', lazy: '😴', workhorse: '💪', balanced: '⚖️',
 };
 
-// ── AgentSystem ──────────────────────────────────────────────────────────────
+// ── AgentSystem ───────────────────────────────────────────────────────────────
+// One instance is created per match in App.jsx after teams and match state
+// are initialised.  It owns the Anthropic client and all conversation histories.
 export class AgentSystem {
+  /**
+   * @param {string} apiKey  – Anthropic API key (entered by user in the UI)
+   * @param {object} matchCtx – match meta-data:
+   *   homeTeam / awayTeam  – full team objects (name, color, shortName, players)
+   *   referee              – { name, leniency, strictness }
+   *   homeManager / awayManager – { name, personality, emotion }
+   *   homeTactics / awayTactics – tactical style strings
+   *   stadium              – { name, planet, capacity }
+   *   weather              – WX constant string (e.g. 'dust_storm')
+   */
   constructor(apiKey, { homeTeam, awayTeam, referee, homeManager, awayManager,
                         homeTactics, awayTactics, stadium, weather }) {
     this.client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
@@ -62,24 +107,32 @@ export class AgentSystem {
     this.stadium     = stadium;
     this.weather     = weather;
 
-    // Per-entity message histories for conversational continuity
+    // Per-entity message histories for conversational continuity.
+    // Kept to the last 6 messages (3 turns) to stay within token budget.
     this.commentatorHistories = { nexus7: [], captain_vox: [], zara_bloom: [] };
     this.homeManagerHistory   = [];
     this.awayManagerHistory   = [];
     this.refHistory           = [];
 
+    // Rate-limiting: no more than 1 Claude call per 1.5 seconds.
     this._lastCallTime = 0;
     this._cooldownMs   = 1500;
-    this._eventQueue   = [];
-    this._draining     = false;
+    this._eventQueue   = [];   // pending { event, gameState, allAgents, resolve }
+    this._draining     = false; // true while _drainQueue() is running
   }
 
-  // ── Shared helpers ─────────────────────────────────────────────────────────
+  // ── Shared helpers ──────────────────────────────────────────────────────────
 
+  /** Builds the one-line match context string prepended to every API prompt. */
   _ctx(gameState) {
     return `MATCH: ${this.homeTeam.name} (${gameState.score[0]}) vs ${this.awayTeam.name} (${gameState.score[1]}) | Minute: ${gameState.minute}' | Stadium: ${this.stadium?.name || 'Unknown'} | Weather: ${this.weather}`;
   }
 
+  /**
+   * Thin wrapper around client.messages.create.
+   * Uses claude-haiku for low latency; max_tokens kept small (120 default)
+   * so responses are always concise.
+   */
   async _call(system, messages, maxTokens = 120) {
     const response = await this.client.messages.create({
       model:      'claude-haiku-4-5-20251001',
@@ -90,13 +143,24 @@ export class AgentSystem {
     return response.content[0]?.text?.trim() || null;
   }
 
-  // ── Commentator ────────────────────────────────────────────────────────────
+  // ── Commentator ─────────────────────────────────────────────────────────────
 
+  /**
+   * Generates a live commentary line from one of the three broadcast personas.
+   *
+   * The commentator's recent history (up to 6 messages) is included so each
+   * line can reference what the commentator just said, creating a natural
+   * back-and-forth feel across consecutive events.
+   *
+   * Returns a commentary object ready to be pushed into the UI feed, or null
+   * if the API call fails.
+   */
   async generateCommentary(commentatorId, event, gameState) {
     const profile = COMMENTATOR_PROFILES.find(p => p.id === commentatorId);
     if (!profile) return null;
 
     const history = this.commentatorHistories[commentatorId];
+    // Build the user message: match context + event description + event flags
     const userMsg = [
       this._ctx(gameState),
       `Event: "${event.commentary}"`,
@@ -118,6 +182,7 @@ export class AgentSystem {
         [...history.slice(-6), { role: 'user', content: userMsg }],
       );
       if (!text) return null;
+      // Append to history; cap at 12 items (6 turns) to avoid runaway growth
       history.push({ role: 'user', content: userMsg }, { role: 'assistant', content: text });
       if (history.length > 12) history.splice(0, 2);
       return {
@@ -129,8 +194,19 @@ export class AgentSystem {
     } catch { return null; }
   }
 
-  // ── Player ─────────────────────────────────────────────────────────────────
+  // ── Player ──────────────────────────────────────────────────────────────────
 
+  /**
+   * Generates a one-sentence inner thought from a specific player's perspective.
+   *
+   * The prompt includes:
+   *  - Player name, position, team
+   *  - Personality description (from PERS_DESC)
+   *  - Current confidence%, fatigue%, and emotion
+   *  - The event that just happened
+   *
+   * Returns a player_thought feed item or null on failure.
+   */
   async generatePlayerThought(player, agent, event, gameState) {
     const isHome   = agent?.isHome;
     const teamName = isHome ? this.homeTeam.name : this.awayTeam.name;
@@ -162,8 +238,17 @@ export class AgentSystem {
     } catch { return null; }
   }
 
-  // ── Manager ────────────────────────────────────────────────────────────────
+  // ── Manager ─────────────────────────────────────────────────────────────────
 
+  /**
+   * Generates a touchline reaction from the home or away manager.
+   *
+   * The prompt tells Claude which team is winning/losing/level so the
+   * manager reacts appropriately.  History is kept so the manager's tone
+   * can escalate across the match.
+   *
+   * @param {boolean} isHome – true for home manager, false for away
+   */
   async generateManagerReaction(isHome, event, gameState) {
     const mgr      = isHome ? this.homeManager : this.awayManager;
     const team     = isHome ? this.homeTeam    : this.awayTeam;
@@ -204,12 +289,20 @@ export class AgentSystem {
     } catch { return null; }
   }
 
-  // ── Referee ────────────────────────────────────────────────────────────────
+  // ── Referee ─────────────────────────────────────────────────────────────────
 
+  /**
+   * Generates the referee's justification for a card or controversial call.
+   *
+   * The referee's style (strict / lenient / pragmatic) is derived from his
+   * leniency and strictness attributes set in createAIManager.
+   * Called whenever event.cardType is set or event.isControversial is true.
+   */
   async generateRefDecision(event, gameState) {
     const ref = this.referee;
     if (!ref) return null;
 
+    // Derive a natural-language style description from numeric attributes
     const style = ref.strictness > 70
       ? 'strict, zero tolerance, rigidly by-the-book'
       : ref.leniency > 70
@@ -250,8 +343,20 @@ export class AgentSystem {
     } catch { return null; }
   }
 
-  // ── Halftime Quotes ────────────────────────────────────────────────────────
+  // ── Halftime Quotes ─────────────────────────────────────────────────────────
 
+  /**
+   * Generates a tunnel interview quote from each manager at halftime.
+   * Called once at minute 45 from App.jsx.
+   *
+   * Unlike the live reactions, there is no history here — each halftime quote
+   * is a standalone statement shaped by the first-half scoreline.
+   *
+   * @param {boolean} isHome
+   * @param {number[]} score  – [homeGoals, awayGoals]
+   * @param {object[]} goalEvents – all goal events from the first half
+   * @returns {string|null} raw text (not a feed item)
+   */
   async generateHalftimeQuote(isHome, score, goalEvents) {
     const mgr      = isHome ? this.homeManager : this.awayManager;
     const team     = isHome ? this.homeTeam    : this.awayTeam;
@@ -274,14 +379,24 @@ export class AgentSystem {
     } catch { return null; }
   }
 
-  // ── Event classification ───────────────────────────────────────────────────
+  // ── Event classification ────────────────────────────────────────────────────
 
+  /**
+   * Maps an event to one of four tiers that control how many AI voices respond.
+   *
+   * 'full'    → goals and red cards (the most dramatic moments)
+   * 'medium'  → yellow cards, injuries, or controversial decisions
+   * 'manager' → touchline interventions (shouts, rallies, subs, siege)
+   * 'skip'    → sub-events inside multi-step sequences; social posts
+   * 'minor'   → everything else (passes, tackles, atmosphere moments)
+   */
   _classifyEvent(event) {
     if (event.isGoal || event.cardType === 'red') return 'full';
     if (event.cardType === 'yellow' || event.type === 'injury' || event.isControversial) return 'medium';
     if (['team_talk', 'manager_shout', 'captain_rally', 'desperate_sub',
          'manager_sentoff', 'siege_start'].includes(event.type)) return 'manager';
-    // Sub-events of sequences and social posts are skipped
+    // Penalty/VAR sub-steps and social posts produce their own narrative text;
+    // no need to add an additional AI layer on top.
     if (event.type && (
       event.type.startsWith('penalty_') ||
       event.type.startsWith('var_') ||
@@ -290,8 +405,17 @@ export class AgentSystem {
     return 'minor';
   }
 
-  // ── Internal event processor ───────────────────────────────────────────────
+  // ── Internal event processor ────────────────────────────────────────────────
 
+  /**
+   * Fires all appropriate AI calls for a single event and returns an array
+   * of feed items.  All calls run in parallel via Promise.allSettled so one
+   * slow/failed call does not block the others.
+   *
+   * @param {object} event      – the match event object
+   * @param {object} gameState  – { score, minute }
+   * @param {object[]} allAgents – all player agents (home + away)
+   */
   async _processEventDirect(event, gameState, allAgents) {
     const tier = this._classifyEvent(event);
     if (tier === 'skip') return [];
@@ -302,14 +426,14 @@ export class AgentSystem {
 
     const isHomeEvent = event.team === this.homeTeam.shortName;
 
-    // ─ Commentators
+    // ─ Commentators: full=3, medium=2, minor/manager=1 (shuffled so order varies)
     const numCasters = tier === 'full' ? 3 : tier === 'medium' ? 2 : 1;
     const shuffled = [...COMMENTATOR_PROFILES].sort(() => Math.random() - 0.5);
     for (let i = 0; i < numCasters; i++) {
       promises.push(this.generateCommentary(shuffled[i].id, event, gameState).then(push));
     }
 
-    // ─ Player inner thought
+    // ─ Player inner thought: always on full/medium; 30% chance on minor
     const wantThought = tier === 'full' || tier === 'medium' ||
       (tier === 'minor' && event.player && Math.random() < 0.3);
     if (wantThought && event.player) {
@@ -319,20 +443,20 @@ export class AgentSystem {
       }
     }
 
-    // ─ Manager reactions
+    // ─ Manager reactions:
+    //   full    → both managers react (one scored, both care)
+    //   medium  → only the manager whose team was involved
+    //   manager → acting manager only (the one who triggered the intervention)
     if (tier === 'full') {
-      // Both managers react to goals and red cards
       promises.push(this.generateManagerReaction(isHomeEvent,  event, gameState).then(push));
       promises.push(this.generateManagerReaction(!isHomeEvent, event, gameState).then(push));
     } else if (tier === 'medium') {
-      // Relevant manager reacts
       promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
     } else if (tier === 'manager') {
-      // Intervention events — the acting manager reacts
       promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
     }
 
-    // ─ Referee for cards and controversial calls
+    // ─ Referee: only for card events or disputed decisions
     if (event.cardType || event.isControversial) {
       promises.push(this.generateRefDecision(event, gameState).then(push));
     }
@@ -341,8 +465,19 @@ export class AgentSystem {
     return results;
   }
 
-  // ── Queued event processor (public API) ───────────────────────────────────
+  // ── Queued event processor (public API) ─────────────────────────────────────
 
+  /**
+   * The main entry point for triggering AI commentary.
+   *
+   * Events are pushed onto an internal queue and processed one at a time
+   * with a 1.5-second gap between Claude calls.  Returns a Promise that
+   * resolves with an array of feed items when the event is processed.
+   *
+   * Usage in App.jsx:
+   *   const items = await agentSystem.queueEvent(event, gameState, allAgents);
+   *   // items is an array of { type, name, text, color, ... } objects
+   */
   queueEvent(event, gameState, allAgents) {
     return new Promise(resolve => {
       this._eventQueue.push({ event, gameState, allAgents, resolve });
@@ -350,6 +485,12 @@ export class AgentSystem {
     });
   }
 
+  /**
+   * Internal loop that processes queued events one at a time.
+   * Enforces the cooldown between API calls to avoid rate-limit errors.
+   * Sets this._draining=true while running so concurrent calls don't
+   * start a second loop.
+   */
   async _drainQueue() {
     if (this._draining) return;
     this._draining = true;
@@ -369,8 +510,8 @@ export class AgentSystem {
     this._draining = false;
   }
 
-  // ── Legacy processEvent (kept for halftime compatibility) ──────────────────
-
+  // ── Legacy processEvent (kept for halftime compatibility) ───────────────────
+  // App.jsx calls this at halftime; it simply delegates to the queue.
   async processEvent(event, gameState, allAgents) {
     return this.queueEvent(event, gameState, allAgents);
   }
