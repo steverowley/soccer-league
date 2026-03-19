@@ -436,8 +436,6 @@ const MatchSimulator = ({
   // or modals — to keep each card lightweight.
   if(compact){
     return(
-      {/* border opacity 0.2 — matches the .card CSS class standard so compact
-          cards visually integrate with the ISL design system. */}
       <div style={{border:'1px solid rgba(227,224,213,0.2)',backgroundColor:'#1F1F1F',display:'flex',flexDirection:'column',fontFamily:"'Space Mono',monospace",color:'#E3E0D5',height:'100%'}}>
         {/* Scoreboard row: short-name | score·time·score | short-name */}
         <div style={{padding:'12px 16px',backgroundColor:'#111',borderBottom:'1px solid rgba(227,224,213,0.07)'}}>
