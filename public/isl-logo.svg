@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 270 305" fill="none">
+  <!-- Shield background -->
+  <path d="M135 300 C80 272 15 228 15 148 L15 20 C15 15 20 10 25 10 L245 10 C250 10 255 15 255 20 L255 148 C255 228 190 272 135 300Z" fill="#161614"/>
+
+  <!-- Shield inner highlight border -->
+  <path d="M135 288 C85 262 27 220 27 148 L27 28 C27 24 30 22 34 22 L236 22 C240 22 243 24 243 28 L243 148 C243 220 185 262 135 288Z" fill="none" stroke="#E3E0D5" stroke-width="1.5" opacity="0.25"/>
+
+  <!-- Top sparkle (large, top center-right) -->
+  <g fill="#E3E0D5">
+    <!-- Sparkle top-right -->
+    <path d="M196 48 L198.5 56 L206 58 L198.5 60 L196 68 L193.5 60 L186 58 L193.5 56 Z" />
+    <!-- Sparkle top-left small -->
+    <path d="M68 62 L69.5 67 L74 68 L69.5 69 L68 74 L66.5 69 L62 68 L66.5 67 Z" />
+    <!-- Sparkle mid-left -->
+    <path d="M52 102 L53.2 106 L57 107 L53.2 108 L52 112 L50.8 108 L47 107 L50.8 106 Z" />
+    <!-- Sparkle right -->
+    <path d="M214 90 L215 93.5 L218.5 94.5 L215 95.5 L214 99 L213 95.5 L209.5 94.5 L213 93.5 Z" />
+  </g>
+
+  <!-- Planet ring (back half - behind planet) -->
+  <ellipse cx="135" cy="128" rx="72" ry="16" fill="none" stroke="#E3E0D5" stroke-width="6"
+    stroke-dasharray="105 130"
+    stroke-dashoffset="0"
+    transform="rotate(-15, 135, 128)"
+  />
+
+  <!-- Planet/soccer ball circle -->
+  <circle cx="135" cy="128" r="52" fill="#E3E0D5"/>
+
+  <!-- Soccer ball pentagons pattern -->
+  <g fill="#161614" stroke="#161614" stroke-width="1">
+    <!-- Center pentagon -->
+    <polygon points="135,106 148,116 143,131 127,131 122,116" />
+    <!-- Top pentagon -->
+    <polygon points="135,84 145,91 141,104 129,104 125,91" />
+    <!-- Upper-right -->
+    <polygon points="155,96 167,100 166,114 154,119 148,109" />
+    <!-- Upper-left -->
+    <polygon points="115,96 127,109 121,119 109,114 108,100" />
+    <!-- Lower-right -->
+    <polygon points="149,133 158,140 155,153 143,155 138,144" />
+    <!-- Lower-left -->
+    <polygon points="121,133 132,144 127,155 115,153 112,140" />
+    <!-- Bottom -->
+    <polygon points="135,148 143,155 140,167 130,167 127,155" />
+  </g>
+
+  <!-- Seam lines on soccer ball -->
+  <g stroke="#161614" stroke-width="1.5" fill="none" opacity="0.6">
+    <line x1="135" y1="76" x2="135" y2="106"/>
+    <line x1="155" y1="83" x2="148" y2="109"/>
+    <line x1="168" y1="106" x2="143" y2="116"/>
+    <line x1="162" y1="148" x2="143" y2="131"/>
+    <line x1="135" y1="180" x2="135" y2="148"/>
+    <line x1="115" y1="83" x2="122" y2="109"/>
+    <line x1="102" y1="106" x2="127" y2="116"/>
+    <line x1="108" y1="148" x2="127" y2="131"/>
+  </g>
+
+  <!-- Planet ring (front half - over planet) -->
+  <ellipse cx="135" cy="128" rx="72" ry="16" fill="none" stroke="#E3E0D5" stroke-width="6"
+    stroke-dasharray="130 105"
+    stroke-dashoffset="0"
+    transform="rotate(-15, 135, 128)"
+  />
+
+  <!-- ISL Text -->
+  <text x="135" y="235" font-family="'Space Mono', monospace" font-size="38" font-weight="700"
+    fill="#E3E0D5" text-anchor="middle" letter-spacing="4">ISL</text>
+</svg>
