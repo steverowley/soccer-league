@@ -61,34 +61,44 @@ export default function Header() {
   };
 
   return (
-    <header style={{ backgroundColor: 'var(--color-abyss)', position: 'relative', zIndex: 10 }}>
+    <header style={{ backgroundColor: 'var(--color-abyss)', position: 'relative', zIndex: 10, overflow: 'visible' }}>
       {/* ── Inner wrapper — max-width container with logo + nav ──────────────── */}
       <div
         className="container"
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
-          paddingTop: '8px',
-          paddingBottom: '0',
           position: 'relative',
         }}
       >
         {/* ── Logo ─────────────────────────────────────────────────────────── */}
-        {/* The logo is deliberately oversized relative to the header line so
-            the shield crest overlaps the divider — matching the design spec. */}
-        <Link to="/" style={{ display: 'block', flexShrink: 0 }}>
+        {/* The logo is intentionally larger than the nav strip and positioned
+            relative so it can overflow downward via a negative marginBottom.
+            This makes the shield crest visually cross the horizontal divider,
+            matching the design spec.
+            •  width: 100px   — final rendered width per the design mockup;
+               height is left auto so the PNG's aspect ratio is preserved.
+            •  marginBottom: -70px — pulls the element up by 70 px in the flow
+               so the nav strip stays ~36 px tall while the logo's bottom edge
+               lands roughly 70 px below the divider line.
+            •  zIndex: 11     — sits one level above the header (z 10) so the
+               overhanging portion renders on top of page content beneath it. */}
+        <Link to="/" style={{ display: 'block', flexShrink: 0, zIndex: 11, position: 'relative' }}>
           <img
             src={`${import.meta.env.BASE_URL}isl-logo.png`}
             alt="Intergalactic Soccer League"
-            style={{ width: 72, height: 'auto', display: 'block', marginBottom: '-12px' }}
+            style={{ width: 100, height: 'auto', display: 'block', marginBottom: '-70px' }}
           />
         </Link>
 
         {/* ── Desktop navigation ───────────────────────────────────────────── */}
+        {/* padding: '10px 0' — 10 px top/bottom gives the nav strip a ~36 px
+            total height (10 + ~16 line-height + 10) which matches the thin
+            bar shown in the design, with the logo overhanging below it. */}
         <nav
           className="desktop-nav"
-          style={{ display: 'flex', gap: '32px', alignItems: 'center', paddingBottom: '14px' }}
+          style={{ display: 'flex', gap: '32px', alignItems: 'center', padding: '10px 0' }}
         >
           {NAV_LINKS.map(({ label, to }) => (
             <Link
@@ -113,7 +123,7 @@ export default function Header() {
             cursor: 'pointer',
             padding: '6px',
             display: 'none', // shown via CSS at mobile breakpoint
-            marginBottom: '12px',
+            margin: '10px 0', // vertically centres button in the nav strip (matches desktop nav padding)
           }}
         >
           {mobileOpen ? <X size={18} /> : <Menu size={18} />}
