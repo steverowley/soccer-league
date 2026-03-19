@@ -436,7 +436,9 @@ const MatchSimulator = ({
   // or modals — to keep each card lightweight.
   if(compact){
     return(
-      <div style={{border:'1px solid rgba(227,224,213,0.12)',backgroundColor:'#1F1F1F',display:'flex',flexDirection:'column',fontFamily:"'Space Mono',monospace",color:'#E3E0D5',height:'100%'}}>
+      {/* border opacity 0.2 — matches the .card CSS class standard so compact
+          cards visually integrate with the ISL design system. */}
+      <div style={{border:'1px solid rgba(227,224,213,0.2)',backgroundColor:'#1F1F1F',display:'flex',flexDirection:'column',fontFamily:"'Space Mono',monospace",color:'#E3E0D5',height:'100%'}}>
         {/* Scoreboard row: short-name | score·time·score | short-name */}
         <div style={{padding:'12px 16px',backgroundColor:'#111',borderBottom:'1px solid rgba(227,224,213,0.07)'}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',alignItems:'center',gap:'8px'}}>
@@ -478,7 +480,8 @@ const MatchSimulator = ({
         {/* Expand button — triggers onExpand prop from parent Matches page */}
         {onExpand&&(
           <div style={{padding:'7px 12px',borderTop:'1px solid rgba(227,224,213,0.05)'}}>
-            <button onClick={onExpand} style={{width:'100%',padding:'6px',backgroundColor:'transparent',border:'1px solid rgba(227,224,213,0.12)',color:'rgba(227,224,213,0.5)',fontFamily:"'Space Mono',monospace",fontSize:'9px',textTransform:'uppercase',letterSpacing:'0.09em',cursor:'pointer'}}>
+            {/* border opacity 0.2 — matches .card standard */}
+          <button onClick={onExpand} style={{width:'100%',padding:'6px',backgroundColor:'transparent',border:'1px solid rgba(227,224,213,0.2)',color:'rgba(227,224,213,0.5)',fontFamily:"'Space Mono',monospace",fontSize:'9px',textTransform:'uppercase',letterSpacing:'0.09em',cursor:'pointer'}}>
               View Full Match ↗
             </button>
           </div>

@@ -43,12 +43,17 @@ export default function Matches() {
     : null;
 
   return (
-    <div style={{ paddingTop: '24px', paddingBottom: '60px' }}>
+    <div style={{ paddingTop: '40px', paddingBottom: '60px' }}>
 
       {/* ── Page hero ───────────────────────────────────────────────────────── */}
+      {/* Mirrors the hero pattern used on all other ISL pages:
+          H1 → .divider HR → subtitle.  The paddingTop of 40px on the outer
+          wrapper matches the container paddingTop used on Leagues and Teams so
+          the hero sits at the same distance from the header divider. */}
       <div className="container">
         <div className="page-hero">
           <h1>Our Electrifying Matches</h1>
+          <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
           <p className="subtitle">Four simultaneous fixtures — live across the galaxy</p>
           {expandedFixture && (
             <button

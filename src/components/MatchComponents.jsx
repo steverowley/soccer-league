@@ -58,25 +58,51 @@ export const FeedCard = ({ item, isThought }) => (
   </div>
 );
 
+/**
+ * Compact commentary entry used in the match card feed.
+ *
+ * Renders a left-bordered card whose accent colour reflects the agent type:
+ *   - commentator / player_thought / manager → item.color (team colour)
+ *   - referee                               → gold (#FFD700)
+ *   - fallback                              → Quantum Purple
+ *
+ * Uses inline styles throughout so it stays consistent with the compact
+ * match card's inline-style approach (no Tailwind dependency).
+ *
+ * @param {{ type: string, name: string, role?: string, emoji: string,
+ *           color?: string, minute: number, text: string }} item
+ * @returns {JSX.Element}
+ */
 export const AgentCard = ({ item }) => {
+  // Derive the accent colour for the left border and name label.
   const borderColor = item.type === 'commentator' ? item.color
     : item.type === 'player_thought' ? item.color
     : item.type === 'manager' ? item.color
     : item.type === 'referee' ? '#FFD700'
     : C.purple;
+
+  // Human-readable agent label shown beside the emoji icon.
   const label = item.type === 'commentator' ? `${item.name} • ${item.role}`
     : item.type === 'player_thought' ? `${item.name} (inner thought)`
     : item.type === 'manager' ? item.name
     : item.type === 'referee' ? `${item.name} • Referee`
     : 'Agent';
+
   return (
-    <div className="p-2 border-l-2 mb-2" style={{ borderColor, backgroundColor: C.abyss }}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-base">{item.emoji}</span>
-        <span className="text-xs font-bold" style={{ color: borderColor }}>{label}</span>
-        <span className="text-xs ml-auto" style={{ opacity: 0.4 }}>{item.minute}'</span>
+    <div style={{
+      padding: '8px',
+      borderLeft: `2px solid ${borderColor}`,
+      marginBottom: '8px',
+      backgroundColor: C.abyss,
+    }}>
+      {/* ── Agent header: emoji + name label + timestamp ─────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        <span style={{ fontSize: '14px' }}>{item.emoji}</span>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: borderColor }}>{label}</span>
+        <span style={{ fontSize: '11px', marginLeft: 'auto', opacity: 0.4 }}>{item.minute}'</span>
       </div>
-      <div className="text-xs italic" style={{ opacity: 0.9 }}>"{item.text}"</div>
+      {/* ── Quote text ───────────────────────────────────────────────────── */}
+      <div style={{ fontSize: '11px', fontStyle: 'italic', opacity: 0.9 }}>"{item.text}"</div>
     </div>
   );
 };
