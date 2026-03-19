@@ -1,7 +1,70 @@
+// ── gameEngine.js ─────────────────────────────────────────────────────────────
+// The core simulation engine for the Interstellar Soccer League.
+//
+// This file contains every mechanical rule that governs a match:
+//   • Player agent creation and psychological state (createAgent)
+//   • Match setup: weather, stadium, referees, managers (createAIManager)
+//   • Stat helpers: teamStats, getPlayer, formBonus, makeSub, calcMVP
+//   • Contest resolution: resolveContest (the "dice roll" that decides outcomes)
+//   • Commentary text pools: buildCommentary
+//   • Multi-step dramatic sequences: penalties, free kicks, VAR, celebrations,
+//     confrontations, counter-attacks, near-misses, sieges, comebacks, red-card send-offs
+//   • Per-minute event generation: genEvent (split across three private helpers)
+//   • Social media feed generation: genSocial
+//
+// OVERALL SIMULATION LOOP (driven by App.jsx)
+// ────────────────────────────────────────────
+// Each simulated minute (1–90+) App.jsx calls:
+//   1. aim.updateAllAgents(mins)   – accumulate fatigue and decay emotions
+//   2. genEvent(...)               – 35% chance of producing a match event
+//   3. applyLateGameLogic(...)     – extra manager/captain actions after min 70
+//   4. flattenSequences(...)       – unpack multi-step sequences into the feed
+//   5. buildPostGoalExtras(...)    – VAR, celebration, hat-trick, sub-impact
+//   6. agentSystem.queueEvent(...) – trigger Claude AI commentary
+
 import { PERS, WX, MGER_EMO, REFS, STADIUMS, PLANET_WX } from './constants.js';
 import { rnd, rndI, pick } from './utils.js';
 
 // ── createAgent ───────────────────────────────────────────────────────────────
+// Wraps a raw player object (from teams.js) with a live psychological state
+// and a set of methods that update as the match progresses.
+//
+// HOW PERSONALITY IS ASSIGNED
+// ────────────────────────────
+// Personality is derived deterministically from the player's base stats,
+// with a couple of random wildcards at the end:
+//
+//   atk > 82 AND FW  → selfish  (star forwards chase personal glory)
+//   men > 78         → team_player (high-IQ players are selfless)
+//   def > 82 AND DF  → aggressive (defensive stoppers are physical)
+//   ath < 70         → lazy  (low-fitness players coast)
+//   ath > 85         → workhorse (elite athletes never stop running)
+//   10% random       → creative (unpredictable flair player)
+//   20% random       → cautious (risk-averse reader of the game)
+//   else             → balanced
+//
+// HOW DYNAMIC STATS WORK
+// ──────────────────────
+//   confidence (0–100): starts at 50.  Goals scored, good moments → up.
+//     Misses, cards, conceding → down.  High confidence gives +8 bonus
+//     in resolveContest; low confidence gives -5.
+//
+//   fatigue (0–100): increments ~0.8–1.2 per minute via updateFatigue().
+//     fatigue > 65 → -5 stat penalty in resolveContest
+//     fatigue > 80 → -12 penalty (exhausted)
+//     fatigue also raises injuryRisk (5/10/20% at different thresholds)
+//
+//   emotion: 'neutral' | 'ecstatic' | 'proud' | 'frustrated' |
+//            'anxious' | 'devastated'
+//     Triggered by goal_scored, assists, cards, etc.  Lasts several minutes
+//     then fades back to neutral via updateEmotion().
+//     ecstatic → +10 bonus; anxious/devastated → -8.
+//
+//   isCaptain: highest-mental player on each side (set by createAIManager).
+//   isClutch (15% random): big-moment bonus +14 in the 80th minute+ with
+//     a close scoreline.
+//   penaltyAbility: (mental + attacking) / 2 + random(0–20).
+//     Used to pick the best penalty taker in genPenaltySeq.
 export function createAgent(player, isHome) {
   const pos = player.position;
   let personality = PERS.BAL;
@@ -76,6 +139,26 @@ export function createAgent(player, isHome) {
 }
 
 // ── createAIManager ───────────────────────────────────────────────────────────
+// Initialises everything that persists for the entire match:
+//   • A player agent for every member of both squads
+//   • Active player lists (11 starters per side)
+//   • Captains (highest mental on each side)
+//   • Stadium and weather (randomly selected from the home team's planet table)
+//   • Tactics (from team data or randomly picked from 6 styles)
+//   • Referee (random name + leniency/strictness values 0–100)
+//   • Home and away managers (names and initial calm emotion)
+//   • Temperature (-50°C to +70°C — galactic range!) and time of day
+//
+// Returns the "aim" object which is threaded through genEvent and
+// simulateHelpers throughout the match.  It acts as a game-wide registry:
+//   aim.getAgentByName(name)       – look up any player's live agent
+//   aim.updateAllAgents(mins)      – tick fatigue/emotion for all active players
+//   aim.handleSubstitution(out, in, isHome) – swap agent in the active list
+//   aim.shouldGiveCard(severity)   – referee card threshold (0–100 scale)
+//   aim.updateManagerEmotion(...)  – changes manager emotion after goals
+//   aim.getDecisionInfluence()     – aggregates agent decision bonuses
+//   aim.giveTeamTalk(isHome, diff) – halftime team-talk text
+//   aim.managerTacticalShout(...)  – 10% chance touchline instruction text
 export function createAIManager(homeTeam, awayTeam) {
   const homeAgents = homeTeam.players.map(p => createAgent(p, true));
   const awayAgents = awayTeam.players.map(p => createAgent(p, false));
@@ -153,8 +236,20 @@ export function createAIManager(homeTeam, awayTeam) {
 }
 
 // ── Pure match helpers ────────────────────────────────────────────────────────
+// Small stateless utility functions used throughout the simulation.
+
+/**
+ * Returns the full player objects for the currently active (on-pitch) players
+ * of a team, given the names listed in the active array.
+ */
 export const getActive = (team, active) => team.players.filter(p => active.includes(p.name));
 
+/**
+ * Calculates average outfield-player stats for a team's active squad.
+ * Goalkeepers are excluded because their role is specialised and would
+ * distort the attacking and technical averages.
+ * Used to derive possession% and team-level bonuses.
+ */
 export function teamStats(team, active) {
   const pl = getActive(team, active).filter(p => p.position !== 'GK');
   if (!pl.length) return { attacking: 0, defending: 0, technical: 0, athletic: 0, mental: 0 };
@@ -162,6 +257,18 @@ export function teamStats(team, active) {
   return { attacking: avg('attacking'), defending: avg('defending'), technical: avg('technical'), athletic: avg('athletic'), mental: avg('mental') };
 }
 
+/**
+ * Picks a player from the active squad using weighted random selection.
+ *
+ * @param {object}  team   – full team object
+ * @param {string[]} active – names of currently on-pitch players
+ * @param {string}  stat   – stat key to weight by ('attacking', 'defending', etc.)
+ *                           Better players at the relevant stat are more likely picked.
+ * @param {string}  pos    – optional position filter ('GK', 'DF', 'MF', 'FW')
+ *
+ * If no players match the position filter the position restriction is dropped.
+ * If stat is omitted a uniform random pick is made instead.
+ */
 export function getPlayer(team, active, stat, pos) {
   let pool = team.players.filter(p => active.includes(p.name));
   if (!pool.length) return null;
@@ -174,6 +281,14 @@ export function getPlayer(team, active, stat, pos) {
   return pool[0];
 }
 
+/**
+ * Calculates an in-match form bonus for a player based on their running stats.
+ * Added to resolveContest rolls to give "on fire" players an edge.
+ *
+ * Bonuses: +10 per goal, +10 extra for a brace, +5 for 1 goal
+ *          +5 for 2+ assists, +8 for 3+ saves (GKs), +5 for 3+ tackles
+ * Penalties: -5 for a yellow card, -20 for injury
+ */
 export function formBonus(name, stats) {
   const s = stats[name] || {};
   return (s.goals || 0) * 10
@@ -185,6 +300,14 @@ export function formBonus(name, stats) {
     - (s.injured ? 20 : 0);
 }
 
+/**
+ * Finds the best available substitute when a player is removed (injury or
+ * desperate sub).  Prefers a same-position match.  Returns the substitute's
+ * name and the updated active player name list, or { substitute: null } if
+ * no substitution is possible (bench exhausted or sub limit reached).
+ *
+ * Max 3 substitutions per team per match (soccer rules).
+ */
 export function makeSub(team, out, active, subsUsed, stats) {
   const subs = team.players.filter(p => !p.starter && !active.includes(p.name) && !stats[p.name]?.injured && !stats[p.name]?.redCard);
   if (!subs.length || subsUsed >= 3) return { substitute: null, newActive: active.filter(n => n !== out) };
@@ -193,6 +316,15 @@ export function makeSub(team, out, active, subsUsed, stats) {
   return { substitute: sub.name, newActive: active.map(n => n === out ? sub.name : n) };
 }
 
+/**
+ * Determines the Man of the Match at full-time.
+ *
+ * Scoring: goals×10 + assists×6 + saves×4 + tackles×2
+ *          − yellowCard×3 − redCard×10
+ *
+ * The player with the highest score wins MVP.  Returned object includes
+ * the team name, colour, and a snapshot of their final stats.
+ */
 export function calcMVP(stats, home, away) {
   let best = null, maxScore = 0;
   [...home.players, ...away.players].filter(p => stats[p.name]).forEach(p => {
@@ -209,6 +341,50 @@ export function calcMVP(stats, home, away) {
 }
 
 // ── resolveContest ────────────────────────────────────────────────────────────
+// The central "dice roll" that decides the outcome of every contested action
+// (shots, headers, free kicks, penalties, tackles).
+//
+// HOW IT WORKS
+// ─────────────
+// 1. Base stats for the attacker and defender are chosen based on the action
+//    type:
+//      shot      → atk = attacking×0.6 + athletic×0.4
+//      freekick  → atk = technical×0.6 + mental×0.4
+//      penalty   → atk = technical×0.5 + mental×0.5
+//      header    → atk = athletic×0.7  + mental×0.3
+//      tackle    → atk = defending×0.8 + athletic×0.2  (def and atk swap roles)
+//
+//    defender always uses: defending×0.7 + mental×0.3
+//
+// 2. Psychological modifiers (atkMod / defMod) are applied:
+//      confidence > 75   → +8      (on form)
+//      confidence < 30   → -5      (crisis of confidence)
+//      fatigue > 80      → -12     (exhausted)
+//      fatigue > 65      → -5      (tired)
+//      emotion ecstatic  → +10
+//      emotion anxious   → -8
+//      emotion devastated → -8
+//      isClutch player in clutch moment (min 80+, score within 1) → +14
+//      creative personality → +3
+//      aggressive personality → +2
+//
+// 3. Weather penalties:
+//      RAIN / STORM → atk-5, def-3
+//      WIND         → atk-8
+//
+// 4. A random roll is added to both sides:
+//      attacker: rnd(-20, +20)
+//      defender: rnd(-15, +15)
+//
+// 5. net = atkRoll − defRoll determines the outcome:
+//      Shots:     net > 25 → goal; net > 8 → saved; else → miss
+//                 (freekick threshold is 28 to make them harder)
+//      Penalty:   base 50% success rate modified by net/250; capped at 85%
+//      Tackle:    net > 10 → won; net > -10 → contested; else → lost
+//      Post:      net in (8, threshold] with 15% random → post/woodwork
+//
+// Returns { outcome, margin: net, flavour: string[] }
+// The flavour array describes which modifiers fired (used by buildCommentary).
 export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {}) {
   const { type = 'shot', weather = WX.CLEAR, isClutch = false } = ctx;
   const atkStat = type === 'freekick' ? (atkPlayer.technical || 70) * 0.6 + (atkPlayer.mental || 70) * 0.4
@@ -259,6 +435,17 @@ export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {
 }
 
 // ── buildCommentary ───────────────────────────────────────────────────────────
+// Returns a randomly selected commentary string that is contextually aware of:
+//   • The action type (shot / freekick / penalty / header / tackle)
+//   • The outcome (goal / saved / miss / post / won / contested / lost)
+//   • The flavour flags set by resolveContest (exhausted, clutch, anxious, etc.)
+//   • Match context: game phase (early/midgame/late/dying), score situation,
+//     whether the player is "on fire" (already scored), hat-trick hunt
+//
+// Commentary pools are large so repeated events don't feel monotonous.
+// Conditional entries (e.g. phase === 'dying' &&  ...) are placed first in the
+// array and filtered out when false, so context-specific lines are always
+// chosen when available.
 export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
   const atk = actors.attacker || 'The player';
   const def = actors.defender || 'the keeper';
@@ -473,6 +660,24 @@ export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
 }
 
 // ── Sequence generators ───────────────────────────────────────────────────────
+// Each generator returns a { sequence: event[] } object (some also return
+// outcome metadata like isGoal).  The sequence is an ordered array of
+// sub-events with the same minute stamp.  App.jsx flattens these into the
+// main event feed via flattenSequences().
+//
+// WHY SEQUENCES?
+// ─────────────
+// Rather than a single "penalty awarded — scored" event, the simulation
+// generates 5–8 individual steps (incident, card, award, taker selection,
+// tension build, run-up, shot outcome).  This makes the live feed feel like
+// watching real match footage unfold in real time.
+
+/**
+ * Free kick sequence: setup → wall formation → optional creative trick → outcome.
+ * The free kick is resolved by resolveContest with type='freekick'.
+ * Creative personality players have a 45% chance to attempt an unconventional
+ * approach (two players over the ball, whispered tactics, etc.).
+ */
 export function genFreekickSeq(min, taker, gk, posTeam, defTeam, aim, ctx = {}) {
   const seq = [];
   const takerAgent = aim?.getAgentByName(taker.name);
@@ -493,6 +698,19 @@ export function genFreekickSeq(min, taker, gk, posTeam, defTeam, aim, ctx = {}) 
   return { sequence: seq, isGoal, outcomeCommentary };
 }
 
+/**
+ * Celebration sequence: scorer reaction → teammate pile-on → manager reaction
+ * → restart.
+ *
+ * The scorer's current emotion shapes their celebration:
+ *   ecstatic  → over-the-top euphoria
+ *   anxious   → relief-driven; drops to knees
+ *   isClutch  → points to the armband; hero moment
+ *   otherwise → standard sliding/arms-wide options
+ *
+ * The manager's emotion must be 'jubilant' (set after scoring) for a
+ * touchline sprint; otherwise they stay composed.
+ */
 export function genCelebrationSeq(min, scorer, team, mgrName, mgrEmotion, scorerAgent) {
   const seq = [];
   const emo     = scorerAgent?.emotion;
@@ -518,6 +736,15 @@ export function genCelebrationSeq(min, scorer, team, mgrName, mgrEmotion, scorer
   return { sequence: seq };
 }
 
+/**
+ * VAR (Video Assistant Referee) review sequence: check notice → review
+ * tension → decision.
+ *
+ * Called by buildPostGoalExtras with an 8% chance after every goal.
+ * The 'overturned' flag (30% of VAR checks) determines whether the goal
+ * stands.  If overturned, the score is decremented and the scorer is
+ * shown devastated.
+ */
 export function genVARSeq(min, scorer, team, ref, overturned) {
   const seq     = [];
   const refName = ref?.name || 'The referee';
@@ -537,6 +764,15 @@ export function genVARSeq(min, scorer, team, ref, overturned) {
   return { sequence: seq };
 }
 
+/**
+ * Siege sequence: desperate all-out attack in the dying minutes.
+ *
+ * Triggered by applyLateGameLogic after minute 85 when a team is losing
+ * (22% chance).  Generates three events: siege_start → siege_pressure →
+ * siege_chance (near miss by the team's clutch player).
+ * The siege_start event type is checked in applyLateGameLogic to prevent
+ * a second siege being triggered in the same match.
+ */
 export function genSiegeSeq(min, team, defTeam, clutchName) {
   const seq = [];
   seq.push({ minute: min, type: 'siege_start', team,
@@ -548,6 +784,13 @@ export function genSiegeSeq(min, team, defTeam, clutchName) {
   return { sequence: seq };
 }
 
+/**
+ * Manager sent-off sequence: protest → warning → dismissal → reaction.
+ *
+ * Triggered by applyLateGameLogic when a manager's emotion is 'angry'
+ * (5% chance per minute).  Their team loses 4 confidence points and the
+ * assistant takes over.
+ */
 export function genManagerSentOffSeq(min, managerName, refName, team) {
   const seq = [];
   seq.push({ minute: min, type: 'manager_protest', team,
@@ -561,6 +804,13 @@ export function genManagerSentOffSeq(min, managerName, refName, team) {
   return { sequence: seq };
 }
 
+/**
+ * Comeback sequence: eruption → captain rally → momentum shift.
+ *
+ * Fired by buildPostGoalExtras when a goal pulls a team back to level
+ * after being 2+ goals down.  Grants +8 confidence to the entire team
+ * and generates a 3-event sequence that conveys the emotional turnaround.
+ */
 export function genComebackSeq(min, scorer, captainName, team) {
   const seq = [];
   seq.push({ minute: min, type: 'comeback_eruption', team, player: scorer,
@@ -574,6 +824,17 @@ export function genComebackSeq(min, scorer, captainName, team) {
   return { sequence: seq };
 }
 
+/**
+ * Counter-attack sequence: burst → optional support pass → 1v1 with keeper.
+ *
+ * Triggered in two places:
+ *  • After a saved shot (20% chance) — the keeper's distribution launches it
+ *  • After a successful interception (15% chance) — turnover in midfield
+ *
+ * The counter finishes with a resolveContest(type='shot') resolved in the
+ * parent call (not inside this function — this only generates the narrative
+ * sub-events leading up to the shot).
+ */
 export function genCounterSeq(min, counterPlayer, counterGk, counterTeam, supportPlayer) {
   const seq = [];
   seq.push({ minute: min, type: 'counter_start', team: counterTeam.shortName, player: counterPlayer.name,
@@ -587,6 +848,15 @@ export function genCounterSeq(min, counterPlayer, counterGk, counterTeam, suppor
   return { sequence: seq };
 }
 
+/**
+ * Confrontation sequence: players clash → possible crowd involvement →
+ * optional booking for the fouled player → referee restores order.
+ *
+ * Triggered when a red card is shown (40% chance).  An aggressive fouler
+ * or a player with an ecstatic/angry emotion makes the confrontation more
+ * heated.  The 'addCard' flag (25% of confrontations) means the fouled
+ * player gets booked for their reaction — yellow card for dissent.
+ */
 export function genConfrontationSeq(min, fouler, fouled, ref, addCard, foulerAgent, fouledAgent) {
   const seq     = [];
   const refName = ref?.name || 'The referee';
@@ -611,6 +881,14 @@ export function genConfrontationSeq(min, fouler, fouled, ref, addCard, foulerAge
   return { sequence: seq };
 }
 
+/**
+ * Near-miss sequence: initial shot → scramble in the box → resolution.
+ *
+ * Triggered when a shot's net score falls in the 'dangerous but saved' band
+ * (net > 5) with a 20% chance.  The sequence ends 60% of the time with the
+ * defence clearing off the line, and 40% of the time rolling just wide.
+ * No goal is scored in either case.
+ */
 export function genNearMissSeq(min, player, gk, posTeam, defTeam) {
   const seq = [];
   seq.push({ minute: min, type: 'near_miss_setup', team: posTeam.shortName, player: player.name,
@@ -626,6 +904,21 @@ export function genNearMissSeq(min, player, gk, posTeam, defTeam) {
   return { sequence: seq };
 }
 
+/**
+ * Penalty kick sequence: incident → card → award → taker selection →
+ * tension → run-up → outcome.
+ *
+ * The best penalty taker available (highest penaltyAbility score and
+ * canTakePenalty() returns true) is selected from the attacking team's
+ * active agents — they may not be the player who was fouled.
+ *
+ * Outcome is resolved by resolveContest(type='penalty').  The base success
+ * rate is 50%, adjusted by: net/250 (capped at 85%).  A failed penalty is
+ * either saved (65% of misses) or blazed over.
+ *
+ * Returns { sequence, isGoal, outcomeCommentary, penaltyTaker,
+ *           isRed, isYellow } so the parent event can carry outcome data.
+ */
 export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, ctx = {}) {
   const seq = [];
   seq.push({ minute: min, type: 'penalty_incident', commentary: pick([`💥 CONTACT! ${def.name} brings down ${atk.name} in the box!`, `⚠️ HANDBALL! ${def.name}'s arm is up... penalty!`, `🚨 CHALLENGE! ${def.name} lunges at ${atk.name}!`]), team: defTeam.shortName, momentumChange: [0,0] });
@@ -658,17 +951,59 @@ export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, c
 }
 
 // ── genEvent — Part 1: setup + chaos + personality ────────────────────────────
+// The main per-minute event generator.  Called once per simulated minute.
+//
+// STRUCTURE
+// ─────────
+// genEvent is split into three private functions to keep file size manageable:
+//   genEvent           → early-exit (65% skip), weather setup, chaos events,
+//                        personality-driven events (12% roll)
+//   _genEventBranches  → controversy events (3%), foul/card/penalty branch,
+//                        shot branch (including long-range, counter, near-miss)
+//   _genEventPart3     → attack/dribble, corner, injury, defence, passing/possession
+//
+// EVENT PROBABILITY SUMMARY (approximate, per minute)
+// ────────────────────────────────────────────────────
+//   35% overall chance of ANY event generating
+//   Of those events:
+//     12% → personality event (before the roll check)
+//      3% → referee controversy
+//      5% → foul/card/penalty
+//     15% → shot (regular)
+//      3% → shot (long-range speculative, inside the shot branch)
+//     20% → attack/dribble
+//      8% → corner
+//      4% → injury
+//     18% → defence/tackle
+//     15% → passing/possession (remainder)
+//
+// THE ROLL VARIABLE
+// ─────────────────
+// A single `roll` value (0.0–1.0) determines which branch fires.  The roll is
+// modified DOWNWARD by:
+//   • positive momentum (+4–8% reduction → more attacking events)
+//   • previous event was a shot or corner (chain boost → more follow-up shots)
+//   • zero-gravity weather (+10% shot chance)
+//   • many aggressive agents on the team (+30% more shots if >3 want to shoot)
+//   • losing after min 80 (×0.5 multiplier → almost all events become attacks)
+//
+// Lower roll → more likely to hit the foul (< 0.05) or shot (< 0.20) branches.
 export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerStats, score, activePlayers, substitutionsUsed, aiInfluence, aim, chaosLevel = 0, lastEventType = null) {
+  // 65% of minutes produce no event — this creates natural quiet spells
   if (Math.random() > 0.35) return null;
 
-  // Weather modifiers
+  // Weather modifiers — computed once per event call and threaded through
   const wx          = aim?.weather;
-  const wxGkPen     = wx === WX.MAG   ? 25 : 0;
-  const wxStatPen   = wx === WX.SOLAR ? 15 : 0;
-  const wxShotBoost = wx === WX.ZERO  ? 0.10 : 0;
-  const wxDustFail  = wx === WX.DUST  ? 12 : 0;
+  const wxGkPen     = wx === WX.MAG   ? 25 : 0;   // magnetic storm debuffs the keeper
+  const wxStatPen   = wx === WX.SOLAR ? 15 : 0;   // solar flare blinds everyone
+  const wxShotBoost = wx === WX.ZERO  ? 0.10 : 0; // zero-g lowers the roll threshold (more shots)
+  const wxDustFail  = wx === WX.DUST  ? 12 : 0;   // dust storm increases pass-interception threshold
 
-  // Chaos events
+  // Chaos events (4% chance when chaos level > 70)
+  // chaosLevel is calculated by calcChaosLevel() in simulateHelpers:
+  //   +30 if draw, +25 if after min 80, +8 per card shown, +20 per red card
+  // When high chaos fires it replaces the normal event with absurdist sci-fi
+  // flavour that doesn't affect the score.
   if (chaosLevel > 70 && Math.random() < 0.04) {
     const refName = aim?.referee?.name || 'The referee';
     const CHAOS = [
@@ -692,15 +1027,30 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   const phase     = min <= 25 ? 'early' : min <= 65 ? 'midgame' : min <= 82 ? 'late' : 'dying';
   const matchCtx  = (pName) => ({ min, scoreDiff, playerGoals: playerStats[pName]?.goals || 0 });
 
-  // Momentum + weather + chain roll
-  const momTeam   = isHome ? momentum[0] : momentum[1];
-  const momBoost  = momTeam > 5 ? 0.08 : momTeam > 3 ? 0.04 : 0;
+  // Build the roll value that selects which event branch fires
+  const momTeam    = isHome ? momentum[0] : momentum[1];
+  // High momentum reduces the roll → pushes into shot/foul territory
+  const momBoost   = momTeam > 5 ? 0.08 : momTeam > 3 ? 0.04 : 0;
+  // Chain boosts: consecutive shots/corners keep pressure on
   const chainBoost = lastEventType === 'shot' ? 0.04 : lastEventType === 'corner' ? 0.02 : 0;
   let roll = Math.max(0, Math.random() - momBoost - chainBoost - wxShotBoost);
+  // AI influence: teams with many shoot-happy or attack-minded agents get more shots
   if (aiInfluence) { const td = isHome ? aiInfluence.home : aiInfluence.away; if (td.SHOOT > 3) roll *= 0.7; if (td.ATTACK > 5) roll *= 0.8; }
+  // Desperate late-game mode: losing after minute 80 → nearly every event is an attack
   if (scoreDiff < 0 && min >= 80) roll *= 0.5;
 
-  // Personality-driven events (12%)
+  // ── Personality-driven events (12% chance per event) ──────────────────────
+  // Before the standard roll branches, there's a 12% chance that a specific
+  // player's personality trait fires an event unique to their archetype.
+  // This creates unpredictable moments of individual character.
+  //
+  //   aggressive (40% sub-chance) → crunching foul, possible card
+  //   selfish FW (30%)            → selfish long shot, almost always misses
+  //   creative (25%)              → audacious move — 30% chance of a wonder goal
+  //   lazy at fatigue > 50 (20%) → stops running; manager rages
+  //   workhorse at fatigue > 70 (25%) → extra tackle, gains more fatigue
+  //   team_player (12%)          → unselfish assist to a forward
+  //   cautious (15%)             → quiet, effective defensive intervention
   if (aim && Math.random() < 0.12) {
     const agents = isHome ? aim.activeHomeAgents : aim.activeAwayAgents;
     const agent  = pick(agents.filter(a => a.fatigue < 95));
@@ -755,9 +1105,17 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
 }
 
 // ── genEvent Part 2: controversy + foul + shot branches ──────────────────────
+// This private function handles the first two major event branches:
+//   • Referee controversy (3% flat chance — independent of the roll)
+//   • Foul / card / penalty (roll < 0.05)
+//   • Shot / long shot / goal / save / miss / counter / near-miss (roll < 0.20)
 function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum) {
 
-  // --- Controversy events (3%) ---
+  // ── Controversy events (3% chance, fires before roll check) ───────────────
+  // The referee makes a controversial call that didn't really happen:
+  //   'wrong_penalty'  → penalty awarded for nothing (favours attacking team)
+  //   'missed_penalty' → clear penalty waved away (favours defending team)
+  //   'missed_foul'    → a foul not given (narrative only, no card)
   if (aim && Math.random() < 0.03) {
     const type = pick(['missed_penalty', 'wrong_penalty', 'missed_foul']);
     if (type === 'wrong_penalty')
@@ -770,7 +1128,20 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
   let player, defender, outcome, commentary, momentumChange = [0, 0];
 
   if (roll < 0.05) {
-    // FOUL / CARD / PENALTY
+    // ── FOUL / CARD / PENALTY branch ────────────────────────────────────────
+    // A defending player commits a foul on an attacking player.
+    //
+    // Card severity (0–100) → passed to aim.shouldGiveCard():
+    //   severity > 90 − strictness×0.3  → red card
+    //   severity > 60 − strictness×0.2  → yellow card
+    //   else                              → no card (just a foul)
+    //
+    // Second yellow → automatic red (simulated by checking yellowCard in stats)
+    //
+    // inBox (15% chance): foul inside the penalty area → penalty sequence
+    //   (calls genPenaltySeq; the fouler gets the card, not the taker)
+    // outBox (50% of non-box fouls): free kick sequence (genFreekickSeq)
+    // red card (40% chance): confrontation sequence (genConfrontationSeq)
     player = getPlayer(defTeam, defActive, 'defending');
     const atk = getPlayer(posTeam, posActive, 'attacking');
     if (!player || !atk) return null;
@@ -820,7 +1191,26 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
   }
 
   if (roll < 0.20) {
-    // SHOT
+    // ── SHOT branch ─────────────────────────────────────────────────────────
+    // The most important branch — generates goals, saves, near-misses, and
+    // counter-attacks.  A forward (FW) is preferred as the shooter; falls
+    // back to any outfield attacker if no FW is active.
+    //
+    // LONG-RANGE SHOT (18% sub-chance within shots):
+    //   Uses a simplified formula (no resolveContest) with a higher threshold.
+    //   Most long shots are saved/missed; the odd thunderbolt gets through.
+    //
+    // REGULAR SHOT RESOLUTION (resolveContest):
+    //   net = atkRoll − defRoll (see resolveContest docs above)
+    //   net > 15  → GOAL
+    //   net > 5   → saved/near-miss (20% near-miss, 20% counter-attack)
+    //   else      → miss
+    //
+    // SPECIAL WEATHER GOALS:
+    //   net > 5 but ≤ 15 + zero gravity (28%) → ball curves back in
+    //   net > 5 but ≤ 15 + magnetic storm (28%) → keeper gloves malfunction
+    //
+    // OWN GOAL: net > 10 with 5% random chance (keeper fumbles it in)
     player = getPlayer(posTeam, posActive, 'attacking', 'FW') || getPlayer(posTeam, posActive, 'attacking');
     const gk = getPlayer(defTeam, defActive, 'defending', 'GK');
     if (!player || !gk) return null;
@@ -898,11 +1288,21 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
 }
 
 // ── genEvent Part 3: attack + corner + injury + defense + passing ─────────────
+// Handles the lower-probability / lower-impact event types.
 function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum) {
   let player, defender, outcome, commentary, momentumChange = [0, 0];
 
   if (roll < 0.40) {
-    // ATTACK / DRIBBLE
+    // ── ATTACK / DRIBBLE branch (roll 0.20–0.40) ────────────────────────────
+    // An outfield player makes a dribbling run or carries the ball forward.
+    // net = (attacking×0.7 + athletic×0.3 + rnd) − (defending×0.7 + athletic×0.3 + rnd)
+    //
+    //   net > 20 → breakthrough (22% chance of a skill move flair event instead)
+    //   net > 0  → success (minor possession gain)
+    //   net ≤ 0  → intercepted (15% chance triggers a counter-attack)
+    //
+    // Skill moves (net > 20, 22%): rabona, nutmeg, elastico, heel flick, etc.
+    // — pure spectacle, adds momentum but no direct shot.
     player   = getPlayer(posTeam, posActive, 'attacking');
     defender = getPlayer(defTeam, defActive, 'defending');
     if (!player || !defender) return null;
@@ -982,7 +1382,16 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
   }
 
   if (roll < 0.48) {
-    // CORNER
+    // ── CORNER branch (roll 0.40–0.48) ──────────────────────────────────────
+    // A corner kick is taken by the team's most technical player; the best
+    // aerial threat tries to head it in.
+    //
+    // net = (header.athletic×0.5 + header.attacking×0.5 + rnd) −
+    //        (gk.defending×0.7 + gk.athletic×0.3 + rnd) − wxGkPen
+    //
+    //   net > 20 → GOAL (headed in)
+    //   net > 10 → keeper catches/punches clear
+    //   else     → scramble / blocked / cleared
     player        = getPlayer(posTeam, posActive, 'technical');
     const gk      = getPlayer(defTeam, defActive, 'defending', 'GK');
     const header  = getPlayer(posTeam, posActive, 'athletic');
@@ -1027,7 +1436,13 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, outcome: 'cleared', commentary, momentumChange: [0, 0] };
 
   } else if (roll < 0.52) {
-    // INJURY
+    // ── INJURY branch (roll 0.48–0.52) ──────────────────────────────────────
+    // A random athletic player from either team goes down.
+    // 30% chance it's just a scare (player waves physio away, plays on).
+    // 70% chance it's a real injury that forces a substitution.
+    //   Plasma-winds weather adds flavour text about environmental exposure.
+    //   The injury event sets isInjury=true, which App.jsx intercepts to
+    //   trigger makeSub() and replace the player in the active list.
     player = Math.random() < 0.5 ? getPlayer(posTeam, posActive, 'athletic') : getPlayer(defTeam, defActive, 'athletic');
     if (!player) return null;
     const inHome = posActive.includes(player.name);
@@ -1056,7 +1471,15 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     return { minute: min, type: 'injury', team: tm.shortName, player: player.name, outcome: 'injured', commentary, momentumChange: [0, 0], isInjury: true };
 
   } else if (roll < 0.70) {
-    // DEFENSE / TACKLE
+    // ── DEFENCE / TACKLE branch (roll 0.52–0.70) ────────────────────────────
+    // A defender makes a tackle or blocks a run.  Preferred player is a DF.
+    //
+    // net = (defender.defending + defender.athletic) / 2 + rnd
+    //       − (player.technical + player.athletic) / 2 + rnd
+    //
+    //   net > 20 → clean tackle (positive momentum for the defending team)
+    //   net > 0  → success (defender gets a foot in)
+    //   net ≤ 0  → failed (attacker beats the defender)
     defender = getPlayer(defTeam, defActive, 'defending', 'DF');
     player   = getPlayer(posTeam, posActive, 'attacking');
     if (!defender || !player) return null;
@@ -1104,7 +1527,26 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     return { minute: min, type: 'defense', team: defTeam.shortName, player: defender.name, defender: player.name, outcome, commentary, momentumChange };
 
   } else {
-    // PASSING / POSSESSION
+    // ── PASSING / POSSESSION branch (roll > 0.70) ───────────────────────────
+    // The most common event: the team in possession moves the ball around.
+    // Uses the technical + mental average to measure the quality of the build-up.
+    //
+    // net = (technical + mental) / 2 + rnd − (defender.defending + mental) / 2 + rnd
+    //       − solar flare penalty × 0.5
+    //
+    //   net > 10          → good_pass (forward progress)
+    //   net > dustThreshold (-10 + wxDustFail) → continue (safe keep)
+    //   else              → intercepted (turnover)
+    //
+    // DUST STORM: wxDustFail = 12 raises the interception threshold, making
+    // it much harder to complete passes cleanly.
+    //
+    // GK DISTRIBUTION (15% sub-chance): simulates a goal kick or throw.
+    //   Long ball (40%) or short pass to a defender (60%).
+    //   No contest — purely narrative, no stat check.
+    //
+    // ATMOSPHERE MOMENT (8% sub-chance outside dying phase): crowd noise,
+    //   chants, or announcer updates — adds colour without affecting play.
     player   = getPlayer(posTeam, posActive, 'technical');
     defender = getPlayer(defTeam, defActive, 'defending');
     if (!player || !defender) return null;
@@ -1193,6 +1635,16 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
 }
 
 // ── genSocial ─────────────────────────────────────────────────────────────────
+// Generates fake social media posts to display in the ISL social feed panel.
+// Called after goals, controversial events, and red cards.
+//
+// Post accounts:
+//   @MarsUltra / @SaturnSupporter – rival fan bases reacting to goals
+//   @ISL_Updates  – official league account (60% chance after goals)
+//   @GalacticFootyFan – outrage account for controversial calls
+//   @CosmicFootyNews  – breaking news for red cards
+//
+// Each post has randomised like/retweet counts in realistic ranges.
 export function genSocial(event, min, ms) {
   const posts = [];
   if (event.isGoal) {

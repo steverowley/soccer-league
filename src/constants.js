@@ -1,18 +1,38 @@
-// ── Colors & style helpers ────────────────────────────────────────────────────
+// ── constants.js ──────────────────────────────────────────────────────────────
+// All static game data: colours, enums, personality keys, weather types,
+// manager emotions, stadiums, and planet weather tables.
+//
+// Nothing here is calculated at runtime — it is purely look-up data.
+
+// ── UI Colour palette ─────────────────────────────────────────────────────────
+// Used by components to keep the dark sci-fi aesthetic consistent.
 export const C = {
-  abyss:  '#111111',
-  ash:    '#1F1F1F',
-  dust:   '#E3E0D5',
-  purple: '#9A5CF4',
-  red:    '#FF6B6B',
+  abyss:  '#111111', // deepest background
+  ash:    '#1F1F1F', // card / panel background
+  dust:   '#E3E0D5', // primary text
+  purple: '#9A5CF4', // accent / Saturn Rings FC brand colour
+  red:    '#FF6B6B', // danger, red cards
 };
 
+/** Helper that returns an inline-style object with a coloured border and ash background. */
 export const bdr = (bc, bg = '#1F1F1F') => ({
   border: `1px solid ${bc}`,
   backgroundColor: bg,
 });
 
-// ── Player personalities ──────────────────────────────────────────────────────
+// ── Player personality keys ───────────────────────────────────────────────────
+// Each player is assigned exactly one personality at agent-creation time
+// (see createAgent in gameEngine.js).  Personality gates which special events
+// can fire for that player each minute.
+//
+//  BAL  (balanced)    – no special triggers; reliable all-rounder
+//  SEL  (selfish)     – forwards shoot from anywhere; miss often
+//  TEAM (team_player) – creates assists; boosts teammates after goals
+//  AGG  (aggressive)  – prone to fouls, yellow/red cards
+//  CAU  (cautious)    – snuffs out danger quietly; rarely goes forward
+//  CRE  (creative)    – audacious skill moves; 30% chance of a wonder-goal
+//  LAZ  (lazy)        – randomly drops work rate, loses possession
+//  WRK  (workhorse)   – sprints even at full fatigue; accumulates more tired
 export const PERS = {
   BAL:  'balanced',
   SEL:  'selfish',
@@ -24,6 +44,7 @@ export const PERS = {
   WRK:  'workhorse',
 };
 
+/** Emoji shown next to a player's name in the UI for quick personality identification. */
 export const PERS_ICON = {
   [PERS.SEL]:  '🎯',
   [PERS.TEAM]: '🤝',
@@ -35,7 +56,22 @@ export const PERS_ICON = {
   [PERS.BAL]:  '⚖️',
 };
 
-// ── Weather ───────────────────────────────────────────────────────────────────
+// ── Weather condition keys ────────────────────────────────────────────────────
+// Weather is picked once per match from the planet's weather table (PLANET_WX).
+// It then applies mechanical modifiers throughout the game:
+//
+//  CLEAR           – no effect
+//  RAIN / STORM    – -5 shot accuracy, -3 keeper penalty
+//  WIND            – -8 shot accuracy (ball movement)
+//  SNOW            – mild accuracy penalty
+//  METEOR          – narrative-only; no stat change
+//  DUST            – passing accuracy penalty (wxDustFail)
+//  SOLAR           – -15 to all stats while active; blinding miss chance
+//  ACID            – narrative/injury flavour text only
+//  ZERO_GRAVITY    – shots that narrowly miss (net 5–15) curve back in 28% of the time
+//  MAG             – 25% chance keeper gloves malfunction; concede soft goals
+//  CRYSTAL / METH
+//  / PLASMA / RING – narrative variety on Titan, Neptune, Saturn Ring locations
 export const WX = {
   CLEAR:   'clear',
   RAIN:    'rain',
@@ -54,6 +90,7 @@ export const WX = {
   RING:    'ring_shadow',
 };
 
+/** Emoji shown in the match scoreboard header next to the weather condition. */
 export const WX_ICON = {
   [WX.CLEAR]:   '☀️',
   [WX.RAIN]:    '🌧️',
@@ -72,6 +109,21 @@ export const WX_ICON = {
   [WX.RING]:    '🪐',
 };
 
+// ── Planet weather tables ─────────────────────────────────────────────────────
+// Each planet/moon has a weighted pool of possible weather conditions.
+// Entries that appear multiple times are proportionally more likely to be
+// selected.  createAIManager picks one at random via pick(wxOpts).
+//
+// Planet character guide:
+//  Mars            – dusty, hot, occasional meteor showers
+//  Phobos          – low gravity (ZERO), clear or meteors
+//  Saturn Rings    – ring shadow interference, occasional zero-g
+//  Titan (Saturn)  – dense methane atmosphere, chemical rain, snow
+//  Enceladus       – icy geysers, crystal fog, calm or windy
+//  Europa          – magnetic ocean interference, crystal fog
+//  Io (Jupiter)    – volcanic acid rain, intense solar flares
+//  Ganymede        – strong magnetic field, snow
+//  Triton (Neptune)– nitrogen plasma winds, methane rains, extreme cold
 export const PLANET_WX = {
   'Mars':              [WX.CLEAR, WX.DUST, WX.DUST, WX.METEOR, WX.WIND, WX.HEAT],
   'Phobos (Mars)':     [WX.CLEAR, WX.METEOR, WX.ZERO, WX.DUST],
@@ -84,7 +136,16 @@ export const PLANET_WX = {
   'Triton (Neptune)':  [WX.PLASMA, WX.METH, WX.SNOW, WX.CRYSTAL, WX.WIND],
 };
 
-// ── Manager emotions ──────────────────────────────────────────────────────────
+// ── Manager emotion keys ──────────────────────────────────────────────────────
+// Manager emotion is updated by updateManagerEmotion() after every goal and
+// changes as the score changes.  It affects which late-game interventions fire:
+//
+//  CALM / CONF  – no special actions
+//  FRUS / NERV  – manager shouts increase in frequency
+//  ANG          – 5% chance per minute of being sent to the stands
+//  DESP         – 12% chance per minute of making a desperate substitution
+//  JUB          – manager celebration sequence added after scoring
+//  EXC          – enthusiasm-only state
 export const MGER_EMO = {
   CALM: 'calm',
   FRUS: 'frustrated',
@@ -96,6 +157,7 @@ export const MGER_EMO = {
   JUB:  'jubilant',
 };
 
+/** Emoji shown next to manager name in the UI to give a quick emotional read. */
 export const EMO_ICON = {
   [MGER_EMO.CALM]: '😌',
   [MGER_EMO.FRUS]: '😤',
@@ -108,13 +170,24 @@ export const EMO_ICON = {
 };
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Sort order for positions when displaying squad lists.
+ * GK always first, then defenders, midfielders, forwards.
+ */
 export const POS_ORDER = { GK: 0, DF: 1, MF: 2, FW: 3 };
 
+/** Pool of referee names selected randomly each match. */
 export const REFS = [
   'Commander Voss', 'Justice Krell', 'Arbiter Sol',
   'Ref-9000', 'Magistrate Zuri', 'Judge Orion',
 ];
 
+/**
+ * All possible match venues.  Each team has a home stadium defined in teams.js,
+ * but neutral venues can be selected if needed.  The planet field maps to
+ * PLANET_WX to determine available weather conditions.
+ */
 export const STADIUMS = [
   { name: 'Olympus Mons Arena',       planet: 'Mars',              capacity: '89,000' },
   { name: 'Titan Dome',               planet: 'Titan (Saturn)',    capacity: '76,000' },
