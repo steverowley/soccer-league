@@ -18,6 +18,7 @@ import {
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
 import { Stat, PlayerRow, FeedCard, AgentCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
+import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic } from "./simulateHelpers.js";
 
 const MatchSimulator = () => {
   const initState=()=>({
@@ -199,91 +200,11 @@ const MatchSimulator = () => {
           if(at)interventions.push({minute:45,commentary:`⏸️ HALFTIME - ${at.commentary}`,team:prev.awayTeam.shortName,type:'team_talk',momentumChange:[0,0]});
         }
         if(newMin>70){
-          const hs=aim.managerTacticalShout(true,newMin,prev.score[0]-prev.score[1]);
-          if(hs)interventions.push({minute:newMin,commentary:`📣 ${hs.commentary}`,team:prev.homeTeam.shortName,type:'manager_shout',momentumChange:[0,0]});
-          const as=aim.managerTacticalShout(false,newMin,prev.score[1]-prev.score[0]);
-          if(as)interventions.push({minute:newMin,commentary:`📣 ${as.commentary}`,team:prev.awayTeam.shortName,type:'manager_shout',momentumChange:[0,0]});
-          // Captain rally: losing captain lifts the team
-          const hDiff=prev.score[0]-prev.score[1];
-          const homeCpt=aim.activeHomeAgents.find(a=>a.isCaptain);
-          const awayCpt=aim.activeAwayAgents.find(a=>a.isCaptain);
-          if(hDiff<0&&hDiff>=-2&&homeCpt&&homeCpt.morale>55&&Math.random()<0.06){
-            homeCpt.updateConfidence(6);
-            aim.activeHomeAgents.forEach(a=>a.updateConfidence(3));
-            interventions.push({minute:newMin,type:'captain_rally',team:prev.homeTeam.shortName,player:homeCpt.player.name,
-              commentary:pick([`🦁 ${homeCpt.player.name} ROARS at his teammates! "WE FIGHT UNTIL THE END!"`,`💪 Captain ${homeCpt.player.name} goes player to player — this team is NOT done.`,`🔥 ${homeCpt.player.name} leads from the front. You can see the team lift.`]),
-              momentumChange:[4,0]});
-          }
-          if(hDiff>0&&hDiff<=2&&awayCpt&&awayCpt.morale>55&&Math.random()<0.06){
-            awayCpt.updateConfidence(6);
-            aim.activeAwayAgents.forEach(a=>a.updateConfidence(3));
-            interventions.push({minute:newMin,type:'captain_rally',team:prev.awayTeam.shortName,player:awayCpt.player.name,
-              commentary:pick([`🦁 ${awayCpt.player.name} demands MORE from his side! Not giving up!`,`💪 ${awayCpt.player.name} — the captain's armband means everything right now.`,`🔥 ${awayCpt.player.name} grabs the team by the collar. Push!`]),
-              momentumChange:[0,4]});
-          }
-          // Desperate manager substitution
-          if(aim.homeManager.emotion===MGER_EMO.DESP&&prev.substitutionsUsed.home<3&&Math.random()<0.12){
-            const mostTired=aim.activeHomeAgents.filter(a=>a.player.position!=='GK'&&!prev.playerStats[a.player.name]?.redCard).sort((a,b)=>b.fatigue-a.fatigue)[0];
-            if(mostTired){
-              const sub=makeSub(prev.homeTeam,mostTired.player.name,prev.activePlayers.home,prev.substitutionsUsed.home,prev.playerStats);
-              if(sub.substitute){
-                newActive.home=sub.newActive;newSubsUsed.home=(newSubsUsed.home||0)+1;
-                aim.handleSubstitution(mostTired.player.name,sub.substitute,true);
-                newStats[sub.substitute]={...newStats[sub.substitute],subbedOnMinute:newMin,subbedOn:true};
-                interventions.push({minute:newMin,type:'desperate_sub',team:prev.homeTeam.shortName,player:sub.substitute,
-                  commentary:pick([`🔄 ${aim.homeManager.name} MUST CHANGE THIS — ${mostTired.player.name} off, ${sub.substitute} ON!`,`🔄 Tactical emergency from ${aim.homeManager.name}! ${sub.substitute} thrown into the fire!`]),
-                  momentumChange:[3,0]});
-              }
-            }
-          }
-          if(aim.awayManager.emotion===MGER_EMO.DESP&&prev.substitutionsUsed.away<3&&Math.random()<0.12){
-            const mostTired=aim.activeAwayAgents.filter(a=>a.player.position!=='GK'&&!prev.playerStats[a.player.name]?.redCard).sort((a,b)=>b.fatigue-a.fatigue)[0];
-            if(mostTired){
-              const sub=makeSub(prev.awayTeam,mostTired.player.name,prev.activePlayers.away,prev.substitutionsUsed.away,prev.playerStats);
-              if(sub.substitute){
-                newActive.away=sub.newActive;newSubsUsed.away=(newSubsUsed.away||0)+1;
-                aim.handleSubstitution(mostTired.player.name,sub.substitute,false);
-                newStats[sub.substitute]={...newStats[sub.substitute],subbedOnMinute:newMin,subbedOn:true};
-                interventions.push({minute:newMin,type:'desperate_sub',team:prev.awayTeam.shortName,player:sub.substitute,
-                  commentary:pick([`🔄 ${aim.awayManager.name} MUST CHANGE THIS — ${mostTired.player.name} off, ${sub.substitute} ON!`,`🔄 Tactical emergency from ${aim.awayManager.name}! ${sub.substitute} thrown into the fire!`]),
-                  momentumChange:[0,3]});
-              }
-            }
-          }
-          // Late-game siege (min 85+, losing team throws everyone forward)
-          const hasSiege=prev.events.slice(-25).some(e=>e.type==='siege_start');
-          if(!hasSiege){
-            const hDiff=prev.score[0]-prev.score[1];
-            if(newMin>=85&&hDiff<0&&Math.random()<0.22){
-              const clutchH=aim.activeHomeAgents.find(a=>a.isClutch)?.player.name||aim.activeHomeAgents[0]?.player.name||'The captain';
-              const sSeq=genSiegeSeq(newMin,prev.homeTeam.shortName,prev.awayTeam.shortName,clutchH);
-              interventions=[...interventions,...sSeq.sequence];
-              aim.activeHomeAgents.forEach(a=>a.updateConfidence(5));
-            }
-            if(newMin>=85&&hDiff>0&&Math.random()<0.22){
-              const clutchA=aim.activeAwayAgents.find(a=>a.isClutch)?.player.name||aim.activeAwayAgents[0]?.player.name||'The captain';
-              const sSeq=genSiegeSeq(newMin,prev.awayTeam.shortName,prev.homeTeam.shortName,clutchA);
-              interventions=[...interventions,...sSeq.sequence];
-              aim.activeAwayAgents.forEach(a=>a.updateConfidence(5));
-            }
-          }
-          // Manager sent off
-          if(!prev.managerSentOff?.home&&aim.homeManager.emotion===MGER_EMO.ANG&&Math.random()<0.05){
-            const mSeq=genManagerSentOffSeq(newMin,aim.homeManager.name,aim.referee.name,prev.homeTeam.shortName);
-            interventions=[...interventions,...mSeq.sequence];
-            newManagerSentOff.home=true;
-            aim.activeHomeAgents.forEach(a=>a.updateConfidence(-4));
-          }
-          if(!prev.managerSentOff?.away&&aim.awayManager.emotion===MGER_EMO.ANG&&Math.random()<0.05){
-            const mSeq=genManagerSentOffSeq(newMin,aim.awayManager.name,aim.referee.name,prev.awayTeam.shortName);
-            interventions=[...interventions,...mSeq.sequence];
-            newManagerSentOff.away=true;
-            aim.activeAwayAgents.forEach(a=>a.updateConfidence(-4));
-          }
+          applyLateGameLogic(aim,prev,newMin,interventions,newActive,newSubsUsed,newStats,newManagerSentOff);
         }
         aim.updateManagerEmotion({},prev.score[0],prev.score[1]);
       }
-      const chaosLevel=(()=>{let c=0;const diff=Math.abs(prev.score[0]-prev.score[1]);if(diff===0)c+=30;else if(diff===1)c+=20;if(newMin>80)c+=25;else if(newMin>70)c+=15;c+=prev.events.filter(e=>e.cardType).length*8;c+=(prev.redCards.home||0)*20+(prev.redCards.away||0)*20;return Math.min(100,c);})();
+      const chaosLevel=calcChaosLevel(prev,newMin);
       const event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType);
       if(!event){
         return{...prev,minute:newMin,stoppageTime:newStop,events:[...prev.events,...interventions].filter(Boolean),aiThoughts:newThoughts.slice(-30),socialFeed:newSocial.slice(-20),lastEventType:prev.lastEventType};
@@ -329,54 +250,11 @@ const MatchSimulator = () => {
         if(sub.substitute){event.substituteInfo={out:event.player,in:sub.substitute};newSubsUsed[key]++;if(aim)aim.handleSubstitution(event.player,sub.substitute,isH);newStats[sub.substitute]={...newStats[sub.substitute],subbedOnMinute:newMin,subbedOn:true};}
         else event.substituteInfo={out:event.player,in:null};
       }
-      // Build allEvents with all sequence types
-      let allEvents=[...prev.events,...interventions];
-      if(event.penaltySequence){const{penaltySequence,...penEvt}=event;allEvents=[...allEvents,...penaltySequence,penEvt];}
-      else if(event.freekickSequence){const{freekickSequence,...fkEvt}=event;allEvents=[...allEvents,...freekickSequence,fkEvt];}
-      else if(event.counterSequence){const{counterSequence,...finalEvt}=event;allEvents=[...allEvents,...counterSequence,finalEvt];}
-      else if(event.confrontationSequence){const{confrontationSequence,...baseEvt}=event;allEvents=[...allEvents,baseEvt,...confrontationSequence];}
-      else if(event.nearMissSequence){const{nearMissSequence,...nmEvt}=event;allEvents=[...allEvents,...nearMissSequence,nmEvt];}
-      else{allEvents=[...allEvents,event];}
-      // Post-goal: VAR + celebration + comeback + hat trick + sub impact
-      let varOverturned=false;
-      if(event.isGoal&&aim){
-        const isHome=event.team===prev.homeTeam.shortName;
-        const mgr=isHome?aim.homeManager:aim.awayManager;
-        const prevDiff=isHome?(prev.score[0]-prev.score[1]):(prev.score[1]-prev.score[0]);
-        // VAR review (8% of goals)
-        if(Math.random()<0.08){
-          const overturned=Math.random()<0.30;
-          const vSeq=genVARSeq(newMin,event.player,event.team,aim.referee,overturned);
-          allEvents=[...allEvents,...vSeq.sequence];
-          if(overturned){if(isHome)newScore[0]--;else newScore[1]--;varOverturned=true;}
-        }
-        if(!varOverturned){
-          // Celebration
-          const scorerAgent=aim?.getAgentByName(event.player);
-          const celebSeq=genCelebrationSeq(newMin,event.player,event.team,mgr?.name,mgr?.emotion,scorerAgent);
-          allEvents=[...allEvents,...celebSeq.sequence];
-          // Comeback (equaliser or lead after 2+ down)
-          const newDiff=isHome?(newScore[0]-newScore[1]):(newScore[1]-newScore[0]);
-          if(newDiff>=0&&prevDiff<=-2){
-            const cptAgent=(isHome?aim.activeHomeAgents:aim.activeAwayAgents).find(a=>a.isCaptain);
-            const cbSeq=genComebackSeq(newMin,event.player,cptAgent?.player?.name,event.team);
-            allEvents=[...allEvents,...cbSeq.sequence];
-            (isHome?aim.activeHomeAgents:aim.activeAwayAgents).forEach(a=>a.updateConfidence(8));
-          }
-          // Hat trick
-          if((newStats[event.player]?.goals||0)===3){
-            allEvents=[...allEvents,{minute:newMin,type:'hat_trick',team:event.team,player:event.player,
-              commentary:pick([`🎩 HAT TRICK! ${event.player} completes the treble! HISTORY!`,`🎩 THREE GOALS for ${event.player}! Legendary performance!`,`🎩 ${event.player} has his HAT TRICK! This is extraordinary!`]),momentumChange:[0,0]}];
-            (isHome?aim.activeHomeAgents:aim.activeAwayAgents).forEach(a=>a.updateConfidence(6));
-          }
-          // Sub impact (scored within 10 mins of coming on)
-          const subbedMin=newStats[event.player]?.subbedOnMinute;
-          if(subbedMin&&newMin-subbedMin<=10){
-            allEvents=[...allEvents,{minute:newMin,type:'sub_impact',team:event.team,player:event.player,
-              commentary:pick([`⚡ ${event.player} — on for just ${newMin-subbedMin} minutes and ALREADY on the scoresheet!`,`⚡ IMPACT SUBSTITUTION! ${event.player} proves the manager RIGHT immediately!`,`⚡ Off the bench and straight into the history books! ${event.player}!`]),momentumChange:[0,0]}];
-          }
-        }
-      }
+      let allEvents=flattenSequences(prev,event,interventions);
+      // Post-goal: VAR + celebration + comeback + hat-trick + sub impact
+      const pgExtras=buildPostGoalExtras(aim,event,prev,newMin,newScore,newStats,allEvents);
+      allEvents=pgExtras.allEvents; newScore=pgExtras.newScore;
+      const varOverturned=pgExtras.varOverturned;
       const isKey=event.isGoal&&!varOverturned&&event.animation?.type==='goal';
       return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff};
     });
