@@ -2,8 +2,8 @@
 // Site-wide navigation header implementing the ISL design system spec:
 //
 //  Desktop (≥768px):
-//    ISL logo (left, overlapping the bottom rule)  |  nav links (right, inline)
-//    A full-width horizontal rule separates the logo from the page content.
+//    ISL logo (left, vertically centred)  |  nav links (right, vertically centred)
+//    A full-width horizontal rule sits below the header row.
 //
 //  Mobile (<768px):
 //    ISL logo (left)  |  hamburger menu icon (right)
@@ -32,9 +32,8 @@ const NAV_LINKS = [
  * Site-wide header with ISL logo and primary navigation.
  *
  * Renders a desktop (horizontal) or mobile (hamburger drawer) layout
- * depending on viewport width via CSS media queries.  The logo overhangs
- * the bottom divider line by design — matching the Figma mockup where the
- * shield crest visually crosses the horizontal rule.
+ * depending on viewport width via CSS media queries.  Logo and nav links
+ * are vertically centred on the same row, separated by a bottom divider.
  *
  * @returns {JSX.Element}
  */
@@ -61,44 +60,41 @@ export default function Header() {
   };
 
   return (
-    <header style={{ backgroundColor: 'var(--color-abyss)', position: 'relative', zIndex: 10, overflow: 'visible' }}>
-      {/* ── Inner wrapper — max-width container with logo + nav ──────────────── */}
+    <header style={{ backgroundColor: 'var(--color-abyss)', position: 'relative', zIndex: 10 }}>
+      {/* ── Inner wrapper ─────────────────────────────────────────────────────── */}
+      {/* padding: '8px var(--space-8)' — 8px top/bottom centres the 40px logo
+          and 13px nav text in a ~56px strip; horizontal padding defers to the
+          shared --space-8 (32px) container token so the header gutters match
+          every other page section. */}
       <div
         className="container"
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           justifyContent: 'space-between',
-          position: 'relative',
+          padding: '8px var(--space-8)',
         }}
       >
         {/* ── Logo ─────────────────────────────────────────────────────────── */}
-        {/* The logo is intentionally larger than the nav strip and positioned
-            relative so it can overflow downward via a negative marginBottom.
-            This makes the shield crest visually cross the horizontal divider,
-            matching the design spec.
-            •  width: 100px   — final rendered width per the design mockup;
-               height is left auto so the PNG's aspect ratio is preserved.
-            •  marginBottom: -70px — pulls the element up by 70 px in the flow
-               so the nav strip stays ~36 px tall while the logo's bottom edge
-               lands roughly 70 px below the divider line.
-            •  zIndex: 11     — sits one level above the header (z 10) so the
-               overhanging portion renders on top of page content beneath it. */}
-        <Link to="/" style={{ display: 'block', flexShrink: 0, zIndex: 11, position: 'relative' }}>
+        {/* width: 40px — sized to sit comfortably inline with the nav links
+            at the header's 8px top/bottom padding (total strip ≈ 56px).
+            height: auto preserves the PNG's aspect ratio. */}
+        <Link to="/" style={{ display: 'block', flexShrink: 0 }}>
           <img
             src={`${import.meta.env.BASE_URL}isl-logo.png`}
             alt="Intergalactic Soccer League"
-            style={{ width: 100, height: 'auto', display: 'block', marginBottom: '-70px' }}
+            style={{ width: 40, height: 'auto', display: 'block' }}
           />
         </Link>
 
         {/* ── Desktop navigation ───────────────────────────────────────────── */}
-        {/* padding: '10px 0' — 10 px top/bottom gives the nav strip a ~36 px
-            total height (10 + ~16 line-height + 10) which matches the thin
-            bar shown in the design, with the logo overhanging below it. */}
+        {/* gap: 32px — matches --space-8 from the design token scale, giving
+            each nav item enough breathing room without crowding at 1312px max
+            width. alignItems: center keeps link text baseline-aligned with the
+            logo when font metrics differ slightly across browsers. */}
         <nav
           className="desktop-nav"
-          style={{ display: 'flex', gap: '32px', alignItems: 'center', padding: '10px 0' }}
+          style={{ display: 'flex', gap: '32px', alignItems: 'center' }}
         >
           {NAV_LINKS.map(({ label, to }) => (
             <Link
@@ -112,6 +108,12 @@ export default function Header() {
         </nav>
 
         {/* ── Mobile hamburger button ──────────────────────────────────────── */}
+        {/* padding: 6px — tight hit-area around the 18px icon keeps the button
+            compact in the narrow mobile header strip.
+            border opacity 0.3 — subtle outline consistent with other ghost
+            controls in the design system without overpowering the icon.
+            display: none — hidden by default; the media query below overrides
+            this to 'flex' at <768px so the icon stays vertically centred. */}
         <button
           className="mobile-menu-btn"
           onClick={() => setMobileOpen(prev => !prev)}
@@ -122,8 +124,7 @@ export default function Header() {
             color: 'var(--color-dust)',
             cursor: 'pointer',
             padding: '6px',
-            display: 'none', // shown via CSS at mobile breakpoint
-            margin: '10px 0', // vertically centres button in the nav strip (matches desktop nav padding)
+            display: 'none',
           }}
         >
           {mobileOpen ? <X size={18} /> : <Menu size={18} />}
@@ -131,12 +132,17 @@ export default function Header() {
       </div>
 
       {/* ── Full-width horizontal divider ────────────────────────────────────── */}
-      {/* This rule appears in both desktop and mobile layouts; on desktop
-          the logo overlaps it from above. */}
+      {/* opacity 0.2 — same translucency used by all ISL horizontal rules so
+          the line reads as a subtle separator without creating visual weight. */}
       <div style={{ borderTop: '1px solid rgba(227,224,213,0.2)' }} />
 
       {/* ── Mobile navigation drawer ─────────────────────────────────────────── */}
-      {/* Only rendered in the DOM when open to avoid focus-trap issues. */}
+      {/* Only rendered in the DOM when open to avoid focus-trap issues.
+          padding: '16px 24px' — 16px top/bottom for comfortable touch targets;
+          24px sides aligns the links with the logo above (logo left edge sits
+          at 32px container padding, 24px here is intentionally slightly inset).
+          gap: 16px — --space-4 between each stacked link, matching the card
+          inner spacing used elsewhere in the design system. */}
       {mobileOpen && (
         <nav
           style={{
