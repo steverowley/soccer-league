@@ -665,10 +665,10 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',alignItems:'stretch'}}>
 
             {/* ── HOME column ─────────────────────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.homeTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.homeTeam.color,marginBottom:'4px'}}>{ms.homeTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.homeFormation} · {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
@@ -695,9 +695,12 @@ const MatchSimulator = ({
                   }
                 </div>
               </div>
-              <div className="card" style={{padding:0,overflow:'hidden'}}>
+              {/* Player Thoughts — flex:1 so this card stretches to fill remaining column
+                  height, keeping the home/away columns flush with the taller centre
+                  column. minHeight preserves a sensible floor when content is sparse. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Player Thoughts</div>
-                <div style={{padding:'8px',overflowY:'auto',height:'200px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:'200px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :[...homeThoughtsFeed].reverse().map((item,i)=>(
@@ -716,7 +719,9 @@ const MatchSimulator = ({
             </div>
 
             {/* ── CENTRE: pitch + commentary ──────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+            {/* height:100% lets this flex column fill its grid cell so the
+                commentary card's flex:1 can grow to match the tallest column. */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
               <div className="card" style={{padding:'12px'}}>
                 <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
                 <div style={{position:'relative',height:'88px',backgroundColor:'#1a4d2e',border:'1px solid rgba(227,224,213,0.2)',backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.04) 19px,rgba(255,255,255,0.04) 20px)'}}>
@@ -733,7 +738,11 @@ const MatchSimulator = ({
                   <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔ ':''}{ms.awayTeam.shortName}</span>
                 </div>
               </div>
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1}}>
+              {/* Commentary card — flex:1 consumes remaining centre-column height
+                  after the pitch visualization.  display:flex+flexDirection:column
+                  lets the scrollable feed div below also use flex:1 so it grows
+                  to match the side columns rather than being a fixed 400 px box. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(154,92,244,0.3)',backgroundColor:'rgba(154,92,244,0.06)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',display:'flex',alignItems:'center',gap:'8px'}}>
                   <span>Commentary</span>
                   {agentSystemRef.current&&(
@@ -749,7 +758,10 @@ const MatchSimulator = ({
                     <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'2px 8px',border:'1px solid rgba(154,92,244,0.5)',backgroundColor:'transparent',color:'#9A5CF4',cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
                   )}
                 </div>
-                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',height:'400px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
+                {/* flex:1 lets the feed grow to fill whatever height the card
+                    occupies; minHeight:'400px' ensures a comfortable minimum
+                    when the side columns are short (pre-match / sparse feeds). */}
+                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',flex:1,minHeight:'400px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
                   {commentaryFeed.length===0&&(
                     <div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'80px'}}>
                       {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
@@ -796,7 +808,9 @@ const MatchSimulator = ({
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+            {/* height:100% mirrors the home column so Player Thoughts stretches
+                to align the bottom edge with the commentary feed. */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.awayTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.awayTeam.color,marginBottom:'4px'}}>{ms.awayTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.awayFormation} · {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
@@ -823,9 +837,11 @@ const MatchSimulator = ({
                   }
                 </div>
               </div>
-              <div className="card" style={{padding:0,overflow:'hidden'}}>
+              {/* Player Thoughts — flex:1 stretches to fill remaining away-column
+                  height, keeping the bottom edge aligned with the centre column. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Player Thoughts</div>
-                <div style={{padding:'8px',overflowY:'auto',height:'200px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:'200px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :[...awayThoughtsFeed].reverse().map((item,i)=>(
