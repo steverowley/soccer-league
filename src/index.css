@@ -34,40 +34,44 @@
 }
 
 /* ── Base ──────────────────────────────────────────────────────────────── */
-
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html, body, #root {
-  height: 100%;
-}
-
-body {
-  font-family: var(--font-mono);
-  background-color: var(--color-abyss);
-  color: var(--color-dust);
-  font-size: 16px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ── Typography ────────────────────────────────────────────────────────── */
-/* Rules are in @layer base so Tailwind utility classes (text-2xl, etc.)   */
-/* can override them — unlayered CSS would win over @layer utilities.       */
+/* All base resets and element defaults live inside @layer base so that    */
+/* Tailwind @layer utilities (and our own inline styles) can override them  */
+/* without specificity fights.  Unlayered CSS wins over @layer utilities,  */
+/* so a bare `* { padding: 0 }` reset would silently defeat every          */
+/* Tailwind p-* class — putting it in @layer base prevents that.           */
 
 @layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-mono);
+    background-color: var(--color-abyss);
+    color: var(--color-dust);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  /* Heading sizes match the ISL design spec.  All in @layer base so any   */
+  /* utility class (text-2xl, font-normal, etc.) can override per-element. */
   h1 { font-size: 40px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
   h2 { font-size: 32px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
   h3 { font-size: 28px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
   p  { font-size: 16px; font-weight: 400; }
-}
 
-a {
-  color: inherit;
-  text-decoration: none;
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 /* ── Starfield background ──────────────────────────────────────────────── */

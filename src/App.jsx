@@ -882,53 +882,109 @@ const MatchSimulator = ({
         </div>
 
       </div>
+      {/* ── Halftime report modal ──────────────────────────────────────────── */}
+      {/* Full-screen overlay rendered when the simulation reaches 45' and
+          stoppage time expires.  Shows the score, key events, manager quotes,
+          and a betting panel for the second half.  Cleared by startSecondHalf. */}
       {htReport&&(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{backgroundColor:'rgba(0,0,0,0.92)'}}>
-          <div className="w-full max-w-lg border overflow-hidden" style={bdr(C.purple,C.ash)}>
-            <div className="p-3 text-center border-b" style={{borderColor:C.purple}}>
-              <div className="text-xs mb-1" style={{color:C.purple,opacity:0.7}}>⏸ HALF TIME</div>
-              <div className="flex items-center justify-center gap-6">
-                <div className="text-lg font-bold" style={{color:htReport.homeTeam.color}}>{htReport.homeTeam.shortName}</div>
-                <div className="text-5xl font-bold">{htReport.score[0]} – {htReport.score[1]}</div>
-                <div className="text-lg font-bold" style={{color:htReport.awayTeam.color}}>{htReport.awayTeam.shortName}</div>
+        <div style={{position:'fixed',inset:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backgroundColor:'rgba(0,0,0,0.92)'}}>
+          <div style={{width:'100%',maxWidth:'512px',border:`1px solid ${C.purple}`,backgroundColor:C.ash,overflow:'hidden'}}>
+
+            {/* Score header */}
+            <div style={{padding:'12px',textAlign:'center',borderBottom:`1px solid ${C.purple}`}}>
+              <div style={{fontSize:'11px',marginBottom:'4px',color:C.purple,opacity:0.7}}>⏸ HALF TIME</div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'24px'}}>
+                <div style={{fontSize:'18px',fontWeight:700,color:htReport.homeTeam.color}}>{htReport.homeTeam.shortName}</div>
+                <div style={{fontSize:'48px',fontWeight:700}}>{htReport.score[0]} – {htReport.score[1]}</div>
+                <div style={{fontSize:'18px',fontWeight:700,color:htReport.awayTeam.color}}>{htReport.awayTeam.shortName}</div>
               </div>
             </div>
-            <div className="p-3 overflow-y-auto" style={{maxHeight:'80vh'}}>
-              <div className="grid grid-cols-3 gap-2 mb-3 text-center text-xs">
+
+            <div style={{padding:'12px',overflowY:'auto',maxHeight:'80vh'}}>
+
+              {/* Stats row: goals / shots / cards */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'12px',textAlign:'center',fontSize:'11px'}}>
                 {[['GOALS',htReport.goals.length],['SHOTS',htReport.shots],['CARDS',htReport.cards.length]].map(([l,v])=>(
-                  <div key={l} className="p-2 border" style={bdr(C.dust,C.abyss)}><div style={{opacity:0.6}}>{l}</div><div className="font-bold text-lg">{v}</div></div>
-                ))}
-              </div>
-              {htReport.goals.length>0&&<div className="mb-3">{htReport.goals.map((g,i)=>(
-                <div key={i} className="flex gap-2 text-xs py-1 border-b" style={{borderColor:C.dust}}>
-                  <span style={{color:C.purple}}>{g.minute}'</span><span className="font-bold">{g.player}</span><span style={{opacity:0.5}}>{g.team}</span>
-                </div>))}</div>}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {[[C.red,htReport.homeManager,htLlmQuotes?.home||htReport.homeQuote,!htLlmQuotes?.home&&agentSystemRef.current],[C.purple,htReport.awayManager,htLlmQuotes?.away||htReport.awayQuote,!htLlmQuotes?.away&&agentSystemRef.current]].map(([col,name,quote,isLoading])=>(
-                  <div key={name} className="p-2 border" style={bdr(col,C.abyss)}>
-                    <div className="text-xs font-bold mb-1 flex items-center gap-1" style={{color:col}}>🎙️ {name}{agentSystemRef.current&&<span style={{opacity:0.5,fontSize:9}}>AI</span>}</div>
-                    {isLoading?<div className="text-xs" style={{opacity:0.4}}>Generating...</div>:<div className="text-xs italic" style={{opacity:0.8}}>"{quote}"</div>}
+                  <div key={l} style={{padding:'8px',border:`1px solid rgba(227,224,213,0.2)`,backgroundColor:C.abyss}}>
+                    <div style={{opacity:0.6}}>{l}</div>
+                    <div style={{fontWeight:700,fontSize:'18px'}}>{v}</div>
                   </div>
                 ))}
               </div>
-              <div className="text-xs font-bold mb-2" style={{color:'#FFA500'}}>⚡ IN-PLAY BETS</div>
-              <div className="mb-2 flex gap-2 items-center text-xs">
+
+              {/* Goal log */}
+              {htReport.goals.length>0&&(
+                <div style={{marginBottom:'12px'}}>
+                  {htReport.goals.map((g,i)=>(
+                    <div key={i} style={{display:'flex',gap:'8px',fontSize:'11px',padding:'4px 0',borderBottom:`1px solid rgba(227,224,213,0.1)`}}>
+                      <span style={{color:C.purple}}>{g.minute}'</span>
+                      <span style={{fontWeight:700}}>{g.player}</span>
+                      <span style={{opacity:0.5}}>{g.team}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Manager quotes */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'12px'}}>
+                {[[C.red,htReport.homeManager,htLlmQuotes?.home||htReport.homeQuote,!htLlmQuotes?.home&&agentSystemRef.current],
+                  [C.purple,htReport.awayManager,htLlmQuotes?.away||htReport.awayQuote,!htLlmQuotes?.away&&agentSystemRef.current]
+                ].map(([col,name,quote,isLoading])=>(
+                  <div key={name} style={{padding:'8px',border:`1px solid ${col}`,backgroundColor:C.abyss}}>
+                    <div style={{fontSize:'11px',fontWeight:700,marginBottom:'4px',display:'flex',alignItems:'center',gap:'4px',color:col}}>
+                      🎙️ {name}
+                      {agentSystemRef.current&&<span style={{opacity:0.5,fontSize:'9px'}}>AI</span>}
+                    </div>
+                    {isLoading
+                      ?<div style={{fontSize:'11px',opacity:0.4}}>Generating...</div>
+                      :<div style={{fontSize:'11px',fontStyle:'italic',opacity:0.8}}>"{quote}"</div>}
+                  </div>
+                ))}
+              </div>
+
+              {/* Betting panel */}
+              <div style={{fontSize:'11px',fontWeight:700,marginBottom:'8px',color:'#FFA500'}}>⚡ IN-PLAY BETS</div>
+              <div style={{display:'flex',gap:'8px',alignItems:'center',fontSize:'11px',marginBottom:'8px'}}>
                 <span style={{opacity:0.7}}>Stake:</span>
-                <input type="number" value={betAmount} onChange={e=>setBetAmount(Math.max(0,Math.min(credits,parseInt(e.target.value)||0)))}
-                  className="w-20 p-1 text-center border font-bold" style={{backgroundColor:C.abyss,borderColor:C.dust,color:C.dust}}/>
+                <input
+                  type="number"
+                  value={betAmount}
+                  onChange={e=>setBetAmount(Math.max(0,Math.min(credits,parseInt(e.target.value)||0)))}
+                  style={{
+                    width:'80px',padding:'4px',textAlign:'center',border:`1px solid ${C.dust}`,
+                    fontWeight:700,fontFamily:"'Space Mono',monospace",
+                    backgroundColor:C.abyss,color:C.dust,
+                  }}
+                />
                 <span style={{color:C.purple}}>{credits} coins</span>
               </div>
-              <div className="grid grid-cols-3 gap-1.5 mb-2">
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'6px',marginBottom:'8px'}}>
                 <BetBtn type="homeWin" odds={odds.homeWin} label={matchState.homeTeam.shortName+' WIN'} color={C.red} placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="draw" odds={odds.draw} label="DRAW" placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="awayWin" odds={odds.awayWin} label={matchState.awayTeam.shortName+' WIN'} placeBet={placeBet} betAmount={betAmount}/>
+                <BetBtn type="draw"    odds={odds.draw}    label="DRAW"                                               placeBet={placeBet} betAmount={betAmount}/>
+                <BetBtn type="awayWin" odds={odds.awayWin} label={matchState.awayTeam.shortName+' WIN'}               placeBet={placeBet} betAmount={betAmount}/>
               </div>
-              <div className="grid grid-cols-2 gap-1.5 mb-3">
-                <BetBtn type="btts" odds="1.75" label="BTTS YES" placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="over25" odds="1.85" label="OVER 2.5" placeBet={placeBet} betAmount={betAmount}/>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px',marginBottom:'12px'}}>
+                <BetBtn type="btts"   odds="1.75" label="BTTS YES"  placeBet={placeBet} betAmount={betAmount}/>
+                <BetBtn type="over25" odds="1.85" label="OVER 2.5"  placeBet={placeBet} betAmount={betAmount}/>
               </div>
-              {currentBets.length>0&&<div className="text-xs mb-2 text-center" style={{color:C.purple}}>{currentBets.length} wager{currentBets.length>1?'s':''} placed ✅</div>}
-              <button onClick={startSecondHalf} className="w-full py-3 font-bold border" style={{backgroundColor:C.purple,color:C.abyss,borderColor:C.purple}}>▶ KICK OFF — SECOND HALF</button>
+
+              {currentBets.length>0&&(
+                <div style={{fontSize:'11px',marginBottom:'8px',textAlign:'center',color:C.purple}}>
+                  {currentBets.length} wager{currentBets.length>1?'s':''} placed ✅
+                </div>
+              )}
+
+              <button
+                onClick={startSecondHalf}
+                style={{
+                  width:'100%',padding:'12px',fontWeight:700,
+                  border:`1px solid ${C.purple}`,fontFamily:"'Space Mono',monospace",
+                  fontSize:'13px',letterSpacing:'0.08em',cursor:'pointer',
+                  backgroundColor:C.purple,color:C.abyss,
+                }}
+              >
+                ▶ KICK OFF — SECOND HALF
+              </button>
             </div>
           </div>
         </div>

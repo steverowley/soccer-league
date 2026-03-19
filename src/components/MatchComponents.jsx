@@ -1,43 +1,64 @@
+// ── MatchComponents.jsx ───────────────────────────────────────────────────────
+// Shared UI primitives for the ISL match simulator.
+//
+// Styling approach: inline styles throughout.  These components are rendered
+// inside App.jsx (the MatchSimulator), which itself uses inline styles because
+// many values are computed at runtime (team colours, chaos percentages, etc.).
+// Using inline styles here keeps the styling approach consistent and avoids the
+// CSS-cascade conflict where the ISL global reset (* { padding: 0; margin: 0 })
+// sits in the unlayered cascade and overrides Tailwind @layer utilities.
+//
+// Constant shorthands imported from constants.js:
+//   C      — ISL colour palette  (C.abyss, C.ash, C.dust, C.purple, C.red, C.green)
+//   bdr    — helper that builds { backgroundColor, border, color } style objects
+//   PERS   — personality key constants
+//   PERS_ICON — maps personality key → emoji
+
 import { useState } from "react";
 import { C, bdr, PERS, PERS_ICON } from "../constants.js";
 import { COMMENTATOR_PROFILES } from "../agents.js";
 
+// ── Stat ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Horizontal stat bar comparing a home value against an away value.
+ * Used in league/team detail pages to render attacking, defensive, etc. stats.
+ *
+ * @param {{ label: string, a: number, b: number, homeColor: string, awayColor: string }} props
+ * @returns {JSX.Element}
+ */
 export const Stat = ({ label, a, b, homeColor, awayColor }) => (
-  <div style={bdr(C.dust)}>
-    <div className="text-xs text-center py-1" style={{ opacity: 0.6 }}>{label}</div>
-    <div className="flex items-center gap-1 px-2 pb-2">
-      <span className="text-sm font-bold" style={{ color: homeColor }}>{a}</span>
-      <div className="flex-1 h-1.5" style={{ backgroundColor: C.abyss }}>
-        <div className="h-full" style={{ width: `${typeof a === 'number' ? a : 50}%`, backgroundColor: homeColor }} />
+  <div style={{ border: `1px solid rgba(227,224,213,0.2)` }}>
+    <div style={{ fontSize: '11px', textAlign: 'center', padding: '4px', opacity: 0.6 }}>{label}</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px 8px' }}>
+      <span style={{ fontSize: '14px', fontWeight: 700, color: homeColor }}>{a}</span>
+      <div style={{ flex: 1, height: '6px', backgroundColor: C.abyss }}>
+        <div style={{ height: '100%', width: `${typeof a === 'number' ? a : 50}%`, backgroundColor: homeColor }} />
       </div>
-      <span className="text-sm font-bold" style={{ color: awayColor }}>{b}</span>
+      <span style={{ fontSize: '14px', fontWeight: 700, color: awayColor }}>{b}</span>
     </div>
   </div>
 );
 
+// ── PlayerRow ─────────────────────────────────────────────────────────────────
+
 /**
  * Single player row rendered inside the squad panel (On Pitch / Bench sections).
  *
- * Uses inline styles throughout so layout is consistent with the match
- * simulator's inline-style-only approach — Tailwind utility classes are NOT
- * used here because the component is rendered inside contexts where Tailwind
- * purging may strip the classes at build time.
- *
  * Visual states:
- *   - Active (on pitch): full opacity, name tinted in team colour, clickable
- *     to open the PlayerCard detail modal.
- *   - Inactive (bench / sent off): 50 % opacity, default cursor — the row is
- *     not interactive.
+ *   Active (on pitch)  — full opacity, name tinted in team colour, clickable to
+ *                        open the PlayerCard detail modal.
+ *   Inactive (bench)   — 50 % opacity, default cursor, not interactive.
  *
  * @param {Object}   props
- * @param {Object}   props.player     - Player data object (name, position, stats)
- * @param {Object}   props.stats      - Live match stats keyed by player name
- * @param {boolean}  props.isActive   - True when the player is currently on pitch
- * @param {string}   props.teamColor  - Hex team accent colour for name highlight
- * @param {Array}    props.agents     - AI agent array for the team (may be null)
- * @param {boolean}  props.isHome     - Whether this player belongs to the home team
- * @param {string}   props.teamName   - Short team name shown in the PlayerCard modal
- * @param {Function} props.onSelect   - Callback invoked with player data when clicked
+ * @param {Object}   props.player     Player data object (name, position, stats)
+ * @param {Object}   props.stats      Live match stats keyed by player name
+ * @param {boolean}  props.isActive   True when the player is currently on pitch
+ * @param {string}   props.teamColor  Hex team accent colour for name highlight
+ * @param {Array}    props.agents     AI agent array for the team (may be null)
+ * @param {boolean}  props.isHome     Whether this player belongs to the home team
+ * @param {string}   props.teamName   Short team name shown in the PlayerCard modal
+ * @param {Function} props.onSelect   Callback invoked with player data when clicked
  * @returns {JSX.Element}
  */
 export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, teamName, onSelect }) => {
@@ -52,57 +73,88 @@ export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, 
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '8px 16px',
-        borderBottom: `1px solid rgba(227,224,213,0.08)`,
+        borderBottom: '1px solid rgba(227,224,213,0.08)',
         backgroundColor: C.abyss,
         opacity: isActive ? 1 : 0.5,
         cursor: isActive ? 'pointer' : 'default',
       }}
     >
+      {/* ── Player name + personality icon ──────────────────────────────── */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: isActive ? teamColor : undefined }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: isActive ? teamColor : C.dust }}>
           {s.subbedOn ? '🔺 ' : ''}{player.name}
-          {PERS_ICON[agent?.personality] ? <span style={{ opacity: 0.6 }}>{PERS_ICON[agent.personality]}</span> : null}
+          {PERS_ICON[agent?.personality]
+            ? <span style={{ opacity: 0.6 }}>{PERS_ICON[agent.personality]}</span>
+            : null}
         </div>
+        {/* ── Position + agent state (confidence, fatigue, emotion) ──────── */}
         <div style={{ display: 'flex', gap: '8px', fontSize: '11px', opacity: 0.6, marginTop: '2px' }}>
           <span>{player.position}</span>
           {agent && <span>😊{Math.round(agent.confidence)}% 💨{Math.round(agent.fatigue)}%</span>}
           {emo && emo !== 'neutral' && <span style={{ color: C.purple }}>{emo}</span>}
         </div>
       </div>
+      {/* ── Match-event badges: goals, assists, cards, injury ───────────── */}
       <div style={{ display: 'flex', gap: '4px', fontSize: '14px', flexShrink: 0 }}>
-        {s.goals > 0 && <span>⚽{s.goals}</span>}
+        {s.goals   > 0 && <span>⚽{s.goals}</span>}
         {s.assists > 0 && <span>👟{s.assists}</span>}
-        {s.saves > 0 && <span>✋{s.saves}</span>}
-        {s.yellowCard && <span>🟨</span>}
-        {s.redCard && <span>🟥</span>}
-        {s.injured && <span>🏥</span>}
+        {s.saves   > 0 && <span>✋{s.saves}</span>}
+        {s.yellowCard  && <span>🟨</span>}
+        {s.redCard     && <span>🟥</span>}
+        {s.injured     && <span>🏥</span>}
       </div>
     </div>
   );
 };
 
+// ── FeedCard ──────────────────────────────────────────────────────────────────
+
+/**
+ * Social-feed or player-thought card used in the team panels.
+ *
+ * @param {{ item: Object, isThought: boolean }} props
+ *   item.emoji   — emoji avatar for thought entries
+ *   item.user    — display name for social entries
+ *   item.minute  — match minute
+ *   item.player  — player name (thought entries only)
+ *   item.text    — quote text
+ *   item.likes   — like count (social entries)
+ *   item.retweets — retweet count (social entries)
+ * @returns {JSX.Element}
+ */
 export const FeedCard = ({ item, isThought }) => (
-  <div className="p-2 border-l-2 mb-2" style={{ borderColor: isThought ? C.red : C.purple, backgroundColor: C.abyss }}>
-    <div className="flex items-center gap-2 mb-1">
-      {isThought ? <span className="text-lg">{item.emoji}</span> : <span className="text-xs font-bold" style={{ color: C.purple }}>{item.user}</span>}
-      <span className="text-xs" style={{ opacity: 0.5 }}>{item.minute}'</span>
+  <div style={{
+    padding: '8px',
+    borderLeft: `2px solid ${isThought ? C.red : C.purple}`,
+    marginBottom: '8px',
+    backgroundColor: C.abyss,
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+      {isThought
+        ? <span style={{ fontSize: '18px' }}>{item.emoji}</span>
+        : <span style={{ fontSize: '11px', fontWeight: 700, color: C.purple }}>{item.user}</span>}
+      <span style={{ fontSize: '11px', opacity: 0.5 }}>{item.minute}'</span>
     </div>
-    {isThought && <span className="text-xs font-bold">{item.player}</span>}
-    <div className="text-xs italic mt-1" style={{ opacity: 0.85 }}>"{item.text}"</div>
-    {!isThought && <div className="text-xs mt-1" style={{ opacity: 0.5 }}>♥️{item.likes} 🔁{item.retweets}</div>}
+    {isThought && <span style={{ fontSize: '11px', fontWeight: 700 }}>{item.player}</span>}
+    <div style={{ fontSize: '11px', fontStyle: 'italic', marginTop: '4px', opacity: 0.85 }}>"{item.text}"</div>
+    {!isThought && (
+      <div style={{ fontSize: '11px', marginTop: '4px', opacity: 0.5 }}>
+        ♥️{item.likes} 🔁{item.retweets}
+      </div>
+    )}
   </div>
 );
 
+// ── AgentCard ─────────────────────────────────────────────────────────────────
+
 /**
- * Compact commentary entry used in the match card feed.
+ * Compact commentary entry used in the match card feed (compact mode) and in
+ * the full commentary panel.
  *
- * Renders a left-bordered card whose accent colour reflects the agent type:
- *   - commentator / player_thought / manager → item.color (team colour)
- *   - referee                               → gold (#FFD700)
- *   - fallback                              → Quantum Purple
- *
- * Uses inline styles throughout so it stays consistent with the compact
- * match card's inline-style approach (no Tailwind dependency).
+ * Accent colour reflects agent type:
+ *   commentator / player_thought / manager → item.color (team colour)
+ *   referee                               → gold (#FFD700)
+ *   fallback                              → Quantum Purple
  *
  * @param {{ type: string, name: string, role?: string, emoji: string,
  *           color?: string, minute: number, text: string }} item
@@ -110,17 +162,17 @@ export const FeedCard = ({ item, isThought }) => (
  */
 export const AgentCard = ({ item }) => {
   // Derive the accent colour for the left border and name label.
-  const borderColor = item.type === 'commentator' ? item.color
-    : item.type === 'player_thought' ? item.color
-    : item.type === 'manager' ? item.color
-    : item.type === 'referee' ? '#FFD700'
+  const borderColor =
+    item.type === 'referee'      ? '#FFD700'
+    : item.color                 ? item.color
     : C.purple;
 
-  // Human-readable agent label shown beside the emoji icon.
-  const label = item.type === 'commentator' ? `${item.name} • ${item.role}`
+  // Human-readable label shown beside the emoji icon.
+  const label =
+    item.type === 'commentator'    ? `${item.name} • ${item.role}`
     : item.type === 'player_thought' ? `${item.name} (inner thought)`
-    : item.type === 'manager' ? item.name
-    : item.type === 'referee' ? `${item.name} • Referee`
+    : item.type === 'manager'      ? item.name
+    : item.type === 'referee'      ? `${item.name} • Referee`
     : 'Agent';
 
   return (
@@ -142,21 +194,37 @@ export const AgentCard = ({ item }) => {
   );
 };
 
+// ── ApiKeyModal ───────────────────────────────────────────────────────────────
+
+/**
+ * Full-screen modal for entering and testing an Anthropic API key.
+ * The key is persisted to localStorage and never sent to any server.
+ *
+ * @param {{ apiKey: string, setApiKey: Function, setShowApiKeyModal: Function }} props
+ * @returns {JSX.Element}
+ */
 export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
   const [draft, setDraft] = useState(apiKey);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+
   const save = () => {
     localStorage.setItem('isi_api_key', draft);
     setApiKey(draft);
     setShowApiKeyModal(false);
   };
+
   const test = async () => {
-    setTesting(true); setTestResult(null);
+    setTesting(true);
+    setTestResult(null);
     try {
       const { default: Anthropic } = await import('@anthropic-ai/sdk');
       const client = new Anthropic({ apiKey: draft, dangerouslyAllowBrowser: true });
-      await client.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] });
+      await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 5,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
       setTestResult('✅ Connected!');
     } catch (e) {
       const msg = e?.message || String(e);
@@ -170,46 +238,119 @@ export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
     }
     setTesting(false);
   };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.92)' }}>
-      <div className="w-full max-w-md border p-6" style={{ ...bdr(C.purple, C.ash) }}>
-        <h2 className="text-xl font-bold mb-1" style={{ color: C.purple }}>⚙️ AGENT CONFIGURATION</h2>
-        <p className="text-xs mb-4" style={{ opacity: 0.6 }}>Paste your Anthropic API key to enable LLM-powered agents. Your key is stored in <code>localStorage</code> and never leaves your browser.</p>
-        <div className="mb-3">
-          <label className="text-xs font-bold mb-1 block" style={{ color: C.purple }}>ANTHROPIC API KEY</label>
-          <input type="password" value={draft} onChange={e => setDraft(e.target.value)} placeholder="sk-ant-..."
-            className="w-full p-3 border text-sm font-mono" style={{ backgroundColor: C.abyss, borderColor: C.dust, color: C.dust }} />
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '16px', backgroundColor: 'rgba(0,0,0,0.92)',
+    }}>
+      <div style={{ width: '100%', maxWidth: '448px', border: `1px solid ${C.purple}`, backgroundColor: C.ash, padding: '24px' }}>
+
+        <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px', color: C.purple }}>⚙️ AGENT CONFIGURATION</h2>
+        <p style={{ fontSize: '11px', opacity: 0.6, marginBottom: '16px' }}>
+          Paste your Anthropic API key to enable LLM-powered agents.
+          Your key is stored in <code>localStorage</code> and never leaves your browser.
+        </p>
+
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: C.purple }}>
+            ANTHROPIC API KEY
+          </label>
+          <input
+            type="password"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="sk-ant-..."
+            style={{
+              width: '100%', padding: '12px', border: `1px solid ${C.dust}`,
+              fontSize: '13px', fontFamily: "'Space Mono', monospace",
+              backgroundColor: C.abyss, color: C.dust,
+            }}
+          />
         </div>
-        <div className="flex gap-2 mb-1">
-          <button onClick={test} disabled={testing || !draft} className="px-4 py-2 border text-sm" style={bdr(C.dust, C.abyss)}>
+
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
+          <button
+            onClick={test}
+            disabled={testing || !draft}
+            style={{
+              padding: '8px 16px', border: `1px solid ${C.dust}`, fontSize: '13px',
+              fontFamily: "'Space Mono', monospace", backgroundColor: C.abyss,
+              color: C.dust, cursor: testing || !draft ? 'not-allowed' : 'pointer',
+              opacity: testing || !draft ? 0.5 : 1,
+            }}
+          >
             {testing ? 'Testing...' : 'Test Key'}
           </button>
         </div>
+
         {testResult && (
-          <div className="mb-3 p-2 border text-xs font-mono break-all"
-            style={{ borderColor: testResult.startsWith('✅') ? '#00cc66' : C.red, color: testResult.startsWith('✅') ? '#00cc66' : C.red, backgroundColor: C.abyss }}>
+          <div style={{
+            marginBottom: '12px', padding: '8px', border: `1px solid ${testResult.startsWith('✅') ? '#00cc66' : C.red}`,
+            fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all',
+            color: testResult.startsWith('✅') ? '#00cc66' : C.red,
+            backgroundColor: C.abyss,
+          }}>
             {testResult}
           </div>
         )}
-        <div className="mb-4 p-3 border text-xs" style={bdr(C.dust, C.abyss)}>
-          <div className="font-bold mb-2" style={{ color: C.purple }}>ACTIVE AGENTS</div>
+
+        {/* ── Active agent list ────────────────────────────────────────────── */}
+        <div style={{ marginBottom: '16px', padding: '12px', border: `1px solid rgba(227,224,213,0.2)`, backgroundColor: C.abyss }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '8px', color: C.purple }}>ACTIVE AGENTS</div>
           {COMMENTATOR_PROFILES.map(p => (
-            <div key={p.id} className="flex items-center gap-2 mb-1">
-              <span>{p.emoji}</span><span style={{ color: p.color }}>{p.name}</span><span style={{ opacity: 0.5 }}>— {p.role}</span>
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', fontSize: '11px' }}>
+              <span>{p.emoji}</span>
+              <span style={{ color: p.color }}>{p.name}</span>
+              <span style={{ opacity: 0.5 }}>— {p.role}</span>
             </div>
           ))}
-          <div className="flex items-center gap-2 mb-1"><span>🧑‍💼</span><span>Managers</span><span style={{ opacity: 0.5 }}>— Touchline reactions</span></div>
-          <div className="flex items-center gap-2 mb-1"><span>⚖️</span><span>Referee</span><span style={{ opacity: 0.5 }}>— Decision explanations</span></div>
-          <div className="flex items-center gap-2"><span>💭</span><span>Players</span><span style={{ opacity: 0.5 }}>— Inner monologue</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', fontSize: '11px' }}>
+            <span>🧑‍💼</span><span>Managers</span><span style={{ opacity: 0.5 }}>— Touchline reactions</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', fontSize: '11px' }}>
+            <span>⚖️</span><span>Referee</span><span style={{ opacity: 0.5 }}>— Decision explanations</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
+            <span>💭</span><span>Players</span><span style={{ opacity: 0.5 }}>— Inner monologue</span>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={save} disabled={!draft} className="flex-1 py-2 font-bold border"
-            style={{ backgroundColor: C.purple, color: C.abyss, borderColor: C.purple }}>SAVE &amp; ENABLE AGENTS</button>
-          <button onClick={() => setShowApiKeyModal(false)} className="px-4 py-2 border" style={bdr(C.dust, C.abyss)}>CANCEL</button>
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={save}
+            disabled={!draft}
+            style={{
+              flex: 1, padding: '8px', fontWeight: 700, border: `1px solid ${C.purple}`,
+              fontFamily: "'Space Mono', monospace", fontSize: '13px',
+              backgroundColor: C.purple, color: C.abyss,
+              cursor: !draft ? 'not-allowed' : 'pointer', opacity: !draft ? 0.5 : 1,
+            }}
+          >
+            SAVE &amp; ENABLE AGENTS
+          </button>
+          <button
+            onClick={() => setShowApiKeyModal(false)}
+            style={{
+              padding: '8px 16px', border: `1px solid rgba(227,224,213,0.3)`,
+              fontFamily: "'Space Mono', monospace", fontSize: '13px',
+              backgroundColor: C.abyss, color: C.dust, cursor: 'pointer',
+            }}
+          >
+            CANCEL
+          </button>
         </div>
+
         {apiKey && (
-          <button onClick={() => { localStorage.removeItem('isi_api_key'); setApiKey(''); setShowApiKeyModal(false); }}
-            className="mt-2 w-full py-1 text-xs border" style={{ borderColor: C.red, color: C.red, backgroundColor: C.abyss }}>
+          <button
+            onClick={() => { localStorage.removeItem('isi_api_key'); setApiKey(''); setShowApiKeyModal(false); }}
+            style={{
+              marginTop: '8px', width: '100%', padding: '4px', fontSize: '11px',
+              border: `1px solid ${C.red}`, color: C.red,
+              fontFamily: "'Space Mono', monospace", backgroundColor: C.abyss, cursor: 'pointer',
+            }}
+          >
             CLEAR KEY &amp; DISABLE AGENTS
           </button>
         )}
@@ -218,86 +359,157 @@ export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
   );
 };
 
+// ── BetBtn ────────────────────────────────────────────────────────────────────
+
+/**
+ * Betting button used in the halftime and pre-match betting panels.
+ *
+ * Displays the bet label, an optional sub-label, the odds multiplier, and the
+ * projected payout for the current stake amount.  Disabled when betAmount ≤ 0.
+ *
+ * @param {{ type: string, odds: string|number, label: string, sub?: string,
+ *           color?: string, placeBet: Function, betAmount: number }} props
+ * @returns {JSX.Element}
+ */
 export const BetBtn = ({ type, odds, label, sub, color = C.purple, placeBet, betAmount }) => (
-  <button onClick={() => placeBet(type, betAmount, odds)} disabled={betAmount <= 0}
-    className="p-3 border w-full" style={{ ...bdr(color, C.abyss), opacity: betAmount <= 0 ? 0.5 : 1, cursor: betAmount <= 0 ? 'not-allowed' : 'pointer' }}>
-    <div className="text-xs mb-1" style={{ opacity: 0.7 }}>{label}</div>
-    {sub && <div className="text-xs mb-1" style={{ opacity: 0.5 }}>{sub}</div>}
-    <div className="text-2xl font-bold" style={{ color }}>{odds}x</div>
-    <div className="text-xs mt-1" style={{ opacity: 0.6 }}>Win: {Math.floor(betAmount * parseFloat(odds))} coins</div>
+  <button
+    onClick={() => placeBet(type, betAmount, odds)}
+    disabled={betAmount <= 0}
+    style={{
+      padding: '12px', border: `1px solid ${color}`, width: '100%',
+      backgroundColor: C.abyss, fontFamily: "'Space Mono', monospace",
+      cursor: betAmount <= 0 ? 'not-allowed' : 'pointer',
+      opacity: betAmount <= 0 ? 0.5 : 1,
+    }}
+  >
+    <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px' }}>{label}</div>
+    {sub && <div style={{ fontSize: '11px', opacity: 0.5, marginBottom: '4px' }}>{sub}</div>}
+    <div style={{ fontSize: '24px', fontWeight: 700, color }}>{odds}x</div>
+    <div style={{ fontSize: '11px', marginTop: '4px', opacity: 0.6 }}>
+      Win: {Math.floor(betAmount * parseFloat(odds))} coins
+    </div>
   </button>
 );
 
+// ── PlayerCard ────────────────────────────────────────────────────────────────
+
+/**
+ * Slide-up player detail modal.  Shown when a player row is clicked in the
+ * squad panel.  Displays attributes, current match stats, and match events
+ * involving the player.  Clicking the backdrop or the × button closes it.
+ *
+ * @param {{ sp: Object|null, events: Array, onClose: Function }} props
+ *   sp.player    — player data object
+ *   sp.agent     — AI agent object (may be null)
+ *   sp.stats     — live match stats for this player
+ *   sp.teamColor — hex accent colour
+ *   sp.teamName  — short team name
+ * @returns {JSX.Element|null}
+ */
 export const PlayerCard = ({ sp, events, onClose }) => {
   if (!sp) return null;
   const { player, agent, stats, teamColor, teamName } = sp;
   const s = stats || {};
   const evts = events.filter(e => e.player === player.name || e.assister === player.name);
+
+  // Personality trait descriptions shown in the card header quote.
   const DESC = {
-    [PERS.SEL]: "Glory hunter. Shoots from everywhere, passes to nobody.",
+    [PERS.SEL]:  "Glory hunter. Shoots from everywhere, passes to nobody.",
     [PERS.TEAM]: "The glue. Always finds the open man.",
-    [PERS.AGG]: "Leaves a mark — on opponents and the ref.",
-    [PERS.CAU]: "Reads the game. Never panics, rarely impresses.",
-    [PERS.CRE]: "Unpredictable genius or costly showboat.",
-    [PERS.LAZ]: "Tremendous talent. Questionable work rate.",
-    [PERS.WRK]: "Will run through a wall. Then run through it again.",
-    [PERS.BAL]: "Solid. Dependable. Forgettable in the best way.",
+    [PERS.AGG]:  "Leaves a mark — on opponents and the ref.",
+    [PERS.CAU]:  "Reads the game. Never panics, rarely impresses.",
+    [PERS.CRE]:  "Unpredictable genius or costly showboat.",
+    [PERS.LAZ]:  "Tremendous talent. Questionable work rate.",
+    [PERS.WRK]:  "Will run through a wall. Then run through it again.",
+    [PERS.BAL]:  "Solid. Dependable. Forgettable in the best way.",
   };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
-      <div className="w-full max-w-sm border" style={bdr(teamColor, C.ash)} onClick={e => e.stopPropagation()}>
-        <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: teamColor }}>
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: '16px', backgroundColor: 'rgba(0,0,0,0.85)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width: '100%', maxWidth: '384px', border: `1px solid ${teamColor}`, backgroundColor: C.ash }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header: name + position + close button ───────────────────────── */}
+        <div style={{
+          padding: '12px', borderBottom: `1px solid ${teamColor}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
           <div>
-            <div className="text-xl font-bold" style={{ color: teamColor }}>{player.name}</div>
-            <div className="text-xs" style={{ opacity: 0.6 }}>{player.position} &bull; {teamName} {PERS_ICON[agent?.personality] || ''}</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: teamColor }}>{player.name}</div>
+            <div style={{ fontSize: '11px', opacity: 0.6 }}>
+              {player.position} &bull; {teamName} {PERS_ICON[agent?.personality] || ''}
+            </div>
           </div>
-          <button onClick={onClose} style={{ opacity: 0.5, fontSize: 18 }}>&#x2715;</button>
+          <button onClick={onClose} style={{ opacity: 0.5, fontSize: '18px', background: 'none', border: 'none', color: C.dust, cursor: 'pointer' }}>&#x2715;</button>
         </div>
-        <div className="p-3">
+
+        <div style={{ padding: '12px' }}>
+          {/* ── Personality quote ─────────────────────────────────────────── */}
           {agent && (
-            <div className="mb-3 p-2 border-l-4 text-xs italic" style={{ borderColor: teamColor, backgroundColor: teamColor + '22' }}>
+            <div style={{
+              marginBottom: '12px', padding: '8px',
+              borderLeft: `4px solid ${teamColor}`, backgroundColor: teamColor + '22',
+              fontSize: '11px', fontStyle: 'italic',
+            }}>
               "{DESC[agent.personality] || 'Plays the game.'}"
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
+
+          {/* ── Attributes + match stats side by side ─────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            {/* Attributes */}
             <div>
-              <div className="font-bold mb-2" style={{ opacity: 0.6 }}>ATTRIBUTES</div>
+              <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '8px', opacity: 0.6 }}>ATTRIBUTES</div>
               {[['ATK', player.attacking], ['DEF', player.defending], ['TEC', player.technical], ['ATH', player.athletic], ['MEN', player.mental]].map(([k, v]) => (
-                <div key={k} className="flex items-center gap-1 mb-1">
-                  <span className="w-7" style={{ opacity: 0.6 }}>{k}</span>
-                  <div className="flex-1 h-1.5" style={{ backgroundColor: C.abyss }}>
-                    <div className="h-full" style={{ width: v + '%', backgroundColor: v > 80 ? teamColor : v > 65 ? C.purple : C.dust }} />
+                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px', fontSize: '11px' }}>
+                  <span style={{ width: '28px', opacity: 0.6 }}>{k}</span>
+                  <div style={{ flex: 1, height: '6px', backgroundColor: C.abyss }}>
+                    <div style={{ height: '100%', width: v + '%', backgroundColor: v > 80 ? teamColor : v > 65 ? C.purple : C.dust }} />
                   </div>
-                  <span className="w-5 text-right">{v}</span>
+                  <span style={{ width: '20px', textAlign: 'right' }}>{v}</span>
                 </div>
               ))}
             </div>
+
+            {/* This match */}
             <div>
-              <div className="font-bold mb-2" style={{ opacity: 0.6 }}>THIS MATCH</div>
-              <div className="text-xs space-y-1">
-                {s.goals > 0 && <div>&#x26BD; {s.goals} goal{s.goals > 1 ? 's' : ''}</div>}
+              <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '8px', opacity: 0.6 }}>THIS MATCH</div>
+              <div style={{ fontSize: '11px' }}>
+                {s.goals   > 0 && <div>&#x26BD; {s.goals} goal{s.goals > 1 ? 's' : ''}</div>}
                 {s.assists > 0 && <div>&#x1F45F; {s.assists} assist{s.assists > 1 ? 's' : ''}</div>}
-                {s.saves > 0 && <div>&#x270B; {s.saves} save{s.saves > 1 ? 's' : ''}</div>}
+                {s.saves   > 0 && <div>&#x270B; {s.saves} save{s.saves > 1 ? 's' : ''}</div>}
                 {s.tackles > 0 && <div>&#x1F4AA; {s.tackles} tackle{s.tackles > 1 ? 's' : ''}</div>}
                 {s.yellowCard && <div>&#x1F7E8; Booked</div>}
-                {s.redCard && <div>&#x1F7E5; Sent off</div>}
-                {s.injured && <div>&#x1F3E5; Injured</div>}
-                {!s.goals && !s.assists && !s.saves && !s.tackles && !s.yellowCard && <div style={{ opacity: 0.4 }}>Quiet so far</div>}
+                {s.redCard    && <div>&#x1F7E5; Sent off</div>}
+                {s.injured    && <div>&#x1F3E5; Injured</div>}
+                {!s.goals && !s.assists && !s.saves && !s.tackles && !s.yellowCard && (
+                  <div style={{ opacity: 0.4 }}>Quiet so far</div>
+                )}
               </div>
               {agent && (
-                <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor: C.dust }}>
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid rgba(227,224,213,0.2)`, fontSize: '11px' }}>
                   <div style={{ opacity: 0.6 }}>Conf {Math.round(agent.confidence)}% &bull; Fatigue {Math.round(agent.fatigue)}%</div>
                   {agent.emotion !== 'neutral' && <div style={{ color: teamColor }}>{agent.emotion}</div>}
                 </div>
               )}
             </div>
           </div>
+
+          {/* ── Recent match events involving this player ─────────────────── */}
           {evts.length > 0 && (
-            <div className="border-t pt-2" style={{ borderColor: C.dust }}>
+            <div style={{ borderTop: `1px solid rgba(227,224,213,0.2)`, paddingTop: '8px' }}>
               {evts.slice(-4).map((e, i) => (
-                <div key={i} className="text-xs py-0.5" style={{ opacity: 0.7 }}>
-                  <span style={{ color: C.purple }}>{e.minute}'</span> {(e.commentary || '').slice(0, 55)}
+                <div key={i} style={{ fontSize: '11px', padding: '2px 0', opacity: 0.7 }}>
+                  <span style={{ color: C.purple }}>{e.minute}'</span>{' '}
+                  {(e.commentary || '').slice(0, 55)}
                 </div>
               ))}
             </div>
