@@ -216,7 +216,7 @@ const MatchSimulator = () => {
       if(event.cardType==='yellow'&&event.player&&aim){const a=aim.getAgentByName(event.player);if(a)a.triggerEmotion('yellow_card');}
       if(event.cardType==='red'&&aim){const a=aim.getAgentByName(event.foulerName||event.player);if(a)a.triggerEmotion('red_card');}
       if(aim)aim.updateManagerEmotion(event,prev.score[0],prev.score[1]);
-      const newScore=[...prev.score];
+      let newScore=[...prev.score];
       if(event.isGoal){if(event.team===prev.homeTeam.shortName)newScore[0]++;else newScore[1]++;}
       const swing=event.team===prev.homeTeam.shortName?event.momentumChange[0]:event.momentumChange[1];
       const newMom=[Math.max(-10,Math.min(10,prev.momentum[0]+(event.team===prev.homeTeam.shortName?swing:-swing))),Math.max(-10,Math.min(10,prev.momentum[1]+(event.team===prev.awayTeam.shortName?swing:-swing)))];
