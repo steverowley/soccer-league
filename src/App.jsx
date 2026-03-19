@@ -665,16 +665,16 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
-          {/* 600px — explicit section height that gives all three columns a
-              definite block size. This is the only reliable way to make
-              height:100% on column wrappers and flex:1 on inner feed divs
-              work without circular CSS-Grid sizing dependencies.
-              Chosen so the centre column allocates ~400px to commentary
-              (600px minus the ~150px pitch card and 12px gap) and the side
-              columns allocate ~280px to Player Thoughts (600px minus team-
-              info, manager-shouts, and gaps). Both feed areas scroll once
-              content exceeds their allocated height. */}
           <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',height:'600px'}}>
+            {/* 600px — explicit section height that gives all three columns a
+                definite block size. This is the only reliable way to make
+                height:100% on column wrappers and flex:1 on inner feed divs
+                work without circular CSS-Grid sizing dependencies.
+                Chosen so the centre column allocates ~400px to commentary
+                (600 minus the ~150px pitch card and 12px gap) and the side
+                columns allocate ~280px to Player Thoughts (600 minus team
+                info, manager shouts, and gaps). Both feed areas scroll once
+                content exceeds their allocated height. */}
             {/* ── HOME column ─────────────────────────────────────────── */}
             {/* height:100% works here because the parent grid has an explicit
                 height (600px), giving a definite reference for percentage
