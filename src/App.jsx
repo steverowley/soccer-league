@@ -906,30 +906,18 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'16px',height:'600px'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'600px',alignItems:'stretch'}}>
             {/* Layout contract for this section:
                 - grid height 600px gives all three columns a fixed block size.
-                - Each column wrapper has overflow:hidden so nothing bleeds out.
-                - Feed divs use explicit fixed heights (same pattern as Manager
-                  Shouts, which has always worked reliably) so overflowY:auto
-                  creates a real scroll context without any flex trickery.
-
-                  Heights chosen so both side columns and the centre column
-                  total ≈ 590px — safely inside the 600px clip:
-                    Side:   team-info(~84) + gap(12) + mgr-shouts(194) +
-                            gap(12) + thoughts-header(34) + 250px feed = ~586px
-                    Centre: pitch-card(~161) + gap(12) + commentary-header(34)
-                            + 380px feed = ~587px
-
-                  380px commentary — fits ~6–8 entries before scrolling.
-                  250px player-thoughts — fits ~3–4 entries before scrolling.
-                  160px manager-shouts (unchanged) — fits ~2 entries. */}
+                - Grid align-items:stretch sizes each column to 600px without
+                  needing height:100% on the column divs (avoids % resolution
+                  edge cases in some browsers).
+                - overflow:hidden on each column clips any content overflow.
+                - flex:1 on the last card in each column fills remaining space,
+                  keeping all three column bottoms perfectly flush.
+                - Gaps are 8px (design system: multiples of 4 or 8). */}
             {/* ── HOME column ─────────────────────────────────────────── */}
-            {/* height:100% works here because the parent grid has an explicit
-                height (600px), giving a definite reference for percentage
-                resolution. flex:1 on the last card then reliably fills the
-                remaining column space. */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%',overflow:'hidden'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.homeTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.homeTeam.color,marginBottom:'4px'}}>{ms.homeTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.homeFormation} · {aiManager.homeTactics.replace(/_/g,' ').toUpperCase()}</div>
@@ -984,7 +972,7 @@ const MatchSimulator = ({
             </div>
 
             {/* ── CENTRE: pitch + commentary ──────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%',overflow:'hidden'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px'}}>
                 <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
                 <div style={{position:'relative',height:'88px',backgroundColor:'#1a4d2e',border:'1px solid rgba(227,224,213,0.2)',backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 19px,rgba(255,255,255,0.04) 19px,rgba(255,255,255,0.04) 20px)'}}>
@@ -1146,7 +1134,7 @@ const MatchSimulator = ({
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',height:'100%',overflow:'hidden'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px',borderColor:ms.awayTeam.color}}>
                 <div style={{fontSize:'13px',fontWeight:700,color:ms.awayTeam.color,marginBottom:'4px'}}>{ms.awayTeam.name}</div>
                 <div style={{fontSize:'11px',opacity:0.6}}>{aiManager.awayFormation} · {aiManager.awayTactics.replace(/_/g,' ').toUpperCase()}</div>
