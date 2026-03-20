@@ -31,6 +31,7 @@ import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
+import MetaRow from '../components/ui/MetaRow';
 import { findTeam, getLeagueName, PLAYER_STAT_COLS, placeholderPlayerRows } from '../data/leagueData';
 
 // ── Season / Historic stats column definitions ────────────────────────────────
@@ -148,12 +149,12 @@ export default function TeamDetail() {
 
             {/* Structured metadata block */}
             <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <InfoRow label="Location"    value={team.location} />
-              <InfoRow label="Home Ground" value={team.homeGround} />
-              <InfoRow label="Capacity"    value={team.capacity} />
+              <MetaRow label="Location"    value={team.location} />
+              <MetaRow label="Home Ground" value={team.homeGround} />
+              <MetaRow label="Capacity"    value={team.capacity} />
               {/* League membership — derived rather than stored on the team
                   object so it stays in sync if a team is moved between leagues */}
-              {leagueName && <InfoRow label="League" value={leagueName} />}
+              {leagueName && <MetaRow label="League" value={leagueName} />}
             </div>
 
             {/* Description paragraphs — split from the \n-delimited string */}
@@ -215,25 +216,3 @@ export default function TeamDetail() {
   );
 }
 
-// ── InfoRow ───────────────────────────────────────────────────────────────────
-
-/**
- * Single "LABEL: value" metadata row for the team info card.
- *
- * Mirrors the MetaRow component in Teams.jsx but used within a card context
- * where the font size is slightly larger (13px vs 11px on the listing card).
- *
- * @param {string} label - Field name rendered bold-uppercase.
- * @param {string} value - Field value in normal weight.
- * @returns {JSX.Element}
- */
-function InfoRow({ label, value }) {
-  return (
-    <p style={{ fontSize: '13px', lineHeight: 1.6 }}>
-      <strong style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        {label}:
-      </strong>{' '}
-      {value}
-    </p>
-  );
-}

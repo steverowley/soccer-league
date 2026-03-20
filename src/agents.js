@@ -24,7 +24,6 @@
 //  'skip'    (penalty sub-steps, VAR sub-steps, social) → nothing generated
 
 import Anthropic from '@anthropic-ai/sdk';
-import { pick as _pick } from './utils.js';
 import { PERS_ICON } from './constants.js';
 
 // ── Commentator Personalities ─────────────────────────────────────────────────
