@@ -545,8 +545,12 @@ export class AgentSystem {
   _classifyEvent(event) {
     if (event.isGoal || event.cardType === 'red') return 'full';
     if (event.cardType === 'yellow' || event.type === 'injury' || event.isControversial) return 'medium';
+    // Substitutions are manager decisions already surfaced in the Manager
+    // Shouts column, so routing them through Vox creates redundant commentary
+    // feed noise.  Keeping them in the 'manager' tier means the manager
+    // reaction still fires (touchline column) without a Vox play-by-play.
     if (['team_talk', 'manager_shout', 'captain_rally', 'desperate_sub',
-         'manager_sentoff', 'siege_start'].includes(event.type)) return 'manager';
+         'manager_sentoff', 'siege_start', 'substitution'].includes(event.type)) return 'manager';
     // Penalty/VAR sub-steps and social posts produce their own narrative text;
     // no need to add an additional AI layer on top.
     if (event.type && (
@@ -631,11 +635,14 @@ export class AgentSystem {
     }
 
     // ── Step 3: Player inner thought (PARALLEL) ─────────────────────────────
-    // full / medium → always; minor → 30% chance.
-    // 0.3 — threshold chosen to keep the minor-event thought rate low enough
-    // that it feels like a genuine spontaneous aside, not constant chatter.
+    // full / medium → always; minor → 15% chance.
+    // 0.15 — halved from the original 0.30 to reduce feed noise during routine
+    // play.  At ~6–8 minor events per half this still yields roughly one
+    // spontaneous player aside per half on average, which feels organic rather
+    // than constant.  Full/medium events are unaffected so dramatic moments
+    // retain their full voice coverage.
     const wantThought = tier === 'full' || tier === 'medium' ||
-      (tier === 'minor' && event.player && Math.random() < 0.3);
+      (tier === 'minor' && event.player && Math.random() < 0.15);
     if (wantThought && event.player) {
       const agent = allAgents?.find(a => a.player.name === event.player);
       if (agent) {

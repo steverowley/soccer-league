@@ -212,8 +212,27 @@ const MatchSimulator = ({
   const architectRef=useRef(null);
   const lastEventCountRef=useRef(0);
   const lastThoughtsCountRef=useRef(0);
+  // Tracks whether the user has manually scrolled away from the top of the
+  // commentary feed.  When true, auto-scroll is suppressed so new entries
+  // don't yank the viewport back while the user is reading older content.
+  // Intentionally a ref (not state) — we don't want a re-render on scroll.
+  const commentaryUserScrolledRef=useRef(false);
 
-  useEffect(()=>{if(evtLogRef.current)evtLogRef.current.scrollTop=0;},[commentaryFeed]);
+  /**
+   * onScroll handler for the commentary feed container.
+   * Sets commentaryUserScrolledRef to true once the user scrolls more than
+   * 40 px from the top, and back to false when they return near the top.
+   * The 40 px threshold prevents accidental micro-scrolls from locking
+   * auto-scroll permanently.
+   */
+  const handleCommentaryScroll=()=>{
+    if(evtLogRef.current) commentaryUserScrolledRef.current=evtLogRef.current.scrollTop>40;
+  };
+
+  // Auto-scroll the commentary feed to the top when new items arrive, but
+  // only when the user hasn't scrolled down.  This preserves the "latest
+  // event always visible" default while letting users read history freely.
+  useEffect(()=>{if(evtLogRef.current&&!commentaryUserScrolledRef.current)evtLogRef.current.scrollTop=0;},[commentaryFeed]);
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
 
@@ -624,6 +643,15 @@ const MatchSimulator = ({
     awayYellows: ms.events.filter(e => e.cardType === 'yellow' && (e.team === asn || e.foulerTeam === asn)).length,
   }), [ms.events, sn, asn]);
 
+  // ── Key match events (goals, cards, subs) ─────────────────────────────────
+  // Filtered from ms.events for display in the timeline strip above the
+  // commentary feed.  Only significant events are included so the strip stays
+  // scannable — routine play (corners, fouls, etc.) is intentionally omitted.
+  // Memoised on ms.events so it only recomputes when a new event is appended.
+  const keyEvents = useMemo(() => ms.events.filter(e =>
+    e.isGoal || e.cardType === 'red' || e.cardType === 'yellow' || e.type === 'substitution'
+  ), [ms.events]);
+
   // ── Reversed feed arrays ───────────────────────────────────────────────────
   // Each feed is displayed newest-first (reverse order) in the UI.
   // Memoised so a new reversed array is only allocated when the source feed
@@ -969,11 +997,44 @@ const MatchSimulator = ({
                   <span style={{color:ms.awayTeam.color}}>{ms.possession[1]>55?'⚔ ':''}{ms.awayTeam.shortName}</span>
                 </div>
               </div>
+              {/* ── Key Events Timeline ──────────────────────────────────────
+                  Compact strip showing only goals, cards, and substitutions in
+                  chronological order (oldest left → newest right).  Routine
+                  events (corners, fouls, etc.) are omitted to keep this strip
+                  scannable at a glance.  Each chip is colour-coded by team and
+                  event type so the match story is readable without scrolling
+                  through the full commentary feed.
+                  Empty-state placeholder is shown until the first key event
+                  so the card doesn't collapse to zero height. */}
+              <div className="card" style={{padding:'8px 12px'}}>
+                <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)',marginBottom:'6px'}}>Match Events</div>
+                {keyEvents.length===0
+                  ?<div style={{fontSize:'10px',opacity:0.25,fontStyle:'italic'}}>No key events yet</div>
+                  :<div style={{display:'flex',flexWrap:'wrap',gap:'5px'}}>
+                    {keyEvents.map((e,i)=>{
+                      // Determine chip icon and colour based on event type.
+                      // Goals use the scoring team's colour for instant visual
+                      // association; cards use standard football colours
+                      // (red/yellow); subs use a neutral grey.
+                      const isHome=e.team===sn;
+                      const teamColor=isHome?ms.homeTeam.color:ms.awayTeam.color;
+                      const icon=e.isGoal?'⚽':e.cardType==='red'?'🟥':e.cardType==='yellow'?'🟨':'🔄';
+                      const borderColor=e.isGoal?teamColor:e.cardType==='red'?'#E05252':e.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.3)';
+                      const label=e.isGoal?`${e.minute}' ${isHome?ms.homeTeam.shortName:ms.awayTeam.shortName}`:`${e.minute}'`;
+                      return(
+                        <span key={i} title={e.player||e.type} style={{display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'10px',padding:'2px 6px',border:`1px solid ${borderColor}`,color:e.isGoal?teamColor:'rgba(227,224,213,0.7)',backgroundColor:e.isGoal?`${teamColor}10`:'transparent',whiteSpace:'nowrap'}}>
+                          {icon} {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                }
+              </div>
+
               {/* Commentary card — flex:1 fills the remaining centre-column
-                  height after the pitch visualization. display:flex lets the
-                  inner feed div also use flex:1 to fill the card; overflow:hidden
-                  clips any overflow so the card never grows past its share of
-                  the 600px column height. */}
+                  height after the pitch visualization and events strip.
+                  Height reduced to 300px (from 380px) to accommodate the new
+                  events card while keeping the overall column height unchanged. */}
               <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(154,92,244,0.3)',backgroundColor:'rgba(154,92,244,0.06)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',display:'flex',alignItems:'center',gap:'8px'}}>
                   <span>Commentary</span>
@@ -993,7 +1054,7 @@ const MatchSimulator = ({
                 {/* flex:1 fills whatever height the card has been allocated by
                     the 600px grid; overflowY:auto scrolls new entries rather
                     than expanding the div (and therefore the whole column). */}
-                <div ref={evtLogRef} style={{padding:'8px',overflowY:'auto',height:'380px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
+                <div ref={evtLogRef} onScroll={handleCommentaryScroll} style={{padding:'8px',overflowY:'auto',height:'300px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
                   {commentaryFeed.length===0&&(
                     <div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'80px'}}>
                       {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
