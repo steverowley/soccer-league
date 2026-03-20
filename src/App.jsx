@@ -956,12 +956,16 @@ const MatchSimulator = ({
                   }
                 </div>
               </div>
-              {/* Player Thoughts — flex:1 so this card stretches to fill remaining column
-                  height, keeping the home/away columns flush with the taller centre
-                  column. minHeight preserves a sensible floor when content is sparse. */}
-              <div className="card" style={{padding:0,overflow:'hidden'}}>
+              {/* Player Thoughts — flex:1 on the outer card so it stretches to fill
+                  whatever height remains after the team-info and manager-shouts
+                  cards, keeping the home column flush with the centre column's
+                  bottom edge.  The outer card is also a flex column so the scroll
+                  div inside can use flex:1 + minHeight:0 (the standard CSS trick
+                  to let a flex child scroll within its allocated space rather than
+                  expanding past it). */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Player Thoughts</div>
-                <div style={{padding:'8px',overflowY:'auto',height:'250px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :homeThoughtsReversed.map((item,i)=>(
@@ -1031,11 +1035,14 @@ const MatchSimulator = ({
                 }
               </div>
 
-              {/* Commentary card — flex:1 fills the remaining centre-column
-                  height after the pitch visualization and events strip.
-                  Height reduced to 300px (from 380px) to accommodate the new
-                  events card while keeping the overall column height unchanged. */}
-              <div className="card" style={{padding:0,overflow:'hidden'}}>
+              {/* Commentary card — flex:1 so it fills whatever height remains in
+                  the centre column after the pitch card, events strip, and gaps.
+                  The card is also a flex column so the inner scroll div can use
+                  flex:1 + minHeight:0 instead of a fixed pixel height, letting
+                  the column height drive the scroll area rather than the reverse.
+                  This keeps the centre column bottom edge aligned with the outer
+                  columns regardless of how tall the events strip grows. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(154,92,244,0.3)',backgroundColor:'rgba(154,92,244,0.06)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',display:'flex',alignItems:'center',gap:'8px'}}>
                   <span>Commentary</span>
                   {agentSystemRef.current&&(
@@ -1051,10 +1058,12 @@ const MatchSimulator = ({
                     <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'2px 8px',border:'1px solid rgba(154,92,244,0.5)',backgroundColor:'transparent',color:'#9A5CF4',cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
                   )}
                 </div>
-                {/* flex:1 fills whatever height the card has been allocated by
-                    the 600px grid; overflowY:auto scrolls new entries rather
-                    than expanding the div (and therefore the whole column). */}
-                <div ref={evtLogRef} onScroll={handleCommentaryScroll} style={{padding:'8px',overflowY:'auto',height:'300px',scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
+                {/* flex:1 + minHeight:0 — the card's flex-column layout lets this
+                    div grow to fill all remaining card height; minHeight:0
+                    overrides the browser default (min-height:auto) that would
+                    otherwise prevent the div from shrinking below its content
+                    size and break the scroll context. */}
+                <div ref={evtLogRef} onScroll={handleCommentaryScroll} style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:'#9A5CF4 #111'}}>
                   {commentaryFeed.length===0&&(
                     <div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'80px'}}>
                       {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
@@ -1164,11 +1173,13 @@ const MatchSimulator = ({
                   }
                 </div>
               </div>
-              {/* Player Thoughts — flex:1 stretches to fill remaining away-column
-                  height, keeping the bottom edge aligned with the centre column. */}
-              <div className="card" style={{padding:0,overflow:'hidden'}}>
+              {/* Player Thoughts — mirrors the home column: flex:1 on the outer
+                  card fills remaining away-column height; flex-column layout on
+                  the card lets the scroll div use flex:1 + minHeight:0 so it
+                  expands to fill allocated space without a fixed pixel height. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Player Thoughts</div>
-                <div style={{padding:'8px',overflowY:'auto',height:'250px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
                     :awayThoughtsReversed.map((item,i)=>(
