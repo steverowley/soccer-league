@@ -267,40 +267,48 @@ const MatchSimulator = ({
 
   // Agent event processing: watch for new events, trigger LLM or route fallback.
   //
-  // The Architect (architectRef) is triggered here rather than inside
-  // AgentSystem so it can be called after queueEvent resolves — meaning Vox's
-  // narration and the reactor commentary have already been queued.  The
-  // Architect's maybeUpdate() then fires asynchronously; its result (if any)
-  // is routed to the commentary feed as an architect_proclamation card.
+  // ── Event routing ─────────────────────────────────────────────────────────
+  // Each new event is queued through AgentSystem (Vox play-by-play → reactors
+  // → managers → referee → player thought).  queueEvent() returns a Promise
+  // that resolves with the AI-generated feed items when the event is finally
+  // processed from the internal queue.
   //
-  // maybeUpdate() internally guards against over-firing: it only issues a new
-  // Proclamation if ≥ UPDATE_INTERVAL_MINUTES have elapsed OR the current
-  // event is a goal / red card, so calling it on every event is safe.
+  // ── Architect timing ──────────────────────────────────────────────────────
+  // maybeUpdate() is called ONCE per batch (outside the per-event loop) rather
+  // than once per event.  Calling it inside the loop would invoke it N times
+  // per tick (once per event in the batch), creating unnecessary API calls even
+  // though the internal time/event guard prevents duplicate Proclamations.
+  // Firing once per batch is cleaner: the Architect assesses the full newEvents
+  // array in one call and decides whether a Proclamation is due.
   useEffect(()=>{
     if(!matchState.events.length)return;
     const newEvents=matchState.events.slice(lastEventCountRef.current);
     lastEventCountRef.current=matchState.events.length;
+    if(!newEvents.length)return;
     const sys=agentSystemRef.current;
     const arch=architectRef.current;
     const allAgents=aiManager?[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents]:[];
     const gameState={minute:matchState.minute,score:matchState.score};
+
+    // ── Queue individual events through AgentSystem ────────────────────────
     for(const event of newEvents){
       if(!event)continue;
       if(sys){
-        // Queue the event through AgentSystem (play-by-play + reactors + managers etc.)
         sys.queueEvent(event,gameState,allAgents).then(results=>{
           results.forEach(routeAgentResult);
-          // After commentary is queued, ask the Architect if a Proclamation is due.
-          // Pass newEvents (not just this event) so it can assess recent context.
-          if(arch){
-            arch.maybeUpdate(matchState.minute,newEvents,gameState,allAgents)
-              .then(proclamation=>{if(proclamation)routeAgentResult(proclamation);})
-              .catch(()=>{});
-          }
         });
       }else{
         routeFallbackEvent(event,matchState.homeTeam.shortName);
       }
+    }
+
+    // ── Architect: one check per batch, not per event ──────────────────────
+    // maybeUpdate() internally guards against over-firing (time threshold +
+    // major-event check), so this is safe to call on every tick.
+    if(sys&&arch){
+      arch.maybeUpdate(matchState.minute,newEvents,gameState,allAgents)
+        .then(proclamation=>{if(proclamation)routeAgentResult(proclamation);})
+        .catch(()=>{});
     }
   },[matchState.events]);
 
