@@ -74,8 +74,31 @@ export function calcChaosLevel(prev, newMin) {
  */
 export function flattenSequences(prev, event, interventions) {
   let all = [...prev.events, ...interventions];
-  if (event.penaltySequence)        { const { penaltySequence,      ...e } = event; all = [...all, ...penaltySequence, e]; }
-  else if (event.freekickSequence)  { const { freekickSequence,     ...e } = event; all = [...all, ...freekickSequence, e]; }
+  // ── Sequence flattening ────────────────────────────────────────────────────
+  // Each branch destructures the sequence array out of the parent event object,
+  // then splices [sequence steps … parent remainder] into the running log.
+  //
+  // WHY WE STRIP isGoal / cardType FROM CERTAIN PARENT EVENTS
+  // ──────────────────────────────────────────────────────────
+  // penalty_sequence: genPenaltySeq already emits a `penalty_red_card` step
+  //   (cardType:'red') and a `penalty_shot` step (isGoal:true/false) inside the
+  //   sequence.  Keeping those flags on the outer container `e` would cause both
+  //   the card and the goal to appear twice in keyEvents (the match-events strip)
+  //   and in any stats filter that counts e.isGoal / e.cardType across the array.
+  //   Solution: strip isGoal + cardType from the container — the sequence steps
+  //   are the canonical source of truth for those signals.
+  //
+  // freekick_sequence: the sequence always begins with the raw `foulEvt` which
+  //   already carries cardType (yellow or red).  Retaining cardType on the outer
+  //   container `e` doubles the card count.  isGoal is NOT duplicated (the
+  //   freekick sequence never pushes a goal-flagged step), so it is kept on `e`
+  //   so that scored free kicks still appear in the events strip.
+  //
+  // counter_sequence / confrontationSequence / nearMissSequence: no duplication
+  //   risk — their inner sequences do not emit events carrying the same key flags
+  //   as the parent, so the parent is added unchanged.
+  if (event.penaltySequence)        { const { penaltySequence, isGoal: _ig, cardType: _ct, ...e } = event; all = [...all, ...penaltySequence, e]; }
+  else if (event.freekickSequence)  { const { freekickSequence, cardType: _ct, ...e } = event; all = [...all, ...freekickSequence, e]; }
   else if (event.counterSequence)   { const { counterSequence,      ...e } = event; all = [...all, ...counterSequence, e]; }
   else if (event.confrontationSequence) { const { confrontationSequence, ...e } = event; all = [...all, e, ...confrontationSequence]; }
   else if (event.nearMissSequence)  { const { nearMissSequence,     ...e } = event; all = [...all, ...nearMissSequence, e]; }
