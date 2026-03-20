@@ -635,14 +635,13 @@ export class AgentSystem {
     }
 
     // ── Step 3: Player inner thought (PARALLEL) ─────────────────────────────
-    // full / medium → always; minor → 15% chance.
-    // 0.15 — halved from the original 0.30 to reduce feed noise during routine
-    // play.  At ~6–8 minor events per half this still yields roughly one
-    // spontaneous player aside per half on average, which feels organic rather
-    // than constant.  Full/medium events are unaffected so dramatic moments
-    // retain their full voice coverage.
+    // full / medium events always produce a player thought so dramatic moments
+    // (goals, cards, injuries) retain full voice coverage.  For minor/routine
+    // events a 30% random roll keeps the feed lively without overwhelming it —
+    // at ~6–8 minor events per half this yields roughly 2 spontaneous player
+    // asides per half on average, giving the feed a steady pulse of personality.
     const wantThought = tier === 'full' || tier === 'medium' ||
-      (tier === 'minor' && event.player && Math.random() < 0.15);
+      (tier === 'minor' && event.player && Math.random() < 0.30); // 0.30 = 30% chance per minor event
     if (wantThought && event.player) {
       const agent = allAgents?.find(a => a.player.name === event.player);
       if (agent) {
