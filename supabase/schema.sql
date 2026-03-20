@@ -235,9 +235,11 @@ ALTER TABLE players             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE managers            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE match_player_stats  ENABLE ROW LEVEL SECURITY;
 
--- Public SELECT on all tables.
--- We loop instead of writing 9 identical policy statements to keep this
--- maintainable; adding a new table only requires appending it to the array.
+-- Public SELECT on all tables, plus authenticated write on all tables.
+-- CREATE POLICY has no IF NOT EXISTS clause in PostgreSQL, so we DROP first
+-- (IF EXISTS makes that a no-op on a fresh run) then CREATE.
+-- We loop over both policy names and table names to avoid repetition;
+-- adding a new table only requires appending it to the array.
 DO $$
 DECLARE t text;
 BEGIN
@@ -245,22 +247,19 @@ BEGIN
     'leagues','teams','seasons','competitions',
     'competition_teams','matches','players','managers','match_player_stats'
   ] LOOP
-    EXECUTE format(
-      'CREATE POLICY IF NOT EXISTS "public read %1$s" ON %1$s FOR SELECT USING (true)', t
-    );
-  END LOOP;
-END $$;
+    -- Drop any pre-existing versions of these policies (safe on first run).
+    EXECUTE format('DROP POLICY IF EXISTS "public read %1$s" ON %1$s', t);
+    EXECUTE format('DROP POLICY IF EXISTS "auth write %1$s"  ON %1$s', t);
 
--- Authenticated INSERT / UPDATE / DELETE on all tables.
-DO $$
-DECLARE t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY[
-    'leagues','teams','seasons','competitions',
-    'competition_teams','matches','players','managers','match_player_stats'
-  ] LOOP
+    -- Public SELECT: the anon key used by the front-end can read everything.
     EXECUTE format(
-      'CREATE POLICY IF NOT EXISTS "auth write %1$s" ON %1$s
+      'CREATE POLICY "public read %1$s" ON %1$s FOR SELECT USING (true)', t
+    );
+
+    -- Authenticated INSERT / UPDATE / DELETE: requires a logged-in user or
+    -- a server-side call made with the service-role key.
+    EXECUTE format(
+      'CREATE POLICY "auth write %1$s" ON %1$s
        FOR ALL USING (auth.role() = ''authenticated'')
        WITH CHECK (auth.role() = ''authenticated'')', t
     );
