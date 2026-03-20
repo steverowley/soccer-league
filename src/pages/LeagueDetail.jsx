@@ -28,73 +28,7 @@ import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
-import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
-
-// ── Standings table columns ───────────────────────────────────────────────────
-// Exactly mirrors the column headers shown in the mockup:
-//   TEAM | PLAYED | WINS | DRAWS | LOSES | POINTS
-const STANDINGS_COLS = [
-  { key: 'team',   label: 'Team' },
-  { key: 'played', label: 'Played', align: 'right' },
-  { key: 'wins',   label: 'Wins',   align: 'right' },
-  { key: 'draws',  label: 'Draws',  align: 'right' },
-  { key: 'loses',  label: 'Loses',  align: 'right' },
-  { key: 'points', label: 'Points', align: 'right' },
-];
-
-// ── Player stat table columns ─────────────────────────────────────────────────
-// Shared structure for Top Scorers, Top Assists, Top Clean Sheets,
-// Most Yellow Cards, and Most Red Cards — all use PLAYER | TEAM | GOALS.
-// The "GOALS" header label is reused for all categories because the mockup
-// uses it generically; individual StatTable titles provide the context.
-const PLAYER_STAT_COLS = [
-  { key: 'player', label: 'Player' },
-  { key: 'team',   label: 'Team' },
-  { key: 'goals',  label: 'Goals', align: 'right' },
-];
-
-/**
- * Builds a zeroed standings row array for every team in a given league.
- *
- * All stats are 0 pre-season.  When the match simulator is extended to persist
- * results, this function will be replaced by a selector reading from a results
- * store or API response.
- *
- * @param {string} leagueId - League slug (e.g. 'rocky-inner')
- * @returns {Array<{id: string, team: string, played: 0, wins: 0,
- *                  draws: 0, loses: 0, points: 0}>}
- */
-function buildStandingsRows(leagueId) {
-  const teams = TEAMS_BY_LEAGUE[leagueId] ?? [];
-  return teams.map(t => ({
-    id:     t.id,
-    team:   t.name,
-    played: 0,
-    wins:   0,
-    draws:  0,
-    loses:  0,
-    points: 0,
-  }));
-}
-
-/**
- * Returns an array of 6 placeholder player-stat rows.
- *
- * The mockup consistently shows 6 rows in every player stat table with
- * "Lorem Ipsum" text and 0 values.  Six rows is the display cap before
- * the "SEE MORE" button is shown.
- *
- * @returns {Array<{id: string, player: string, team: string, goals: number}>}
- */
-function placeholderPlayerRows() {
-  // 6 rows — the exact count shown in every player stat table in the mockup.
-  return Array.from({ length: 6 }, (_, i) => ({
-    id:     `placeholder-${i}`,
-    player: '—',
-    team:   '—',
-    goals:  0,
-  }));
-}
+import { LEAGUES, STANDINGS_COLS, PLAYER_STAT_COLS, buildStandingsRows, placeholderPlayerRows } from '../data/leagueData';
 
 /**
  * League Detail page.
@@ -188,13 +122,6 @@ export default function LeagueDetail() {
 
       </div>
 
-      {/* ── Responsive overrides ──────────────────────────────────────────────── */}
-      {/* Collapse all 2-column stat grids to single column below 640px. */}
-      <style>{`
-        @media (max-width: 640px) {
-          .stats-two-col { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </div>
   );
 }

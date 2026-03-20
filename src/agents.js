@@ -24,8 +24,8 @@
 //  'skip'    (penalty sub-steps, VAR sub-steps, social) → nothing generated
 
 import Anthropic from '@anthropic-ai/sdk';
-
-const _pick = arr => arr[Math.floor(Math.random() * arr.length)];
+import { pick as _pick } from './utils.js';
+import { PERS_ICON } from './constants.js';
 
 // ── Commentator Personalities ─────────────────────────────────────────────────
 // Three distinct on-air voices.  Each has a system-prompt that shapes how
@@ -75,10 +75,8 @@ const PERS_DESC = {
   balanced:    'professional, composed, and reliable under pressure',
 };
 
-const PERS_EMOJI = {
-  selfish: '🎯', team_player: '🤝', aggressive: '⚔️', cautious: '🛡️',
-  creative: '✨', lazy: '😴', workhorse: '💪', balanced: '⚖️',
-};
+// PERS_ICON (imported from constants.js) maps personality key → emoji.
+// Used in generatePlayerThought to set the emoji on player-thought feed items.
 
 // ── AgentSystem ───────────────────────────────────────────────────────────────
 // One instance is created per match in App.jsx after teams and match state
@@ -230,7 +228,7 @@ export class AgentSystem {
         type:   'player_thought',
         isHome,
         name:   player.name,
-        emoji:  PERS_EMOJI[agent?.personality] || '💭',
+        emoji:  PERS_ICON[agent?.personality] || '💭',
         color:  isHome ? this.homeTeam.color : this.awayTeam.color,
         text,
         minute: gameState.minute,
@@ -496,23 +494,26 @@ export class AgentSystem {
     this._draining = true;
     while (this._eventQueue.length) {
       const { event, gameState, allAgents, resolve } = this._eventQueue.shift();
+      // ── Cooldown enforcement ─────────────────────────────────────────────
+      // Wait until at least _cooldownMs has elapsed since the LAST call
+      // completed (not since it was dispatched).  Recording the timestamp
+      // after the await below ensures the gap is measured from call-end to
+      // call-start, so slow API responses never cause back-to-back rapid
+      // calls that trigger rate-limit errors.
       const now  = Date.now();
       const wait = this._cooldownMs - (now - this._lastCallTime);
       if (wait > 0) await new Promise(r => setTimeout(r, wait));
-      this._lastCallTime = Date.now();
       try {
         const results = await this._processEventDirect(event, gameState, allAgents);
         resolve(results);
       } catch {
         resolve([]);
       }
+      // Record AFTER the call completes so the cooldown window starts from
+      // the moment this call finished, not when it was dispatched.
+      this._lastCallTime = Date.now();
     }
     this._draining = false;
   }
 
-  // ── Legacy processEvent (kept for halftime compatibility) ───────────────────
-  // App.jsx calls this at halftime; it simply delegates to the queue.
-  async processEvent(event, gameState, allAgents) {
-    return this.queueEvent(event, gameState, allAgents);
-  }
 }

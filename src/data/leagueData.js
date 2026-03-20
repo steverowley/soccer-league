@@ -417,6 +417,89 @@ export const TEAMS_BY_LEAGUE = {
   ],
 };
 
+// ── Shared table column definitions ───────────────────────────────────────────
+// Defined here so Home, LeagueDetail, and TeamDetail all use one source of
+// truth.  Changing a column key or label here propagates automatically.
+
+/**
+ * Column definitions for the league standings table.
+ * Used by Home (carousel), LeagueDetail, and TeamDetail (season / historic).
+ *
+ * @type {Array<{key: string, label: string, align?: string}>}
+ */
+export const STANDINGS_COLS = [
+  { key: 'team',   label: 'Team' },
+  { key: 'played', label: 'Played', align: 'right' },
+  { key: 'wins',   label: 'Wins',   align: 'right' },
+  { key: 'draws',  label: 'Draws',  align: 'right' },
+  { key: 'loses',  label: 'Loses',  align: 'right' },
+  { key: 'points', label: 'Points', align: 'right' },
+];
+
+/**
+ * Column definitions shared by all five player-stat tables:
+ * Top Scorers, Top Assists, Top Clean Sheets, Most Yellow Cards, Most Red Cards.
+ *
+ * The "Goals" header is intentionally generic — the enclosing section title
+ * (e.g. "TOP SCORERS") provides the semantic context.
+ *
+ * @type {Array<{key: string, label: string, align?: string}>}
+ */
+export const PLAYER_STAT_COLS = [
+  { key: 'player', label: 'Player' },
+  { key: 'team',   label: 'Team' },
+  { key: 'goals',  label: 'Goals', align: 'right' },
+];
+
+// ── Shared row-builder helpers ─────────────────────────────────────────────────
+
+/**
+ * Builds a zeroed-out standings row array for every team in a given league.
+ *
+ * All numeric fields start at 0 (pre-season state).  When match results are
+ * persisted, this function will be replaced by a selector reading from a
+ * results store or API response.
+ *
+ * Used by: Home (carousel), LeagueDetail (full standings table).
+ *
+ * @param {string} leagueId - League slug (e.g. 'rocky-inner')
+ * @returns {Array<{id: string, team: string, played: number, wins: number,
+ *                  draws: number, loses: number, points: number}>}
+ */
+export function buildStandingsRows(leagueId) {
+  const teams = TEAMS_BY_LEAGUE[leagueId] ?? [];
+  return teams.map(t => ({
+    id:     t.id,
+    team:   t.name,
+    played: 0,
+    wins:   0,
+    draws:  0,
+    loses:  0,
+    points: 0,
+  }));
+}
+
+/**
+ * Returns 6 placeholder player-stat rows for use before live data is available.
+ *
+ * 6 rows is the display cap shown in the mockup before the "SEE MORE" button
+ * appears.  The em-dash values signal to the user that data is pending rather
+ * than showing empty cells.
+ *
+ * Used by: LeagueDetail and TeamDetail for all five player-stat tables.
+ *
+ * @returns {Array<{id: string, player: string, team: string, goals: number}>}
+ */
+export function placeholderPlayerRows() {
+  // 6 rows — the exact count displayed in every player stat table in the mockup.
+  return Array.from({ length: 6 }, (_, i) => ({
+    id:     `placeholder-${i}`,
+    player: '—',
+    team:   '—',
+    goals:  0,
+  }));
+}
+
 // ── Derived helpers ────────────────────────────────────────────────────────────
 
 /**

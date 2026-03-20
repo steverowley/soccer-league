@@ -48,10 +48,11 @@ export default function Leagues() {
           `align-items: stretch` on the grid container so that pairs of cards
           always share the same bottom edge — matching the mockup. */}
       <div
+        className="leagues-grid"
         style={{
           display: 'grid',
           // Two equal columns on desktop; single column on narrow viewports
-          // via the responsive override in the <style> block below.
+          // via the .leagues-grid responsive rule in index.css.
           gridTemplateColumns: '1fr 1fr',
           gap: '24px',
         }}
@@ -87,14 +88,6 @@ export default function Leagues() {
         ))}
       </div>
 
-      {/* ── Responsive grid override ────────────────────────────────────────── */}
-      {/* Collapses the 2-column grid to 1 column below 640px to match the
-          mobile layout spec (single-column card stack). */}
-      <style>{`
-        @media (max-width: 640px) {
-          .leagues-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </div>
   );
 }

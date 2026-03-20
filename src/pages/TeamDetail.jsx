@@ -31,7 +31,7 @@ import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
-import { findTeam, getLeagueName } from '../data/leagueData';
+import { findTeam, getLeagueName, PLAYER_STAT_COLS, placeholderPlayerRows } from '../data/leagueData';
 
 // ── Season / Historic stats column definitions ────────────────────────────────
 // Shared by both the Season Stats and Historic Stats tables — same columns,
@@ -55,15 +55,6 @@ const TROPHY_COLS = [
   { key: 'leagueCups',    label: 'League Cups',    align: 'right' },
   { key: 'celestialCups', label: 'Celestial Cups', align: 'right' },
   { key: 'solarCups',     label: 'Solar Cups',     align: 'right' },
-];
-
-// ── Player stat table columns ─────────────────────────────────────────────────
-// Reused across all five player-stat tables on this page.
-// "GOALS" header is used generically — the section title provides context.
-const PLAYER_STAT_COLS = [
-  { key: 'player', label: 'Player' },
-  { key: 'team',   label: 'Team' },
-  { key: 'goals',  label: 'Goals', align: 'right' },
 ];
 
 /**
@@ -90,24 +81,6 @@ function zeroRecord(teamName) {
  */
 function zeroTrophies(teamName) {
   return [{ id: 'trophies', team: teamName, leagueCups: 0, celestialCups: 0, solarCups: 0 }];
-}
-
-/**
- * Returns 6 placeholder player-stat rows.
- *
- * 6 rows is the display cap before the SEE MORE button — consistent with
- * the league detail page and the mockup's player stat tables.
- *
- * @returns {Array<{id: string, player: string, team: string, goals: number}>}
- */
-function placeholderPlayerRows() {
-  // 6 rows exactly — matches the mockup's pre-data placeholder count.
-  return Array.from({ length: 6 }, (_, i) => ({
-    id:     `p-${i}`,
-    player: '—',
-    team:   '—',
-    goals:  0,
-  }));
 }
 
 /**
@@ -238,13 +211,6 @@ export default function TeamDetail() {
 
       </div>
 
-      {/* ── Responsive overrides ──────────────────────────────────────────────── */}
-      {/* Collapse 2-column stat grids to single column below 640px. */}
-      <style>{`
-        @media (max-width: 640px) {
-          .stats-two-col { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </div>
   );
 }

@@ -22,43 +22,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import IslTable from '../components/ui/IslTable';
-import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
-
-// ── Standings table column definitions ────────────────────────────────────────
-// Mirrors the columns shown in the league standings mockup:
-//   TEAM | PLAYED | WINS | DRAWS | LOSES | POINTS
-const STANDINGS_COLUMNS = [
-  { key: 'team',   label: 'Team' },
-  { key: 'played', label: 'Played', align: 'right' },
-  { key: 'wins',   label: 'Wins',   align: 'right' },
-  { key: 'draws',  label: 'Draws',  align: 'right' },
-  { key: 'loses',  label: 'Loses',  align: 'right' },
-  { key: 'points', label: 'Points', align: 'right' },
-];
-
-/**
- * Builds a zeroed-out standings row array for a given league.
- *
- * All numeric fields start at 0 because no matches have been played yet.
- * When match results are persisted (future work), this function will be
- * replaced by a selector that reads from a results store.
- *
- * @param {string} leagueId - League slug (e.g. 'rocky-inner')
- * @returns {Array<{id: string, team: string, played: number, wins: number,
- *                  draws: number, loses: number, points: number}>}
- */
-function buildStandingsRows(leagueId) {
-  const teams = TEAMS_BY_LEAGUE[leagueId] ?? [];
-  return teams.map(t => ({
-    id:     t.id,
-    team:   t.name,
-    played: 0,
-    wins:   0,
-    draws:  0,
-    loses:  0,
-    points: 0,
-  }));
-}
+import { LEAGUES, buildStandingsRows, STANDINGS_COLS } from '../data/leagueData';
 
 /**
  * ISL Home page component.
@@ -196,7 +160,7 @@ export default function Home() {
           {/* Dark standings table — matches the primary table variant in mockup */}
           <IslTable
             variant="dark"
-            columns={STANDINGS_COLUMNS}
+            columns={STANDINGS_COLS}
             rows={standingsRows}
           />
         </section>

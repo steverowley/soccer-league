@@ -87,13 +87,6 @@ export default function Teams() {
         );
       })}
 
-      {/* ── Responsive grid override ─────────────────────────────────────────── */}
-      {/* Single column below 640px — matches the mobile layout spec. */}
-      <style>{`
-        @media (max-width: 640px) {
-          .team-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </div>
   );
 }
