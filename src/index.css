@@ -312,6 +312,22 @@ table {
   margin-bottom: var(--space-4);
 }
 
+/* ── Responsive grid helpers ───────────────────────────────────────────── */
+/* All two-column grids on listing/detail pages collapse to a single column
+   below 640px.  The three classes are set inline by their components and
+   targeted here so no per-page <style> blocks are needed:
+     .stats-two-col  – stat table pairs (LeagueDetail, TeamDetail)
+     .team-grid      – team card grid (Teams)
+     .leagues-grid   – league card grid (Leagues) */
+
+@media (max-width: 640px) {
+  .stats-two-col,
+  .team-grid,
+  .leagues-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* ── Footer ────────────────────────────────────────────────────────────── */
 
 .footer {

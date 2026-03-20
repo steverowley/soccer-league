@@ -28,6 +28,7 @@
 
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import MetaRow from '../components/ui/MetaRow';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 
 /**
@@ -87,13 +88,6 @@ export default function Teams() {
         );
       })}
 
-      {/* ── Responsive grid override ─────────────────────────────────────────── */}
-      {/* Single column below 640px — matches the mobile layout spec. */}
-      <style>{`
-        @media (max-width: 640px) {
-          .team-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -131,9 +125,9 @@ function TeamCard({ team }) {
       {/* ── Structured metadata rows ──────────────────────────────────────── */}
       {/* Each row uses the "LABEL: value" format shown in the mockup.
           Labels are bold-uppercase; values are normal-weight. */}
-      <MetaRow label="Location"    value={team.location} />
-      <MetaRow label="Home Ground" value={team.homeGround} />
-      <MetaRow label="Capacity"    value={team.capacity} />
+      <MetaRow label="Location"    value={team.location}   fontSize="11px" />
+      <MetaRow label="Home Ground" value={team.homeGround} fontSize="11px" />
+      <MetaRow label="Capacity"    value={team.capacity}   fontSize="11px" />
 
       {/* ── Tagline ──────────────────────────────────────────────────────── */}
       {/* flex: 1 pushes the button below to the card's bottom edge. */}
@@ -151,25 +145,3 @@ function TeamCard({ team }) {
   );
 }
 
-// ── MetaRow ───────────────────────────────────────────────────────────────────
-
-/**
- * Single "LABEL: value" metadata row used inside team cards.
- *
- * The label is rendered bold-uppercase at 11px to match the design mockup's
- * structured info block style.  The value follows inline in normal weight.
- *
- * @param {string} label - Field name (e.g. "Location"), rendered uppercase bold.
- * @param {string} value - Field value (e.g. "Mercury").
- * @returns {JSX.Element}
- */
-function MetaRow({ label, value }) {
-  return (
-    <p style={{ fontSize: '11px', lineHeight: 1.6 }}>
-      <strong style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        {label}:
-      </strong>{' '}
-      {value}
-    </p>
-  );
-}

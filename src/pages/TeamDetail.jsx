@@ -31,7 +31,8 @@ import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
-import { findTeam, getLeagueName } from '../data/leagueData';
+import MetaRow from '../components/ui/MetaRow';
+import { findTeam, getLeagueName, PLAYER_STAT_COLS, placeholderPlayerRows } from '../data/leagueData';
 
 // ── Season / Historic stats column definitions ────────────────────────────────
 // Shared by both the Season Stats and Historic Stats tables — same columns,
@@ -55,15 +56,6 @@ const TROPHY_COLS = [
   { key: 'leagueCups',    label: 'League Cups',    align: 'right' },
   { key: 'celestialCups', label: 'Celestial Cups', align: 'right' },
   { key: 'solarCups',     label: 'Solar Cups',     align: 'right' },
-];
-
-// ── Player stat table columns ─────────────────────────────────────────────────
-// Reused across all five player-stat tables on this page.
-// "GOALS" header is used generically — the section title provides context.
-const PLAYER_STAT_COLS = [
-  { key: 'player', label: 'Player' },
-  { key: 'team',   label: 'Team' },
-  { key: 'goals',  label: 'Goals', align: 'right' },
 ];
 
 /**
@@ -90,24 +82,6 @@ function zeroRecord(teamName) {
  */
 function zeroTrophies(teamName) {
   return [{ id: 'trophies', team: teamName, leagueCups: 0, celestialCups: 0, solarCups: 0 }];
-}
-
-/**
- * Returns 6 placeholder player-stat rows.
- *
- * 6 rows is the display cap before the SEE MORE button — consistent with
- * the league detail page and the mockup's player stat tables.
- *
- * @returns {Array<{id: string, player: string, team: string, goals: number}>}
- */
-function placeholderPlayerRows() {
-  // 6 rows exactly — matches the mockup's pre-data placeholder count.
-  return Array.from({ length: 6 }, (_, i) => ({
-    id:     `p-${i}`,
-    player: '—',
-    team:   '—',
-    goals:  0,
-  }));
 }
 
 /**
@@ -175,12 +149,12 @@ export default function TeamDetail() {
 
             {/* Structured metadata block */}
             <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <InfoRow label="Location"    value={team.location} />
-              <InfoRow label="Home Ground" value={team.homeGround} />
-              <InfoRow label="Capacity"    value={team.capacity} />
+              <MetaRow label="Location"    value={team.location} />
+              <MetaRow label="Home Ground" value={team.homeGround} />
+              <MetaRow label="Capacity"    value={team.capacity} />
               {/* League membership — derived rather than stored on the team
                   object so it stays in sync if a team is moved between leagues */}
-              {leagueName && <InfoRow label="League" value={leagueName} />}
+              {leagueName && <MetaRow label="League" value={leagueName} />}
             </div>
 
             {/* Description paragraphs — split from the \n-delimited string */}
@@ -238,36 +212,7 @@ export default function TeamDetail() {
 
       </div>
 
-      {/* ── Responsive overrides ──────────────────────────────────────────────── */}
-      {/* Collapse 2-column stat grids to single column below 640px. */}
-      <style>{`
-        @media (max-width: 640px) {
-          .stats-two-col { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </div>
   );
 }
 
-// ── InfoRow ───────────────────────────────────────────────────────────────────
-
-/**
- * Single "LABEL: value" metadata row for the team info card.
- *
- * Mirrors the MetaRow component in Teams.jsx but used within a card context
- * where the font size is slightly larger (13px vs 11px on the listing card).
- *
- * @param {string} label - Field name rendered bold-uppercase.
- * @param {string} value - Field value in normal weight.
- * @returns {JSX.Element}
- */
-function InfoRow({ label, value }) {
-  return (
-    <p style={{ fontSize: '13px', lineHeight: 1.6 }}>
-      <strong style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        {label}:
-      </strong>{' '}
-      {value}
-    </p>
-  );
-}

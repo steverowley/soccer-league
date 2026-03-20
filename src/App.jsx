@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Play, Pause, RotateCcw, Settings } from "lucide-react";
 import TEAMS from "./teams.js";
 import { AgentSystem, COMMENTATOR_PROFILES } from "./agents.js";
@@ -19,6 +19,147 @@ import {
 import { rnd, rndI, pick } from "./utils.js";
 import { Stat, PlayerRow, FeedCard, AgentCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic } from "./simulateHelpers.js";
+
+// ── Halftime tunnel quotes ─────────────────────────────────────────────────────
+// Two quote buckets selected by scoreline when the whistle blows at 45':
+//   TUNNEL_Q[0]  adversity / trailing — urges fight and adjustment.
+//   TUNNEL_Q[1]  confidence / leading or level — urges patience and execution.
+//
+// Defined at module level so the simulateMinute setState callback never
+// reallocates this array on every tick (it would otherwise be re-created
+// every time the interval fires, ~1–5 times per second).
+const TUNNEL_Q = [
+  [
+    'We need more desire out there. Leave everything on that pitch.',
+    "The numbers don\u2019t lie. Adjust and execute.",
+    "I\u2019ve seen worse. Fix the shape.",
+  ],
+  [
+    "Tactically we\u2019re sound. Just need that final ball.",
+    'Patience. The goal is coming.',
+    "Keep the faith. We\u2019ve been here before.",
+  ],
+];
+
+// ── Betting helpers ────────────────────────────────────────────────────────────
+// Pure functions with no component state; defined at module level so React
+// never re-creates them on re-render (they were previously inside the component
+// body, causing a fresh allocation on every state update).
+
+/**
+ * Returns a human-readable label for a bet type.
+ *
+ * @param {string} type - Bet type key (e.g. 'homeWin', 'score_2_1').
+ * @param {{ homeTeam: {shortName:string}, awayTeam: {shortName:string} }} ms
+ * @returns {string}
+ */
+const betLabel = (type, ms) => {
+  if (type === 'homeWin') return ms.homeTeam.shortName + ' Win';
+  if (type === 'awayWin') return ms.awayTeam.shortName + ' Win';
+  if (type === 'draw')    return 'Draw';
+  if (type === 'over25')  return 'Over 2.5 Goals';
+  if (type === 'under25') return 'Under 2.5 Goals';
+  if (type === 'redCard') return 'Red Card Shown';
+  if (type === 'btts')    return 'Both Teams Score';
+  if (type === 'nobtts')  return 'Clean Sheet (1 team)';
+  if (type && type.startsWith('score_'))  return 'Exact Score '  + type.replace('score_',  '').replace('_', '-');
+  if (type && type.startsWith('scorer_')) return 'First Scorer: ' + type.replace('scorer_', '');
+  return type;
+};
+
+/**
+ * Returns the live settlement status of a placed bet given the current match state.
+ *
+ * @param {{ type: string, amount: number, odds: number }} bet
+ * @param {{ score: number[], minute: number, redCards: {home:number,away:number},
+ *            events: object[] }} ms
+ * @returns {'winning'|'losing'|'pending'}
+ */
+const betStatus = (bet, ms) => {
+  const [h, a] = ms.score;
+  const total   = h + a;
+  const hadRed  = ms.redCards.home > 0 || ms.redCards.away > 0;
+  if (bet.type === 'homeWin')  return h > a ? 'winning' : h < a ? 'losing' : 'pending';
+  if (bet.type === 'awayWin')  return a > h ? 'winning' : a < h ? 'losing' : 'pending';
+  if (bet.type === 'draw')     return h === a ? 'winning' : 'losing';
+  if (bet.type === 'over25')   return total >= 3 ? 'winning' : total < 3 && ms.minute > 85 ? 'losing' : 'pending';
+  if (bet.type === 'under25')  return total < 3 ? 'winning' : total >= 3 ? 'losing' : 'pending';
+  if (bet.type === 'redCard')  return hadRed ? 'winning' : ms.minute > 85 ? 'losing' : 'pending';
+  if (bet.type === 'btts')     return (h > 0 && a > 0) ? 'winning' : ms.minute > 85 ? 'losing' : 'pending';
+  if (bet.type === 'nobtts')   return (h === 0 || a === 0) ? 'winning' : (h > 0 && a > 0) ? 'losing' : 'pending';
+  if (bet.type && bet.type.startsWith('score_')) {
+    const [sh, sa] = bet.type.replace('score_', '').split('_').map(Number);
+    return (h === sh && a === sa) ? 'winning' : ms.minute > 85 ? 'losing' : 'pending';
+  }
+  if (bet.type && bet.type.startsWith('scorer_')) {
+    const name      = bet.type.replace('scorer_', '');
+    const firstGoal = ms.events.find(e => e.isGoal);
+    return firstGoal ? (firstGoal.player === name ? 'winning' : 'losing') : 'pending';
+  }
+  return 'pending';
+};
+
+/**
+ * Calculates pre-match win/draw/loss odds from team attacking+technical stats.
+ *
+ * The 0.65 factor caps the win-probability sum so the remaining ~35% is shared
+ * by draws, preventing impossibly tight odds.  The 0.88 vigorish factor bakes
+ * the bookmaker margin into the returned decimal odds.
+ *
+ * @param {{ players: object[] }} homeTeam
+ * @param {{ players: object[] }} awayTeam
+ * @param {{ home: string[], away: string[] }} activePlayers
+ * @returns {{ homeWin: string, draw: string, awayWin: string }}
+ */
+const getOdds = (homeTeam, awayTeam, activePlayers) => {
+  const hStats = teamStats(homeTeam, activePlayers.home);
+  const aStats = teamStats(awayTeam,  activePlayers.away);
+  const hStr   = (hStats.attacking + hStats.technical) / 2;
+  const aStr   = (aStats.attacking + aStats.technical) / 2;
+  const total  = hStr + aStr;
+  // 0.65 — combined win probability cap, leaving ~35% for draw probability
+  const hWinProb  = hStr / total * 0.65;
+  const aWinProb  = aStr / total * 0.65;
+  const drawProb  = 1 - hWinProb - aWinProb;
+  // 0.88 — vigorish (bookmaker margin) applied to all three markets
+  return {
+    homeWin: Math.max(1.2, (1 / hWinProb * 0.88)).toFixed(2),
+    draw:    Math.max(1.5, (1 / drawProb  * 0.88)).toFixed(2),
+    awayWin: Math.max(1.2, (1 / aWinProb  * 0.88)).toFixed(2),
+  };
+};
+
+/**
+ * Returns the bookmaker's odds for an exact final scoreline.
+ *
+ * Common scorelines (e.g. 1-0, 1-1) carry tighter odds; rare ones default to 15.
+ *
+ * @param {number} h - Home goals
+ * @param {number} a - Away goals
+ * @returns {number} Decimal odds
+ */
+const getScoreOdds = (h, a) => {
+  const base = {
+    score_0_0: 8,  score_1_0: 4.5, score_0_1: 4.5, score_1_1: 3.5,
+    score_2_0: 7,  score_0_2: 7,   score_2_1: 6,   score_1_2: 6,
+    score_2_2: 10, score_3_0: 14,  score_0_3: 14,  score_3_1: 12, score_1_3: 12,
+  };
+  return base[`score_${h}_${a}`] || 15; // 15 — default for unlisted/unlikely scorelines
+};
+
+/**
+ * Returns the first-scorer odds for a given player based on their attacking stat.
+ *
+ * Higher attacking → lower odds (more likely to score first).
+ * Capped at 2.5 to prevent trivially tight odds for elite attackers.
+ *
+ * @param {{ attacking: number }} player
+ * @returns {string} Decimal odds string (1 d.p.)
+ */
+const getScorerOdds = (player) => {
+  const base = player.attacking || 70; // 70 — fallback if attacking stat is missing
+  return Math.max(2.5, (120 - base) / 10).toFixed(1);
+};
 
 const MatchSimulator = ({
   homeTeamKey = 'mars',
@@ -188,10 +329,6 @@ const MatchSimulator = ({
         const htCards=prev.events.filter(e=>e.cardType);
         const htShots=prev.events.filter(e=>e.type==='shot');
         const mgr=aiRef.current;
-        const TUNNEL_Q=[
-          ['We need more desire out there. Leave everything on that pitch.',"The numbers don\u2019t lie. Adjust and execute.","I\u2019ve seen worse. Fix the shape."],
-          ["Tactically we\u2019re sound. Just need that final ball.",'Patience. The goal is coming.',"Keep the faith. We\u2019ve been here before."]
-        ];
         const hDiff=prev.score[0]-prev.score[1];
         const homeQuote=pick(hDiff>=0?TUNNEL_Q[1]:TUNNEL_Q[0]);
         const awayQuote=pick(hDiff<=0?TUNNEL_Q[1]:TUNNEL_Q[0]);
@@ -309,41 +446,6 @@ const MatchSimulator = ({
   const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));intervalRef.current=setInterval(simulateMinute,speed);}};
   const resetMatch=()=>{clearInterval(intervalRef.current);aiRef.current=null;agentSystemRef.current=null;lastEventCountRef.current=0;lastThoughtsCountRef.current=0;setAiManager(null);setMatchState(initState());setShowBetting(true);setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);setAwayThoughtsFeed([]);setHtLlmQuotes(null);};
 
-  const getOdds=()=>{
-    const hStats=teamStats(matchState.homeTeam,matchState.activePlayers.home);
-    const aStats=teamStats(matchState.awayTeam,matchState.activePlayers.away);
-    const hStr=(hStats.attacking+hStats.technical)/2,aStr=(aStats.attacking+aStats.technical)/2;
-    const total=hStr+aStr;
-    const hWinProb=hStr/total*0.65,aWinProb=aStr/total*0.65,drawProb=1-hWinProb-aWinProb;
-    return{homeWin:Math.max(1.2,(1/hWinProb*0.88)).toFixed(2),draw:Math.max(1.5,(1/drawProb*0.88)).toFixed(2),awayWin:Math.max(1.2,(1/aWinProb*0.88)).toFixed(2)};
-  };
-  const betLabel=(type,ms)=>{
-    if(type==='homeWin') return ms.homeTeam.shortName+' Win';
-    if(type==='awayWin') return ms.awayTeam.shortName+' Win';
-    if(type==='draw') return 'Draw';
-    if(type==='over25') return 'Over 2.5 Goals';
-    if(type==='under25') return 'Under 2.5 Goals';
-    if(type==='redCard') return 'Red Card Shown';
-    if(type==='btts') return 'Both Teams Score';
-    if(type==='nobtts') return 'Clean Sheet (1 team)';
-    if(type&&type.startsWith('score_')) return 'Exact Score '+type.replace('score_','').replace('_','-');
-    if(type&&type.startsWith('scorer_')) return 'First Scorer: '+type.replace('scorer_','');
-    return type;
-  };
-  const betStatus=(bet,ms)=>{
-    const [h,a]=ms.score;const total=h+a;const hadRed=ms.redCards.home>0||ms.redCards.away>0;
-    if(bet.type==='homeWin') return h>a?'winning':h<a?'losing':'pending';
-    if(bet.type==='awayWin') return a>h?'winning':a<h?'losing':'pending';
-    if(bet.type==='draw') return h===a?'winning':'losing';
-    if(bet.type==='over25') return total>=3?'winning':total<3&&ms.minute>85?'losing':'pending';
-    if(bet.type==='under25') return total<3?'winning':total>=3?'losing':'pending';
-    if(bet.type==='redCard') return hadRed?'winning':ms.minute>85?'losing':'pending';
-    if(bet.type==='btts') return (h>0&&a>0)?'winning':ms.minute>85?'losing':'pending';
-    if(bet.type==='nobtts') return (h===0||a===0)?'winning':(h>0&&a>0)?'losing':'pending';
-    if(bet.type&&bet.type.startsWith('score_')){const[sh,sa]=bet.type.replace('score_','').split('_').map(Number);return(h===sh&&a===sa)?'winning':ms.minute>85?'losing':'pending';}
-    if(bet.type&&bet.type.startsWith('scorer_')){const name=bet.type.replace('scorer_','');const firstGoal=ms.events.find(e=>e.isGoal);return firstGoal?(firstGoal.player===name?'winning':'losing'):'pending';}
-    return 'pending';
-  };
   const placeBet=(type,amount,odds)=>{
     if(amount<=0||amount>credits)return;
     const bet={type,amount,odds:parseFloat(odds)};
@@ -378,48 +480,71 @@ const MatchSimulator = ({
     }
   },[matchState.mvp,matchState.isPlaying]);
 
-  const getScoreOdds=(h,a)=>{
-    const base={[`score_0_0`]:8,[`score_1_0`]:4.5,[`score_0_1`]:4.5,[`score_1_1`]:3.5,[`score_2_0`]:7,[`score_0_2`]:7,[`score_2_1`]:6,[`score_1_2`]:6,[`score_2_2`]:10,[`score_3_0`]:14,[`score_0_3`]:14,[`score_3_1`]:12,[`score_1_3`]:12};
-    return base[`score_${h}_${a}`]||15;
-  };
-  const getScorerOdds=(player)=>{
-    const base=player.attacking||70;
-    return Math.max(2.5,(120-base)/10).toFixed(1);
-  };
-  const chaos=()=>{
-    let c=0;
-    const diff=Math.abs(matchState.score[0]-matchState.score[1]);
-    if(diff===0)c+=30;else if(diff===1)c+=20;
-    if(matchState.minute>80)c+=25;else if(matchState.minute>70)c+=15;
-    c+=matchState.events.filter(e=>e.cardType).length*8;
-    c+=(matchState.redCards.home||0)*20+(matchState.redCards.away||0)*20;
-    if(aiManager){const angry=[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length;c+=angry*5;}
-    return Math.min(100,c);
-  };
+  // ── Memoised derived values ────────────────────────────────────────────────
+  // All four blocks below are recalculated only when their specific inputs
+  // change, preventing redundant work on every unrelated state update.
 
-  const chaosLevel=chaos();
-  const chaosColor=chaosLevel<20?C.purple:chaosLevel<40?C.dust:chaosLevel<60?'#FFA500':chaosLevel<80?C.red:'#FF0000';
-  const chaosLabel=chaosLevel<20?'CALM':chaosLevel<40?'TENSE':chaosLevel<60?'HEATED':chaosLevel<80?'CHAOTIC':'MAYHEM';
-  const odds=getOdds();
-  const ms=matchState;
+  // Betting odds — only change when team rosters or squad depth changes.
+  const odds = useMemo(
+    () => getOdds(matchState.homeTeam, matchState.awayTeam, matchState.activePlayers),
+    [matchState.homeTeam, matchState.awayTeam, matchState.activePlayers],
+  );
+
+  // Chaos level — recalculate only when score, minute, cards, or agent
+  // emotions change.  Avoids an O(n) event scan on every render.
+  const chaosLevel = useMemo(() => {
+    let c = 0;
+    const diff = Math.abs(matchState.score[0] - matchState.score[1]);
+    if (diff === 0) c += 30; else if (diff === 1) c += 20;  // 30/20 — tied/close tension bonus
+    if (matchState.minute > 80) c += 25; else if (matchState.minute > 70) c += 15; // late-game urgency
+    c += matchState.events.filter(e => e.cardType).length * 8; // 8 pts per card shown
+    c += (matchState.redCards.home || 0) * 20 + (matchState.redCards.away || 0) * 20; // 20 pts per red
+    if (aiManager) {
+      const angry = [...aiManager.activeHomeAgents, ...aiManager.activeAwayAgents]
+        .filter(a => a.emotion === 'ecstatic' || a.emotion === 'anxious').length;
+      c += angry * 5; // 5 pts per emotionally charged agent
+    }
+    return Math.min(100, c);
+  }, [matchState.score, matchState.minute, matchState.events, matchState.redCards, aiManager]);
+
+  const chaosColor = chaosLevel < 20 ? C.purple : chaosLevel < 40 ? C.dust : chaosLevel < 60 ? '#FFA500' : chaosLevel < 80 ? C.red : '#FF0000';
+  const chaosLabel = chaosLevel < 20 ? 'CALM'   : chaosLevel < 40 ? 'TENSE' : chaosLevel < 60 ? 'HEATED'  : chaosLevel < 80 ? 'CHAOTIC' : 'MAYHEM';
+
+  const ms = matchState;
 
   // ── Derived match statistics ───────────────────────────────────────────────
-  // Computed from the event log each render so the stats table always reflects
-  // the current state without needing extra state slices.
-  // Shot counts include both attempts that ended in goals and standalone shots.
-  // "On target" = saved by keeper OR converted to goal.
-  const sn=ms.homeTeam.shortName;
-  const asn=ms.awayTeam.shortName;
-  const homeShots=ms.events.filter(e=>e.team===sn&&(e.type==='shot'||e.isGoal)).length;
-  const awayShots=ms.events.filter(e=>e.team===asn&&(e.type==='shot'||e.isGoal)).length;
-  const homeSoT=ms.events.filter(e=>e.team===sn&&(e.isGoal||e.outcome==='saved')).length;
-  const awaySoT=ms.events.filter(e=>e.team===asn&&(e.isGoal||e.outcome==='saved')).length;
-  const homeCorners=ms.events.filter(e=>e.team===sn&&e.type==='corner').length;
-  const awayCorners=ms.events.filter(e=>e.team===asn&&e.type==='corner').length;
-  // Yellow card fouls: check both primary team and foulerTeam fields since the
-  // fouling player may be from the opposite team to the event's main team.
-  const homeYellows=ms.events.filter(e=>e.cardType==='yellow'&&(e.team===sn||e.foulerTeam===sn)).length;
-  const awayYellows=ms.events.filter(e=>e.cardType==='yellow'&&(e.team===asn||e.foulerTeam===asn)).length;
+  // Six filter passes over the event log, memoised as a single block so they
+  // only rerun when the events array reference changes (i.e. each new minute),
+  // not on every re-render triggered by other state updates.
+  const sn  = ms.homeTeam.shortName;
+  const asn = ms.awayTeam.shortName;
+  const {
+    homeShots, awayShots, homeSoT, awaySoT, homeCorners, awayCorners,
+    homeYellows, awayYellows,
+  } = useMemo(() => ({
+    // Shot counts include both attempts that ended in goals and standalone shots.
+    homeShots:   ms.events.filter(e => e.team === sn  && (e.type === 'shot' || e.isGoal)).length,
+    awayShots:   ms.events.filter(e => e.team === asn && (e.type === 'shot' || e.isGoal)).length,
+    // On target = saved by keeper OR converted to goal.
+    homeSoT:     ms.events.filter(e => e.team === sn  && (e.isGoal || e.outcome === 'saved')).length,
+    awaySoT:     ms.events.filter(e => e.team === asn && (e.isGoal || e.outcome === 'saved')).length,
+    homeCorners: ms.events.filter(e => e.team === sn  && e.type === 'corner').length,
+    awayCorners: ms.events.filter(e => e.team === asn && e.type === 'corner').length,
+    // Yellow card fouls: check both primary team and foulerTeam since the fouling
+    // player may be from the opposite team to the event's main team.
+    homeYellows: ms.events.filter(e => e.cardType === 'yellow' && (e.team === sn  || e.foulerTeam === sn)).length,
+    awayYellows: ms.events.filter(e => e.cardType === 'yellow' && (e.team === asn || e.foulerTeam === asn)).length,
+  }), [ms.events, sn, asn]);
+
+  // ── Reversed feed arrays ───────────────────────────────────────────────────
+  // Each feed is displayed newest-first (reverse order) in the UI.
+  // Memoised so a new reversed array is only allocated when the source feed
+  // changes, not on every unrelated re-render (e.g. score updates).
+  const commentaryReversed    = useMemo(() => [...commentaryFeed].reverse(),    [commentaryFeed]);
+  const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
+  const awayManagerReversed   = useMemo(() => [...awayManagerFeed].reverse(),   [awayManagerFeed]);
+  const homeThoughtsReversed  = useMemo(() => [...homeThoughtsFeed].reverse(),  [homeThoughtsFeed]);
+  const awayThoughtsReversed  = useMemo(() => [...awayThoughtsFeed].reverse(),  [awayThoughtsFeed]);
 
   // ── Time display helpers ───────────────────────────────────────────────────
   // Formats the clock string shown in the scoreboard and compact card header.
@@ -472,7 +597,7 @@ const MatchSimulator = ({
         <div style={{flex:1,overflowY:'auto',padding:'6px 8px',minHeight:'180px',maxHeight:'240px',scrollbarWidth:'thin'}}>
           {commentaryFeed.length===0
             ?<div style={{textAlign:'center',padding:'40px 0',opacity:0.2,fontSize:'10px'}}>{ms.minute===0?'Starting...':'Watching...'}</div>
-            :[...commentaryFeed].reverse().slice(0,10).map((item,i)=><AgentCard key={i} item={item}/>)}
+            :commentaryReversed.slice(0,10).map((item,i)=><AgentCard key={i} item={item}/>)}
         </div>
 
         {/* Expand button — triggers onExpand prop from parent Matches page */}
@@ -703,7 +828,7 @@ const MatchSimulator = ({
                 <div style={{padding:'8px',overflowY:'auto',height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeManagerFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
-                    :[...homeManagerFeed].reverse().map((item,i)=>(
+                    :homeManagerReversed.map((item,i)=>(
                       <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
                           <span style={{fontWeight:700,color:ms.homeTeam.color}}>{item.emoji} {item.name}</span>
@@ -723,7 +848,7 @@ const MatchSimulator = ({
                 <div style={{padding:'8px',overflowY:'auto',height:'250px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
-                    :[...homeThoughtsFeed].reverse().map((item,i)=>(
+                    :homeThoughtsReversed.map((item,i)=>(
                       <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
                           <span>{item.emoji}</span>
@@ -786,7 +911,7 @@ const MatchSimulator = ({
                       {ms.minute===0?'Press Kick Off to begin':'Agents are watching...'}
                     </div>
                   )}
-                  {[...commentaryFeed].reverse().map((item,i)=>{
+                  {commentaryReversed.map((item,i)=>{
                     if(item.type==='commentator'){
                       return(
                         <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'8px'}}>
@@ -842,7 +967,7 @@ const MatchSimulator = ({
                 <div style={{padding:'8px',overflowY:'auto',height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayManagerFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
-                    :[...awayManagerFeed].reverse().map((item,i)=>(
+                    :awayManagerReversed.map((item,i)=>(
                       <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
                           <span style={{fontWeight:700,color:ms.awayTeam.color}}>{item.emoji} {item.name}</span>
@@ -861,7 +986,7 @@ const MatchSimulator = ({
                 <div style={{padding:'8px',overflowY:'auto',height:'250px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
-                    :[...awayThoughtsFeed].reverse().map((item,i)=>(
+                    :awayThoughtsReversed.map((item,i)=>(
                       <div key={i} style={{marginBottom:'10px',paddingBottom:'8px',borderBottom:'1px solid rgba(227,224,213,0.06)'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px',fontSize:'11px'}}>
                           <span>{item.emoji}</span>
