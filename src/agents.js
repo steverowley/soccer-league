@@ -89,6 +89,7 @@ const PERS_DESC = {
 // One instance is created per match in App.jsx after teams and match state
 // are initialised.  It owns the Anthropic client and all conversation histories.
 export class AgentSystem {
+  /**
    * @param {string} apiKey   – Anthropic API key (entered by user in the UI)
    * @param {object} matchCtx – match meta-data:
    *   homeTeam / awayTeam     – full team objects (name, color, shortName, players)
