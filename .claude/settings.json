@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "Check if any relevant changes were made to this project during this session by running: git diff HEAD --name-only 2>/dev/null || git status --short. If there are meaningful changes to source files (not just config or lock files), review README.md and update it if needed to reflect those changes — new features, changed behavior, updated structure, or anything a developer would want to know. Only update the README if the changes are substantial enough to warrant it. If no update is needed, do nothing.",
+            "timeout": 60,
+            "statusMessage": "Checking if README needs updating..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
