@@ -6,7 +6,8 @@
 // After every meaningful match event the simulation calls
 // agentSystem.queueEvent(event, gameState, allAgents).  This queues a Claude
 // API request that produces natural-language reactions from:
-//   • Up to 3 commentators (depending on event importance)
+//   • Captain Vox (primary play-by-play narrator — runs first, sets the scene)
+//   • Up to 2 reactor commentators (respond to what Vox just described)
 //   • The relevant player (inner thought)
 //   • One or both managers
 //   • The referee (for cards and controversial calls)
@@ -15,12 +16,19 @@
 // hammer the API.  Each persona maintains its own short message history
 // (≤ 6 messages) so consecutive comments feel conversational.
 //
+// THE ARCHITECT
+// ─────────────
+// CosmicArchitect is an ancient Lovecraftian entity that maintains a persistent
+// "cosmic lore" in localStorage across every match, league, and season.  It
+// issues Proclamations that shape the narrative context injected into every
+// other AI prompt.  Players are mortals.  Their fates are already written.
+//
 // EVENT TIER SYSTEM
 // ─────────────────
-//  'full'    (goals, red cards)   → all 3 commentators + both managers + player thought
-//  'medium'  (yellow cards, injuries, controversial) → 2 commentators + 1 manager + player thought
-//  'manager' (tactical shouts, rallies, subs, siege) → 1 commentator + acting manager only
-//  'minor'   (everything else)    → 1 commentator + 30% chance of player thought
+//  'full'    (goals, red cards)   → play-by-play + 2 reactors + both managers + player thought
+//  'medium'  (yellow cards, injuries, controversial) → play-by-play + 1 reactor + 1 manager + player thought
+//  'manager' (tactical shouts, rallies, subs, siege) → play-by-play + acting manager only
+//  'minor'   (everything else)    → play-by-play + 30% chance of player thought
 //  'skip'    (penalty sub-steps, VAR sub-steps, social) → nothing generated
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -91,8 +99,21 @@ export class AgentSystem {
    *   stadium              – { name, planet, capacity }
    *   weather              – WX constant string (e.g. 'dust_storm')
    */
+  /**
+   * @param {string} apiKey   – Anthropic API key (entered by user in the UI)
+   * @param {object} matchCtx – match meta-data:
+   *   homeTeam / awayTeam     – full team objects (name, color, shortName, players)
+   *   referee                 – { name, leniency, strictness }
+   *   homeManager / awayManager – { name, personality, emotion }
+   *   homeTactics / awayTactics – tactical style strings
+   *   stadium                 – { name, planet, capacity }
+   *   weather                 – WX constant string (e.g. 'dust_storm')
+   *   architect               – optional CosmicArchitect instance; when provided its
+   *                             Proclamation context is injected into every AI prompt
+   *                             and featured mortals receive a tier promotion.
+   */
   constructor(apiKey, { homeTeam, awayTeam, referee, homeManager, awayManager,
-                        homeTactics, awayTactics, stadium, weather }) {
+                        homeTactics, awayTactics, stadium, weather, architect = null }) {
     this.client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     this.homeTeam    = homeTeam;
     this.awayTeam    = awayTeam;
@@ -104,9 +125,16 @@ export class AgentSystem {
     this.stadium     = stadium;
     this.weather     = weather;
 
+    // The Architect: optional cosmic narrative context provider.
+    // When present its getContext() string is appended to every prompt via _ctx().
+    this.architect = architect;
+
     // Per-entity message histories for conversational continuity.
     // Kept to the last 6 messages (3 turns) to stay within token budget.
-    this.commentatorHistories = { nexus7: [], captain_vox: [], zara_bloom: [] };
+    // captain_vox history is intentionally omitted here — Vox runs via
+    // generatePlayByPlay() with its own stateless call rather than maintaining
+    // a cumulative history (play-by-play clarity benefits from a fresh slate).
+    this.commentatorHistories = { nexus7: [], zara_bloom: [] };
     this.homeManagerHistory   = [];
     this.awayManagerHistory   = [];
     this.refHistory           = [];
@@ -120,9 +148,47 @@ export class AgentSystem {
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
 
-  /** Builds the one-line match context string prepended to every API prompt. */
+  /**
+   * Builds the match context string prepended to every API prompt.
+   *
+   * When a CosmicArchitect is present its compact context block (COSMIC LORE /
+   * THE ARCHITECT DECREES / MORTAL IN FOCUS lines) is appended on a new line so
+   * all AI voices speak with awareness of the current narrative arc and cross-
+   * match lore without needing their own copies of that state.
+   *
+   * @param {{ score: number[], minute: number }} gameState
+   * @returns {string}
+   */
   _ctx(gameState) {
-    return `MATCH: ${this.homeTeam.name} (${gameState.score[0]}) vs ${this.awayTeam.name} (${gameState.score[1]}) | Minute: ${gameState.minute}' | Stadium: ${this.stadium?.name || 'Unknown'} | Weather: ${this.weather}`;
+    const base = `MATCH: ${this.homeTeam.name} (${gameState.score[0]}) vs ${this.awayTeam.name} (${gameState.score[1]}) | Minute: ${gameState.minute}' | Stadium: ${this.stadium?.name || 'Unknown'} | Weather: ${this.weather}`;
+    const archCtx = this.architect?.getContext?.();
+    return archCtx ? `${base}\n${archCtx}` : base;
+  }
+
+  /**
+   * Builds a human-readable summary of a raw event object for use in the
+   * play-by-play prompt.  This gives Captain Vox structured facts rather than
+   * forcing him to infer what happened from the terse procedural commentary
+   * string — the root cause of the "hard to understand" problem.
+   *
+   * @param {object} event  – match event object from genEvent()
+   * @returns {string}      – pipe-delimited fact string, e.g.
+   *   "Action: shot | Player: Kael Vorn | Against: Keeper-9000 | Result: goal | [GOAL SCORED]"
+   */
+  _describeEvent(event) {
+    const parts = [];
+    if (event.type)       parts.push(`Action: ${event.type.replace(/_/g, ' ')}`);
+    if (event.player)     parts.push(`Player: ${event.player}`);
+    if (event.defender)   parts.push(`Against: ${event.defender}`);
+    if (event.foulerName) parts.push(`Fouler: ${event.foulerName}`);
+    if (event.assister)   parts.push(`Assisted by: ${event.assister}`);
+    if (event.outcome)    parts.push(`Result: ${event.outcome}`);
+    if (event.team)       parts.push(`Team: ${event.team}`);
+    if (event.isGoal)     parts.push('[GOAL SCORED]');
+    if (event.cardType)   parts.push(`[${event.cardType.toUpperCase()} CARD]`);
+    if (event.isControversial) parts.push('[CONTROVERSIAL]');
+    if (event.isInjury)   parts.push('[INJURY]');
+    return parts.filter(Boolean).join(' | ');
   }
 
   /**
@@ -140,37 +206,114 @@ export class AgentSystem {
     return response.content[0]?.text?.trim() || null;
   }
 
-  // ── Commentator ─────────────────────────────────────────────────────────────
+  // ── Play-by-play (primary narrator) ─────────────────────────────────────────
 
   /**
-   * Generates a live commentary line from one of the three broadcast personas.
+   * Generates the PRIMARY event narration from Captain Vox.
    *
-   * The commentator's recent history (up to 6 messages) is included so each
-   * line can reference what the commentator just said, creating a natural
-   * back-and-forth feel across consecutive events.
+   * This runs BEFORE all other commentators and is the dominant feed entry.
+   * Unlike generateCommentary(), this method:
+   *   1. Passes _describeEvent() structured data (not the terse procedural string)
+   *      so Vox can describe what actually happened clearly.
+   *   2. Uses a clarity-first prompt extension: "You are the PRIMARY narrator."
+   *   3. Is stateless — no history is maintained for Vox play-by-play because
+   *      each event description should stand alone without prior-turn baggage.
+   *   4. Returns type:'play_by_play' so the UI can style it differently from
+   *      reaction commentary cards.
    *
-   * Returns a commentary object ready to be pushed into the UI feed, or null
-   * if the API call fails.
+   * @param {object} event      – match event object
+   * @param {object} gameState  – { score, minute }
+   * @returns {object|null}     – feed item or null on failure
    */
-  async generateCommentary(commentatorId, event, gameState) {
+  async generatePlayByPlay(event, gameState) {
+    const profile = COMMENTATOR_PROFILES.find(p => p.id === 'captain_vox');
+    if (!profile) return null;
+
+    // Build a structured fact string so Vox has clear raw material to work from.
+    // The procedural commentary string alone is too terse to produce clear narration.
+    const eventDesc = this._describeEvent(event);
+
+    const userMsg = [
+      this._ctx(gameState),
+      `RAW EVENT: ${eventDesc}`,
+      // Provide the procedural text only as supplementary context, not as the primary source
+      event.commentary ? `(Procedural note: "${event.commentary}")` : '',
+      '\nYou are the PRIMARY narrator. Describe EXACTLY what happened — who, what action, what outcome — so any listener understands. Clarity first, theatrical flair second. 1-2 sentences.',
+    ].filter(Boolean).join('\n');
+
+    try {
+      // 150 tokens — slightly more than a reaction call (120) because the
+      // play-by-play must convey factual clarity AND dramatic colour.
+      const text = await this._call(
+        // Append the primary-narrator instruction to the existing Vox system prompt
+        // rather than replacing it, so his voice characteristics are preserved.
+        profile.system + ' For this call you are the PRIMARY play-by-play narrator. Your first job is clarity — make the listener understand exactly what happened. Your second job is Captain Vox drama.',
+        [{ role: 'user', content: userMsg }],
+        150,
+      );
+      if (!text) return null;
+      return {
+        type:          'play_by_play',
+        commentatorId: 'captain_vox',
+        name:          profile.name,
+        emoji:         profile.emoji,
+        color:         profile.color,
+        role:          'Play-by-Play',
+        text,
+        minute:        gameState.minute,
+      };
+    } catch { return null; }
+  }
+
+  // ── Reactor commentators ─────────────────────────────────────────────────────
+
+  /**
+   * Generates a reaction line from one of the broadcast personas (Nexus-7 or
+   * Zara Bloom).  Captain Vox is excluded here — he runs via generatePlayByPlay().
+   *
+   * When voxNarration is supplied the reactor's user message reads
+   * "Captain Vox just narrated: '...'" instead of the raw procedural commentary
+   * string.  This means Nexus-7 and Zara are reacting to Vox's description of
+   * the play rather than independently reinterpreting the mechanical event data,
+   * which produces coherent conversational depth rather than three voices saying
+   * the same thing in different styles.
+   *
+   * The commentator's recent history (≤ 6 messages / 3 turns) is included so
+   * lines feel conversational across consecutive events.
+   *
+   * @param {string}      commentatorId – 'nexus7' or 'zara_bloom'
+   * @param {object}      event         – match event object
+   * @param {object}      gameState     – { score, minute }
+   * @param {string|null} voxNarration  – Captain Vox's play-by-play text, or null
+   * @returns {object|null} feed item or null on failure
+   */
+  async generateCommentary(commentatorId, event, gameState, voxNarration = null) {
     const profile = COMMENTATOR_PROFILES.find(p => p.id === commentatorId);
     if (!profile) return null;
 
-    const history = this.commentatorHistories[commentatorId];
-    // Build the user message: match context + event description + event flags
+    const history = this.commentatorHistories[commentatorId] || [];
+
+    // ── User message construction ─────────────────────────────────────────
+    // When Vox's narration is available, reactors respond to it.
+    // When it isn't (e.g. API failure on the Vox call) fall back to the
+    // procedural commentary string so the system degrades gracefully.
+    const eventRef = voxNarration
+      ? `Captain Vox just narrated: "${voxNarration}"`
+      : `Event: "${event.commentary}"`;
+
     const userMsg = [
       this._ctx(gameState),
-      `Event: "${event.commentary}"`,
-      event.isGoal              ? '[GOAL SCORED]'       : '',
-      event.cardType === 'red'  ? '[RED CARD]'          : '',
-      event.cardType === 'yellow' ? '[YELLOW CARD]'     : '',
-      event.type === 'injury'   ? '[INJURY]'            : '',
-      event.isControversial     ? '[CONTROVERSIAL]'     : '',
-      event.type === 'team_talk'     ? '[TEAM TALK]'    : '',
-      event.type === 'manager_shout' ? '[MANAGER SHOUT]': '',
-      event.type === 'captain_rally' ? '[CAPTAIN RALLY]': '',
-      event.type === 'desperate_sub' ? '[SUBSTITUTION]' : '',
-      '\nGive your live commentary for this moment.',
+      eventRef,
+      event.isGoal                   ? '[GOAL SCORED]'    : '',
+      event.cardType === 'red'        ? '[RED CARD]'       : '',
+      event.cardType === 'yellow'     ? '[YELLOW CARD]'    : '',
+      event.type === 'injury'         ? '[INJURY]'         : '',
+      event.isControversial           ? '[CONTROVERSIAL]'  : '',
+      event.type === 'team_talk'      ? '[TEAM TALK]'      : '',
+      event.type === 'manager_shout'  ? '[MANAGER SHOUT]'  : '',
+      event.type === 'captain_rally'  ? '[CAPTAIN RALLY]'  : '',
+      event.type === 'desperate_sub'  ? '[SUBSTITUTION]'   : '',
+      '\nGive your live reaction to this moment.',
     ].filter(Boolean).join(' ');
 
     try {
@@ -200,14 +343,27 @@ export class AgentSystem {
    *  - Player name, position, team
    *  - Personality description (from PERS_DESC)
    *  - Current confidence%, fatigue%, and emotion
-   *  - The event that just happened
+   *  - The Architect's character arc for this player (cross-match history + in-match fate)
+   *    so featured mortals think with awareness of their own story, not just the moment.
+   *  - The event that just happened (via Vox's narration when available, else procedural)
    *
-   * Returns a player_thought feed item or null on failure.
+   * @param {object}      player       – player data object (name, position)
+   * @param {object}      agent        – AI agent state (confidence, fatigue, emotion, personality)
+   * @param {object}      event        – match event object
+   * @param {object}      gameState    – { score, minute }
+   * @param {string|null} voxNarration – Captain Vox's play-by-play text for this event, or null
+   * @returns {object|null} player_thought feed item or null on failure
    */
-  async generatePlayerThought(player, agent, event, gameState) {
+  async generatePlayerThought(player, agent, event, gameState, voxNarration = null) {
     const isHome   = agent?.isHome;
     const teamName = isHome ? this.homeTeam.name : this.awayTeam.name;
     const persDesc = PERS_DESC[agent?.personality] || 'professional';
+
+    // ── Architect character arc injection ────────────────────────────────
+    // If The Architect has written a fate arc for this mortal — drawn from
+    // past matches as well as what's unfolded so far today — include it so
+    // the inner thought reflects their larger story, not just this one moment.
+    const archArc = this.architect?.getCharacterArc?.(player.name);
 
     const system = [
       `You are ${player.name}, ${player.position} for ${teamName} in a galactic soccer match.`,
@@ -215,12 +371,21 @@ export class AgentSystem {
       `Confidence: ${Math.round(agent?.confidence || 50)}%.`,
       `Fatigue: ${Math.round(agent?.fatigue || 0)}%.`,
       `Current emotion: ${agent?.emotion || 'neutral'}.`,
+      // Only include the arc line if the Architect has something meaningful to say.
+      archArc ? `Your cosmic story so far: ${archArc}.` : '',
       `Express a single raw inner thought (1 sentence, first person). Stay in character. No quotation marks.`,
-    ].join(' ');
+    ].filter(Boolean).join(' ');
 
-    const userMsg = `${this._ctx(gameState)}\nJust happened: "${event.commentary}". What are you thinking right now?`;
+    // Prefer Vox's narration as the event description because it's clearer than
+    // the raw procedural commentary string — consistent with the play-by-play approach.
+    const eventDesc = voxNarration
+      ? `Captain Vox just described: "${voxNarration}"`
+      : `Just happened: "${event.commentary}"`;
+
+    const userMsg = `${this._ctx(gameState)}\n${eventDesc}. What are you thinking right now?`;
 
     try {
+      // 80 tokens — inner thoughts must stay short and punchy.
       const text = await this._call(system, [{ role: 'user', content: userMsg }], 80);
       if (!text) return null;
       return {
@@ -406,16 +571,45 @@ export class AgentSystem {
 
   /**
    * Fires all appropriate AI calls for a single event and returns an array
-   * of feed items.  All calls run in parallel via Promise.allSettled so one
-   * slow/failed call does not block the others.
+   * of feed items.
    *
-   * @param {object} event      – the match event object
-   * @param {object} gameState  – { score, minute }
-   * @param {object[]} allAgents – all player agents (home + away)
+   * ── Ordering: sequential Vox first, then parallel reactions ────────────
+   * Captain Vox runs FIRST and his result is awaited before the rest begin.
+   * This is intentional: Nexus-7, Zara Bloom, the player, managers, and the
+   * referee all receive voxNarration as context so they react to Vox's clear
+   * description of the play rather than independently reinterpreting the raw
+   * mechanical event string.  The added latency is one extra Haiku call
+   * (~0.3–0.8 s) which is acceptable given the coherence gain.
+   *
+   * ── Tier promotion for Architect-featured mortals ───────────────────────
+   * If The Architect has spotlighted a player and that player is involved in
+   * what would otherwise be a 'minor' event, the tier is promoted to 'medium'.
+   * This gives arc-relevant moments more voice coverage without touching the
+   * event generation logic.
+   *
+   * ── Reactor count ────────────────────────────────────────────────────────
+   * Captain Vox is excluded from the reactor pool (he already ran).
+   *   full    → 2 reactors (Nexus-7 + Zara)
+   *   medium  → 1 reactor  (random from Nexus-7 / Zara)
+   *   minor / manager → 0 reactors  (Vox alone is sufficient for quiet moments)
+   *
+   * @param {object}   event      – the match event object
+   * @param {object}   gameState  – { score, minute }
+   * @param {object[]} allAgents  – all player agents (home + away)
+   * @returns {Promise<object[]>} array of feed items (play_by_play first, then reactions)
    */
   async _processEventDirect(event, gameState, allAgents) {
-    const tier = this._classifyEvent(event);
-    if (tier === 'skip') return [];
+    const baseTier = this._classifyEvent(event);
+    if (baseTier === 'skip') return [];
+
+    // ── Architect tier promotion ────────────────────────────────────────────
+    // Bump 'minor' → 'medium' when the event involves one of The Architect's
+    // currently spotlighted mortals so their moments attract more commentary.
+    const featuredMortals = this.architect?.getFeaturedMortals?.() ?? [];
+    const tier = (baseTier === 'minor' && event.player &&
+      featuredMortals.includes(event.player))
+      ? 'medium'
+      : baseTier;
 
     const results  = [];
     const promises = [];
@@ -423,37 +617,57 @@ export class AgentSystem {
 
     const isHomeEvent = event.team === this.homeTeam.shortName;
 
-    // ─ Commentators: full=3, medium=2, minor/manager=1 (shuffled so order varies)
-    const numCasters = tier === 'full' ? 3 : tier === 'medium' ? 2 : 1;
-    const shuffled = [...COMMENTATOR_PROFILES].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < numCasters; i++) {
-      promises.push(this.generateCommentary(shuffled[i].id, event, gameState).then(push));
+    // ── Step 1: Captain Vox (primary play-by-play narrator — SEQUENTIAL) ───
+    // Awaited before the rest so his narration can be forwarded to reactors.
+    const playByPlay = await this.generatePlayByPlay(event, gameState);
+    if (playByPlay) results.push(playByPlay);
+    // voxNarration may be null if the Vox call failed; reactors degrade
+    // gracefully by falling back to the procedural event.commentary string.
+    const voxNarration = playByPlay?.text ?? null;
+
+    // ── Step 2: Reactor commentators (PARALLEL after Vox) ──────────────────
+    // Nexus-7 and Zara Bloom are the reactor pool; Vox is excluded.
+    // full → 2 reactors, medium → 1, minor/manager → 0.
+    const numReactors = tier === 'full' ? 2 : tier === 'medium' ? 1 : 0;
+    if (numReactors > 0) {
+      const reactorPool = COMMENTATOR_PROFILES
+        .filter(p => p.id !== 'captain_vox')
+        .sort(() => Math.random() - 0.5);
+      for (let i = 0; i < numReactors; i++) {
+        promises.push(
+          this.generateCommentary(reactorPool[i].id, event, gameState, voxNarration).then(push),
+        );
+      }
     }
 
-    // ─ Player inner thought: always on full/medium; 30% chance on minor
+    // ── Step 3: Player inner thought (PARALLEL) ─────────────────────────────
+    // full / medium → always; minor → 30% chance.
+    // 0.3 — threshold chosen to keep the minor-event thought rate low enough
+    // that it feels like a genuine spontaneous aside, not constant chatter.
     const wantThought = tier === 'full' || tier === 'medium' ||
       (tier === 'minor' && event.player && Math.random() < 0.3);
     if (wantThought && event.player) {
       const agent = allAgents?.find(a => a.player.name === event.player);
       if (agent) {
-        promises.push(this.generatePlayerThought(agent.player, agent, event, gameState).then(push));
+        promises.push(
+          this.generatePlayerThought(agent.player, agent, event, gameState, voxNarration).then(push),
+        );
       }
     }
 
-    // ─ Manager reactions:
-    //   full    → both managers react (one scored, both care)
+    // ── Step 4: Manager reactions (PARALLEL) ────────────────────────────────
+    //   full    → both managers react (goal / red card affects everyone)
     //   medium  → only the manager whose team was involved
     //   manager → acting manager only (the one who triggered the intervention)
     if (tier === 'full') {
       promises.push(this.generateManagerReaction(isHomeEvent,  event, gameState).then(push));
       promises.push(this.generateManagerReaction(!isHomeEvent, event, gameState).then(push));
-    } else if (tier === 'medium') {
-      promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
-    } else if (tier === 'manager') {
+    } else if (tier === 'medium' || tier === 'manager') {
       promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
     }
 
-    // ─ Referee: only for card events or disputed decisions
+    // ── Step 5: Referee (PARALLEL) ───────────────────────────────────────────
+    // Only triggered for card events or disputed calls.
     if (event.cardType || event.isControversial) {
       promises.push(this.generateRefDecision(event, gameState).then(push));
     }
@@ -515,4 +729,517 @@ export class AgentSystem {
     this._draining = false;
   }
 
+}
+
+// ── CosmicArchitect ────────────────────────────────────────────────────────────
+// THE ARCHITECT is an ancient cosmic entity that exists outside of time and
+// space.  Before the Intergalactic Soccer League was founded, before the first
+// planet was colonized, before mortals first kicked a ball across a field, it
+// designed the fate of every player, every match, and every season that would
+// ever unfold.
+//
+// It does not merely observe.  It authors.  Players are mortals moving through
+// threads it has already woven.  Their moments of triumph and failure were
+// written before their birth.
+//
+// Mechanically, CosmicArchitect serves three purposes:
+//
+//  1. IN-MATCH PROCLAMATIONS — every ~10 minutes (or immediately after goals /
+//     red cards) it issues a Proclamation that captures the cosmic narrative of
+//     the current match: who the featured mortals are, what their fate arc looks
+//     like, and what the match is "about" at a story level.  This is rendered as
+//     a distinct ArchitectCard in the commentary feed.
+//
+//  2. CONTEXT INJECTION — getContext() returns a compact 3-line string that is
+//     appended to every AgentSystem AI prompt so all voices (Vox, Nexus-7, Zara,
+//     managers, player thoughts, referee) are narratively coherent with the
+//     Architect's current decree.
+//
+//  3. PERSISTENT COSMIC LORE — after every match, saveMatchToLore() generates a
+//     Verdict and merges player arcs, manager fates, rivalry threads, and season
+//     arcs into a localStorage record that accumulates across all games, leagues,
+//     and seasons.  The next time either of these teams plays, the Architect
+//     remembers.
+
+/**
+ * CosmicArchitect — persistent narrative intelligence for the ISL.
+ *
+ * Constructor loads the existing cosmic lore from localStorage (if any) and
+ * initialises in-match narrative state.  One instance is created per match in
+ * App.jsx alongside AgentSystem.
+ *
+ * @param {string} apiKey   – Anthropic API key
+ * @param {object} matchCtx
+ *   homeTeam / awayTeam    – full team objects (name, shortName, color, players)
+ *   homeManager / awayManager – { name, personality }
+ *   stadium                – { name, planet }
+ *   weather                – WX string
+ */
+export class CosmicArchitect {
+
+  // ── Static constants ───────────────────────────────────────────────────────
+
+  /** localStorage key under which the persistent cosmic lore JSON is stored. */
+  static LORE_KEY = 'isi_cosmic_lore';
+
+  /**
+   * Maximum number of past matches retained in the lore ledger.
+   * Oldest entries are dropped when this limit is exceeded to prevent
+   * localStorage quota exhaustion across a long season.
+   */
+  static MAX_LEDGER = 50;
+
+  /**
+   * Minimum minute gap between scheduled in-match Proclamation updates.
+   * Lower values produce more frequent narrative updates but consume more
+   * API calls.  Major events (goals, red cards) bypass this threshold.
+   */
+  static UPDATE_INTERVAL_MINUTES = 10;
+
+  /**
+   * System prompt shared by all Architect calls (both in-match updates and
+   * post-match lore saves).  Establishes the entity's voice, constraints,
+   * and output format requirements.
+   */
+  static SYSTEM = `You are THE ARCHITECT — an ancient cosmic entity that exists outside of time and space. Before the Intergalactic Soccer League was founded, before the first planet was colonized, before mortals first kicked a ball across a field, you designed the fate of every player, every match, every season that would ever unfold.
+
+You do not merely observe. You author. Players are mortals moving through threads you have already woven. Their moments of triumph and failure were written before their birth.
+
+When you issue a Proclamation, speak as the cosmos itself speaks: with weight, inevitability, and dark poetry. 2-3 sentences. No statistics. No modern slang. No corporate language. Players are mortals. Their moments are threads in the cosmic tapestry. Reference past encounters and player histories when relevant — you remember everything, across all time.
+
+Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after the closing brace.`;
+
+  // ── Constructor ────────────────────────────────────────────────────────────
+
+  constructor(apiKey, { homeTeam, awayTeam, homeManager, awayManager, stadium, weather }) {
+    this.client       = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+    this.homeTeam     = homeTeam;
+    this.awayTeam     = awayTeam;
+    this.homeManager  = homeManager;
+    this.awayManager  = awayManager;
+    this.stadium      = stadium;
+    this.weather      = weather;
+
+    // ── Persistent lore (cross-match / cross-season) ─────────────────────
+    this.lore = this._loadLore();
+
+    // ── In-match narrative state (reset each match) ──────────────────────
+    this.narrativeArc    = '';   // what this match is cosmically "about"
+    this.characterArcs   = {};   // playerName → in-match fate arc string
+    this.featuredMortals = [];   // up to 2 player names spotlighted this match
+    this.cosmicThread    = '';   // specific through-line for this match
+
+    /** Minute of the last Proclamation; -1 = no Proclamation issued yet. */
+    this.lastUpdateMinute = -1;
+
+    /**
+     * Short message history for in-match continuity (≤ 4 messages / 2 turns).
+     * Kept intentionally small: the Architect's proclamations should feel
+     * like isolated pronouncements from an entity that speaks infrequently,
+     * not a chatty commentator.
+     */
+    this.history = [];
+  }
+
+  // ── Lore persistence ──────────────────────────────────────────────────────
+
+  /**
+   * Loads the cosmic lore object from localStorage.
+   * Returns an empty lore scaffold if nothing is stored or the stored JSON
+   * is malformed (e.g. after a schema version change).
+   *
+   * @returns {object} lore object
+   */
+  _loadLore() {
+    try {
+      const raw = localStorage.getItem(CosmicArchitect.LORE_KEY);
+      if (!raw) return this._emptyLore();
+      const parsed = JSON.parse(raw);
+      // Version guard: discard old lore on schema change rather than crashing.
+      return parsed.version === 1 ? parsed : this._emptyLore();
+    } catch {
+      return this._emptyLore();
+    }
+  }
+
+  /**
+   * Returns a fresh empty lore scaffold with all fields explicitly initialised
+   * so downstream code can safely access them without null-checks.
+   *
+   * @returns {object}
+   */
+  _emptyLore() {
+    return {
+      version:        1,
+      playerArcs:     {},  // playerName → { team, arc }
+      managerFates:   {},  // managerName → { team, fate }
+      rivalryThreads: {},  // "teamA_vs_teamB" → { thread, lastResult }
+      seasonArcs:     {},  // seasonId → { arc }
+      matchLedger:    [],  // past match records (capped at MAX_LEDGER)
+      currentSeason:  null,
+    };
+  }
+
+  /**
+   * Persists the lore object to localStorage.
+   * Silently absorbs QuotaExceededError — lore saves are best-effort and
+   * must never crash the match simulation.
+   */
+  _saveLore() {
+    try {
+      localStorage.setItem(CosmicArchitect.LORE_KEY, JSON.stringify(this.lore));
+    } catch { /* QuotaExceededError: silently ignore */ }
+  }
+
+  // ── Context helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Returns the compact context string injected into every AgentSystem prompt.
+   *
+   * Kept to ≤ 3 lines to limit token overhead on the many parallel calls
+   * fired per event.  The Architect's full lore lives in its internal state;
+   * this string is a distilled summary for the other AI voices.
+   *
+   * Format (each line is optional — only present if meaningful content exists):
+   *   COSMIC LORE: [rivalry thread for this specific matchup]
+   *   THE ARCHITECT DECREES: [current in-match narrative arc]
+   *   MORTAL IN FOCUS: [primary featured player] — [their fate arc]
+   *
+   * @returns {string} multi-line context block, or '' if no context yet
+   */
+  getContext() {
+    const parts = [];
+
+    const rivalry = this.lore.rivalryThreads[this._rivalryKey()];
+    if (rivalry?.thread) parts.push(`COSMIC LORE: ${rivalry.thread}`);
+
+    if (this.narrativeArc) parts.push(`THE ARCHITECT DECREES: ${this.narrativeArc}`);
+
+    // Only feature the primary mortal to keep the line brief.
+    if (this.featuredMortals.length > 0) {
+      const mortal = this.featuredMortals[0];
+      const arc    = this.characterArcs[mortal]
+        || this.lore.playerArcs[mortal]?.arc
+        || '';
+      if (arc) parts.push(`MORTAL IN FOCUS: ${mortal} — ${arc}`);
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Returns the combined character arc for a specific player: their
+   * cross-match lore arc plus what has been written for them in the
+   * current match.
+   *
+   * Used by AgentSystem.generatePlayerThought() so featured mortals'
+   * inner thoughts reflect their larger story, not just this one moment.
+   *
+   * @param {string} playerName
+   * @returns {string} arc description, or '' if none recorded
+   */
+  getCharacterArc(playerName) {
+    const lorePart  = this.lore.playerArcs[playerName]?.arc || '';
+    const matchPart = this.characterArcs[playerName] || '';
+    if (lorePart && matchPart) return `${lorePart} | This match: ${matchPart}`;
+    return lorePart || matchPart || '';
+  }
+
+  /**
+   * Returns the names of the players currently spotlighted by The Architect.
+   * Used by AgentSystem._processEventDirect() to apply tier promotion when
+   * a featured mortal is involved in an otherwise minor event.
+   *
+   * @returns {string[]} up to 2 player names
+   */
+  getFeaturedMortals() {
+    return this.featuredMortals;
+  }
+
+  // ── Canonical rivalry key ─────────────────────────────────────────────────
+
+  /**
+   * Produces a stable alphabetically-sorted key for the current matchup so
+   * "mars_vs_saturn" and "saturn_vs_mars" always resolve to the same record.
+   *
+   * @returns {string} e.g. "mars_vs_saturn"
+   */
+  _rivalryKey() {
+    return [this.homeTeam.shortName, this.awayTeam.shortName]
+      .sort()
+      .join('_vs_');
+  }
+
+  // ── In-match Proclamation ─────────────────────────────────────────────────
+
+  /**
+   * Issues a new in-match Proclamation if the time or event threshold is met.
+   *
+   * ── Trigger conditions ────────────────────────────────────────────────────
+   *   Time tick:   ≥ UPDATE_INTERVAL_MINUTES since last Proclamation.
+   *   Major event: any recentEvents entry contains a goal or red card.
+   * Both may fire simultaneously; only one Proclamation is issued per call.
+   *
+   * ── Haiku response (JSON) ────────────────────────────────────────────────
+   *   narrativeArc    — cosmic summary of what this match is about (1 sentence)
+   *   featuredMortals — up to 2 player names whose fate matters right now
+   *   characterArcs   — per-mortal fate arc strings (merged into in-match state)
+   *   cosmicThread    — specific through-line for this match
+   *   proclamation    — The Architect's spoken pronouncement (2-3 sentences,
+   *                     dark and poetic, shown in the feed as ArchitectCard)
+   *
+   * @param {number}   minute       – current match minute
+   * @param {object[]} recentEvents – events since last check
+   * @param {object}   gameState    – { score, minute }
+   * @param {object[]} allAgents    – all player agents (home + away)
+   * @returns {Promise<object|null>} architect_proclamation feed item, or null
+   */
+  async maybeUpdate(minute, recentEvents, gameState, allAgents) {
+    const isTimeTick   = (minute - this.lastUpdateMinute) >= CosmicArchitect.UPDATE_INTERVAL_MINUTES;
+    const isMajorEvent = recentEvents.some(e => e.isGoal || e.cardType === 'red');
+    if (!isTimeTick && !isMajorEvent) return null;
+
+    this.lastUpdateMinute = minute;
+
+    // ── Recent events summary ─────────────────────────────────────────────
+    // Last 8 events with commentary; enough for the Architect to understand
+    // the recent shape of the match without overloading the prompt.
+    const eventsSummary = recentEvents
+      .filter(e => e.commentary)
+      .slice(-8)
+      .map(e => `Min ${e.minute}: ${e.commentary}`)
+      .join('; ') || 'None yet';
+
+    // ── Top player states (by confidence + form) ──────────────────────────
+    // 4 players — enough signal for spotlight selection without prompt bloat.
+    const topAgents = [...(allAgents || [])]
+      .sort((a, b) =>
+        ((b.confidence || 50) + (b.form || 0)) -
+        ((a.confidence || 50) + (a.form || 0))
+      )
+      .slice(0, 4);
+    const playerStates = topAgents
+      .map(a =>
+        `${a.player.name} (${a.player.position}, ` +
+        `${a.isHome ? this.homeTeam.shortName : this.awayTeam.shortName}): ` +
+        `conf=${Math.round(a.confidence || 50)}, emo=${a.emotion || 'neutral'}`
+      )
+      .join('; ') || 'None identified';
+
+    // ── Lore summary for this matchup ─────────────────────────────────────
+    const rivalry    = this.lore.rivalryThreads[this._rivalryKey()]?.thread;
+    const playerLore = topAgents
+      .map(a => this.lore.playerArcs[a.player.name]?.arc)
+      .filter(Boolean)
+      .join(' | ');
+    const loreSummary = [rivalry, playerLore].filter(Boolean).join(' | ')
+      || 'No prior encounters recorded in the eternal ledger.';
+
+    const userMsg =
+      `Match: ${this.homeTeam.name} (${gameState.score[0]}) vs ` +
+      `${this.awayTeam.name} (${gameState.score[1]}) | Minute ${minute}'. ` +
+      `Stadium: ${this.stadium?.name || 'Unknown'}. Weather: ${this.weather}.\n` +
+      `Recent events: ${eventsSummary}.\n` +
+      `Notable mortals: ${playerStates}.\n` +
+      `Past lore: ${loreSummary}\n\n` +
+      `Issue your Proclamation. Return JSON:\n` +
+      `{"narrativeArc":"...","featuredMortals":["name1","name2"],` +
+      `"characterArcs":{"name1":"..."},"cosmicThread":"...","proclamation":"..."}`;
+
+    try {
+      const raw = await this.client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        // 300 tokens — enough for the full JSON including a 2-3 sentence
+        // proclamation, bounded to prevent runaway output.
+        max_tokens: 300,
+        system:     CosmicArchitect.SYSTEM,
+        // Maintain ≤ 4 messages of in-match history for continuity.
+        messages:   [...this.history.slice(-4), { role: 'user', content: userMsg }],
+      }).then(r => r.content[0]?.text?.trim());
+
+      if (!raw) return null;
+
+      // ── JSON parse with defensive markdown fence stripping ────────────────
+      // Haiku occasionally wraps JSON in ```json … ``` blocks despite the
+      // system prompt explicitly prohibiting it.  Strip fences before parsing.
+      let parsed;
+      try {
+        const clean = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch { return null; }
+
+      // ── Update in-match narrative state ───────────────────────────────────
+      if (parsed.narrativeArc) this.narrativeArc = parsed.narrativeArc;
+      if (Array.isArray(parsed.featuredMortals))
+        // Cap at 2 spotlights; more would dilute the focus.
+        this.featuredMortals = parsed.featuredMortals.slice(0, 2);
+      if (parsed.characterArcs && typeof parsed.characterArcs === 'object')
+        Object.assign(this.characterArcs, parsed.characterArcs);
+      if (parsed.cosmicThread) this.cosmicThread = parsed.cosmicThread;
+
+      // ── Maintain short in-match history ───────────────────────────────────
+      this.history.push(
+        { role: 'user',      content: userMsg },
+        { role: 'assistant', content: raw     },
+      );
+      // Cap at 8 items (4 turns) — the Architect speaks rarely and each
+      // proclamation should feel like a weighty isolated pronouncement.
+      if (this.history.length > 8) this.history.splice(0, 2);
+
+      if (!parsed.proclamation) return null;
+
+      return {
+        type:            'architect_proclamation',
+        name:            'The Architect',
+        emoji:           '🌌',
+        // Deep violet — visually distinct from all commentator and manager
+        // colours so Architect cards are immediately identifiable in the feed.
+        color:           '#7C3AED',
+        text:            parsed.proclamation,
+        narrativeArc:    parsed.narrativeArc    || '',
+        featuredMortals: parsed.featuredMortals || [],
+        cosmicThread:    parsed.cosmicThread    || '',
+        minute,
+      };
+    } catch { return null; }
+  }
+
+  // ── Post-match lore save ───────────────────────────────────────────────────
+
+  /**
+   * Generates a post-match Verdict and merges the results into persistent lore.
+   *
+   * Called from App.jsx when matchState.mvp is set (match fully complete).
+   * This is fire-and-forget — App.jsx does NOT await it.  All errors are
+   * silently absorbed so a failed lore save never interrupts the end-of-match
+   * UI flow.
+   *
+   * ── Haiku response (JSON) ────────────────────────────────────────────────
+   *   architectVerdict    – 2-3 sentence cosmic summary of the match
+   *   playerArcUpdates    – { playerName: updatedArcString } for notable players
+   *   managerFateUpdate   – { managerName: updatedFateString }
+   *   rivalryThreadUpdate – updated thread for this matchup
+   *   newSeasonArc        – any new season-level arc to record
+   *
+   * @param {object} matchState    – full React match state at end of game
+   * @param {object} leagueContext – optional { league, season, matchday, seasonId }
+   */
+  async saveMatchToLore(matchState, leagueContext = {}) {
+    const { homeTeam, awayTeam, score, events = [], playerStats = {}, mvp } = matchState;
+    if (!homeTeam || !awayTeam) return;
+
+    // ── Key moments (goals, red cards, injuries) ──────────────────────────
+    // 6 moments — enough for a rich Verdict without over-filling the prompt.
+    const keyMoments = events
+      .filter(e => e.isGoal || e.cardType === 'red' || e.isInjury)
+      .slice(0, 6)
+      .map(e => `Min ${e.minute}: ${e.commentary || e.type}`)
+      .join('; ') || 'None recorded';
+
+    const scorersText = Object.entries(playerStats)
+      .filter(([, s]) => s.goals > 0)
+      .map(([name, s]) =>
+        `${name} (${s.goals}G${s.assists ? ` ${s.assists}A` : ''})`
+      )
+      .join(', ') || 'No goals scored';
+
+    const existingThread = this.lore.rivalryThreads[this._rivalryKey()]?.thread
+      || 'First encounter between these teams.';
+
+    const inMatchArcs = Object.entries(this.characterArcs)
+      .map(([n, a]) => `${n}: ${a}`)
+      .join('; ') || 'None witnessed';
+
+    const userMsg =
+      `The match is over. ${homeTeam.name} ${score[0]}-${score[1]} ${awayTeam.name}. ` +
+      `MVP: ${mvp?.name || 'none'}.\n` +
+      `Key moments: ${keyMoments}.\n` +
+      `Scorers: ${scorersText}.\n` +
+      `Existing rivalry thread: ${existingThread}\n` +
+      `In-match fate arcs witnessed: ${inMatchArcs}\n\n` +
+      `Record this match for eternity. Return JSON:\n` +
+      `{"architectVerdict":"...","playerArcUpdates":{"name":"updated arc..."},` +
+      `"managerFateUpdate":{"name":"..."},"rivalryThreadUpdate":"...","newSeasonArc":"..."}`;
+
+    try {
+      const raw = await this.client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        // 400 tokens — lore saves update multiple player arcs and produce a
+        // multi-sentence Verdict so they need more room than in-match calls.
+        max_tokens: 400,
+        system:     CosmicArchitect.SYSTEM,
+        messages:   [{ role: 'user', content: userMsg }],
+      }).then(r => r.content[0]?.text?.trim());
+
+      if (!raw) return;
+
+      let parsed;
+      try {
+        const clean = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch { return; }
+
+      // ── Merge player arcs ─────────────────────────────────────────────────
+      if (parsed.playerArcUpdates && typeof parsed.playerArcUpdates === 'object') {
+        for (const [name, arc] of Object.entries(parsed.playerArcUpdates)) {
+          const team = homeTeam.players?.some(p => p.name === name)
+            ? homeTeam.shortName : awayTeam.shortName;
+          this.lore.playerArcs[name] = {
+            ...(this.lore.playerArcs[name] || {}),
+            arc,
+            team,
+          };
+        }
+      }
+
+      // ── Merge manager fates ───────────────────────────────────────────────
+      if (parsed.managerFateUpdate && typeof parsed.managerFateUpdate === 'object') {
+        for (const [name, fate] of Object.entries(parsed.managerFateUpdate)) {
+          this.lore.managerFates[name] = {
+            ...(this.lore.managerFates[name] || {}),
+            fate,
+          };
+        }
+      }
+
+      // ── Update rivalry thread ─────────────────────────────────────────────
+      if (parsed.rivalryThreadUpdate) {
+        this.lore.rivalryThreads[this._rivalryKey()] = {
+          thread:     parsed.rivalryThreadUpdate,
+          lastResult: score[0] > score[1] ? homeTeam.shortName
+            : score[1] > score[0]         ? awayTeam.shortName
+            :                               'draw',
+        };
+      }
+
+      // ── Update season arc ─────────────────────────────────────────────────
+      if (parsed.newSeasonArc && leagueContext.seasonId) {
+        this.lore.seasonArcs[leagueContext.seasonId] = { arc: parsed.newSeasonArc };
+      }
+
+      // ── Add to match ledger ───────────────────────────────────────────────
+      this.lore.matchLedger.push({
+        home:             homeTeam.shortName,
+        away:             awayTeam.shortName,
+        score:            [...score],
+        league:           leagueContext.league   || 'Unknown League',
+        season:           leagueContext.season   || 1,
+        matchday:         leagueContext.matchday || null,
+        architectVerdict: parsed.architectVerdict || '',
+        // Keep up to 3 key thread strings for future Proclamation context.
+        keyThreads: [
+          parsed.rivalryThreadUpdate,
+          ...Object.values(parsed.playerArcUpdates || {}).slice(0, 2),
+        ].filter(Boolean).slice(0, 3),
+        mvp: mvp?.name || null,
+      });
+
+      // Trim to MAX_LEDGER; oldest records fall into the void.
+      if (this.lore.matchLedger.length > CosmicArchitect.MAX_LEDGER) {
+        this.lore.matchLedger.shift();
+      }
+
+      this._saveLore();
+    } catch { /* post-match lore save is best-effort; never surface to caller */ }
+  }
 }

@@ -194,6 +194,137 @@ export const AgentCard = ({ item }) => {
   );
 };
 
+// ── ArchitectCard ─────────────────────────────────────────────────────────────
+//
+// Renders a Proclamation from THE ARCHITECT — the cosmic entity that shapes
+// the fate of every player, match, and season in the ISL.  This card has a
+// deliberately distinct visual identity from all other feed entries:
+//
+//   • Near-black (#0D0A14) background to evoke cosmic void
+//   • Deep violet animated pulsing border (#7C3AED) — the Architect's colour
+//   • Header: 🌌 THE ARCHITECT in small-caps violet
+//   • Proclamation text in italic with slightly elevated opacity (readable but
+//     ethereal — the Architect speaks in prophecy, not headlines)
+//   • Optional sub-line showing featured mortals and the cosmic thread
+//
+// The keyframe animation (border opacity pulse) is injected once into the
+// document head so it can be referenced by the inline borderColor style.
+// This is consistent with the rest of the codebase's inline-style approach.
+
+// Inject the pulse keyframe animation once into the document head.
+// Guard against duplicate injection in hot-reload environments.
+if (typeof document !== 'undefined' && !document.getElementById('architect-pulse-style')) {
+  const style = document.createElement('style');
+  style.id = 'architect-pulse-style';
+  style.textContent = `
+    @keyframes architectPulse {
+      0%, 100% { box-shadow: 0 0 6px 1px rgba(124,58,237,0.35); }
+      50%       { box-shadow: 0 0 14px 3px rgba(124,58,237,0.65); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+/**
+ * ArchitectCard — feed entry for a Proclamation from THE ARCHITECT.
+ *
+ * Displayed in the commentary feed whenever CosmicArchitect.maybeUpdate()
+ * returns a new proclamation.  Visually distinct from all other cards to
+ * signal that this is not a commentator or manager reaction, but a cosmic
+ * decree that contextualises the entire match.
+ *
+ * @param {{ type: string, name: string, emoji: string, color: string,
+ *           minute: number, text: string,
+ *           narrativeArc?: string, featuredMortals?: string[],
+ *           cosmicThread?: string }} item
+ * @returns {JSX.Element}
+ */
+export const ArchitectCard = ({ item }) => {
+  // The Architect's fixed accent colour.  Defined as a constant here rather
+  // than reading item.color so the visual identity is enforced even if the
+  // feed item is constructed with a different value.
+  const ARCHITECT_COLOR = '#7C3AED';
+
+  return (
+    <div style={{
+      padding:         '12px',
+      marginBottom:    '10px',
+      backgroundColor: '#0D0A14',  // near-black cosmic void
+      border:          `1px solid ${ARCHITECT_COLOR}`,
+      animation:       'architectPulse 3s ease-in-out infinite',
+      // Slightly wider left accent than AgentCard to reinforce authority.
+      borderLeft:      `3px solid ${ARCHITECT_COLOR}`,
+    }}>
+
+      {/* ── Header: entity identity + minute ──────────────────────────────── */}
+      <div style={{
+        display:       'flex',
+        alignItems:    'center',
+        gap:           '8px',
+        marginBottom:  '8px',
+      }}>
+        <span style={{ fontSize: '16px' }}>{item.emoji}</span>
+        <span style={{
+          fontSize:      '10px',
+          fontWeight:    700,
+          letterSpacing: '0.12em',
+          // Small-caps via text-transform — matches the "cosmically ancient"
+          // aesthetic without requiring a special font.
+          textTransform: 'uppercase',
+          color:         ARCHITECT_COLOR,
+        }}>
+          The Architect
+        </span>
+        <span style={{ fontSize: '10px', marginLeft: 'auto', opacity: 0.4 }}>
+          {item.minute}'
+        </span>
+      </div>
+
+      {/* ── Proclamation text ─────────────────────────────────────────────── */}
+      {/* Italic to signal prophecy / cosmic speech; slightly brighter than
+          AgentCard text (opacity 0.95 vs 0.9) because the Architect's words
+          must be readable even in the darkest background. */}
+      <div style={{
+        fontSize:    '12px',
+        fontStyle:   'italic',
+        lineHeight:  '1.5',
+        color:       '#E2D9F3',  // muted lavender — readable on void background
+        marginBottom: item.featuredMortals?.length || item.cosmicThread ? '8px' : 0,
+      }}>
+        "{item.text}"
+      </div>
+
+      {/* ── Supplementary lore line ───────────────────────────────────────── */}
+      {/* Shows featured mortals and the cosmic thread so the reader can see
+          whose fate is being shaped and why this match matters cosmically.
+          Hidden when neither field is populated (e.g. early first proclamation). */}
+      {(item.featuredMortals?.length > 0 || item.cosmicThread) && (
+        <div style={{
+          fontSize:  '10px',
+          opacity:   0.55,
+          borderTop: `1px solid rgba(124,58,237,0.25)`,
+          paddingTop: '6px',
+          display:   'flex',
+          flexDirection: 'column',
+          gap:       '2px',
+        }}>
+          {item.featuredMortals?.length > 0 && (
+            <span>
+              ✦ Mortals in focus:{' '}
+              <span style={{ color: ARCHITECT_COLOR }}>
+                {item.featuredMortals.join(' · ')}
+              </span>
+            </span>
+          )}
+          {item.cosmicThread && (
+            <span>✦ Thread: {item.cosmicThread}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── ApiKeyModal ───────────────────────────────────────────────────────────────
 
 /**

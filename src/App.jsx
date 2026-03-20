@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Play, Pause, RotateCcw, Settings } from "lucide-react";
 import TEAMS from "./teams.js";
-import { AgentSystem, COMMENTATOR_PROFILES } from "./agents.js";
+import { AgentSystem, CosmicArchitect, COMMENTATOR_PROFILES } from "./agents.js";
 import {
   createAgent, createAIManager,
   getActive, teamStats, getPlayer, formBonus,
@@ -17,7 +17,7 @@ import {
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
-import { Stat, PlayerRow, FeedCard, AgentCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
+import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic } from "./simulateHelpers.js";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
@@ -206,6 +206,10 @@ const MatchSimulator = ({
   const [awayThoughtsFeed,setAwayThoughtsFeed]=useState([]);
   const [htLlmQuotes,setHtLlmQuotes]=useState(null);
   const agentSystemRef=useRef(null);
+  // Ref for the CosmicArchitect instance.  Kept as a ref (not state) for the
+  // same reason as agentSystemRef: the Architect is mutated in place across
+  // every minute tick and we don't want React to re-render on each mutation.
+  const architectRef=useRef(null);
   const lastEventCountRef=useRef(0);
   const lastThoughtsCountRef=useRef(0);
 
@@ -213,10 +217,21 @@ const MatchSimulator = ({
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
 
-  // Route a single LLM result to the correct feed
+  // Route a single LLM result to the correct feed.
+  //
+  // New types added for the Architect + play-by-play system:
+  //
+  //   'play_by_play'          → commentaryFeed  (Captain Vox primary narration;
+  //                             styled differently from 'commentator' reactions
+  //                             but lives in the same panel for feed continuity)
+  //
+  //   'architect_proclamation'→ commentaryFeed  (The Architect's cosmic decree;
+  //                             rendered via ArchitectCard for visual distinction)
+  //
+  // All other types are unchanged from the original routing logic.
   const routeAgentResult=(r)=>{
     if(!r)return;
-    if(r.type==='commentator'||r.type==='referee'){
+    if(r.type==='commentator'||r.type==='referee'||r.type==='play_by_play'||r.type==='architect_proclamation'){
       setCommentaryFeed(p=>[...p,r].slice(-120));
     }else if(r.type==='player_thought'){
       if(r.isHome)setHomeThoughtsFeed(p=>[...p,r].slice(-60));
@@ -250,18 +265,39 @@ const MatchSimulator = ({
     }
   };
 
-  // Agent event processing: watch for new events, trigger LLM or route fallback
+  // Agent event processing: watch for new events, trigger LLM or route fallback.
+  //
+  // The Architect (architectRef) is triggered here rather than inside
+  // AgentSystem so it can be called after queueEvent resolves — meaning Vox's
+  // narration and the reactor commentary have already been queued.  The
+  // Architect's maybeUpdate() then fires asynchronously; its result (if any)
+  // is routed to the commentary feed as an architect_proclamation card.
+  //
+  // maybeUpdate() internally guards against over-firing: it only issues a new
+  // Proclamation if ≥ UPDATE_INTERVAL_MINUTES have elapsed OR the current
+  // event is a goal / red card, so calling it on every event is safe.
   useEffect(()=>{
     if(!matchState.events.length)return;
     const newEvents=matchState.events.slice(lastEventCountRef.current);
     lastEventCountRef.current=matchState.events.length;
     const sys=agentSystemRef.current;
+    const arch=architectRef.current;
     const allAgents=aiManager?[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents]:[];
     const gameState={minute:matchState.minute,score:matchState.score};
     for(const event of newEvents){
       if(!event)continue;
       if(sys){
-        sys.queueEvent(event,gameState,allAgents).then(results=>{results.forEach(routeAgentResult);});
+        // Queue the event through AgentSystem (play-by-play + reactors + managers etc.)
+        sys.queueEvent(event,gameState,allAgents).then(results=>{
+          results.forEach(routeAgentResult);
+          // After commentary is queued, ask the Architect if a Proclamation is due.
+          // Pass newEvents (not just this event) so it can assess recent context.
+          if(arch){
+            arch.maybeUpdate(matchState.minute,newEvents,gameState,allAgents)
+              .then(proclamation=>{if(proclamation)routeAgentResult(proclamation);})
+              .catch(()=>{});
+          }
+        });
       }else{
         routeFallbackEvent(event,matchState.homeTeam.shortName);
       }
@@ -432,11 +468,25 @@ const MatchSimulator = ({
     let mgr=aiRef.current;
     if(!mgr){mgr=createAIManager(matchState.homeTeam,matchState.awayTeam);aiRef.current=mgr;setAiManager(mgr);}
     if(apiKey&&!agentSystemRef.current){
+      // ── Create the Architect before AgentSystem so it can be passed in ───
+      // The Architect loads its persistent lore from localStorage at construction
+      // time, meaning cross-match rivalries and player arcs are available from
+      // the very first Proclamation of this match.
+      const arch=new CosmicArchitect(apiKey,{
+        homeTeam:matchState.homeTeam,awayTeam:matchState.awayTeam,
+        homeManager:mgr.homeManager,awayManager:mgr.awayManager,
+        stadium:mgr.stadium,weather:mgr.weather,
+      });
+      architectRef.current=arch;
+
+      // Pass the Architect instance into AgentSystem so _ctx() can inject its
+      // context into every AI prompt without App.jsx needing to coordinate that.
       agentSystemRef.current=new AgentSystem(apiKey,{
         homeTeam:matchState.homeTeam,awayTeam:matchState.awayTeam,
         referee:mgr.referee,homeManager:mgr.homeManager,awayManager:mgr.awayManager,
         homeTactics:mgr.homeTactics,awayTactics:mgr.awayTactics,
-        stadium:mgr.stadium,weather:mgr.weather
+        stadium:mgr.stadium,weather:mgr.weather,
+        architect:arch,
       });
     }
     setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
@@ -444,7 +494,22 @@ const MatchSimulator = ({
   };
   const pauseMatch=()=>{clearInterval(intervalRef.current);setMatchState(p=>({...p,isPlaying:false}));};
   const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));intervalRef.current=setInterval(simulateMinute,speed);}};
-  const resetMatch=()=>{clearInterval(intervalRef.current);aiRef.current=null;agentSystemRef.current=null;lastEventCountRef.current=0;lastThoughtsCountRef.current=0;setAiManager(null);setMatchState(initState());setShowBetting(true);setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);setAwayThoughtsFeed([]);setHtLlmQuotes(null);};
+  const resetMatch=()=>{
+    clearInterval(intervalRef.current);
+    aiRef.current=null;
+    agentSystemRef.current=null;
+    // Clear the Architect ref so the next match starts with a fresh in-match
+    // state (narrativeArc, characterArcs, featuredMortals).  The persistent
+    // lore in localStorage is NOT cleared — that accumulates across resets.
+    architectRef.current=null;
+    lastEventCountRef.current=0;
+    lastThoughtsCountRef.current=0;
+    setAiManager(null);setMatchState(initState());setShowBetting(true);
+    setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);
+    setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);
+    setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);
+    setAwayThoughtsFeed([]);setHtLlmQuotes(null);
+  };
 
   const placeBet=(type,amount,odds)=>{
     if(amount<=0||amount>credits)return;
@@ -457,6 +522,21 @@ const MatchSimulator = ({
     toastRef.current=setTimeout(()=>setBetToast(null),2500);
   };
   useEffect(()=>{
+    if(matchState.mvp&&!matchState.isPlaying){
+      // ── Architect post-match lore save ────────────────────────────────────
+      // Fire-and-forget: we don't await this because the lore save is a
+      // best-effort background operation and must never block the end-of-match
+      // UI flow.  The Architect generates a Verdict and merges player arcs,
+      // rivalry threads, and season arcs into localStorage for use in future
+      // matches.  leagueContext is intentionally minimal here; league pages
+      // can pass richer context (season, matchday) in a future integration.
+      const arch=architectRef.current;
+      if(arch){
+        arch.saveMatchToLore(matchState,{
+          league: matchState.homeTeam?.league || 'Intergalactic Soccer League',
+        });
+      }
+    }
     if(matchState.mvp&&!matchState.isPlaying&&betsRef.current.length>0){
       const score=matchState.score;
       const hadRed=matchState.redCards.home>0||matchState.redCards.away>0;
@@ -912,6 +992,35 @@ const MatchSimulator = ({
                     </div>
                   )}
                   {commentaryReversed.map((item,i)=>{
+                    // ── The Architect Proclamation ──────────────────────────
+                    // Rendered by ArchitectCard which handles all visual styling
+                    // including the cosmic void background and pulsing border.
+                    if(item.type==='architect_proclamation'){
+                      return <ArchitectCard key={i} item={item}/>;
+                    }
+
+                    // ── Captain Vox: primary play-by-play narration ─────────
+                    // Displayed with a thicker border and slightly larger text
+                    // than reaction commentary cards to signal it is the main
+                    // "what just happened" entry in the feed, not a reaction.
+                    if(item.type==='play_by_play'){
+                      return(
+                        <div key={i} style={{marginBottom:'14px',borderLeft:`3px solid ${item.color}`,paddingLeft:'10px',backgroundColor:'rgba(255,215,0,0.04)'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                            <span style={{fontSize:'15px'}}>{item.emoji}</span>
+                            <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
+                            {/* 'PRIMARY' badge distinguishes Vox narration from reaction cards */}
+                            <span style={{fontSize:'9px',padding:'1px 5px',border:`1px solid ${item.color}`,color:item.color,opacity:0.7,letterSpacing:'0.08em'}}>PRIMARY</span>
+                            <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                          </div>
+                          <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>"{item.text}"</div>
+                        </div>
+                      );
+                    }
+
+                    // ── Reactor commentators (Nexus-7, Zara Bloom) ──────────
+                    // Standard reaction card — thinner border, smaller text,
+                    // visually subordinate to the play-by-play entry above.
                     if(item.type==='commentator'){
                       return(
                         <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'8px'}}>
@@ -925,6 +1034,8 @@ const MatchSimulator = ({
                         </div>
                       );
                     }
+
+                    // ── Referee decision ────────────────────────────────────
                     if(item.type==='referee'){
                       return(
                         <div key={i} style={{marginBottom:'12px',borderLeft:'2px solid #FFD700',paddingLeft:'8px'}}>
@@ -937,12 +1048,17 @@ const MatchSimulator = ({
                         </div>
                       );
                     }
-                    const bc=item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.3)';
+
+                    // ── Procedural event entry (fallback / no API key) ───────
+                    // Visually de-emphasised relative to the play-by-play card:
+                    // dimmer text and thinner border so it reads as a timestamp
+                    // reference, not the main narrative voice.
+                    const bc=item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
                     return(
-                      <div key={i} style={{marginBottom:'8px',borderLeft:`2px solid ${bc}`,paddingLeft:'8px',backgroundColor:item.isGoal?'rgba(154,92,244,0.08)':item.cardType==='red'?'rgba(224,82,82,0.06)':undefined}}>
-                        <div style={{display:'flex',gap:'8px',fontSize:'11px',lineHeight:1.5}}>
+                      <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:0.65,backgroundColor:item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
+                        <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5}}>
                           <span style={{fontWeight:700,color:'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
-                          <span style={{opacity:0.9}}>{item.text}</span>
+                          <span style={{opacity:0.8}}>{item.text}</span>
                         </div>
                       </div>
                     );
