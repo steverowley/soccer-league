@@ -27,6 +27,9 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
 - Procedurally generated events: goals, free kicks, penalties, cards, injuries, VAR reviews, confrontations, and more
 - Dynamic possession, momentum, and chaos level tracking
 - Planetary weather systems — rain, solar storms, zero-gravity, magnetic fields, and others
+- **Tension Curves**: 10-segment time-weighted probability curve for events, with 5 pre-match tension variants (standard/frantic/cagey/slow_burn/back_and_forth)
+- **Narrative Residue**: Tracks team pressure, consecutive near-misses, and 15+ flashpoint types (retaliation, momentum_surge, hat_trick_hunt, etc.) that dynamically affect gameplay
+- **Manager Tactics**: AI-driven manager decisions responding to match conditions (halftime, losing position, red cards, siege mode) with stance-specific shot/defense/press biases
 
 ### Player Psychology
 - 8 personality types: balanced, selfish, team_player, aggressive, cautious, creative, lazy, workhorse
@@ -39,6 +42,7 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
 - Maintains persistent **cosmic lore** in localStorage — accumulated player arcs, manager fates, team rivalry threads, and season arcs across all matches and leagues
 - When teams meet a second time, the Architect recalls their history and previous encounters
 - Context is injected into every AI prompt, so all voices speak with narrative coherence
+- Influences matches through three layers: **Cosmic Edicts** (polarity/magnitude modifiers), **Intentions** (12 types with directed outcomes), and **Sealed Fate** (prophecy-driven forced outcomes)
 
 **Primary Narration** — Captain Vox now runs first as the primary narrator:
 - Receives structured event data instead of terse procedural text
@@ -56,6 +60,7 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 - 4 regional leagues: Rocky Inner, Gas/Ice Giants, Outer Reaches, Kuiper Belt
 - 5 formation options: 4-3-3, 4-4-2, 3-5-2, 5-4-1, 5-3-2
 - Substitution system (3 per team) and tactical manager personalities
+- **Player Relationship Graph**: Dynamic relationships (rivalry, partnership, grudge, mutual_respect, etc.) that evolve ±0.15 per match, influencing player interactions and fouls
 
 ### Match Simulator UI
 - Live scoreboard, possession bar, and momentum tracker
@@ -64,6 +69,25 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 - Separate feeds for commentary, manager thoughts, and player inner monologues
 - Fantasy betting system with credits
 - Adjustable simulation speed and pause/resume controls
+
+## Game Engine Architecture
+
+The match simulator is built on a sophisticated event generation system with five major architectural layers:
+
+1. **Tension Curves** — Events are no longer gated at a flat 35% probability. Instead, matches have a 10-segment time-weighted curve and one of 5 narrative shapes (standard/frantic/cagey/slow_burn/back_and_forth) selected at kick-off. Per-match jitter adds variation, and near-miss pressure bonuses escalate tension.
+
+2. **Narrative Residue** — Teams accumulate pressure (0–100), consecutive near-misses, and active flashpoints (15+ types like retaliation, momentum_surge, hat_trick_hunt). Flashpoints are baked at creation with durations and effects, feeding into player selection bias and contest modifiers in events.
+
+3. **Architect as Director** — The cosmic Architect influences matches through three mechanisms:
+   - **Cosmic Edicts**: Polarity and magnitude convert to roll/contestMod/conversionBonus modifiers
+   - **Intentions**: 12 intention types with per-proclamation prompts wire into player selection bias and contest bonus
+   - **Sealed Fate**: Freeform prophecy parsed into forced outcomes (goal/red_card/wonder_save/chaos) with window and probability
+
+4. **LLM Manager Decisions** — Managers respond to 10 trigger conditions (halftime, losing at 60+, red card, siege mode, etc.) with AI-selected stances. Each stance applies ranged shotBias/defenseBias/pressBias/fatigueCost that expire after a window, with stale stances having zero effect.
+
+5. **Player Relationship Graph** — Player relationships (8 types: rivalry, partnership, grudge, mutual_respect, etc.) evolve ±0.15 per match. Relationships influence rival selection in foul branches and scale resolveContest() modifiers. The lore schema supports v1→v2 migration preserving existing match history.
+
+All five layers degrade gracefully when the LLM is unavailable, ensuring the simulation continues to run.
 
 ## Getting Started
 
