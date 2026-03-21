@@ -42,7 +42,11 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
 - Maintains persistent **cosmic lore** in localStorage — accumulated player arcs, manager fates, team rivalry threads, and season arcs across all matches and leagues
 - When teams meet a second time, the Architect recalls their history and previous encounters
 - Context is injected into every AI prompt, so all voices speak with narrative coherence
-- Influences matches through three layers: **Cosmic Edicts** (polarity/magnitude modifiers), **Intentions** (12 types with directed outcomes), and **Sealed Fate** (prophecy-driven forced outcomes)
+- Influences matches through four layers:
+  - **Cosmic Edicts** (polarity/magnitude modifiers)
+  - **Intentions** (12 types with directed outcomes)
+  - **Sealed Fate** (prophecy-driven forced outcomes)
+  - **Architect Interference** (45 reality-rewrite types: history mutations, conjured events, player curses/blesses, formation chaos, and more — fires once per event batch with a 20-min cooldown, probability scaling with edict polarity)
 
 **Primary Narration** — Captain Vox now runs first as the primary narrator:
 - Receives structured event data instead of terse procedural text
@@ -72,22 +76,25 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 
 ## Game Engine Architecture
 
-The match simulator is built on a sophisticated event generation system with five major architectural layers:
+The match simulator is built on a sophisticated event generation system with six major architectural layers:
 
 1. **Tension Curves** — Events are no longer gated at a flat 35% probability. Instead, matches have a 10-segment time-weighted curve and one of 5 narrative shapes (standard/frantic/cagey/slow_burn/back_and_forth) selected at kick-off. Per-match jitter adds variation, and near-miss pressure bonuses escalate tension.
 
 2. **Narrative Residue** — Teams accumulate pressure (0–100), consecutive near-misses, and active flashpoints (15+ types like retaliation, momentum_surge, hat_trick_hunt). Flashpoints are baked at creation with durations and effects, feeding into player selection bias and contest modifiers in events.
 
-3. **Architect as Director** — The cosmic Architect influences matches through three mechanisms:
+3. **Architect as Director** — The cosmic Architect influences matches through four mechanisms:
    - **Cosmic Edicts**: Polarity and magnitude convert to roll/contestMod/conversionBonus modifiers
    - **Intentions**: 12 intention types with per-proclamation prompts wire into player selection bias and contest bonus
    - **Sealed Fate**: Freeform prophecy parsed into forced outcomes (goal/red_card/wonder_save/chaos) with window and probability
+   - **Architect Interference**: 45 reality-rewrite types organized into 7 categories (history rewrites, conjured events, possession warping, formation chaos, prophecy resets, sabotage, mass curses/blesses). Fires once per event batch with 20-min cooldown; probability scales with edict polarity (base 10%, up to ~66% in chaos edict + frantic variant). Effects include score mutations, player roster rewrites, synthetically spawned events, and mid-match modifiers (curses −2–20 atkMod, blesses +2–20, possession swaps ±30 coin-flip)
 
 4. **LLM Manager Decisions** — Managers respond to 10 trigger conditions (halftime, losing at 60+, red card, siege mode, etc.) with AI-selected stances. Each stance applies ranged shotBias/defenseBias/pressBias/fatigueCost that expire after a window, with stale stances having zero effect.
 
 5. **Player Relationship Graph** — Player relationships (8 types: rivalry, partnership, grudge, mutual_respect, etc.) evolve ±0.15 per match. Relationships influence rival selection in foul branches and scale resolveContest() modifiers. The lore schema supports v1→v2 migration preserving existing match history.
 
-All five layers degrade gracefully when the LLM is unavailable, ensuring the simulation continues to run.
+6. **LLM-Driven Architect Interference** — Beyond prophecy, the Architect actively warps reality during matches through 45 distinct interference types, applying curses/blesses to individual contests, rewriting team formation and score history, and spawning synthetic events. Interference probability scales with cosmic chaos levels and has intelligent cooldown management to prevent narrative whiplash.
+
+All six layers degrade gracefully when the LLM is unavailable, ensuring the simulation continues to run.
 
 ## Getting Started
 
