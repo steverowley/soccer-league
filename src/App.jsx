@@ -17,7 +17,7 @@ import {
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
-import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
+import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
@@ -160,6 +160,481 @@ const getScorerOdds = (player) => {
   const base = player.attacking || 70; // 70 — fallback if attacking stat is missing
   return Math.max(2.5, (120 - base) / 10).toFixed(1);
 };
+
+// ── Architect Interference helpers ────────────────────────────────────────────
+// These two functions are module-level (pure / near-pure) so they are never
+// reallocated on re-render.  Neither touches React state directly.
+
+/**
+ * Maps an interference result object to a commentary-feed item for display.
+ *
+ * Each interferenceType has a fixed emoji and subtitle that encodes the
+ * category of cosmic act — blood-red for history rewrites, violet for
+ * conjured events, amber for curses, etc.  The values here should match
+ * the accent colours defined in ArchitectInterferenceCard.
+ *
+ * @param {object} r - Raw result returned by CosmicArchitect.maybeInterfereWith()
+ * @returns {object} Feed item ready to push to commentaryFeed state
+ */
+function buildInterferenceFeedItem(r) {
+  // Per-type display metadata — emoji signals category at a glance,
+  // subtitle gives the one-line human-readable name of the act.
+  const TYPE_META = {
+    // ── Rewrite History ─────────────────────────────────────────────────────
+    annul_goal:          { emoji: '🌌', subtitle: 'GOAL ERASED FROM HISTORY'          },
+    annul_red_card:      { emoji: '🌌', subtitle: 'RED CARD UNMADE'                   },
+    annul_yellow_card:   { emoji: '🌌', subtitle: 'BOOKING DISSOLVED'                 },
+    steal_goal:          { emoji: '🌀', subtitle: 'GOAL TRANSFERRED'                  },
+    // ── Conjure Events ───────────────────────────────────────────────────────
+    grant_goal:          { emoji: '⚡', subtitle: 'PHANTOM GOAL CONJURED'             },
+    force_red_card:      { emoji: '💀', subtitle: 'COSMIC BANISHMENT'                 },
+    force_injury:        { emoji: '💀', subtitle: 'STRUCK DOWN'                       },
+    lucky_penalty:       { emoji: '⚡', subtitle: 'PENALTY DECREED'                   },
+    // ── Player Fate ──────────────────────────────────────────────────────────
+    curse_player:        { emoji: '🩸', subtitle: 'DARK FATE BOUND'                   },
+    bless_player:        { emoji: '✨', subtitle: 'COSMIC BOON GRANTED'               },
+    resurrect_player:    { emoji: '☀️', subtitle: 'RESURRECTION'                       },
+    dimension_shift:     { emoji: '🌀', subtitle: 'BANISHED TO ANOTHER PLANE'         },
+    identity_swap:       { emoji: '🌀', subtitle: 'IDENTITIES EXCHANGED'              },
+    mass_curse:          { emoji: '🩸', subtitle: 'ENTIRE TEAM CURSED'                },
+    possession:          { emoji: '👁️', subtitle: 'COSMICALLY POSSESSED'              },
+    // ── Match Structure ──────────────────────────────────────────────────────
+    score_reset:         { emoji: '♾️', subtitle: 'SCORES WIPED FROM THE LEDGER'      },
+    score_mirror:        { emoji: '🪞', subtitle: 'SCORES REVERSED'                   },
+    add_stoppage:        { emoji: '⏳', subtitle: 'TIME STRETCHED'                    },
+    momentum_vacuum:     { emoji: '🕳️', subtitle: 'MOMENTUM ERASED'                   },
+    // ── Cosmic Chaos ─────────────────────────────────────────────────────────
+    player_swap:         { emoji: '🌀', subtitle: 'PLAYER SWITCHED ALLEGIANCE'        },
+    echo_goal:           { emoji: '🌀', subtitle: 'HISTORY REWRITTEN — GOAL ALWAYS WENT IN' },
+    keeper_paralysis:    { emoji: '👁️', subtitle: 'KEEPER PARALYSED BY COSMIC TREMOR' },
+    goal_drought:        { emoji: '🕳️', subtitle: 'NET SEALED SHUT'                   },
+    double_goals:        { emoji: '⚡', subtitle: 'TEMPORAL RESONANCE — NEXT GOAL COUNTS TWICE' },
+    reversal_of_fortune: { emoji: '✨', subtitle: 'COSMOS BACKS THE UNDERDOG'         },
+    time_rewind:         { emoji: '⏳', subtitle: 'CLOCK ROLLS BACK'                  },
+    phantom_foul:        { emoji: '💀', subtitle: 'PHANTOM RED CARD INSCRIBED'        },
+    cosmic_own_goal:     { emoji: '🌌', subtitle: 'COMPELLED TO BETRAY THEIR OWN NET' },
+    goalkeeper_swap:     { emoji: '🌀', subtitle: 'GOALKEEPERS EXCHANGED'             },
+    formation_override:  { emoji: '👁️', subtitle: 'ARCHITECT SEIZES TACTICAL COMMAND' },
+    score_amplifier:     { emoji: '⚡', subtitle: 'GOALS AMPLIFIED — EACH WORTH THREE' },
+    equalizer_decree:    { emoji: '♾️', subtitle: 'COSMIC MERCY — SCORES LEVELLED'    },
+    talent_drain:        { emoji: '🩸', subtitle: 'TALENT SIPHONED'                   },
+    prophecy_reset:      { emoji: '🌌', subtitle: 'FATE REWRITTEN — NEW PROPHECY SEALED' },
+    commentary_void:     { emoji: '🕳️', subtitle: 'COSMIC STATIC — COMMENTARY SILENCED' },
+    // ── Eldritch / Reality ───────────────────────────────────────────────────
+    eldritch_portal:     { emoji: '🌀', subtitle: 'PORTAL OPENS — ELDRITCH FORCES POUR THROUGH' },
+    void_creature:       { emoji: '👁️', subtitle: 'VOID CREATURE MANIFESTS ON THE PITCH' },
+    gravity_flip:        { emoji: '⚡', subtitle: 'GRAVITY INVERTED — PHYSICS BETRAYED' },
+    cosmic_weather:      { emoji: '🌌', subtitle: 'WEATHER TORN APART BY COSMIC WILL' },
+    pitch_collapse:      { emoji: '🕳️', subtitle: 'PITCH COLLAPSES — PLAYERS SWALLOWED' },
+    // ── Architect Mood ───────────────────────────────────────────────────────
+    architect_boredom:   { emoji: '♾️', subtitle: 'THE ARCHITECT GROWS BORED — CHAOS CASCADE' },
+    architect_tantrum:   { emoji: '💀', subtitle: 'COSMIC TANTRUM — ALL RULES SUSPENDED' },
+    architect_amusement: { emoji: '✨', subtitle: 'THE ARCHITECT IS PLEASED — GIFTS GIVEN' },
+    architect_sabotage:  { emoji: '🌀', subtitle: 'THE ARCHITECT TURNS ON THEIR OWN DECREE' },
+  };
+  const meta = TYPE_META[r.interferenceType] || { emoji: '🌌', subtitle: 'COSMIC INTERFERENCE' };
+  return {
+    type:             'architect_interference',
+    interferenceType: r.interferenceType,
+    targetPlayer:     r.targetPlayer    || null,
+    targetTeam:       r.targetTeam      || null,
+    // proclamation is the LLM-generated dark poetry; shown as the card body
+    text:             r.proclamation    || '',
+    minute:           r.minute,
+    emoji:            meta.emoji,
+    subtitle:         meta.subtitle,
+    // annulMinute / annulPlayer are only meaningful for annul_goal cards —
+    // shown as a struck-through notice inside ArchitectInterferenceCard
+    annulMinute:      r.goalMinute      ?? null,
+    annulPlayer:      r.targetPlayer    || null,
+    color:            '#7C3AED',
+  };
+}
+
+/**
+ * Pure function: applies a single interference action to the previous React
+ * match state and returns a new match state object.
+ *
+ * Called inside `setMatchState(prev => _applyInterferenceToState(prev, r))`.
+ * Must never produce side-effects on refs or external objects — use
+ * `applyArchitectInterference` for those (arch mutations, aim tactics).
+ *
+ * Score bounds: no score component is ever allowed to go below 0.
+ *
+ * @param {object} prev  - Previous matchState snapshot
+ * @param {object} r     - Interference result from maybeInterfereWith()
+ * @returns {object}     - New matchState (spread of prev + mutations)
+ */
+function _applyInterferenceToState(prev, r) {
+  const t   = r.interferenceType;
+  const min = r.minute;
+
+  // Shallow-clone the fields we may mutate; leave the rest as references
+  // (React will see a new object reference at the top level).
+  let score            = [...prev.score];
+  let events           = prev.events;           // replaced wholesale only when needed
+  let activePlayers    = { home: [...prev.activePlayers.home], away: [...prev.activePlayers.away] };
+  let playerStats      = prev.playerStats;      // replaced wholesale only when needed
+  let narrativeResidue = prev.narrativeResidue;
+  let stoppageTime     = prev.stoppageTime;
+  let minute           = prev.minute;
+
+  // ── Helper: which side ('home'|'away') does this player currently play on?
+  const sideOf   = (name) => activePlayers.home.includes(name) ? 'home'
+                           : activePlayers.away.includes(name) ? 'away' : null;
+  // ── Helper: short team name for a side key
+  const shortOf  = (side) => side === 'home' ? prev.homeTeam.shortName : prev.awayTeam.shortName;
+  // ── Helper: flip side key
+  const oppSide  = (side) => side === 'home' ? 'away' : 'home';
+  // ── Helper: build a minimal synthetic event
+  const synthEvt = (fields) => ({
+    minute, team: prev.homeTeam.shortName, momentumChange: [0, 0],
+    architectForced: true, ...fields,
+  });
+
+  // ── Early-return helpers for flag-only types ──────────────────────────────
+  // These set a single flag on matchState; no other fields change.
+  // Using early-return avoids the default spread at the bottom.
+  if (t === 'lucky_penalty')    return { ...prev, pendingPenalty: { team: r.targetTeam } };
+  if (t === 'keeper_paralysis') return { ...prev, keeperParalysed: { team: r.targetTeam === 'away' ? shortOf('away') : shortOf('home'), expiresMin: min + 10 } };
+  if (t === 'goal_drought')     return { ...prev, goalDrought:  { expiresMin: min + 15 } };
+  if (t === 'double_goals')     return { ...prev, doubleGoalActive: true };
+  if (t === 'commentary_void')  return { ...prev, commentaryVoid:  { expiresMin: min + 10 } };
+  if (t === 'eldritch_portal')  return { ...prev, eldritchPortal:  { teamArea: r.targetTeam === 'away' ? shortOf('away') : shortOf('home'), expiresMin: min + 10 } };
+  if (t === 'void_creature')    return { ...prev, voidCreature:    { expiresMin: min + 5  } };
+  if (t === 'gravity_flip')     return { ...prev, gravityFlipped:  { expiresMin: min + 10 } };
+  if (t === 'score_amplifier')  return { ...prev, scoreAmplifier:  { expiresMin: min + 5, multiplier: 3 } };
+  if (t === 'architect_tantrum') return { ...prev, architectTantrum: { expiresMin: min + 10 } };
+  // architect_boredom: queue 3 mild types to process one per simulateMinute tick
+  if (t === 'architect_boredom') {
+    const mild = ['add_stoppage', 'momentum_vacuum', 'curse_player', 'bless_player', 'commentary_void'];
+    const picks = mild.sort(() => Math.random() - 0.5).slice(0, 3);
+    return { ...prev, pendingInterferences: picks };
+  }
+  // cosmic_weather: override weather to a random extreme value
+  if (t === 'cosmic_weather') {
+    const extremes = ['VOID_STORM', 'SOLAR_FLARE', 'ZERO_GRAVITY'];
+    return { ...prev, weather: extremes[Math.floor(Math.random() * extremes.length)] };
+  }
+
+  // ── Main switch ───────────────────────────────────────────────────────────
+  switch (t) {
+
+    // ── Rewrite History ─────────────────────────────────────────────────────
+
+    case 'annul_goal': {
+      // Find the goal to erase — prefer matching by goalMinute (±3 min tolerance)
+      // so the LLM's stated minute is honoured even with slight clock drift.
+      const idx = r.goalMinute != null
+        ? [...events].map((e, i) => ({ e, i })).filter(({ e }) => e.isGoal && !e.architectAnnulled && Math.abs(e.minute - r.goalMinute) <= 3).pop()?.i ?? -1
+        : [...events].map((e, i) => ({ e, i })).filter(({ e }) => e.isGoal && !e.architectAnnulled).pop()?.i ?? -1;
+      if (idx !== -1) {
+        const g = events[idx];
+        events = events.map((e, i) => i === idx ? { ...e, architectAnnulled: true } : e);
+        // Score can never go below 0 — cosmos erases, doesn't invert
+        if (g.team === prev.homeTeam.shortName) score[0] = Math.max(0, score[0] - 1);
+        else                                    score[1] = Math.max(0, score[1] - 1);
+      }
+      break;
+    }
+
+    case 'steal_goal': {
+      // Transfer the most recent non-annulled, non-stolen goal to the other team
+      const idx = [...events].map((e, i) => ({ e, i }))
+        .filter(({ e }) => e.isGoal && !e.architectAnnulled && !e.architectStolen).pop()?.i ?? -1;
+      if (idx !== -1) {
+        const g       = events[idx];
+        const srcHome = g.team === prev.homeTeam.shortName;
+        events = events.map((e, i) => i === idx ? { ...e, architectAnnulled: true, architectStolen: true } : e);
+        // Decrement source, increment destination — both clamped to ≥0
+        if (srcHome) { score[0] = Math.max(0, score[0] - 1); score[1]++; }
+        else         { score[1] = Math.max(0, score[1] - 1); score[0]++; }
+        events = [...events, synthEvt({ type: 'goal', isGoal: true, architectConjured: true, architectStolen: true, team: srcHome ? shortOf('away') : shortOf('home'), commentary: 'The cosmos reshuffles the ledger — the goal passes across the divide.' })];
+      }
+      break;
+    }
+
+    case 'annul_red_card': {
+      const name = r.targetPlayer;
+      if (name) {
+        // Determine original side from team roster (player may already be off-pitch)
+        const origHome = prev.homeTeam.players.some(p => p.name === name);
+        const side     = origHome ? 'home' : 'away';
+        if (!activePlayers[side].includes(name)) activePlayers[side] = [...activePlayers[side], name];
+        playerStats = { ...playerStats, [name]: { ...playerStats[name], redCard: false } };
+      }
+      break;
+    }
+
+    case 'annul_yellow_card': {
+      const name = r.targetPlayer;
+      if (name) playerStats = { ...playerStats, [name]: { ...playerStats[name], yellowCard: false } };
+      break;
+    }
+
+    // ── Conjure Events ───────────────────────────────────────────────────────
+
+    case 'grant_goal': {
+      // Cosmos conjures a goal for the stated team (default home)
+      const side  = r.targetTeam === 'away' ? 'away' : 'home';
+      score[side === 'home' ? 0 : 1]++;
+      events = [...events, synthEvt({ type: 'goal', isGoal: true, architectConjured: true, team: shortOf(side), player: r.targetPlayer, commentary: 'A phantom goal materialises from the void — the cosmos wills it so.' })];
+      break;
+    }
+
+    case 'force_red_card': {
+      const name = r.targetPlayer;
+      const side = r.targetTeam === 'away' ? 'away' : 'home';
+      if (name) {
+        activePlayers[side] = activePlayers[side].filter(n => n !== name);
+        playerStats = { ...playerStats, [name]: { ...playerStats[name], redCard: true } };
+        events = [...events, synthEvt({ type: 'card', cardType: 'red', player: name, architectForced: true, team: shortOf(side), commentary: `The cosmos passes judgement — ${name} is banished.` })];
+      }
+      break;
+    }
+
+    case 'force_injury': {
+      const name = r.targetPlayer;
+      const side = r.targetTeam === 'away' ? 'away' : 'home';
+      if (name) {
+        const team     = side === 'home' ? prev.homeTeam : prev.awayTeam;
+        const subsUsed = prev.substitutionsUsed[side] || 0;
+        // Reuse existing makeSub helper — same logic as organic injuries
+        const sub = makeSub(team, name, activePlayers[side], subsUsed, playerStats);
+        activePlayers[side] = sub.newActive;
+        playerStats = { ...playerStats, [name]: { ...playerStats[name], injured: true } };
+        if (sub.substitute) playerStats = { ...playerStats, [sub.substitute]: { ...playerStats[sub.substitute], subbedOn: true } };
+        events = [...events, synthEvt({ type: 'injury', isInjury: true, player: name, architectForced: true, team: shortOf(side), commentary: `${name} crumples — struck by unseen forces.` })];
+      }
+      break;
+    }
+
+    // ── Player Fate (curse/bless/possession are handled on the Architect instance; no matchState change) ──
+
+    case 'curse_player':
+    case 'bless_player':
+    case 'possession':
+      // Side-effects already applied to arch.activeCurses / activePossessions
+      // inside applyArchitectInterference before this setState call.
+      break;
+
+    case 'resurrect_player': {
+      const name = r.targetPlayer;
+      if (name) {
+        const origHome = prev.homeTeam.players.some(p => p.name === name);
+        const side     = origHome ? 'home' : 'away';
+        if (!activePlayers[side].includes(name)) {
+          activePlayers[side] = [...activePlayers[side], name];
+          playerStats = { ...playerStats, [name]: { ...playerStats[name], injured: false, redCard: false } };
+        }
+      }
+      break;
+    }
+
+    case 'dimension_shift': {
+      const name = r.targetPlayer;
+      if (name) {
+        const side = sideOf(name);
+        if (side) {
+          activePlayers[side] = activePlayers[side].filter(n => n !== name);
+          events = [...events, synthEvt({ type: 'dimension_shift', player: name, architectForced: true, team: shortOf(side), commentary: `${name} shimmers and fades — pulled through the membrane of reality.` })];
+        }
+      }
+      break;
+    }
+
+    case 'identity_swap': {
+      // Swap all playerStats entries for two active players
+      const nameA = r.targetPlayer;
+      const allActive = [...activePlayers.home, ...activePlayers.away];
+      // Pick a random second active player that isn't the target
+      const nameB = allActive.find(n => n !== nameA);
+      if (nameA && nameB) {
+        playerStats = { ...playerStats, [nameA]: { ...playerStats[nameB] }, [nameB]: { ...playerStats[nameA] } };
+      }
+      break;
+    }
+
+    case 'mass_curse':
+      // Individual curse entries added to arch.activeCurses by applyArchitectInterference
+      break;
+
+    // ── Match Structure ──────────────────────────────────────────────────────
+
+    case 'score_reset': {
+      // Mark ALL existing goals as annulled so the feed shows them struck through
+      events = events.map(e => e.isGoal ? { ...e, architectAnnulled: true } : e);
+      score  = [0, 0];
+      break;
+    }
+
+    case 'score_mirror': {
+      // Swap home and away scores — losers become leaders, leaders become losers
+      score = [prev.score[1], prev.score[0]];
+      break;
+    }
+
+    case 'add_stoppage': {
+      // stoppageMinutes comes from the LLM (clamped 5–10 in maybeInterfereWith)
+      stoppageTime = stoppageTime + (r.stoppageMinutes || 7);
+      break;
+    }
+
+    case 'momentum_vacuum': {
+      // Wipe all narrative residue — pressure, near-misses, and active flashpoints
+      narrativeResidue = { pressure: { home: 0, away: 0 }, nearMisses: { home: 0, away: 0 }, flashpoints: [] };
+      break;
+    }
+
+    // ── Cosmic Chaos ─────────────────────────────────────────────────────────
+
+    case 'player_swap': {
+      const name = r.targetPlayer;
+      if (name) {
+        const side  = sideOf(name);
+        const other = side ? oppSide(side) : null;
+        if (side && other) {
+          activePlayers[side]  = activePlayers[side].filter(n => n !== name);
+          activePlayers[other] = [...activePlayers[other], name];
+          events = [...events, synthEvt({ type: 'player_swap', player: name, architectForced: true, commentary: `${name} crosses the divide — the Architect has rewritten their allegiance.` })];
+        }
+      }
+      break;
+    }
+
+    case 'echo_goal': {
+      // Retroactively convert the most recent saved shot or miss into a goal
+      const shot = [...events].reverse().find(e => !e.isGoal && (e.outcome === 'saved' || e.outcome === 'miss') && e.player);
+      if (shot) {
+        const sideIdx = shot.team === prev.homeTeam.shortName ? 0 : 1;
+        score[sideIdx]++;
+        events = [...events, synthEvt({ type: 'goal', isGoal: true, architectConjured: true, architectEcho: true, player: shot.player, team: shot.team, commentary: `History folds — ${shot.player}'s shot always found the net. Reality corrects itself.` })];
+      }
+      break;
+    }
+
+    case 'reversal_of_fortune': {
+      // Grant the losing team a permanent boost flag read by genCtx / resolveContest
+      const losing = score[0] < score[1] ? 'home' : score[1] < score[0] ? 'away' : null;
+      if (losing) return { ...prev, score, events, reversalBoost: losing };
+      break; // already level — no-op
+    }
+
+    case 'time_rewind': {
+      // Roll the clock back 10 minutes; score and events stay (players relive time)
+      minute = Math.max(1, prev.minute - 10);
+      break;
+    }
+
+    case 'phantom_foul': {
+      // Pick a random active player from the target team and red-card them
+      const side   = r.targetTeam === 'away' ? 'away' : 'home';
+      const victim = activePlayers[side][Math.floor(Math.random() * activePlayers[side].length)];
+      if (victim) {
+        activePlayers[side] = activePlayers[side].filter(n => n !== victim);
+        playerStats = { ...playerStats, [victim]: { ...playerStats[victim], redCard: true } };
+        events = [...events, synthEvt({ type: 'card', cardType: 'red', player: victim, architectForced: true, team: shortOf(side), commentary: `The Architect's quill writes a red card into the void. ${victim} sees it materialise in the referee's hand.` })];
+      }
+      break;
+    }
+
+    case 'cosmic_own_goal': {
+      // Named player scores against their own team
+      const name    = r.targetPlayer;
+      const side    = name ? sideOf(name) : (r.targetTeam === 'away' ? 'away' : 'home');
+      const oppIdx  = side === 'home' ? 1 : 0;
+      score[oppIdx]++;
+      events = [...events, synthEvt({ type: 'goal', isGoal: true, isOwnGoal: true, architectForced: true, player: name, team: shortOf(oppSide(side)), commentary: `${name || 'A player'} turns against their own net, compelled by the cosmos.` })];
+      break;
+    }
+
+    case 'goalkeeper_swap': {
+      // Swap the two starting GKs across teams
+      const findGK = (teamObj, active) =>
+        teamObj.players.find(p => active.includes(p.name) && (p.position === 'GK' || p.isGoalkeeper));
+      const homeGK = findGK(prev.homeTeam, activePlayers.home);
+      const awayGK = findGK(prev.awayTeam, activePlayers.away);
+      if (homeGK && awayGK) {
+        activePlayers.home = activePlayers.home.filter(n => n !== homeGK.name).concat(awayGK.name);
+        activePlayers.away = activePlayers.away.filter(n => n !== awayGK.name).concat(homeGK.name);
+      }
+      break;
+    }
+
+    case 'formation_override':
+      // Manager tactics mutation happens in applyArchitectInterference (needs aim ref)
+      break;
+
+    case 'equalizer_decree': {
+      // Force the trailing team's score up to match the leader
+      if (score[0] > score[1])      score[1] = score[0];
+      else if (score[1] > score[0]) score[0] = score[1];
+      // If already level this is a no-op (cosmos offers mercy only to the fallen)
+      events = [...events, synthEvt({ type: 'equalizer_decree', architectForced: true, commentary: 'The cosmos demands parity. The scores are levelled by decree.' })];
+      break;
+    }
+
+    case 'talent_drain': {
+      // Drain the target star player's stats and give them to a bench reserve
+      const starName = r.targetPlayer
+        || Object.entries(prev.playerStats).sort((a, b) => (b[1].goals || 0) - (a[1].goals || 0))[0]?.[0];
+      if (starName) {
+        const side    = sideOf(starName);
+        const team    = side === 'home' ? prev.homeTeam : prev.awayTeam;
+        const reserve = team?.players.find(p =>
+          !activePlayers.home.includes(p.name) && !activePlayers.away.includes(p.name) && !p.starter,
+        );
+        if (reserve) {
+          // Full stat-entry swap — the star gets the reserve's blank slate
+          playerStats = {
+            ...playerStats,
+            [starName]:      { ...playerStats[reserve.name] },
+            [reserve.name]:  { ...playerStats[starName]     },
+          };
+        }
+      }
+      break;
+    }
+
+    case 'prophecy_reset':
+      // arch.sealedFate = null handled in applyArchitectInterference (needs arch ref)
+      break;
+
+    case 'pitch_collapse': {
+      // Remove one random player from each team (dimension_shift × 2)
+      const hVictim = activePlayers.home[Math.floor(Math.random() * activePlayers.home.length)];
+      const aVictim = activePlayers.away[Math.floor(Math.random() * activePlayers.away.length)];
+      if (hVictim) activePlayers.home = activePlayers.home.filter(n => n !== hVictim);
+      if (aVictim) activePlayers.away = activePlayers.away.filter(n => n !== aVictim);
+      if (hVictim || aVictim) {
+        events = [...events, synthEvt({ type: 'pitch_collapse', architectForced: true, commentary: `The pitch tears apart. ${hVictim ? hVictim + ' ' : ''}${aVictim ? 'and ' + aVictim : ''} are consumed by the void.` })];
+      }
+      break;
+    }
+
+    case 'architect_amusement': {
+      // Composite: grant goal to losing team + remove one of their yellow cards
+      const losing     = score[0] < score[1] ? 'home' : score[1] < score[0] ? 'away' : 'home';
+      const losingShort = shortOf(losing);
+      score[losing === 'home' ? 0 : 1]++;
+      events = [...events, synthEvt({ type: 'goal', isGoal: true, architectConjured: true, team: losingShort, commentary: 'The Architect smiles upon the defeated — a gift goal manifests from cosmic amusement.' })];
+      // Annul a yellow card if any booked player is still on the pitch
+      const bookedPlayer = activePlayers[losing].find(n => playerStats[n]?.yellowCard);
+      if (bookedPlayer) playerStats = { ...playerStats, [bookedPlayer]: { ...playerStats[bookedPlayer], yellowCard: false } };
+      break;
+    }
+
+    case 'architect_sabotage':
+      // arch.cosmicEdict.polarity flip handled in applyArchitectInterference (needs arch ref)
+      break;
+
+    default:
+      // Unknown type — no state change; the feed card still renders via buildInterferenceFeedItem
+      break;
+  }
+
+  return { ...prev, score, events, activePlayers, playerStats, narrativeResidue, stoppageTime, minute };
+}
 
 // ── applyManagerTactics ────────────────────────────────────────────────────────
 // Writes a tactical stance and its baked biases onto a manager's tactics object.
@@ -360,6 +835,69 @@ const MatchSimulator = ({
     }
   };
 
+  // ── Architect Interference application ────────────────────────────────────
+  // Applies a single interference result: mutates Architect instance side-effects
+  // (curses, formation override, sabotage, prophecy reset) that require live refs,
+  // then delegates pure matchState mutations to _applyInterferenceToState and
+  // pushes the feed card to commentaryFeed.
+  //
+  // WHY SPLIT SIDE-EFFECTS FROM setState
+  // ─────────────────────────────────────
+  // React's setState updater must be pure (no side-effects on refs).
+  // Arch instance mutations (activeCurses, cosmicEdict, sealedFate) and aim
+  // tactics mutations happen BEFORE the setState call so the state update
+  // sees the already-mutated arch when it next reads arch.activeCurses.
+  const applyArchitectInterference = (r) => {
+    const arch = architectRef.current;
+    const aim  = aiManager; // captured from component closure — acceptable here
+    const t    = r.interferenceType;
+    const min  = r.minute;
+
+    // ── Side-effects on Architect instance (need arch ref) ─────────────────
+    if (t === 'mass_curse' && arch) {
+      // mass_curse: add every active player on the target team to activeCurses
+      // at half the stated magnitude so the team-wide debuff is less severe
+      // than a single-player curse at full strength.
+      const side    = r.targetTeam === 'away' ? 'away' : 'home';
+      const players = matchState.activePlayers[side] || [];
+      const mag     = Math.max(1, Math.floor((r.magnitude || 5) / 2));
+      players.forEach(name => arch.activeCurses.push({ playerName: name, magnitude: mag, startMin: min }));
+    }
+
+    if (t === 'prophecy_reset' && arch) {
+      // Tear up the sealed fate — the Architect will generate a new one on the
+      // next maybeUpdate() call that hits the isSecondProclamation branch.
+      arch.sealedFate = null;
+    }
+
+    if (t === 'architect_sabotage' && arch?.cosmicEdict) {
+      // Flip the edict polarity — boon becomes curse, curse becomes boon.
+      // 'chaos' stays chaos (the cosmos can't contradict itself any further).
+      const p = arch.cosmicEdict.polarity;
+      arch.cosmicEdict = {
+        ...arch.cosmicEdict,
+        polarity: p === 'boon' ? 'curse' : p === 'curse' ? 'boon' : 'chaos',
+      };
+    }
+
+    // ── Side-effects on aim (need aiManager ref) ───────────────────────────
+    if (t === 'formation_override' && aim) {
+      const mgr    = r.targetTeam === 'away' ? aim.awayManager : aim.homeManager;
+      // 50/50 between the two extremes — the Architect picks randomly since
+      // it acts from cosmic whim, not tactical reasoning.
+      const stance = Math.random() < 0.5 ? 'all_out_attack' : 'park_the_bus';
+      if (mgr) applyManagerTactics(mgr, stance, min, 'The Architect has seized tactical command');
+    }
+
+    // ── Pure matchState mutation (via setState) ────────────────────────────
+    setMatchState(prev => _applyInterferenceToState(prev, r));
+
+    // ── Push feed card ─────────────────────────────────────────────────────
+    // Done outside setState so commentaryFeed and matchState update in the
+    // same React batch (avoids a flicker where the card appears before state).
+    setCommentaryFeed(p => [...p, buildInterferenceFeedItem(r)].slice(-120));
+  };
+
   // Classify and route a procedural (no-LLM) event to the correct feed
   const routeFallbackEvent=(event,homeShortName)=>{
     if(!event||!event.commentary)return;
@@ -427,6 +965,57 @@ const MatchSimulator = ({
       arch.maybeUpdate(matchState.minute,newEvents,gameState,allAgents)
         .then(proclamation=>{if(proclamation)routeAgentResult(proclamation);})
         .catch(()=>{});
+
+      // ── Architect Interference: one probability check per batch ────────────
+      // maybeInterfereWith() has its own 20-minute cooldown guard and a
+      // probability gate scaled by edict polarity + narrative tension, so
+      // calling it on every event batch is safe — it will self-throttle.
+      // The test-override (interferenceCount === 0 && minute >= 30) guarantees
+      // at least one interference fires per match for easier QA.
+      arch.maybeInterfereWith(matchState.minute, matchState, allAgents)
+        .then(r => { if (r) applyArchitectInterference(r); })
+        .catch(() => {});
+    }
+
+    // ── Feature 6: pendingInterferences — architect boredom cascade ──────────
+    // When architect_boredom fires it queues up to 3 mild interference types in
+    // matchState.pendingInterferences.  We process ONE per event batch so they
+    // fire on consecutive ticks rather than all at once — giving each its own
+    // feed card and state mutation without racing each other.
+    //
+    // WHY HERE (events useEffect, not simulateMinute)
+    // ────────────────────────────────────────────────
+    // simulateMinute's setState callback must be a pure function of prev state.
+    // Generating LLM proclamations and calling applyArchitectInterference (which
+    // calls setMatchState AND setCommentaryFeed) is a side-effect that cannot
+    // safely live inside another setState.  The events useEffect already handles
+    // Architect side-effects (maybeUpdate, maybeInterfereWith) so it is the
+    // natural home for this too.
+    //
+    // We construct a synthetic interference result from the queued type string
+    // so it flows through the same applyArchitectInterference path as LLM-generated
+    // interferences — consistent feed cards, state mutations, and arch mutations.
+    if(matchState.pendingInterferences?.length){
+      const[nextType,...restInterferences]=matchState.pendingInterferences;
+      // Synthetic result — no LLM involved; proclamation is left blank so the
+      // feed card shows only the subtitle rather than empty quotes.
+      const syntheticR={
+        interferenceType: nextType,
+        targetPlayer:     null,
+        // Random target team so mild effects (commentary_void, add_stoppage)
+        // don't always hit the same side.
+        targetTeam:       Math.random()<0.5?'home':'away',
+        goalMinute:       null,
+        stoppageMinutes:  7,
+        // magnitude 3 — lower than a direct Architect call (5) since boredom
+        // cascades should feel chaotic but not overwhelmingly punishing.
+        magnitude:        3,
+        proclamation:     '',
+        minute:           matchState.minute,
+      };
+      applyArchitectInterference(syntheticR);
+      // Pop the consumed type; remaining queue written back via setMatchState
+      setMatchState(prev=>({...prev,pendingInterferences:restInterferences}));
     }
   },[matchState.events]);
 
@@ -531,6 +1120,36 @@ const MatchSimulator = ({
       }
       const chaosLevel=calcChaosLevel(prev,newMin);
 
+      // ── Feature 6: eldritchPortal — 20 % / min dimension_shift ───────────
+      // Each minute while the portal is open there is a 20% chance a random
+      // player from the affected team is pulled through and removed from play
+      // (no substitution granted — they simply cease to exist on the pitch).
+      //
+      // WHY HERE (before genEvent)
+      // ───────────────────────────
+      // Processing the portal BEFORE genEvent means the reduced active-player
+      // roster is visible to genEvent's player-selection logic in the same
+      // minute the shift happens — the match immediately plays with one fewer
+      // player rather than lagging a full tick.
+      //
+      // 0.20 probability per minute: with a 10-minute window that gives
+      // ~1–2 expected shifts per portal — disruptive but not catastrophic.
+      if(prev.eldritchPortal && newMin<=prev.eldritchPortal.expiresMin){
+        if(Math.random()<0.20){
+          const portalShortName=prev.eldritchPortal.teamArea;
+          const portalSide=portalShortName===prev.homeTeam.shortName?'home':'away';
+          const portalPool=newActive[portalSide];
+          if(portalPool.length){
+            const victim=portalPool[Math.floor(Math.random()*portalPool.length)];
+            newActive[portalSide]=portalPool.filter(n=>n!==victim);
+            interventions.push({minute:newMin,type:'dimension_shift',player:victim,architectForced:true,
+              team:portalShortName,
+              commentary:`The eldritch portal yawns wide — ${victim} is pulled through. Gone from this realm.`,
+              momentumChange:[0,0]});
+          }
+        }
+      }
+
       // ── Feature 1: compute dynamic event probability ──────────────────────
       // getEventProbability() replaces the old flat 35% gate.  It reads the
       // match's pre-determined tension variant and per-match jitter (both set
@@ -571,9 +1190,72 @@ const MatchSimulator = ({
         // getRelationshipFor() and getActiveRelationships() for rival-selection
         // bias in the foul branch and partnership bonuses in resolveContest().
         architect:            arch ?? null,
+        // ── Feature 6: Architect Interference — persistent player fate ────────
+        // Live curse / bless / possession arrays from the Architect instance;
+        // forwarded to resolveContest() via archModCtx in genEvent().
+        // Passing the arrays (not the instance) keeps genEvent pure and avoids
+        // stale-closure issues if arch is replaced mid-match.
+        architectCurses:      arch ? arch.activeCurses      : [],
+        architectBlesses:     arch ? arch.activeBlesses     : [],
+        architectPossessions: arch ? arch.activePossessions : [],
+        // ── Feature 6: matchState interference flags ─────────────────────────
+        // A snapshot of active cosmic flags so genEvent() can apply flag-based
+        // overrides (keeper paralysis, goal drought, tantrum, etc.) without
+        // receiving the entire matchState.  All flags carry an expiresMin field;
+        // genEvent() is responsible for the expiry comparison so App.jsx never
+        // needs a separate cleanup pass.
+        //
+        // reversalBoost is the side string ('home'|'away') that the cosmos is
+        // backing — forwarded into archModCtx → resolveContest() as reversalBoostSide.
+        matchFlags: {
+          keeperParalysed:  prev.keeperParalysed  ?? null, // { team: shortName, expiresMin }
+          goalDrought:      prev.goalDrought      ?? null, // { expiresMin }
+          architectTantrum: prev.architectTantrum ?? null, // { expiresMin }
+          commentaryVoid:   prev.commentaryVoid   ?? null, // { expiresMin }
+          voidCreature:     prev.voidCreature     ?? null, // { expiresMin }
+          pendingPenalty:   prev.pendingPenalty   ?? null, // { team: 'home'|'away' }
+          reversalBoost:    prev.reversalBoost    ?? null, // 'home' | 'away'
+        },
       };
 
-      const event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType,genCtx);
+      let event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType,genCtx);
+
+      // ── Feature 6: event post-processing for interference flags ──────────
+      // Applied immediately after genEvent() returns so that all downstream
+      // logic (score increment, stats, commentary feed) sees the modified event.
+      //
+      // commentaryVoid: blanket commentary replacement while the flag is active.
+      //   Applied unconditionally to EVERY event in the window — substitutes,
+      //   fouls, goals alike — so the feed reads as impenetrable static.
+      //   Preserves all other event fields so stats / score still update correctly.
+      //
+      // gravityFlipped: inverts isGoal on any shot/goal event.
+      //   A natural goal (isGoal: true) becomes a non-goal (cosmos deflects it);
+      //   a natural save/miss (isGoal: false) becomes a goal (cosmos guides it in).
+      //   Only applied to events that carry isGoal (shots, penalties, counters).
+      //   We also patch the outcome field for commentary consistency ('goal'/'saved').
+      //
+      // clearPendingPenalty: genEvent() sets this sentinel on the penalty sequence
+      //   it generates when consuming the lucky_penalty flag.  We clear the flag
+      //   from matchState here via a spread in the final return rather than in a
+      //   separate setState call, keeping the mutation atomic with the tick.
+      if(event){
+        // commentaryVoid — replace commentary text
+        if(prev.commentaryVoid && newMin<=prev.commentaryVoid.expiresMin){
+          event={...event,commentary:'〰〰〰 [COSMIC STATIC] 〰〰〰'};
+        }
+        // gravityFlipped — invert isGoal on shot-type events
+        if(prev.gravityFlipped && newMin<=prev.gravityFlipped.expiresMin && event.isGoal!==undefined){
+          const flipped=!event.isGoal;
+          // Patch outcome string so buildCommentary / stats logic stays consistent
+          const flippedOutcome=flipped?'goal':'saved';
+          const flipNote=flipped?' [GRAVITY INVERTED — IT CURVES IN!]':' [GRAVITY INVERTED — IT CURVES OUT!]';
+          event={...event,isGoal:flipped,outcome:flippedOutcome,
+            commentary:(event.commentary||'')+flipNote,
+            animation:flipped?{type:'goal',color:event.team===prev.homeTeam.shortName?prev.homeTeam.color:prev.awayTeam.color}:null};
+        }
+      }
+
       if(!event){
         // Spread prev first so tensionVariant, tensionJitter, and narrativeResidue
         // are carried forward untouched — Feature 1-5 state must survive quiet minutes.
@@ -587,7 +1269,27 @@ const MatchSimulator = ({
       if(event.cardType==='red'&&aim){const a=aim.getAgentByName(event.foulerName||event.player);if(a)a.triggerEmotion('red_card');}
       if(aim)aim.updateManagerEmotion(event,prev.score[0],prev.score[1]);
       let newScore=[...prev.score];
-      if(event.isGoal){if(event.team===prev.homeTeam.shortName)newScore[0]++;else newScore[1]++;}
+      // ── Feature 6: Architect Interference — score multipliers ───────────
+      // scoreAmplifier: all goals in the next 5 minutes count as 3.
+      //   Consumed by expiry (expiresMin) rather than a one-shot flag, so every
+      //   goal in the window is tripled — not just the first.
+      // doubleGoalActive: the very next goal counts as 2.
+      //   One-shot flag cleared at the end of this tick (via doubleGoalConsumed)
+      //   so exactly one goal is doubled, regardless of how many events fire.
+      //   NOT cleared here with an early return — doing so would skip momentum,
+      //   stats, and post-goal extras that must still run for this tick.
+      let doubleGoalConsumed = false;
+      if(event.isGoal){
+        const isHome=event.team===prev.homeTeam.shortName;
+        const idx=isHome?0:1;
+        const ampActive = prev.scoreAmplifier && newMin <= prev.scoreAmplifier.expiresMin;
+        const increment = ampActive         ? (prev.scoreAmplifier.multiplier || 3)
+                        : prev.doubleGoalActive ? 2
+                        : 1;
+        newScore[idx] = newScore[idx] + increment;
+        // Mark that the doubleGoal was consumed this tick so the final spread clears it
+        if(prev.doubleGoalActive && !ampActive) doubleGoalConsumed = true;
+      }
       const swing=event.team===prev.homeTeam.shortName?event.momentumChange[0]:event.momentumChange[1];
       const newMom=[Math.max(-10,Math.min(10,prev.momentum[0]+(event.team===prev.homeTeam.shortName?swing:-swing))),Math.max(-10,Math.min(10,prev.momentum[1]+(event.team===prev.awayTeam.shortName?swing:-swing)))];
       const hStats=teamStats(prev.homeTeam,prev.activePlayers.home);
@@ -635,7 +1337,18 @@ const MatchSimulator = ({
       const newResidue = updateNarrativeResidue(prev, eventWithVAR, newMin, aim);
 
       const isKey=event.isGoal&&!varOverturned&&event.animation?.type==='goal';
-      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff,narrativeResidue:newResidue};
+      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff,narrativeResidue:newResidue,
+        // ── Feature 6: one-shot interference flag clearances ─────────────────
+        // These are spread last so their values win over the prev spread above.
+        //
+        // doubleGoalActive: cleared the tick it is consumed (only one goal doubled).
+        //
+        // pendingPenalty: genEvent() sets clearPendingPenalty on the event it
+        //   generates when consuming the flag.  We clear it here atomically with
+        //   the rest of the tick state so the next minute cannot trigger a second
+        //   free penalty from the same decree.
+        ...(doubleGoalConsumed          ? { doubleGoalActive: false  } : {}),
+        ...(event.clearPendingPenalty   ? { pendingPenalty:   null   } : {})};
     });
   };
 
@@ -1368,6 +2081,16 @@ const MatchSimulator = ({
                     </div>
                   )}
                   {commentaryReversed.map((item,i)=>{
+                    // ── Architect Interference ──────────────────────────────
+                    // Rendered before proclamations so interference cards
+                    // visually stand apart from narrative decree cards.
+                    // ArchitectInterferenceCard handles all per-category
+                    // accent colours, border styles, and the single-flare
+                    // box-shadow animation.
+                    if(item.type==='architect_interference'){
+                      return <ArchitectInterferenceCard key={i} item={item}/>;
+                    }
+
                     // ── The Architect Proclamation ──────────────────────────
                     // Rendered by ArchitectCard which handles all visual styling
                     // including the cosmic void background and pulsing border.
@@ -1429,12 +2152,20 @@ const MatchSimulator = ({
                     // Visually de-emphasised relative to the play-by-play card:
                     // dimmer text and thinner border so it reads as a timestamp
                     // reference, not the main narrative voice.
-                    const bc=item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
+                    //
+                    // Annulled goals (architectAnnulled) are struck through and
+                    // dim further — they happened but were erased from reality.
+                    // A small inline ANNULLED badge makes the erasure explicit
+                    // to the reader without requiring a tooltip.
+                    const annulled = item.architectAnnulled;
+                    const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
                     return(
-                      <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:0.65,backgroundColor:item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
-                        <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5}}>
-                          <span style={{fontWeight:700,color:'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
-                          <span style={{opacity:0.8}}>{item.text}</span>
+                      <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:annulled?0.35:0.65,backgroundColor:annulled?'rgba(185,28,28,0.04)':item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
+                        <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5,alignItems:'center'}}>
+                          <span style={{fontWeight:700,color:annulled?'#B91C1C':'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
+                          {/* Strike-through on annulled entries to signal erasure from history */}
+                          <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
+                          {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
                         </div>
                       </div>
                     );

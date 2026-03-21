@@ -425,7 +425,25 @@ export function calcMVP(stats, home, away) {
 // The flavour array describes which modifiers fired (used by buildCommentary).
 export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {}) {
   const { type = 'shot', weather = WX.CLEAR, isClutch = false, flashpoints = [],
-          architectIntentions = [], relationship = null } = ctx;
+          architectIntentions = [], relationship = null,
+          // ── Feature 6: Architect Interference — persistent player fate ────────
+          // architectCurses      – active curse objects { playerName, magnitude }
+          //                        applied to the attacker: atkMod -= magnitude*2 (max −20)
+          // architectBlesses     – active bless objects  { playerName, magnitude }
+          //                        applied to the attacker: atkMod += magnitude*2 (max +20)
+          // architectPossessions – active possession windows { playerName, magnitude, window }
+          //                        random ±30 swing each contest while the window is open;
+          //                        coin-flip polarity makes the player unpredictably erratic
+          // currentMinute        – needed to test possession window [startMin, startMin+15]
+          architectCurses = [], architectBlesses = [], architectPossessions = [],
+          currentMinute = 0,
+          // ── Feature 6: matchState interference flags forwarded via archModCtx ──────
+          // voidCreatureActive – true while a void creature is on the pitch (expiresMin
+          //   already resolved to a boolean outside so resolveContest stays stateless)
+          // reversalBoostSide  – 'home' | 'away' | null; the cosmos-backed side whose
+          //   attackers receive a permanent +15 atkMod for the rest of the match
+          voidCreatureActive = false,
+          reversalBoostSide  = null } = ctx;
   const atkStat = type === 'freekick' ? (atkPlayer.technical || 70) * 0.6 + (atkPlayer.mental || 70) * 0.4
     : type === 'penalty' ? (atkPlayer.technical || 70) * 0.5 + (atkPlayer.mental || 70) * 0.5
     : type === 'header'  ? (atkPlayer.athletic  || 70) * 0.7 + (atkPlayer.mental || 70) * 0.3
@@ -496,6 +514,92 @@ export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {
     if (playerIntent) {
       atkMod += playerIntent.contestBonus;
       flavour.push(`architect_${playerIntent.type}`);
+    }
+  }
+
+  // ── Feature 6: Architect Interference — curse / bless / possession ────────
+  // Applied after intentions so interference fate can override narrative arcs.
+  //
+  // CURSE  — the Architect has marked this player for failure.  Magnitude 1–10
+  //          maps to a –2 to –20 atkMod penalty.  Capped at −20 so a cursed
+  //          player is badly hampered but not completely unable to score.
+  //
+  // BLESS  — the Architect has granted cosmic favour.  Same scale as curse but
+  //          positive: +2 to +20 atkMod.  A heavily blessed player becomes a
+  //          near-unstoppable force for the rest of the match.
+  //
+  // POSSESSION — the Architect has cosmically possessed the player.  Each contest
+  //          during the active 15-minute window rolls a ±30 coin-flip swing
+  //          making the player wildly erratic — sometimes brilliant, sometimes
+  //          catastrophic.  Random polarity is intentional: the cosmos does not
+  //          favour or punish, it just destabilises.
+  if (atkPlayer?.name) {
+    const curse = architectCurses.find(c => c.playerName === atkPlayer.name);
+    if (curse) {
+      // magnitude * 2 converts the 1–10 scale to a 2–20 point penalty
+      atkMod -= Math.min(20, (curse.magnitude || 5) * 2);
+      flavour.push('architect_cursed');
+    }
+
+    const bless = architectBlesses.find(b => b.playerName === atkPlayer.name);
+    if (bless) {
+      // Same scale as curse but positive — magnitude * 2, capped at +20
+      atkMod += Math.min(20, (bless.magnitude || 5) * 2);
+      flavour.push('architect_blessed');
+    }
+
+    // Possession: only fires during the active [startMin, startMin+15] window
+    const possessed = architectPossessions.find(
+      p => p.playerName === atkPlayer.name
+        && currentMinute >= (p.window?.[0] ?? 0)
+        && currentMinute <= (p.window?.[1] ?? 0),
+    );
+    if (possessed) {
+      // ±30 coin-flip: half the time a massive boost, half the time a crippling penalty.
+      // 30 was chosen so possession swings are larger than any single intention bonus
+      // (max ±26) — making a possessed player genuinely unpredictable to observers.
+      atkMod += Math.random() < 0.5 ? 30 : -30;
+      flavour.push('architect_possessed');
+    }
+  }
+
+  // ── Feature 6: Void creature — reality-destabilising contest swing ────────
+  // While a void creature from the eldritch depths stalks the pitch, every
+  // resolveContest() call receives a random ±25 swing with a coin-flip polarity.
+  //
+  // WHY ±25 AND NOT A FIXED SIGN
+  // ─────────────────────────────
+  // The creature's presence should feel chaotic and unpredictable to BOTH sides.
+  // A fixed sign (always +25 or always -25) would just be another buff/debuff.
+  // The coin-flip means a striker might be helped or hindered on the SAME shot —
+  // which is narratively more interesting ("the creature brushed past the ball")
+  // and mechanically prevents exploitation.
+  //
+  // 25 points sits between the curse/bless cap (±20) and the possession swing
+  // (±30) — significant enough to feel cosmic but not absolutely game-deciding.
+  if (voidCreatureActive) {
+    atkMod += Math.random() < 0.5 ? 25 : -25;
+    flavour.push('void_creature');
+  }
+
+  // ── Feature 6: Reversal of fortune — permanent boost for the losing side ──
+  // When the cosmos decrees a reversal, the trailing team's attackers gain a
+  // flat +15 atkMod for every contest for the rest of the match.
+  //
+  // WHY +15 (FLAT)
+  // ──────────────
+  // +15 is meaningful (roughly equivalent to a strong relationship bonus) but
+  // not so large that it guarantees the comeback — the trailing team still needs
+  // good play to score.  It tips the scales without removing human drama.
+  //
+  // We check atkAgent.isHome rather than the team name because atkAgent is the
+  // reliable source of team affiliation inside resolveContest() — atkPlayer is
+  // a data object and may not carry a team field.
+  if (reversalBoostSide && atkAgent) {
+    const atkSide = atkAgent.isHome ? 'home' : 'away';
+    if (atkSide === reversalBoostSide) {
+      atkMod += 15;
+      flavour.push('reversal_of_fortune');
     }
   }
 
@@ -871,7 +975,8 @@ export function genFreekickSeq(min, taker, gk, posTeam, defTeam, aim, ctx = {}) 
       commentary: pick([`${taker.name} motions to a teammate... something unconventional is brewing.`, `TWO PLAYERS over the ball! This could be unusual!`, `${taker.name} whispers something. The wall looks nervous.`]), momentumChange: [0,0] });
   }
   const gkAgent = aim?.getAgentByName(gk?.name);
-  const result  = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'freekick', weather: aim?.weather });
+  // Spread architect interference fields from ctx if present (passed from genEvent via archModCtx)
+  const result  = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'freekick', weather: aim?.weather, architectCurses: ctx.architectCurses ?? [], architectBlesses: ctx.architectBlesses ?? [], architectPossessions: ctx.architectPossessions ?? [], currentMinute: ctx.currentMinute ?? 0 });
   const isGoal  = result.outcome === 'goal';
   const outcomeCommentary = buildCommentary('freekick', { attacker: taker.name, defender: gk?.name || 'the keeper' }, result.outcome, result.flavour, ctx);
   return { sequence: seq, isGoal, outcomeCommentary };
@@ -1122,7 +1227,8 @@ export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, c
   seq.push({ minute: min, type: 'penalty_runup',   commentary: pick([`${taker.name} begins his run-up...`, `Three steps back. ${taker.name} focuses.`, `${taker.name} eyes the corner. Steps forward.`]), team: team.shortName, momentumChange: [0,0] });
   const takerAgent = aim?.getAgentByName(taker.name);
   const gkAgent    = aim?.getAgentByName(gk?.name);
-  const result     = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'penalty', weather: aim?.weather });
+  // Spread architect interference fields from ctx if present (passed from genEvent via archModCtx)
+  const result     = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'penalty', weather: aim?.weather, architectCurses: ctx.architectCurses ?? [], architectBlesses: ctx.architectBlesses ?? [], architectPossessions: ctx.architectPossessions ?? [], currentMinute: ctx.currentMinute ?? 0 });
   const scored     = result.outcome === 'goal';
   const outcomeComm = buildCommentary('penalty', { attacker: taker.name, defender: gk?.name || 'the keeper' }, result.outcome, result.flavour, ctx);
   seq.push({ minute: min, type: 'penalty_shot', commentary: outcomeComm, team: team.shortName, isGoal: scored, outcome: result.outcome, momentumChange: [0,0] });
@@ -1215,7 +1321,19 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   // falls back to 0.35 — identical behaviour to the original flat gate.
   const { eventProbability = 0.35, narrativeResidue, flashpoints = [],
           architectIntentions = [], architectEdictFn = null,
-          architectFate = null, consumeFate = null } = genCtx;
+          architectFate = null, consumeFate = null,
+          // ── Feature 6: Architect Interference — persistent effects ────────
+          // Destructured here and bundled into archModCtx (below) so every
+          // resolveContest() call receives them without repeating the fields.
+          // currentMinute is passed as genEvent's `min` parameter.
+          architectCurses = [], architectBlesses = [], architectPossessions = [],
+        // ── Feature 6: matchState interference flags ──────────────────────────
+        // matchFlags is a snapshot of the active cosmic flag objects set by
+        // _applyInterferenceToState (App.jsx).  Each flag has an expiresMin field
+        // so genEvent() can self-expire them without a separate cleanup pass.
+        // Defaults to null so legacy / test callers that don't supply genCtx are
+        // completely unaffected.
+        matchFlags = null } = genCtx;
 
   // ── Feature 3: Cosmic Edict — event-gate modifier ────────────────────────
   // The edict's rollMod shifts the probability gate before the roll.
@@ -1286,6 +1404,32 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
     // chaos / injury / fallthrough — let normal branches handle the event type
     // but mark it as fated for commentary hooks.
   }
+
+  // ── Feature 6: Architect Interference — shared contest context ───────────
+  // Built once per genEvent() call and spread into every resolveContest() ctx
+  // so curse / bless / possession modifiers apply uniformly across all contest
+  // types (shot, freekick, penalty, counter, interception) without duplicating
+  // the three field names at every call site.
+  //
+  // currentMinute is the `min` parameter (already in scope) — possession windows
+  // are checked per-contest against [startMin, startMin+15].
+  const archModCtx = {
+    architectCurses,       // persistent debuff list from CosmicArchitect instance
+    architectBlesses,      // persistent buff list from CosmicArchitect instance
+    architectPossessions,  // active possession windows (erratic ±30 swing per contest)
+    currentMinute: min,    // needed to gate possession windows correctly
+    // ── Resolved boolean/value flags for resolveContest() ─────────────────
+    // We resolve expiresMin comparisons HERE (once per genEvent call) rather
+    // than inside resolveContest() so the contest function stays stateless —
+    // it receives plain booleans / scalars instead of flag objects.
+    //
+    // voidCreatureActive: true only while the void creature's window is open.
+    //   Drives the ±25 random swing inside resolveContest().
+    // reversalBoostSide: forwarded as-is — resolveContest() checks atkAgent.isHome
+    //   to decide whether this attacker is on the boosted side.
+    voidCreatureActive: !!(matchFlags?.voidCreature && min <= matchFlags.voidCreature.expiresMin),
+    reversalBoostSide:  matchFlags?.reversalBoost ?? null,
+  };
 
   // Weather modifiers — computed once per event call and threaded through
   const wx          = aim?.weather;
@@ -1591,9 +1735,19 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const sev = Math.min(100, sevRaw);
     let card = aim ? aim.shouldGiveCard(sev) : (sev > 85 ? 'red' : sev > 60 ? 'yellow' : null);
     if (card === 'yellow' && playerStats[player.name]?.yellowCard) card = 'red';
+    // ── Feature 6: architectTantrum — cosmic rage, all yellows become reds ──
+    // The Architect's tantrum suspends normal disciplinary thresholds.  Any
+    // challenge that would earn a yellow is escalated to a straight red while
+    // the tantrum window is active.
+    // We apply this AFTER the double-yellow → red promotion above so a player
+    // who already has a yellow card is sent off correctly regardless of tantrum.
+    if (card === 'yellow' && matchFlags?.architectTantrum && min <= matchFlags.architectTantrum.expiresMin) {
+      card = 'red';
+    }
     if (inBox) {
       const penGk  = getPlayer(defTeam, defActive, 'defending', 'GK');
-      const pseq   = genPenaltySeq(min, atk, player, posTeam, defTeam, card, aim, penGk, matchCtx(atk.name));
+      // Merge archModCtx so curse/bless/possession modifiers reach resolveContest inside genPenaltySeq
+      const pseq   = genPenaltySeq(min, atk, player, posTeam, defTeam, card, aim, penGk, { ...matchCtx(atk.name), ...archModCtx });
       return { minute: min, type: 'penalty_sequence', team: posTeam.shortName,
         player: pseq.penaltyTaker.name, foulerName: player.name, foulerTeam: defTeam.shortName,
         defender: penGk?.name, outcome: pseq.isGoal ? 'goal' : 'saved',
@@ -1619,7 +1773,8 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     if (card !== 'red' && Math.random() < 0.50) {
       const fkTaker = getPlayer(posTeam, posActive, 'technical') || atk;
       const fkGk    = getPlayer(defTeam, defActive, 'defending', 'GK');
-      const fkSeq   = genFreekickSeq(min, fkTaker, fkGk, posTeam, defTeam, aim, matchCtx(fkTaker.name));
+      // Merge archModCtx so curse/bless/possession modifiers reach resolveContest inside genFreekickSeq
+      const fkSeq   = genFreekickSeq(min, fkTaker, fkGk, posTeam, defTeam, aim, { ...matchCtx(fkTaker.name), ...archModCtx });
       return { minute: min, type: 'freekick_sequence', team: posTeam.shortName,
         player: fkTaker.name, foulerName: player.name, foulerTeam: defTeam.shortName,
         cardType: card, isGoal: fkSeq.isGoal, outcome: fkSeq.isGoal ? 'goal' : 'miss',
@@ -1688,13 +1843,91 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
       return { minute: min, type: 'long_shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: lsGoal ? 'goal' : 'miss', isGoal: lsGoal, commentary: lsComm, momentumChange: isHome ? [lsGoal ? 5 : 1, 0] : [0, lsGoal ? 5 : 1], animation: lsGoal ? { type: 'goal', color: posTeam.color } : null };
     }
 
+    // ── Feature 6: pendingPenalty — cosmic penalty decree ────────────────────
+    // If the Architect decreed `lucky_penalty` for the attacking team, convert
+    // this shot attempt into a full penalty sequence before resolveContest runs.
+    //
+    // WHY CHECK HERE (not at the start of genEvent)
+    // ─────────────────────────────────────────────
+    // The pending-penalty flag targets the ATTACKING team at shot time.  Checking
+    // here rather than at the top of genEvent lets normal event routing (foul,
+    // offside, etc.) still fire — only the shot branch is hijacked, which is the
+    // correct behaviour: the Architect "blesses" a shot into a penalty, not an
+    // arbitrary free moment.
+    //
+    // The flag carries targetTeam ('home' | 'away').  We compare against
+    // posTeam.shortName using the homeTeam reference to map 'home' → shortName.
+    const pendingPenaltyTeam = matchFlags?.pendingPenalty?.team;
+    if (pendingPenaltyTeam) {
+      const targetShort = pendingPenaltyTeam === 'away'
+        ? awayTeam.shortName : homeTeam.shortName;
+      if (posTeam.shortName === targetShort) {
+        const penGk  = getPlayer(defTeam, defActive, 'defending', 'GK');
+        const penSeq = genPenaltySeq(min, player, penGk, posTeam, defTeam, null, aim, penGk, { ...matchCtx(player.name), ...archModCtx });
+        return {
+          minute: min, type: 'penalty_sequence', team: posTeam.shortName,
+          player: penSeq.penaltyTaker.name, defender: penGk?.name,
+          outcome: penSeq.isGoal ? 'goal' : 'saved',
+          commentary: penSeq.outcomeCommentary,
+          momentumChange: isHome ? [penSeq.isGoal ? 6 : 1, 0] : [0, penSeq.isGoal ? 6 : 1],
+          isPenalty: true, isGoal: penSeq.isGoal, architectForced: true,
+          animation: penSeq.isGoal ? { type: 'goal', color: posTeam.color } : null,
+          penaltySequence: penSeq.sequence, penaltyTaker: penSeq.penaltyTaker,
+          clearPendingPenalty: true, // App.jsx reads this to wipe the flag from matchState
+        };
+      }
+    }
+
     const shooterAgent   = aim?.getAgentByName(player.name);
     const gkAgent        = aim?.getAgentByName(gk.name);
     const isClutchMoment = shooterAgent?.isClutch && min >= 80 && Math.abs(score[0] - score[1]) <= 1;
-    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null });
+    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null, ...archModCtx });
     const formAdj        = formBonus(player.name, playerStats) - formBonus(gk.name, playerStats) + (aim?.getAgentByName(player.name)?.getDecisionBonus() || 0) - wxStatPen + wxGkPen;
     const net            = shotResult.margin + formAdj;
     const shotFlavour    = shotResult.flavour;
+
+    // ── Feature 6: matchState flag overrides — applied after resolveContest ──
+    // These checks override the natural outcome AFTER the contest has run so
+    // that flavour tags and formAdj are still computed (they feed commentary
+    // and post-match lore).  The outcome is simply replaced.
+    //
+    // ORDER MATTERS
+    // ─────────────
+    // 1. keeperParalysed: checked first — the keeper literally cannot move, so
+    //    goalDrought and tantrum cannot override a paralysis.
+    // 2. goalDrought: second — the cosmos has sealed the net; even a tantrum
+    //    cannot score through a drought (drought wins the priority battle).
+    // 3. architectTantrum: last — turns saves into goals only when neither of
+    //    the higher-priority flags is active.
+    if (matchFlags) {
+      // 1. Keeper paralysis — guarantee a goal against the frozen keeper
+      //    expiresMin uses the match minute (min), not real time.
+      //    defTeam.shortName identifies which keeper is the target so only shots
+      //    AGAINST the paralysed team are affected, not shots the other way.
+      const kp = matchFlags.keeperParalysed;
+      if (kp && min <= kp.expiresMin && defTeam.shortName === kp.team) {
+        const comm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'goal', [...shotFlavour, 'keeper_paralysed'], matchCtx(player.name));
+        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, assister: null, outcome: 'goal', commentary: comm, momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, architectForced: true, animation: { type: 'goal', color: posTeam.color } };
+      }
+
+      // 2. Goal drought — collapse any goal-bound shot (net > 15) into a save
+      //    The drought does NOT affect shots that would naturally miss (net ≤ 5);
+      //    those still miss, preserving the full outcome distribution minus goals.
+      const gd = matchFlags.goalDrought;
+      if (gd && min <= gd.expiresMin && net > 15) {
+        const comm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'saved', shotFlavour, matchCtx(player.name));
+        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: comm, momentumChange: isHome ? [2, 0] : [0, 2], architectForced: true, animation: { type: 'saved', color: defTeam.color } };
+      }
+
+      // 3. Architect tantrum — every save becomes a goal; misses are unaffected
+      //    net > 5 && net <= 15 is the 'saved' band from the normal shot logic.
+      //    Misses (net ≤ 5) stay misses — the cosmos is enraged, not omnipotent.
+      const at = matchFlags.architectTantrum;
+      if (at && min <= at.expiresMin && net > 5 && net <= 15) {
+        const comm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'goal', [...shotFlavour, 'architect_tantrum'], matchCtx(player.name));
+        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, assister: null, outcome: 'goal', commentary: comm, momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, architectForced: true, animation: { type: 'goal', color: posTeam.color } };
+      }
+    }
 
     // Own goal
     if (net > 10 && Math.random() < 0.05) {
@@ -1729,7 +1962,7 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
           const cAtkAgent   = aim?.getAgentByName(cPlayer.name);
           const cGkAgent    = aim?.getAgentByName(cGk.name);
           const cIsClutch   = cAtkAgent?.isClutch && min >= 80;
-          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null });
+          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null, ...archModCtx });
           const cGoal       = cResult.outcome === 'goal';
           const cIsHome     = defTeam === homeTeam;
           const savedSeqEvt = { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: saveComm, momentumChange: [0, 0] };
@@ -1849,7 +2082,7 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
           const cSeq      = genCounterSeq(min, cPlayer, cGk, defTeam, cSupport);
           const cAtkAgent = aim?.getAgentByName(cPlayer.name);
           const cGkAgent  = aim?.getAgentByName(cGk.name);
-          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null });
+          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null, ...archModCtx });
           const cGoal     = cResult.outcome === 'goal';
           const cIsHome   = defTeam === homeTeam;
           const intEvt    = { minute: min, type: 'attack', team: posTeam.shortName, player: player.name, defender: defender.name, outcome: 'intercepted', commentary, momentumChange: [0, 0] };

@@ -921,6 +921,13 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
      * not a chatty commentator.
      */
     this.history = [];
+
+    // ── Architect Interference state ──────────────────────────────────────
+    this.interferenceCount = 0;
+    this.lastInterferenceMinute = -1;
+    this.activeCurses = [];       // [{ playerName, magnitude, startMin }]
+    this.activeBlesses = [];      // [{ playerName, magnitude, startMin }]
+    this.activePossessions = [];  // [{ playerName, magnitude, startMin, window }]
   }
 
   // ── Feature 3: resolve cosmic edict ──────────────────────────────────────
@@ -1517,6 +1524,204 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
         minute,
       };
     } catch { return null; }
+  }
+
+  // ── Architect Interference ─────────────────────────────────────────────────
+
+  /**
+   * Checks whether the Architect wants to interfere with the current match state.
+   * Called every 5 match minutes from App.jsx when there is content to act on.
+   * Fire-and-forget async; returns an interference result object or null.
+   *
+   * The LLM is given full match context and a menu of available interference types
+   * (filtered by content guards). It speaks in character — expressing boredom,
+   * rage, amusement, or cosmic compulsion — and picks freely.
+   */
+  async maybeInterfereWith(minute, matchState, allAgents) {
+    // ── Cooldown guard ────────────────────────────────────────────────────────
+    if (this.lastInterferenceMinute !== -1 && minute - this.lastInterferenceMinute < 20) return null;
+
+    // ── Content availability flags ────────────────────────────────────────────
+    const goals = (matchState.events || []).filter(e => e.isGoal && !e.architectAnnulled && !e.isVAROverturned);
+    const redCardPlayers   = Object.entries(matchState.cards || {}).filter(([, v]) => v?.red > 0).map(([k]) => k);
+    const yellowCardPlayers= Object.entries(matchState.cards || {}).filter(([, v]) => v?.yellow > 0).map(([k]) => k);
+    const subbedPlayers    = [...(matchState.subs?.home || []), ...(matchState.subs?.away || [])];
+    const activePlayers    = [...(matchState.activePlayers?.home || []), ...(matchState.activePlayers?.away || [])];
+
+    const canAnnulGoal    = goals.length > 0;
+    const canAnnulRed     = redCardPlayers.length > 0;
+    const canAnnulYellow  = yellowCardPlayers.length > 0;
+    const canResurrect    = subbedPlayers.length > 0;
+    const canScoreReset   = (matchState.score?.[0] || 0) + (matchState.score?.[1] || 0) > 0;
+    const canStealGoal    = goals.length > 0;
+    const canEchoGoal     = (matchState.events || []).some(e => !e.isGoal && (e.outcome === 'saved' || e.outcome === 'miss'));
+    const hasActiveEdict  = !!this.cosmicEdict;
+
+    // Always-available types
+    const availableTypes = [
+      'grant_goal','force_red_card','force_injury','curse_player','bless_player',
+      'add_stoppage','dimension_shift','mass_curse','possession','score_mirror',
+      'keeper_paralysis','goal_drought','double_goals','reversal_of_fortune',
+      'time_rewind','phantom_foul','cosmic_own_goal','goalkeeper_swap',
+      'formation_override','score_amplifier','equalizer_decree','talent_drain',
+      'prophecy_reset','commentary_void','eldritch_portal','void_creature',
+      'gravity_flip','cosmic_weather','pitch_collapse','architect_boredom',
+      'architect_tantrum','architect_amusement','architect_sabotage',
+      'identity_swap','player_swap','lucky_penalty',
+    ];
+    if (canAnnulGoal)   availableTypes.push('annul_goal','steal_goal');
+    if (canAnnulRed)    availableTypes.push('annul_red_card');
+    if (canAnnulYellow) availableTypes.push('annul_yellow_card');
+    if (canResurrect)   availableTypes.push('resurrect_player');
+    if (canScoreReset)  availableTypes.push('score_reset');
+    if (canEchoGoal)    availableTypes.push('echo_goal');
+
+    // ── Probability gate ──────────────────────────────────────────────────────
+    // Base probability: 10% per check. Pressure and tension variant add up to
+    // ~8% and ~4% respectively. Chaos polarity triples total; any edict 1.5×.
+    const edict       = this.cosmicEdict;
+    const residue     = matchState.narrativeResidue;
+    const polarityMult= edict?.polarity === 'chaos' ? 3.0 : edict?.polarity ? 1.5 : 1.0;
+    const avgPressure = ((residue?.pressure?.home || 0) + (residue?.pressure?.away || 0)) / 2;
+    const pressureBonus = (avgPressure / 100) * 0.08;   // 0–0.08 scaling with narrative pressure (0–100)
+    const variantBonus  = ['frantic','back_and_forth'].includes(matchState.tensionVariant) ? 0.04 : 0;
+    const finalProb     = (0.10 + pressureBonus + variantBonus) * polarityMult;
+
+    // Test override: guarantee first interference fires at min 30+
+    const testOverride = this.interferenceCount === 0 && minute >= 30;
+    if (!testOverride && Math.random() > finalProb) return null;
+
+    // Increment counters BEFORE async call to prevent concurrent races
+    this.interferenceCount++;
+    this.lastInterferenceMinute = minute;
+
+    // ── Build context-rich in-character prompt ────────────────────────────────
+    const recentCommentary = (matchState.events || []).slice(-6).map(e => e.commentary || e.type).filter(Boolean).join(' | ');
+    const goalList = goals.map(g => `Min ${g.minute}: ${g.player} (${g.team})`).join(', ') || 'none';
+    const scoreSummary = `${this.homeTeam?.name} ${matchState.score?.[0] || 0}–${matchState.score?.[1] || 0} ${this.awayTeam?.name}`;
+    const fateSummary  = this.sealedFate
+      ? (this.sealedFate.consumed ? 'Fate was set but already consumed — the Architect may feel cheated.' : `Fate sealed: "${this.sealedFate.prophecy}" (fires ~min ${this.sealedFate.window?.[0]}–${this.sealedFate.window?.[1]})`)
+      : 'No fate has been sealed yet.';
+
+    // Mood hint: steers the LLM's tone without constraining its choice of action.
+    // Flat match → boredom; cursed team scoring → enrage; frantic/high-scoring → amusement.
+    const isFlat     = avgPressure < 20 && goals.length === 0;
+    const isEnraged  = edict?.polarity === 'curse' && goals.some(g => g.team === (edict.target === 'home' ? this.homeTeam?.shortName : this.awayTeam?.shortName));
+    const isAmused   = matchState.tensionVariant === 'frantic' || goals.length >= 3;
+    const moodHint   = isFlat ? 'The Architect grows bored — the mortals perform without drama.'
+                     : isEnraged ? 'The Architect seethes. The cursed have dared to score.'
+                     : isAmused ? 'The Architect is entertained — but perhaps wishes to escalate further.'
+                     : 'The Architect watches, impassive, calculating whether to intervene.';
+
+    const userMsg = `THE ARCHITECT CONSIDERS INTERVENTION.\n\n` +
+      `Match: ${scoreSummary} | Minute ${minute}'. ` +
+      `Tension: ${matchState.tensionVariant || 'standard'}. Edict: ${edict?.polarity || 'none set'} (magnitude ${edict?.magnitude || 0}).\n` +
+      `${fateSummary}\n` +
+      `Cosmic thread: ${this.cosmicThread || 'none yet'}.\n` +
+      `Recent events: ${recentCommentary || 'none'}.\n` +
+      `Live goals in history: ${goalList}.\n` +
+      `Active players: ${activePlayers.slice(0, 8).join(', ')}${activePlayers.length > 8 ? '...' : ''}.\n` +
+      `Mood: ${moodHint}\n\n` +
+      `You may intervene — or choose not to. Available interference types:\n${availableTypes.join(', ')}.\n\n` +
+      `If you intervene, speak as the cosmos reshaping reality. Be dramatic, poetic, in character.\n` +
+      `Return JSON: {"interfere":true,"interferenceType":"<type>","targetPlayer":"<name or null>","targetTeam":"home|away|null",` +
+      `"goalMinute":<number or null>,"stoppageMinutes":<5-10 or null>,"magnitude":<1-10>,"proclamation":"<2-3 sentences of cosmic dark poetry>"}` +
+      ` OR {"interfere":false}`;
+
+    try {
+      const raw = await this.client.messages.create({
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 350,
+        system:     CosmicArchitect.SYSTEM,
+        messages:   [...this.history.slice(-4), { role: 'user', content: userMsg }],
+      }).then(r => r.content[0]?.text?.trim());
+
+      if (!raw) return null;
+
+      let parsed;
+      try {
+        const clean = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch { return null; }
+
+      if (!parsed.interfere) return null;
+
+      const type = parsed.interferenceType;
+      if (!availableTypes.includes(type)) return null;
+
+      // Register persistent effects immediately on the instance.
+      // These arrays are read each simulation tick by getCursesFor / getBlessesFor /
+      // getPossessionsFor so that the engine can apply per-player modifiers without
+      // re-querying the LLM.
+      const playerName = parsed.targetPlayer ?? null;
+      const magnitude  = Math.min(10, Math.max(1, Number(parsed.magnitude) || 5));
+      if (type === 'curse_player' && playerName) {
+        this.activeCurses.push({ playerName, magnitude, startMin: minute });
+      }
+      if (type === 'bless_player' && playerName) {
+        this.activeBlesses.push({ playerName, magnitude, startMin: minute });
+      }
+      if (type === 'possession' && playerName) {
+        // Possession window: active for 15 minutes from the moment of interference
+        this.activePossessions.push({ playerName, magnitude, startMin: minute, window: [minute, minute + 15] });
+      }
+
+      // Update history for narrative continuity — trimmed to last 4 messages (2 turns)
+      // to keep the Architect's voice fresh and avoid stale context bleeding forward.
+      this.history.push({ role: 'user', content: userMsg }, { role: 'assistant', content: raw });
+      if (this.history.length > 8) this.history.splice(0, 2);
+
+      return {
+        type:              'architect_interference',
+        interferenceType:  type,
+        targetPlayer:      playerName,
+        targetTeam:        parsed.targetTeam ?? null,
+        goalMinute:        parsed.goalMinute  != null ? Number(parsed.goalMinute) : null,
+        stoppageMinutes:   Math.min(10, Math.max(5, Number(parsed.stoppageMinutes) || 7)),
+        magnitude,
+        proclamation:      parsed.proclamation || '',
+        minute,
+      };
+    } catch { return null; }
+  }
+
+  /**
+   * Returns all active curses targeting the given player name.
+   * Each curse is a { playerName, magnitude, startMin } object.
+   * The engine uses magnitude (1–10) to scale negative probability modifiers.
+   *
+   * @param {string} playerName - The player's display name as stored in matchState.
+   * @returns {{ playerName: string, magnitude: number, startMin: number }[]}
+   */
+  getCursesFor(playerName) {
+    return this.activeCurses.filter(c => c.playerName === playerName);
+  }
+
+  /**
+   * Returns all active blesses targeting the given player name.
+   * Each bless is a { playerName, magnitude, startMin } object.
+   * The engine uses magnitude (1–10) to scale positive probability modifiers.
+   *
+   * @param {string} playerName - The player's display name as stored in matchState.
+   * @returns {{ playerName: string, magnitude: number, startMin: number }[]}
+   */
+  getBlessesFor(playerName) {
+    return this.activeBlesses.filter(b => b.playerName === playerName);
+  }
+
+  /**
+   * Returns active possessions for a player during the given match minute.
+   * A possession is active only while minute falls within its [window[0], window[1]] range.
+   * Each entry is a { playerName, magnitude, startMin, window } object.
+   *
+   * @param {string} playerName - The player's display name as stored in matchState.
+   * @param {number} minute     - The current match minute to test against each window.
+   * @returns {{ playerName: string, magnitude: number, startMin: number, window: [number, number] }[]}
+   */
+  getPossessionsFor(playerName, minute) {
+    return this.activePossessions.filter(
+      p => p.playerName === playerName && minute >= p.window[0] && minute <= p.window[1]
+    );
   }
 
   // ── Post-match lore save ───────────────────────────────────────────────────

@@ -225,6 +225,19 @@ if (typeof document !== 'undefined' && !document.getElementById('architect-pulse
   document.head.appendChild(style);
 }
 
+if (typeof document !== 'undefined' && !document.getElementById('architect-interference-style')) {
+  const style = document.createElement('style');
+  style.id = 'architect-interference-style';
+  style.textContent = `
+    @keyframes interferenceFlare {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.85; }
+      100% { opacity: 1; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 /**
  * ArchitectCard — feed entry for a Proclamation from THE ARCHITECT.
  *
@@ -319,6 +332,165 @@ export const ArchitectCard = ({ item }) => {
           {item.cosmicThread && (
             <span>✦ Thread: {item.cosmicThread}</span>
           )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── ArchitectInterferenceCard ─────────────────────────────────────────────────
+
+/**
+ * ArchitectInterferenceCard — feed entry for a direct Interference action by
+ * THE ARCHITECT (as opposed to a Proclamation, which is narrative commentary).
+ *
+ * Interference actions have mechanical effects on the match state (e.g. annulling
+ * a goal, cursing a player, forcing a red card).  This card surfaces those events
+ * in the commentary feed with:
+ *   • A per-category accent colour that signals the nature of the interference
+ *     (red = destructive/annul, purple = conjured/grant, amber = curse, etc.)
+ *   • A border style that further encodes category (dashed = annulment/removal,
+ *     dotted = time/momentum manipulation, solid = all others)
+ *   • A brief entry flare — the box-shadow blooms then fades over 2.5 s so the
+ *     card catches the reader's eye without persistent distraction
+ *   • An optional annulment notice rendered when interferenceType === 'annul_goal'
+ *     and an annulMinute is present, surfacing exactly which goal was struck out
+ *
+ * The component is intentionally self-contained: accent and border lookups live
+ * inside the component so it can be dropped into any feed without external context.
+ *
+ * @param {{ item: {
+ *   interferenceType: string,  // snake_case key from CATEGORY_ACCENT / BORDER_STYLE
+ *   emoji: string,             // visual icon for the interference type
+ *   subtitle?: string,         // optional human-readable subtitle; falls back to interferenceType
+ *   minute: number,            // match minute at which the interference occurred
+ *   text: string,              // The Architect's proclamation / flavour text
+ *   targetPlayer?: string,     // name of the mortal targeted by this interference
+ *   targetTeam?: string,       // team of the targeted player (optional clarifier)
+ *   annulMinute?: number,       // minute of the goal being annulled (annul_goal only)
+ *   annulPlayer?: string,      // scorer of the annulled goal (annul_goal only)
+ * }}} props
+ * @returns {JSX.Element}
+ */
+export const ArchitectInterferenceCard = ({ item }) => {
+  // flared starts true so the card opens with a vivid box-shadow bloom,
+  // then the effect is cut off after 2 500 ms via the transition (2.5 s ease-out).
+  const [flared, setFlared] = React.useState(true);
+  React.useEffect(() => {
+    const t = setTimeout(() => setFlared(false), 2500);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Per-category accent colours — each colour group encodes the nature of the
+  // interference so readers can parse the feed at a glance:
+  //   Red (#B91C1C)    — destructive / annulment / removal actions
+  //   Purple (#9333EA) — conjured / granted / forced actions
+  //   Amber (#F59E0B)  — curses and possession manipulation
+  //   Green (#10B981)  — blessings and beneficial effects
+  //   Cyan (#06B6D4)   — resurrection / revival effects
+  //   Pink (#EC4899)   — reality-warping / dimensional effects
+  //   Sky (#0EA5E9)    — time and momentum manipulation
+  //   Orange (#F97316) — score amplification and reversal effects
+  //   Violet (#7C3AED) — eldritch / cosmic / void effects (default)
+  //   Slate (#64748B)  — architect-boredom (neutral / passive)
+  //   Crimson (#DC2626)— architect-tantrum (heightened destruction)
+  const CATEGORY_ACCENT = {
+    annul_goal: '#B91C1C', annul_red_card: '#B91C1C', annul_yellow_card: '#B91C1C',
+    steal_goal: '#B91C1C', score_reset: '#B91C1C', score_mirror: '#B91C1C',
+    grant_goal: '#9333EA', force_red_card: '#9333EA', force_injury: '#9333EA',
+    lucky_penalty: '#9333EA',
+    curse_player: '#F59E0B', mass_curse: '#F59E0B', possession: '#F59E0B',
+    bless_player: '#10B981',
+    resurrect_player: '#06B6D4',
+    dimension_shift: '#EC4899', identity_swap: '#EC4899', player_swap: '#EC4899',
+    keeper_paralysis: '#EC4899', phantom_foul: '#EC4899', cosmic_own_goal: '#EC4899',
+    goalkeeper_swap: '#EC4899',
+    add_stoppage: '#0EA5E9', momentum_vacuum: '#0EA5E9', time_rewind: '#0EA5E9',
+    goal_drought: '#0EA5E9', commentary_void: '#0EA5E9',
+    echo_goal: '#F97316', double_goals: '#F97316', reversal_of_fortune: '#F97316',
+    score_amplifier: '#F97316', equalizer_decree: '#F97316', talent_drain: '#F97316',
+    prophecy_reset: '#F97316',
+    eldritch_portal: '#7C3AED', void_creature: '#7C3AED', gravity_flip: '#7C3AED',
+    cosmic_weather: '#7C3AED', pitch_collapse: '#7C3AED', formation_override: '#7C3AED',
+    architect_boredom: '#64748B', architect_tantrum: '#DC2626',
+    architect_amusement: '#10B981', architect_sabotage: '#F59E0B',
+  };
+
+  // Border style encodes the mechanical category:
+  //   dashed — annulment / removal (something is being struck out)
+  //   dotted — time / momentum manipulation (flow of the match is disrupted)
+  //   solid  — all other interference types (default)
+  const BORDER_STYLE = {
+    annul_goal: 'dashed', annul_red_card: 'dashed', annul_yellow_card: 'dashed',
+    steal_goal: 'dashed', score_reset: 'dashed', score_mirror: 'dashed',
+    add_stoppage: 'dotted', momentum_vacuum: 'dotted', time_rewind: 'dotted',
+    goal_drought: 'dotted', commentary_void: 'dotted',
+  };
+
+  const accent = CATEGORY_ACCENT[item.interferenceType] || '#7C3AED';
+  const borderStyle = BORDER_STYLE[item.interferenceType] || 'solid';
+
+  return (
+    <div style={{
+      padding: '13px',
+      marginBottom: '10px',
+      backgroundColor: `rgba(0,0,0,0.6)`,
+      border: `1px ${borderStyle} ${accent}`,
+      borderLeft: `4px ${borderStyle} ${accent}`,
+      // Box-shadow fades from a vivid bloom (entry flare) to a subtle ambient
+      // glow over 2.5 s.  The transition provides the ease-out; the flared flag
+      // switches the target value once the timeout fires.
+      boxShadow: flared ? `0 0 20px 5px ${accent}55` : `0 0 6px 1px ${accent}33`,
+      transition: 'box-shadow 2.5s ease-out',
+    }}>
+      {/* Header row: emoji icon, label stack (type + subtitle), and match minute */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px' }}>
+        <span style={{ fontSize: '16px' }}>{item.emoji}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          <span style={{
+            fontSize: '9px', fontWeight: 700, letterSpacing: '0.14em',
+            textTransform: 'uppercase', color: accent,
+          }}>
+            THE ARCHITECT — INTERFERENCE
+          </span>
+          <span style={{
+            fontSize: '9px', letterSpacing: '0.10em', textTransform: 'uppercase',
+            color: accent, opacity: 0.7,
+          }}>
+            {item.subtitle || (item.interferenceType || '').replace(/_/g, ' ').toUpperCase()}
+          </span>
+        </div>
+        <span style={{ fontSize: '10px', marginLeft: 'auto', opacity: 0.4 }}>{item.minute}'</span>
+      </div>
+
+      {/* Target line — only rendered when a specific mortal is singled out */}
+      {item.targetPlayer && (
+        <div style={{
+          fontSize: '10px', marginBottom: '6px', color: accent,
+          opacity: 0.85, letterSpacing: '0.04em',
+        }}>
+          ✦ Mortal: {item.targetPlayer}
+          {item.targetTeam && ` (${item.targetTeam})`}
+        </div>
+      )}
+
+      {/* Proclamation / flavour text delivered by The Architect */}
+      <div style={{
+        fontSize: '12px', fontStyle: 'italic', lineHeight: '1.55',
+        color: '#E2D9F3', marginBottom: 0,
+      }}>
+        "{item.text}"
+      </div>
+
+      {/* Annulment notice — only shown for annul_goal with a known annulMinute,
+          clearly surfacing which goal has been struck from the record */}
+      {item.interferenceType === 'annul_goal' && item.annulMinute && (
+        <div style={{
+          fontSize: '10px', padding: '4px 8px', marginTop: '6px',
+          backgroundColor: `rgba(185,28,28,0.12)`, border: `1px solid rgba(185,28,28,0.3)`,
+          color: '#FCA5A5', letterSpacing: '0.06em',
+        }}>
+          ✕ ANNULLED — goal at min {item.annulMinute}{item.annulPlayer ? ` (${item.annulPlayer})` : ''}
         </div>
       )}
     </div>
