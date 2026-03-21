@@ -178,6 +178,43 @@ export function createAIManager(homeTeam, awayTeam) {
   const ref       = { name: pick(REFS), leniency: 30 + Math.random() * 70, strictness: Math.random() * 100 };
   const homeM     = { name: homeTeam.manager?.name || 'Manager Alpha', emotion: MGER_EMO.CALM, personality: homeTeam.manager?.personality || 'Aggressive', team: homeTeam };
   const awayM     = { name: awayTeam.manager?.name || 'Manager Beta',  emotion: MGER_EMO.CALM, personality: awayTeam.manager?.personality || 'Calculated', team: awayTeam };
+
+  // ── Near-miss thresholds ──────────────────────────────────────────────────
+  // How many consecutive near-misses (saved shots / posts) a team must
+  // accumulate before the next shot attempt gets a conversion bonus.
+  // Randomised per-team at match start so pressure "breaks" at different
+  // points every game — sometimes a single near-miss is enough, sometimes
+  // the crowd has to wait through four before the dam bursts.
+  // Range: 2–4 (rndI inclusive on both ends).
+  const nearMissThreshold = { home: rndI(2, 4), away: rndI(2, 4) };
+
+  // ── Manager tactics state (Feature 4) ────────────────────────────────────
+  // Each manager carries a live `tactics` object that genEvent() consults on
+  // every tick.  Values are written by applyManagerTactics() in App.jsx when
+  // the LLM returns a decision.  All biases default to 0 so the system is a
+  // no-op until the first decision fires (~minute 10–15 for most triggers).
+  //
+  // Fields:
+  //   stance          — human-readable stance name for UI display and LLM prompts
+  //   shotBias        — subtracted from `roll` in genEvent(); positive = more shots
+  //                     (roll < 0.20 threshold reached more easily)
+  //   defenseBias     — added to the defence branch upper bound (0.70) in
+  //                     _genEventPart3; positive = wider tackle branch → more
+  //                     defensive events; negative = narrower → fewer
+  //   pressBias       — applied in App.jsx's possession calculation; positive =
+  //                     possessing team more likely to retain the ball
+  //   expiresMin      — genEvent() ignores the stance when min > expiresMin;
+  //                     duration is set by applyManagerTactics() using DURATIONS
+  //   lastDecisionMin — App.jsx useEffect uses this to enforce a minimum gap
+  //                     between same-team decisions (rndI(8,14) mins)
+  //   rationale       — one-sentence LLM justification, surfaced in the AI feed
+  const defaultTactics = {
+    stance: 'balanced', shotBias: 0, defenseBias: 0,
+    pressBias: 0, expiresMin: 0, lastDecisionMin: -1, rationale: '',
+  };
+  homeM.tactics = { ...defaultTactics };
+  awayM.tactics = { ...defaultTactics };
+
   const temp      = Math.round(-50 + Math.random() * 120);
   const timeOfDay = pick(['Morning','Afternoon','Evening','Night','Dawn','Dusk']);
 
@@ -189,6 +226,7 @@ export function createAIManager(homeTeam, awayTeam) {
     homeFormation: homeTeam.formation || '4-4-2',
     awayFormation: awayTeam.formation || '4-3-3',
     referee: ref, homeManager: homeM, awayManager: awayM,
+    nearMissThreshold,
     getAgentByName(name) { return [...allH, ...allA].find(a => a.player.name === name) || null; },
     updateAllAgents(mins) { [...activeH, ...activeA].forEach(a => { a.updateFatigue(mins); a.updateEmotion(mins); }); },
     handleSubstitution(out, inName, isHome) {
@@ -386,7 +424,8 @@ export function calcMVP(stats, home, away) {
 // Returns { outcome, margin: net, flavour: string[] }
 // The flavour array describes which modifiers fired (used by buildCommentary).
 export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {}) {
-  const { type = 'shot', weather = WX.CLEAR, isClutch = false } = ctx;
+  const { type = 'shot', weather = WX.CLEAR, isClutch = false, flashpoints = [],
+          architectIntentions = [], relationship = null } = ctx;
   const atkStat = type === 'freekick' ? (atkPlayer.technical || 70) * 0.6 + (atkPlayer.mental || 70) * 0.4
     : type === 'penalty' ? (atkPlayer.technical || 70) * 0.5 + (atkPlayer.mental || 70) * 0.5
     : type === 'header'  ? (atkPlayer.athletic  || 70) * 0.7 + (atkPlayer.mental || 70) * 0.3
@@ -396,6 +435,143 @@ export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {
     ? (defPlayer?.attacking || 70) * 0.6 + (defPlayer?.athletic || 70) * 0.4
     : (defPlayer?.defending || 70) * 0.7 + (defPlayer?.mental   || 70) * 0.3;
   const flavour = []; let atkMod = 0, defMod = 0;
+
+  // ── Feature 2: Flashpoint modifiers ─────────────────────────────────────
+  // Active flashpoints from narrativeResidue apply contestMod adjustments to
+  // attacker and/or defender before the roll is computed.
+  //
+  // HOW FLASHPOINTS STACK
+  // ─────────────────────
+  // Multiple flashpoints can apply to the same player simultaneously
+  // (e.g. retaliation + momentum_surge).  All contestMods are summed.
+  // This means drama compounds — a player with retaliation AND momentum_surge
+  // is significantly more potent, which is intentional: big moments breed
+  // bigger moments.
+  //
+  // cardBias on flashpoints is not applied here; it is consumed in the foul
+  // branch of _genEventBranches when shouldGiveCard() is called.
+  if (flashpoints.length) {
+    // Attacker-side flashpoints
+    for (const fp of flashpoints) {
+      if (!fp.contestMod) continue;
+      if (fp.primaryPlayer === atkPlayer?.name) {
+        atkMod += fp.contestMod;
+        flavour.push(`fp_${fp.type}`);
+      }
+      // Team-wide flashpoints (primaryPlayer === null) apply when atkPlayer's
+      // team matches the flashpoint's teamKey — resolved via atkAgent
+      if (fp.primaryPlayer === null && fp.teamKey === (atkAgent?.isHome ? 'home' : 'away')) {
+        atkMod += fp.contestMod;
+        flavour.push(`fp_${fp.type}_team`);
+      }
+    }
+    // Defender-side flashpoints (goalkeeper_nervous, penalty_trauma if GK)
+    for (const fp of flashpoints) {
+      if (!fp.contestMod) continue;
+      if (fp.primaryPlayer === defPlayer?.name) {
+        defMod += fp.contestMod; // negative contestMod on GK = harder to save
+        flavour.push(`fp_${fp.type}_def`);
+      }
+      if (fp.primaryPlayer === null && fp.teamKey === (defAgent?.isHome ? 'home' : 'away')) {
+        defMod += fp.contestMod;
+        flavour.push(`fp_${fp.type}_def_team`);
+      }
+    }
+  }
+  // ── Feature 3: Architect intentions — contestBonus ──────────────────────
+  // The first active intention that names the attacker applies its
+  // contestBonus to atkMod.  Bonuses are positive for blessed arcs
+  // (redemption, curse_broken, breakout_moment) and negative for dark arcs
+  // (fall_from_grace, villain_arc).  Values are baked in at proclamation
+  // parse time via INTENTION_DEFAULTS in agents.js, so they are consistent
+  // across every contest the player is involved in during their window.
+  //
+  // A flavour tag is pushed so buildCommentary() can optionally surface the
+  // narrative context ("architect_redemption", "architect_villain_arc", etc.)
+  // without the player or viewer knowing the mechanical reason.
+  if (architectIntentions.length) {
+    const playerIntent = architectIntentions.find(
+      i => i.player === atkPlayer?.name && typeof i.contestBonus === 'number',
+    );
+    if (playerIntent) {
+      atkMod += playerIntent.contestBonus;
+      flavour.push(`architect_${playerIntent.type}`);
+    }
+  }
+
+  // ── Feature 5: Player relationship modifiers ─────────────────────────────
+  // When the two players involved in this contest have a known relationship
+  // (looked up via genEvent() calling getRelationshipFor() and passed in via
+  // ctx.relationship), apply intensity-scaled modifiers to atkMod / defMod
+  // and cardBiasMod.
+  //
+  // INTENSITY SCALING
+  // ─────────────────
+  // All modifiers are multiplied by relationship.intensity (0–1) so a
+  // newly-established rivalry has a modest effect while a long-standing feud
+  // at intensity 0.9+ feels genuinely dangerous.  This also means a
+  // relationship that starts at 0.5 and climbs over multiple matches
+  // gradually becomes more impactful — the graph is "alive".
+  //
+  // WHY NOT CLAMP cardBiasMod
+  // ─────────────────────────
+  // cardBiasMod is a multiplier fed to aim.shouldGiveCard().  We let rivalry
+  // and grudge stack freely; a rnd(1.5, 2.1) × intensity can push a normally
+  // borderline challenge into a red card, which is the intended drama.
+  //
+  // Note: `relationship` is null if no lore entry exists — this block is a
+  // strict no-op in that case, maintaining backward compatibility.
+  let cardBiasMod = 1.0;
+  if (relationship) {
+    const scaled = (mod) => Math.round(mod * (relationship.intensity || 0.5));
+    switch (relationship.type) {
+      case 'rivalry':
+      case 'grudge':
+        // Rivalries and grudges raise card severity and confrontation risk.
+        // The range rnd(1.3,1.9) is baked at call time, not pre-baked, so
+        // every contest between rivals feels slightly different.
+        cardBiasMod *= rnd(1.3, 1.9) * (relationship.intensity || 0.5);
+        flavour.push(`rel_${relationship.type}`);
+        break;
+      case 'partnership':
+        // Partnership chemistry boosts the attacker's margin — two players
+        // who have built trust finish each other's runs.
+        atkMod += scaled(rnd(8, 16));
+        flavour.push('rel_partnership_chemistry');
+        break;
+      case 'mentor_pupil':
+        // The pupil performs better with their mentor active on the same team.
+        atkMod += scaled(rnd(5, 11));
+        flavour.push('rel_mentor_guidance');
+        break;
+      case 'former_teammates':
+        // Old friends hesitate against each other — attacker doesn't go full
+        // out, defender doesn't commit to the challenge.
+        atkMod -= scaled(rnd(4, 8));
+        flavour.push('rel_old_friends_hesitate');
+        break;
+      case 'mutual_respect':
+        // Players who respect each other play cleaner — lower card risk.
+        cardBiasMod *= Math.max(0.3, 1 - (relationship.intensity || 0.5) * 0.5);
+        flavour.push('rel_mutual_respect');
+        break;
+      case 'national_rivals':
+        // National rivalries intensify card risk moderately (less than a
+        // personal grudge, more than a neutral contest).
+        cardBiasMod *= rnd(1.1, 1.4) * (relationship.intensity || 0.5);
+        flavour.push('rel_national_rivals');
+        break;
+      case 'captain_vs_rebel':
+        // The rebel player performs individually well but creates team friction
+        // — modelled as an atkMod boost for the rebel in direct contests.
+        atkMod += scaled(rnd(6, 12));
+        flavour.push('rel_captain_vs_rebel');
+        break;
+      default:
+        break;
+    }
+  }
+
   if (atkAgent) {
     if (atkAgent.confidence > 75)  { atkMod += 8;  flavour.push('confident'); }
     else if (atkAgent.confidence < 30) { atkMod -= 5; flavour.push('low_confidence'); }
@@ -431,7 +607,10 @@ export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {
     const isPost    = net <= threshold && net > 12 && Math.random() < 0.15;
     outcome = net > threshold ? 'goal' : isPost ? 'post' : net > 8 ? 'saved' : 'miss';
   }
-  return { outcome, margin: net, flavour };
+  // cardBiasMod is returned so callers that compute card severity (e.g. tackle
+  // branches that follow a contest) can apply it to shouldGiveCard().  It is
+  // 1.0 (no effect) unless a rivalry/grudge relationship was active.
+  return { outcome, margin: net, flavour, cardBiasMod };
 }
 
 // ── buildCommentary ───────────────────────────────────────────────────────────
@@ -988,9 +1167,125 @@ export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, c
 //   • losing after min 80 (×0.5 multiplier → almost all events become attacks)
 //
 // Lower roll → more likely to hit the foul (< 0.05) or shot (< 0.20) branches.
-export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerStats, score, activePlayers, substitutionsUsed, aiInfluence, aim, chaosLevel = 0, lastEventType = null) {
-  // 65% of minutes produce no event — this creates natural quiet spells
-  if (Math.random() > 0.35) return null;
+/**
+ * Attempts to generate a single match event for the given minute.
+ *
+ * Returns null on most calls — the event gate (see below) means only a
+ * fraction of minutes produce something worth narrating.  When it does
+ * return an event the object is consumed by simulateMinute() in App.jsx,
+ * which handles stats, score updates, sequences and post-goal extras.
+ *
+ * PARAMETERS
+ * ──────────
+ * The first 13 parameters are unchanged from the original signature and
+ * carry the same meaning as before.
+ *
+ * genCtx (new) – a context bag that carries Feature-1+ data without
+ *   bloating the positional argument list further.  All fields are
+ *   optional and default to safe no-ops so existing callers that pass
+ *   nothing continue to work.
+ *
+ *   eventProbability {number}   – pre-computed gate from getEventProbability()
+ *                                 in simulateHelpers.js.  Defaults to the
+ *                                 original flat 0.35 if not supplied.
+ *   narrativeResidue {object}   – current matchState.narrativeResidue; used
+ *                                 to read near-miss counts and flashpoints.
+ *   architectIntentions {Array} – active CosmicArchitect intentions for this
+ *                                 minute (Feature 3).
+ *   architectEdictFn {Function} – (isHome) => edictModifiers object (Feature 3).
+ *   architectFate {object}      – active sealed-fate decree (Feature 3).
+ *   consumeFate {Function}      – marks the fate as consumed on the Architect
+ *                                 instance (Feature 3).
+ *   flashpoints {Array}         – active narrative-residue flashpoints used
+ *                                 for player-selection bias (Feature 2).
+ *
+ * @returns {object|null} event object or null (no event this minute)
+ */
+export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerStats, score, activePlayers, substitutionsUsed, aiInfluence, aim, chaosLevel = 0, lastEventType = null, genCtx = {}) {
+  // ── Event gate ────────────────────────────────────────────────────────────
+  // Determines whether this minute produces a notable event at all.
+  //
+  // Feature 1 (Tension Curves): the gate probability is now supplied by
+  // getEventProbability() in simulateHelpers.js, which uses a time-weighted
+  // curve instead of the original flat 35% value.  The curve varies by match
+  // phase (low opening → first-half peak → reset → late surge) and is shifted
+  // by the match's tension variant and per-match jitter baked at kick-off.
+  //
+  // When genCtx is not supplied (e.g. tests or legacy callers) eventProbability
+  // falls back to 0.35 — identical behaviour to the original flat gate.
+  const { eventProbability = 0.35, narrativeResidue, flashpoints = [],
+          architectIntentions = [], architectEdictFn = null,
+          architectFate = null, consumeFate = null } = genCtx;
+
+  // ── Feature 3: Cosmic Edict — event-gate modifier ────────────────────────
+  // The edict's rollMod shifts the probability gate before the roll.
+  // A boon lowers the gate (more events for that side), a curse raises it.
+  // edictFn is called with a temporary isHome=true to get the home-side mods;
+  // we don't know which team will possess yet, so we average both sides.
+  // This is intentional: the edict affects the match as a whole at gate level;
+  // per-team effects are applied later in resolveContest via contestMod.
+  const homeEdictMods = architectEdictFn ? architectEdictFn(true)  : {};
+  const awayEdictMods = architectEdictFn ? architectEdictFn(false) : {};
+  const edictGateMod  = ((homeEdictMods.rollMod ?? 0) + (awayEdictMods.rollMod ?? 0)) / 2;
+
+  if (Math.random() > eventProbability + edictGateMod) return null;
+
+  // ── Feature 3: Sealed Fate — force-construct a fated event ───────────────
+  // The Architect sealed a fate at the second Proclamation.  When the match
+  // minute falls inside the fate's window, roll against the fate's probability.
+  // On success, construct the fated event directly and return it — bypassing
+  // all normal branch logic.  The event is built using existing helpers so all
+  // downstream hooks (VAR, celebration, hat-trick) still fire normally.
+  //
+  // WHY BYPASS NORMAL BRANCHES
+  // ───────────────────────────
+  // The fate must override whatever roll the normal flow would produce.
+  // Building it here (before posTeam determination) keeps the logic clean:
+  // we determine which team the fated player belongs to, construct a minimal
+  // event, and return.  The match state handles everything else.
+  if (architectFate && !architectFate.consumed && Math.random() < architectFate.probability) {
+    if (typeof consumeFate === 'function') consumeFate();
+    const fatedPlayer  = architectFate.player;
+    const fatedTeam    = fatedPlayer
+      ? (homeTeam.players.some(p => p.name === fatedPlayer) ? homeTeam : awayTeam)
+      : (Math.random() < possession[0] / 100 ? homeTeam : awayTeam);
+    const fatedIsHome  = fatedTeam === homeTeam;
+
+    if (architectFate.outcome === 'goal' && fatedPlayer) {
+      const gk = getPlayer(fatedIsHome ? awayTeam : homeTeam,
+        fatedIsHome ? activePlayers.away : activePlayers.home, 'defending', 'GK');
+      return {
+        minute: min, type: 'goal', team: fatedTeam.shortName, player: fatedPlayer,
+        defender: gk?.name, outcome: 'goal', isGoal: true,
+        commentary: `✨ ${fatedPlayer} — it was written. The cosmos delivers.`,
+        momentumChange: fatedIsHome ? [15, -10] : [-10, 15],
+        animation: { type: 'goal', color: fatedTeam.color },
+        isFatedEvent: true,
+      };
+    }
+    if (architectFate.outcome === 'red_card' && fatedPlayer) {
+      return {
+        minute: min, type: 'foul', team: fatedTeam.shortName, player: fatedPlayer,
+        cardType: 'red',
+        commentary: `🟥 ${fatedPlayer} — fate demanded it. Straight red.`,
+        momentumChange: fatedIsHome ? [-8, 5] : [5, -8],
+        isFatedEvent: true,
+      };
+    }
+    if (architectFate.outcome === 'wonder_save' && fatedPlayer) {
+      return {
+        minute: min, type: 'shot', team: (fatedIsHome ? awayTeam : homeTeam).shortName,
+        player: getPlayer(fatedIsHome ? awayTeam : homeTeam,
+          fatedIsHome ? activePlayers.away : activePlayers.home, 'attacking')?.name || 'Unknown',
+        defender: fatedPlayer, outcome: 'saved',
+        commentary: `🧤 ${fatedPlayer} — the save that was always going to happen.`,
+        momentumChange: fatedIsHome ? [0, 6] : [6, 0],
+        isFatedEvent: true,
+      };
+    }
+    // chaos / injury / fallthrough — let normal branches handle the event type
+    // but mark it as fated for commentary hooks.
+  }
 
   // Weather modifiers — computed once per event call and threaded through
   const wx          = aim?.weather;
@@ -1027,17 +1322,68 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   const phase     = min <= 25 ? 'early' : min <= 65 ? 'midgame' : min <= 82 ? 'late' : 'dying';
   const matchCtx  = (pName) => ({ min, scoreDiff, playerGoals: playerStats[pName]?.goals || 0 });
 
+  // ── Near-miss pressure bonus ───────────────────────────────────────────────
+  // When a team has been unlucky enough times in a row (near-misses threshold
+  // reached) their next possession carries extra attacking energy — the crowd
+  // senses a goal is coming and the team pushes harder.
+  //
+  // The bonus is injected as an eventProbability boost AFTER the gate has
+  // already passed (we're already generating an event), so it manifests as a
+  // bias in the roll rather than a second gate roll.  We fold it into a
+  // `nmRollReduction` that subtracts from `roll` below — lower roll pushes
+  // the event into the shot/foul branches.
+  //
+  // Threshold is team-specific (2–4, set in createAIManager at match start).
+  // Bonus magnitude is randomised per activation: rnd(0.15, 0.28) to avoid
+  // the "every third near-miss = goal" predictability.
+  const nmKey       = isHome ? 'home' : 'away';
+  const nmThreshold = aim?.nearMissThreshold?.[nmKey] ?? 3;
+  const nmCount     = narrativeResidue?.nearMisses?.[nmKey] ?? 0;
+  const nmRollReduction = nmCount >= nmThreshold ? rnd(0.15, 0.28) : 0;
+
   // Build the roll value that selects which event branch fires
   const momTeam    = isHome ? momentum[0] : momentum[1];
   // High momentum reduces the roll → pushes into shot/foul territory
   const momBoost   = momTeam > 5 ? 0.08 : momTeam > 3 ? 0.04 : 0;
   // Chain boosts: consecutive shots/corners keep pressure on
   const chainBoost = lastEventType === 'shot' ? 0.04 : lastEventType === 'corner' ? 0.02 : 0;
-  let roll = Math.max(0, Math.random() - momBoost - chainBoost - wxShotBoost);
+  let roll = Math.max(0, Math.random() - momBoost - chainBoost - wxShotBoost - nmRollReduction);
   // AI influence: teams with many shoot-happy or attack-minded agents get more shots
   if (aiInfluence) { const td = isHome ? aiInfluence.home : aiInfluence.away; if (td.SHOOT > 3) roll *= 0.7; if (td.ATTACK > 5) roll *= 0.8; }
   // Desperate late-game mode: losing after minute 80 → nearly every event is an attack
   if (scoreDiff < 0 && min >= 80) roll *= 0.5;
+
+  // ── Feature 4: Manager tactics — shotBias roll modifier ──────────────────
+  // If the possessing team has an active tactical stance (expiresMin not yet
+  // reached), their shotBias shifts the roll toward or away from the shot
+  // branch (roll < 0.20 threshold).
+  //
+  // Positive shotBias (attacking, high_press, all_out_attack) → roll is
+  // lowered → event is more likely to enter the shot branch.
+  // Negative shotBias (park_the_bus, time_wasting) → roll stays high →
+  // event drifts into defensive/passing territory instead.
+  //
+  // Tactics expire at expiresMin.  An expired stance has zero effect — the
+  // manager must make a fresh decision to re-apply any bias.
+  const activeTac = isHome
+    ? (aim?.homeManager?.tactics?.expiresMin >= min ? aim.homeManager.tactics : null)
+    : (aim?.awayManager?.tactics?.expiresMin >= min ? aim.awayManager.tactics : null);
+  if (activeTac?.shotBias) roll = Math.max(0, roll - activeTac.shotBias);
+
+  // ── Feature 3: Architect intentions — rivalry_flashpoint roll modifier ────
+  // rivalry_flashpoint intentions bias the match toward foul/confrontation
+  // events by lowering the roll (sub-0.05 triggers the foul branch).
+  // Only fires when both named players are currently active on opposing sides.
+  for (const intent of architectIntentions) {
+    if (intent.type === 'rivalry_flashpoint' && intent.players?.length === 2) {
+      const [rA, rB] = intent.players;
+      const bothActive = (posActive.includes(rA) || defActive.includes(rA))
+                      && (posActive.includes(rB) || defActive.includes(rB));
+      if (bothActive && Math.random() < 0.45) {
+        roll = Math.max(0, roll - rnd(0.04, 0.09));
+      }
+    }
+  }
 
   // ── Personality-driven events (12% chance per event) ──────────────────────
   // Before the standard roll branches, there's a 12% chance that a specific
@@ -1101,7 +1447,10 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
 
   // genEvent continues in Part 2 (controversy + foul/shot) and Part 3 (attack/corner/injury/defense/passing)
   // Export the shared locals so Part 2/3 can be spliced in via genEventFull
-  return _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum);
+  // Pass genCtx forward so deeper branches (Feature 2 flashpoints, Feature 3
+  // architect intentions, Feature 5 relationships) can access the same bag of
+  // contextual data without expanding the already-large positional arg list.
+  return _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum, genCtx);
 }
 
 // ── genEvent Part 2: controversy + foul + shot branches ──────────────────────
@@ -1109,7 +1458,7 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
 //   • Referee controversy (3% flat chance — independent of the roll)
 //   • Foul / card / penalty (roll < 0.05)
 //   • Shot / long shot / goal / save / miss / counter / near-miss (roll < 0.20)
-function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum) {
+function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum, genCtx = {}) {
 
   // ── Controversy events (3% chance, fires before roll check) ───────────────
   // The referee makes a controversial call that didn't really happen:
@@ -1145,8 +1494,101 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     player = getPlayer(defTeam, defActive, 'defending');
     const atk = getPlayer(posTeam, posActive, 'attacking');
     if (!player || !atk) return null;
+
+    // ── Feature 5: Relationship rival-selection bias ─────────────────────
+    // If the Architect has spotlighted active rivalry/grudge relationships,
+    // bias the foul toward those specific player pairings so long-running
+    // feuds manifest mechanically, not just in commentary.
+    //
+    // HOW IT WORKS
+    // ────────────
+    // For each active rivalry/grudge/national_rivals relationship, we check if
+    // one player is in posActive and the other in defActive.  If so, the
+    // probability of forcing that specific matchup scales with intensity:
+    //   base 40% + intensity × 25% → maximum 65% at intensity 1.0.
+    // This keeps normal randomness alive at low intensity while making
+    // established feuds feel inevitable at high intensity.
+    const architect = genCtx?.architect;
+    if (architect) {
+      const activeRels = architect.getActiveRelationships?.() ?? [];
+      for (const rel of activeRels) {
+        if (!['rivalry', 'grudge', 'national_rivals'].includes(rel.type)) continue;
+        // Keys use _vs_ separator; split to get the two player names
+        const parts = rel.key?.split('_vs_');
+        if (!parts || parts.length !== 2) continue;
+        const [rA, rB] = parts;
+        // Check if one player is on pos side and the other on def side
+        const aOnPos = posActive.includes(rA), bOnPos = posActive.includes(rB);
+        const aOnDef = defActive.includes(rA), bOnDef = defActive.includes(rB);
+        if ((aOnPos && bOnDef) || (bOnPos && aOnDef)) {
+          // Probability scales with relationship intensity (0–1)
+          const prob = 0.40 + (rel.intensity || 0.5) * 0.25;
+          if (Math.random() < prob) {
+            const defName = aOnDef ? rA : rB;
+            const rival   = defTeam.players.find(p => p.name === defName);
+            if (rival) player = rival; // override foul defender selection
+            break;
+          }
+        }
+      }
+    }
+
+    // ── Feature 2: Flashpoint player-selection bias ──────────────────────
+    // If a retaliation flashpoint exists where the fouled player (primary) is
+    // on the defending team AND the fouling player (secondary) is on the
+    // possessing team, bias the selection toward that matchup.
+    //
+    // 45% chance to enforce the retaliation pairing — not guaranteed, so the
+    // flashpoint doesn't override all other drama, just tilts probability.
+    //
+    // Similarly, a grudge_tackle flashpoint makes that specific player more
+    // likely to be chosen as the fouler (selectBias already applied to
+    // getPlayer-level calls; here we do the explicit override for fouls).
+    const flashpoints = genCtx?.flashpoints ?? [];
+    const retFP = flashpoints.find(
+      f => f.type === 'retaliation' &&
+           defActive.includes(f.primaryPlayer) &&
+           posActive.includes(f.secondaryPlayer),
+    );
+    if (retFP && Math.random() < 0.45) {
+      const retTarget = defTeam.players.find(p => p.name === retFP.primaryPlayer);
+      if (retTarget) player = retTarget; // bias: fouled player now the defender
+    }
+    const grudgeFP = flashpoints.find(
+      f => f.type === 'grudge_tackle' && defActive.includes(f.primaryPlayer),
+    );
+    if (grudgeFP && Math.random() < 0.50) {
+      const grudgeTarget = defTeam.players.find(p => p.name === grudgeFP.primaryPlayer);
+      if (grudgeTarget) player = grudgeTarget;
+    }
+
+    // ── Feature 2: Flashpoint card-severity bias ─────────────────────────
+    // Some flashpoints increase the severity of this specific contest.
+    // cardBias values on flashpoints are multipliers applied to the raw
+    // severity roll before passing to shouldGiveCard().
+    // ref_controversy applies league-wide (teamKey: null).
     const inBox = Math.random() < 0.15;
-    const sev   = rnd(0, 100);
+    let sevRaw = rnd(0, 100);
+    for (const fp of flashpoints) {
+      if (!fp.cardBias) continue;
+      const teamMatches = fp.teamKey === null ||
+        fp.teamKey === (isHome ? 'away' : 'home'); // defender's team
+      const playerMatches = fp.primaryPlayer === player.name || fp.primaryPlayer === null;
+      if (teamMatches && playerMatches) sevRaw *= fp.cardBias;
+    }
+
+    // ── Feature 5: Relationship card-severity bias ────────────────────────
+    // A rivalry or grudge between the fouling defender and the fouled attacker
+    // makes challenges more dangerous — they go in harder, the referee reads
+    // the intent.  The multiplier is intensity-scaled so a new rivalry barely
+    // nudges the needle while a long-standing grudge can turn a yellow into red.
+    const foulRel = architect?.getRelationshipFor?.(player.name, atk.name);
+    if (foulRel && ['rivalry', 'grudge', 'national_rivals'].includes(foulRel.type)) {
+      // rnd(1.2, 1.8): lower range than full rivalry/grudge in resolveContest
+      // because the foul branch already has its own flashpoint multipliers.
+      sevRaw *= rnd(1.2, 1.8) * (foulRel.intensity || 0.5);
+    }
+    const sev = Math.min(100, sevRaw);
     let card = aim ? aim.shouldGiveCard(sev) : (sev > 85 ? 'red' : sev > 60 ? 'yellow' : null);
     if (card === 'yellow' && playerStats[player.name]?.yellowCard) card = 'red';
     if (inBox) {
@@ -1215,6 +1657,27 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const gk = getPlayer(defTeam, defActive, 'defending', 'GK');
     if (!player || !gk) return null;
 
+    // ── Feature 3: Architect intentions — shot-branch player bias ─────────
+    // If an active intention names a player on the possessing team, bias the
+    // shooter selection toward that player.  Probability scales with
+    // selectBias: a bias of 20 gives ~67% override; 10 gives ~33%.
+    //
+    // We iterate all active intentions (there can be up to 3) and take the
+    // first match to avoid multiple competing overrides.  Priority order is
+    // handled by CosmicArchitect.getIntentions() which sorts by type weight.
+    const { architectIntentions: shotIntentions = [] } = genCtx;
+    for (const intent of shotIntentions) {
+      if (intent.player && posActive.includes(intent.player) && intent.selectBias > 0) {
+        // selectBias / 30 maps the 0–16 range to a 0–53% override chance.
+        // Capped at 80% so normal player selection still has a floor — the
+        // cosmos prefers, but does not dictate.
+        if (Math.random() < Math.min(0.80, intent.selectBias / 30)) {
+          const intentPlayer = posTeam.players.find(p => p.name === intent.player);
+          if (intentPlayer) { player = intentPlayer; break; }
+        }
+      }
+    }
+
     // Long-range speculative (18%)
     if (Math.random() < 0.18) {
       const lsNet  = (player.technical || 70) * 0.4 + (player.mental || 70) * 0.3 + rnd(-20, 20) - (gk.defending || 70) * 0.8 - 18;
@@ -1228,7 +1691,7 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const shooterAgent   = aim?.getAgentByName(player.name);
     const gkAgent        = aim?.getAgentByName(gk.name);
     const isClutchMoment = shooterAgent?.isClutch && min >= 80 && Math.abs(score[0] - score[1]) <= 1;
-    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment });
+    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null });
     const formAdj        = formBonus(player.name, playerStats) - formBonus(gk.name, playerStats) + (aim?.getAgentByName(player.name)?.getDecisionBonus() || 0) - wxStatPen + wxGkPen;
     const net            = shotResult.margin + formAdj;
     const shotFlavour    = shotResult.flavour;
@@ -1266,7 +1729,7 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
           const cAtkAgent   = aim?.getAgentByName(cPlayer.name);
           const cGkAgent    = aim?.getAgentByName(cGk.name);
           const cIsClutch   = cAtkAgent?.isClutch && min >= 80;
-          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch });
+          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null });
           const cGoal       = cResult.outcome === 'goal';
           const cIsHome     = defTeam === homeTeam;
           const savedSeqEvt = { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: saveComm, momentumChange: [0, 0] };
@@ -1284,13 +1747,30 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
   }
 
   // Attack/dribble, corner, injury, defense, passing branches handled in Part 3
-  return _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum);
+  return _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum, genCtx);
 }
 
 // ── genEvent Part 3: attack + corner + injury + defense + passing ─────────────
 // Handles the lower-probability / lower-impact event types.
-function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum) {
+function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum, genCtx = {}) {
   let player, defender, outcome, commentary, momentumChange = [0, 0];
+
+  // ── Feature 4: defenseBias — widen / narrow the tackle branch ────────────
+  // The manager's active tactical stance can expand or contract the roll
+  // window that routes events into the defence/tackle branch (normally capped
+  // at 0.70).
+  //
+  // Positive defenseBias (defensive, park_the_bus, counter_attack) → upper
+  // bound rises above 0.70 → more events are defensive tackles / blocks.
+  // Negative defenseBias (attacking, overload_wing) → upper bound falls
+  // below 0.70 → the branch shrinks, fewer events are purely defensive.
+  //
+  // The same `activeTac` pattern as in genEvent(): only applies when the
+  // stance has not yet expired this match.
+  const tacP3 = isHome
+    ? (aim?.homeManager?.tactics?.expiresMin >= min ? aim.homeManager.tactics : null)
+    : (aim?.awayManager?.tactics?.expiresMin >= min ? aim.awayManager.tactics : null);
+  const defenseBranch = 0.70 + (tacP3?.defenseBias ?? 0); // normally 0.70
 
   if (roll < 0.40) {
     // ── ATTACK / DRIBBLE branch (roll 0.20–0.40) ────────────────────────────
@@ -1369,7 +1849,7 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
           const cSeq      = genCounterSeq(min, cPlayer, cGk, defTeam, cSupport);
           const cAtkAgent = aim?.getAgentByName(cPlayer.name);
           const cGkAgent  = aim?.getAgentByName(cGk.name);
-          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx });
+          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null });
           const cGoal     = cResult.outcome === 'goal';
           const cIsHome   = defTeam === homeTeam;
           const intEvt    = { minute: min, type: 'attack', team: posTeam.shortName, player: player.name, defender: defender.name, outcome: 'intercepted', commentary, momentumChange: [0, 0] };
@@ -1470,8 +1950,8 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
         ]);
     return { minute: min, type: 'injury', team: tm.shortName, player: player.name, outcome: 'injured', commentary, momentumChange: [0, 0], isInjury: true };
 
-  } else if (roll < 0.70) {
-    // ── DEFENCE / TACKLE branch (roll 0.52–0.70) ────────────────────────────
+  } else if (roll < defenseBranch) {
+    // ── DEFENCE / TACKLE branch (roll 0.52–0.70, adjusted by defenseBias) ──
     // A defender makes a tackle or blocks a run.  Preferred player is a DF.
     //
     // net = (defender.defending + defender.athletic) / 2 + rnd
