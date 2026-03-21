@@ -33,6 +33,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { PERS_ICON } from './constants.js';
+import { rnd, rndI } from './utils.js';
 
 // ── Commentator Personalities ─────────────────────────────────────────────────
 // Three distinct on-air voices.  Each has a system-prompt that shapes how
@@ -531,6 +532,61 @@ export class AgentSystem {
     } catch { return null; }
   }
 
+  // ── Tactical decision ───────────────────────────────────────────────────────
+
+  /**
+   * Asks the manager LLM to pick a tactical stance from a constrained option
+   * list, then returns the chosen stance and a one-sentence rationale.
+   *
+   * Called by App.jsx's 10-trigger useEffect when a decision trigger fires for
+   * a specific team.  The result is passed straight into applyManagerTactics()
+   * which writes the biases onto aim.homeManager.tactics / aim.awayManager.tactics.
+   *
+   * DESIGN: The LLM is given personality, emotion, scoreline, minute, and a
+   * short list of valid stances.  It is NOT told what the biases are — it
+   * picks a stance the same way a real manager might say "we go defensive now"
+   * without knowing the exact probability modifiers that entails.  The engine
+   * decides the numbers; the LLM decides the intent.
+   *
+   * @param {object} manager   - aim.homeManager or aim.awayManager object
+   * @param {object} situation - { minute, score, subsUsed, recentSummary }
+   * @param {string[]} options - valid stance strings the LLM must choose from
+   * @returns {Promise<{stance:string, rationale:string}|null>}
+   */
+  async generateManagerDecision(manager, situation, options) {
+    const system = [
+      `You are ${manager.name}, manager of ${manager.team.name}.`,
+      `Personality: ${manager.personality}. Current emotion: ${manager.emotion}.`,
+      `Make a tactical decision. Return ONLY valid JSON with two keys:`,
+      `"stance" (exactly one of the provided options) and "rationale" (one sentence, first person).`,
+      `No markdown, no extra keys, no explanation outside the JSON.`,
+    ].join(' ');
+
+    const userMsg = [
+      `Minute ${situation.minute}. Score: ${situation.score[0]}-${situation.score[1]}.`,
+      `Substitutions used: ${situation.subsUsed}/3.`,
+      situation.recentSummary ? `Recent events: ${situation.recentSummary}.` : '',
+      `Choose exactly one stance from: ${options.join(', ')}.`,
+    ].filter(Boolean).join(' ');
+
+    try {
+      const raw = await this._call(system, [{ role: 'user', content: userMsg }], 80);
+      if (!raw) return null;
+      // Strip any accidental markdown fences before parsing
+      const clean  = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
+      const parsed = JSON.parse(clean);
+      const stance = options.includes(parsed.stance) ? parsed.stance : options[0];
+      const rationale = typeof parsed.rationale === 'string' ? parsed.rationale
+                      : typeof parsed.reason    === 'string' ? parsed.reason
+                      : '';
+      return { stance, rationale };
+    } catch {
+      // LLM unavailable or returned garbage — fall back to options[0] silently.
+      // The match continues; no bias is applied until the next trigger.
+      return null;
+    }
+  }
+
   // ── Event classification ────────────────────────────────────────────────────
 
   /**
@@ -825,6 +881,36 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     this.featuredMortals = [];   // up to 2 player names spotlighted this match
     this.cosmicThread    = '';   // specific through-line for this match
 
+    // ── Feature 3: Architect as Director — in-match control state ────────
+    //
+    // cosmicEdict   – match-wide modifier set once at the first Proclamation.
+    //                 Parsed from freeform LLM text (edictPolarity + magnitude)
+    //                 into resolved numeric modifiers baked at parse time so
+    //                 genEvent() never has to call rnd() itself on them.
+    //                 null = no edict yet (first proclamation hasn't fired).
+    //
+    // intentions    – up to 3 active per-player or per-team narrative directives
+    //                 from the current Proclamation.  Each intention carries a
+    //                 window [startMin, endMin] and pre-baked contestBonus /
+    //                 selectBias values.  getIntentions(minute) filters by window.
+    //
+    // sealedFate    – one near-certain outcome the Architect has "written in".
+    //                 Set at the second Proclamation (~min 25-35).  genEvent()
+    //                 checks getFate(minute) and forces the outcome when the
+    //                 window arrives and the probability roll succeeds.
+    //                 consumed: true once the fate has fired (or window expired).
+    this.cosmicEdict  = null;
+    this.intentions   = [];
+    this.sealedFate   = null;
+
+    // ── Feature 5: active relationship spotlight ──────────────────────────
+    // The Architect spotlights up to 2 relationship keys per Proclamation via
+    // the "activeRelationships" JSON field.  Keys are in the canonical
+    // _vs_ / _and_ format used in lore.playerRelationships.  The engine
+    // reads these in getActiveRelationships() to inject rivalry/grudge bias
+    // into genEvent() player selection and resolveContest() modifiers.
+    this.activeRelationships = [];
+
     /** Minute of the last Proclamation; -1 = no Proclamation issued yet. */
     this.lastUpdateMinute = -1;
 
@@ -835,6 +921,63 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
      * not a chatty commentator.
      */
     this.history = [];
+  }
+
+  // ── Feature 3: resolve cosmic edict ──────────────────────────────────────
+
+  /**
+   * Converts the Architect's freeform edict declaration (polarity + magnitude)
+   * into resolved numeric modifiers baked at call time with rnd/rndI.
+   *
+   * WHY BAKE VALUES AT PARSE TIME
+   * ──────────────────────────────
+   * We want the edict's effects to be consistent for the entire match — a
+   * "boon" shouldn't vary in strength minute-to-minute.  Pre-baking also
+   * makes the values inspectable (e.g. in the browser console) for debugging.
+   *
+   * POLARITY SEMANTICS
+   * ──────────────────
+   *   boon   – favours the target: lower roll gate (more events), positive
+   *            contestMod, higher shot conversion.
+   *   curse  – burdens the target: higher roll gate (fewer events for cursed
+   *            side), negative contestMod, elevated card severity.
+   *   chaos  – unpredictable: roll gate and contestMod randomly flip sign,
+   *            cardSeverityMult swings wide.  chaosDouble (40% chance) means
+   *            BOTH a bonus AND a penalty apply simultaneously — the blessing
+   *            is also a curse.
+   *
+   * @param {string} polarity  – 'boon' | 'curse' | 'chaos'
+   * @param {number} magnitude – 1–10 (LLM-supplied, clamped)
+   * @param {string} target    – 'home' | 'away' | 'both' | playerName
+   * @param {string} rawText   – the Architect's freeform declaration sentence
+   * @returns {object} resolved edict modifiers
+   */
+  _resolveCosmicEdict(polarity, magnitude, target, rawText) {
+    const mag   = Math.min(10, Math.max(1, Number(magnitude) || 5));
+    const scale = mag / 10; // 0.1 – 1.0
+
+    // roll direction helpers
+    const boonRoll  = () => -(rnd(0.03, 0.10) * scale);  // lower gate = more events
+    const curseRoll = () =>  (rnd(0.02, 0.08) * scale);  // higher gate = fewer events
+    const chaosRoll = () =>  (Math.random() < 0.5 ? boonRoll() : curseRoll()) * rnd(0.8, 1.4);
+
+    const rollMod          = polarity === 'boon'  ? boonRoll()
+                           : polarity === 'curse' ? curseRoll()
+                           : chaosRoll();
+    const conversionBonus  = polarity === 'boon'  ? rnd(0.04, 0.12) * scale : 0;
+    const cardSeverityMult = polarity === 'curse' ? 1 + rnd(0.2, 0.8) * scale
+                           : polarity === 'chaos' ? rnd(0.6, 1.8)
+                           : 1.0;
+    // contestMod: direction depends on polarity; chaos can flip
+    const baseContest      = rnd(5, 18) * scale;
+    const contestMod       = polarity === 'boon'  ?  baseContest
+                           : polarity === 'curse' ? -baseContest
+                           : (Math.random() < 0.5 ? 1 : -1) * baseContest;
+
+    // chaosDouble: 40% chance — both bonus AND penalty apply at once
+    const chaosDouble = polarity === 'chaos' && Math.random() < 0.40;
+
+    return { target, polarity, rollMod, conversionBonus, cardSeverityMult, contestMod, chaosDouble, raw: rawText };
   }
 
   // ── Lore persistence ──────────────────────────────────────────────────────
@@ -851,8 +994,19 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       const raw = localStorage.getItem(CosmicArchitect.LORE_KEY);
       if (!raw) return this._emptyLore();
       const parsed = JSON.parse(raw);
-      // Version guard: discard old lore on schema change rather than crashing.
-      return parsed.version === 1 ? parsed : this._emptyLore();
+
+      // ── Schema migration ──────────────────────────────────────────────────
+      // v1 → v2: Add playerRelationships without discarding existing arcs.
+      //   All other fields (playerArcs, rivalryThreads, matchLedger, etc.)
+      //   are preserved exactly as-is — only the new field is added.
+      if (parsed.version === 1) {
+        parsed.playerRelationships = {};
+        parsed.version = 2;
+        return parsed;
+      }
+
+      // Accept v2; discard anything older (unknown schema).
+      return parsed.version === 2 ? parsed : this._emptyLore();
     } catch {
       return this._emptyLore();
     }
@@ -866,13 +1020,22 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
    */
   _emptyLore() {
     return {
-      version:        1,
+      // Version 2 adds playerRelationships.
+      // The _loadLore() migration bumps v1 data to v2 without discarding it.
+      version:        2,
       playerArcs:     {},  // playerName → { team, arc }
       managerFates:   {},  // managerName → { team, fate }
       rivalryThreads: {},  // "teamA_vs_teamB" → { thread, lastResult }
       seasonArcs:     {},  // seasonId → { arc }
       matchLedger:    [],  // past match records (capped at MAX_LEDGER)
       currentSeason:  null,
+      // playerRelationships — Feature 5: dynamic player-pair relationships.
+      // Key format:
+      //   cross-team:  [nameA, nameB].sort().join('_vs_')
+      //   same-team:   [nameA, nameB].sort().join('_and_')
+      // Shape per entry: { type, intensity, thread, teams, createdMatch, matchCount }
+      // See getRelationshipFor() and saveMatchToLore() for read/write paths.
+      playerRelationships: {},
     };
   }
 
@@ -920,6 +1083,37 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       if (arc) parts.push(`MORTAL IN FOCUS: ${mortal} — ${arc}`);
     }
 
+    // ── Feature 3: Architect Director context ─────────────────────────────
+    // Surface the active cosmic edict, intentions, and sealed fate so that
+    // subsequent Proclamations are aware of what has already been set in
+    // motion.  Subsequent LLM calls build on prior state rather than
+    // contradicting it.  Kept brief to limit per-event prompt overhead.
+    if (this.cosmicEdict) {
+      parts.push(`EDICT IN FORCE: "${this.cosmicEdict.raw}" [target:${this.cosmicEdict.target}, polarity:${this.cosmicEdict.polarity}]`);
+    }
+    const activeIntentions = this.getIntentions(this.lastUpdateMinute);
+    if (activeIntentions.length > 0) {
+      parts.push(`ACTIVE WILLS: ${activeIntentions
+        .map(i => i.player ? `${i.player} → ${i.type}` : i.type)
+        .join(' | ')}`);
+    }
+    if (this.sealedFate && !this.sealedFate.consumed) {
+      parts.push(`SEALED: "${this.sealedFate.prophecy}"`);
+    }
+
+    // ── Feature 5: active relationship spotlight ──────────────────────────
+    // Surface the first active relationship thread so subsequent Proclamations
+    // build on it coherently — the Architect can escalate a rivalry or bless
+    // a partnership without contradicting what was established earlier.
+    // Only the first entry is included to keep the context string compact;
+    // the second (if any) is visible to the Architect via lore but not echoed
+    // back here to avoid prompt saturation.
+    const activeRels = this.getActiveRelationships();
+    if (activeRels.length > 0 && activeRels[0].thread) {
+      const display = activeRels[0].key.replace(/_vs_/g, ' vs ').replace(/_and_/g, ' & ');
+      parts.push(`MORTAL BOND: ${display} — ${activeRels[0].thread}`);
+    }
+
     return parts.join('\n');
   }
 
@@ -950,6 +1144,112 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
    */
   getFeaturedMortals() {
     return this.featuredMortals;
+  }
+
+  // ── Feature 5: Player relationship accessors ─────────────────────────────
+
+  /**
+   * Looks up the canonical relationship between two players in persistent lore.
+   *
+   * Checks both key formats:
+   *   cross-team:  [nameA, nameB].sort().join('_vs_')
+   *   same-team:   [nameA, nameB].sort().join('_and_')
+   *
+   * Returns null if neither key exists — callers must treat null as "no
+   * known relationship" and apply no modifier.
+   *
+   * @param {string} playerA - name of first player
+   * @param {string} playerB - name of second player
+   * @returns {object|null} relationship object or null
+   */
+  getRelationshipFor(playerA, playerB) {
+    if (!playerA || !playerB) return null;
+    const vsKey  = [playerA, playerB].sort().join('_vs_');
+    const andKey = [playerA, playerB].sort().join('_and_');
+    return this.lore.playerRelationships[vsKey]
+        || this.lore.playerRelationships[andKey]
+        || null;
+  }
+
+  /**
+   * Returns the full relationship objects for all currently spotlighted keys
+   * (set via `activeRelationships` in the Architect's Proclamation JSON).
+   *
+   * Filters out stale keys that no longer exist in lore (e.g. if lore was
+   * reset between matches) so callers always get valid objects.
+   *
+   * @returns {Array<{key:string, type:string, intensity:number, thread:string}>}
+   */
+  getActiveRelationships() {
+    return (this.activeRelationships || [])
+      .map(key => ({ key, ...this.lore.playerRelationships[key] }))
+      .filter(r => r.type); // exclude entries where lore key doesn't exist yet
+  }
+
+  // ── Feature 3: Architect Director — public accessors ─────────────────────
+
+  /**
+   * Returns the subset of active intentions whose time window includes the
+   * given minute.  Called by App.jsx simulateMinute() each tick.
+   *
+   * Intentions outside their window are silently excluded — the Architect's
+   * will was in force for a spell, then passed.  This means a call to
+   * getIntentions() always returns a "live" snapshot: safe to pass directly
+   * into genCtx.architectIntentions.
+   *
+   * @param {number} minute – current match minute
+   * @returns {object[]} active intention objects (may be empty)
+   */
+  getIntentions(minute) {
+    return this.intentions.filter(i => minute >= i.window[0] && minute <= i.window[1]);
+  }
+
+  /**
+   * Returns the cosmic edict's resolved modifiers for a given team side,
+   * or an empty object if no edict has been set or the edict does not
+   * apply to this side.
+   *
+   * Called by App.jsx as `architectEdictFn(isHome)` and passed into genCtx
+   * so genEvent() can apply rollMod before the early-exit gate.
+   *
+   * @param {boolean} isHome – true if we're asking about the home team
+   * @returns {object} edict modifier bag, or {} if not applicable
+   */
+  getEdictModifiers(isHome) {
+    if (!this.cosmicEdict) return {};
+    const e = this.cosmicEdict;
+    const teamKey = isHome ? 'home' : 'away';
+    const appliesToTeam = e.target === 'both' || e.target === teamKey;
+    // Player-named targets: genEvent passes the player name through ctx
+    // separately; here we only resolve team-level applicability.
+    if (!appliesToTeam && !['home', 'away', 'both'].includes(e.target)) return {};
+    if (!appliesToTeam) return {};
+    return e;
+  }
+
+  /**
+   * Returns the sealed fate if its time window is currently active and it
+   * has not yet been consumed.  Returns null otherwise.
+   *
+   * genEvent() calls this once per minute and force-constructs the fated
+   * event type if the probability roll succeeds.
+   *
+   * @param {number} minute – current match minute
+   * @returns {object|null} sealedFate object, or null
+   */
+  getFate(minute) {
+    if (!this.sealedFate || this.sealedFate.consumed) return null;
+    if (minute < this.sealedFate.window[0] || minute > this.sealedFate.window[1]) return null;
+    return this.sealedFate;
+  }
+
+  /**
+   * Marks the sealed fate as consumed so it can never fire again.
+   * Called by App.jsx's consumeFate callback immediately after genEvent()
+   * force-constructs the fated event, ensuring exactly one execution.
+   */
+  consumeFate() {
+    if (this.sealedFate) this.sealedFate.consumed = true;
   }
 
   // ── Canonical rivalry key ─────────────────────────────────────────────────
@@ -1031,6 +1331,51 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     const loreSummary = [rivalry, playerLore].filter(Boolean).join(' | ')
       || 'No prior encounters recorded in the eternal ledger.';
 
+    // ── Per-proclamation prompt strategy (Feature 3) ─────────────────────
+    // The Architect speaks three times per match with different asks:
+    //
+    //   Proclamation 1 (lastUpdateMinute === -1, first ever call):
+    //     Ask for the cosmic edict — the match-wide force governing everything.
+    //     Also ask for intentions (per-player narrative directives).
+    //     The edict is set once and never replaced.
+    //
+    //   Proclamation 2 (~minute 25-35, second call):
+    //     Ask for the sealed fate — one near-certain outcome written into the
+    //     match.  The fate is set once; this field is omitted from later prompts.
+    //     Also update intentions.
+    //
+    //   Proclamation 3+ (late game):
+    //     Update intentions only.  Edict and fate are already written; asking
+    //     again would create contradictions and waste tokens.
+    //
+    // The isFirstProclamation / isSecondProclamation flags drive which JSON
+    // fields we request.  The LLM can still return unexpected fields — the
+    // parse block handles that defensively.
+    const isFirstProclamation  = this.lastUpdateMinute === -1;
+    const isSecondProclamation = !isFirstProclamation && !this.sealedFate;
+
+    // Build the JSON schema request line based on proclamation index
+    let jsonSchema = `{"narrativeArc":"...","featuredMortals":["name1","name2"],` +
+      `"characterArcs":{"name1":"..."},"cosmicThread":"...","proclamation":"...",` +
+      `"intentions":[{"type":"redemption","player":"Name","window":[60,90],"contestBonus":15,"selectBias":8,"cardBias":1.0}]`;
+    if (isFirstProclamation) {
+      // First proclamation: request the match-wide cosmic edict.
+      // edictPolarity: 'boon' favours the target, 'curse' burdens them, 'chaos' is both.
+      // edictMagnitude: 1-10 scale (1 = subtle, 10 = overwhelming).
+      jsonSchema += `,"cosmicEdict":"< one sentence — what cosmic force governs this match >",` +
+        `"edictTarget":"home"|"away"|"both"|"<playerName>",` +
+        `"edictPolarity":"boon"|"curse"|"chaos","edictMagnitude":5}`;
+    } else if (isSecondProclamation) {
+      // Second proclamation: seal a fate — one near-certain outcome.
+      // fatedOutcome is constrained to 5 types so genEvent() can force-construct it.
+      // fatedMinute: suggest the minute; we apply a random window around it.
+      jsonSchema += `,"sealedFate":"< one sentence — what has been written for this match >",` +
+        `"fatedPlayer":"<name or null>","fatedMinute":72,` +
+        `"fatedOutcome":"goal"|"red_card"|"injury"|"wonder_save"|"chaos"}`;
+    } else {
+      jsonSchema += `}`;
+    }
+
     const userMsg =
       `Match: ${this.homeTeam.name} (${gameState.score[0]}) vs ` +
       `${this.awayTeam.name} (${gameState.score[1]}) | Minute ${minute}'. ` +
@@ -1038,16 +1383,14 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       `Recent events: ${eventsSummary}.\n` +
       `Notable mortals: ${playerStates}.\n` +
       `Past lore: ${loreSummary}\n\n` +
-      `Issue your Proclamation. Return JSON:\n` +
-      `{"narrativeArc":"...","featuredMortals":["name1","name2"],` +
-      `"characterArcs":{"name1":"..."},"cosmicThread":"...","proclamation":"..."}`;
+      `Issue your Proclamation. Return JSON:\n${jsonSchema}`;
 
     try {
       const raw = await this.client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        // 300 tokens — enough for the full JSON including a 2-3 sentence
-        // proclamation, bounded to prevent runaway output.
-        max_tokens: 300,
+        // 450 tokens — increased from 300 to accommodate edict + intentions +
+        // sealedFate fields without truncation.
+        max_tokens: 450,
         system:     CosmicArchitect.SYSTEM,
         // Maintain ≤ 4 messages of in-match history for continuity.
         messages:   [...this.history.slice(-4), { role: 'user', content: userMsg }],
@@ -1072,6 +1415,82 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       if (parsed.characterArcs && typeof parsed.characterArcs === 'object')
         Object.assign(this.characterArcs, parsed.characterArcs);
       if (parsed.cosmicThread) this.cosmicThread = parsed.cosmicThread;
+
+      // ── Feature 3: Parse cosmic edict (first proclamation only) ──────────
+      // The edict is immutable once set — if the Architect returns it on a
+      // subsequent call we ignore it to avoid mid-match contradictions.
+      if (isFirstProclamation && parsed.cosmicEdict && !this.cosmicEdict) {
+        const VALID_POLARITIES = ['boon', 'curse', 'chaos'];
+        const polarity = VALID_POLARITIES.includes(parsed.edictPolarity)
+          ? parsed.edictPolarity : 'chaos';
+        this.cosmicEdict = this._resolveCosmicEdict(
+          polarity,
+          parsed.edictMagnitude,
+          parsed.edictTarget || 'both',
+          parsed.cosmicEdict,
+        );
+      }
+
+      // ── Feature 3: Parse intentions (every proclamation) ─────────────────
+      // Intentions are replaced wholesale each proclamation — the Architect's
+      // current will supersedes prior directives.  Max 3; all numeric fields
+      // clamped to prevent runaway LLM values.
+      const VALID_INTENTION_TYPES = [
+        'redemption', 'rivalry_flashpoint', 'fall_from_grace', 'breakout_moment',
+        'comeback_arc', 'veteran_farewell', 'youth_emergence', 'captain_crisis',
+        'curse_broken', 'villain_arc', 'silent_hero', 'climax',
+      ];
+      if (Array.isArray(parsed.intentions)) {
+        this.intentions = parsed.intentions
+          .filter(i => i && VALID_INTENTION_TYPES.includes(i.type))
+          .slice(0, 3)
+          .map(i => ({
+            type:         i.type,
+            player:       typeof i.player === 'string' ? i.player : null,
+            players:      Array.isArray(i.players) ? i.players.slice(0, 2) : [],
+            window:       Array.isArray(i.window) && i.window.length === 2 ? i.window : [0, 90],
+            // contestBonus: ±modifier for resolveContest atkMod.  Clamped to
+            // ±26 so a single intention can't trivially guarantee a goal.
+            contestBonus: Math.min(26, Math.max(-18, Number(i.contestBonus) || 0)),
+            // selectBias: extra weight when genEvent() picks which player acts.
+            // 0–16 range; higher = player selected far more often than chance.
+            selectBias:   Math.min(16, Math.max(0,   Number(i.selectBias)   || 0)),
+            // cardBias: multiplier on card severity in the foul branch.
+            // 0.8 = much less likely to card; 2.2 = very likely to card.
+            cardBias:     Math.min(2.2, Math.max(0.8, Number(i.cardBias)    || 1.0)),
+            flavourTag:   `architect_${i.type}`,
+          }));
+      }
+
+      // ── Feature 3: Parse sealed fate (second proclamation only) ──────────
+      // Fate is immutable once set — same reasoning as the edict.
+      if (isSecondProclamation && parsed.sealedFate && !this.sealedFate) {
+        const VALID_FATES = ['goal', 'red_card', 'injury', 'wonder_save', 'chaos'];
+        const outcome  = VALID_FATES.includes(parsed.fatedOutcome) ? parsed.fatedOutcome : 'chaos';
+        // fatedMinute clamped to 55–88 so the fate fires during meaningful play.
+        const fateMin  = Math.min(88, Math.max(55, Number(parsed.fatedMinute) || 72));
+        this.sealedFate = {
+          outcome,
+          player:    typeof parsed.fatedPlayer === 'string' ? parsed.fatedPlayer : null,
+          // ±2–5 minute window around the stated minute for organic timing.
+          window:    [fateMin - rndI(2, 4), fateMin + rndI(2, 5)],
+          // 78–94% probability — not 100%, because the cosmos is capricious.
+          probability: rnd(0.78, 0.94),
+          prophecy:  parsed.sealedFate || '',
+          consumed:  false,
+        };
+      }
+
+      // ── Feature 5: active relationship spotlight ──────────────────────────
+      // The Architect optionally names up to 2 relationship keys to spotlight
+      // this Proclamation.  Keys must be in the canonical _vs_ / _and_ format.
+      // Only keys that actually exist in lore are stored — stale or invented
+      // keys are silently discarded so genEvent() never reads phantom data.
+      if (Array.isArray(parsed.activeRelationships)) {
+        this.activeRelationships = parsed.activeRelationships
+          .filter(k => typeof k === 'string' && this.lore.playerRelationships[k])
+          .slice(0, 2); // max 2 spotlighted at once
+      }
 
       // ── Maintain short in-match history ───────────────────────────────────
       this.history.push(
@@ -1146,23 +1565,39 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       .map(([n, a]) => `${n}: ${a}`)
       .join('; ') || 'None witnessed';
 
+    // ── Feature 5: build existing relationship context for the prompt ────────
+    // Surface the top-3 most intense relationships so the Architect can
+    // evolve them based on what happened in this match.  Sorted by intensity
+    // so the most dramatic bonds appear first and are most likely to be
+    // referenced in the returned update.
+    const topRels = Object.entries(this.lore.playerRelationships)
+      .sort(([, a], [, b]) => (b.intensity || 0) - (a.intensity || 0))
+      .slice(0, 3)
+      .map(([key, r]) => `${key.replace(/_vs_|_and_/g, ' / ')} (${r.type}, ${(r.intensity||0).toFixed(2)}): ${r.thread || ''}`)
+      .join('; ') || 'None established yet.';
+
     const userMsg =
       `The match is over. ${homeTeam.name} ${score[0]}-${score[1]} ${awayTeam.name}. ` +
       `MVP: ${mvp?.name || 'none'}.\n` +
       `Key moments: ${keyMoments}.\n` +
       `Scorers: ${scorersText}.\n` +
       `Existing rivalry thread: ${existingThread}\n` +
-      `In-match fate arcs witnessed: ${inMatchArcs}\n\n` +
+      `In-match fate arcs witnessed: ${inMatchArcs}\n` +
+      `Known player relationships: ${topRels}\n\n` +
       `Record this match for eternity. Return JSON:\n` +
       `{"architectVerdict":"...","playerArcUpdates":{"name":"updated arc..."},` +
-      `"managerFateUpdate":{"name":"..."},"rivalryThreadUpdate":"...","newSeasonArc":"..."}`;
+      `"managerFateUpdate":{"name":"..."},"rivalryThreadUpdate":"...","newSeasonArc":"...",` +
+      `"playerRelationshipUpdates":{"PlayerA_vs_PlayerB":{"type":"rivalry","intensity":0.7,"thread":"..."}}}` +
+      `\nFor playerRelationshipUpdates: use _vs_ for cross-team pairs, _and_ for same-team. ` +
+      `Valid types: rivalry, partnership, mentor_pupil, grudge, former_teammates, mutual_respect, captain_vs_rebel, national_rivals. ` +
+      `intensity 0.0–1.0. Only include pairs that actually interacted this match.`;
 
     try {
       const raw = await this.client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        // 400 tokens — lore saves update multiple player arcs and produce a
-        // multi-sentence Verdict so they need more room than in-match calls.
-        max_tokens: 400,
+        // 550 tokens — lore saves now include playerRelationshipUpdates in
+        // addition to player arcs and the Verdict, so they need more room.
+        max_tokens: 550,
         system:     CosmicArchitect.SYSTEM,
         messages:   [{ role: 'user', content: userMsg }],
       }).then(r => r.content[0]?.text?.trim());
@@ -1211,6 +1646,41 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       // ── Update season arc ─────────────────────────────────────────────────
       if (parsed.newSeasonArc && leagueContext.seasonId) {
         this.lore.seasonArcs[leagueContext.seasonId] = { arc: parsed.newSeasonArc };
+      }
+
+      // ── Feature 5: Merge player relationship updates ──────────────────────
+      // The LLM returns a map of canonical key → relationship delta.
+      // We validate the type, apply an intensity evolution cap (±0.15 per
+      // match), and merge with any existing entry — never discarding a
+      // relationship that was established in a prior match.
+      //
+      // INTENSITY EVOLUTION CAP (+0.15 / −0.15 per match)
+      // ───────────────────────────────────────────────────
+      // Relationships should feel like they deepen over many matches, not
+      // explode to max intensity in one game.  The cap also prevents the LLM
+      // from zeroing out a long-standing rivalry by returning intensity=0
+      // in a quiet match.
+      if (parsed.playerRelationshipUpdates && typeof parsed.playerRelationshipUpdates === 'object') {
+        const VALID_REL_TYPES = new Set([
+          'rivalry', 'partnership', 'mentor_pupil', 'grudge',
+          'former_teammates', 'mutual_respect', 'captain_vs_rebel', 'national_rivals',
+        ]);
+        for (const [key, rel] of Object.entries(parsed.playerRelationshipUpdates)) {
+          if (!rel || !VALID_REL_TYPES.has(rel.type)) continue;
+          const existing     = this.lore.playerRelationships[key];
+          const prevIntensity = typeof existing?.intensity === 'number' ? existing.intensity : 0.5;
+          const rawDelta      = (typeof rel.intensity === 'number' ? rel.intensity : prevIntensity) - prevIntensity;
+          // Clamp delta to ±0.15 so intensity evolves gradually over multiple matches
+          const clampedDelta  = Math.max(-0.15, Math.min(0.15, rawDelta));
+          this.lore.playerRelationships[key] = {
+            ...(existing || {}),
+            type:        rel.type,
+            intensity:   Math.min(1, Math.max(0, prevIntensity + clampedDelta)),
+            thread:      rel.thread || existing?.thread || '',
+            teams:       existing?.teams || [homeTeam.shortName, awayTeam.shortName],
+            matchCount:  (existing?.matchCount || 0) + 1,
+          };
+        }
       }
 
       // ── Add to match ledger ───────────────────────────────────────────────
