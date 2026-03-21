@@ -976,6 +976,47 @@ const MatchSimulator = ({
         .then(r => { if (r) applyArchitectInterference(r); })
         .catch(() => {});
     }
+
+    // ── Feature 6: pendingInterferences — architect boredom cascade ──────────
+    // When architect_boredom fires it queues up to 3 mild interference types in
+    // matchState.pendingInterferences.  We process ONE per event batch so they
+    // fire on consecutive ticks rather than all at once — giving each its own
+    // feed card and state mutation without racing each other.
+    //
+    // WHY HERE (events useEffect, not simulateMinute)
+    // ────────────────────────────────────────────────
+    // simulateMinute's setState callback must be a pure function of prev state.
+    // Generating LLM proclamations and calling applyArchitectInterference (which
+    // calls setMatchState AND setCommentaryFeed) is a side-effect that cannot
+    // safely live inside another setState.  The events useEffect already handles
+    // Architect side-effects (maybeUpdate, maybeInterfereWith) so it is the
+    // natural home for this too.
+    //
+    // We construct a synthetic interference result from the queued type string
+    // so it flows through the same applyArchitectInterference path as LLM-generated
+    // interferences — consistent feed cards, state mutations, and arch mutations.
+    if(matchState.pendingInterferences?.length){
+      const[nextType,...restInterferences]=matchState.pendingInterferences;
+      // Synthetic result — no LLM involved; proclamation is left blank so the
+      // feed card shows only the subtitle rather than empty quotes.
+      const syntheticR={
+        interferenceType: nextType,
+        targetPlayer:     null,
+        // Random target team so mild effects (commentary_void, add_stoppage)
+        // don't always hit the same side.
+        targetTeam:       Math.random()<0.5?'home':'away',
+        goalMinute:       null,
+        stoppageMinutes:  7,
+        // magnitude 3 — lower than a direct Architect call (5) since boredom
+        // cascades should feel chaotic but not overwhelmingly punishing.
+        magnitude:        3,
+        proclamation:     '',
+        minute:           matchState.minute,
+      };
+      applyArchitectInterference(syntheticR);
+      // Pop the consumed type; remaining queue written back via setMatchState
+      setMatchState(prev=>({...prev,pendingInterferences:restInterferences}));
+    }
   },[matchState.events]);
 
   // Route procedural player thoughts (no-LLM fallback) to team panels
@@ -1079,6 +1120,36 @@ const MatchSimulator = ({
       }
       const chaosLevel=calcChaosLevel(prev,newMin);
 
+      // ── Feature 6: eldritchPortal — 20 % / min dimension_shift ───────────
+      // Each minute while the portal is open there is a 20% chance a random
+      // player from the affected team is pulled through and removed from play
+      // (no substitution granted — they simply cease to exist on the pitch).
+      //
+      // WHY HERE (before genEvent)
+      // ───────────────────────────
+      // Processing the portal BEFORE genEvent means the reduced active-player
+      // roster is visible to genEvent's player-selection logic in the same
+      // minute the shift happens — the match immediately plays with one fewer
+      // player rather than lagging a full tick.
+      //
+      // 0.20 probability per minute: with a 10-minute window that gives
+      // ~1–2 expected shifts per portal — disruptive but not catastrophic.
+      if(prev.eldritchPortal && newMin<=prev.eldritchPortal.expiresMin){
+        if(Math.random()<0.20){
+          const portalShortName=prev.eldritchPortal.teamArea;
+          const portalSide=portalShortName===prev.homeTeam.shortName?'home':'away';
+          const portalPool=newActive[portalSide];
+          if(portalPool.length){
+            const victim=portalPool[Math.floor(Math.random()*portalPool.length)];
+            newActive[portalSide]=portalPool.filter(n=>n!==victim);
+            interventions.push({minute:newMin,type:'dimension_shift',player:victim,architectForced:true,
+              team:portalShortName,
+              commentary:`The eldritch portal yawns wide — ${victim} is pulled through. Gone from this realm.`,
+              momentumChange:[0,0]});
+          }
+        }
+      }
+
       // ── Feature 1: compute dynamic event probability ──────────────────────
       // getEventProbability() replaces the old flat 35% gate.  It reads the
       // match's pre-determined tension variant and per-match jitter (both set
@@ -1127,9 +1198,64 @@ const MatchSimulator = ({
         architectCurses:      arch ? arch.activeCurses      : [],
         architectBlesses:     arch ? arch.activeBlesses     : [],
         architectPossessions: arch ? arch.activePossessions : [],
+        // ── Feature 6: matchState interference flags ─────────────────────────
+        // A snapshot of active cosmic flags so genEvent() can apply flag-based
+        // overrides (keeper paralysis, goal drought, tantrum, etc.) without
+        // receiving the entire matchState.  All flags carry an expiresMin field;
+        // genEvent() is responsible for the expiry comparison so App.jsx never
+        // needs a separate cleanup pass.
+        //
+        // reversalBoost is the side string ('home'|'away') that the cosmos is
+        // backing — forwarded into archModCtx → resolveContest() as reversalBoostSide.
+        matchFlags: {
+          keeperParalysed:  prev.keeperParalysed  ?? null, // { team: shortName, expiresMin }
+          goalDrought:      prev.goalDrought      ?? null, // { expiresMin }
+          architectTantrum: prev.architectTantrum ?? null, // { expiresMin }
+          commentaryVoid:   prev.commentaryVoid   ?? null, // { expiresMin }
+          voidCreature:     prev.voidCreature     ?? null, // { expiresMin }
+          pendingPenalty:   prev.pendingPenalty   ?? null, // { team: 'home'|'away' }
+          reversalBoost:    prev.reversalBoost    ?? null, // 'home' | 'away'
+        },
       };
 
-      const event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType,genCtx);
+      let event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType,genCtx);
+
+      // ── Feature 6: event post-processing for interference flags ──────────
+      // Applied immediately after genEvent() returns so that all downstream
+      // logic (score increment, stats, commentary feed) sees the modified event.
+      //
+      // commentaryVoid: blanket commentary replacement while the flag is active.
+      //   Applied unconditionally to EVERY event in the window — substitutes,
+      //   fouls, goals alike — so the feed reads as impenetrable static.
+      //   Preserves all other event fields so stats / score still update correctly.
+      //
+      // gravityFlipped: inverts isGoal on any shot/goal event.
+      //   A natural goal (isGoal: true) becomes a non-goal (cosmos deflects it);
+      //   a natural save/miss (isGoal: false) becomes a goal (cosmos guides it in).
+      //   Only applied to events that carry isGoal (shots, penalties, counters).
+      //   We also patch the outcome field for commentary consistency ('goal'/'saved').
+      //
+      // clearPendingPenalty: genEvent() sets this sentinel on the penalty sequence
+      //   it generates when consuming the lucky_penalty flag.  We clear the flag
+      //   from matchState here via a spread in the final return rather than in a
+      //   separate setState call, keeping the mutation atomic with the tick.
+      if(event){
+        // commentaryVoid — replace commentary text
+        if(prev.commentaryVoid && newMin<=prev.commentaryVoid.expiresMin){
+          event={...event,commentary:'〰〰〰 [COSMIC STATIC] 〰〰〰'};
+        }
+        // gravityFlipped — invert isGoal on shot-type events
+        if(prev.gravityFlipped && newMin<=prev.gravityFlipped.expiresMin && event.isGoal!==undefined){
+          const flipped=!event.isGoal;
+          // Patch outcome string so buildCommentary / stats logic stays consistent
+          const flippedOutcome=flipped?'goal':'saved';
+          const flipNote=flipped?' [GRAVITY INVERTED — IT CURVES IN!]':' [GRAVITY INVERTED — IT CURVES OUT!]';
+          event={...event,isGoal:flipped,outcome:flippedOutcome,
+            commentary:(event.commentary||'')+flipNote,
+            animation:flipped?{type:'goal',color:event.team===prev.homeTeam.shortName?prev.homeTeam.color:prev.awayTeam.color}:null};
+        }
+      }
+
       if(!event){
         // Spread prev first so tensionVariant, tensionJitter, and narrativeResidue
         // are carried forward untouched — Feature 1-5 state must survive quiet minutes.
@@ -1212,9 +1338,17 @@ const MatchSimulator = ({
 
       const isKey=event.isGoal&&!varOverturned&&event.animation?.type==='goal';
       return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff,narrativeResidue:newResidue,
-        // ── Feature 6: clear doubleGoalActive flag if it was consumed this tick ──
-        // Spread after all other fields so the cleared value wins over prev spread.
-        ...(doubleGoalConsumed ? { doubleGoalActive: false } : {})};
+        // ── Feature 6: one-shot interference flag clearances ─────────────────
+        // These are spread last so their values win over the prev spread above.
+        //
+        // doubleGoalActive: cleared the tick it is consumed (only one goal doubled).
+        //
+        // pendingPenalty: genEvent() sets clearPendingPenalty on the event it
+        //   generates when consuming the flag.  We clear it here atomically with
+        //   the rest of the tick state so the next minute cannot trigger a second
+        //   free penalty from the same decree.
+        ...(doubleGoalConsumed          ? { doubleGoalActive: false  } : {}),
+        ...(event.clearPendingPenalty   ? { pendingPenalty:   null   } : {})};
     });
   };
 
