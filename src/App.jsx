@@ -1908,21 +1908,19 @@ const MatchSimulator = ({
           <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'16px'}}>
             <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'8px',fontSize:'12px',textAlign:'center'}}>
+          <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
             {[
               ['Shots',homeShots,awayShots],
               ['On Target',homeSoT,awaySoT],
               ['Corners',homeCorners,awayCorners],
               ['Yellows',homeYellows,awayYellows],
             ].map(([label,h,a])=>(
-              <div key={label}>
-                <div style={{fontSize:'10px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'4px'}}>{label}</div>
-                <div style={{display:'flex',justifyContent:'center',gap:'8px'}}>
-                  <span style={{fontWeight:700,color:ms.homeTeam.color}}>{h}</span>
-                  <span style={{opacity:0.3}}>–</span>
-                  <span style={{fontWeight:700,color:ms.awayTeam.color}}>{a}</span>
-                </div>
-              </div>
+              <span key={label} style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #2A2A2A',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',display:'inline-flex',gap:'4px',alignItems:'center'}}>
+                <span style={{color:ms.homeTeam.color}}>{h}</span>
+                <span style={{opacity:0.3}}>–</span>
+                <span style={{color:ms.awayTeam.color}}>{a}</span>
+                <span style={{opacity:0.5,marginLeft:'4px'}}>{label}</span>
+              </span>
             ))}
           </div>
         </div>
