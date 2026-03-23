@@ -68,6 +68,14 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 
 ### Match Simulator UI
 - Live scoreboard, possession bar, and momentum tracker
+- **Chaos Meter** with dynamic event pills showing what's driving the chaos level:
+  - **Late Game** (red) — minute > 80
+  - **Final Stretch** (orange) — minutes 71–80
+  - **Tied** (purple) — level scores past minute 30
+  - **Close Match** (muted) — one-goal difference
+  - **Red Cards** (red) — any red cards issued
+  - **Heated Bench** (orange) — agents experiencing heightened emotions
+  - **Full Time** (purple outline) — match complete
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
 - Separate feeds for commentary, manager thoughts, and player inner monologues
