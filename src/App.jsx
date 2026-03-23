@@ -1905,11 +1905,11 @@ const MatchSimulator = ({
           </div>
           <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
             {ms.minute>80&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Late Game</span>}
-            {ms.minute>70&&ms.minute<=80&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Final Stretch</span>}
+            {ms.minute>70&&ms.minute<=80&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Final Stretch</span>}
             {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span style={{padding:'4px 10px',backgroundColor:'#7A3ED4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Tied</span>}
             {Math.abs(ms.score[0]-ms.score[1])===1&&<span style={{padding:'4px 10px',backgroundColor:'#333',border:'1px solid #666',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Close Match</span>}
             {(ms.redCards.home+ms.redCards.away)>0&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Red Cards</span>}
-            {aiManager&&[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length>0&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Heated Bench</span>}
+            {aiManager&&[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length>0&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Heated Bench</span>}
             {ms.mvp&&<span style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #9A5CF4',color:'#9A5CF4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Full Time</span>}
           </div>
         </div>
