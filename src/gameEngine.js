@@ -1988,6 +1988,21 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
 function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum, genCtx = {}) {
   let player, defender, outcome, commentary, momentumChange = [0, 0];
 
+  // ── Feature 6: rebuild archModCtx from genCtx ────────────────────────────
+  // archModCtx is built in _genEventBranches (the Part 2 function) and is
+  // needed here for the counter-attack resolveContest call at the bottom of
+  // the attack/dribble branch.  Rather than expanding the already-long
+  // parameter list, we reconstruct it from genCtx which is already passed.
+  const { architectCurses: _ac = [], architectBlesses: _ab = [], architectPossessions: _ap = [], matchFlags: _mf = null } = genCtx;
+  const archModCtx = {
+    architectCurses:      _ac,
+    architectBlesses:     _ab,
+    architectPossessions: _ap,
+    currentMinute:        min,
+    voidCreatureActive:   !!(_mf?.voidCreature && min <= _mf.voidCreature.expiresMin),
+    reversalBoostSide:    _mf?.reversalBoost ?? null,
+  };
+
   // ── Feature 4: defenseBias — widen / narrow the tackle branch ────────────
   // The manager's active tactical stance can expand or contract the roll
   // window that routes events into the defence/tackle branch (normally capped
