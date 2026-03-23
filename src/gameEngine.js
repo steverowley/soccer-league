@@ -1604,6 +1604,20 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
 //   • Shot / long shot / goal / save / miss / counter / near-miss (roll < 0.20)
 function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum, genCtx = {}) {
 
+  // ── Feature 6: extract interference context from genCtx ──────────────────
+  // _genEventBranches is a top-level function (not a closure inside genEvent),
+  // so matchFlags / archModCtx from genEvent's scope are NOT available here.
+  // Reconstruct them from genCtx which is already passed as the last argument.
+  const { architectCurses: _bac = [], architectBlesses: _bab = [], architectPossessions: _bap = [], matchFlags = null } = genCtx;
+  const archModCtx = {
+    architectCurses:      _bac,
+    architectBlesses:     _bab,
+    architectPossessions: _bap,
+    currentMinute:        min,
+    voidCreatureActive:   !!(matchFlags?.voidCreature && min <= matchFlags.voidCreature.expiresMin),
+    reversalBoostSide:    matchFlags?.reversalBoost ?? null,
+  };
+
   // ── Controversy events (3% chance, fires before roll check) ───────────────
   // The referee makes a controversial call that didn't really happen:
   //   'wrong_penalty'  → penalty awarded for nothing (favours attacking team)

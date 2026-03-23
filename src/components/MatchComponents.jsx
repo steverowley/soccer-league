@@ -14,7 +14,7 @@
 //   PERS   — personality key constants
 //   PERS_ICON — maps personality key → emoji
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, bdr, PERS, PERS_ICON } from "../constants.js";
 import { COMMENTATOR_PROFILES } from "../agents.js";
 
@@ -375,8 +375,8 @@ export const ArchitectCard = ({ item }) => {
 export const ArchitectInterferenceCard = ({ item }) => {
   // flared starts true so the card opens with a vivid box-shadow bloom,
   // then the effect is cut off after 2 500 ms via the transition (2.5 s ease-out).
-  const [flared, setFlared] = React.useState(true);
-  React.useEffect(() => {
+  const [flared, setFlared] = useState(true);
+  useEffect(() => {
     const t = setTimeout(() => setFlared(false), 2500);
     return () => clearTimeout(t);
   }, []);
