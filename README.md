@@ -46,7 +46,7 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
   - **Cosmic Edicts** (polarity/magnitude modifiers)
   - **Intentions** (12 types with directed outcomes)
   - **Sealed Fate** (prophecy-driven forced outcomes)
-  - **Architect Interference** (45 reality-rewrite types: history mutations, conjured events, player curses/blesses, formation chaos, and more — fires once per event batch with a 20-min cooldown, probability scaling with edict polarity)
+  - **Architect Interference** (10 active flags: keeperParalysed, goalDrought, gravityFlipped, architectTantrum, commentaryVoid, voidCreature, eldritchPortal, pendingInterferences, pendingPenalty, reversalBoost — each flag fires once per event batch with 20-min cooldown, probability scaling with edict polarity)
 
 **Primary Narration** — Captain Vox now runs first as the primary narrator:
 - Receives structured event data instead of terse procedural text
@@ -86,13 +86,20 @@ The match simulator is built on a sophisticated event generation system with six
    - **Cosmic Edicts**: Polarity and magnitude convert to roll/contestMod/conversionBonus modifiers
    - **Intentions**: 12 intention types with per-proclamation prompts wire into player selection bias and contest bonus
    - **Sealed Fate**: Freeform prophecy parsed into forced outcomes (goal/red_card/wonder_save/chaos) with window and probability
-   - **Architect Interference**: 45 reality-rewrite types organized into 7 categories (history rewrites, conjured events, possession warping, formation chaos, prophecy resets, sabotage, mass curses/blesses). Fires once per event batch with 20-min cooldown; probability scales with edict polarity (base 10%, up to ~66% in chaos edict + frantic variant). Effects include score mutations, player roster rewrites, synthetically spawned events, and mid-match modifiers (curses −2–20 atkMod, blesses +2–20, possession swaps ±30 coin-flip)
+   - **Architect Interference**: 10 reality-rewrite flags (keeperParalysed, goalDrought, gravityFlipped, architectTantrum, commentaryVoid, voidCreature, eldritchPortal, pendingInterferences, pendingPenalty, reversalBoost). Each flag fires once per event batch with 20-min cooldown; probability scales with edict polarity (base 10%, up to ~66% in chaos edict + frantic variant). Flags are actively consumed by the game engine (shot/foul/contest branches, post-event processing) to mutate outcomes, apply modifiers (±25 void-creature swing, +15 reversal boost), hijack plays (pending penalty), or spawn synthetic events (boredom cascade)
 
 4. **LLM Manager Decisions** — Managers respond to 10 trigger conditions (halftime, losing at 60+, red card, siege mode, etc.) with AI-selected stances. Each stance applies ranged shotBias/defenseBias/pressBias/fatigueCost that expire after a window, with stale stances having zero effect.
 
 5. **Player Relationship Graph** — Player relationships (8 types: rivalry, partnership, grudge, mutual_respect, etc.) evolve ±0.15 per match. Relationships influence rival selection in foul branches and scale resolveContest() modifiers. The lore schema supports v1→v2 migration preserving existing match history.
 
-6. **LLM-Driven Architect Interference** — Beyond prophecy, the Architect actively warps reality during matches through 45 distinct interference types, applying curses/blesses to individual contests, rewriting team formation and score history, and spawning synthetic events. Interference probability scales with cosmic chaos levels and has intelligent cooldown management to prevent narrative whiplash.
+6. **LLM-Driven Architect Interference** — Beyond prophecy, the Architect actively warps reality during matches through 10 flag-based interference types. Each flag is set by `_applyInterferenceToState` (App.jsx) and actively consumed by the game engine:
+   - **Shot branch flags** (keeperParalysed, goalDrought, architectTantrum, pendingPenalty): Force goals, collapse saves, convert outcome chains, or hijack shots into penalties
+   - **Foul branch flags** (architectTantrum): Escalate yellow cards to red
+   - **Contest flags** (voidCreature, reversalBoost): Apply ±25 chaos swing or +15 permanent attacker boost for trailing teams
+   - **Roster flags** (eldritchPortal): Randomly remove players from active pitch (20% per minute)
+   - **Post-event flags** (gravityFlipped, commentaryVoid): Invert goal outcomes or replace all commentary with cosmic static
+   - **Queue flags** (pendingInterferences): Cascade multiple mild interference types (one per tick) via synthetic generation
+   Interference probability scales with cosmic chaos levels and has intelligent cooldown management to prevent narrative whiplash.
 
 All six layers degrade gracefully when the LLM is unavailable, ensuring the simulation continues to run.
 
