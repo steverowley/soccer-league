@@ -175,12 +175,25 @@ export const AgentCard = ({ item }) => {
     : item.type === 'referee'      ? `${item.name} • Referee`
     : 'Agent';
 
+  // Each commentator gets a subtly tinted box so voices are visually
+  // distinct at a glance rather than blurring into a single text stream.
+  //
+  // Tinting strategy uses 8-digit CSS hex (RRGGBBAA) which all modern
+  // browsers support.  Two layers:
+  //   • backgroundColor: borderColor + '12' → ~7 % opacity tint
+  //     Gives each voice a faint colour cast without obscuring the text.
+  //   • border: 1 px borderColor + '40' → ~25 % opacity outline
+  //     Closes the box on all four sides so the card reads as a discrete unit.
+  //   • borderLeft: 3 px solid borderColor → full-opacity accent stripe
+  //     Keeps the strong visual anchor that identifies the speaker.
   return (
     <div style={{
-      padding: '8px',
-      borderLeft: `2px solid ${borderColor}`,
-      marginBottom: '8px',
-      backgroundColor: C.abyss,
+      padding: '8px 10px',
+      border: `1px solid ${borderColor}40`,
+      borderLeft: `3px solid ${borderColor}`,
+      borderRadius: '3px',
+      marginBottom: '6px',
+      backgroundColor: `${borderColor}12`,
     }}>
       {/* ── Agent header: emoji + name label + timestamp ─────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>

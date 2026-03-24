@@ -133,6 +133,11 @@ export class AgentSystem {
     // Rate-limiting: gap between event processings (adaptive via setMatchSpeed).
     this._lastCallTime = 0;
     this._cooldownMs   = 300;
+    // Inter-wave stagger for DRAMATIC mode (0 = fire all voices in parallel).
+    // When > 0, _processEventDirect delivers voices in three sequential waves
+    // so commentary spreads across the tick window rather than dumping all at
+    // once.  See setMatchSpeed() and _processEventDirect() for how this is used.
+    this._staggerMs    = 0;
     this._eventQueue      = [];   // pending { event, gameState, allAgents, resolve, onResult }
     this._draining        = false; // true while _drainQueue() is running
     this._drainCallbacks  = [];   // resolved when queue empties (for waitForDrain)
@@ -796,66 +801,133 @@ export class AgentSystem {
     // LLM round-trip blocking the pipeline.
     const eventDesc = this._describeEvent(event);
 
-    // ── Step 1: Captain Vox (play-by-play — PARALLEL with all other voices) ─
-    // Vox no longer runs as a blocking sequential step.  He joins the
-    // parallel promise pool so his narration appears in the feed as soon as
-    // his individual call resolves, racing alongside the reactor calls.
-    //
-    // onResult is forwarded so generatePlayByPlay can use the streaming path:
-    // an empty feed slot appears immediately and text types itself in via
-    // play_by_play_update events rather than arriving as a single block.
-    promises.push(this.generatePlayByPlay(event, gameState, onResult).then(push));
+    // ── Pre-compute voice roster (shared by both execution paths) ────────────
+    // Hoisted outside the parallel/staggered branch so the same randomised
+    // reactor draw and thought-eligibility roll applies to both paths.
 
-    // ── Step 2: Reactor commentators (PARALLEL) ──────────────────────────────
-    // Nexus-7 and Zara Bloom react to the structured event description.
-    // full → 2 reactors, medium → 1, minor/manager → 0.
+    // Reactor count by tier:
+    //   full   (goal / red card) → 2 reactors — the biggest moments deserve
+    //                               the full commentary ensemble
+    //   medium (yellow / injury / controversy) → 1 reactor
+    //   minor / manager → 0 reactors — quiet moments don't need the full bench
     const numReactors = tier === 'full' ? 2 : tier === 'medium' ? 1 : 0;
-    if (numReactors > 0) {
-      const reactorPool = COMMENTATOR_PROFILES
-        .filter(p => p.id !== 'captain_vox')
-        .sort(() => Math.random() - 0.5);
+
+    // Shuffle the non-Vox pool so the same pair doesn't always react together.
+    const reactorPool = numReactors > 0
+      ? COMMENTATOR_PROFILES.filter(p => p.id !== 'captain_vox').sort(() => Math.random() - 0.5)
+      : [];
+
+    // Player-thought eligibility:
+    //   full / medium → always (dramatic moments need the inner voice)
+    //   minor → 30% random roll — keeps the feed lively without overwhelming it;
+    //           at ~6–8 minor events per half this yields ~2 player asides per
+    //           half on average, giving the feed a steady pulse of personality.
+    const wantThought = tier === 'full' || tier === 'medium' ||
+      (tier === 'minor' && event.player && Math.random() < 0.30); // 0.30 = 30% chance
+    const thoughtAgent = (wantThought && event.player)
+      ? (allAgents?.find(a => a.player.name === event.player) ?? null)
+      : null;
+
+    if (this._staggerMs > 0) {
+      // ── DRAMATIC mode: three sequential voice waves ─────────────────────
+      //
+      // Problem: with all voices firing in parallel, every API call resolves
+      // within a ~2 s window → all commentary appears at once → long silence
+      // for the rest of the 15 s tick → another dump → repeat.  The feed
+      // feels like a news ticker, not a live broadcast.
+      //
+      // Solution: deliver voices in three waves separated by _staggerMs.
+      // Each wave fires its calls in parallel internally, so no extra latency
+      // is introduced within a wave.  The stagger only adds time *between*
+      // waves so the commentary spreads across the tick window organically.
+      //
+      // Timing for a full event at _staggerMs = 3 000 ms:
+      //   t = 0 s   — Vox streams his narration (first word in ~150 ms)
+      //   t ≈ 1.5 s — Vox finishes; feed shows his full line
+      //   t = 4.5 s — Reactors chip in (both in parallel)
+      //   t ≈ 5.5 s — Reactors done
+      //   t = 8.5 s — Inner thought + managers + referee fire (all parallel)
+      //   t ≈ 9.5 s — Wave 3 done; 5.5 s of reading time before next tick
+
+      // Wave 1 — Vox narrates the play (streaming: text types itself in)
+      await this.generatePlayByPlay(event, gameState, onResult).then(push);
+
+      // Wave 2 — Reactor commentators (Nexus-7 / Zara Bloom)
+      if (reactorPool.length > 0) {
+        await new Promise(r => setTimeout(r, this._staggerMs));
+        await Promise.allSettled(
+          reactorPool.slice(0, numReactors).map(p =>
+            this.generateCommentary(p.id, event, gameState, eventDesc).then(push),
+          ),
+        );
+      }
+
+      // Wave 3 — Inner voice, touchline reactions, referee decision.
+      // All fire in parallel within the wave; the stagger only separates
+      // this group from the reactors above.
+      const wave3 = [];
+      if (thoughtAgent) {
+        wave3.push(
+          this.generatePlayerThought(thoughtAgent.player, thoughtAgent, event, gameState, eventDesc).then(push),
+        );
+      }
+      if (tier === 'full') {
+        wave3.push(this.generateManagerReaction(isHomeEvent,  event, gameState).then(push));
+        wave3.push(this.generateManagerReaction(!isHomeEvent, event, gameState).then(push));
+      } else if (tier === 'medium' || tier === 'manager') {
+        wave3.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
+      }
+      if (event.cardType || event.isControversial) {
+        wave3.push(this.generateRefDecision(event, gameState).then(push));
+      }
+      if (wave3.length > 0) {
+        await new Promise(r => setTimeout(r, this._staggerMs));
+        await Promise.allSettled(wave3);
+      }
+
+    } else {
+      // ── Fast modes (SLOW / NORMAL / FAST / TURBO): all voices in parallel ─
+      // All five steps launch simultaneously.  Each promise's .then(push)
+      // fires onResult(item) the moment that individual API call resolves so
+      // the feed updates incrementally rather than waiting for the slowest call.
+      // Execution order matches the original implementation exactly.
+
+      // Step 1: Captain Vox
+      promises.push(this.generatePlayByPlay(event, gameState, onResult).then(push));
+
+      // Step 2: Reactors
       for (let i = 0; i < numReactors; i++) {
         promises.push(
           this.generateCommentary(reactorPool[i].id, event, gameState, eventDesc).then(push),
         );
       }
-    }
 
-    // ── Step 3: Player inner thought (PARALLEL) ─────────────────────────────
-    // full / medium events always produce a player thought so dramatic moments
-    // (goals, cards, injuries) retain full voice coverage.  For minor/routine
-    // events a 30% random roll keeps the feed lively without overwhelming it —
-    // at ~6–8 minor events per half this yields roughly 2 spontaneous player
-    // asides per half on average, giving the feed a steady pulse of personality.
-    const wantThought = tier === 'full' || tier === 'medium' ||
-      (tier === 'minor' && event.player && Math.random() < 0.30); // 0.30 = 30% chance per minor event
-    if (wantThought && event.player) {
-      const agent = allAgents?.find(a => a.player.name === event.player);
-      if (agent) {
+      // Step 3: Player inner thought
+      if (thoughtAgent) {
         promises.push(
-          this.generatePlayerThought(agent.player, agent, event, gameState, eventDesc).then(push),
+          this.generatePlayerThought(thoughtAgent.player, thoughtAgent, event, gameState, eventDesc).then(push),
         );
       }
+
+      // Step 4: Manager reactions
+      //   full    → both managers react (goal / red card affects everyone)
+      //   medium  → only the manager whose team was involved
+      //   manager → acting manager only (the one who triggered the intervention)
+      if (tier === 'full') {
+        promises.push(this.generateManagerReaction(isHomeEvent,  event, gameState).then(push));
+        promises.push(this.generateManagerReaction(!isHomeEvent, event, gameState).then(push));
+      } else if (tier === 'medium' || tier === 'manager') {
+        promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
+      }
+
+      // Step 5: Referee — only for card events or disputed calls
+      if (event.cardType || event.isControversial) {
+        promises.push(this.generateRefDecision(event, gameState).then(push));
+      }
+
+      await Promise.allSettled(promises);
     }
 
-    // ── Step 4: Manager reactions (PARALLEL) ────────────────────────────────
-    //   full    → both managers react (goal / red card affects everyone)
-    //   medium  → only the manager whose team was involved
-    //   manager → acting manager only (the one who triggered the intervention)
-    if (tier === 'full') {
-      promises.push(this.generateManagerReaction(isHomeEvent,  event, gameState).then(push));
-      promises.push(this.generateManagerReaction(!isHomeEvent, event, gameState).then(push));
-    } else if (tier === 'medium' || tier === 'manager') {
-      promises.push(this.generateManagerReaction(isHomeEvent, event, gameState).then(push));
-    }
-
-    // ── Step 5: Referee (PARALLEL) ───────────────────────────────────────────
-    // Only triggered for card events or disputed calls.
-    if (event.cardType || event.isControversial) {
-      promises.push(this.generateRefDecision(event, gameState).then(push));
-    }
-
-    await Promise.allSettled(promises);
     return results;
   }
 
@@ -885,11 +957,27 @@ export class AgentSystem {
     // drain in App.jsx so the queue never backs up — no inter-event cooldown
     // is needed.  Map it to 0 just like TURBO so _drainQueue fires immediately
     // between events within a single tick's parallel call bundle.
-    if      (tickMs < 0)     this._cooldownMs = 0;    // DRAMATIC — tick-locked
-    else if (tickMs <= 200)  this._cooldownMs = 0;    // TURBO   — no gap
-    else if (tickMs <= 500)  this._cooldownMs = 100;  // FAST    — 100 ms gap
-    else if (tickMs <= 1000) this._cooldownMs = 300;  // NORMAL  — 300 ms gap
-    else                     this._cooldownMs = 500;  // SLOW    — 500 ms gap
+    if (tickMs < 0) {
+      // DRAMATIC — tick-locked in App.jsx; no inter-event cooldown needed.
+      // _staggerMs spreads each event's voices across three sequential waves
+      // (Vox → reactors → inner thought + managers) so commentary fills the
+      // 15-second tick window organically rather than arriving as one dump.
+      // 3 000 ms between waves: Vox at t=0, reactors at t=3 s, rest at t=6 s.
+      this._cooldownMs = 0;
+      this._staggerMs  = 3_000;
+    } else if (tickMs <= 200) {
+      this._cooldownMs = 0;    // TURBO  — no gap; max throughput
+      this._staggerMs  = 0;    // all voices in parallel; speed > drama
+    } else if (tickMs <= 500) {
+      this._cooldownMs = 100;  // FAST   — 100 ms gap
+      this._staggerMs  = 0;
+    } else if (tickMs <= 1000) {
+      this._cooldownMs = 300;  // NORMAL — 300 ms gap
+      this._staggerMs  = 0;
+    } else {
+      this._cooldownMs = 500;  // SLOW   — 500 ms gap
+      this._staggerMs  = 0;
+    }
   }
 
   /**
