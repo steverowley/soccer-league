@@ -1732,6 +1732,12 @@ const MatchSimulator = ({
   // Memoised so a new reversed array is only allocated when the source feed
   // changes, not on every unrelated re-render (e.g. score updates).
   const commentaryReversed    = useMemo(() => [...commentaryFeed].reverse(),    [commentaryFeed]);
+  // Per-voice splits used by the full-width commentary booth.
+  // Nexus-7 also receives referee decisions (data-driven rulings suit his column).
+  // Vox gets everything else: play_by_play, architect cards, procedural fallback.
+  const voxItems   = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'referee'), [commentaryReversed]);
+  const nexusItems = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'   || i.type === 'referee'),       [commentaryReversed]);
+  const zaraItems  = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'),                              [commentaryReversed]);
   const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
   const awayManagerReversed   = useMemo(() => [...awayManagerFeed].reverse(),   [awayManagerFeed]);
   const homeThoughtsReversed  = useMemo(() => [...homeThoughtsFeed].reverse(),  [homeThoughtsFeed]);
@@ -2233,134 +2239,6 @@ const MatchSimulator = ({
                 }
               </div>
 
-              {/* ── Commentary broadcast booth — 3 columns, one per voice ─────
-                  Replaces the previous single commentary feed with three
-                  dedicated columns so each voice has its own reading lane and
-                  items no longer blur together in a shared stream.
-
-                  Column assignment (filter predicate against commentaryFeed):
-
-                    Captain Vox  — type:'play_by_play' (live narration, streaming)
-                                 — type:'architect_proclamation' / 'architect_interference'
-                                   (cosmic decrees belong next to the main narrator)
-                                 — any item that doesn't match Nexus or Zara
-                                   (catch-all covers procedural fallback entries
-                                   produced when no API key is set)
-
-                    Nexus-7      — type:'commentator' AND commentatorId:'nexus7'
-                                 — type:'referee'
-                                   (referee decisions are data-driven rulings;
-                                   they suit the AI Analyst's analytical column)
-
-                    Zara Bloom   — type:'commentator' AND commentatorId:'zara_bloom'
-
-                  The underlying commentaryFeed state array and all routing
-                  logic (routeAgentResult, play_by_play_update patching) remain
-                  unchanged — this is a pure render-layer split.  The scroll
-                  ref (evtLogRef) and auto-scroll behaviour live on the Vox
-                  column since that is the primary narrative voice.
-
-                  The grid is flex:1 so it fills the remaining centre-column
-                  height after the pitch card and events strip. */}
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
-                {/* ── Per-commentator column headers ──────────────────────── */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',borderBottom:'1px solid rgba(227,224,213,0.08)'}}>
-                  {COMMENTATOR_PROFILES.map((p,pi)=>(
-                    <div key={p.id} style={{
-                      padding:'7px 10px',
-                      borderRight:pi<2?'1px solid rgba(227,224,213,0.08)':'none',
-                      display:'flex',alignItems:'center',gap:'6px',
-                      backgroundColor:`${p.color}0A`,
-                    }}>
-                      <span style={{fontSize:'13px'}}>{p.emoji}</span>
-                      <div>
-                        <div style={{fontSize:'10px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
-                        <div style={{fontSize:'9px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
-                      </div>
-                      {/* AI key controls sit in Vox's header — one place, not repeated */}
-                      {p.id==='captain_vox'&&!agentSystemRef.current&&apiKey&&(
-                        <span style={{marginLeft:'auto',fontSize:'9px',opacity:0.35}}>next kickoff</span>
-                      )}
-                      {p.id==='captain_vox'&&!agentSystemRef.current&&!apiKey&&(
-                        <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'9px',padding:'2px 6px',border:`1px solid ${p.color}80`,backgroundColor:'transparent',color:p.color,cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {/* ── 3-column scroll area ─────────────────────────────────── */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',flex:1,minHeight:0,overflow:'hidden'}}>
-
-                  {/* ── Vox column: play-by-play + architect + fallback ─────── */}
-                  <div ref={evtLogRef} onScroll={handleCommentaryScroll} style={{padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#FFD700 #111',borderRight:'1px solid rgba(227,224,213,0.06)'}}>
-                    {commentaryReversed.filter(item=>item.commentatorId==='captain_vox'||item.type==='play_by_play'||item.type==='architect_proclamation'||item.type==='architect_interference'||(item.type!=='commentator'&&item.type!=='referee')).length===0
-                      ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'48px',fontStyle:'italic'}}>{ms.minute===0?'Press Kick Off to begin':'Awaiting first play...'}</div>
-                      :commentaryReversed.filter(item=>item.commentatorId==='captain_vox'||item.type==='play_by_play'||item.type==='architect_proclamation'||item.type==='architect_interference'||(item.type!=='commentator'&&item.type!=='referee')).map((item,i)=>{
-                        if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
-                        if(item.type==='architect_proclamation') return <ArchitectCard key={i} item={item}/>;
-                        if(item.type==='play_by_play') return(
-                          <div key={i} style={{marginBottom:'12px',borderLeft:`3px solid ${item.color}`,paddingLeft:'8px',backgroundColor:`${item.color}06`}}>
-                            <div style={{display:'flex',alignItems:'center',gap:'5px',marginBottom:'3px',fontSize:'10px'}}>
-                              <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                              <span style={{marginLeft:'auto',opacity:0.3}}>{item.minute}'</span>
-                            </div>
-                            <div style={{fontSize:'11px',lineHeight:1.55,opacity:0.95,fontStyle:'italic'}}>"{item.text}{item.isStreaming?'▋':''}"</div>
-                          </div>
-                        );
-                        // Procedural fallback (no API key)
-                        const annulled=item.architectAnnulled;
-                        const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
-                        return(
-                          <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:annulled?0.35:0.65,backgroundColor:annulled?'rgba(185,28,28,0.04)':item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
-                            <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5,alignItems:'center'}}>
-                              <span style={{fontWeight:700,color:annulled?'#B91C1C':'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
-                              <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
-                              {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
-                            </div>
-                          </div>
-                        );
-                      })
-                    }
-                  </div>
-
-                  {/* ── Nexus-7 column: AI analysis + referee decisions ─────── */}
-                  <div style={{padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#4FC3F7 #111',borderRight:'1px solid rgba(227,224,213,0.06)'}}>
-                    {commentaryReversed.filter(item=>item.commentatorId==='nexus7'||item.type==='referee').length===0
-                      ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'48px',fontStyle:'italic'}}>Compiling data...</div>
-                      :commentaryReversed.filter(item=>item.commentatorId==='nexus7'||item.type==='referee').map((item,i)=>{
-                        const col=item.type==='referee'?'#FFD700':item.color;
-                        return(
-                          <div key={i} style={{marginBottom:'10px',borderLeft:`2px solid ${col}`,paddingLeft:'8px',backgroundColor:`${col}0A`}}>
-                            <div style={{display:'flex',alignItems:'center',gap:'5px',marginBottom:'3px',fontSize:'10px'}}>
-                              <span>{item.type==='referee'?'⚖️':item.emoji}</span>
-                              <span style={{fontWeight:700,color:col}}>{item.name}</span>
-                              <span style={{marginLeft:'auto',opacity:0.3}}>{item.minute}'</span>
-                            </div>
-                            <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
-                          </div>
-                        );
-                      })
-                    }
-                  </div>
-
-                  {/* ── Zara Bloom column: colour analysis ──────────────────── */}
-                  <div style={{padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#A5D6A7 #111'}}>
-                    {commentaryReversed.filter(item=>item.commentatorId==='zara_bloom').length===0
-                      ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'48px',fontStyle:'italic'}}>Watching the game...</div>
-                      :commentaryReversed.filter(item=>item.commentatorId==='zara_bloom').map((item,i)=>(
-                        <div key={i} style={{marginBottom:'10px',borderLeft:`2px solid ${item.color}`,paddingLeft:'8px',backgroundColor:`${item.color}0A`}}>
-                          <div style={{display:'flex',alignItems:'center',gap:'5px',marginBottom:'3px',fontSize:'10px'}}>
-                            <span>{item.emoji}</span>
-                            <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                            <span style={{marginLeft:'auto',opacity:0.3}}>{item.minute}'</span>
-                          </div>
-                          <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
-                        </div>
-                      ))
-                    }
-                  </div>
-
-                </div>
-              </div>
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
@@ -2416,6 +2294,151 @@ const MatchSimulator = ({
             </div>
 
           </div>
+
+          {/* ── Broadcast Booth ─────────────────────────────────────────────
+              Full-width 3-column panel sitting below the pitch/manager grid.
+              Each column is the exclusive reading lane for one commentary
+              voice — items no longer blur together in a shared stream.
+
+              Column assignment mirrors the voxItems / nexusItems / zaraItems
+              memos defined above (derived from the shared commentaryFeed):
+
+                Captain Vox  — play_by_play (live narration, streaming cursor)
+                             — architect_proclamation / architect_interference
+                             — procedural fallback when no API key is set
+                Nexus-7      — commentator where commentatorId:'nexus7'
+                             — referee decisions (data-driven rulings suit the
+                               AI Analyst's clinical column)
+                Zara Bloom   — commentator where commentatorId:'zara_bloom'
+
+              The panel is 400 px tall — enough for ~5 items per column at
+              typical line heights without dominating the page.  Each column
+              scrolls independently; Vox carries the evtLogRef auto-scroll
+              because his narration is the primary narrative anchor. */}
+          <div className="card section" style={{padding:0,overflow:'hidden'}}>
+
+            {/* ── Column headers: emoji · name · role · accent tint ─────── */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',borderBottom:'1px solid rgba(227,224,213,0.08)'}}>
+              {COMMENTATOR_PROFILES.map((p,pi)=>(
+                <div key={p.id} style={{
+                  padding:'10px 14px',
+                  borderRight:pi<2?'1px solid rgba(227,224,213,0.08)':'none',
+                  display:'flex',alignItems:'center',gap:'10px',
+                  // Subtle tint so each header visually "owns" its column colour.
+                  backgroundColor:`${p.color}0A`,
+                }}>
+                  <span style={{fontSize:'18px'}}>{p.emoji}</span>
+                  <div>
+                    <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
+                    <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
+                  </div>
+                  {/* API-key controls live in Vox's header only — one affordance,
+                      not repeated three times. */}
+                  {p.id==='captain_vox'&&!agentSystemRef.current&&!apiKey&&(
+                    <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'3px 8px',border:`1px solid ${p.color}80`,backgroundColor:'transparent',color:p.color,cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
+                  )}
+                  {p.id==='captain_vox'&&!agentSystemRef.current&&apiKey&&(
+                    <span style={{marginLeft:'auto',fontSize:'10px',opacity:0.35}}>key set — next kickoff</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* ── 3 independent scroll columns (400 px fixed height) ──────── */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',height:'400px'}}>
+
+              {/* ── Captain Vox: play-by-play + architect + fallback ──────── */}
+              <div ref={evtLogRef} onScroll={handleCommentaryScroll}
+                   style={{padding:'10px',overflowY:'auto',scrollbarWidth:'thin',
+                           scrollbarColor:'#FFD700 #111',
+                           borderRight:'1px solid rgba(227,224,213,0.06)'}}>
+                {voxItems.length===0
+                  ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>
+                     {ms.minute===0?'Press Kick Off to begin':'Awaiting first play...'}
+                   </div>
+                  :voxItems.map((item,i)=>{
+                    // Architect interference and proclamation cards have their own
+                    // full-bleed component with pulse animation — render them directly.
+                    if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                    if(item.type==='architect_proclamation') return <ArchitectCard key={i} item={item}/>;
+
+                    // play_by_play: thicker border + streaming cursor ▋ so the
+                    // viewer can watch Vox composing the line word-by-word.
+                    if(item.type==='play_by_play') return(
+                      <div key={i} style={{marginBottom:'14px',borderLeft:`3px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}06`}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                          <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                        </div>
+                        <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>
+                          "{item.text}{item.isStreaming?'▋':''}"
+                        </div>
+                      </div>
+                    );
+
+                    // Procedural fallback entry (no API key): minimal timestamp
+                    // style.  Annulled goals are struck through with an ANNULLED
+                    // badge — they happened but were erased from the timeline.
+                    const annulled=item.architectAnnulled;
+                    const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
+                    return(
+                      <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:annulled?0.35:0.65,backgroundColor:annulled?'rgba(185,28,28,0.04)':item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
+                        <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5,alignItems:'center'}}>
+                          <span style={{fontWeight:700,color:annulled?'#B91C1C':'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
+                          <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
+                          {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+
+              {/* ── Nexus-7: AI analysis + referee decisions ─────────────── */}
+              <div style={{padding:'10px',overflowY:'auto',scrollbarWidth:'thin',
+                           scrollbarColor:'#4FC3F7 #111',
+                           borderRight:'1px solid rgba(227,224,213,0.06)'}}>
+                {nexusItems.length===0
+                  ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>Compiling data...</div>
+                  :nexusItems.map((item,i)=>{
+                    // Referee items borrow the gold (#FFD700) accent; all other
+                    // items in this column are Nexus-7's light-blue (#4FC3F7).
+                    const col=item.type==='referee'?'#FFD700':item.color;
+                    return(
+                      <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${col}`,paddingLeft:'10px',backgroundColor:`${col}0A`}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                          <span>{item.type==='referee'?'⚖️':item.emoji}</span>
+                          <span style={{fontWeight:700,color:col}}>{item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                        </div>
+                        <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+
+              {/* ── Zara Bloom: colour analysis ───────────────────────────── */}
+              <div style={{padding:'10px',overflowY:'auto',scrollbarWidth:'thin',
+                           scrollbarColor:'#A5D6A7 #111'}}>
+                {zaraItems.length===0
+                  ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>Watching the game...</div>
+                  :zaraItems.map((item,i)=>(
+                    <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}0A`}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                        <span>{item.emoji}</span>
+                        <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
+                        <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                      </div>
+                      <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
+                    </div>
+                  ))
+                }
+              </div>
+
+            </div>
+          </div>
+
         )}
 
         {/* Pre-match prompt (no AI manager set up yet) */}
