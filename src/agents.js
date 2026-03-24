@@ -454,6 +454,18 @@ export class AgentSystem {
     // the inner thought reflects their larger story, not just this one moment.
     const archArc = this.architect?.getCharacterArc?.(player.name);
 
+    // ── Architect bewilderment injection ────────────────────────────────────
+    // If this event was caused by Architect interference, the player has
+    // NO knowledge of the Architect — they only feel the inexplicable effect.
+    // The suffix steers the LLM to confusion/disbelief rather than acceptance,
+    // without leaking any cosmic framing into the character's voice.
+    const hasArchitectEffect = event?.architectAnnulled || event?.architectForced
+      || event?.architectConjured || event?.architectStolen || event?.architectEcho;
+    const bewilderSuffix = hasArchitectEffect
+      ? ' Something about this moment was inexplicable — react with confusion or'
+        + ' disbelief. Do NOT mention fate, cosmic forces, luck, or any external cause. Just feel it.'
+      : '';
+
     const system = [
       `You are ${player.name}, ${player.position} for ${teamName} in a galactic soccer match.`,
       `Personality: ${persDesc}.`,
@@ -462,7 +474,7 @@ export class AgentSystem {
       `Current emotion: ${agent?.emotion || 'neutral'}.`,
       // Only include the arc line if the Architect has something meaningful to say.
       archArc ? `Your cosmic story so far: ${archArc}.` : '',
-      `Express a single raw inner thought (1 sentence, first person). Stay in character. No quotation marks.`,
+      `Express a single raw inner thought (1 sentence, first person). Stay in character. No quotation marks.${bewilderSuffix}`,
     ].filter(Boolean).join(' ');
 
     // Prefer Vox's narration as the event description because it's clearer than
@@ -511,11 +523,22 @@ export class AgentSystem {
       : (gameState.score[1] - gameState.score[0]);
     const standing = scoreDiff > 0 ? 'winning' : scoreDiff < 0 ? 'losing' : 'level';
 
+    // ── Architect bewilderment injection ────────────────────────────────────
+    // Managers have zero knowledge of The Architect.  When an architect-flagged
+    // event affects their team, steer the reaction toward bafflement rather than
+    // tactical analysis — they can't explain what just happened, only feel it.
+    const hasArchitectEffect = event?.architectAnnulled || event?.architectForced
+      || event?.architectConjured || event?.architectStolen || event?.architectEcho;
+    const bewilderSuffix = hasArchitectEffect
+      ? ' Something inexplicable just happened to your team. React with bafflement,'
+        + ' rage, or disbelief — do NOT attribute it to luck, fate, or any external force.'
+      : '';
+
     const system = [
       `You are ${mgr.name}, manager of ${team.name} in a galactic soccer match.`,
       `Personality: ${mgr.personality}. Tactics: ${tactics}.`,
       `You are on the touchline. React in 1-2 sentences, first person, in character.`,
-      `Be passionate and specific to what just happened.`,
+      `Be passionate and specific to what just happened.${bewilderSuffix}`,
     ].join(' ');
 
     const userMsg = `${this._ctx(gameState)}\nYou are ${standing}. Just happened: "${event.commentary}". React now.`;
@@ -563,10 +586,20 @@ export class AgentSystem {
         ? 'lenient, hates stopping play, lets minor fouls go'
         : 'pragmatic and occasionally inconsistent — follows his instincts';
 
+    // ── Architect bewilderment injection ────────────────────────────────────
+    // Referees have no knowledge of The Architect.  When a call was cosmically
+    // forced (e.g. phantom_foul, force_red_card), steer the explanation toward
+    // authority with subtle uncertainty — the referee can't fully explain the
+    // circumstances but won't admit doubt openly.
+    const bewilderSuffix = event?.architectForced
+      ? ' Your call is correct by the laws of the game, but even you sensed'
+        + ' something was off. Be authoritative — you do not need to explain the context.'
+      : '';
+
     const system = [
       `You are ${ref.name}, galactic soccer referee.`,
       `Officiating style: ${style}.`,
-      `Explain your decision in 1-2 sentences as if addressing a player or the press. Be authoritative and specific.`,
+      `Explain your decision in 1-2 sentences as if addressing a player or the press. Be authoritative and specific.${bewilderSuffix}`,
     ].join(' ');
 
     const userMsg = [
@@ -597,6 +630,194 @@ export class AgentSystem {
         minute: gameState.minute,
       };
     } catch { return null; }
+  }
+
+  // ── Architect Bewilderment ───────────────────────────────────────────────────
+
+  /**
+   * Generates mystified reactions from mortal characters after an Architect
+   * interference fires.  Characters react to the *effect* — a goal that
+   * evaporated, a player suddenly off-form, a red card that felt cosmically
+   * unjust — without any awareness of The Architect or supernatural cause.
+   *
+   * Produces up to two feed items per call:
+   *   1. A player_thought from the targeted player (if one is named).
+   *   2. A manager reaction from that player's team manager.
+   *
+   * Both are generated in parallel for speed.  Nulls (LLM failures) are
+   * filtered before returning so the caller always receives a clean array.
+   *
+   * @param {object} interferenceResult  – The architect_interference feed item,
+   *   containing interferenceType, targetPlayer, targetTeam, and minute.
+   * @param {object} gameState           – Current match state snapshot (score,
+   *   minute, teams) used for context in the LLM call.
+   * @returns {Promise<object[]>}  Array of feed items (player_thought / manager).
+   */
+  async generateMystifiedReaction(interferenceResult, gameState) {
+    const { interferenceType, targetPlayer, targetTeam, minute } = interferenceResult;
+
+    // ── Map interference type → mortal-eye description ──────────────────────
+    // Each string describes what just happened from a human perspective — no
+    // cosmic framing, no Architect mention.  The player/manager only knows what
+    // they sensed with their own body or eyes.
+    const MORTAL_CONTEXT = {
+      annul_goal:        'A goal that clearly went in was inexplicably not awarded — no one can explain why',
+      steal_goal:        'A goal somehow ended up credited to the other team despite you scoring it',
+      grant_goal:        'A goal appeared from nowhere — the physics of it made no sense',
+      conjure_goal:      'A goal came out of nowhere with no logical explanation',
+      cosmic_own_goal:   'The ball found the back of your own net in a way nobody could account for',
+      force_red_card:    'You were sent off for a challenge that barely seemed to warrant a foul',
+      force_injury:      'You went down injured despite no real physical contact',
+      curse_player:      'Something feels deeply wrong — your rhythm has deserted you and you have no idea why',
+      bless_player:      'Everything is clicking inexplicably well right now',
+      phantom_foul:      'A free kick was given against you but nobody on the pitch understood why',
+      keeper_paralysis:  'You froze at the critical moment — your body simply did not respond',
+      score_reset:       'The scoreboard reset to 0-0 and nobody can explain what happened',
+      time_rewind:       'Play seems to be looping — you could swear this same situation just happened',
+      dimension_shift:   'Something felt physically wrong out there, like the ground itself shifted',
+      gravity_flip:      'The ball behaved as though gravity changed direction for a moment',
+      pitch_collapse:    'The pitch felt unstable underfoot — surreal and disorienting',
+      score_mirror:      'The scores just swapped and no one knows how',
+      double_goals:      'Both goals were credited simultaneously somehow',
+      reversal_of_fortune: 'The match turned in an instant for no discernible reason',
+    };
+
+    // Default for uncommon or abstract types not listed above
+    const mortalContext = MORTAL_CONTEXT[interferenceType]
+      || 'Something happened that defied all normal explanation';
+
+    // ── Identify which team is affected ─────────────────────────────────────
+    // Prefer the team derived from the named player; fall back to the explicit
+    // targetTeam field on the interference result.
+    let affectedIsHome = null;
+    let targetAgent    = null;
+    let targetPlayerObj = null;
+
+    if (targetPlayer) {
+      // Search both squads for the named player
+      targetAgent = this._allAgents?.find(a => a.player?.name === targetPlayer);
+      if (targetAgent) {
+        affectedIsHome  = targetAgent.isHome;
+        targetPlayerObj = targetAgent.player;
+      }
+    }
+
+    // Fall back to targetTeam when no named player was found
+    if (affectedIsHome === null && targetTeam) {
+      affectedIsHome = targetTeam === 'home';
+    }
+
+    // ── Synthetic event passed to the generators ─────────────────────────────
+    // We build a minimal event-like object so the existing generators can be
+    // reused unchanged.  The architectForced flag activates their bewilderment
+    // suffix (injected in generatePlayerThought / generateManagerReaction) so
+    // neither function needs a separate code path for this call.
+    const syntheticEvent = {
+      commentary:     mortalContext,
+      architectForced: true,   // triggers the bewilderment suffix in both generators
+      minute,
+    };
+
+    // ── Build reaction prompt overrides ──────────────────────────────────────
+    // These override the standard system-prompt suffix with a tighter, more
+    // targeted bewilderment directive specific to this interference type.
+    // 50 tokens: shorter than the normal 60/70 budget — these should be quick,
+    // raw shocks, not considered reflections.
+    const BEWILDERMENT_BUDGET = 50;
+
+    const promises = [];
+
+    // Player thought — only if we found the target player in the agent list
+    if (targetPlayerObj && targetAgent) {
+      const playerPromise = (async () => {
+        const persDesc = PERS_DESC[targetAgent?.personality] || 'professional';
+        const archArc  = this.architect?.getCharacterArc?.(targetPlayer);
+        const isHome   = targetAgent.isHome;
+        const teamName = isHome ? this.homeTeam.name : this.awayTeam.name;
+
+        const system = [
+          `You are ${targetPlayer}, ${targetPlayerObj.position} for ${teamName} in a galactic soccer match.`,
+          `Personality: ${persDesc}.`,
+          `Confidence: ${Math.round(targetAgent?.confidence || 50)}%.`,
+          `Fatigue: ${Math.round(targetAgent?.fatigue || 0)}%.`,
+          archArc ? `Your story so far: ${archArc}.` : '',
+          // The Architect is unknown — pure mortal confusion, no supernatural framing.
+          `Something inexplicable just happened directly to you: ${mortalContext}.`
+            + ` Express one raw sentence of confusion, disbelief, or distress (first person).`
+            + ` Do NOT mention fate, cosmic forces, the universe, or any external cause.`
+            + ` No quotation marks.`,
+        ].filter(Boolean).join(' ');
+
+        const userMsg = `${this._ctx(gameState)}\nWhat are you feeling right now?`;
+
+        try {
+          const text = await this._call(system, [{ role: 'user', content: userMsg }], BEWILDERMENT_BUDGET);
+          if (!text) return null;
+          return {
+            type:   'player_thought',
+            isHome,
+            name:   targetPlayer,
+            emoji:  PERS_ICON[targetAgent?.personality] || '💭',
+            color:  isHome ? this.homeTeam.color : this.awayTeam.color,
+            text,
+            minute,
+          };
+        } catch { return null; }
+      })();
+      promises.push(playerPromise);
+    }
+
+    // Manager reaction — only if we know which team is affected
+    if (affectedIsHome !== null) {
+      const managerPromise = (async () => {
+        const mgr      = affectedIsHome ? this.homeManager : this.awayManager;
+        const team     = affectedIsHome ? this.homeTeam    : this.awayTeam;
+        const tactics  = affectedIsHome ? this.homeTactics : this.awayTactics;
+        const history  = affectedIsHome ? this.homeManagerHistory : this.awayManagerHistory;
+        const scoreDiff = affectedIsHome
+          ? (gameState.score[0] - gameState.score[1])
+          : (gameState.score[1] - gameState.score[0]);
+        const standing = scoreDiff > 0 ? 'winning' : scoreDiff < 0 ? 'losing' : 'level';
+
+        // Tighter directive than the standard manager prompt: push bafflement
+        // over tactical response, since they cannot explain what just happened.
+        const system = [
+          `You are ${mgr.name}, manager of ${team.name} in a galactic soccer match.`,
+          `Personality: ${mgr.personality}. Tactics: ${tactics}.`,
+          `You are on the touchline. React in 1-2 sentences, first person.`,
+          `Something inexplicable just happened to your team: ${mortalContext}.`
+            + ` React with bafflement, fury, or disbelief.`
+            + ` Do NOT attribute it to luck, fate, or any external force — you simply don't understand it.`,
+        ].join(' ');
+
+        const userMsg = `${this._ctx(gameState)}\nYou are ${standing}. React to what just happened.`;
+
+        try {
+          const text = await this._call(
+            system,
+            [...history.slice(-4), { role: 'user', content: userMsg }],
+            BEWILDERMENT_BUDGET,
+          );
+          if (!text) return null;
+          history.push({ role: 'user', content: userMsg }, { role: 'assistant', content: text });
+          if (history.length > 10) history.splice(0, 2);
+          return {
+            type:   'manager',
+            isHome: affectedIsHome,
+            name:   mgr.name,
+            emoji:  '🧑‍💼',
+            color:  affectedIsHome ? this.homeTeam.color : this.awayTeam.color,
+            text,
+            minute,
+          };
+        } catch { return null; }
+      })();
+      promises.push(managerPromise);
+    }
+
+    // Run player + manager calls in parallel; filter out any LLM failures
+    const results = await Promise.all(promises);
+    return results.filter(Boolean);
   }
 
   // ── Halftime Quotes ─────────────────────────────────────────────────────────
@@ -1009,6 +1230,11 @@ export class AgentSystem {
    *                              once all API calls for this event complete
    */
   queueEvent(event, gameState, allAgents, onResult) {
+    // Cache the latest agent list so async methods like generateMystifiedReaction
+    // can find player agents without needing allAgents in their call signature.
+    // Interference fires after events, so the cache is always current.
+    this._allAgents = allAgents;
+
     const tier = this._classifyEvent(event);
 
     // ── Priority gate: shed low-value events when the queue is deep ─────────

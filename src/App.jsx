@@ -974,6 +974,79 @@ const MatchSimulator = ({
     // Done outside setState so commentaryFeed and matchState update in the
     // same React batch (avoids a flicker where the card appears before state).
     setCommentaryFeed(p => [...p, buildInterferenceFeedItem(r)].slice(-120));
+
+    // ── Mortal reactions to Architect effects ──────────────────────────────
+    // Characters react to what the Architect *did* — a goal that vanished, a
+    // forced red card, a mysterious injury — with no meta-knowledge of the
+    // cause.  Two paths:
+    //
+    //  LLM active:   generateMystifiedReaction() fires in parallel and routes
+    //                player thoughts + manager reactions to the appropriate
+    //                feeds.  Fire-and-forget; failures are silently swallowed.
+    //
+    //  No API key:   A canned bewildered line is pushed to the commentary feed
+    //                for the most narratively significant interference types so
+    //                non-LLM matches still show character confusion.
+    if (agentSystemRef.current) {
+      agentSystemRef.current.generateMystifiedReaction(r, matchState)
+        .then(items => {
+          items.forEach(item => {
+            if (item.type === 'player_thought') {
+              if (item.isHome) setHomeThoughtsFeed(p => [...p, item].slice(-60));
+              else             setAwayThoughtsFeed(p => [...p, item].slice(-60));
+            } else if (item.type === 'manager') {
+              if (item.isHome) setHomeManagerFeed(p => [...p, item].slice(-40));
+              else             setAwayManagerFeed(p => [...p, item].slice(-40));
+            }
+          });
+        })
+        .catch(() => {}); // fire-and-forget; LLM failures must not break match flow
+    } else {
+      // ── Procedural fallback bewilderment ──────────────────────────────────
+      // Pre-written confused reactions for the five most impactful interference
+      // types.  Two or three lines per type; one is chosen at random so the
+      // same interference doesn't always produce the same text.
+      //
+      // targetPlayer is used when available to name the affected character;
+      // falls back to "a player" for team-wide or abstract effects.
+      const who = r.targetPlayer || 'a player';
+      const min = r.minute ?? matchState.minute;
+      const FALLBACK = {
+        annul_goal: [
+          `${who} can't believe it — the ball was clearly over the line.`,
+          `Nobody on the pitch can explain why that goal wasn't given.`,
+          `${who} is still pointing at the goalmouth. The ball went in.`,
+        ],
+        steal_goal: [
+          `Chaos in the penalty area — somehow the goal ended up on the scoreboard for the wrong team.`,
+          `${who} looks utterly bewildered. How did that end up at the other end?`,
+        ],
+        grant_goal:   [`A goal appears out of nowhere. The physics of that made no sense at all.`],
+        conjure_goal: [`${who} barely touched it — and somehow it's in the net.`],
+        force_red_card: [
+          `${who} is furious — that challenge barely warranted a yellow, let alone a red.`,
+          `${who} stares at the referee in disbelief. No one saw a foul worthy of a sending-off.`,
+        ],
+        score_reset: [
+          `The scoreboard shows 0-0. Both benches are looking at each other in total confusion.`,
+          `The goals are gone. Nobody is saying anything — nobody has an explanation.`,
+        ],
+        cosmic_own_goal: [
+          `${who} watches the ball roll slowly into their own net. There's no explanation for it.`,
+        ],
+        force_injury: [
+          `${who} is down — but there was no contact. No one touched them.`,
+        ],
+        phantom_foul: [
+          `Free kick given — but ask anyone in the ground and they'll tell you there was no foul.`,
+        ],
+      };
+      const lines = FALLBACK[r.interferenceType];
+      if (lines) {
+        const text = lines[Math.floor(Math.random() * lines.length)];
+        setCommentaryFeed(p => [...p, { type:'commentary', text, minute: min }].slice(-120));
+      }
+    }
   };
 
   // Classify and route a procedural (no-LLM) event to the correct feed
@@ -2371,14 +2444,16 @@ const MatchSimulator = ({
                   : p.id==='nexus7' ? 'Compiling data...' : 'Watching the game...';
 
                 return(
-                  // height:'100%' is required here.  CSS grid stretches grid
-                  // items to fill their cell by default, but without an explicit
-                  // height the browser may not propagate the computed pixel height
-                  // to flex children, causing flex:1 on the scroll div below to
-                  // resolve to 0 and disabling scrolling entirely.
+                  // height:'100%' ensures the column fills its 360px grid cell.
+                  // overflow:'hidden' is the KEY fix: it creates a block formatting
+                  // context (BFC) that forces the CSS flex algorithm to treat the
+                  // grid track's definite 360px as the container height.  Without
+                  // it, flex:1 on the scroll div below expands unbounded — the outer
+                  // card clips content with overflow:hidden but there is no finite-
+                  // height scroll container, so the user cannot scroll at all.
                   <div key={p.id} style={{
                     display:'flex',flexDirection:'column',
-                    height:'100%',
+                    height:'100%',overflow:'hidden',
                     borderRight:ci<2?'1px solid rgba(227,224,213,0.08)':'none',
                   }}>
                     {/* ── Column header ───────────────────────────────────── */}

@@ -89,15 +89,18 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
   - **Full Time** (purple outline) — match complete
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
-- **4-column broadcast booth layout** — Full-width section below the pitch grid with four dedicated columns so voices don't blur together in a single stream:
-  - **Nexus-7** (column 1) — AI analysis and data-driven observations
-  - **The Architect** (column 2) — Cosmic Proclamations and Architect Interference cards
-  - **Captain Vox** (column 3) — Play-by-play narration and procedural commentary
-  - **Zara Bloom** (column 4) — Colour analysis and tactical insights
-  - Referee decisions appear only in the Officials card above; no longer routed to commentary columns
-  - Positioned below the home/pitch/away grid, each commentator column spans equal width across the full page for legibility
-  - Each column has its own header with the commentator's emoji, name, role, and accent colour tint
-  - Scroll independently while remaining visually unified as a broadcast booth
+- **Centre column feed** — Three stacked cards occupy the wider centre column of the pitch grid:
+  - **Live Pitch** — Formation-based player positioning with ball tracking and momentum overlay
+  - **Match Events** — Key events (goals, cards, subs) as compact chips with team colour coding
+  - **✦ The Architect** — Dedicated scrollable card for Cosmic Proclamations and Architect Interference results; fills all remaining vertical space below Match Events
+- **3-column broadcast booth** — Full-width section below the pitch grid; one column per commentary voice:
+  - **Nexus-7** — AI analysis and data-driven observations
+  - **Captain Vox** — Play-by-play narration and procedural match commentary
+  - **Zara Bloom** — Colour analysis and tactical insights
+  - Architect proclamations/interference appear exclusively in the centre feed Architect card above; not duplicated in the booth
+  - Referee decisions appear only in the Officials card; not routed to any commentary column
+  - Each column scrolls independently; header shows commentator emoji, name, role, and accent colour
+  - Columns rendered via a single `COMMENTATOR_PROFILES.map()` pass for structural alignment
 - Separate feeds for manager thoughts and player inner monologues
 - **Simulation Speed Modes**: SLOW/NORMAL/FAST/TURBO interval-based speeds, plus **DRAMATIC** mode with tunable real-time pacing:
   - **DRAMATIC Mode** — Inspired by Blaseball's philosophy that slow cadence is a feature, not a bug
