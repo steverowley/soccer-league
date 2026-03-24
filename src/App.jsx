@@ -1819,11 +1819,21 @@ const MatchSimulator = ({
   // Referee decisions are intentionally excluded from all commentary columns;
   // the Referee info card in the Officials section is the sole referee display.
   const nexusItems     = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'), [commentaryReversed]);
-  // architectItems feeds the Architect card in the centre feed column
-  // (below Match Events).  Architect types are excluded from voxItems below
-  // so they appear only in that dedicated card, not duplicated in Vox's column.
+  // architectItems feeds the Architect zone inside the Chaos Meter card.
+  // Architect types are excluded from voxItems so they appear only there,
+  // not duplicated in Vox's broadcast booth column.
   const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference'), [commentaryReversed]);
+
+  // refItems feeds the Referee Decisions feed in the centre column (bottom).
+  // Referee commentary (type:'referee') is pushed to commentaryFeed by the
+  // agent pipeline (agents.js generateRefDecision) but excluded from every
+  // broadcast booth column — this memo surfaces it in its dedicated card.
+  // Derived from commentaryReversed so newest decisions appear at the top.
+  const refItems       = useMemo(() => commentaryReversed.filter(i => i.type === 'referee'), [commentaryReversed]);
+
   // Vox column: play_by_play + procedural fallback events only.
+  // Architect, referee, and other commentator columns are excluded so each
+  // feed card shows exactly one category of content without duplication.
   const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'architect_proclamation' && i.type !== 'architect_interference' && i.type !== 'referee'), [commentaryReversed]);
   const zaraItems      = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'), [commentaryReversed]);
   const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
@@ -2019,52 +2029,49 @@ const MatchSimulator = ({
           </div>
         </div>
 
-        {/* ── Officials / Stadium / Weather ─────────────────────────────── */}
-        {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
-            <div className="card" style={{padding:'10px'}}>
-              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Referee</div>
-              <div style={{fontSize:'20px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
-              <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.referee.name}</div>
-              <div style={{fontSize:'11px',marginTop:'4px',color:aiManager.referee.leniency>70?'#A5D6A7':aiManager.referee.leniency>40?'#E3E0D5':'#E05252'}}>
-                {aiManager.referee.leniency>70?'Lenient':aiManager.referee.leniency>40?'Fair':'Strict'}
-              </div>
+        {/* ── Chaos meter + Architect ────────────────────────────────────────
+            The card is split into two zones stacked vertically:
+              top   — chaos bar + status tags (flexShrink:0, auto height)
+              bottom — Architect feed (flex:1, scrollable)
+            padding:0 + overflow:'hidden' on the card itself keeps the inner
+            flex children flush to the card edges, matching the broadcast
+            booth and other multi-zone card patterns in this layout. */}
+        <div className="card section" style={{display:'flex',flexDirection:'column',height:'260px',padding:0,overflow:'hidden'}}>
+          {/* ── Chaos bar zone ── */}
+          <div style={{padding:'12px 16px',flexShrink:0}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+              <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Chaos Meter</div>
+              <div style={{fontSize:'11px',fontWeight:700,color:chaosColor}}>{chaosLabel}</div>
             </div>
-            <div className="card" style={{padding:'10px'}}>
-              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Stadium</div>
-              <div style={{fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
-              <div style={{fontSize:'11px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
+              <span>Calm</span><span>Tense</span><span>Mayhem</span>
             </div>
-            <div className="card" style={{padding:'10px'}}>
-              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Conditions</div>
-              <div style={{fontSize:'20px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
-              <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
-              <div style={{fontSize:'11px',opacity:0.5,marginTop:'4px'}}>{aiManager.temperature}°C · {aiManager.timeOfDay}</div>
+            {/* Chaos bar — width driven by chaosLevel 0–100 */}
+            <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'8px'}}>
+              <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
+            </div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
+              {ms.minute>80&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Late Game</span>}
+              {ms.minute>70&&ms.minute<=80&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Final Stretch</span>}
+              {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span style={{padding:'4px 10px',backgroundColor:'#7A3ED4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Tied</span>}
+              {Math.abs(ms.score[0]-ms.score[1])===1&&<span style={{padding:'4px 10px',backgroundColor:'#333',border:'1px solid #666',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Close Match</span>}
+              {(ms.redCards.home+ms.redCards.away)>0&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Red Cards</span>}
+              {aiManager&&[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length>0&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Heated Bench</span>}
+              {ms.mvp&&<span style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #9A5CF4',color:'#9A5CF4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Full Time</span>}
             </div>
           </div>
-        )}
-
-        {/* ── Chaos meter + match stats ─────────────────────────────────── */}
-        <div className="card section">
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-            <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Chaos Meter</div>
-            <div style={{fontSize:'11px',fontWeight:700,color:chaosColor}}>{chaosLabel}</div>
-          </div>
-          <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
-            <span>Calm</span><span>Tense</span><span>Mayhem</span>
-          </div>
-          {/* Chaos bar — width driven by chaosLevel 0–100 */}
-          <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'8px'}}>
-            <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
-          </div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
-            {ms.minute>80&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Late Game</span>}
-            {ms.minute>70&&ms.minute<=80&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Final Stretch</span>}
-            {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span style={{padding:'4px 10px',backgroundColor:'#7A3ED4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Tied</span>}
-            {Math.abs(ms.score[0]-ms.score[1])===1&&<span style={{padding:'4px 10px',backgroundColor:'#333',border:'1px solid #666',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Close Match</span>}
-            {(ms.redCards.home+ms.redCards.away)>0&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Red Cards</span>}
-            {aiManager&&[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length>0&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Heated Bench</span>}
-            {ms.mvp&&<span style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #9A5CF4',color:'#9A5CF4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Full Time</span>}
+          {/* ── Divider ── */}
+          <div style={{borderTop:'1px solid rgba(124,58,237,0.2)',flexShrink:0}}/>
+          {/* ── Architect feed zone ── */}
+          <div style={{flex:1,minHeight:0,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
+            <div style={{padding:'6px 12px 4px',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',opacity:0.7}}>✦ The Architect</div>
+            {architectItems.length===0
+              ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',padding:'8px 12px 12px',fontStyle:'italic'}}>The void stirs...</div>
+              :architectItems.map((item,i)=>{
+                if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                return <ArchitectCard key={i} item={item}/>;
+              })
+            }
           </div>
         </div>
 
@@ -2331,29 +2338,84 @@ const MatchSimulator = ({
                 }
               </div>
 
-              {/* ── The Architect ─────────────────────────────────────────
-                  Third card in the centre column, directly below Match
-                  Events.  flex:1 + minHeight:0 fills whatever vertical
-                  space remains in the 460px grid row after the Live Pitch
-                  and Match Events cards, keeping the centre column flush
-                  with the home/away columns.  Uses the existing
-                  ArchitectCard / ArchitectInterferenceCard components so
-                  the visual language is consistent with all other cosmic
-                  event displays in the UI. */}
-              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
-                <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(124,58,237,0.2)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',display:'flex',alignItems:'center',gap:'6px',backgroundColor:'rgba(124,58,237,0.05)'}}>
-                  <span>✦</span> The Architect
+              {/* ── Officials + Referee Decisions ─────────────────────────
+                  Replaces The Architect at the bottom of the centre column.
+                  The Architect has moved into the Chaos Meter card above
+                  the feed columns.
+
+                  Layout: flex column, flex:1 fills remaining height after
+                  Live Pitch and Match Events.  Two zones:
+                    1. Officials info grid  — Referee, Stadium, Conditions
+                       (flexShrink:0 so it never shrinks away)
+                    2. Referee Decisions feed — scrollable flex:1 area that
+                       displays referee commentary (type:'referee') items
+                       from commentaryFeed.  These items were previously
+                       filtered out of every column and rendered nowhere;
+                       this is their first visible home in the UI.
+
+                  Both zones are conditionally rendered on aiManager so the
+                  section is absent before kick-off when no match is set up. */}
+              {aiManager&&(
+                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
+
+                  {/* Officials info row — three equal-width info cards.
+                      flexShrink:0 keeps them auto-height regardless of how
+                      tall the Referee Decisions feed grows. */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',flexShrink:0}}>
+                    {/* Referee — name, leniency emoji, and plain-language style
+                        label so users can anticipate how the ref will call fouls. */}
+                    <div className="card" style={{padding:'10px'}}>
+                      <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>Referee</div>
+                      <div style={{fontSize:'18px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
+                      <div style={{fontSize:'12px',fontWeight:700,lineHeight:1.2}}>{aiManager.referee.name}</div>
+                      <div style={{fontSize:'10px',marginTop:'4px',color:aiManager.referee.leniency>70?'#A5D6A7':aiManager.referee.leniency>40?'#E3E0D5':'#E05252'}}>
+                        {aiManager.referee.leniency>70?'Lenient':aiManager.referee.leniency>40?'Fair':'Strict'}
+                      </div>
+                    </div>
+                    {/* Stadium — name and capacity for flavour context. */}
+                    <div className="card" style={{padding:'10px'}}>
+                      <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>Stadium</div>
+                      <div style={{fontSize:'12px',fontWeight:700,lineHeight:1.3,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
+                      <div style={{fontSize:'10px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
+                    </div>
+                    {/* Conditions — weather icon, name, temperature and time of
+                        day.  Weather affects pitch gameplay in gameEngine.js so
+                        this gives the user immediate context on active modifiers. */}
+                    <div className="card" style={{padding:'10px'}}>
+                      <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>Conditions</div>
+                      <div style={{fontSize:'18px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
+                      <div style={{fontSize:'12px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
+                      <div style={{fontSize:'10px',opacity:0.5,marginTop:'4px'}}>{aiManager.temperature}°C · {aiManager.timeOfDay}</div>
+                    </div>
+                  </div>
+
+                  {/* Referee Decisions feed — scrollable flex:1 card.
+                      refItems is memoised from commentaryFeed filtered to
+                      type:'referee', reversed so newest decisions appear at
+                      the top.  Gold (#FFD700) accent matches the referee
+                      return type colour in agents.js generateRefDecision(). */}
+                  <div className="card" style={{flex:1,minHeight:0,padding:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+                    <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',opacity:0.6,display:'flex',alignItems:'center',gap:'6px'}}>
+                      ⚖️ Referee Decisions
+                    </div>
+                    <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#FFD700 #111'}}>
+                      {refItems.length===0
+                        ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',paddingTop:'16px',fontStyle:'italic'}}>Awaiting decisions...</div>
+                        :refItems.map((item,i)=>(
+                          <div key={i} style={{marginBottom:'8px',padding:'8px',backgroundColor:'rgba(255,215,0,0.04)',border:'1px solid rgba(255,215,0,0.12)'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
+                              <span style={{fontSize:'10px',fontWeight:700,color:'#FFD700'}}>⚖️ {item.name}</span>
+                              <span style={{fontSize:'10px',opacity:0.4}}>{item.minute}'</span>
+                            </div>
+                            <div style={{fontSize:'11px',opacity:0.85,lineHeight:1.4}}>{item.text}</div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+
                 </div>
-                <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
-                  {architectItems.length===0
-                    ?<div style={{textAlign:'center',opacity:0.25,fontSize:'10px',paddingTop:'20px',fontStyle:'italic'}}>The void stirs...</div>
-                    :architectItems.map((item,i)=>{
-                      if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
-                      return <ArchitectCard key={i} item={item}/>;
-                    })
-                  }
-                </div>
-              </div>
+              )}
 
             </div>
 
