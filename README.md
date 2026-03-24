@@ -47,6 +47,11 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
   - **Intentions** (12 types with directed outcomes)
   - **Sealed Fate** (prophecy-driven forced outcomes)
   - **Architect Interference** (10 active flags: keeperParalysed, goalDrought, gravityFlipped, architectTantrum, commentaryVoid, voidCreature, eldritchPortal, pendingInterferences, pendingPenalty, reversalBoost — each flag fires once per event batch with 20-min cooldown, probability scaling with edict polarity)
+- **Mortal Bewilderment** — When The Architect interferes, affected characters (players, managers, referees) react with confusion and disbelief:
+  - Characters have **zero knowledge** of The Architect or any cosmic cause — they only sense the inexplicable effect
+  - System prompts inject bewilderment directives steering reactions toward confusion rather than acceptance
+  - LLM-powered reactions fire in parallel after each interference, generating targeted player thoughts and manager responses
+  - **Procedural fallback** (no API key): Canned bewildered commentary lines for high-impact interference types (vanished goals, forced red cards, phantom injuries, unexplained score resets) ensure character confusion even in procedural-only matches
 
 **Commentary Pipeline** — Optimized for minimal latency between match events and AI commentary:
 - All voices (Captain Vox, Nexus-7, Zara Bloom) run in **parallel** rather than sequentially, eliminating the 300–800 ms blocking wait for Vox's narration
@@ -101,6 +106,7 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
   - Referee decisions appear only in the Officials card; not routed to any commentary column
   - Each column scrolls independently; header shows commentator emoji, name, role, and accent colour
   - Columns rendered via a single `COMMENTATOR_PROFILES.map()` pass for structural alignment
+  - **Independent scrolling enabled** via CSS block formatting context (BFC): each column div has `overflow:hidden`, allowing flex layout to properly constrain scroll-container height and enable smooth scrolling through full match commentary
 - Separate feeds for manager thoughts and player inner monologues
 - **Simulation Speed Modes**: SLOW/NORMAL/FAST/TURBO interval-based speeds, plus **DRAMATIC** mode with tunable real-time pacing:
   - **DRAMATIC Mode** — Inspired by Blaseball's philosophy that slow cadence is a feature, not a bug
