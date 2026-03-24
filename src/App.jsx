@@ -1732,12 +1732,27 @@ const MatchSimulator = ({
   // Memoised so a new reversed array is only allocated when the source feed
   // changes, not on every unrelated re-render (e.g. score updates).
   const commentaryReversed    = useMemo(() => [...commentaryFeed].reverse(),    [commentaryFeed]);
-  // Per-voice splits used by the full-width commentary booth.
-  // Nexus-7 also receives referee decisions (data-driven rulings suit his column).
-  // Vox gets everything else: play_by_play, architect cards, procedural fallback.
-  const voxItems   = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'referee'), [commentaryReversed]);
-  const nexusItems = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'   || i.type === 'referee'),       [commentaryReversed]);
-  const zaraItems  = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'),                              [commentaryReversed]);
+  // ── Per-voice commentary splits for the broadcast booth ─────────────────
+  // Each memo filters the shared commentaryReversed array to produce the item
+  // list for one booth column.  Memos depend only on commentaryReversed so
+  // they do not recompute on unrelated state changes (score, possession, etc.).
+  //
+  // Column routing:
+  //   nexus7      → nexusItems      — Nexus-7 commentator reactions only
+  //   architect   → architectItems  — cosmic proclamations + interference cards
+  //   captain_vox → voxItems        — play_by_play + procedural fallback
+  //   zara_bloom  → zaraItems       — Zara Bloom commentator reactions only
+  //
+  // Referee decisions are intentionally excluded from all commentary columns;
+  // the Referee info card in the Officials section is the sole referee display.
+  const nexusItems     = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'), [commentaryReversed]);
+  // architectItems feeds the Architect card in the centre feed column above
+  // the broadcast booth (below Match Events).  The same items also appear in
+  // the Vox booth column so the full cosmic narrative is readable there too.
+  const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference'), [commentaryReversed]);
+  // Vox column: play_by_play + architect cards + procedural fallback events.
+  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom'), [commentaryReversed]);
+  const zaraItems      = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'), [commentaryReversed]);
   const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
   const awayManagerReversed   = useMemo(() => [...awayManagerFeed].reverse(),   [awayManagerFeed]);
   const homeThoughtsReversed  = useMemo(() => [...homeThoughtsFeed].reverse(),  [homeThoughtsFeed]);
@@ -1830,9 +1845,9 @@ const MatchSimulator = ({
         </div>
       )}
 
-      <div className="container" style={{paddingTop:'32px',paddingBottom:'60px'}}>
+      <div className="container" style={{paddingTop:'16px',paddingBottom:'32px'}}>
         {/* ── Page title ───────────────────────────────────────────────── */}
-        <div className="page-hero" style={{paddingBottom:'24px'}}>
+        <div className="page-hero" style={{paddingBottom:'8px'}}>
           <h1 style={{color:'#E3E0D5',marginBottom:'8px'}}>
             {ms.homeTeam.shortName} <span style={{color:'#9A5CF4'}}>vs</span> {ms.awayTeam.shortName}
           </h1>
@@ -1854,10 +1869,10 @@ const MatchSimulator = ({
           <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:'16px',alignItems:'center'}}>
             <div style={{textAlign:'center'}}>
               <div style={{fontSize:'13px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:ms.homeTeam.color,marginBottom:'8px',opacity:0.8}}>{ms.homeTeam.name}</div>
-              <div style={{fontSize:'72px',fontWeight:700,lineHeight:1,color:'#E3E0D5'}}>{ms.score[0]}</div>
+              <div style={{fontSize:'52px',fontWeight:700,lineHeight:1,color:'#E3E0D5'}}>{ms.score[0]}</div>
             </div>
             <div style={{textAlign:'center',minWidth:'120px'}}>
-              <div style={{fontSize:'28px',fontWeight:700,color:'#9A5CF4',marginBottom:'4px'}}>{timeDisplay}</div>
+              <div style={{fontSize:'22px',fontWeight:700,color:'#9A5CF4',marginBottom:'4px'}}>{timeDisplay}</div>
               <div style={{fontSize:'11px',letterSpacing:'0.1em',textTransform:'uppercase',opacity:0.5,marginBottom:'10px'}}>{periodLabel}</div>
               <div style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'11px'}}>
                 <span style={{color:ms.homeTeam.color}}>{ms.possession[0].toFixed(0)}%</span>
@@ -1870,7 +1885,7 @@ const MatchSimulator = ({
             </div>
             <div style={{textAlign:'center'}}>
               <div style={{fontSize:'13px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:ms.awayTeam.color,marginBottom:'8px',opacity:0.8}}>{ms.awayTeam.name}</div>
-              <div style={{fontSize:'72px',fontWeight:700,lineHeight:1,color:'#E3E0D5'}}>{ms.score[1]}</div>
+              <div style={{fontSize:'52px',fontWeight:700,lineHeight:1,color:'#E3E0D5'}}>{ms.score[1]}</div>
             </div>
           </div>
           {ms.mvp&&(
@@ -1933,8 +1948,8 @@ const MatchSimulator = ({
 
         {/* ── Officials / Stadium / Weather ─────────────────────────────── */}
         {aiManager&&(
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'16px'}}>
-            <div className="card" style={{padding:'16px'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
+            <div className="card" style={{padding:'10px'}}>
               <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Referee</div>
               <div style={{fontSize:'20px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
               <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.referee.name}</div>
@@ -1942,12 +1957,12 @@ const MatchSimulator = ({
                 {aiManager.referee.leniency>70?'Lenient':aiManager.referee.leniency>40?'Fair':'Strict'}
               </div>
             </div>
-            <div className="card" style={{padding:'16px'}}>
+            <div className="card" style={{padding:'10px'}}>
               <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Stadium</div>
               <div style={{fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
               <div style={{fontSize:'11px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
             </div>
-            <div className="card" style={{padding:'16px'}}>
+            <div className="card" style={{padding:'10px'}}>
               <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Conditions</div>
               <div style={{fontSize:'20px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
               <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
@@ -1966,7 +1981,7 @@ const MatchSimulator = ({
             <span>Calm</span><span>Tense</span><span>Mayhem</span>
           </div>
           {/* Chaos bar — width driven by chaosLevel 0–100 */}
-          <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'16px'}}>
+          <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'8px'}}>
             <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
           </div>
           <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
@@ -1983,7 +1998,7 @@ const MatchSimulator = ({
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
           <>
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'600px',alignItems:'stretch'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'460px',alignItems:'stretch'}}>
             {/* Layout contract for this section:
                 - grid height 600px gives all three columns a fixed block size.
                 - Grid align-items:stretch sizes each column to 600px without
@@ -2006,7 +2021,7 @@ const MatchSimulator = ({
               </div>
               <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Manager Shouts</div>
-                <div style={{padding:'8px',overflowY:'auto',height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',height:'120px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeManagerFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
                     :homeManagerReversed.map((item,i)=>(
@@ -2240,6 +2255,30 @@ const MatchSimulator = ({
                 }
               </div>
 
+              {/* ── The Architect ─────────────────────────────────────────
+                  Third card in the centre column, directly below Match
+                  Events.  flex:1 + minHeight:0 fills whatever vertical
+                  space remains in the 460px grid row after the Live Pitch
+                  and Match Events cards, keeping the centre column flush
+                  with the home/away columns.  Uses the existing
+                  ArchitectCard / ArchitectInterferenceCard components so
+                  the visual language is consistent with all other cosmic
+                  event displays in the UI. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
+                <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(124,58,237,0.2)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',display:'flex',alignItems:'center',gap:'6px',backgroundColor:'rgba(124,58,237,0.05)'}}>
+                  <span>✦</span> The Architect
+                </div>
+                <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
+                  {architectItems.length===0
+                    ?<div style={{textAlign:'center',opacity:0.25,fontSize:'10px',paddingTop:'20px',fontStyle:'italic'}}>The void stirs...</div>
+                    :architectItems.map((item,i)=>{
+                      if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                      return <ArchitectCard key={i} item={item}/>;
+                    })
+                  }
+                </div>
+              </div>
+
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
@@ -2255,7 +2294,7 @@ const MatchSimulator = ({
               </div>
               <div className="card" style={{padding:0,overflow:'hidden'}}>
                 <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Manager Shouts</div>
-                <div style={{padding:'8px',overflowY:'auto',height:'160px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
+                <div style={{padding:'8px',overflowY:'auto',height:'120px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayManagerFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
                     :awayManagerReversed.map((item,i)=>(
@@ -2298,20 +2337,26 @@ const MatchSimulator = ({
 
           {/* ── Broadcast Booth ─────────────────────────────────────────────
               Full-width 3-column panel, one column per commentary voice.
-              Rendered as a single COMMENTATOR_PROFILES.map() pass so
-              each column's header and scroll content are produced by the
-              same loop iteration — structural misalignment is impossible.
+              Rendered as a single COMMENTATOR_PROFILES.map() pass so each
+              column's header and scroll content are produced by the same loop
+              iteration — structural misalignment is impossible.
 
               Items routed per voice via the memos above:
-                nexus7      → nexusItems  (+ referee decisions)
-                captain_vox → voxItems    (play_by_play + architect + fallback)
-                zara_bloom  → zaraItems
+                nexus7      → nexusItems  (Nexus-7 commentator reactions)
+                captain_vox → voxItems    (play_by_play + architect cards + fallback)
+                zara_bloom  → zaraItems   (Zara Bloom commentator reactions)
+
+              Architect proclamations/interference also appear in the centre
+              feed column above (The Architect card below Match Events).
+
+              Referee commentary is intentionally excluded from all columns;
+              the Referee info card in the Officials section is its sole display.
 
               Column layout: each column is display:flex flex-direction:column
-              inside a 440px grid row.  The header is auto-height; the scroll
-              div fills the remaining space with flex:1 + minHeight:0. */}
+              inside a 360px grid row.  The header is auto-height; the scroll
+              div fills remaining space with flex:1 + minHeight:0. */}
           <div className="card section" style={{padding:0,overflow:'hidden'}}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',height:'440px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',height:'360px'}}>
               {COMMENTATOR_PROFILES.map((p,ci)=>{
                 // ── Resolve items for this voice ──────────────────────────
                 const items = p.id==='nexus7'     ? nexusItems
@@ -2339,7 +2384,8 @@ const MatchSimulator = ({
                         <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
                         <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
                       </div>
-                      {/* AI key controls on Vox's header only — one affordance */}
+                      {/* AI key affordance on Vox's header only — single entry
+                          point for enabling the LLM agent system. */}
                       {isVox&&!agentSystemRef.current&&!apiKey&&(
                         <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'3px 8px',border:`1px solid ${p.color}80`,backgroundColor:'transparent',color:p.color,cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
                       )}
@@ -2359,7 +2405,7 @@ const MatchSimulator = ({
                       {items.length===0
                         ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>{emptyMsg}</div>
                         :items.map((item,i)=>{
-                          // ── Vox column: special renders for architect + play_by_play ──
+                          // ── Vox column: architect cards + play_by_play ───────
                           if(isVox){
                             if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
                             if(item.type==='architect_proclamation') return <ArchitectCard key={i} item={item}/>;
@@ -2374,7 +2420,9 @@ const MatchSimulator = ({
                                 </div>
                               </div>
                             );
-                            // Procedural fallback (no API key) — annulled goals struck through
+                            // ── Procedural fallback (no API key) ──────────────
+                            // Annulled goals are struck through and dimmed so the
+                            // Architect's retrospective rewrites remain readable.
                             const annulled=item.architectAnnulled;
                             const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
                             return(
@@ -2387,14 +2435,12 @@ const MatchSimulator = ({
                               </div>
                             );
                           }
-                          // ── Nexus-7 + Zara columns: standard reaction card ────────────
-                          // Referee items in Nexus's column borrow gold (#FFD700).
-                          const col=item.type==='referee'?'#FFD700':item.color;
+                          // ── Nexus-7 + Zara: standard commentator reaction card ─
                           return(
-                            <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${col}`,paddingLeft:'10px',backgroundColor:`${col}0A`}}>
+                            <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}0A`}}>
                               <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                                <span>{item.type==='referee'?'⚖️':item.emoji}</span>
-                                <span style={{fontWeight:700,color:col}}>{item.name}</span>
+                                <span>{item.emoji}</span>
+                                <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
                                 <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
                               </div>
                               <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>

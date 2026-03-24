@@ -89,10 +89,12 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
   - **Full Time** (purple outline) — match complete
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
-- **3-column broadcast booth layout** — Full-width section below the pitch grid with three dedicated columns so voices don't blur together in a single stream:
-  - **Nexus-7** (left column) — AI analysis and referee decisions (data-driven rulings)
-  - **Captain Vox** (centre column) — Play-by-play narration, Architect proclamations and interference cards
-  - **Zara Bloom** (right column) — Colour analysis and tactical insights
+- **4-column broadcast booth layout** — Full-width section below the pitch grid with four dedicated columns so voices don't blur together in a single stream:
+  - **Nexus-7** (column 1) — AI analysis and data-driven observations
+  - **The Architect** (column 2) — Cosmic Proclamations and Architect Interference cards
+  - **Captain Vox** (column 3) — Play-by-play narration and procedural commentary
+  - **Zara Bloom** (column 4) — Colour analysis and tactical insights
+  - Referee decisions appear only in the Officials card above; no longer routed to commentary columns
   - Positioned below the home/pitch/away grid, each commentator column spans equal width across the full page for legibility
   - Each column has its own header with the commentator's emoji, name, role, and accent colour tint
   - Scroll independently while remaining visually unified as a broadcast booth
