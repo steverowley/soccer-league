@@ -17,7 +17,7 @@ import {
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
-import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, BetBtn, PlayerCard } from "./components/MatchComponents.jsx";
+import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
@@ -40,126 +40,6 @@ const TUNNEL_Q = [
     "Keep the faith. We\u2019ve been here before.",
   ],
 ];
-
-// ── Betting helpers ────────────────────────────────────────────────────────────
-// Pure functions with no component state; defined at module level so React
-// never re-creates them on re-render (they were previously inside the component
-// body, causing a fresh allocation on every state update).
-
-/**
- * Returns a human-readable label for a bet type.
- *
- * @param {string} type - Bet type key (e.g. 'homeWin', 'score_2_1').
- * @param {{ homeTeam: {shortName:string}, awayTeam: {shortName:string} }} ms
- * @returns {string}
- */
-const betLabel = (type, ms) => {
-  if (type === 'homeWin') return ms.homeTeam.shortName + ' Win';
-  if (type === 'awayWin') return ms.awayTeam.shortName + ' Win';
-  if (type === 'draw')    return 'Draw';
-  if (type === 'over25')  return 'Over 2.5 Goals';
-  if (type === 'under25') return 'Under 2.5 Goals';
-  if (type === 'redCard') return 'Red Card Shown';
-  if (type === 'btts')    return 'Both Teams Score';
-  if (type === 'nobtts')  return 'Clean Sheet (1 team)';
-  if (type && type.startsWith('score_'))  return 'Exact Score '  + type.replace('score_',  '').replace('_', '-');
-  if (type && type.startsWith('scorer_')) return 'First Scorer: ' + type.replace('scorer_', '');
-  return type;
-};
-
-/**
- * Returns the live settlement status of a placed bet given the current match state.
- *
- * @param {{ type: string, amount: number, odds: number }} bet
- * @param {{ score: number[], minute: number, redCards: {home:number,away:number},
- *            events: object[] }} ms
- * @returns {'winning'|'losing'|'pending'}
- */
-const betStatus = (bet, ms) => {
-  const [h, a] = ms.score;
-  const total   = h + a;
-  const hadRed  = ms.redCards.home > 0 || ms.redCards.away > 0;
-  if (bet.type === 'homeWin')  return h > a ? 'winning' : h < a ? 'losing' : 'pending';
-  if (bet.type === 'awayWin')  return a > h ? 'winning' : a < h ? 'losing' : 'pending';
-  if (bet.type === 'draw')     return h === a ? 'winning' : 'losing';
-  if (bet.type === 'over25')   return total >= 3 ? 'winning' : total < 3 && ms.minute > 85 ? 'losing' : 'pending';
-  if (bet.type === 'under25')  return total < 3 ? 'winning' : total >= 3 ? 'losing' : 'pending';
-  if (bet.type === 'redCard')  return hadRed ? 'winning' : ms.minute > 85 ? 'losing' : 'pending';
-  if (bet.type === 'btts')     return (h > 0 && a > 0) ? 'winning' : ms.minute > 85 ? 'losing' : 'pending';
-  if (bet.type === 'nobtts')   return (h === 0 || a === 0) ? 'winning' : (h > 0 && a > 0) ? 'losing' : 'pending';
-  if (bet.type && bet.type.startsWith('score_')) {
-    const [sh, sa] = bet.type.replace('score_', '').split('_').map(Number);
-    return (h === sh && a === sa) ? 'winning' : ms.minute > 85 ? 'losing' : 'pending';
-  }
-  if (bet.type && bet.type.startsWith('scorer_')) {
-    const name      = bet.type.replace('scorer_', '');
-    const firstGoal = ms.events.find(e => e.isGoal);
-    return firstGoal ? (firstGoal.player === name ? 'winning' : 'losing') : 'pending';
-  }
-  return 'pending';
-};
-
-/**
- * Calculates pre-match win/draw/loss odds from team attacking+technical stats.
- *
- * The 0.65 factor caps the win-probability sum so the remaining ~35% is shared
- * by draws, preventing impossibly tight odds.  The 0.88 vigorish factor bakes
- * the bookmaker margin into the returned decimal odds.
- *
- * @param {{ players: object[] }} homeTeam
- * @param {{ players: object[] }} awayTeam
- * @param {{ home: string[], away: string[] }} activePlayers
- * @returns {{ homeWin: string, draw: string, awayWin: string }}
- */
-const getOdds = (homeTeam, awayTeam, activePlayers) => {
-  const hStats = teamStats(homeTeam, activePlayers.home);
-  const aStats = teamStats(awayTeam,  activePlayers.away);
-  const hStr   = (hStats.attacking + hStats.technical) / 2;
-  const aStr   = (aStats.attacking + aStats.technical) / 2;
-  const total  = hStr + aStr;
-  // 0.65 — combined win probability cap, leaving ~35% for draw probability
-  const hWinProb  = hStr / total * 0.65;
-  const aWinProb  = aStr / total * 0.65;
-  const drawProb  = 1 - hWinProb - aWinProb;
-  // 0.88 — vigorish (bookmaker margin) applied to all three markets
-  return {
-    homeWin: Math.max(1.2, (1 / hWinProb * 0.88)).toFixed(2),
-    draw:    Math.max(1.5, (1 / drawProb  * 0.88)).toFixed(2),
-    awayWin: Math.max(1.2, (1 / aWinProb  * 0.88)).toFixed(2),
-  };
-};
-
-/**
- * Returns the bookmaker's odds for an exact final scoreline.
- *
- * Common scorelines (e.g. 1-0, 1-1) carry tighter odds; rare ones default to 15.
- *
- * @param {number} h - Home goals
- * @param {number} a - Away goals
- * @returns {number} Decimal odds
- */
-const getScoreOdds = (h, a) => {
-  const base = {
-    score_0_0: 8,  score_1_0: 4.5, score_0_1: 4.5, score_1_1: 3.5,
-    score_2_0: 7,  score_0_2: 7,   score_2_1: 6,   score_1_2: 6,
-    score_2_2: 10, score_3_0: 14,  score_0_3: 14,  score_3_1: 12, score_1_3: 12,
-  };
-  return base[`score_${h}_${a}`] || 15; // 15 — default for unlisted/unlikely scorelines
-};
-
-/**
- * Returns the first-scorer odds for a given player based on their attacking stat.
- *
- * Higher attacking → lower odds (more likely to score first).
- * Capped at 2.5 to prevent trivially tight odds for elite attackers.
- *
- * @param {{ attacking: number }} player
- * @returns {string} Decimal odds string (1 d.p.)
- */
-const getScorerOdds = (player) => {
-  const base = player.attacking || 70; // 70 — fallback if attacking stat is missing
-  return Math.max(2.5, (120 - base) / 10).toFixed(1);
-};
 
 // ── Live Pitch helpers ─────────────────────────────────────────────────────────
 // Pure module-level functions — defined here rather than inside the component so
@@ -824,16 +704,9 @@ const MatchSimulator = ({
   const aiRef=useRef(null);
   const intervalRef=useRef(null);
   const evtLogRef=useRef(null);
-  const [showBetting,setShowBetting]=useState(true);
-  const [credits,setCredits]=useState(1000);
-  const [currentBets,setCurrentBets]=useState([]);
-  const [betAmount,setBetAmount]=useState(100);
-  const [betResult,setBetResult]=useState(null);
-  const [betToast,setBetToast]=useState(null);
   const [htReport,setHtReport]=useState(null);
   const [selectedPlayer,setSelectedPlayer]=useState(null);
-  const betsRef=useRef([]);
-  const toastRef=useRef(null);
+
   const [apiKey,setApiKey]=useState(()=>localStorage.getItem('isi_api_key')||'');
   const [showApiKeyModal,setShowApiKeyModal]=useState(false);
   const [commentaryFeed,setCommentaryFeed]=useState([]);
@@ -890,7 +763,7 @@ const MatchSimulator = ({
   // only when the user hasn't scrolled down.  This preserves the "latest
   // event always visible" default while letting users read history freely.
   useEffect(()=>{if(evtLogRef.current&&!commentaryUserScrolledRef.current)evtLogRef.current.scrollTop=0;},[commentaryFeed]);
-  useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
+  useEffect(()=>{return()=>{clearInterval(intervalRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
 
   // ── Ball position + cinema event ──────────────────────────────────────────
@@ -1504,7 +1377,6 @@ const MatchSimulator = ({
       });
     }
     setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
-    setShowBetting(false);
   };
   const pauseMatch=()=>{clearInterval(intervalRef.current);setMatchState(p=>({...p,isPlaying:false}));};
   const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));intervalRef.current=setInterval(simulateMinute,speed);}};
@@ -1518,23 +1390,12 @@ const MatchSimulator = ({
     architectRef.current=null;
     lastEventCountRef.current=0;
     lastThoughtsCountRef.current=0;
-    setAiManager(null);setMatchState(initState());setShowBetting(true);
-    setCurrentBets([]);betsRef.current=[];setBetAmount(100);setBetResult(null);
+    setAiManager(null);setMatchState(initState());
     setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);
     setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);
     setAwayThoughtsFeed([]);setHtLlmQuotes(null);
   };
 
-  const placeBet=(type,amount,odds)=>{
-    if(amount<=0||amount>credits)return;
-    const bet={type,amount,odds:parseFloat(odds)};
-    betsRef.current=[...betsRef.current,bet];
-    setCredits(c=>c-amount);
-    setCurrentBets(b=>[...b,bet]);
-    clearTimeout(toastRef.current);
-    setBetToast({label:betLabel(type,matchState),amount,odds:parseFloat(odds)});
-    toastRef.current=setTimeout(()=>setBetToast(null),2500);
-  };
   useEffect(()=>{
     if(matchState.mvp&&!matchState.isPlaying){
       // ── Architect post-match lore save ────────────────────────────────────
@@ -1551,38 +1412,11 @@ const MatchSimulator = ({
         });
       }
     }
-    if(matchState.mvp&&!matchState.isPlaying&&betsRef.current.length>0){
-      const score=matchState.score;
-      const hadRed=matchState.redCards.home>0||matchState.redCards.away>0;
-      const hWin=score[0]>score[1],aWin=score[1]>score[0],isDraw=score[0]===score[1];
-      const total=score[0]+score[1];
-      let gain=0,won=0,lost=0;
-      const bets=betsRef.current.map(bet=>{
-        const firstGoal=matchState.events.find(e=>e.isGoal);
-        const btts=score[0]>0&&score[1]>0;
-        const exactScore=bet.type?.startsWith('score_')&&bet.type===`score_${score[0]}_${score[1]}`;
-        const firstScorer=bet.type?.startsWith('scorer_')&&firstGoal&&bet.type===`scorer_${firstGoal.player}`;
-        const betWon=(bet.type==='homeWin'&&hWin)||(bet.type==='awayWin'&&aWin)||(bet.type==='draw'&&isDraw)||(bet.type==='over25'&&total>=3)||(bet.type==='under25'&&total<3)||(bet.type==='redCard'&&hadRed)||(bet.type==='btts'&&btts)||(bet.type==='nobtts'&&!btts)||exactScore||firstScorer;
-        const payout=betWon?Math.floor(bet.amount*bet.odds):0;
-        if(betWon){gain+=payout;won++;}else lost++;
-        return{...bet,won:betWon,payout};
-      });
-      if(gain>0)setCredits(c=>c+gain);
-      setBetResult({gain,won,lost,total:betsRef.current.length,bets,finalScore:score,hadRed});
-      betsRef.current=[];
-      setCurrentBets([]);
-    }
   },[matchState.mvp,matchState.isPlaying]);
 
   // ── Memoised derived values ────────────────────────────────────────────────
-  // All four blocks below are recalculated only when their specific inputs
+  // All blocks below are recalculated only when their specific inputs
   // change, preventing redundant work on every unrelated state update.
-
-  // Betting odds — only change when team rosters or squad depth changes.
-  const odds = useMemo(
-    () => getOdds(matchState.homeTeam, matchState.awayTeam, matchState.activePlayers),
-    [matchState.homeTeam, matchState.awayTeam, matchState.activePlayers],
-  );
 
   // Chaos level — recalculate only when score, minute, cards, or agent
   // emotions change.  Avoids an O(n) event scan on every render.
@@ -2516,7 +2350,7 @@ const MatchSimulator = ({
       {/* ── Halftime report modal ──────────────────────────────────────────── */}
       {/* Full-screen overlay rendered when the simulation reaches 45' and
           stoppage time expires.  Shows the score, key events, manager quotes,
-          and a betting panel for the second half.  Cleared by startSecondHalf. */}
+          Cleared by startSecondHalf. */}
       {htReport&&(
         <div style={{position:'fixed',inset:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backgroundColor:'rgba(0,0,0,0.92)'}}>
           <div style={{width:'100%',maxWidth:'512px',border:`1px solid ${C.purple}`,backgroundColor:C.ash,overflow:'hidden'}}>
@@ -2572,38 +2406,6 @@ const MatchSimulator = ({
                   </div>
                 ))}
               </div>
-
-              {/* Betting panel */}
-              <div style={{fontSize:'11px',fontWeight:700,marginBottom:'8px',color:'#FFA500'}}>⚡ IN-PLAY BETS</div>
-              <div style={{display:'flex',gap:'8px',alignItems:'center',fontSize:'11px',marginBottom:'8px'}}>
-                <span style={{opacity:0.7}}>Stake:</span>
-                <input
-                  type="number"
-                  value={betAmount}
-                  onChange={e=>setBetAmount(Math.max(0,Math.min(credits,parseInt(e.target.value)||0)))}
-                  style={{
-                    width:'80px',padding:'4px',textAlign:'center',border:`1px solid ${C.dust}`,
-                    fontWeight:700,fontFamily:"'Space Mono',monospace",
-                    backgroundColor:C.abyss,color:C.dust,
-                  }}
-                />
-                <span style={{color:C.purple}}>{credits} coins</span>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'6px',marginBottom:'8px'}}>
-                <BetBtn type="homeWin" odds={odds.homeWin} label={matchState.homeTeam.shortName+' WIN'} color={C.red} placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="draw"    odds={odds.draw}    label="DRAW"                                               placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="awayWin" odds={odds.awayWin} label={matchState.awayTeam.shortName+' WIN'}               placeBet={placeBet} betAmount={betAmount}/>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px',marginBottom:'12px'}}>
-                <BetBtn type="btts"   odds="1.75" label="BTTS YES"  placeBet={placeBet} betAmount={betAmount}/>
-                <BetBtn type="over25" odds="1.85" label="OVER 2.5"  placeBet={placeBet} betAmount={betAmount}/>
-              </div>
-
-              {currentBets.length>0&&(
-                <div style={{fontSize:'11px',marginBottom:'8px',textAlign:'center',color:C.purple}}>
-                  {currentBets.length} wager{currentBets.length>1?'s':''} placed ✅
-                </div>
-              )}
 
               <button
                 onClick={startSecondHalf}

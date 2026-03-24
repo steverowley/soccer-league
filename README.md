@@ -86,7 +86,6 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
 - Separate feeds for commentary, manager thoughts, and player inner monologues
-- Fantasy betting system with credits
 - Adjustable simulation speed and pause/resume controls
 
 ## Game Engine Architecture
