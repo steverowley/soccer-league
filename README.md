@@ -89,7 +89,13 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
   - **Full Time** (purple outline) — match complete
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
-- Separate feeds for commentary, manager thoughts, and player inner monologues
+- **3-column broadcast booth layout** — Each of the three commentators has a dedicated column so voices don't blur together in a single stream:
+  - **Captain Vox** (left column) — Play-by-play narration, Architect proclamations and interference cards
+  - **Nexus-7** (centre column) — AI analysis and referee decisions (data-driven rulings)
+  - **Zara Bloom** (right column) — Colour analysis and tactical insights
+  - Each column has its own header with the commentator's emoji, name, role, and accent colour tint
+  - Scroll independently while remaining visually unified as a broadcast booth
+- Separate feeds for manager thoughts and player inner monologues
 - **Simulation Speed Modes**: SLOW/NORMAL/FAST/TURBO interval-based speeds, plus **DRAMATIC** mode with tunable real-time pacing:
   - **DRAMATIC Mode** — Inspired by Blaseball's philosophy that slow cadence is a feature, not a bug
     - Each match-minute is allocated a real wall-clock budget (default: 15 seconds)
