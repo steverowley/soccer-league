@@ -90,7 +90,13 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
 - Separate feeds for commentary, manager thoughts, and player inner monologues
-- Adjustable simulation speed and pause/resume controls
+- **Simulation Speed Modes**: SLOW/NORMAL/FAST/TURBO interval-based speeds, plus **DRAMATIC** mode with tunable real-time pacing:
+  - **DRAMATIC Mode** — Inspired by Blaseball's philosophy that slow cadence is a feature, not a bug
+    - Each match-minute is allocated a real wall-clock budget (default: 15 seconds)
+    - LLM commentary (Vox + reactors) completes in ~1–2 s; the remaining time is breathing/atmosphere room
+    - Full 90-minute match runs ~22.5 real minutes (tunable: 30 s/tick → 45 min match, 8 s/tick → ~12 min match)
+    - Tick timing is controlled by the `DRAMATIC_TICK_MS` constant in `App.jsx`
+  - Pause/resume controls apply to all speeds
 
 ## Game Engine Architecture
 
