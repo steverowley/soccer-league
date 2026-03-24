@@ -2348,6 +2348,31 @@ const MatchSimulator = ({
             {/* ── 3 independent scroll columns (400 px fixed height) ──────── */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',height:'400px'}}>
 
+              {/* ── Nexus-7: AI analysis + referee decisions ─────────────── */}
+              {/* Column order matches COMMENTATOR_PROFILES: [nexus7, captain_vox, zara_bloom] */}
+              <div style={{padding:'10px',overflowY:'auto',scrollbarWidth:'thin',
+                           scrollbarColor:'#4FC3F7 #111',
+                           borderRight:'1px solid rgba(227,224,213,0.06)'}}>
+                {nexusItems.length===0
+                  ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>Compiling data...</div>
+                  :nexusItems.map((item,i)=>{
+                    // Referee items borrow the gold (#FFD700) accent; all other
+                    // items in this column are Nexus-7's light-blue (#4FC3F7).
+                    const col=item.type==='referee'?'#FFD700':item.color;
+                    return(
+                      <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${col}`,paddingLeft:'10px',backgroundColor:`${col}0A`}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                          <span>{item.type==='referee'?'⚖️':item.emoji}</span>
+                          <span style={{fontWeight:700,color:col}}>{item.name}</span>
+                          <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                        </div>
+                        <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+
               {/* ── Captain Vox: play-by-play + architect + fallback ──────── */}
               <div ref={evtLogRef} onScroll={handleCommentaryScroll}
                    style={{padding:'10px',overflowY:'auto',scrollbarWidth:'thin',
@@ -2389,30 +2414,6 @@ const MatchSimulator = ({
                           <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
                           {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
                         </div>
-                      </div>
-                    );
-                  })
-                }
-              </div>
-
-              {/* ── Nexus-7: AI analysis + referee decisions ─────────────── */}
-              <div style={{padding:'10px',overflowY:'auto',scrollbarWidth:'thin',
-                           scrollbarColor:'#4FC3F7 #111',
-                           borderRight:'1px solid rgba(227,224,213,0.06)'}}>
-                {nexusItems.length===0
-                  ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>Compiling data...</div>
-                  :nexusItems.map((item,i)=>{
-                    // Referee items borrow the gold (#FFD700) accent; all other
-                    // items in this column are Nexus-7's light-blue (#4FC3F7).
-                    const col=item.type==='referee'?'#FFD700':item.color;
-                    return(
-                      <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${col}`,paddingLeft:'10px',backgroundColor:`${col}0A`}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                          <span>{item.type==='referee'?'⚖️':item.emoji}</span>
-                          <span style={{fontWeight:700,color:col}}>{item.name}</span>
-                          <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
-                        </div>
-                        <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
                       </div>
                     );
                   })
