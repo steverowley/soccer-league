@@ -130,10 +130,10 @@ export class AgentSystem {
     this.awayManagerHistory   = [];
     this.refHistory           = [];
 
-    // Rate-limiting: no more than 1 Claude call per 1.5 seconds.
+    // Rate-limiting: gap between event processings (adaptive via setMatchSpeed).
     this._lastCallTime = 0;
-    this._cooldownMs   = 1500;
-    this._eventQueue   = [];   // pending { event, gameState, allAgents, resolve }
+    this._cooldownMs   = 300;
+    this._eventQueue   = [];   // pending { event, gameState, allAgents, resolve, onResult }
     this._draining     = false; // true while _drainQueue() is running
   }
 
@@ -623,13 +623,23 @@ export class AgentSystem {
    * Fires all appropriate AI calls for a single event and returns an array
    * of feed items.
    *
-   * ── Ordering: sequential Vox first, then parallel reactions ────────────
-   * Captain Vox runs FIRST and his result is awaited before the rest begin.
-   * This is intentional: Nexus-7, Zara Bloom, the player, managers, and the
-   * referee all receive voxNarration as context so they react to Vox's clear
-   * description of the play rather than independently reinterpreting the raw
-   * mechanical event string.  The added latency is one extra Haiku call
-   * (~0.3–0.8 s) which is acceptable given the coherence gain.
+   * ── All voices run in parallel ──────────────────────────────────────────
+   * Previously Captain Vox ran first (sequential await) so reactors could
+   * receive his narration as context.  That added ~0.3–0.8 s of blocking
+   * latency per event — acceptable at slow match speeds but a significant
+   * contributor to queue back-pressure at FAST/TURBO.
+   *
+   * Reactors now receive the structured _describeEvent() string instead of
+   * Vox's prose.  This provides the same factual clarity (action, player,
+   * result, flags) without any LLM round-trip, and all voices launch
+   * simultaneously so commentary arrives as fast as the slowest individual
+   * call — not as fast as the sum of two sequential calls.
+   *
+   * ── Streaming dispatch via onResult ────────────────────────────────────
+   * Each promise's .then(push) fires onResult(item) the moment that
+   * individual API call resolves.  Callers see Vox's line appear in the
+   * feed as soon as it's ready, then reactors trickle in — rather than
+   * waiting for the slowest parallel call before anything renders.
    *
    * ── Tier promotion for Architect-featured mortals ───────────────────────
    * If The Architect has spotlighted a player and that player is involved in
@@ -638,17 +648,22 @@ export class AgentSystem {
    * event generation logic.
    *
    * ── Reactor count ────────────────────────────────────────────────────────
-   * Captain Vox is excluded from the reactor pool (he already ran).
-   *   full    → 2 reactors (Nexus-7 + Zara)
-   *   medium  → 1 reactor  (random from Nexus-7 / Zara)
-   *   minor / manager → 0 reactors  (Vox alone is sufficient for quiet moments)
+   * Captain Vox is included in the parallel pool (no longer a separate step).
+   *   full    → Vox + 2 reactors (Nexus-7 + Zara)
+   *   medium  → Vox + 1 reactor  (random from Nexus-7 / Zara)
+   *   minor / manager → Vox only  (quiet moments don't need the full ensemble)
    *
-   * @param {object}   event      – the match event object
+   * @param {object}   event      – the match event object from genEvent()
    * @param {object}   gameState  – { score, minute }
    * @param {object[]} allAgents  – all player agents (home + away)
-   * @returns {Promise<object[]>} array of feed items (play_by_play first, then reactions)
+   * @param {Function} [onResult] – optional streaming callback; called once
+   *                                per feed item as soon as its API call
+   *                                resolves (before Promise.allSettled).
+   *                                Receives a single feed-item object.
+   * @returns {Promise<object[]>} resolves with the full array of feed items
+   *                              once every parallel call has settled
    */
-  async _processEventDirect(event, gameState, allAgents) {
+  async _processEventDirect(event, gameState, allAgents, onResult) {
     const baseTier = this._classifyEvent(event);
     if (baseTier === 'skip') return [];
 
@@ -663,20 +678,34 @@ export class AgentSystem {
 
     const results  = [];
     const promises = [];
-    const push     = r => { if (r) results.push(r); };
+
+    // push() is the single collection point for all parallel results.
+    // onResult? streams each item to the caller (e.g. App.jsx routeAgentResult)
+    // the instant its API call resolves, so the feed updates incrementally
+    // rather than in one batch after the slowest call finishes.
+    const push = r => {
+      if (r) {
+        results.push(r);
+        onResult?.(r);
+      }
+    };
 
     const isHomeEvent = event.team === this.homeTeam.shortName;
 
-    // ── Step 1: Captain Vox (primary play-by-play narrator — SEQUENTIAL) ───
-    // Awaited before the rest so his narration can be forwarded to reactors.
-    const playByPlay = await this.generatePlayByPlay(event, gameState);
-    if (playByPlay) results.push(playByPlay);
-    // voxNarration may be null if the Vox call failed; reactors degrade
-    // gracefully by falling back to the procedural event.commentary string.
-    const voxNarration = playByPlay?.text ?? null;
+    // Structured event description used as context for all reactor voices.
+    // Replaces the old sequential-Vox narration: reactors get the same
+    // factual information (action / player / result / flags) without any
+    // LLM round-trip blocking the pipeline.
+    const eventDesc = this._describeEvent(event);
 
-    // ── Step 2: Reactor commentators (PARALLEL after Vox) ──────────────────
-    // Nexus-7 and Zara Bloom are the reactor pool; Vox is excluded.
+    // ── Step 1: Captain Vox (play-by-play — PARALLEL with all other voices) ─
+    // Vox no longer runs as a blocking sequential step.  He joins the
+    // parallel promise pool so his narration appears in the feed as soon as
+    // his individual call resolves, racing alongside the reactor calls.
+    promises.push(this.generatePlayByPlay(event, gameState).then(push));
+
+    // ── Step 2: Reactor commentators (PARALLEL) ──────────────────────────────
+    // Nexus-7 and Zara Bloom react to the structured event description.
     // full → 2 reactors, medium → 1, minor/manager → 0.
     const numReactors = tier === 'full' ? 2 : tier === 'medium' ? 1 : 0;
     if (numReactors > 0) {
@@ -685,7 +714,7 @@ export class AgentSystem {
         .sort(() => Math.random() - 0.5);
       for (let i = 0; i < numReactors; i++) {
         promises.push(
-          this.generateCommentary(reactorPool[i].id, event, gameState, voxNarration).then(push),
+          this.generateCommentary(reactorPool[i].id, event, gameState, eventDesc).then(push),
         );
       }
     }
@@ -702,7 +731,7 @@ export class AgentSystem {
       const agent = allAgents?.find(a => a.player.name === event.player);
       if (agent) {
         promises.push(
-          this.generatePlayerThought(agent.player, agent, event, gameState, voxNarration).then(push),
+          this.generatePlayerThought(agent.player, agent, event, gameState, eventDesc).then(push),
         );
       }
     }
@@ -731,34 +760,100 @@ export class AgentSystem {
   // ── Queued event processor (public API) ─────────────────────────────────────
 
   /**
+   * Adjusts the inter-event cooldown to match the current simulation speed.
+   *
+   * At fast/turbo speeds the match engine generates events much faster than a
+   * fixed 1 500 ms cooldown can drain, causing commentary to lag further and
+   * further behind reality.  Scaling the gap down proportionally keeps the
+   * queue shallow so voices stay in sync with the action.
+   *
+   * Cooldown tiers (chosen to stay well inside Haiku's rate limits while
+   * maximising throughput at each speed setting):
+   *   TURBO  (200 ms/tick) →   0 ms  — fire immediately; queue must drain fast
+   *   FAST   (500 ms/tick) → 100 ms  — small breathing room
+   *   NORMAL (1 000 ms/tick)→ 300 ms — comfortable pacing, ~1 event/1.8 s
+   *   SLOW   (2 000 ms/tick)→ 500 ms — generous gap; match moves at a crawl
+   *
+   * Called by App.jsx whenever the player changes the speed selector.
+   *
+   * @param {number} tickMs – simulation interval in milliseconds (200/500/1000/2000)
+   */
+  setMatchSpeed(tickMs) {
+    if      (tickMs <= 200)  this._cooldownMs = 0;    // TURBO  — no gap
+    else if (tickMs <= 500)  this._cooldownMs = 100;  // FAST   — 100 ms gap
+    else if (tickMs <= 1000) this._cooldownMs = 300;  // NORMAL — 300 ms gap
+    else                     this._cooldownMs = 500;  // SLOW   — 500 ms gap
+  }
+
+  /**
    * The main entry point for triggering AI commentary.
    *
    * Events are pushed onto an internal queue and processed one at a time
-   * with a 1.5-second gap between Claude calls.  Returns a Promise that
-   * resolves with an array of feed items when the event is processed.
+   * with a cooldown gap between Claude calls (see _cooldownMs / setMatchSpeed).
+   * Each result is streamed to `onResult` immediately as its API call
+   * completes — callers receive commentary as it arrives rather than waiting
+   * for the slowest parallel call in the batch.
    *
-   * Usage in App.jsx:
-   *   const items = await agentSystem.queueEvent(event, gameState, allAgents);
-   *   // items is an array of { type, name, text, color, ... } objects
+   * Low-priority events are shed when the queue is already backed up so that
+   * important moments (goals, red cards) are never delayed by a pile of stale
+   * minor-event commentary.  Dropped events resolve with an empty array.
+   *
+   * Priority / queue-depth thresholds:
+   *   full    (goal, red card) → always queued regardless of depth
+   *   medium  (yellow, injury, controversial) → dropped if queue depth ≥ 3
+   *   minor / manager          → dropped if queue depth ≥ 2
+   *   skip    (penalty sub-steps, VAR, social) → always dropped immediately
+   *
+   * @param {object}   event      – match event object from genEvent()
+   * @param {object}   gameState  – { score, minute }
+   * @param {object[]} allAgents  – all player agents (home + away)
+   * @param {Function} [onResult] – optional callback fired for each feed item
+   *                                as soon as it is available; receives a
+   *                                single { type, name, text, … } object
+   * @returns {Promise<object[]>} resolves with the full array of feed items
+   *                              once all API calls for this event complete
    */
-  queueEvent(event, gameState, allAgents) {
+  queueEvent(event, gameState, allAgents, onResult) {
+    const tier = this._classifyEvent(event);
+
+    // ── Priority gate: shed low-value events when the queue is deep ─────────
+    // Commentary about a minor tackle that happened 3 events ago is worse than
+    // no commentary — it confuses viewers about the current match state.
+    // 'full' events (goals / red cards) always pass regardless of queue depth.
+    if (tier === 'skip') return Promise.resolve([]);
+    if ((tier === 'minor' || tier === 'manager') && this._eventQueue.length >= 2)
+      return Promise.resolve([]);
+    if (tier === 'medium' && this._eventQueue.length >= 3)
+      return Promise.resolve([]);
+
     return new Promise(resolve => {
-      this._eventQueue.push({ event, gameState, allAgents, resolve });
+      this._eventQueue.push({ event, gameState, allAgents, resolve, onResult });
       if (!this._draining) this._drainQueue();
     });
   }
 
   /**
    * Internal loop that processes queued events one at a time.
-   * Enforces the cooldown between API calls to avoid rate-limit errors.
-   * Sets this._draining=true while running so concurrent calls don't
-   * start a second loop.
+   *
+   * Enforces the inter-event cooldown (_cooldownMs) to avoid rate-limit
+   * errors.  Sets this._draining=true while running so concurrent calls
+   * don't inadvertently start a second drain loop.
+   *
+   * The onResult callback extracted from each queue entry is forwarded to
+   * _processEventDirect so individual feed items are streamed to the caller
+   * as they arrive rather than batched at the end.
+   *
+   * Cooldown timing note: _lastCallTime is recorded AFTER each
+   * _processEventDirect resolves (not before), so the gap is always
+   * measured from call-end to next call-start.  This prevents a slow API
+   * response from eating into the cooldown and causing two rapid-fire calls.
    */
   async _drainQueue() {
     if (this._draining) return;
     this._draining = true;
     while (this._eventQueue.length) {
-      const { event, gameState, allAgents, resolve } = this._eventQueue.shift();
+      const { event, gameState, allAgents, resolve, onResult } = this._eventQueue.shift();
+
       // ── Cooldown enforcement ─────────────────────────────────────────────
       // Wait until at least _cooldownMs has elapsed since the LAST call
       // completed (not since it was dispatched).  Recording the timestamp
@@ -768,12 +863,16 @@ export class AgentSystem {
       const now  = Date.now();
       const wait = this._cooldownMs - (now - this._lastCallTime);
       if (wait > 0) await new Promise(r => setTimeout(r, wait));
+
       try {
-        const results = await this._processEventDirect(event, gameState, allAgents);
+        // Pass onResult through so each feed item streams to the caller
+        // (e.g. App.jsx routeAgentResult) the moment its API call resolves.
+        const results = await this._processEventDirect(event, gameState, allAgents, onResult);
         resolve(results);
       } catch {
         resolve([]);
       }
+
       // Record AFTER the call completes so the cooldown window starts from
       // the moment this call finished, not when it was dispatched.
       this._lastCallTime = Date.now();
