@@ -2029,6 +2029,31 @@ const MatchSimulator = ({
           </div>
         </div>
 
+        {/* ── Officials / Stadium / Weather ─────────────────────────────── */}
+        {aiManager&&(
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
+            <div className="card" style={{padding:'10px'}}>
+              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Referee</div>
+              <div style={{fontSize:'20px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
+              <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.referee.name}</div>
+              <div style={{fontSize:'11px',marginTop:'4px',color:aiManager.referee.leniency>70?'#A5D6A7':aiManager.referee.leniency>40?'#E3E0D5':'#E05252'}}>
+                {aiManager.referee.leniency>70?'Lenient':aiManager.referee.leniency>40?'Fair':'Strict'}
+              </div>
+            </div>
+            <div className="card" style={{padding:'10px'}}>
+              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Stadium</div>
+              <div style={{fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
+              <div style={{fontSize:'11px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
+            </div>
+            <div className="card" style={{padding:'10px'}}>
+              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Conditions</div>
+              <div style={{fontSize:'20px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
+              <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
+              <div style={{fontSize:'11px',opacity:0.5,marginTop:'4px'}}>{aiManager.temperature}°C · {aiManager.timeOfDay}</div>
+            </div>
+          </div>
+        )}
+
         {/* ── Chaos meter + Architect ────────────────────────────────────────
             The card is split into two zones stacked vertically:
               top   — chaos bar + status tags (flexShrink:0, auto height)
@@ -2338,56 +2363,22 @@ const MatchSimulator = ({
                 }
               </div>
 
-              {/* ── Officials + Referee Decisions ─────────────────────────
-                  Replaces The Architect at the bottom of the centre column.
-                  The Architect has moved into the Chaos Meter card above
-                  the feed columns.
+              {/* ── Referee Decisions ──────────────────────────────────────
+                  Bottom of the centre column; fills all remaining height
+                  after Live Pitch and Match Events via flex:1 + minHeight:0.
 
-                  Layout: flex column, flex:1 fills remaining height after
-                  Live Pitch and Match Events.  Two zones:
-                    1. Officials info grid  — Referee, Stadium, Conditions
-                       (flexShrink:0 so it never shrinks away)
-                    2. Referee Decisions feed — scrollable flex:1 area that
-                       displays referee commentary (type:'referee') items
-                       from commentaryFeed.  These items were previously
-                       filtered out of every column and rendered nowhere;
-                       this is their first visible home in the UI.
+                  Referee / Stadium / Conditions info cards live in the
+                  standalone Officials section above the Chaos Meter card
+                  (restored to their original full-width position).
 
-                  Both zones are conditionally rendered on aiManager so the
-                  section is absent before kick-off when no match is set up. */}
+                  refItems is memoised from commentaryFeed filtered to
+                  type:'referee' and reversed so newest decisions appear at
+                  the top.  Gold (#FFD700) accent matches the referee return
+                  type colour used in agents.js generateRefDecision().
+
+                  Gated on aiManager so the card is absent before kick-off. */}
               {aiManager&&(
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
-
-                  {/* Officials info row — three equal-width info cards.
-                      flexShrink:0 keeps them auto-height regardless of how
-                      tall the Referee Decisions feed grows. */}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',flexShrink:0}}>
-                    {/* Referee — name, leniency emoji, and plain-language style
-                        label so users can anticipate how the ref will call fouls. */}
-                    <div className="card" style={{padding:'10px'}}>
-                      <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>Referee</div>
-                      <div style={{fontSize:'18px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
-                      <div style={{fontSize:'12px',fontWeight:700,lineHeight:1.2}}>{aiManager.referee.name}</div>
-                      <div style={{fontSize:'10px',marginTop:'4px',color:aiManager.referee.leniency>70?'#A5D6A7':aiManager.referee.leniency>40?'#E3E0D5':'#E05252'}}>
-                        {aiManager.referee.leniency>70?'Lenient':aiManager.referee.leniency>40?'Fair':'Strict'}
-                      </div>
-                    </div>
-                    {/* Stadium — name and capacity for flavour context. */}
-                    <div className="card" style={{padding:'10px'}}>
-                      <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>Stadium</div>
-                      <div style={{fontSize:'12px',fontWeight:700,lineHeight:1.3,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
-                      <div style={{fontSize:'10px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
-                    </div>
-                    {/* Conditions — weather icon, name, temperature and time of
-                        day.  Weather affects pitch gameplay in gameEngine.js so
-                        this gives the user immediate context on active modifiers. */}
-                    <div className="card" style={{padding:'10px'}}>
-                      <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>Conditions</div>
-                      <div style={{fontSize:'18px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
-                      <div style={{fontSize:'12px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
-                      <div style={{fontSize:'10px',opacity:0.5,marginTop:'4px'}}>{aiManager.temperature}°C · {aiManager.timeOfDay}</div>
-                    </div>
-                  </div>
 
                   {/* Referee Decisions feed — scrollable flex:1 card.
                       refItems is memoised from commentaryFeed filtered to
