@@ -1982,6 +1982,7 @@ const MatchSimulator = ({
 
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
+          <>
           <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'600px',alignItems:'stretch'}}>
             {/* Layout contract for this section:
                 - grid height 600px gives all three columns a fixed block size.
@@ -2438,7 +2439,7 @@ const MatchSimulator = ({
 
             </div>
           </div>
-
+          </>
         )}
 
         {/* Pre-match prompt (no AI manager set up yet) */}
