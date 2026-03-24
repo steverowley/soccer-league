@@ -301,7 +301,9 @@ table {
 /* ── Section ───────────────────────────────────────────────────────────── */
 
 .section {
-  margin-bottom: var(--space-12);
+  /* 24px gap keeps sections visually distinct without forcing excessive
+     scrolling to reach the broadcast booth and squad lists below. */
+  margin-bottom: 24px;
 }
 
 .section-title {
