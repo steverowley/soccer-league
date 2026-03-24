@@ -1746,11 +1746,12 @@ const MatchSimulator = ({
   // Referee decisions are intentionally excluded from all commentary columns;
   // the Referee info card in the Officials section is the sole referee display.
   const nexusItems     = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'), [commentaryReversed]);
-  // Architect column receives both proclamation cards and interference result cards.
+  // architectItems feeds the Architect card in the centre feed column above
+  // the broadcast booth (below Match Events).  The same items also appear in
+  // the Vox booth column so the full cosmic narrative is readable there too.
   const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference'), [commentaryReversed]);
-  // Vox column: play_by_play and procedural fallback events only — architect
-  // items are now handled by their dedicated column and excluded here.
-  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'architect_proclamation' && i.type !== 'architect_interference'), [commentaryReversed]);
+  // Vox column: play_by_play + architect cards + procedural fallback events.
+  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom'), [commentaryReversed]);
   const zaraItems      = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'), [commentaryReversed]);
   const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
   const awayManagerReversed   = useMemo(() => [...awayManagerFeed].reverse(),   [awayManagerFeed]);
@@ -2254,6 +2255,30 @@ const MatchSimulator = ({
                 }
               </div>
 
+              {/* ── The Architect ─────────────────────────────────────────
+                  Third card in the centre column, directly below Match
+                  Events.  flex:1 + minHeight:0 fills whatever vertical
+                  space remains in the 460px grid row after the Live Pitch
+                  and Match Events cards, keeping the centre column flush
+                  with the home/away columns.  Uses the existing
+                  ArchitectCard / ArchitectInterferenceCard components so
+                  the visual language is consistent with all other cosmic
+                  event displays in the UI. */}
+              <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
+                <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(124,58,237,0.2)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',display:'flex',alignItems:'center',gap:'6px',backgroundColor:'rgba(124,58,237,0.05)'}}>
+                  <span>✦</span> The Architect
+                </div>
+                <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
+                  {architectItems.length===0
+                    ?<div style={{textAlign:'center',opacity:0.25,fontSize:'10px',paddingTop:'20px',fontStyle:'italic'}}>The void stirs...</div>
+                    :architectItems.map((item,i)=>{
+                      if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                      return <ArchitectCard key={i} item={item}/>;
+                    })
+                  }
+                </div>
+              </div>
+
             </div>
 
             {/* ── AWAY column ─────────────────────────────────────────── */}
@@ -2311,174 +2336,122 @@ const MatchSimulator = ({
           </div>
 
           {/* ── Broadcast Booth ─────────────────────────────────────────────
-              Full-width 4-column panel: Nexus-7 | The Architect | Captain Vox | Zara Bloom.
-              The Architect occupies the second column, visually aligned under
-              the centre match-events feed above.
+              Full-width 3-column panel, one column per commentary voice.
+              Rendered as a single COMMENTATOR_PROFILES.map() pass so each
+              column's header and scroll content are produced by the same loop
+              iteration — structural misalignment is impossible.
 
-              Each column is a flex-column: fixed-height auto header + flex:1
-              scroll region (flex:1 + minHeight:0 is the standard CSS trick for
-              a scrollable flex child within a fixed-height parent).
+              Items routed per voice via the memos above:
+                nexus7      → nexusItems  (Nexus-7 commentator reactions)
+                captain_vox → voxItems    (play_by_play + architect cards + fallback)
+                zara_bloom  → zaraItems   (Zara Bloom commentator reactions)
 
-              Items routed per column via the memos defined above:
-                nexus7      → nexusItems      (Nexus-7 commentator reactions)
-                architect   → architectItems  (proclamations + interference cards)
-                captain_vox → voxItems        (play_by_play + procedural fallback)
-                zara_bloom  → zaraItems       (Zara Bloom commentator reactions)
+              Architect proclamations/interference also appear in the centre
+              feed column above (The Architect card below Match Events).
 
               Referee commentary is intentionally excluded from all columns;
-              the Referee info card in the Officials section above is its sole
-              display location. */}
+              the Referee info card in the Officials section is its sole display.
+
+              Column layout: each column is display:flex flex-direction:column
+              inside a 360px grid row.  The header is auto-height; the scroll
+              div fills remaining space with flex:1 + minHeight:0. */}
           <div className="card section" style={{padding:0,overflow:'hidden'}}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',height:'360px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',height:'360px'}}>
+              {COMMENTATOR_PROFILES.map((p,ci)=>{
+                // ── Resolve items for this voice ──────────────────────────
+                const items = p.id==='nexus7'     ? nexusItems
+                            : p.id==='zara_bloom' ? zaraItems
+                            : voxItems;
+                const isVox = p.id==='captain_vox';
+                const emptyMsg = isVox
+                  ? (ms.minute===0?'Press Kick Off to begin':'Awaiting first play...')
+                  : p.id==='nexus7' ? 'Compiling data...' : 'Watching the game...';
 
-              {/* ── Column 1: Nexus-7 ──────────────────────────────────────── */}
-              {(()=>{const p=COMMENTATOR_PROFILES.find(x=>x.id==='nexus7');return(
-                <div style={{display:'flex',flexDirection:'column',borderRight:'1px solid rgba(227,224,213,0.08)'}}>
-                  <div style={{padding:'10px 14px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',display:'flex',alignItems:'center',gap:'10px',backgroundColor:`${p.color}0A`}}>
-                    <span style={{fontSize:'18px'}}>{p.emoji}</span>
-                    <div>
-                      <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
-                      <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
-                    </div>
-                  </div>
-                  <div style={{flex:1,minHeight:0,padding:'10px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${p.color} #111`}}>
-                    {nexusItems.length===0
-                      ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>Compiling data...</div>
-                      :nexusItems.map((item,i)=>(
-                        <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}0A`}}>
-                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                            <span>{item.emoji}</span>
-                            <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                            <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
-                          </div>
-                          <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
-                        </div>
-                      ))
-                    }
-                  </div>
-                </div>
-              );})()}
-
-              {/* ── Column 2: The Architect ─────────────────────────────────
-                  Dedicated column for cosmic proclamations and interference
-                  results, positioned second so it sits beneath the centre
-                  match-events feed above.  Reuses the existing ArchitectCard
-                  and ArchitectInterferenceCard components for consistent
-                  styling with the rest of the game UI. */}
-              {(()=>{
-                // #7C3AED — matches ARCHITECT_COLOR used inside ArchitectCard;
-                // kept here as a local constant so the header colour is
-                // consistent without importing a separate constant.
-                const ARCH_COLOR='#7C3AED';
                 return(
-                  <div style={{display:'flex',flexDirection:'column',borderRight:'1px solid rgba(227,224,213,0.08)'}}>
-                    <div style={{padding:'10px 14px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',display:'flex',alignItems:'center',gap:'10px',backgroundColor:`${ARCH_COLOR}0A`}}>
-                      <span style={{fontSize:'18px'}}>✦</span>
+                  <div key={p.id} style={{
+                    display:'flex',flexDirection:'column',
+                    borderRight:ci<2?'1px solid rgba(227,224,213,0.08)':'none',
+                  }}>
+                    {/* ── Column header ───────────────────────────────────── */}
+                    <div style={{
+                      padding:'10px 14px',flexShrink:0,
+                      borderBottom:'1px solid rgba(227,224,213,0.08)',
+                      display:'flex',alignItems:'center',gap:'10px',
+                      backgroundColor:`${p.color}0A`,
+                    }}>
+                      <span style={{fontSize:'18px'}}>{p.emoji}</span>
                       <div>
-                        <div style={{fontSize:'11px',fontWeight:700,color:ARCH_COLOR,textTransform:'uppercase',letterSpacing:'0.07em'}}>The Architect</div>
-                        <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>Cosmic Overseer</div>
+                        <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
+                        <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
                       </div>
+                      {/* AI key affordance on Vox's header only — single entry
+                          point for enabling the LLM agent system. */}
+                      {isVox&&!agentSystemRef.current&&!apiKey&&(
+                        <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'3px 8px',border:`1px solid ${p.color}80`,backgroundColor:'transparent',color:p.color,cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
+                      )}
+                      {isVox&&!agentSystemRef.current&&apiKey&&(
+                        <span style={{marginLeft:'auto',fontSize:'10px',opacity:0.35}}>key set — next kickoff</span>
+                      )}
                     </div>
-                    <div style={{flex:1,minHeight:0,padding:'10px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${ARCH_COLOR} #111`}}>
-                      {architectItems.length===0
-                        ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>The void stirs...</div>
-                        :architectItems.map((item,i)=>{
-                          if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
-                          return <ArchitectCard key={i} item={item}/>;
+
+                    {/* ── Scroll content ──────────────────────────────────── */}
+                    {/* flex:1 + minHeight:0: standard trick to let a flex child
+                        scroll within its allocated space rather than expanding
+                        past it.  evtLogRef / onScroll live on Vox's column. */}
+                    <div
+                      {...(isVox?{ref:evtLogRef,onScroll:handleCommentaryScroll}:{})}
+                      style={{flex:1,minHeight:0,padding:'10px',overflowY:'auto',
+                              scrollbarWidth:'thin',scrollbarColor:`${p.color} #111`}}>
+                      {items.length===0
+                        ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>{emptyMsg}</div>
+                        :items.map((item,i)=>{
+                          // ── Vox column: architect cards + play_by_play ───────
+                          if(isVox){
+                            if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                            if(item.type==='architect_proclamation') return <ArchitectCard key={i} item={item}/>;
+                            if(item.type==='play_by_play') return(
+                              <div key={i} style={{marginBottom:'14px',borderLeft:`3px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}06`}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                                  <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
+                                  <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                                </div>
+                                <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>
+                                  "{item.text}{item.isStreaming?'▋':''}"
+                                </div>
+                              </div>
+                            );
+                            // ── Procedural fallback (no API key) ──────────────
+                            // Annulled goals are struck through and dimmed so the
+                            // Architect's retrospective rewrites remain readable.
+                            const annulled=item.architectAnnulled;
+                            const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
+                            return(
+                              <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:annulled?0.35:0.65,backgroundColor:annulled?'rgba(185,28,28,0.04)':item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
+                                <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5,alignItems:'center'}}>
+                                  <span style={{fontWeight:700,color:annulled?'#B91C1C':'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
+                                  <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
+                                  {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
+                                </div>
+                              </div>
+                            );
+                          }
+                          // ── Nexus-7 + Zara: standard commentator reaction card ─
+                          return(
+                            <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}0A`}}>
+                              <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
+                                <span>{item.emoji}</span>
+                                <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
+                                <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
+                              </div>
+                              <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
+                            </div>
+                          );
                         })
                       }
                     </div>
                   </div>
                 );
-              })()}
-
-              {/* ── Column 3: Captain Vox ───────────────────────────────────
-                  Play-by-play and procedural fallback events only.  Architect
-                  items are excluded from voxItems (see memo above) and now
-                  live in their own dedicated column. */}
-              {(()=>{const p=COMMENTATOR_PROFILES.find(x=>x.id==='captain_vox');return(
-                <div style={{display:'flex',flexDirection:'column',borderRight:'1px solid rgba(227,224,213,0.08)'}}>
-                  <div style={{padding:'10px 14px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',display:'flex',alignItems:'center',gap:'10px',backgroundColor:`${p.color}0A`}}>
-                    <span style={{fontSize:'18px'}}>{p.emoji}</span>
-                    <div>
-                      <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
-                      <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
-                    </div>
-                    {/* API key affordance lives on Vox's header — single entry
-                        point for enabling the LLM agent system. */}
-                    {!agentSystemRef.current&&!apiKey&&(
-                      <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'3px 8px',border:`1px solid ${p.color}80`,backgroundColor:'transparent',color:p.color,cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
-                    )}
-                    {!agentSystemRef.current&&apiKey&&(
-                      <span style={{marginLeft:'auto',fontSize:'10px',opacity:0.35}}>key set — next kickoff</span>
-                    )}
-                  </div>
-                  {/* evtLogRef + handleCommentaryScroll live here so the auto-
-                      scroll-to-bottom logic tracks the primary event feed. */}
-                  <div ref={evtLogRef} onScroll={handleCommentaryScroll} style={{flex:1,minHeight:0,padding:'10px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${p.color} #111`}}>
-                    {voxItems.length===0
-                      ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>{ms.minute===0?'Press Kick Off to begin':'Awaiting first play...'}</div>
-                      :voxItems.map((item,i)=>{
-                        // ── LLM play-by-play (API key active) ─────────────
-                        if(item.type==='play_by_play') return(
-                          <div key={i} style={{marginBottom:'14px',borderLeft:`3px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}06`}}>
-                            <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                              <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                              <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
-                            </div>
-                            <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>
-                              "{item.text}{item.isStreaming?'▋':''}"
-                            </div>
-                          </div>
-                        );
-                        // ── Procedural fallback (no API key) ──────────────
-                        // Annulled items are struck through and dimmed so the
-                        // Architect's retrospective rewrites remain readable.
-                        const annulled=item.architectAnnulled;
-                        const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
-                        return(
-                          <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:annulled?0.35:0.65,backgroundColor:annulled?'rgba(185,28,28,0.04)':item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
-                            <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5,alignItems:'center'}}>
-                              <span style={{fontWeight:700,color:annulled?'#B91C1C':'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
-                              <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
-                              {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
-                            </div>
-                          </div>
-                        );
-                      })
-                    }
-                  </div>
-                </div>
-              );})()}
-
-              {/* ── Column 4: Zara Bloom ────────────────────────────────── */}
-              {(()=>{const p=COMMENTATOR_PROFILES.find(x=>x.id==='zara_bloom');return(
-                <div style={{display:'flex',flexDirection:'column'}}>
-                  <div style={{padding:'10px 14px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',display:'flex',alignItems:'center',gap:'10px',backgroundColor:`${p.color}0A`}}>
-                    <span style={{fontSize:'18px'}}>{p.emoji}</span>
-                    <div>
-                      <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
-                      <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
-                    </div>
-                  </div>
-                  <div style={{flex:1,minHeight:0,padding:'10px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${p.color} #111`}}>
-                    {zaraItems.length===0
-                      ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>Watching the game...</div>
-                      :zaraItems.map((item,i)=>(
-                        <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}0A`}}>
-                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                            <span>{item.emoji}</span>
-                            <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                            <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
-                          </div>
-                          <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
-                        </div>
-                      ))
-                    }
-                  </div>
-                </div>
-              );})()}
-
+              })}
             </div>
           </div>
           </>
