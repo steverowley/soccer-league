@@ -846,6 +846,12 @@ const MatchSimulator = ({
   // Updated on every new event to simulate the ball moving around the pitch.
   // Initialised at 50 (centre) so the ball starts in a neutral position.
   const [ballY,setBallY]=useState(50);
+  // cinemaEvent — the latest "significant" match event (goal, save, card, injury)
+  // shown as an overlay on the pitch.  Null between events = calm pitch view.
+  const [cinemaEvent,setCinemaEvent]=useState(null);
+  // cinemaKey — incremented each time cinemaEvent changes; used as the React
+  // key on the overlay div so CSS animations restart cleanly for every new event.
+  const [cinemaKey,setCinemaKey]=useState(0);
   const agentSystemRef=useRef(null);
   // Ref for the CosmicArchitect instance.  Kept as a ref (not state) for the
   // same reason as agentSystemRef: the Architect is mutated in place across
@@ -858,6 +864,11 @@ const MatchSimulator = ({
   const managerDecisionRef=useRef({ homeLastMin: -99, awayLastMin: -99 });
   const lastEventCountRef=useRef(0);
   const lastThoughtsCountRef=useRef(0);
+  // cinemaTimeoutRef — holds the setTimeout handle that clears cinemaEvent
+  // after the overlay display window (3 s).  Stored in a ref so the timer can
+  // be cancelled synchronously when a new event fires mid-display, preventing
+  // the previous event's timeout from wiping the new event's overlay early.
+  const cinemaTimeoutRef=useRef(null);
   // Tracks whether the user has manually scrolled away from the top of the
   // commentary feed.  When true, auto-scroll is suppressed so new entries
   // don't yank the viewport back while the user is reading older content.
@@ -882,15 +893,43 @@ const MatchSimulator = ({
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);clearTimeout(toastRef.current);};},[]);
   useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
 
-  // ── Ball vertical position ─────────────────────────────────────────────────
-  // Randomise ballY whenever a new event is added to the log.  We depend on
-  // events.length rather than the full array to avoid re-triggering when the
-  // Architect rewrites event content without increasing the count.
-  // Range 25–75 keeps the ball away from the touchlines at all times.
+  // ── Ball position + cinema event ──────────────────────────────────────────
+  // Fires whenever a new event is appended to the log (dep: events.length).
+  // Using events.length rather than the full array avoids re-triggering when
+  // the Architect rewrites event content without increasing the count.
+  //
+  // Two responsibilities:
+  //   1. Randomise ballY (25–75%) so the ball drifts vertically between events.
+  //   2. Classify the new event and, if significant (goal, save, shot, card,
+  //      injury), mount the pitch cinema overlay via cinemaEvent.
+  //      cinemaKey is incremented so the overlay div re-mounts and CSS
+  //      animations restart cleanly even when the same event type fires twice.
+  //      The previous timer is cancelled before the new one is set so rapid
+  //      event succession never clears a newer overlay early.
   useEffect(()=>{
     if(!matchState.events.length)return;
-    setBallY(25+Math.random()*50); // 25–75% — avoids clipping touchlines
-  },[matchState.events.length]);
+    setBallY(25+Math.random()*50); // 25–75% band — avoids clipping touchlines
+
+    const ev=matchState.events[matchState.events.length-1];
+    if(!ev)return;
+
+    // Significant events only — routine play skipped to preserve overlay impact.
+    const significant=ev.isGoal||ev.outcome==='saved'||
+      (ev.type==='shot'&&!ev.isGoal)||ev.cardType||ev.isInjury;
+    if(!significant)return;
+
+    const isHome=ev.team===matchState.homeTeam.shortName;
+    const color=isHome?matchState.homeTeam.color:matchState.awayTeam.color;
+
+    clearTimeout(cinemaTimeoutRef.current);
+    setCinemaEvent({...ev,isHome,color});
+    setCinemaKey(k=>k+1);
+    // 3 000 ms — readable at NORMAL speed (1 000 ms/tick) without lingering
+    // through two consecutive events at FAST speed (500 ms/tick).
+    cinemaTimeoutRef.current=setTimeout(()=>setCinemaEvent(null),3000);
+  },[matchState.events.length]);// eslint-disable-line react-hooks/exhaustive-deps
+  // homeTeam/awayTeam colour and shortName are stable for the match lifetime;
+  // omitting them from deps is intentional and safe.
 
   // Route a single LLM result to the correct feed.
   //
@@ -2067,165 +2106,150 @@ const MatchSimulator = ({
             <div style={{display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px'}}>
                 <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
-                {/* ── Live Pitch ──────────────────────────────────────────────
-                    180px tall (up from 88px) with proportional FIFA markings:
-                      • Penalty areas  16% wide × 60% tall (16.5m/105m depth,
-                        40.32m/68m height on a real pitch)
-                      • Goal areas     5.5% wide × 28% tall (6-yard boxes)
-                      • Goal posts     6px wide × 12% tall (7.32m/68m)
-                      • Centre circle  60px diameter (9.15m radius scaled)
-                      • Corner arcs    12px quarter-circles at each corner
-                    Vertical grass stripes run along the pitch length (90°)
-                    matching the conventional top-down broadcast look.
-                    overflow:hidden clips the ball emoji when near the edges. */}
+                {/* ── Live Pitch (event cinema) ───────────────────────────────
+                    Calm state: minimal pitch outline + ball tracking possession.
+                    Cinema state: when a significant event fires (goal, save,
+                    shot, card, injury) a contextual overlay fades in, holds for
+                    3 s, then clears — making the pitch react to the match
+                    narrative rather than showing static player dots. */}
                 {(()=>{
-                  // ── Derived values for pressure and goal-flash overlays ──
-                  // momDiff > 0 → home dominant; < 0 → away dominant.
-                  // Pressure overlay only fires when the difference is ≥ 2
-                  // to avoid visual noise during balanced midfield exchanges.
-                  const momDiff         = ms.momentum[0]-ms.momentum[1];
-                  // pressureOpacity scales from 0 to 0.18 as momentum gap grows.
-                  // 0.18 cap keeps the overlay subtle and non-distracting.
-                  const pressureOpacity = Math.min(0.18,Math.abs(momDiff)/10*0.18);
-                  const pressureColor   = momDiff>0?ms.homeTeam.color:ms.awayTeam.color;
-                  const pressureDir     = momDiff>0?'to right':'to left';
-                  // Last non-annulled goal event determines which end to flash.
-                  const lastGoalEvt    = ms.events.slice().reverse().find(e=>e.isGoal&&!e.architectAnnulled);
-                  const lastGoalIsHome = lastGoalEvt?lastGoalEvt.team===ms.homeTeam.shortName:null;
-                  const showGoalFlash  = ms.currentAnimation?.type==='goal';
-                  // Player dots — only available after aiManager is initialised on Kick Off.
-                  const homeDots = aiManager?buildPlayerDots(parseFormation(aiManager.homeFormation),true):[];
-                  const awayDots = aiManager?buildPlayerDots(parseFormation(aiManager.awayFormation),false):[];
+                  // ── Cinema config ─────────────────────────────────────────
+                  // Classify the current cinemaEvent into an icon, label, colour,
+                  // background tint, and spatial hint (which side of the pitch the
+                  // action happened on).  Returns null when no overlay should show.
+                  //
+                  // attackDir: the end of the pitch a shot/goal/save is heading
+                  // toward.  Home attacks right, away attacks left — this gives the
+                  // overlay spatial context rather than always centring it.
+                  let cinema=null;
+                  if(cinemaEvent){
+                    const ev=cinemaEvent;
+                    const attackDir=ev.isHome?'right':'left'; // home scores on right, away on left
+                    if(ev.isGoal&&!ev.architectAnnulled){
+                      // Full-pitch celebration: coloured bg tint + large goal icon.
+                      cinema={icon:'⚽',label:'GOAL',color:ev.color,bg:`${ev.color}22`,side:attackDir};
+                    }else if(ev.outcome==='saved'){
+                      // Keeper save — purple accent to feel neutral/keeper-focused.
+                      cinema={icon:'✋',label:'SAVED',color:'#9A5CF4',bg:'rgba(154,92,244,0.12)',side:attackDir};
+                    }else if(ev.type==='shot'&&!ev.isGoal){
+                      // Near miss / wide — muted styling, same attack direction.
+                      cinema={icon:'💨',label:'WIDE',color:'rgba(227,224,213,0.55)',bg:'rgba(0,0,0,0.18)',side:attackDir};
+                    }else if(ev.cardType==='red'){
+                      cinema={icon:'🟥',label:'RED CARD',color:'#E05252',bg:'rgba(224,82,82,0.12)',side:'center'};
+                    }else if(ev.cardType==='yellow'){
+                      cinema={icon:'🟨',label:'BOOKED',color:'#FFD700',bg:'rgba(255,215,0,0.08)',side:'center'};
+                    }else if(ev.isInjury){
+                      cinema={icon:'🚑',label:'INJURY',color:'rgba(227,224,213,0.7)',bg:'rgba(0,0,0,0.25)',side:'center'};
+                    }
+                  }
+
+                  // ── Momentum pressure ────────────────────────────────────
+                  // Subtle directional gradient on the dominant team's side.
+                  // Threshold ≥ 2 suppresses noise during balanced exchanges.
+                  // Max opacity 0.15 keeps it atmospheric, not distracting.
+                  const momDiff=ms.momentum[0]-ms.momentum[1];
+                  const showPressure=Math.abs(momDiff)>=2;
+                  const presDir=momDiff>0?'to right':'to left';
+                  const presColor=momDiff>0?ms.homeTeam.color:ms.awayTeam.color;
+                  // Convert hex → rgb for rgba() — needed because team colors are
+                  // arbitrary hex strings that can't be composed with opacity in CSS
+                  // without parsing.  Only runs when pressure overlay is visible.
+                  const presRgb=showPressure
+                    ?`${parseInt(presColor.slice(1,3),16)},${parseInt(presColor.slice(3,5),16)},${parseInt(presColor.slice(5,7),16)}`
+                    :'0,0,0';
+                  const presOpacity=Math.min(0.15,Math.abs(momDiff)/10*0.15);
+
                   return(
                     <div style={{
                       position:'relative',height:'180px',backgroundColor:'#1a4d2e',
-                      border:'1px solid rgba(227,224,213,0.2)',overflow:'hidden',
-                      // Vertical stripes (90°) along the pitch length — conventional broadcast look.
-                      // Alternate bands are ~11% wide; every other band has a 2.5% brightness lift.
-                      backgroundImage:[
-                        'repeating-linear-gradient(90deg,',
-                        'transparent,transparent 11%,',
-                        'rgba(255,255,255,0.025) 11%,rgba(255,255,255,0.025) 22%,',
-                        'transparent 22%,transparent 33%,',
-                        'rgba(255,255,255,0.025) 33%,rgba(255,255,255,0.025) 44%,',
-                        'transparent 44%,transparent 55%,',
-                        'rgba(255,255,255,0.025) 55%,rgba(255,255,255,0.025) 66%,',
-                        'transparent 66%,transparent 77%,',
-                        'rgba(255,255,255,0.025) 77%,rgba(255,255,255,0.025) 88%,',
-                        'transparent 88%)',
-                      ].join(''),
+                      border:'1px solid rgba(255,255,255,0.12)',overflow:'hidden',
+                      // Vertical stripes along the pitch length — conventional broadcast look.
+                      backgroundImage:'repeating-linear-gradient(90deg,transparent,transparent 11%,rgba(255,255,255,0.025) 11%,rgba(255,255,255,0.025) 22%,transparent 22%,transparent 33%,rgba(255,255,255,0.025) 33%,rgba(255,255,255,0.025) 44%,transparent 44%,transparent 55%,rgba(255,255,255,0.025) 55%,rgba(255,255,255,0.025) 66%,transparent 66%,transparent 77%,rgba(255,255,255,0.025) 77%,rgba(255,255,255,0.025) 88%,transparent 88%)',
                     }}>
 
-                      {/* ── Momentum pressure gradient overlay ──────────────────
-                          Subtle team-coloured glow on the dominant side.
-                          Only rendered when |momDiff| ≥ 2 to avoid noise
-                          during balanced play. Opacity max 0.18. */}
-                      {Math.abs(momDiff)>=2&&(
-                        <div style={{
-                          position:'absolute',inset:0,pointerEvents:'none',zIndex:1,
-                          background:`linear-gradient(${pressureDir},rgba(${parseInt(pressureColor.slice(1,3),16)},${parseInt(pressureColor.slice(3,5),16)},${parseInt(pressureColor.slice(5,7),16)},${pressureOpacity}) 0%,transparent 55%)`,
+                      {/* ── Momentum pressure gradient ────────────────────── */}
+                      {showPressure&&(
+                        <div style={{position:'absolute',inset:0,zIndex:1,pointerEvents:'none',
+                          background:`linear-gradient(${presDir},rgba(${presRgb},${presOpacity}) 0%,transparent 52%)`,
                         }}/>
                       )}
 
-                      {/* ── Goal flash overlay ───────────────────────────────────
-                          Fires when ms.currentAnimation.type === 'goal'.
-                          Highlights the scoring team's goal end with a 2s
-                          fade-out using the goalFlash keyframe. */}
-                      {showGoalFlash&&lastGoalIsHome!==null&&(
-                        <div style={{
-                          position:'absolute',top:0,bottom:0,width:'25%',
-                          ...(lastGoalIsHome?{right:0}:{left:0}),
-                          // Gradient from the goal end inward so it feels directional
-                          background:lastGoalIsHome
-                            ?`linear-gradient(to left,${ms.homeTeam.color}55,transparent)`
-                            :`linear-gradient(to right,${ms.awayTeam.color}55,transparent)`,
-                          animation:'goalFlash 2s ease-out forwards',
-                          zIndex:2,pointerEvents:'none',
-                        }}/>
-                      )}
+                      {/* ── Pitch markings ───────────────────────────────── */}
+                      {/* Halfway line */}
+                      <div style={{position:'absolute',left:'50%',top:0,bottom:0,width:'1px',backgroundColor:'rgba(255,255,255,0.2)',zIndex:2}}/>
+                      {/* Centre circle — 56px ≈ 9.15m/68m scaled to 180px height */}
+                      <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:'56px',height:'56px',borderRadius:'50%',border:'1px solid rgba(255,255,255,0.2)',zIndex:2}}/>
+                      {/* Centre spot */}
+                      <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:'4px',height:'4px',borderRadius:'50%',backgroundColor:'rgba(255,255,255,0.4)',zIndex:2}}/>
+                      {/* Penalty areas: 16% wide × 60% tall, team-tinted fill */}
+                      <div style={{position:'absolute',left:0,top:'20%',width:'16%',height:'60%',border:'1px solid rgba(255,255,255,0.15)',borderLeft:'none',backgroundColor:`${ms.homeTeam.color}08`,zIndex:2}}/>
+                      <div style={{position:'absolute',right:0,top:'20%',width:'16%',height:'60%',border:'1px solid rgba(255,255,255,0.15)',borderRight:'none',backgroundColor:`${ms.awayTeam.color}08`,zIndex:2}}/>
+                      {/* Goals — 5px wide × 20% tall, team coloured */}
+                      <div style={{position:'absolute',left:0,top:'40%',width:'5px',height:'20%',backgroundColor:ms.homeTeam.color,opacity:0.9,zIndex:3}}/>
+                      <div style={{position:'absolute',right:0,top:'40%',width:'5px',height:'20%',backgroundColor:ms.awayTeam.color,opacity:0.9,zIndex:3}}/>
 
-                      {/* ── Halfway line ─────────────────────────────────────── */}
-                      <div style={{position:'absolute',left:'50%',top:0,bottom:0,width:'1px',backgroundColor:'rgba(227,224,213,0.25)',zIndex:3}}/>
-
-                      {/* ── Centre circle (60px diameter) ────────────────────── */}
-                      {/* Real: 9.15m radius / 68m pitch width ≈ 13.5% → 24px radius.
-                          Bumped to 30px (60px diameter) for readability at this scale. */}
-                      <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:'60px',height:'60px',borderRadius:'50%',border:'1px solid rgba(227,224,213,0.3)',zIndex:3}}/>
-
-                      {/* ── Centre spot ──────────────────────────────────────── */}
-                      <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:'4px',height:'4px',borderRadius:'50%',backgroundColor:'rgba(227,224,213,0.5)',zIndex:4}}/>
-
-                      {/* ── Penalty areas (16% wide × 60% tall) ──────────────── */}
-                      {/* Real: 16.5m deep / 105m = 15.7% → rounded to 16%.
-                          40.32m wide / 68m = 59.3% → 60%, centred → top:20%. */}
-                      <div style={{position:'absolute',left:0,top:'20%',width:'16%',height:'60%',border:'1px solid rgba(227,224,213,0.3)',borderLeft:'none',backgroundColor:`${ms.homeTeam.color}08`,zIndex:3}}/>
-                      <div style={{position:'absolute',right:0,top:'20%',width:'16%',height:'60%',border:'1px solid rgba(227,224,213,0.3)',borderRight:'none',backgroundColor:`${ms.awayTeam.color}08`,zIndex:3}}/>
-
-                      {/* ── Goal areas / 6-yard boxes (5.5% wide × 28% tall) ─── */}
-                      {/* Real: 5.5m deep / 105m = 5.2% → 5.5%.
-                          18.32m wide / 68m = 27% → 28%, centred → top:36%. */}
-                      <div style={{position:'absolute',left:0,top:'36%',width:'5.5%',height:'28%',border:'1px solid rgba(227,224,213,0.2)',borderLeft:'none',zIndex:3}}/>
-                      <div style={{position:'absolute',right:0,top:'36%',width:'5.5%',height:'28%',border:'1px solid rgba(227,224,213,0.2)',borderRight:'none',zIndex:3}}/>
-
-                      {/* ── Goals / posts (6px deep × 12% tall) ─────────────── */}
-                      {/* Real: 7.32m wide / 68m ≈ 10.8% → 12%; depth exaggerated
-                          to 6px for visibility. Centred → top:44%. */}
-                      <div style={{position:'absolute',left:0,top:'44%',width:'6px',height:'12%',border:`1px solid ${ms.homeTeam.color}`,borderLeft:'none',backgroundColor:`${ms.homeTeam.color}30`,zIndex:4}}/>
-                      <div style={{position:'absolute',right:0,top:'44%',width:'6px',height:'12%',border:`1px solid ${ms.awayTeam.color}`,borderRight:'none',backgroundColor:`${ms.awayTeam.color}30`,zIndex:4}}/>
-
-                      {/* ── Corner arc indicators ────────────────────────────── */}
-                      {/* Quarter-circle at each corner via single-sided borders
-                          and border-radius on the inner corner only.
-                          Positioned at -6px so the arc originates from the corner. */}
-                      {[
-                        {top:'-6px',left:'-6px',borderTop:'none',borderLeft:'none'},
-                        {top:'-6px',right:'-6px',borderTop:'none',borderRight:'none'},
-                        {bottom:'-6px',left:'-6px',borderBottom:'none',borderLeft:'none'},
-                        {bottom:'-6px',right:'-6px',borderBottom:'none',borderRight:'none'},
-                      ].map((s,i)=>(
-                        <div key={i} style={{position:'absolute',...s,width:'12px',height:'12px',borderRadius:'50%',border:'1px solid rgba(227,224,213,0.25)',zIndex:3}}/>
-                      ))}
-
-                      {/* ── Home player dots ─────────────────────────────────── */}
-                      {/* 7px coloured circles with a soft glow matching team colour.
-                          Only rendered when aiManager (and thus formation data)
-                          is available — i.e. after Kick Off is pressed. */}
-                      {homeDots.map((dot,i)=>(
-                        <div key={`h${i}`} style={{
-                          position:'absolute',left:`${dot.x}%`,top:`${dot.y}%`,
-                          transform:'translate(-50%,-50%)',width:'7px',height:'7px',
-                          borderRadius:'50%',backgroundColor:ms.homeTeam.color,
-                          boxShadow:`0 0 4px ${ms.homeTeam.color}80`,
-                          zIndex:5,transition:'top 1.5s ease,left 1.5s ease',
-                        }}/>
-                      ))}
-
-                      {/* ── Away player dots ─────────────────────────────────── */}
-                      {awayDots.map((dot,i)=>(
-                        <div key={`a${i}`} style={{
-                          position:'absolute',left:`${dot.x}%`,top:`${dot.y}%`,
-                          transform:'translate(-50%,-50%)',width:'7px',height:'7px',
-                          borderRadius:'50%',backgroundColor:ms.awayTeam.color,
-                          boxShadow:`0 0 4px ${ms.awayTeam.color}80`,
-                          zIndex:5,transition:'top 1.5s ease,left 1.5s ease',
-                        }}/>
-                      ))}
-
-                      {/* ── Ball ─────────────────────────────────────────────── */}
-                      {/* Horizontal position driven by possession[0]%.
-                          Vertical position driven by ballY state, randomised
-                          on each new event (25–75% band) to simulate live play.
-                          drop-shadow gives a subtle white halo for visibility
-                          against the dark green pitch surface. */}
+                      {/* ── Ball (calm state) ────────────────────────────── */}
+                      {/* Dimmed behind cinema overlay but still visible so the
+                          viewer doesn't lose spatial context during events. */}
                       <div style={{
                         position:'absolute',
                         left:`calc(${ms.possession[0]}% - 8px)`,
                         top:`calc(${ballY}% - 8px)`,
                         fontSize:'14px',lineHeight:1,
                         transition:'left 1s ease,top 1.5s ease',
-                        zIndex:6,
-                        filter:'drop-shadow(0 0 3px rgba(255,255,255,0.6))',
+                        zIndex:4,
+                        opacity:cinema?0.25:1,
+                        filter:'drop-shadow(0 0 3px rgba(255,255,255,0.55))',
                       }}>⚽</div>
+
+                      {/* ── Cinema overlay ───────────────────────────────── */}
+                      {/* Full-pitch semi-transparent overlay showing event type,
+                          icon, and player name.  key=cinemaKey forces a re-mount
+                          (and animation restart) on every new event, even when
+                          the same event type fires twice in a row.
+                          The goal-end colour strip gives spatial context — it
+                          covers the side of the pitch the action happened on. */}
+                      {cinema&&(
+                        <div key={cinemaKey} style={{
+                          position:'absolute',inset:0,zIndex:5,
+                          display:'flex',flexDirection:'column',
+                          alignItems:'center',justifyContent:'center',
+                          backgroundColor:cinema.bg,
+                          animation:'cinemaIn 0.25s ease-out forwards',
+                        }}>
+                          {/* Directional colour strip at the action end */}
+                          {cinema.side!=='center'&&(
+                            <div style={{
+                              position:'absolute',top:0,bottom:0,width:'28%',
+                              ...(cinema.side==='right'?{right:0}:{left:0}),
+                              background:cinema.side==='right'
+                                ?`linear-gradient(to left,${cinema.color}30,transparent)`
+                                :`linear-gradient(to right,${cinema.color}30,transparent)`,
+                              pointerEvents:'none',
+                            }}/>
+                          )}
+                          {/* Event icon — large, pops in with cinemaPulse */}
+                          <div style={{
+                            fontSize:'38px',lineHeight:1,marginBottom:'6px',
+                            animation:'cinemaPulse 0.4s ease-out forwards',
+                          }}>{cinema.icon}</div>
+                          {/* Event label */}
+                          <div style={{
+                            fontSize:'13px',fontWeight:700,letterSpacing:'0.14em',
+                            textTransform:'uppercase',color:cinema.color,
+                            fontFamily:"'Space Mono',monospace",
+                          }}>{cinema.label}</div>
+                          {/* Player name + minute (when available) */}
+                          {cinemaEvent.player&&(
+                            <div style={{
+                              fontSize:'10px',opacity:0.65,marginTop:'4px',
+                              fontFamily:"'Space Mono',monospace",
+                            }}>
+                              {cinemaEvent.player}{cinemaEvent.minute?` · ${cinemaEvent.minute}'`:''}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                     </div>
                   );
@@ -2604,6 +2628,8 @@ const MatchSimulator = ({
         @keyframes goalPulse{0%{opacity:1;transform:scale(0.5);}50%{opacity:1;transform:scale(1.5);}100%{opacity:0;transform:scale(0.8);}}
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
         @keyframes goalFlash{0%{opacity:1;}60%{opacity:0.8;}100%{opacity:0;}}
+        @keyframes cinemaIn{from{opacity:0;}to{opacity:1;}}
+        @keyframes cinemaPulse{0%{transform:scale(0.4);}65%{transform:scale(1.15);}100%{transform:scale(1);}}
       `}</style>
     </div>
   );
