@@ -152,9 +152,23 @@ export default function TeamDetail() {
               <MetaRow label="Location"    value={team.location} />
               <MetaRow label="Home Ground" value={team.homeGround} />
               <MetaRow label="Capacity"    value={team.capacity} />
-              {/* League membership — derived rather than stored on the team
-                  object so it stays in sync if a team is moved between leagues */}
-              {leagueName && <MetaRow label="League" value={leagueName} />}
+              {/* ── League membership ──────────────────────────────────────────
+                  Derived rather than stored on the team object so it stays in
+                  sync if a team moves between leagues.  The value is a Link so
+                  users can navigate directly from a team to its parent league. */}
+              {leagueName && (
+                <MetaRow
+                  label="League"
+                  value={
+                    <Link
+                      to={`/leagues/${team.leagueId}`}
+                      style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.3)' }}
+                    >
+                      {leagueName}
+                    </Link>
+                  }
+                />
+              )}
             </div>
 
             {/* Description paragraphs — split from the \n-delimited string */}
@@ -165,6 +179,26 @@ export default function TeamDetail() {
                 </p>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ── Cross-feature actions ──────────────────────────────────────────── */}
+        {/* Positioned immediately after the team info card so all key actions
+            are visible before the user scrolls into the stats tables.
+            - Simulate a Match → Matches page (fixture selector pre-loaded)
+            - Browse League    → parent league's standings + player stat tables
+            - View Players     → Players page filtered to this league's clubs   */}
+        <section className="section" style={{ paddingTop: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <Link to="/matches">
+              <Button variant="tertiary">Simulate a Match</Button>
+            </Link>
+            <Link to={`/leagues/${team.leagueId}`}>
+              <Button variant="primary">Browse League</Button>
+            </Link>
+            <Link to={`/players?league=${team.leagueId}`}>
+              <Button variant="primary">View Players</Button>
+            </Link>
           </div>
         </section>
 

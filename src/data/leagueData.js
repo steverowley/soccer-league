@@ -425,10 +425,14 @@ export const TEAMS_BY_LEAGUE = {
  * Column definitions for the league standings table.
  * Used by Home (carousel), LeagueDetail, and TeamDetail (season / historic).
  *
- * @type {Array<{key: string, label: string, align?: string}>}
+ * The 'team' column uses `linkField: 'teamLink'` so IslTable automatically
+ * renders each team name as a React Router <Link> to that team's detail page.
+ * The `teamLink` property is populated by buildStandingsRows().
+ *
+ * @type {Array<{key: string, label: string, align?: string, linkField?: string}>}
  */
 export const STANDINGS_COLS = [
-  { key: 'team',   label: 'Team' },
+  { key: 'team',   label: 'Team', linkField: 'teamLink' },
   { key: 'played', label: 'Played', align: 'right' },
   { key: 'wins',   label: 'Wins',   align: 'right' },
   { key: 'draws',  label: 'Draws',  align: 'right' },
@@ -460,22 +464,30 @@ export const PLAYER_STAT_COLS = [
  * persisted, this function will be replaced by a selector reading from a
  * results store or API response.
  *
+ * Each row includes a `teamLink` property (`/teams/:id`) consumed by the
+ * `linkField` on STANDINGS_COLS so IslTable renders the team name as a
+ * navigable link to that team's detail page — without any extra markup in
+ * the calling page component.
+ *
  * Used by: Home (carousel), LeagueDetail (full standings table).
  *
  * @param {string} leagueId - League slug (e.g. 'rocky-inner')
- * @returns {Array<{id: string, team: string, played: number, wins: number,
- *                  draws: number, loses: number, points: number}>}
+ * @returns {Array<{id: string, team: string, teamLink: string, played: number,
+ *                  wins: number, draws: number, loses: number, points: number}>}
  */
 export function buildStandingsRows(leagueId) {
   const teams = TEAMS_BY_LEAGUE[leagueId] ?? [];
   return teams.map(t => ({
-    id:     t.id,
-    team:   t.name,
-    played: 0,
-    wins:   0,
-    draws:  0,
-    loses:  0,
-    points: 0,
+    id:       t.id,
+    team:     t.name,
+    // teamLink is read by STANDINGS_COLS' linkField so IslTable can render
+    // the team name as a <Link> without any page-level wiring.
+    teamLink: `/teams/${t.id}`,
+    played:   0,
+    wins:     0,
+    draws:    0,
+    loses:    0,
+    points:   0,
   }));
 }
 

@@ -140,8 +140,17 @@ export default function Home() {
               ◄
             </button>
 
+            {/* ── League title as link ─────────────────────────────────────────
+                Wrapping the title in a Link lets the home page standings
+                carousel serve as an entry point into each league's full
+                detail page (standings + player stat tables). */}
             <h2 className="section-title" style={{ margin: 0 }}>
-              League Standings — {currentLeague.name}
+              <Link
+                to={`/leagues/${currentLeague.id}`}
+                style={{ color: 'inherit', textDecoration: 'none' }}
+              >
+                League Standings — {currentLeague.name}
+              </Link>
             </h2>
 
             {/* Right arrow — wraps to first league when on last */}
@@ -157,12 +166,23 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Dark standings table — matches the primary table variant in mockup */}
+          {/* Dark standings table — team names link to /teams/:id via the
+              linkField wired on STANDINGS_COLS + buildStandingsRows(). */}
           <IslTable
             variant="dark"
             columns={STANDINGS_COLS}
             rows={standingsRows}
           />
+
+          {/* ── View full standings link ────────────────────────────────────────
+              Placed below the table so users who want more detail (player
+              stat tables, full standings) have an obvious onward path from
+              the home page preview. */}
+          <div style={{ marginTop: '12px', textAlign: 'right' }}>
+            <Link to={`/leagues/${currentLeague.id}`}>
+              <Button variant="secondary">View Full Standings →</Button>
+            </Link>
+          </div>
         </section>
 
         {/* ── LATEST NEWS ───────────────────────────────────────────────────────── */}

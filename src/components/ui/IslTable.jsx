@@ -1,4 +1,6 @@
 // ── IslTable.jsx ──────────────────────────────────────────────────────────────
+import { Link } from 'react-router-dom';
+
 // Implements the two ISL table variants defined in the design system:
 //
 //  DARK  – Phobos Ash (#1F1F1F) background, Lunar Dust text.
@@ -30,11 +32,16 @@
  * @param {'dark'|'light'} [variant='dark']
  *   Visual style.  'dark' uses Phobos Ash bg; 'light' uses Lunar Dust bg.
  *
- * @param {Array<{key: string, label: string, align?: 'left'|'right'|'center'}>} columns
+ * @param {Array<{key: string, label: string, align?: 'left'|'right'|'center', linkField?: string}>} columns
  *   Column definitions in display order.
- *   - key    – matches the property name on each row data object
- *   - label  – header text (rendered uppercase by CSS)
- *   - align  – optional text alignment; defaults to 'left'
+ *   - key       – matches the property name on each row data object
+ *   - label     – header text (rendered uppercase by CSS)
+ *   - align     – optional text alignment; defaults to 'left'
+ *   - linkField – optional: when set, the cell value is rendered as a React
+ *                 Router <Link> whose `to` prop is read from row[linkField].
+ *                 Allows standings/stat tables to link team names to their
+ *                 detail pages without requiring page components to build
+ *                 custom table markup.
  *
  * @param {Array<object>} rows
  *   Array of data objects.  Each object should have a property for every
@@ -99,9 +106,24 @@ export default function IslTable({ variant = 'dark', columns, rows, className = 
                     key={col.key}
                     style={{ textAlign: col.align ?? 'left' }}
                   >
-                    {/* Render 0 and empty string as-is; only null/undefined
+                    {/* ── Cell content ───────────────────────────────────────
+                        When the column declares a linkField, the cell value is
+                        wrapped in a React Router <Link> whose destination is
+                        read from row[col.linkField].  This keeps navigation
+                        wiring in the data layer (column/row definitions) rather
+                        than requiring each page to build bespoke table markup.
+                        Render 0 and empty string as-is; only null/undefined
                         falls back to an em-dash placeholder. */}
-                    {row[col.key] ?? '—'}
+                    {col.linkField && row[col.linkField] ? (
+                      <Link
+                        to={row[col.linkField]}
+                        style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.3)' }}
+                      >
+                        {row[col.key] ?? '—'}
+                      </Link>
+                    ) : (
+                      row[col.key] ?? '—'
+                    )}
                   </td>
                 ))}
               </tr>
