@@ -1746,12 +1746,12 @@ const MatchSimulator = ({
   // Referee decisions are intentionally excluded from all commentary columns;
   // the Referee info card in the Officials section is the sole referee display.
   const nexusItems     = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'), [commentaryReversed]);
-  // architectItems feeds the Architect card in the centre feed column above
-  // the broadcast booth (below Match Events).  The same items also appear in
-  // the Vox booth column so the full cosmic narrative is readable there too.
+  // architectItems feeds the Architect card in the centre feed column
+  // (below Match Events).  Architect types are excluded from voxItems below
+  // so they appear only in that dedicated card, not duplicated in Vox's column.
   const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference'), [commentaryReversed]);
-  // Vox column: play_by_play + architect cards + procedural fallback events.
-  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom'), [commentaryReversed]);
+  // Vox column: play_by_play + procedural fallback events only.
+  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'architect_proclamation' && i.type !== 'architect_interference'), [commentaryReversed]);
   const zaraItems      = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'), [commentaryReversed]);
   const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
   const awayManagerReversed   = useMemo(() => [...awayManagerFeed].reverse(),   [awayManagerFeed]);
@@ -1998,10 +1998,13 @@ const MatchSimulator = ({
         {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
         {aiManager&&(
           <>
-          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'460px',alignItems:'stretch'}}>
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'580px',alignItems:'stretch'}}>
             {/* Layout contract for this section:
-                - grid height 600px gives all three columns a fixed block size.
-                - Grid align-items:stretch sizes each column to 600px without
+                - grid height 580px gives all three columns a fixed block size.
+                  The extra height (vs the previous 460px) flows entirely to the
+                  Architect card at the bottom of the centre column, giving it
+                  ~260px — enough for 4–5 proclamation cards before scrolling.
+                - Grid align-items:stretch sizes each column to 580px without
                   needing height:100% on the column divs (avoids % resolution
                   edge cases in some browsers).
                 - overflow:hidden on each column clips any content overflow.
@@ -2368,8 +2371,14 @@ const MatchSimulator = ({
                   : p.id==='nexus7' ? 'Compiling data...' : 'Watching the game...';
 
                 return(
+                  // height:'100%' is required here.  CSS grid stretches grid
+                  // items to fill their cell by default, but without an explicit
+                  // height the browser may not propagate the computed pixel height
+                  // to flex children, causing flex:1 on the scroll div below to
+                  // resolve to 0 and disabling scrolling entirely.
                   <div key={p.id} style={{
                     display:'flex',flexDirection:'column',
+                    height:'100%',
                     borderRight:ci<2?'1px solid rgba(227,224,213,0.08)':'none',
                   }}>
                     {/* ── Column header ───────────────────────────────────── */}
