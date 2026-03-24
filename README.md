@@ -48,9 +48,13 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
   - **Sealed Fate** (prophecy-driven forced outcomes)
   - **Architect Interference** (10 active flags: keeperParalysed, goalDrought, gravityFlipped, architectTantrum, commentaryVoid, voidCreature, eldritchPortal, pendingInterferences, pendingPenalty, reversalBoost — each flag fires once per event batch with 20-min cooldown, probability scaling with edict polarity)
 
-**Primary Narration** — Captain Vox now runs first as the primary narrator:
-- Receives structured event data instead of terse procedural text
-- Nexus-7 and Zara Bloom react to Vox's narration, creating conversational depth
+**Commentary Pipeline** — Optimized for minimal latency between match events and AI commentary:
+- All voices (Captain Vox, Nexus-7, Zara Bloom) run in **parallel** rather than sequentially, eliminating the 300–800 ms blocking wait for Vox's narration
+- Reactors receive structured event descriptions (action, player, result, flags) instead of Vox's prose, providing factual clarity without LLM round-trip latency
+- **Streaming dispatch**: Each commentary item is streamed to the feed the moment its individual API call resolves, rather than batching after the slowest parallel call
+- **Speed-adaptive cooldown** (TURBO → 0 ms, FAST → 100 ms, NORMAL → 300 ms, SLOW → 500 ms) scales the inter-event processing gap to match simulation speed, preventing queue back-pressure at high speeds
+- **Priority queue gating** drops low-value events (minor/manager comments) when ≥2 events await; medium events when ≥3 await; goals and red cards always pass — preventing stale commentary from burying important moments
+- Net result: Commentary latency reduced from ~3 s to ~500 ms at TURBO speed
 
 **Commentary Personas** — Three distinct voices:
 - **Captain Vox** — primary narrator, bombastic veteran with cosmic metaphors
