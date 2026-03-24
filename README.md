@@ -68,6 +68,13 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 
 ### Match Simulator UI
 - Live scoreboard, possession bar, and momentum tracker
+- **Live Pitch Visualization** — 180px tall proportional FIFA pitch with:
+  - Proper pitch markings: penalty areas (16% wide × 60% tall), goal areas (5.5% × 28%), goal posts (team-colored, 6px wide × 12% tall), centre circle, centre spot, and corner arcs
+  - Vertical grass stripes along the pitch length for a broadcast-style look
+  - **Player Dots** — formation-based positioning (GK centered at each end, outfield players distributed across their half by formation lines); appear after Kick Off
+  - **Ball Movement** — horizontal tracking by possession percentage + vertical randomization on each new event (25–75% range), creating a sense of dynamic pitch flow
+  - **Momentum Pressure Overlay** — subtle team-colored gradient on the dominant side when momentum gap ≥ 2, fading when teams are balanced
+  - **Goal Flash** — highlights the scoring team's goal end with a 2-second fade for visual drama
 - **Chaos Meter** with dynamic event pills showing what's driving the chaos level:
   - **Late Game** (red) — minute > 80
   - **Final Stretch** (orange) — minutes 71–80
