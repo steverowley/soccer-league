@@ -941,12 +941,16 @@ const MatchSimulator = ({
     const gameState={minute:matchState.minute,score:matchState.score};
 
     // ── Queue individual events through AgentSystem ────────────────────────
+    // routeAgentResult is passed as the streaming onResult callback so each
+    // commentary item hits the feed the moment its individual API call
+    // resolves — rather than waiting for the slowest parallel call in the
+    // batch before anything renders.  The returned Promise is intentionally
+    // not awaited; queueEvent's internal priority gate already drops stale
+    // minor/medium events when the queue is backed up.
     for(const event of newEvents){
       if(!event)continue;
       if(sys){
-        sys.queueEvent(event,gameState,allAgents).then(results=>{
-          results.forEach(routeAgentResult);
-        });
+        sys.queueEvent(event,gameState,allAgents,routeAgentResult);
       }else{
         routeFallbackEvent(event,matchState.homeTeam.shortName);
       }
@@ -1375,6 +1379,11 @@ const MatchSimulator = ({
         stadium:mgr.stadium,weather:mgr.weather,
         architect:arch,
       });
+      // Sync the AgentSystem's inter-event cooldown to the speed that was
+      // already selected before the match started (e.g. player switched to
+      // TURBO before pressing Start).  Without this the system would use the
+      // constructor default (300 ms) regardless of the chosen speed.
+      agentSystemRef.current.setMatchSpeed(speed);
     }
     setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
   };
@@ -1808,9 +1817,12 @@ const MatchSimulator = ({
             <RotateCcw size={14}/> Reset
           </button>
           <div style={{display:'flex',gap:'4px',marginLeft:'auto'}}>
-            {/* Speed selector — 2000ms=Slow … 200ms=Turbo */}
+            {/* Speed selector — 2000ms=Slow … 200ms=Turbo.
+                Both the React interval speed AND the AgentSystem's inter-event
+                cooldown are updated together so the LLM queue drains at a rate
+                proportional to how fast the match engine generates events. */}
             {[['SLOW',2000],['NORMAL',1000],['FAST',500],['TURBO',200]].map(([label,spd])=>(
-              <button key={spd} onClick={()=>setSpeed(spd)} className="btn" style={{
+              <button key={spd} onClick={()=>{setSpeed(spd);agentSystemRef.current?.setMatchSpeed(spd);}} className="btn" style={{
                 padding:'6px 12px',fontSize:'11px',
                 backgroundColor:speed===spd?'#9A5CF4':'#111111',
                 border:`1px solid ${speed===spd?'#9A5CF4':'rgba(227,224,213,0.3)'}`,
