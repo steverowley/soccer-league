@@ -79,6 +79,25 @@ export default function LeagueDetail() {
           <p style={{ maxWidth: '700px', margin: '0 auto', fontSize: '13px', lineHeight: 1.8, opacity: 0.85 }}>
             {league.description}
           </p>
+
+          {/* ── Cross-feature CTAs ────────────────────────────────────────────
+              These buttons stitch the league detail page into the broader app:
+              - Simulate a Match → Matches page (where the user picks a fixture)
+              - View All Teams   → Teams listing (browse all clubs by league)
+              - View Players     → Players page filtered to this league
+              Placed below the description so the editorial content reads first,
+              then the user has clear onward paths to adjacent features. */}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '24px' }}>
+            <Link to="/matches">
+              <Button variant="tertiary">Simulate a Match</Button>
+            </Link>
+            <Link to="/teams">
+              <Button variant="primary">View All Teams</Button>
+            </Link>
+            <Link to={`/players?league=${league.id}`}>
+              <Button variant="primary">View Players</Button>
+            </Link>
+          </div>
         </div>
       </div>
 
