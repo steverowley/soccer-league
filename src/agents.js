@@ -133,8 +133,9 @@ export class AgentSystem {
     // Rate-limiting: gap between event processings (adaptive via setMatchSpeed).
     this._lastCallTime = 0;
     this._cooldownMs   = 300;
-    this._eventQueue   = [];   // pending { event, gameState, allAgents, resolve, onResult }
-    this._draining     = false; // true while _drainQueue() is running
+    this._eventQueue      = [];   // pending { event, gameState, allAgents, resolve, onResult }
+    this._draining        = false; // true while _drainQueue() is running
+    this._drainCallbacks  = [];   // resolved when queue empties (for waitForDrain)
   }
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
@@ -197,12 +198,52 @@ export class AgentSystem {
     return response.content[0]?.text?.trim() || null;
   }
 
+  /**
+   * Streaming variant of _call for progressive text delivery.
+   *
+   * Uses the Anthropic SDK's `messages.stream()` API so individual tokens
+   * arrive ~100–200 ms after the request is sent rather than waiting for the
+   * complete response (~400–800 ms).  Each new chunk calls onChunk with the
+   * full accumulated text so far, allowing the UI to update the feed item
+   * word-by-word as the model generates it.
+   *
+   * Used exclusively by generatePlayByPlay() so Captain Vox's narration
+   * appears to type itself into the feed — the "live commentary" effect that
+   * makes DRAMATIC and SLOW speeds feel genuinely cinematic.
+   *
+   * @param {string}   system    – system prompt
+   * @param {object[]} messages  – message array (same shape as _call)
+   * @param {number}   maxTokens – hard cap on generated tokens (default 100)
+   * @param {Function} [onChunk] – called with the growing partial text string
+   *                               each time a new token arrives; optional
+   * @returns {Promise<string|null>} the complete trimmed response text, or
+   *                                 null if the stream produced nothing
+   */
+  async _callStream(system, messages, maxTokens = 100, onChunk) {
+    let text = '';
+    const stream = this.client.messages.stream({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      system,
+      messages,
+    });
+    for await (const event of stream) {
+      // content_block_delta / text_delta is the only event type that carries
+      // new tokens.  All other events (message_start, content_block_start,
+      // message_stop, etc.) carry metadata but no fresh text — skip them.
+      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+        text += event.delta.text;
+        onChunk?.(text);
+      }
+    }
+    return text.trim() || null;
+  }
+
   // ── Play-by-play (primary narrator) ─────────────────────────────────────────
 
   /**
    * Generates the PRIMARY event narration from Captain Vox.
    *
-   * This runs BEFORE all other commentators and is the dominant feed entry.
    * Unlike generateCommentary(), this method:
    *   1. Passes _describeEvent() structured data (not the terse procedural string)
    *      so Vox can describe what actually happened clearly.
@@ -212,11 +253,29 @@ export class AgentSystem {
    *   4. Returns type:'play_by_play' so the UI can style it differently from
    *      reaction commentary cards.
    *
-   * @param {object} event      – match event object
-   * @param {object} gameState  – { score, minute }
-   * @returns {object|null}     – feed item or null on failure
+   * ── Streaming mode ──────────────────────────────────────────────────────────
+   * When `onResult` is supplied (the normal path from _processEventDirect) the
+   * method uses _callStream() instead of _call() so the first word of Vox's
+   * narration appears in the feed within ~100–200 ms rather than waiting for
+   * the full response (~400–800 ms).
+   *
+   * Protocol:
+   *   1. Emit an empty feed item immediately so a slot appears in the feed.
+   *   2. As each token arrives, emit a 'play_by_play_update' event so
+   *      routeAgentResult can patch the existing item in-place.
+   *   3. Emit a final update with isStreaming:false when the stream ends.
+   *   4. Return null — the item is already in the feed via onResult; returning
+   *      the item again through push() would create a duplicate.
+   *
+   * When `onResult` is NOT supplied (e.g. test harnesses, halftime quotes),
+   * the method falls back to the non-streaming _call() path.
+   *
+   * @param {object}    event      – match event object
+   * @param {object}    gameState  – { score, minute }
+   * @param {Function}  [onResult] – streaming callback from _processEventDirect
+   * @returns {Promise<object|null>} feed item (non-streaming) or null (streaming)
    */
-  async generatePlayByPlay(event, gameState) {
+  async generatePlayByPlay(event, gameState, onResult) {
     const profile = COMMENTATOR_PROFILES.find(p => p.id === 'captain_vox');
     if (!profile) return null;
 
@@ -232,27 +291,57 @@ export class AgentSystem {
       '\nYou are the PRIMARY narrator. Describe EXACTLY what happened — who, what action, what outcome — so any listener understands. Clarity first, theatrical flair second. 1-2 sentences.',
     ].filter(Boolean).join('\n');
 
+    // Append the primary-narrator instruction to the existing Vox system prompt
+    // rather than replacing it, so his voice characteristics are preserved.
+    const systemPrompt = profile.system +
+      ' For this call you are the PRIMARY play-by-play narrator.' +
+      ' Your first job is clarity — make the listener understand exactly what happened.' +
+      ' Your second job is Captain Vox drama.';
+
+    const baseItem = {
+      type:          'play_by_play',
+      commentatorId: 'captain_vox',
+      name:          profile.name,
+      emoji:         profile.emoji,
+      color:         profile.color,
+      role:          'Play-by-Play',
+      minute:        gameState.minute,
+    };
+
     try {
-      // 150 tokens — slightly more than a reaction call (120) because the
-      // play-by-play must convey factual clarity AND dramatic colour.
-      const text = await this._call(
-        // Append the primary-narrator instruction to the existing Vox system prompt
-        // rather than replacing it, so his voice characteristics are preserved.
-        profile.system + ' For this call you are the PRIMARY play-by-play narrator. Your first job is clarity — make the listener understand exactly what happened. Your second job is Captain Vox drama.',
-        [{ role: 'user', content: userMsg }],
-        150,
-      );
+      if (onResult) {
+        // ── Streaming path ─────────────────────────────────────────────────
+        // Emit an empty placeholder immediately so a feed slot appears before
+        // any tokens have arrived (~0 ms).  The isStreaming flag tells the
+        // renderer to show a blinking cursor until the stream completes.
+        const id = Math.random().toString(36).slice(2, 10);
+        onResult({ ...baseItem, id, text: '', isStreaming: true });
+
+        // Stream tokens; each chunk updates the item in-place via onResult.
+        // 100 tokens — enough for 1-2 punchy sentences; shorter than the old
+        // 150 limit to reduce time-to-last-token without losing clarity.
+        const text = await this._callStream(
+          systemPrompt,
+          [{ role: 'user', content: userMsg }],
+          100,
+          partial => onResult({ type: 'play_by_play_update', id, text: partial }),
+        );
+
+        // Finalise: push complete text and clear the streaming cursor.
+        onResult({ type: 'play_by_play_update', id, text: text || '', isStreaming: false });
+
+        // Return null — the item is already in the feed via onResult above.
+        // push() in _processEventDirect guards against null so no duplicate
+        // is added to the results array or emitted a second time.
+        return null;
+      }
+
+      // ── Non-streaming fallback ─────────────────────────────────────────
+      // Used when onResult is absent (test harnesses, isolated calls).
+      // 100 tokens — same budget as the streaming path for consistency.
+      const text = await this._call(systemPrompt, [{ role: 'user', content: userMsg }], 100);
       if (!text) return null;
-      return {
-        type:          'play_by_play',
-        commentatorId: 'captain_vox',
-        name:          profile.name,
-        emoji:         profile.emoji,
-        color:         profile.color,
-        role:          'Play-by-Play',
-        text,
-        minute:        gameState.minute,
-      };
+      return { ...baseItem, text };
     } catch { return null; }
   }
 
@@ -308,9 +397,13 @@ export class AgentSystem {
     ].filter(Boolean).join(' ');
 
     try {
+      // 90 tokens — reactor lines should be punchy takes, not paragraphs.
+      // Cutting from the default 120 saves ~60–100 ms of inference time per
+      // reactor call without meaningfully reducing the wit or content.
       const text = await this._call(
         profile.system,
         [...history.slice(-6), { role: 'user', content: userMsg }],
+        90,
       );
       if (!text) return null;
       // Append to history; cap at 12 items (6 turns) to avoid runaway growth
@@ -376,8 +469,9 @@ export class AgentSystem {
     const userMsg = `${this._ctx(gameState)}\n${eventDesc}. What are you thinking right now?`;
 
     try {
-      // 80 tokens — inner thoughts must stay short and punchy.
-      const text = await this._call(system, [{ role: 'user', content: userMsg }], 80);
+      // 60 tokens — inner thoughts must be a single raw flash of feeling.
+      // Tighter budget produces more vivid one-liners and is faster to infer.
+      const text = await this._call(system, [{ role: 'user', content: userMsg }], 60);
       if (!text) return null;
       return {
         type:   'player_thought',
@@ -422,10 +516,12 @@ export class AgentSystem {
     const userMsg = `${this._ctx(gameState)}\nYou are ${standing}. Just happened: "${event.commentary}". React now.`;
 
     try {
+      // 70 tokens — touchline bark, not a halftime speech.
+      // Shorter budget keeps manager lines punchy and reduces inference time.
       const text = await this._call(
         system,
         [...history.slice(-4), { role: 'user', content: userMsg }],
-        100,
+        70,
       );
       if (!text) return null;
       history.push({ role: 'user', content: userMsg }, { role: 'assistant', content: text });
@@ -477,10 +573,12 @@ export class AgentSystem {
     ].filter(Boolean).join(' ');
 
     try {
+      // 70 tokens — a referee's decision is a terse official statement,
+      // not a legal argument.  Matches the manager budget for consistency.
       const text = await this._call(
         system,
         [...this.refHistory.slice(-4), { role: 'user', content: userMsg }],
-        100,
+        70,
       );
       if (!text) return null;
       this.refHistory.push({ role: 'user', content: userMsg }, { role: 'assistant', content: text });
@@ -702,7 +800,11 @@ export class AgentSystem {
     // Vox no longer runs as a blocking sequential step.  He joins the
     // parallel promise pool so his narration appears in the feed as soon as
     // his individual call resolves, racing alongside the reactor calls.
-    promises.push(this.generatePlayByPlay(event, gameState).then(push));
+    //
+    // onResult is forwarded so generatePlayByPlay can use the streaming path:
+    // an empty feed slot appears immediately and text types itself in via
+    // play_by_play_update events rather than arriving as a single block.
+    promises.push(this.generatePlayByPlay(event, gameState, onResult).then(push));
 
     // ── Step 2: Reactor commentators (PARALLEL) ──────────────────────────────
     // Nexus-7 and Zara Bloom react to the structured event description.
@@ -779,10 +881,15 @@ export class AgentSystem {
    * @param {number} tickMs – simulation interval in milliseconds (200/500/1000/2000)
    */
   setMatchSpeed(tickMs) {
-    if      (tickMs <= 200)  this._cooldownMs = 0;    // TURBO  — no gap
-    else if (tickMs <= 500)  this._cooldownMs = 100;  // FAST   — 100 ms gap
-    else if (tickMs <= 1000) this._cooldownMs = 300;  // NORMAL — 300 ms gap
-    else                     this._cooldownMs = 500;  // SLOW   — 500 ms gap
+    // tickMs === -1 is the DRAMATIC sentinel: the match tick is locked to LLM
+    // drain in App.jsx so the queue never backs up — no inter-event cooldown
+    // is needed.  Map it to 0 just like TURBO so _drainQueue fires immediately
+    // between events within a single tick's parallel call bundle.
+    if      (tickMs < 0)     this._cooldownMs = 0;    // DRAMATIC — tick-locked
+    else if (tickMs <= 200)  this._cooldownMs = 0;    // TURBO   — no gap
+    else if (tickMs <= 500)  this._cooldownMs = 100;  // FAST    — 100 ms gap
+    else if (tickMs <= 1000) this._cooldownMs = 300;  // NORMAL  — 300 ms gap
+    else                     this._cooldownMs = 500;  // SLOW    — 500 ms gap
   }
 
   /**
@@ -878,6 +985,29 @@ export class AgentSystem {
       this._lastCallTime = Date.now();
     }
     this._draining = false;
+
+    // Notify any callers waiting in waitForDrain() that the queue is now empty.
+    // Splice-and-call pattern avoids mutating the array while iterating and
+    // ensures callbacks registered during draining are flushed in this pass.
+    const cbs = this._drainCallbacks.splice(0);
+    if (cbs.length) cbs.forEach(cb => cb());
+  }
+
+  /**
+   * Returns a Promise that resolves when the event queue is empty and no
+   * drain is in progress.  Used by DRAMATIC mode in App.jsx to tick-lock
+   * the match engine: the next simulation minute does not fire until all
+   * LLM commentary for the current event batch has been delivered.
+   *
+   * If the queue is already idle the Promise resolves on the next
+   * microtask tick (via Promise.resolve()) so callers can always await it
+   * unconditionally without special-casing the empty state.
+   *
+   * @returns {Promise<void>}
+   */
+  waitForDrain() {
+    if (!this._draining && this._eventQueue.length === 0) return Promise.resolve();
+    return new Promise(resolve => this._drainCallbacks.push(resolve));
   }
 
 }
