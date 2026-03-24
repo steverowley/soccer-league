@@ -84,26 +84,30 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
   - **Ball Movement** — horizontal tracking by possession percentage + vertical randomization on each new event (25–75% range), creating a sense of dynamic pitch flow
   - **Momentum Pressure Overlay** — subtle team-colored gradient on the dominant side when momentum gap ≥ 2, fading when teams are balanced
   - **Goal Flash** — highlights the scoring team's goal end with a 2-second fade for visual drama
-- **Chaos Meter** with dynamic event pills showing what's driving the chaos level:
-  - **Late Game** (red) — minute > 80
-  - **Final Stretch** (orange) — minutes 71–80
-  - **Tied** (purple) — level scores past minute 30
-  - **Close Match** (muted) — one-goal difference
-  - **Red Cards** (red) — any red cards issued
-  - **Heated Bench** (orange) — agents experiencing heightened emotions
-  - **Full Time** (purple outline) — match complete
+- **Chaos Meter Card** (260px, two-zone layout):
+  - **Top zone** — Chaos bar with scale labels (Calm–Tense–Mayhem) and dynamic event pills:
+    - **Late Game** (red) — minute > 80
+    - **Final Stretch** (orange) — minutes 71–80
+    - **Tied** (purple) — level scores past minute 30
+    - **Close Match** (muted) — one-goal difference
+    - **Red Cards** (red) — any red cards issued
+    - **Heated Bench** (orange) — agents experiencing heightened emotions
+    - **Full Time** (purple outline) — match complete
+  - **Bottom zone** (scrollable) — **Architect Feed** with purple accent: Cosmic Proclamations and Architect Interference results (previously hidden in the centre column)
 - Real-time event feed with timestamps
 - Player roster with live stats (goals, assists, saves, cards, injuries)
-- **Centre column feed** — Three stacked cards occupy the wider centre column of the pitch grid:
+- **Centre column feed** — Two stacked cards occupy the wider centre column of the pitch grid:
   - **Live Pitch** — Formation-based player positioning with ball tracking and momentum overlay
   - **Match Events** — Key events (goals, cards, subs) as compact chips with team colour coding
-  - **✦ The Architect** — Dedicated scrollable card for Cosmic Proclamations and Architect Interference results; fills all remaining vertical space below Match Events
+- **Officials + Referee Decisions section** (if AI manager active):
+  - **Officials info row** — 3-column grid showing Referee (name/leniency/emoji), Stadium (name/capacity), Conditions (weather icon, temperature, time of day)
+  - **Referee Decisions feed** (scrollable, gold accent) — All referee judgements rendered with full context; type:'referee' items are no longer filtered out and now have their dedicated visible home
 - **3-column broadcast booth** — Full-width section below the pitch grid; one column per commentary voice:
   - **Nexus-7** — AI analysis and data-driven observations
   - **Captain Vox** — Play-by-play narration and procedural match commentary
   - **Zara Bloom** — Colour analysis and tactical insights
-  - Architect proclamations/interference appear exclusively in the centre feed Architect card above; not duplicated in the booth
-  - Referee decisions appear only in the Officials card; not routed to any commentary column
+  - Architect proclamations/interference appear only in the Chaos Meter's Architect feed; not duplicated in the booth
+  - Referee decisions appear only in the Referee Decisions feed; not routed to any commentary column
   - Each column scrolls independently; header shows commentator emoji, name, role, and accent colour
   - Columns rendered via a single `COMMENTATOR_PROFILES.map()` pass for structural alignment
   - **Independent scrolling enabled** via CSS block formatting context (BFC): each column div has `overflow:hidden`, allowing flex layout to properly constrain scroll-container height and enable smooth scrolling through full match commentary
