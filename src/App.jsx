@@ -799,10 +799,28 @@ const MatchSimulator = ({
       return;
     }
 
-    // ── DRAMATIC mode: tick-locked async loop ─────────────────────────────
+    // ── DRAMATIC mode: Blaseball-paced tick-locked async loop ─────────────
+    // Design philosophy: rather than racing to make LLM calls faster, we
+    // embrace the latency as atmosphere.  Each match-minute is given a real
+    // wall-clock budget.  LLM commentary (Captain Vox + reactors) fills the
+    // first 1–2 s; the remaining time is natural reading/breathing room
+    // before the next play fires.  Inspired by Blaseball, whose games ran
+    // 20–45 real minutes — the slow cadence was the product, not a bug.
+    //
+    // Tick flow per match-minute:
+    //   1. simulateMinute() fires (synchronous, <1 ms)
+    //   2. React yields so queueEvent can run in the events useEffect
+    //   3. waitForDrain() blocks until ALL LLM calls for this tick resolve
+    //   4. Sleep the remaining tick budget so pacing feels genuinely real
+    //
+    // At 15 s/tick: 90 ticks × 15 s = 22.5 real minutes for a full match.
+    // Increase DRAMATIC_TICK_MS toward 30 000 for a 45-minute "full real-time"
+    // experience; decrease toward 8 000 for a faster dramatic feel.
+    const DRAMATIC_TICK_MS = 15_000; // ms per match-minute; 15 s → ~22.5 min/match
     dramaticModeRef.current=true;
     (async()=>{
       while(dramaticModeRef.current){
+        const tickStart=Date.now();
         simulateMinute();
         // Yield so React can flush the state update and the events useEffect
         // can call queueEvent before we start waiting for drain.
@@ -810,9 +828,11 @@ const MatchSimulator = ({
         if(!dramaticModeRef.current)break;
         // Block until all LLM commentary for this tick has been delivered.
         if(agentSystemRef.current)await agentSystemRef.current.waitForDrain();
-        // 400 ms dramatic breath — lets the viewer read the last entry before
-        // the next play fires.
-        await new Promise(r=>setTimeout(r,400));
+        // Wait out the remainder of the tick window so each match-minute
+        // feels like it has real weight — the Blaseball approach.
+        const elapsed=Date.now()-tickStart;
+        const remaining=Math.max(0,DRAMATIC_TICK_MS-elapsed);
+        if(remaining>0)await new Promise(r=>setTimeout(r,remaining));
       }
     })();
     return()=>{dramaticModeRef.current=false;};
