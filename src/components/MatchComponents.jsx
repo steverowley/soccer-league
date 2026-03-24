@@ -662,38 +662,6 @@ export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
   );
 };
 
-// ── BetBtn ────────────────────────────────────────────────────────────────────
-
-/**
- * Betting button used in the halftime and pre-match betting panels.
- *
- * Displays the bet label, an optional sub-label, the odds multiplier, and the
- * projected payout for the current stake amount.  Disabled when betAmount ≤ 0.
- *
- * @param {{ type: string, odds: string|number, label: string, sub?: string,
- *           color?: string, placeBet: Function, betAmount: number }} props
- * @returns {JSX.Element}
- */
-export const BetBtn = ({ type, odds, label, sub, color = C.purple, placeBet, betAmount }) => (
-  <button
-    onClick={() => placeBet(type, betAmount, odds)}
-    disabled={betAmount <= 0}
-    style={{
-      padding: '12px', border: `1px solid ${color}`, width: '100%',
-      backgroundColor: C.abyss, fontFamily: "'Space Mono', monospace",
-      cursor: betAmount <= 0 ? 'not-allowed' : 'pointer',
-      opacity: betAmount <= 0 ? 0.5 : 1,
-    }}
-  >
-    <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px' }}>{label}</div>
-    {sub && <div style={{ fontSize: '11px', opacity: 0.5, marginBottom: '4px' }}>{sub}</div>}
-    <div style={{ fontSize: '24px', fontWeight: 700, color }}>{odds}x</div>
-    <div style={{ fontSize: '11px', marginTop: '4px', opacity: 0.6 }}>
-      Win: {Math.floor(betAmount * parseFloat(odds))} coins
-    </div>
-  </button>
-);
-
 // ── PlayerCard ────────────────────────────────────────────────────────────────
 
 /**
