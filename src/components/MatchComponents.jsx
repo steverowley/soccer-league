@@ -189,7 +189,9 @@ export const AgentCard = ({ item }) => {
         <span style={{ fontSize: '11px', marginLeft: 'auto', opacity: 0.4 }}>{item.minute}'</span>
       </div>
       {/* ── Quote text ───────────────────────────────────────────────────── */}
-      <div style={{ fontSize: '11px', fontStyle: 'italic', opacity: 0.9 }}>"{item.text}"</div>
+      {/* ▋ cursor mirrors the full feed view: visible while isStreaming:true,
+          removed when the final play_by_play_update clears the flag. */}
+      <div style={{ fontSize: '11px', fontStyle: 'italic', opacity: 0.9 }}>"{item.text}{item.isStreaming?'▋':''}"</div>
     </div>
   );
 };

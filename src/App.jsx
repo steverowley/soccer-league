@@ -703,6 +703,11 @@ const MatchSimulator = ({
   const [aiManager,setAiManager]=useState(null);
   const aiRef=useRef(null);
   const intervalRef=useRef(null);
+  // dramaticModeRef guards the async tick loop used in DRAMATIC speed mode.
+  // Setting it to false from any cleanup path (speed change, pause, reset)
+  // causes the running while-loop to exit after its current await resolves,
+  // without needing to cancel an in-flight Promise.
+  const dramaticModeRef=useRef(false);
   const evtLogRef=useRef(null);
   const [htReport,setHtReport]=useState(null);
   const [selectedPlayer,setSelectedPlayer]=useState(null);
@@ -764,7 +769,54 @@ const MatchSimulator = ({
   // event always visible" default while letting users read history freely.
   useEffect(()=>{if(evtLogRef.current&&!commentaryUserScrolledRef.current)evtLogRef.current.scrollTop=0;},[commentaryFeed]);
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);};},[]);
-  useEffect(()=>{if(matchState.isPlaying){clearInterval(intervalRef.current);intervalRef.current=setInterval(simulateMinute,speed);}},[speed,matchState.isPlaying]);
+  // ── Tick engine — normal speeds use setInterval; DRAMATIC uses a tick-locked
+  // async loop that awaits LLM drain before each advance.
+  //
+  // DRAMATIC mode (speed === -1) is the "Blaseball" philosophy: the match does
+  // not advance to the next minute until every LLM call for the current event
+  // has resolved.  The wait is not lag — it is suspense.  Vox's commentary
+  // types itself into the feed, reactors pile on, then the next play unfolds.
+  //
+  // Implementation notes:
+  //   • dramaticModeRef.current = false is set first so any previous async loop
+  //     from a prior effect invocation exits on its next iteration check.
+  //   • simulateMinute() calls setMatchState() which is async from React's
+  //     perspective; a setTimeout(0) yield after calling it lets React flush
+  //     the state update and run the events useEffect (which calls queueEvent)
+  //     before waitForDrain() is invoked — otherwise we would await an already-
+  //     empty queue and advance immediately without waiting for commentary.
+  //   • The 400 ms breath after draining is the dramatic pause between plays;
+  //     it gives the reader time to absorb the last commentary entry before the
+  //     next event fires.
+  useEffect(()=>{
+    dramaticModeRef.current=false;
+    clearInterval(intervalRef.current);
+    if(!matchState.isPlaying)return;
+
+    if(speed!==-1){
+      // Normal interval-based tick for SLOW / NORMAL / FAST / TURBO speeds.
+      intervalRef.current=setInterval(simulateMinute,speed);
+      return;
+    }
+
+    // ── DRAMATIC mode: tick-locked async loop ─────────────────────────────
+    dramaticModeRef.current=true;
+    (async()=>{
+      while(dramaticModeRef.current){
+        simulateMinute();
+        // Yield so React can flush the state update and the events useEffect
+        // can call queueEvent before we start waiting for drain.
+        await new Promise(r=>setTimeout(r,0));
+        if(!dramaticModeRef.current)break;
+        // Block until all LLM commentary for this tick has been delivered.
+        if(agentSystemRef.current)await agentSystemRef.current.waitForDrain();
+        // 400 ms dramatic breath — lets the viewer read the last entry before
+        // the next play fires.
+        await new Promise(r=>setTimeout(r,400));
+      }
+    })();
+    return()=>{dramaticModeRef.current=false;};
+  },[speed,matchState.isPlaying]);
 
   // ── Ball position + cinema event ──────────────────────────────────────────
   // Fires whenever a new event is appended to the log (dep: events.length).
@@ -818,6 +870,18 @@ const MatchSimulator = ({
   // All other types are unchanged from the original routing logic.
   const routeAgentResult=(r)=>{
     if(!r)return;
+    // ── Streaming patch for Captain Vox play-by-play ───────────────────────
+    // generatePlayByPlay emits an initial empty item (type:'play_by_play') then
+    // streams incremental updates as type:'play_by_play_update' carrying the
+    // same id.  Each update replaces the text (and isStreaming flag) of the
+    // matching item in-place so React re-renders only that card, typing the
+    // narration word-by-word without appending duplicate entries.
+    if(r.type==='play_by_play_update'){
+      setCommentaryFeed(p=>p.map(item=>item.id===r.id
+        ?{...item,text:r.text,isStreaming:r.isStreaming??item.isStreaming}
+        :item));
+      return;
+    }
     if(r.type==='commentator'||r.type==='referee'||r.type==='play_by_play'||r.type==='architect_proclamation'){
       setCommentaryFeed(p=>[...p,r].slice(-120));
     }else if(r.type==='player_thought'){
@@ -1388,7 +1452,11 @@ const MatchSimulator = ({
     setMatchState(p=>({...p,isPlaying:true,isPaused:false}));
   };
   const pauseMatch=()=>{clearInterval(intervalRef.current);setMatchState(p=>({...p,isPlaying:false}));};
-  const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));intervalRef.current=setInterval(simulateMinute,speed);}};
+  // resumeMatch only flips isPlaying→true; the tick useEffect above handles
+  // creating the interval OR starting the DRAMATIC async loop depending on the
+  // current speed.  Keeping the tick-engine logic in one place (the useEffect)
+  // means DRAMATIC mode is respected here without any extra branching.
+  const resumeMatch=()=>{if(matchState.minute<90||matchState.inStoppageTime){setMatchState(p=>({...p,isPlaying:true,isPaused:false}));}};
   const resetMatch=()=>{
     clearInterval(intervalRef.current);
     aiRef.current=null;
@@ -1817,15 +1885,20 @@ const MatchSimulator = ({
             <RotateCcw size={14}/> Reset
           </button>
           <div style={{display:'flex',gap:'4px',marginLeft:'auto'}}>
-            {/* Speed selector — 2000ms=Slow … 200ms=Turbo.
-                Both the React interval speed AND the AgentSystem's inter-event
+            {/* Speed selector — 2000ms=Slow … 200ms=Turbo … -1=DRAMATIC.
+                Both the React tick engine AND the AgentSystem's inter-event
                 cooldown are updated together so the LLM queue drains at a rate
-                proportional to how fast the match engine generates events. */}
-            {[['SLOW',2000],['NORMAL',1000],['FAST',500],['TURBO',200]].map(([label,spd])=>(
+                proportional to how fast the match engine generates events.
+                DRAMATIC (speed=-1) bypasses the interval entirely: the tick
+                loop in the useEffect above awaits LLM drain before each
+                advance, so commentary is never behind the action. */}
+            {[['SLOW',2000],['NORMAL',1000],['FAST',500],['TURBO',200],['DRAMATIC',-1]].map(([label,spd])=>(
               <button key={spd} onClick={()=>{setSpeed(spd);agentSystemRef.current?.setMatchSpeed(spd);}} className="btn" style={{
                 padding:'6px 12px',fontSize:'11px',
-                backgroundColor:speed===spd?'#9A5CF4':'#111111',
-                border:`1px solid ${speed===spd?'#9A5CF4':'rgba(227,224,213,0.3)'}`,
+                // DRAMATIC gets a gold accent to signal it is a fundamentally
+                // different mode (LLM-paced) rather than just another speed tier.
+                backgroundColor:speed===spd?(spd===-1?'#B8860B':'#9A5CF4'):'#111111',
+                border:`1px solid ${speed===spd?(spd===-1?'#FFD700':'#9A5CF4'):'rgba(227,224,213,0.3)'}`,
                 color:speed===spd?'#E3E0D5':'rgba(227,224,213,0.5)',
               }}>{label}</button>
             ))}
@@ -2206,7 +2279,11 @@ const MatchSimulator = ({
                             <span style={{fontSize:'9px',padding:'1px 5px',border:`1px solid ${item.color}`,color:item.color,opacity:0.7,letterSpacing:'0.08em'}}>PRIMARY</span>
                             <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
                           </div>
-                          <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>"{item.text}"</div>
+                          {/* ▋ cursor shown while isStreaming:true so the viewer
+                              can see Vox composing the line in real time.
+                              Disappears when the final play_by_play_update sets
+                              isStreaming:false. */}
+                          <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>"{item.text}{item.isStreaming?'▋':''}"</div>
                         </div>
                       );
                     }
