@@ -93,9 +93,18 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 - **Simulation Speed Modes**: SLOW/NORMAL/FAST/TURBO interval-based speeds, plus **DRAMATIC** mode with tunable real-time pacing:
   - **DRAMATIC Mode** — Inspired by Blaseball's philosophy that slow cadence is a feature, not a bug
     - Each match-minute is allocated a real wall-clock budget (default: 15 seconds)
-    - LLM commentary (Vox + reactors) completes in ~1–2 s; the remaining time is breathing/atmosphere room
+    - **Staggered voice waves** — Commentary spreads across the tick window in three sequential waves instead of arriving as a single dump:
+      - **Wave 1 (t=0 s)** — Captain Vox streams his play-by-play narration (text types in live over ~1.5 s)
+      - **Wave 2 (t=3 s)** — Reactor commentators chip in (Nexus-7 + Zara Bloom in parallel)
+      - **Wave 3 (t=6 s)** — Player inner thoughts, manager reactions, and referee decisions fire simultaneously
+      - Result: ~9 s of commentary + 6 s of reading time before the next tick, filling the interval organically rather than as a news ticker
     - Full 90-minute match runs ~22.5 real minutes (tunable: 30 s/tick → 45 min match, 8 s/tick → ~12 min match)
     - Tick timing is controlled by the `DRAMATIC_TICK_MS` constant in `App.jsx`
+  - **Per-commentator visual boxes** — Each voice in the feed now has a colored box with:
+    - A 3 px left accent stripe in the commentator's signature colour (100% opacity)
+    - A subtle tinted background (~7% opacity) — Captain Vox (gold), Nexus-7 (blue), Zara Bloom (green)
+    - A 1 px border outline on all sides (~25% opacity) — closes the card so each voice reads as a discrete unit
+    - `border-radius: 3px` for a polished card appearance
   - Pause/resume controls apply to all speeds
 
 ## Game Engine Architecture
