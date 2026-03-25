@@ -60,10 +60,11 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
 - **Speed-adaptive cooldown** (TURBO → 0 ms, FAST → 100 ms, NORMAL → 300 ms, SLOW → 500 ms) scales the inter-event processing gap to match simulation speed, preventing queue back-pressure at high speeds
 - **Priority queue gating** drops low-value events (minor/manager comments) when ≥2 events await; medium events when ≥3 await; goals and red cards always pass — preventing stale commentary from burying important moments
 - **Selective reactions**: Medium-tier events (yellow cards, injuries, controversies) now trigger analyst reactions at 50% probability rather than 100%, keeping commentary feel impactful and punctuation-like rather than constant
+- **Duplication filtering**: Feed items are strictly typed; play-by-play commentary is filtered by `type === 'play_by_play'` rather than negation, preventing procedural fallback items and other incidental entries from duplicating event text
 - Net result: Commentary latency reduced from ~3 s to ~500 ms at TURBO speed
 
 **Commentary Personas** — Three distinct voices:
-- **Captain Vox** — primary narrator, bombastic veteran with cosmic metaphors
+- **Captain Vox** — primary narrator, bombastic veteran with cosmic metaphors; styled with gold accent border (#FFD700) and name badge for visual consistency across feed layouts
 - **Nexus-7** — clinical AI analyst, data-driven and precise
 - **Zara Bloom** — ex-striker color analyst, tactically sharp
 
@@ -95,10 +96,12 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
     - **Heated Bench** (orange) — agents experiencing heightened emotions
     - **Full Time** (purple outline) — match complete
   - **Bottom zone** (scrollable) — **Architect Feed** with purple accent: Cosmic Proclamations and Architect Interference results (previously hidden in the centre column)
+    - **Pinned Header** — "✦ The Architect" label stays fixed at the top of the zone while items scroll, ensuring the feed context never disappears even as entries accumulate
 - **Real-time event feed** with optimized readability:
   - Minute timestamps and routine event text at high contrast (0.9 and 1.0 opacity respectively)
   - Default accent borders at 0.45 alpha for visibility without overwhelming the visual hierarchy
   - Text hierarchy carried by font size and border weight rather than opacity fading
+  - **Captain Vox commentary cards** — Play-by-play narration rendered as styled cards matching analyst commentator layouts: gold (#FFD700) left accent border, subtle gold background wash, name badge above, minute stamp on the right, italic quote text
 - Player roster with live stats (goals, assists, saves, cards, injuries)
 - **Centre and right column feeds** — Two stacked cards occupy the wider centre column; right panel shows analyst commentary:
   - **Live Pitch** — Formation-based player positioning with ball tracking and momentum overlay
