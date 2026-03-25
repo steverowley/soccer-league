@@ -805,3 +805,666 @@ export const PlayerCard = ({ sp, events, onClose }) => {
     </div>
   );
 };
+
+// ── FeedRow ────────────────────────────────────────────────────────────────────
+
+/**
+ * A single row in the unified match feed — the Blaseball-style one-liner that
+ * makes each event instantly readable without commentator cards or chrome.
+ *
+ * VISUAL HIERARCHY
+ * ────────────────
+ * Events are visually ranked so the most important moments stand out:
+ *
+ *   goals       — highlighted row (team-colour background tint), bold text,
+ *                 score badge pill on the right.  The biggest visual treatment.
+ *   red_card    — red left-border accent, slightly larger text than routine events.
+ *   yellow_card — yellow left-border accent, standard size.
+ *   penalty     — orange accent, slightly elevated.
+ *   var_review  — purple accent to echo the Architect's colour.
+ *   injury      — amber accent.
+ *   substitution— neutral grey, italic player names.
+ *   commentary  — indented sub-row, italic, smaller — visually subordinate to
+ *                 the event it describes.
+ *   everything else (shot, foul, corner, etc.) — compact, low opacity.
+ *
+ * ANNULLED GOALS
+ * ──────────────
+ * When the Architect annuls a goal (architectAnnulled flag), the row keeps its
+ * goal styling but adds a struck-through text decoration and an "ANNULLED"
+ * badge — preserving the narrative of what was taken away.
+ *
+ * @param {{
+ *   item: {
+ *     minute:            number,
+ *     type:              string,    // event type key
+ *     isGoal?:           boolean,
+ *     cardType?:         'yellow'|'red'|null,
+ *     isInjury?:         boolean,
+ *     commentary:        string,    // procedurally generated one-liner
+ *     team?:             string,    // team shortName
+ *     teamColor?:        string,    // hex colour for the scoring/involved team
+ *     score?:            [number,number], // current score at the moment of event
+ *     architectAnnulled?: boolean,
+ *     isStreaming?:       boolean,  // true while LLM is still generating text
+ *     text?:              string,   // commentary-type sub-row text
+ *     color?:             string,   // commentary-type accent colour
+ *     name?:              string,   // commentator name for sub-rows
+ *   },
+ *   homeTeam: object,  // ms.homeTeam — used to resolve team colour from shortName
+ *   awayTeam: object,  // ms.awayTeam
+ * }} props
+ * @returns {JSX.Element}
+ */
+export const FeedRow = ({ item, homeTeam, awayTeam }) => {
+  // ── Commentary sub-row ────────────────────────────────────────────────────
+  // Vox commentary items arrive typed as 'play_by_play'.  They are rendered
+  // as indented sub-rows directly below the event they describe, so the feed
+  // reads: event → reaction, event → reaction, rather than alternating columns.
+  if (item.type === 'play_by_play') {
+    return (
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        padding: '2px 8px 4px 28px',   // 28px left indent to visually nest under the event
+        fontSize: '11px',
+        lineHeight: 1.45,
+        opacity: 0.7,
+      }}>
+        <span style={{ color: item.color || C.purple, fontWeight: 600, flexShrink: 0 }}>
+          💬
+        </span>
+        <span style={{ fontStyle: 'italic' }}>
+          {item.text}{item.isStreaming ? '▋' : ''}
+        </span>
+      </div>
+    );
+  }
+
+  // ── Resolve event styling from type + flags ───────────────────────────────
+  // Each event type maps to:
+  //   icon       – emoji shown before the minute stamp
+  //   accent     – hex colour for the left-border and text highlights
+  //   bgTint     – background tint string (hex + alpha suffix or rgba)
+  //   bold       – whether the description text is bold
+  //   larger     – whether to use a slightly larger font (12px vs 10px)
+  //
+  // Goals receive the scoring team's colour so home and away goals are
+  // distinguishable at a glance even without reading the text.
+  const isHome     = item.team === homeTeam?.shortName;
+  const teamColor  = item.teamColor || (isHome ? homeTeam?.color : awayTeam?.color) || C.purple;
+  const annulled   = item.architectAnnulled;
+
+  let icon   = '·';
+  let accent = 'rgba(227,224,213,0.2)';
+  let bgTint = 'transparent';
+  let bold   = false;
+  let larger = false;
+
+  if (item.isGoal) {
+    icon   = '⚽';
+    accent = annulled ? 'rgba(185,28,28,0.6)' : teamColor;
+    bgTint = annulled ? 'rgba(185,28,28,0.07)' : `${teamColor}18`; // 18 ≈ 9% opacity
+    bold   = true;
+    larger = true;
+  } else if (item.cardType === 'red' || item.type === 'red_card') {
+    icon   = '🟥';
+    accent = '#E05252';
+    bgTint = 'rgba(224,82,82,0.06)';
+    larger = true;
+  } else if (item.cardType === 'yellow' || item.type === 'yellow_card') {
+    icon   = '🟨';
+    accent = '#FFD700';
+  } else if (item.type === 'penalty' || item.type === 'penalty_awarded') {
+    icon   = '⚠️';
+    accent = '#F97316';  // orange — distinguishes it from yellows
+    larger = true;
+  } else if (item.type === 'var' || item.type === 'var_review') {
+    icon   = '📺';
+    accent = C.purple;   // #9A5CF4 — echoes the Architect's cosmic purple
+  } else if (item.isInjury || item.type === 'injury') {
+    icon   = '🩹';
+    accent = '#F59E0B';  // amber
+  } else if (item.type === 'substitution' || item.type === 'sub') {
+    icon   = '↕';
+    accent = 'rgba(227,224,213,0.35)';
+  } else if (item.type === 'shot') {
+    // Differentiate shot outcomes: saved vs missed vs post
+    icon   = item.outcome === 'saved' ? '🧤' : item.outcome === 'post' ? '🏃' : '→';
+    accent = 'rgba(227,224,213,0.2)';
+  } else if (item.type === 'freekick' || item.type === 'corner') {
+    icon   = '⚑';
+  } else if (item.type === 'team_talk') {
+    icon   = '📢';
+    accent = teamColor;
+  }
+
+  const fontSize = larger ? '12px' : '10px';
+
+  // ── Score badge (goals only) ──────────────────────────────────────────────
+  // When a goal event carries a live `score` array we render a compact badge
+  // on the right edge: "2-1" — so the scoreline is visible inline without
+  // having to look up at the scoreboard header.
+  const scoreBadge = item.isGoal && Array.isArray(item.score) && (
+    <span style={{
+      marginLeft: 'auto',
+      flexShrink: 0,
+      fontSize: '10px',
+      fontWeight: 700,
+      padding: '1px 6px',
+      backgroundColor: `${accent}22`,       // 22 ≈ 13% opacity pill
+      border: `1px solid ${accent}55`,       // 55 ≈ 33% opacity border
+      color: accent,
+      letterSpacing: '0.05em',
+      textDecoration: annulled ? 'line-through' : 'none',
+    }}>
+      {item.score[0]}–{item.score[1]}
+    </span>
+  );
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'baseline',
+      gap: '6px',
+      padding: `${larger ? '5px' : '3px'} 10px`,
+      borderLeft: `${larger ? '3px' : '2px'} solid ${accent}`,
+      backgroundColor: bgTint,
+      marginBottom: '1px',
+    }}>
+      {/* Minute stamp — fixed width so all event texts left-align */}
+      <span style={{
+        fontSize: '10px',
+        fontWeight: 700,
+        color: annulled ? '#B91C1C' : accent,
+        flexShrink: 0,
+        minWidth: '26px',
+        opacity: item.isGoal ? 1 : 0.65,
+      }}>
+        {item.minute}'
+      </span>
+
+      {/* Event type icon */}
+      <span style={{ fontSize: '12px', flexShrink: 0 }}>{icon}</span>
+
+      {/* Event description text */}
+      <span style={{
+        fontSize,
+        fontWeight: bold ? 700 : 400,
+        lineHeight: 1.45,
+        flex: 1,
+        opacity: item.isGoal ? 1 : 0.85,
+        textDecoration: annulled ? 'line-through' : 'none',
+        color: item.isGoal ? accent : 'inherit',
+      }}>
+        {item.commentary || item.text || ''}
+        {annulled && (
+          <span style={{
+            marginLeft: '6px',
+            fontSize: '8px',
+            padding: '1px 4px',
+            border: '1px solid rgba(185,28,28,0.5)',
+            color: '#FCA5A5',
+            letterSpacing: '0.08em',
+            textDecoration: 'none',
+            display: 'inline-block',
+            verticalAlign: 'middle',
+          }}>
+            ANNULLED
+          </span>
+        )}
+      </span>
+
+      {scoreBadge}
+    </div>
+  );
+};
+
+// ── UnifiedFeed ────────────────────────────────────────────────────────────────
+
+/**
+ * The primary match-viewing panel — a single chronological stream of every
+ * event and Vox commentary reaction, newest at the top.
+ *
+ * This replaces the three-column Nexus / Vox / Zara broadcast booth as the
+ * default viewing mode.  The booth is still accessible via the "Detailed"
+ * toggle in App.jsx.
+ *
+ * DESIGN INTENT (Blaseball model)
+ * ─────────────────────────────────
+ * Blaseball's feed was powerful because everything lived in one place.  You
+ * never had to decide which column to watch.  Goals, fouls, cards, and
+ * commentary all scrolled through the same stream at the same pace.  This
+ * component replicates that approach:
+ *
+ *   • All events from matchState.events[] rendered as FeedRow instances.
+ *   • Captain Vox commentary items interleaved as subordinate sub-rows.
+ *   • Newest events at the top (newest-first) so the user sees the latest
+ *     action without scrolling down.
+ *   • Auto-scroll to top whenever new events arrive (via scrollTop = 0).
+ *   • A pulsing "● LIVE" indicator while the simulation is running.
+ *
+ * MERGING EVENTS AND COMMENTARY
+ * ──────────────────────────────
+ * matchState.events[] is the canonical event log (all raw play events).
+ * voxItems is a filtered subset of commentaryFeed (Captain Vox reactions).
+ * We interleave them by matching Vox items to the event with the same minute,
+ * inserting each Vox item immediately after its corresponding event row so
+ * the feed reads: event → reaction, event → reaction.
+ *
+ * @param {{
+ *   events:      object[],   // matchState.events — raw play-by-play events
+ *   voxItems:    object[],   // commentaryFeed filtered to captain_vox
+ *   homeTeam:    object,     // ms.homeTeam
+ *   awayTeam:    object,     // ms.awayTeam
+ *   isPlaying:   boolean,    // true while the clock is running
+ *   scrollRef:   React.Ref,  // forwarded ref so App.jsx can control scroll
+ * }} props
+ * @returns {JSX.Element}
+ */
+export const UnifiedFeed = ({ events, voxItems, homeTeam, awayTeam, isPlaying, scrollRef }) => {
+  // ── Build interleaved display list (newest first) ─────────────────────────
+  // Strategy:
+  //   1. Reverse events so newest is at index 0.
+  //   2. For each event, collect all Vox items that share its minute.
+  //   3. Push the event row, then push those Vox sub-rows immediately after.
+  //
+  // We group Vox items by minute into a Map for O(1) lookup during the loop.
+  const voxByMinute = {};
+  (voxItems || []).forEach(v => {
+    const m = v.minute ?? 0;
+    if (!voxByMinute[m]) voxByMinute[m] = [];
+    voxByMinute[m].push(v);
+  });
+
+  // Reverse a copy — do not mutate the original events array.
+  const reversed = [...(events || [])].reverse();
+
+  // Build the interleaved flat list for rendering.
+  const rows = [];
+  reversed.forEach((evt, i) => {
+    rows.push({ ...evt, _rowType: 'event', _key: `evt-${i}` });
+    const voxForMinute = voxByMinute[evt.minute] || [];
+    voxForMinute.forEach((v, vi) => {
+      rows.push({ ...v, _rowType: 'vox', _key: `vox-${evt.minute}-${vi}` });
+    });
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+
+      {/* ── Feed header ──────────────────────────────────────────────────── */}
+      <div style={{
+        padding: '8px 12px',
+        flexShrink: 0,
+        borderBottom: '1px solid rgba(227,224,213,0.08)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+      }}>
+        {/* Live indicator — pulses while simulation is running */}
+        {isPlaying && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '10px',
+            fontWeight: 700,
+            color: '#E05252',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            animation: 'livePulse 1.4s ease-in-out infinite',
+          }}>
+            ● LIVE
+          </span>
+        )}
+        {!isPlaying && events?.length > 0 && (
+          <span style={{ fontSize: '10px', opacity: 0.4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Match Feed
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.3 }}>
+          {events?.length ?? 0} events
+        </span>
+      </div>
+
+      {/* ── Scrollable feed ──────────────────────────────────────────────── */}
+      <div
+        ref={scrollRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${homeTeam?.color || C.purple} #111`,
+        }}
+      >
+        {rows.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            opacity: 0.25,
+            fontSize: '11px',
+            paddingTop: '60px',
+            fontStyle: 'italic',
+          }}>
+            Kick-off…
+          </div>
+        ) : (
+          rows.map(row => (
+            <FeedRow
+              key={row._key}
+              item={row}
+              homeTeam={homeTeam}
+              awayTeam={awayTeam}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── PostMatchSummary ───────────────────────────────────────────────────────────
+
+/**
+ * Full-screen overlay displayed when the match reaches full time (ms.mvp set).
+ *
+ * INTENT
+ * ──────
+ * Blaseball always had a moment of reflection after a game — the results page
+ * let you absorb what happened before moving on.  This overlay serves that
+ * role: it is the first thing the user sees when the final whistle blows,
+ * giving them the scoreline, scorers, MVP, cards, and the Architect's closing
+ * verdict before they decide what to do next.
+ *
+ * SECTIONS
+ * ────────
+ *   1. Scoreline — large, team-coloured, immediate visual impact.
+ *   2. Scorers   — grouped by team with minute stamps.
+ *   3. MVP       — single line callout.
+ *   4. Cards     — yellow/red cards with player names.
+ *   5. Architect's Verdict — the most recent architect proclamation text
+ *      (if available) rendered with the cosmic purple treatment.
+ *   6. Action buttons — "View Standings" navigates to the league page;
+ *      "Play Again" calls onPlayAgain to reset the simulator.
+ *
+ * @param {{
+ *   matchState:       object,     // final ms (ms.mvp must be set)
+ *   onPlayAgain:      () => void, // callback: reset the simulator
+ *   onViewStandings:  () => void, // callback: navigate to league standings
+ *   architectVerdict: string|null, // last Architect proclamation text (or null)
+ *   homeLeagueId:     string|null, // for the "View Standings" link label
+ * }} props
+ * @returns {JSX.Element}
+ */
+export const PostMatchSummary = ({
+  matchState: ms,
+  onPlayAgain,
+  onViewStandings,
+  architectVerdict,
+  homeLeagueId,
+}) => {
+  const homeWon  = ms.score[0] > ms.score[1];
+  const awayWon  = ms.score[1] > ms.score[0];
+  const isDraw   = ms.score[0] === ms.score[1];
+  const stats    = ms.playerStats || {};
+
+  // ── Derive scorer, card, and assist lists from playerStats ───────────────
+  // playerStats is keyed by player name; we separate by team using shortName.
+  const homeScorers = [];
+  const awayScorers = [];
+  const allCards    = [];
+
+  Object.entries(stats).forEach(([name, s]) => {
+    const isHome = s.team === ms.homeTeam.shortName;
+    if ((s.goals || 0) > 0) {
+      (isHome ? homeScorers : awayScorers).push({ name, goals: s.goals });
+    }
+    if ((s.yellows || 0) > 0 || (s.reds || s.redCards || 0) > 0) {
+      allCards.push({
+        name,
+        team: isHome ? ms.homeTeam.shortName : ms.awayTeam.shortName,
+        color: isHome ? ms.homeTeam.color : ms.awayTeam.color,
+        yellows: s.yellows || 0,
+        reds: s.reds || s.redCards || 0,
+      });
+    }
+  });
+
+  // ── Result label ─────────────────────────────────────────────────────────
+  const resultLabel = isDraw
+    ? 'DRAW'
+    : homeWon
+    ? `${ms.homeTeam.shortName} WIN`
+    : `${ms.awayTeam.shortName} WIN`;
+  const resultColor = isDraw
+    ? 'rgba(227,224,213,0.5)'
+    : homeWon ? ms.homeTeam.color : ms.awayTeam.color;
+
+  return (
+    // ── Backdrop overlay ──────────────────────────────────────────────────
+    // Fixed full-screen overlay with a semi-transparent dark backdrop so the
+    // match state underneath is still visible (adds context without distraction).
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      backgroundColor: 'rgba(0,0,0,0.82)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '16px',
+    }}>
+      <div style={{
+        backgroundColor: '#0D0D0D',
+        border: '1px solid rgba(227,224,213,0.15)',
+        maxWidth: '520px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        padding: '32px 28px 24px',
+      }}>
+
+        {/* ── FULL TIME header ────────────────────────────────────────────── */}
+        <div style={{
+          textAlign: 'center',
+          fontSize: '10px',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.18em',
+          color: C.purple,
+          marginBottom: '8px',
+        }}>
+          Full Time
+        </div>
+
+        {/* ── Result label (WIN / DRAW) ────────────────────────────────────── */}
+        <div style={{
+          textAlign: 'center',
+          fontSize: '11px',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.14em',
+          color: resultColor,
+          marginBottom: '16px',
+        }}>
+          {resultLabel}
+        </div>
+
+        {/* ── Scoreline ────────────────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          marginBottom: '24px',
+        }}>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: ms.homeTeam.color, textAlign: 'right', flex: 1 }}>
+            {ms.homeTeam.shortName}
+          </span>
+          <span style={{
+            fontSize: '36px',
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            color: 'rgba(227,224,213,0.9)',
+            minWidth: '100px',
+            textAlign: 'center',
+          }}>
+            {ms.score[0]}–{ms.score[1]}
+          </span>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: ms.awayTeam.color, textAlign: 'left', flex: 1 }}>
+            {ms.awayTeam.shortName}
+          </span>
+        </div>
+
+        <hr style={{ border: 'none', borderTop: '1px solid rgba(227,224,213,0.08)', marginBottom: '20px' }} />
+
+        {/* ── Scorers ──────────────────────────────────────────────────────── */}
+        {(homeScorers.length > 0 || awayScorers.length > 0) && (
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{
+              fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.1em', opacity: 0.4, marginBottom: '8px',
+            }}>
+              ⚽ Scorers
+            </div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              {/* Home scorers — left column */}
+              <div style={{ flex: 1 }}>
+                {homeScorers.map((s, i) => (
+                  <div key={i} style={{ fontSize: '12px', color: ms.homeTeam.color, marginBottom: '3px' }}>
+                    {s.name}
+                    {s.goals > 1 && (
+                      <span style={{ opacity: 0.6, fontSize: '10px', marginLeft: '4px' }}>
+                        ×{s.goals}{s.goals >= 3 ? ' ★' : ''}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Away scorers — right column */}
+              <div style={{ flex: 1, textAlign: 'right' }}>
+                {awayScorers.map((s, i) => (
+                  <div key={i} style={{ fontSize: '12px', color: ms.awayTeam.color, marginBottom: '3px' }}>
+                    {s.name}
+                    {s.goals > 1 && (
+                      <span style={{ opacity: 0.6, fontSize: '10px', marginLeft: '4px' }}>
+                        ×{s.goals}{s.goals >= 3 ? ' ★' : ''}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MVP ──────────────────────────────────────────────────────────── */}
+        {ms.mvp && (
+          <div style={{
+            marginBottom: '16px',
+            padding: '10px 14px',
+            backgroundColor: `${ms.mvp.teamColor}0D`,  // 0D ≈ 5% opacity tint
+            border: `1px solid ${ms.mvp.teamColor}33`,  // 33 ≈ 20% opacity border
+          }}>
+            <span style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              🏆 Player of the Match
+            </span>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: ms.mvp.teamColor, marginTop: '2px' }}>
+              {ms.mvp.name}
+            </div>
+            <div style={{ fontSize: '10px', opacity: 0.5 }}>{ms.mvp.team}</div>
+          </div>
+        )}
+
+        {/* ── Cards summary ─────────────────────────────────────────────────── */}
+        {allCards.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{
+              fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.1em', opacity: 0.4, marginBottom: '6px',
+            }}>
+              Cards
+            </div>
+            {allCards.map((c, i) => (
+              <span key={i} style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                marginRight: '8px', marginBottom: '4px',
+                fontSize: '11px', color: c.color, opacity: 0.85,
+              }}>
+                {c.reds > 0 ? '🟥' : '🟨'} {c.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* ── Architect's Verdict ───────────────────────────────────────────── */}
+        {architectVerdict && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(124,58,237,0.06)',
+            border: '1px solid rgba(124,58,237,0.25)',
+            borderLeft: '3px solid #7C3AED',
+          }}>
+            <div style={{
+              fontSize: '9px', fontWeight: 700, letterSpacing: '0.14em',
+              textTransform: 'uppercase', color: '#7C3AED', marginBottom: '6px',
+            }}>
+              ✦ The Architect's Verdict
+            </div>
+            <div style={{
+              fontSize: '11px', fontStyle: 'italic', lineHeight: 1.6,
+              color: '#E2D9F3', opacity: 0.9,
+            }}>
+              "{architectVerdict}"
+            </div>
+          </div>
+        )}
+
+        <hr style={{ border: 'none', borderTop: '1px solid rgba(227,224,213,0.08)', marginBottom: '20px' }} />
+
+        {/* ── Action buttons ────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          {onViewStandings && (
+            <button
+              onClick={onViewStandings}
+              style={{
+                padding: '8px 18px',
+                border: '1px solid rgba(227,224,213,0.3)',
+                backgroundColor: 'transparent',
+                color: 'rgba(227,224,213,0.85)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontFamily: "'Space Mono', monospace",
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              View Standings
+            </button>
+          )}
+          {onPlayAgain && (
+            <button
+              onClick={onPlayAgain}
+              style={{
+                padding: '8px 18px',
+                border: `1px solid ${C.purple}`,
+                backgroundColor: `${C.purple}22`,
+                color: C.purple,
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontFamily: "'Space Mono', monospace",
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              Play Again
+            </button>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+};

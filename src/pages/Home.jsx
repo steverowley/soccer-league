@@ -1,5 +1,5 @@
 // ── Home.jsx ──────────────────────────────────────────────────────────────────
-// Landing page for the ISL website.  Implements the home page mockup with:
+// Landing page for the ISL website.
 //
 //  1. HERO — ISL logo (large), H1 welcome title, tagline, two CTAs:
 //            "VIEW LEAGUES" (primary) and "UPCOMING MATCHES" (tertiary/purple).
@@ -7,47 +7,76 @@
 //  2. CREATE ACCOUNT card — left-aligned dark bordered card with benefit list
 //     and "CREATE ACCOUNT" primary button.
 //
-//  3. LEAGUE STANDINGS carousel — dark table showing the current league
-//     standings with prev/next arrows to switch between leagues.
-//     The standings data is placeholder (all zeros) until the match simulator
-//     is wired up to persist results to a shared store.
+//  3. LEAGUE STANDINGS carousel — live standings table for each league,
+//     computed from saved match results in localStorage.  Prev/next arrows
+//     cycle through the four leagues.  Falls back to zeroed placeholder rows
+//     before any matches have been simulated.
 //
-//  4. LATEST NEWS — a single news card ("WELCOME TO SEASON ONE") with a
-//     "LEARN MORE" primary button.  Expandable to multiple cards later.
+//  4. LATEST NEWS — dynamically generated from saved match results via
+//     matchResultsService.generateNewsItems().  Renders one card per news item
+//     (up to 6).  Falls back to the static "Welcome to Season One" card when
+//     no results exist.
+//
+// LIVE DATA STRATEGY
+// ──────────────────
+// Both the standings and news sections read from localStorage synchronously
+// on each render — no loading state, no async fetch.  This keeps the page
+// simple and ensures that after a match is saved the user sees updated data
+// immediately on returning to the home page.
 //
 // All layout follows the 1312px desktop grid (12 cols, 32px gutter) from
 // the design spec, achieved via the `.container` utility class.
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import IslTable from '../components/ui/IslTable';
-import { LEAGUES, buildStandingsRows, STANDINGS_COLS } from '../data/leagueData';
+import { LEAGUES, STANDINGS_COLS, buildStandingsRows } from '../data/leagueData';
+import { computeStandings, generateNewsItems } from '../lib/matchResultsService';
 
 /**
  * ISL Home page component.
  *
- * Renders the landing page with hero, account creation CTA, league standings
- * carousel, and latest news.  The standings carousel tracks which league is
- * currently selected via local state; the league index wraps around at both
- * ends (circular navigation).
+ * Renders the landing page with hero, account CTA, league standings carousel,
+ * and a dynamically generated latest-news section.
+ *
+ * The standings carousel tracks which league is currently displayed via local
+ * state; the league index wraps around at both ends (circular navigation).
  *
  * @returns {JSX.Element}
  */
 export default function Home() {
   // ── League standings carousel state ───────────────────────────────────────
-  // Tracks which league is currently displayed in the standings table.
-  // Index into the LEAGUES array (0 = Rocky Inner, 1 = Gas Giants, …).
+  // `leagueIdx` is an index into the LEAGUES array (0 = Rocky Inner, …).
+  // Clicking prev/next wraps using modular arithmetic so there is no dead end.
   const [leagueIdx, setLeagueIdx] = useState(0);
 
   const currentLeague = LEAGUES[leagueIdx];
-  const standingsRows = buildStandingsRows(currentLeague.id);
+
+  // ── Live standings ─────────────────────────────────────────────────────────
+  // buildStandingsRows() provides the zeroed base list for the current league.
+  // computeStandings() merges real W/D/L/GD/Pts from localStorage on top of
+  // it.  useMemo keys on leagueIdx so we only re-read localStorage when the
+  // user switches leagues, not on every render.
+  const standingsRows = useMemo(
+    () => computeStandings(currentLeague.id, buildStandingsRows(currentLeague.id)),
+    [leagueIdx] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // ── News items ─────────────────────────────────────────────────────────────
+  // generateNewsItems() scans all saved results and produces up to 6 human-
+  // readable news cards (match reports + season-leader item).  Returns [] when
+  // no results are saved yet — the JSX below falls back to the static welcome
+  // card in that case.
+  // useMemo with empty deps: news is generated once per mount.  The home page
+  // is typically navigated to fresh after a match, so stale data is not a
+  // concern; if it were, a key prop on the component would force a remount.
+  const newsItems = useMemo(() => generateNewsItems(6), []); // 6 = display cap
 
   /**
    * Advances the carousel by `delta` positions, wrapping at boundaries.
-   * delta = -1 → previous league; delta = +1 → next league.
    *
-   * @param {number} delta
+   * @param {number} delta  -1 for previous league, +1 for next.
    */
   const shiftLeague = (delta) => {
     setLeagueIdx(prev => (prev + delta + LEAGUES.length) % LEAGUES.length);
@@ -56,29 +85,15 @@ export default function Home() {
   return (
     <div>
       {/* ── HERO ──────────────────────────────────────────────────────────────── */}
-      {/* padding: 32px top — the header logo overhangs the divider by ~60px on
-          desktop so there is no need for large breathing room here; 32px gives
-          the H1 comfortable clearance while keeping the logo and headline in a
-          cohesive visual block. The hero logo is intentionally removed: the
-          overhanging header logo serves as the hero brand mark per the design. */}
       <section style={{ textAlign: 'center', padding: '32px 0 40px' }}>
         <div className="container">
-
-          {/* H1 split across two lines to match the mockup layout */}
           <h1 style={{ marginBottom: '16px', lineHeight: 1.2 }}>
             Welcome to the<br />Intergalactic Soccer League
           </h1>
-
-          {/* Horizontal rule below the heading — matches design spec */}
           <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
-
           <p className="subtitle" style={{ marginBottom: '24px', opacity: 0.7, fontSize: '14px' }}>
             The most exciting soccer simulation game in the solar system!
           </p>
-
-          {/* ── CTA buttons — primary + tertiary side by side ─────────────────── */}
-          {/* "VIEW LEAGUES" uses primary (dark/bordered); "UPCOMING MATCHES"
-              uses tertiary (purple fill) to create visual hierarchy. */}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/leagues">
               <Button variant="primary">View Leagues</Button>
@@ -93,9 +108,6 @@ export default function Home() {
       <div className="container">
 
         {/* ── CREATE ACCOUNT card ─────────────────────────────────────────────── */}
-        {/* Left-aligned dark card; spans roughly half the desktop grid width
-            (6 of 12 columns).  Uses max-width to keep it from stretching full
-            width on large screens, matching the mockup proportions. */}
         <section className="section">
           <div className="card" style={{ maxWidth: '480px' }}>
             <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Create Account</h3>
@@ -105,7 +117,6 @@ export default function Home() {
             <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.85 }}>
               Register now to:
             </p>
-            {/* Benefit bullet list — matches the mockup's indented dot list */}
             <ul style={{ paddingLeft: '16px', marginBottom: '16px', fontSize: '13px', lineHeight: 1.8 }}>
               <li>Place bets on wormhole goals, time-loop own goals, and referee implosions</li>
               <li>Receive cryptic prophecies about your team's league standing</li>
@@ -122,13 +133,12 @@ export default function Home() {
         </section>
 
         {/* ── LEAGUE STANDINGS carousel ─────────────────────────────────────────── */}
-        {/* Prev/next arrows flank the league name so users can scroll through
-            all four leagues without leaving the home page. */}
+        {/* Live data from computeStandings() — updates automatically after
+            each simulated match.  Prev/next arrows cycle all four leagues. */}
         <section className="section">
 
-          {/* ── Carousel header ───────────────────────────────────────────────── */}
+          {/* Carousel header with prev/next arrows flanking the league title */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-            {/* Left arrow — wraps to last league when on first */}
             <button
               onClick={() => shiftLeague(-1)}
               aria-label="Previous league"
@@ -140,10 +150,7 @@ export default function Home() {
               ◄
             </button>
 
-            {/* ── League title as link ─────────────────────────────────────────
-                Wrapping the title in a Link lets the home page standings
-                carousel serve as an entry point into each league's full
-                detail page (standings + player stat tables). */}
+            {/* League title doubles as a link to the full standings page */}
             <h2 className="section-title" style={{ margin: 0 }}>
               <Link
                 to={`/leagues/${currentLeague.id}`}
@@ -153,7 +160,6 @@ export default function Home() {
               </Link>
             </h2>
 
-            {/* Right arrow — wraps to first league when on last */}
             <button
               onClick={() => shiftLeague(1)}
               aria-label="Next league"
@@ -166,18 +172,13 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Dark standings table — team names link to /teams/:id via the
-              linkField wired on STANDINGS_COLS + buildStandingsRows(). */}
+          {/* Dark standings table — team names link to /teams/:id */}
           <IslTable
             variant="dark"
             columns={STANDINGS_COLS}
             rows={standingsRows}
           />
 
-          {/* ── View full standings link ────────────────────────────────────────
-              Placed below the table so users who want more detail (player
-              stat tables, full standings) have an obvious onward path from
-              the home page preview. */}
           <div style={{ marginTop: '12px', textAlign: 'right' }}>
             <Link to={`/leagues/${currentLeague.id}`}>
               <Button variant="secondary">View Full Standings →</Button>
@@ -186,10 +187,14 @@ export default function Home() {
         </section>
 
         {/* ── LATEST NEWS ───────────────────────────────────────────────────────── */}
+        {/* Dynamic news cards generated from match results.  Falls back to the
+            static welcome card before any matches have been simulated so the
+            page is never empty.
+            Each card uses team colours as accent borders so the visual identity
+            of the involved teams is immediately apparent. */}
         <section className="section">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
             <h2 className="section-title" style={{ margin: 0 }}>Latest News</h2>
-            {/* Right-pointing arrow button — for future "see all news" nav */}
             <button
               aria-label="See all news"
               style={{
@@ -201,15 +206,80 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Single news card — max-width matches the Create Account card for
-              visual alignment on the left column of the desktop grid. */}
-          <div className="card" style={{ maxWidth: '480px' }}>
-            <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>Welcome to Season One</h3>
-            <p style={{ fontSize: '13px', opacity: 0.8, marginBottom: '20px' }}>
-              The new season is about to begin. Get ready for some exciting matches across the galaxy!
-            </p>
-            <Button variant="primary">Learn More</Button>
-          </div>
+          {newsItems.length === 0 ? (
+            // ── Pre-season fallback ─────────────────────────────────────────
+            // Shown before any match results are saved.  Gives new users
+            // context about the league without showing an empty section.
+            <div className="card" style={{ maxWidth: '480px' }}>
+              <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>Welcome to Season One</h3>
+              <p style={{ fontSize: '13px', opacity: 0.8, marginBottom: '20px' }}>
+                The new season is about to begin. Get ready for some exciting matches across the galaxy!
+              </p>
+              <Link to="/matches">
+                <Button variant="primary">Simulate a Match</Button>
+              </Link>
+            </div>
+          ) : (
+            // ── Live news cards ─────────────────────────────────────────────
+            // One card per news item, max 6 (generateNewsItems limit).
+            // Cards are laid out in a responsive 2-col grid so the section
+            // fills horizontal space on desktop without each card becoming
+            // uncomfortably wide.
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '16px',
+              maxWidth: '960px',
+            }}>
+              {newsItems.map(item => (
+                <div
+                  key={item.id}
+                  className="card"
+                  style={{
+                    // Left border accent in the home team's colour gives an
+                    // instant visual cue about which club the story concerns.
+                    borderLeft: `3px solid ${item.homeColor || 'rgba(227,224,213,0.3)'}`,
+                  }}
+                >
+                  {/* Date stamp — small, muted, above the headline */}
+                  {item.date && (
+                    <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '6px', letterSpacing: '0.06em' }}>
+                      {item.date}
+                    </div>
+                  )}
+
+                  <h3 style={{ fontSize: '14px', marginBottom: '8px', lineHeight: 1.4 }}>
+                    {item.headline}
+                  </h3>
+
+                  <p style={{ fontSize: '12px', opacity: 0.75, lineHeight: 1.6, marginBottom: '12px' }}>
+                    {item.body}
+                  </p>
+
+                  {/* Score pill — shown only for match-report items that
+                      carry homeGoals / awayGoals fields */}
+                  {item.homeGoals != null && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: item.homeColor, fontWeight: 700 }}>
+                        {item.homeTeam}
+                      </span>
+                      <span style={{
+                        fontSize: '12px', fontWeight: 700,
+                        padding: '1px 8px',
+                        border: '1px solid rgba(227,224,213,0.2)',
+                        letterSpacing: '0.05em',
+                      }}>
+                        {item.homeGoals}–{item.awayGoals}
+                      </span>
+                      <span style={{ fontSize: '11px', color: item.awayColor, fontWeight: 700 }}>
+                        {item.awayTeam}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
       </div>
