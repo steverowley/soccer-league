@@ -1884,15 +1884,26 @@ const MatchSimulator = ({
   // The enriched events are passed to UnifiedFeed only; the engine's internal
   // events array (ms.events) is left unchanged.
   const feedEvents = useMemo(() => {
+    // Event types that belong in the manager/tactical layer, not the play feed.
+    // These appear in ms.events but are rendered in their own columns (Detailed
+    // view) or as coach cards.  Showing them inline in the unified feed creates
+    // noise that competes with actual match action.
+    const EXCLUDE_TYPES = new Set([
+      'team_talk', 'manager_shout', 'captain_rally',
+      'desperate_sub', 'manager_sentoff', 'siege_start',
+    ]);
+
     let h = 0;  // running home score
     let a = 0;  // running away score
-    return ms.events.map(evt => {
-      if (evt.isGoal && !evt.architectAnnulled) {
-        if (evt.team === ms.homeTeam.shortName) h++; else a++;
-      }
-      // Only goal rows display the score badge, so only annotate those.
-      return evt.isGoal ? { ...evt, score: [h, a] } : evt;
-    });
+    return ms.events
+      .filter(evt => !EXCLUDE_TYPES.has(evt.type))
+      .map(evt => {
+        if (evt.isGoal && !evt.architectAnnulled) {
+          if (evt.team === ms.homeTeam.shortName) h++; else a++;
+        }
+        // Only goal rows display the score badge, so only annotate those.
+        return evt.isGoal ? { ...evt, score: [h, a] } : evt;
+      });
   }, [ms.events, ms.homeTeam.shortName]);
 
   // ── Reversed feed arrays ───────────────────────────────────────────────────

@@ -866,10 +866,13 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
       <div style={{
         display: 'flex',
         gap: '8px',
-        padding: '2px 8px 4px 28px',   // 28px left indent to visually nest under the event
+        // Left indent (32px) visually nests the commentary line under its
+        // parent event row; bottom border separates it from the next event.
+        padding: '4px 12px 6px 32px',
         fontSize: '11px',
-        lineHeight: 1.45,
+        lineHeight: 1.5,
         opacity: 0.9,
+        borderBottom: '1px solid rgba(227,224,213,0.05)',
       }}>
         <span style={{ color: item.color || C.purple, fontWeight: 600, flexShrink: 0 }}>
           💬
@@ -970,10 +973,15 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
       display: 'flex',
       alignItems: 'baseline',
       gap: '6px',
-      padding: `${larger ? '5px' : '3px'} 10px`,
+      // Goals: 10px top/bottom to give them visual breathing room.
+      // Regular events: 6px — enough to separate rows clearly without
+      // making the feed feel sparse when many events arrive in a burst.
+      padding: `${larger ? '10px' : '6px'} 12px`,
       borderLeft: `${larger ? '3px' : '2px'} solid ${accent}`,
+      // Separator between events — barely visible but prevents rows from
+      // merging into a solid block at high event density.
+      borderBottom: '1px solid rgba(227,224,213,0.05)',
       backgroundColor: bgTint,
-      marginBottom: '1px',
     }}>
       {/* Minute stamp — fixed width so all event texts left-align */}
       <span style={{
@@ -1072,29 +1080,53 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
  */
 export const UnifiedFeed = ({ events, voxItems, homeTeam, awayTeam, isPlaying, scrollRef }) => {
   // ── Build interleaved display list (newest first) ─────────────────────────
-  // Strategy:
-  //   1. Reverse events so newest is at index 0.
-  //   2. For each event, collect all Vox items that share its minute.
-  //   3. Push the event row, then push those Vox sub-rows immediately after.
   //
-  // We group Vox items by minute into a Map for O(1) lookup during the loop.
-  const voxByMinute = {};
-  (voxItems || []).forEach(v => {
-    const m = v.minute ?? 0;
-    if (!voxByMinute[m]) voxByMinute[m] = [];
-    voxByMinute[m].push(v);
+  // The key challenge: matchState.events[] and commentaryFeed[] are separate
+  // streams.  Multiple events can share the same minute (a foul followed by a
+  // free-kick at minute 34), and each Vox item is keyed only by minute — not
+  // by event index.  A naïve "attach Vox items to every event at that minute"
+  // approach causes each Vox item to repeat once per event at that minute.
+  //
+  // Correct strategy:
+  //   1. Group events by minute (preserving chronological order within each
+  //      minute group).
+  //   2. For each minute group, emit all event rows first, then emit Vox
+  //      sub-rows for that minute exactly once — so commentary always appears
+  //      after the last action it describes, never duplicated.
+  //   3. Reverse the minute groups so the newest minute is at the top.
+
+  // Step 1: group events by minute, preserving order within each group.
+  const byMinute = new Map();
+  (events || []).forEach((evt, i) => {
+    const m = evt.minute ?? 0;
+    if (!byMinute.has(m)) byMinute.set(m, []);
+    byMinute.get(m).push({ ...evt, _origIdx: i });
   });
 
-  // Reverse a copy — do not mutate the original events array.
-  const reversed = [...(events || [])].reverse();
+  // Group Vox items by minute for O(1) lookup.
+  const voxByMinute = {};
+  (voxItems || []).forEach((v, vi) => {
+    const m = v.minute ?? 0;
+    if (!voxByMinute[m]) voxByMinute[m] = [];
+    voxByMinute[m].push({ ...v, _vi: vi });
+  });
 
-  // Build the interleaved flat list for rendering.
+  // Step 2 + 3: build the flat row list, newest minute first.
+  // Sort minute keys descending so the top of the feed is always current.
+  const minuteKeys = [...byMinute.keys()].sort((a, b) => b - a);
   const rows = [];
-  reversed.forEach((evt, i) => {
-    rows.push({ ...evt, _rowType: 'event', _key: `evt-${i}` });
-    const voxForMinute = voxByMinute[evt.minute] || [];
-    voxForMinute.forEach((v, vi) => {
-      rows.push({ ...v, _rowType: 'vox', _key: `vox-${evt.minute}-${vi}` });
+  minuteKeys.forEach(m => {
+    const evtsAtMinute = byMinute.get(m);
+    // All events at this minute — rendered in chronological sub-order
+    // (original index ascending) so within a minute the sequence is preserved.
+    evtsAtMinute.forEach((evt, i) => {
+      rows.push({ ...evt, _rowType: 'event', _key: `evt-${m}-${evt._origIdx}` });
+    });
+    // Vox commentary for this minute — emitted exactly once after all events
+    // at this minute, preventing the duplication bug where the same Vox line
+    // would repeat for every event sharing the minute stamp.
+    (voxByMinute[m] || []).forEach((v, vi) => {
+      rows.push({ ...v, _rowType: 'vox', _key: `vox-${m}-${vi}` });
     });
   });
 

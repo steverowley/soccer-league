@@ -59,6 +59,7 @@ The match simulator runs full 90-minute matches minute by minute with goals, fou
 - **Streaming dispatch**: Each commentary item is streamed to the feed the moment its individual API call resolves, rather than batching after the slowest parallel call
 - **Speed-adaptive cooldown** (TURBO → 0 ms, FAST → 100 ms, NORMAL → 300 ms, SLOW → 500 ms) scales the inter-event processing gap to match simulation speed, preventing queue back-pressure at high speeds
 - **Priority queue gating** drops low-value events (minor/manager comments) when ≥2 events await; medium events when ≥3 await; goals and red cards always pass — preventing stale commentary from burying important moments
+- **Selective reactions**: Medium-tier events (yellow cards, injuries, controversies) now trigger analyst reactions at 50% probability rather than 100%, keeping commentary feel impactful and punctuation-like rather than constant
 - Net result: Commentary latency reduced from ~3 s to ~500 ms at TURBO speed
 
 **Commentary Personas** — Three distinct voices:
@@ -94,20 +95,23 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
     - **Heated Bench** (orange) — agents experiencing heightened emotions
     - **Full Time** (purple outline) — match complete
   - **Bottom zone** (scrollable) — **Architect Feed** with purple accent: Cosmic Proclamations and Architect Interference results (previously hidden in the centre column)
-- Real-time event feed with timestamps
+- **Real-time event feed** with optimized readability:
+  - Minute timestamps and routine event text at high contrast (0.9 and 1.0 opacity respectively)
+  - Default accent borders at 0.45 alpha for visibility without overwhelming the visual hierarchy
+  - Text hierarchy carried by font size and border weight rather than opacity fading
 - Player roster with live stats (goals, assists, saves, cards, injuries)
-- **Centre column feed** — Two stacked cards occupy the wider centre column of the pitch grid:
+- **Centre and right column feeds** — Two stacked cards occupy the wider centre column; right panel shows analyst commentary:
   - **Live Pitch** — Formation-based player positioning with ball tracking and momentum overlay
   - **Match Events** — Key events (goals, cards, subs) as compact chips with team colour coding
-- **Officials + Referee Decisions section** (if AI manager active):
+  - **Commentary feed** (right panel) — Combined Nexus-7 and Zara Bloom analyst reactions, colour-coded by commentator (purple for Nexus-7 data analysis, home team accent for Zara's tactically-driven insight). Replaces the previous Referee Decisions panel with higher-impact colour commentary on key moments.
+- **Officials section** (if AI manager active):
   - **Officials info row** — 3-column grid showing Referee (name/leniency/emoji), Stadium (name/capacity), Conditions (weather icon, temperature, time of day)
-  - **Referee Decisions feed** (scrollable, gold accent) — All referee judgements rendered with full context; type:'referee' items are no longer filtered out and now have their dedicated visible home
 - **3-column broadcast booth** — Full-width section below the pitch grid; one column per commentary voice:
   - **Nexus-7** — AI analysis and data-driven observations
   - **Captain Vox** — Play-by-play narration and procedural match commentary
   - **Zara Bloom** — Colour analysis and tactical insights
   - Architect proclamations/interference appear only in the Chaos Meter's Architect feed; not duplicated in the booth
-  - Referee decisions appear only in the Referee Decisions feed; not routed to any commentary column
+  - Analyst reactions (Nexus-7 and Zara Bloom) appear in the right panel Commentary feed; not duplicated in the booth columns
   - Each column scrolls independently; header shows commentator emoji, name, role, and accent colour
   - Columns rendered via a single `COMMENTATOR_PROFILES.map()` pass for structural alignment
   - **Independent scrolling enabled** via CSS block formatting context (BFC): each column div has `overflow:hidden`, allowing flex layout to properly constrain scroll-container height and enable smooth scrolling through full match commentary
