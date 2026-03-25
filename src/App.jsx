@@ -17,8 +17,9 @@ import {
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
-import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard } from "./components/MatchComponents.jsx";
+import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
+import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
 // Two quote buckets selected by scoreline when the whistle blows at 45':
@@ -727,6 +728,24 @@ const MatchSimulator = ({
   // cinemaEvent — the latest "significant" match event (goal, save, card, injury)
   // shown as an overlay on the pitch.  Null between events = calm pitch view.
   const [cinemaEvent,setCinemaEvent]=useState(null);
+
+  // ── Feed view state ──────────────────────────────────────────────────────────
+  // feedView: true  = default Blaseball-style unified feed (single chronological
+  //                   stream — goals, cards, subs, Vox reactions interleaved).
+  //           false = detailed view (existing 3-col Nexus / Vox / Zara booth +
+  //                   manager shouts + player thoughts panels).
+  // Persists for the lifetime of the component; resets to true on resetMatch().
+  const [feedView,setFeedView]=useState(true);
+
+  // showPostMatch: true after the final whistle (matchState.mvp is set).
+  // Controls visibility of the PostMatchSummary overlay.
+  // Reset to false on resetMatch() so it does not flash on the next kick-off.
+  const [showPostMatch,setShowPostMatch]=useState(false);
+
+  // feedScrollRef — attached to the UnifiedFeed's inner scroll container.
+  // Used by the auto-scroll effect below to snap to the top (newest event)
+  // whenever a new event is added during live simulation.
+  const feedScrollRef=useRef(null);
   // cinemaKey — incremented each time cinemaEvent changes; used as the React
   // key on the overlay div so CSS animations restart cleanly for every new event.
   const [cinemaKey,setCinemaKey]=useState(0);
@@ -1564,6 +1583,9 @@ const MatchSimulator = ({
     setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);
     setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);
     setAwayThoughtsFeed([]);setHtLlmQuotes(null);
+    // Reset feed UI state so the next match starts in Feed View with no
+    // lingering post-match overlay from the previous game.
+    setShowPostMatch(false);setFeedView(true);
   };
 
   useEffect(()=>{
@@ -1581,8 +1603,58 @@ const MatchSimulator = ({
           league: matchState.homeTeam?.league || 'Intergalactic Soccer League',
         });
       }
+
+      // ── Mechanical result persistence ─────────────────────────────────────
+      // Save W/D/L/goals/scorers to localStorage so league standings, player
+      // stat tables, and the news feed reflect real match history.
+      // buildResultRecord() extracts a serialisable snapshot from matchState;
+      // saveResult() appends it and caps the store at 200 records.
+      //
+      // homeTeamKey / awayTeamKey are the teams.js simulator keys ('mars',
+      // 'saturn') passed as props — not the leagueData IDs.  The service maps
+      // them to leagueData IDs via TEAM_LEAGUE_MAP.
+      try {
+        const record=buildResultRecord(matchState,homeTeamKey,awayTeamKey);
+        saveResult(record);
+      } catch(e) {
+        // Non-fatal: a result-save failure should never crash the simulator.
+        console.warn('[ISL] result save failed:', e);
+      }
+
+      // Show the PostMatchSummary overlay after a short delay so the final
+      // event commentary has time to render before the overlay appears.
+      // 800 ms is long enough to register the final whistle without feeling
+      // like a stall, but short enough that the user doesn't wonder if the
+      // match actually ended.
+      setTimeout(()=>setShowPostMatch(true), 800); // 800 ms: post-whistle beat
     }
   },[matchState.mvp,matchState.isPlaying]);
+
+  // ── Unified feed auto-scroll ───────────────────────────────────────────────
+  // Whenever a new event is added to matchState.events during a live simulation,
+  // scroll the UnifiedFeed container to the top so the user always sees the
+  // latest action without having to manually scroll back up.
+  //
+  // WHY scrollTop=0 (not scrollIntoView)
+  // ─────────────────────────────────────
+  // The feed renders newest-first, so index 0 is always the latest event.
+  // Snapping scrollTop to 0 is instant, allocation-free, and avoids the
+  // browser layout cost of scrollIntoView on a frequently updated list.
+  //
+  // We only auto-scroll while the match is actively playing (isPlaying) and
+  // the user hasn't scrolled up to review earlier events.  Detecting manual
+  // scroll is handled by checking scrollTop > 40 — a small tolerance so a
+  // tiny unintentional scroll doesn't lock auto-scroll permanently.
+  // The 40px threshold matches roughly two compact FeedRow heights.
+  useEffect(()=>{
+    if(!matchState.isPlaying) return;
+    const el=feedScrollRef.current;
+    if(!el) return;
+    // Only auto-scroll when the user is already near the top (watching live).
+    // If they've scrolled down more than 40 px they're reading history —
+    // don't yank them back to the top mid-read.
+    if(el.scrollTop<=40) el.scrollTop=0; // 40 px tolerance (≈2 compact rows)
+  },[matchState.events.length]);
 
   // ── Memoised derived values ────────────────────────────────────────────────
   // All blocks below are recalculated only when their specific inputs
@@ -1799,6 +1871,29 @@ const MatchSimulator = ({
   const keyEvents = useMemo(() => ms.events.filter(e =>
     e.isGoal || e.cardType === 'red' || e.cardType === 'yellow' || e.type === 'substitution'
   ), [ms.events]);
+
+  // ── feedEvents — events enriched with a running score for goal rows ────────
+  // The UnifiedFeed's FeedRow component renders a score badge (e.g. "2-1") on
+  // goal events.  Raw events don't carry the scoreline at the moment of the
+  // goal — only the current matchState.score does.  We reconstruct the running
+  // score by scanning events in chronological order and counting goals forward.
+  //
+  // Annulled goals (architectAnnulled) are excluded from the tally because the
+  // Architect erased them from reality — they should not affect the score badge.
+  //
+  // The enriched events are passed to UnifiedFeed only; the engine's internal
+  // events array (ms.events) is left unchanged.
+  const feedEvents = useMemo(() => {
+    let h = 0;  // running home score
+    let a = 0;  // running away score
+    return ms.events.map(evt => {
+      if (evt.isGoal && !evt.architectAnnulled) {
+        if (evt.team === ms.homeTeam.shortName) h++; else a++;
+      }
+      // Only goal rows display the score badge, so only annotate those.
+      return evt.isGoal ? { ...evt, score: [h, a] } : evt;
+    });
+  }, [ms.events, ms.homeTeam.shortName]);
 
   // ── Reversed feed arrays ───────────────────────────────────────────────────
   // Each feed is displayed newest-first (reverse order) in the UI.
@@ -2100,8 +2195,136 @@ const MatchSimulator = ({
           </div>
         </div>
 
-        {/* ── 3-column feeds: manager / pitch+commentary / manager ──────── */}
+        {/* ── Feed / Detailed view toggle ────────────────────────────────── */}
+        {/* Shown whenever the AI manager is active (i.e. a match is in
+            progress or has been played).  Two states:
+              Feed View    — default; Blaseball-style unified chronological
+                             stream.  Single column, instant readability.
+              Detailed View — legacy 3-column Nexus / Vox / Zara broadcast
+                              booth plus home/away manager shouts and player
+                              thoughts panels.  Richer but harder to scan. */}
         {aiManager&&(
+          <div className="section" style={{display:'flex',alignItems:'center',gap:'6px',paddingBottom:0}}>
+            {/* Feed View button — active = purple fill, inactive = ghost */}
+            <button
+              onClick={()=>setFeedView(true)}
+              style={{
+                padding:'4px 12px',
+                fontSize:'10px',
+                fontFamily:"'Space Mono',monospace",
+                textTransform:'uppercase',
+                letterSpacing:'0.08em',
+                cursor:'pointer',
+                border:`1px solid ${feedView?C.purple:'rgba(227,224,213,0.2)'}`,
+                backgroundColor:feedView?`${C.purple}22`:'transparent',
+                color:feedView?C.purple:'rgba(227,224,213,0.4)',
+              }}
+            >
+              ▶ Feed
+            </button>
+            {/* Detailed View button — active when feedView=false */}
+            <button
+              onClick={()=>setFeedView(false)}
+              style={{
+                padding:'4px 12px',
+                fontSize:'10px',
+                fontFamily:"'Space Mono',monospace",
+                textTransform:'uppercase',
+                letterSpacing:'0.08em',
+                cursor:'pointer',
+                border:`1px solid ${!feedView?C.purple:'rgba(227,224,213,0.2)'}`,
+                backgroundColor:!feedView?`${C.purple}22`:'transparent',
+                color:!feedView?C.purple:'rgba(227,224,213,0.4)',
+              }}
+            >
+              ☰ Detailed
+            </button>
+          </div>
+        )}
+
+        {/* ── FEED VIEW: unified stream + key events sidebar ──────────────── */}
+        {/* Default viewing mode.  A single chronological event stream on the
+            left (newest events at top) with a compact right panel showing
+            only key events (goals / cards) and referee decisions.
+            This is intentionally simple — the whole point is that you can
+            follow the match by reading one column, not three. */}
+        {aiManager&&feedView&&(
+          <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 280px',gap:'8px',height:'520px',alignItems:'stretch'}}>
+
+            {/* ── Left: Unified match feed ──────────────────────────────── */}
+            <div className="card" style={{padding:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+              <UnifiedFeed
+                events={feedEvents}
+                voxItems={voxItems}
+                homeTeam={ms.homeTeam}
+                awayTeam={ms.awayTeam}
+                isPlaying={ms.isPlaying}
+                scrollRef={feedScrollRef}
+              />
+            </div>
+
+            {/* ── Right: key events + ref decisions ────────────────────── */}
+            {/* A compact sidebar that stays constant while the feed scrolls.
+                Deliberately minimal — goals/cards at a glance, then refs.
+                Manager shouts and player thoughts are Detailed-view-only. */}
+            <div style={{display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
+
+              {/* Key events — goals, red cards, yellow cards, substitutions */}
+              <div className="card" style={{padding:'10px 12px',flexShrink:0}}>
+                <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)',marginBottom:'8px'}}>
+                  Key Events
+                </div>
+                {keyEvents.length===0
+                  ?<div style={{fontSize:'10px',opacity:0.25,fontStyle:'italic'}}>No key events yet</div>
+                  :<div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                    {[...keyEvents].reverse().map((e,i)=>{
+                      const isHome=e.team===sn;
+                      const tc=isHome?ms.homeTeam.color:ms.awayTeam.color;
+                      const icon=e.isGoal?'⚽':e.cardType==='red'?'🟥':e.cardType==='yellow'?'🟨':'↕';
+                      return(
+                        <div key={i} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'10px'}}>
+                          <span style={{color:C.purple,fontWeight:700,flexShrink:0,minWidth:'22px'}}>{e.minute}'</span>
+                          <span style={{flexShrink:0}}>{icon}</span>
+                          <span style={{color:tc,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                            {e.player||e.type}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                }
+              </div>
+
+              {/* Referee decisions — newest first, scrollable */}
+              <div className="card" style={{flex:1,minHeight:0,padding:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+                <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',opacity:0.5}}>
+                  ⚖️ Referee
+                </div>
+                <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#FFD700 #111'}}>
+                  {refItems.length===0
+                    ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',paddingTop:'12px',fontStyle:'italic'}}>Awaiting decisions...</div>
+                    :refItems.map((item,i)=>(
+                      <div key={i} style={{marginBottom:'6px',padding:'6px 8px',backgroundColor:'rgba(255,215,0,0.04)',border:'1px solid rgba(255,215,0,0.10)'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+                          <span style={{fontSize:'10px',fontWeight:700,color:'#FFD700'}}>⚖️ {item.name}</span>
+                          <span style={{fontSize:'10px',opacity:0.4}}>{item.minute}'</span>
+                        </div>
+                        <div style={{fontSize:'10px',opacity:0.8,lineHeight:1.4}}>{item.text}</div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ── DETAILED VIEW: legacy 3-column booth ────────────────────────── */}
+        {/* Preserved unchanged — all existing manager shouts, player thoughts,
+            live pitch, Nexus-7, Vox, and Zara Bloom columns.  Hidden by
+            default in favour of the unified feed view above. */}
+        {aiManager&&!feedView&&(
           <>
           <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'580px',alignItems:'stretch'}}>
             {/* Layout contract for this section:
@@ -2709,12 +2932,48 @@ const MatchSimulator = ({
       <PlayerCard sp={selectedPlayer} events={ms.events} onClose={()=>setSelectedPlayer(null)}/>
       {showApiKeyModal&&<ApiKeyModal apiKey={apiKey} setApiKey={setApiKey} setShowApiKeyModal={setShowApiKeyModal}/>}
 
+      {/* ── Post-match summary overlay ──────────────────────────────────────
+          Shown 800 ms after the final whistle (matchState.mvp set) via the
+          showPostMatch flag.  Displays the scoreline, scorers, MVP, cards,
+          and the Architect's closing verdict, then offers two actions:
+            View Standings — navigates to the league detail page for the
+                             home team's league (if mapped in TEAM_LEAGUE_MAP).
+            Play Again     — calls resetMatch() to start a fresh simulation.
+          The overlay is rendered on top of everything via position:fixed in
+          PostMatchSummary (zIndex 1000); modals like PlayerCard sit at lower
+          z-indices and are naturally hidden underneath. */}
+      {showPostMatch&&ms.mvp&&(
+        <PostMatchSummary
+          matchState={ms}
+          // Last architect proclamation text shown as the "Verdict" section.
+          // Pull the most recent proclamation from architectItems (newest first).
+          architectVerdict={architectItems.find(i=>i.type==='architect_proclamation')?.text||null}
+          onPlayAgain={()=>{
+            setShowPostMatch(false);
+            // Brief delay so the overlay fade is visible before the reset clears it.
+            setTimeout(()=>resetMatch(),150); // 150 ms: just enough to see the dismiss
+          }}
+          onViewStandings={()=>{
+            // Navigate to the league standings page for the home team.
+            // TEAM_LEAGUE_MAP is keyed by teams.js simulator key (homeTeamKey),
+            // not by ms.homeTeam.shortName — homeTeam objects don't carry a
+            // leagueId field; the mapping is the authoritative source.
+            const leagueId=TEAM_LEAGUE_MAP[homeTeamKey]?.leagueId||null;
+            const url=leagueId?`/leagues/${leagueId}`:'/leagues';
+            setShowPostMatch(false);
+            window.location.href=url;
+          }}
+        />
+      )}
+
       <style>{`
         @keyframes goalPulse{0%{opacity:1;transform:scale(0.5);}50%{opacity:1;transform:scale(1.5);}100%{opacity:0;transform:scale(0.8);}}
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
         @keyframes goalFlash{0%{opacity:1;}60%{opacity:0.8;}100%{opacity:0;}}
         @keyframes cinemaIn{from{opacity:0;}to{opacity:1;}}
         @keyframes cinemaPulse{0%{transform:scale(0.4);}65%{transform:scale(1.15);}100%{transform:scale(1);}}
+        @keyframes livePulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+        @keyframes architectPulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,58,237,0.3);}50%{box-shadow:0 0 14px 3px rgba(124,58,237,0.6);}}
       `}</style>
     </div>
   );

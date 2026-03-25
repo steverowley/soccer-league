@@ -433,25 +433,75 @@ export const TEAMS_BY_LEAGUE = {
  */
 export const STANDINGS_COLS = [
   { key: 'team',   label: 'Team', linkField: 'teamLink' },
-  { key: 'played', label: 'Played', align: 'right' },
-  { key: 'wins',   label: 'Wins',   align: 'right' },
-  { key: 'draws',  label: 'Draws',  align: 'right' },
-  { key: 'loses',  label: 'Loses',  align: 'right' },
-  { key: 'points', label: 'Points', align: 'right' },
+  { key: 'played', label: 'P',   align: 'right' },
+  { key: 'wins',   label: 'W',   align: 'right' },
+  { key: 'draws',  label: 'D',   align: 'right' },
+  { key: 'loses',  label: 'L',   align: 'right' },
+  // GD (goal difference = goals for minus goals against) is populated by
+  // computeStandings() in matchResultsService.  Pre-season placeholder rows
+  // have gd = undefined, which IslTable renders as an empty cell — this is
+  // intentional: it signals "no matches played" rather than showing a 0
+  // that could be confused with a genuine 0-goal-difference record.
+  { key: 'gd',     label: 'GD',  align: 'right' },
+  { key: 'points', label: 'Pts', align: 'right' },
 ];
 
 /**
- * Column definitions shared by all five player-stat tables:
- * Top Scorers, Top Assists, Top Clean Sheets, Most Yellow Cards, Most Red Cards.
+ * Column definitions for the Top Scorers player-stat table.
  *
- * The "Goals" header is intentionally generic — the enclosing section title
- * (e.g. "TOP SCORERS") provides the semantic context.
+ * The `goals` key maps to the aggregated total returned by
+ * matchResultsService.getTopScorers() — one number per player across all
+ * saved results for the league.
  *
  * @type {Array<{key: string, label: string, align?: string}>}
  */
+export const SCORER_COLS = [
+  { key: 'player', label: 'Player' },
+  { key: 'team',   label: 'Team'   },
+  { key: 'goals',  label: 'Goals', align: 'right' },
+];
+
+/**
+ * Column definitions for the Top Assists player-stat table.
+ *
+ * The `assists` key maps to the aggregated total returned by
+ * matchResultsService.getTopAssists().
+ *
+ * @type {Array<{key: string, label: string, align?: string}>}
+ */
+export const ASSISTS_COLS = [
+  { key: 'player',  label: 'Player'  },
+  { key: 'team',    label: 'Team'    },
+  { key: 'assists', label: 'Assists', align: 'right' },
+];
+
+/**
+ * Column definitions for card-count tables (yellow or red).
+ *
+ * The `cards` key maps to the type-specific tally returned by
+ * matchResultsService.getTopCards(leagueId, 'yellow'|'red').
+ *
+ * @type {Array<{key: string, label: string, align?: string}>}
+ */
+export const CARDS_COLS = [
+  { key: 'player', label: 'Player' },
+  { key: 'team',   label: 'Team'   },
+  { key: 'cards',  label: 'Cards', align: 'right' },
+];
+
+/**
+ * Column definitions shared by all five player-stat tables.
+ *
+ * Kept for backward-compatibility with existing imports.
+ * New code should prefer the specific SCORER_COLS / ASSISTS_COLS / CARDS_COLS
+ * exports so column headers accurately describe what they display.
+ *
+ * @type {Array<{key: string, label: string, align?: string}>}
+ * @deprecated Use SCORER_COLS, ASSISTS_COLS, or CARDS_COLS instead.
+ */
 export const PLAYER_STAT_COLS = [
   { key: 'player', label: 'Player' },
-  { key: 'team',   label: 'Team' },
+  { key: 'team',   label: 'Team'   },
   { key: 'goals',  label: 'Goals', align: 'right' },
 ];
 
