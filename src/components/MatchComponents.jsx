@@ -869,7 +869,7 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
         padding: '2px 8px 4px 28px',   // 28px left indent to visually nest under the event
         fontSize: '11px',
         lineHeight: 1.45,
-        opacity: 0.7,
+        opacity: 0.9,
       }}>
         <span style={{ color: item.color || C.purple, fontWeight: 600, flexShrink: 0 }}>
           💬
@@ -896,7 +896,9 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
   const annulled   = item.architectAnnulled;
 
   let icon   = '·';
-  let accent = 'rgba(227,224,213,0.2)';
+  // Default accent: visible but subdued so routine events don't compete with
+  // goals.  Higher alpha (0.45) than the old value (0.2) for legible contrast.
+  let accent = 'rgba(227,224,213,0.45)';
   let bgTint = 'transparent';
   let bold   = false;
   let larger = false;
@@ -929,9 +931,10 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
     icon   = '↕';
     accent = 'rgba(227,224,213,0.35)';
   } else if (item.type === 'shot') {
-    // Differentiate shot outcomes: saved vs missed vs post
+    // Differentiate shot outcomes: saved vs missed vs post.
+    // Accent inherits the default (0.45 alpha) — shots are frequent enough that
+    // giving them a stronger colour would overwhelm the feed.
     icon   = item.outcome === 'saved' ? '🧤' : item.outcome === 'post' ? '🏃' : '→';
-    accent = 'rgba(227,224,213,0.2)';
   } else if (item.type === 'freekick' || item.type === 'corner') {
     icon   = '⚑';
   } else if (item.type === 'team_talk') {
@@ -979,7 +982,9 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
         color: annulled ? '#B91C1C' : accent,
         flexShrink: 0,
         minWidth: '26px',
-        opacity: item.isGoal ? 1 : 0.65,
+        // Non-goal minute stamps were at 0.65 opacity — too faint to scan quickly.
+      // 0.9 keeps them clearly secondary to goal rows (1.0) while staying readable.
+      opacity: item.isGoal ? 1 : 0.9,
       }}>
         {item.minute}'
       </span>
@@ -993,7 +998,10 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
         fontWeight: bold ? 700 : 400,
         lineHeight: 1.45,
         flex: 1,
-        opacity: item.isGoal ? 1 : 0.85,
+        // Full opacity for all events — previous 0.85 on non-goals was too faint
+        // against the dark background.  Visual hierarchy is carried by font size
+        // and border weight instead.
+        opacity: 1,
         textDecoration: annulled ? 'line-through' : 'none',
         color: item.isGoal ? accent : 'inherit',
       }}>
