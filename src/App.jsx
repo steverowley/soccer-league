@@ -1931,6 +1931,18 @@ const MatchSimulator = ({
   // feed card shows exactly one category of content without duplication.
   const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'architect_proclamation' && i.type !== 'architect_interference' && i.type !== 'referee'), [commentaryReversed]);
   const zaraItems      = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'), [commentaryReversed]);
+
+  // commItems — combined Nexus-7 + Zara Bloom feed for the feed-view right panel.
+  // Merges both commentator streams and re-sorts by minute descending so the
+  // sidebar always shows the most recent reaction at the top regardless of which
+  // commentator happened to respond first.  Used in place of the old refItems
+  // panel — referee decisions are less actionable for the viewer than analyst
+  // colour commentary on the same moment.
+  const commItems      = useMemo(
+    () => [...nexusItems, ...zaraItems].sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0)),
+    [nexusItems, zaraItems]
+  );
+
   const homeManagerReversed   = useMemo(() => [...homeManagerFeed].reverse(),   [homeManagerFeed]);
   const awayManagerReversed   = useMemo(() => [...awayManagerFeed].reverse(),   [awayManagerFeed]);
   const homeThoughtsReversed  = useMemo(() => [...homeThoughtsFeed].reverse(),  [homeThoughtsFeed]);
@@ -2295,23 +2307,37 @@ const MatchSimulator = ({
                 }
               </div>
 
-              {/* Referee decisions — newest first, scrollable */}
+              {/* ── Commentary feed (Nexus-7 + Zara Bloom) ───────────────────
+                  Replaces the old Referee Decisions panel.  The combined
+                  analyst feed is more useful at a glance — referees rarely
+                  comment, so the panel was usually empty; Nexus-7 / Zara
+                  fire on goals and significant events where the viewer
+                  wants extra colour.  Newest item at the top (commItems
+                  is already sorted minute-desc). */}
               <div className="card" style={{flex:1,minHeight:0,padding:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
                 <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',opacity:0.5}}>
-                  ⚖️ Referee
+                  💬 Commentary
                 </div>
-                <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#FFD700 #111'}}>
-                  {refItems.length===0
-                    ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',paddingTop:'12px',fontStyle:'italic'}}>Awaiting decisions...</div>
-                    :refItems.map((item,i)=>(
-                      <div key={i} style={{marginBottom:'6px',padding:'6px 8px',backgroundColor:'rgba(255,215,0,0.04)',border:'1px solid rgba(255,215,0,0.10)'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
-                          <span style={{fontSize:'10px',fontWeight:700,color:'#FFD700'}}>⚖️ {item.name}</span>
-                          <span style={{fontSize:'10px',opacity:0.4}}>{item.minute}'</span>
+                <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${C.purple} #111`}}>
+                  {commItems.length===0
+                    ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',paddingTop:'12px',fontStyle:'italic'}}>Awaiting commentary...</div>
+                    :commItems.map((item,i)=>{
+                      // Each commentator has a distinct accent so Nexus-7 and
+                      // Zara Bloom are visually distinguishable without a label.
+                      // Nexus-7 uses purple (data/analysis aesthetic);
+                      // Zara Bloom uses the home team's accent (fan-energy feel).
+                      const isNexus = item.commentatorId==='nexus7';
+                      const accentColor = isNexus ? C.purple : (ms.homeTeam?.color||C.dust);
+                      return(
+                        <div key={i} style={{marginBottom:'6px',padding:'6px 8px',backgroundColor:`${accentColor}08`,borderLeft:`2px solid ${accentColor}55`}}>
+                          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+                            <span style={{fontSize:'10px',fontWeight:700,color:accentColor}}>{item.name||item.commentatorId}</span>
+                            <span style={{fontSize:'10px',opacity:0.4}}>{item.minute}'</span>
+                          </div>
+                          <div style={{fontSize:'10px',lineHeight:1.4}}>{item.text}</div>
                         </div>
-                        <div style={{fontSize:'10px',opacity:0.8,lineHeight:1.4}}>{item.text}</div>
-                      </div>
-                    ))
+                      );
+                    })
                   }
                 </div>
               </div>

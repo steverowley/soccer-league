@@ -1027,11 +1027,17 @@ export class AgentSystem {
     // reactor draw and thought-eligibility roll applies to both paths.
 
     // Reactor count by tier:
-    //   full   (goal / red card) → 2 reactors — the biggest moments deserve
-    //                               the full commentary ensemble
-    //   medium (yellow / injury / controversy) → 1 reactor
+    //   full   (goal / red card) → 2 reactors — biggest moments need the full ensemble
+    //   medium (yellow / injury / controversy) → 1 reactor at 50% probability.
+    //           The 0.5 roll keeps commentary commentary fresh: not every yellow
+    //           card or knock needs a Nexus-7 / Zara take, and the lower density
+    //           makes reactions to significant moments feel more impactful when
+    //           they do appear.  At ~3–5 medium events per half this yields
+    //           ~1–2 analyst reactions per half on average.
     //   minor / manager → 0 reactors — quiet moments don't need the full bench
-    const numReactors = tier === 'full' ? 2 : tier === 'medium' ? 1 : 0;
+    const numReactors = tier === 'full' ? 2
+                      : tier === 'medium' && Math.random() < 0.50 ? 1  // 50% chance
+                      : 0;
 
     // Shuffle the non-Vox pool so the same pair doesn't always react together.
     const reactorPool = numReactors > 0
