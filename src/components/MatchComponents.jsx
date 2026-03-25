@@ -857,29 +857,42 @@ export const PlayerCard = ({ sp, events, onClose }) => {
  * @returns {JSX.Element}
  */
 export const FeedRow = ({ item, homeTeam, awayTeam }) => {
-  // ── Commentary sub-row ────────────────────────────────────────────────────
-  // Vox commentary items arrive typed as 'play_by_play'.  They are rendered
-  // as indented sub-rows directly below the event they describe, so the feed
-  // reads: event → reaction, event → reaction, rather than alternating columns.
+  // ── Captain Vox commentary card ──────────────────────────────────────────
+  // play_by_play items are Captain Vox's LLM-generated narration, one per
+  // significant event.  They are rendered as small highlighted cards in the
+  // same style as the Nexus-7 / Zara Bloom cards in the right panel — name
+  // badge above, coloured left border, italic quote — so all three commentary
+  // voices look visually consistent regardless of which panel they appear in.
+  //
+  // Gold (#FFD700) is used as the Vox accent rather than purple (Architect)
+  // or team colours (manager shouts), giving Captain Vox a distinct visual
+  // identity as the primary match narrator.
   if (item.type === 'play_by_play') {
+    const VOX_COLOR = '#FFD700'; // gold — primary narrator accent
     return (
       <div style={{
-        display: 'flex',
-        gap: '8px',
-        // Left indent (32px) visually nests the commentary line under its
-        // parent event row; bottom border separates it from the next event.
-        padding: '4px 12px 6px 32px',
-        fontSize: '11px',
-        lineHeight: 1.5,
-        opacity: 0.9,
+        padding: '6px 12px',
+        borderLeft: `2px solid ${VOX_COLOR}55`,  // 55 ≈ 33% opacity — present but not overpowering
+        backgroundColor: `${VOX_COLOR}07`,        // very subtle gold wash behind the text
         borderBottom: '1px solid rgba(227,224,213,0.05)',
       }}>
-        <span style={{ color: item.color || C.purple, fontWeight: 600, flexShrink: 0 }}>
-          💬
-        </span>
-        <span style={{ fontStyle: 'italic' }}>
+        {/* ── Name row: commentator label + minute stamp ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            color: VOX_COLOR,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}>
+            {item.name || 'Captain Vox'}
+          </span>
+          <span style={{ fontSize: '10px', opacity: 0.4 }}>{item.minute}'</span>
+        </div>
+        {/* ── Commentary text — italic to distinguish from event descriptions ── */}
+        <div style={{ fontSize: '11px', fontStyle: 'italic', lineHeight: 1.5 }}>
           {item.text}{item.isStreaming ? '▋' : ''}
-        </span>
+        </div>
       </div>
     );
   }

@@ -1937,10 +1937,14 @@ const MatchSimulator = ({
   // Derived from commentaryReversed so newest decisions appear at the top.
   const refItems       = useMemo(() => commentaryReversed.filter(i => i.type === 'referee'), [commentaryReversed]);
 
-  // Vox column: play_by_play + procedural fallback events only.
-  // Architect, referee, and other commentator columns are excluded so each
-  // feed card shows exactly one category of content without duplication.
-  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.commentatorId !== 'nexus7' && i.commentatorId !== 'zara_bloom' && i.type !== 'architect_proclamation' && i.type !== 'architect_interference' && i.type !== 'referee'), [commentaryReversed]);
+  // voxItems: ONLY type:'play_by_play' — Captain Vox's LLM-generated narration.
+  // Using a strict type filter (not the old negation approach) prevents two
+  // classes of duplication:
+  //   1. type:'commentary' procedural-fallback items, which echo event.commentary
+  //      text already visible in the main event row (no-API-key path).
+  //   2. Any other incidental commentaryFeed entries (manager thoughts, social
+  //      posts) that lack a commentatorId and slipped past the old filter.
+  const voxItems       = useMemo(() => commentaryReversed.filter(i => i.type === 'play_by_play'), [commentaryReversed]);
   const zaraItems      = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'zara_bloom'), [commentaryReversed]);
 
   // commItems — combined Nexus-7 + Zara Bloom feed for the feed-view right panel.
@@ -2206,8 +2210,12 @@ const MatchSimulator = ({
           {/* ── Divider ── */}
           <div style={{borderTop:'1px solid rgba(124,58,237,0.2)',flexShrink:0}}/>
           {/* ── Architect feed zone ── */}
+          {/* Header kept outside the scroll container (flexShrink:0) so it
+              stays pinned to the top of the zone rather than scrolling out
+              of view when the Architect feed grows long.  Only the item list
+              below it scrolls. */}
+          <div style={{padding:'6px 12px 4px',flexShrink:0,fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',opacity:0.7}}>✦ The Architect</div>
           <div style={{flex:1,minHeight:0,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
-            <div style={{padding:'6px 12px 4px',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',opacity:0.7}}>✦ The Architect</div>
             {architectItems.length===0
               ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',padding:'8px 12px 12px',fontStyle:'italic'}}>The void stirs...</div>
               :architectItems.map((item,i)=>{
