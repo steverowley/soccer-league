@@ -445,7 +445,7 @@ export const TEAMS_BY_LEAGUE = {
       color: '#8B0000', // Deep Crimson — Sedna's blood-red methane-tholins surface
       tagline: 'The most patient team in the outer system.',
       description:
-        'Sedna FC Mariners play like their home world orbits: with vast, unhurried patience. Sedna's extraordinary 11,400-year elliptical orbit has instilled in its inhabitants a philosophical relationship with time—and their football reflects it. They build slowly, absorb pressure without breaking, and strike only when the moment is certain.\n\nPerihelion Park is among the most remote stadiums in the known solar system, and home advantage here is almost mythological. Visiting teams must travel further than anyone else in the ISL, and they arrive already drained. The Mariners have never beaten a top-four side away from home—but they have never been relegated either.',
+        'Sedna FC Mariners play like their home world orbits: with vast, unhurried patience. Sedna\'s extraordinary 11,400-year elliptical orbit has instilled in its inhabitants a philosophical relationship with time—and their football reflects it. They build slowly, absorb pressure without breaking, and strike only when the moment is certain.\n\nPerihelion Park is among the most remote stadiums in the known solar system, and home advantage here is almost mythological. Visiting teams must travel further than anyone else in the ISL, and they arrive already drained. The Mariners have never beaten a top-four side away from home—but they have never been relegated either.',
     },
     {
       id: 'scattered-disc',
