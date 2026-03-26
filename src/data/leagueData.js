@@ -342,6 +342,28 @@ export const TEAMS_BY_LEAGUE = {
       description:
         'Juno City FC are the most tactically disciplined club in the outer reaches. Their rigid organisational structure rarely concedes—or entertains—but delivers results.',
     },
+    {
+      id: 'beltway',
+      name: 'Beltway FC',
+      location: 'Asteroid Belt Colony',
+      homeGround: 'Transit Hub Arena, "The Junction"',
+      capacity: '19,000',
+      color: '#4A4A8A', // Indigo-slate — colony corridor lighting
+      tagline: 'Tactical and gritty, forged in the lawless belt colonies.',
+      description:
+        'Born from the intersection of a dozen asteroid belt trade routes, Beltway FC represent the pragmatic, opportunistic spirit of colony life. Their tactics mirror the belt itself: adaptable, layered, and always looking for the gap. Formed by workers who played football in cargo bays and pressurised corridors, they carry a blue-collar heart into every match.\n\nWith the smallest budget in the Outer Reaches League, Beltway punch well above their weight through organised counterattacking and relentless set-piece preparation. The Junction has an atmosphere disproportionate to its size—belt colony fans are loud, passionate, and unafraid of a fight.',
+    },
+    {
+      id: 'solar-miners',
+      name: 'Solar Miners FC',
+      location: 'Asteroid Belt Colony',
+      homeGround: 'Extraction Field, "The Dig"',
+      capacity: '17,000',
+      color: '#E8C84A', // Miner Gold — ore dust and headlamp yellow
+      tagline: 'They drill for every inch of the pitch.',
+      description:
+        'Solar Miners FC channel the exhausting, relentless work ethic of asteroid mining operations directly into their football. They drill through defences, press without mercy, and never stop running—even when the match is lost. Originally a recreational side for workers at the Kepler-7 extraction colony, they earned promotion through sheer collective effort.\n\nPhysical and direct, Solar Miners rarely produce beautiful football—but they produce results. The Dig is an intimidating venue built partly underground in a decommissioned ore shaft, and visiting teams hate its uneven acoustics and faintly sulfurous atmosphere.',
+    },
   ],
 
   // ── Kuiper Belt League ───────────────────────────────────────────────────────
@@ -413,6 +435,28 @@ export const TEAMS_BY_LEAGUE = {
       tagline: 'Dark horses who excel at free-kicks.',
       description:
         'From the darkest corner of the Kuiper Belt, Orcus Athletic are the ultimate dark horse. Their dead-ball specialists have decided more matches than any other set-piece team in the league.',
+    },
+    {
+      id: 'sedna-mariners',
+      name: 'Sedna FC Mariners',
+      location: 'Sedna',
+      homeGround: 'Perihelion Park, "The Long Way Round"',
+      capacity: '9,000',
+      color: '#8B0000', // Deep Crimson — Sedna's blood-red methane-tholins surface
+      tagline: 'The most patient team in the outer system.',
+      description:
+        'Sedna FC Mariners play like their home world orbits: with vast, unhurried patience. Sedna's extraordinary 11,400-year elliptical orbit has instilled in its inhabitants a philosophical relationship with time—and their football reflects it. They build slowly, absorb pressure without breaking, and strike only when the moment is certain.\n\nPerihelion Park is among the most remote stadiums in the known solar system, and home advantage here is almost mythological. Visiting teams must travel further than anyone else in the ISL, and they arrive already drained. The Mariners have never beaten a top-four side away from home—but they have never been relegated either.',
+    },
+    {
+      id: 'scattered-disc',
+      name: 'Scattered Disc FC Rangers',
+      location: 'Outer Kuiper Belt',
+      homeGround: 'Void Stadium, "The Scatter"',
+      capacity: '8,000',
+      color: '#556B2F', // Dark Olive — scattered rock and ice on the outer disc
+      tagline: 'Wild, untamed football from the edge of everything.',
+      description:
+        'Scattered Disc FC Rangers play from the absolute fringe of the solar system, in a region so loosely defined that cartographers argue about whether it technically exists. Their football is similarly hard to classify: chaotic, improvisational, and occasionally brilliant. Tactics arrive by committee, change at half-time, and are abandoned by the 70th minute.\n\nThe Void Stadium's sparse attendance and enormous silence create a unique atmosphere—not intimidating so much as deeply unsettling. Opponents describe games there as "playing against the cosmos itself." In their few seasons in the Kuiper Belt League, the Rangers have delivered both the highest-scoring victory and the most embarrassing defeat in the division's history.',
     },
   ],
 };
