@@ -233,12 +233,10 @@ if (typeof document !== 'undefined' && !document.getElementById('architect-pulse
   style.id = 'architect-pulse-style';
   style.textContent = `
     @keyframes architectPulse {
-      /* Resting state: tight glow + subtle inset ring to anchor the card
-         against the pure-black background without washing out neighbours. */
-      0%, 100% { box-shadow: 0 0 8px 2px rgba(124,58,237,0.55), 0 0 0 1px rgba(124,58,237,0.20); }
-      /* Peak: spread widens and a second softer halo blooms outward, giving
-         a two-layer "deep space nebula" pulse effect. */
-      50%       { box-shadow: 0 0 22px 6px rgba(124,58,237,0.90), 0 0 40px 12px rgba(124,58,237,0.30); }
+      /* Resting state: barely-there ambient glow — present but not dominant. */
+      0%, 100% { box-shadow: 0 0 5px 1px rgba(124,58,237,0.30), 0 0 0 1px rgba(124,58,237,0.10); }
+      /* Peak: modest bloom — noticeable but not blinding. */
+      50%       { box-shadow: 0 0 14px 4px rgba(124,58,237,0.55), 0 0 24px 8px rgba(124,58,237,0.18); }
     }
   `;
   document.head.appendChild(style);
@@ -300,7 +298,7 @@ export const ArchitectCard = ({ item }) => {
           color:         ARCHITECT_COLOR,
           // Layered text-shadow: tight inner glow for crispness + wider outer
           // bloom for the "emitting its own light" effect.
-          textShadow:    `0 0 10px rgba(124,58,237,0.9), 0 0 22px rgba(124,58,237,0.45)`,
+          textShadow:    `0 0 8px rgba(124,58,237,0.65), 0 0 16px rgba(124,58,237,0.25)`,
         }}>
           The Architect
         </span>
@@ -1032,7 +1030,7 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
           fontSize: '10px',
           flexShrink: 0,
           color: '#9D6FFB',
-          textShadow: '0 0 6px rgba(124,58,237,0.8)',
+          textShadow: '0 0 5px rgba(124,58,237,0.5)',
           marginRight: '2px',
         }}>✦</span>
       )}
