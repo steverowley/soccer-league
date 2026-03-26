@@ -1868,8 +1868,19 @@ const MatchSimulator = ({
   // commentary feed.  Only significant events are included so the strip stays
   // scannable — routine play (corners, fouls, etc.) is intentionally omitted.
   // Memoised on ms.events so it only recomputes when a new event is appended.
+  // ── Key match events (goals, cards, subs, penalties) ──────────────────────
+  // Filtered from ms.events for display in the Key Events timeline strip.
+  // Only significant events are included so the strip stays scannable —
+  // routine play (corners, fouls, etc.) is intentionally omitted.
+  //
+  // penalty_awarded is included alongside isGoal so the penalty chip (⚠️)
+  // appears in the strip immediately before the goal chip (⚽) that follows
+  // it.  Without it, a penalty goal shows only a lone ⚽ with no context.
+  //
+  // Memoised on ms.events so it only recomputes when a new event is appended.
   const keyEvents = useMemo(() => ms.events.filter(e =>
-    e.isGoal || e.cardType === 'red' || e.cardType === 'yellow' || e.type === 'substitution'
+    e.isGoal || e.cardType === 'red' || e.cardType === 'yellow'
+    || e.type === 'substitution' || e.type === 'penalty_awarded'
   ), [ms.events]);
 
   // ── feedEvents — events enriched with a running score for goal rows ────────
@@ -2309,10 +2320,22 @@ const MatchSimulator = ({
                 {keyEvents.length===0
                   ?<div style={{fontSize:'10px',opacity:0.25,fontStyle:'italic'}}>No key events yet</div>
                   :<div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-                    {[...keyEvents].reverse().map((e,i)=>{
+                    {/* Stable sort: newest minute first, but within the same
+                        minute preserve the original chronological sequence so
+                        e.g. penalty_awarded (⚠️) always appears above the
+                        penalty_shot goal (⚽) rather than below it.
+                        A plain .reverse() would invert same-minute order and
+                        show the goal before the penalty. */}
+                    {keyEvents
+                      .map((e,i)=>({...e,_ki:i}))
+                      .sort((a,b)=>b.minute!==a.minute?b.minute-a.minute:a._ki-b._ki)
+                      .map((e,i)=>{
                       const isHome=e.team===sn;
                       const tc=isHome?ms.homeTeam.color:ms.awayTeam.color;
-                      const icon=e.isGoal?'⚽':e.cardType==='red'?'🟥':e.cardType==='yellow'?'🟨':'↕';
+                      // Icon priority: penalty_awarded gets ⚠️ so the strip
+                      // clearly reads "penalty awarded → goal" rather than
+                      // showing an unexplained ⚽ with no penalty context.
+                      const icon=e.isGoal?'⚽':e.cardType==='red'?'🟥':e.cardType==='yellow'?'🟨':e.type==='penalty_awarded'?'⚠️':'↕';
                       return(
                         <div key={i} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'10px'}}>
                           <span style={{color:C.purple,fontWeight:700,flexShrink:0,minWidth:'22px'}}>{e.minute}'</span>
@@ -2616,11 +2639,14 @@ const MatchSimulator = ({
                       // Determine chip icon and colour based on event type.
                       // Goals use the scoring team's colour for instant visual
                       // association; cards use standard football colours
-                      // (red/yellow); subs use a neutral grey.
+                      // (red/yellow); penalty_awarded gets orange (⚠️) so it
+                      // reads as a precursor to the ⚽ goal chip that follows
+                      // it in the strip; subs use a neutral grey.
                       const isHome=e.team===sn;
                       const teamColor=isHome?ms.homeTeam.color:ms.awayTeam.color;
-                      const icon=e.isGoal?'⚽':e.cardType==='red'?'🟥':e.cardType==='yellow'?'🟨':'🔄';
-                      const borderColor=e.isGoal?teamColor:e.cardType==='red'?'#E05252':e.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.3)';
+                      const isPen=e.type==='penalty_awarded';
+                      const icon=e.isGoal?'⚽':e.cardType==='red'?'🟥':e.cardType==='yellow'?'🟨':isPen?'⚠️':'🔄';
+                      const borderColor=e.isGoal?teamColor:e.cardType==='red'?'#E05252':e.cardType==='yellow'?'#FFD700':isPen?'#F97316':'rgba(227,224,213,0.3)';
                       const label=e.isGoal?`${e.minute}' ${isHome?ms.homeTeam.shortName:ms.awayTeam.shortName}`:`${e.minute}'`;
                       return(
                         <span key={i} title={e.player||e.type} style={{display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'10px',padding:'2px 6px',border:`1px solid ${borderColor}`,color:e.isGoal?teamColor:'rgba(227,224,213,0.7)',backgroundColor:e.isGoal?`${teamColor}10`:'transparent',whiteSpace:'nowrap'}}>

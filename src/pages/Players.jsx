@@ -111,12 +111,13 @@ export default function Players() {
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
 
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+      {/* .page-hero provides the standard centred layout and vertical padding
+          shared across all listing pages.  .subtitle inherits 14px / 0.7
+          opacity from the .page-hero .subtitle rule in index.css. */}
+      <div className="page-hero">
         <h1>Players</h1>
         <hr className="divider" style={{ maxWidth: '500px', margin: '16px auto 16px' }} />
-        <p style={{ fontSize: '14px', opacity: 0.7 }}>
-          Browse all ISL squads across every division.
-        </p>
+        <p className="subtitle">Browse all ISL squads across every division.</p>
       </div>
 
       {/* ── League filter tabs ────────────────────────────────────────────────── */}

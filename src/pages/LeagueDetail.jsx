@@ -121,11 +121,16 @@ export default function LeagueDetail() {
   return (
     <div>
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', padding: '48px 24px 32px' }}>
+      {/* .page-hero provides the standard centred layout and vertical padding
+          shared across all detail pages.  The description retains its maxWidth
+          constraint so prose doesn't span the full viewport on wide screens —
+          this is intentional.  .subtitle supplies 14px / 0.7 opacity;
+          lineHeight and margin are kept as overrides for this longer copy. */}
+      <div className="page-hero">
         <div className="container">
           <h1 style={{ marginBottom: '16px' }}>{league.name}</h1>
           <hr className="divider" style={{ maxWidth: '700px', margin: '0 auto 24px' }} />
-          <p style={{ maxWidth: '700px', margin: '0 auto', fontSize: '13px', lineHeight: 1.8, opacity: 0.85 }}>
+          <p className="subtitle" style={{ maxWidth: '700px', margin: '0 auto', lineHeight: 1.8 }}>
             {league.description}
           </p>
 
