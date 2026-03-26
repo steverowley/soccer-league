@@ -66,9 +66,9 @@ export default function Leagues() {
             className="card"
             style={{ display: 'flex', flexDirection: 'column' }}
           >
-            {/* League name — H3 weight but sized to match the card heading
-                level in the mockup (between H2 and body text). */}
-            <h3 style={{ fontSize: '22px', marginBottom: '16px' }}>{league.name}</h3>
+            {/* League name — .card-title gives the standardised in-card
+                heading size (18px uppercase) shared across all listing cards. */}
+            <h3 className="card-title">{league.name}</h3>
 
             {/* Description prose — grows to fill available card space so the
                 button stays at the bottom even on cards with short text. */}

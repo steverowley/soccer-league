@@ -45,10 +45,13 @@ export default function Teams() {
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>
 
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+      {/* .page-hero provides the standard centred layout and vertical padding
+          shared across all listing pages (Teams, Players, Leagues, etc.).
+          .subtitle inside .page-hero gets 14px / 0.7 opacity from index.css. */}
+      <div className="page-hero">
         <h1>Our Heroic Teams</h1>
         <hr className="divider" style={{ maxWidth: '600px', margin: '16px auto 16px' }} />
-        <p style={{ fontSize: '14px', opacity: 0.7 }}>Lorem ipsum dolor sit amet.</p>
+        <p className="subtitle">Lorem ipsum dolor sit amet.</p>
       </div>
 
       {/* ── League sections ───────────────────────────────────────────────────── */}
@@ -120,7 +123,8 @@ function TeamCard({ team }) {
       style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
     >
       {/* ── Team name heading ─────────────────────────────────────────────── */}
-      <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>{team.name}</h3>
+      {/* .card-title (18px uppercase) — standardised in-card heading class. */}
+      <h3 className="card-title" style={{ marginBottom: '8px' }}>{team.name}</h3>
 
       {/* ── Structured metadata rows ──────────────────────────────────────── */}
       {/* Each row uses the "LABEL: value" format shown in the mockup.

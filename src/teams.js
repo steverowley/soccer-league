@@ -29,8 +29,11 @@
 //  20% random chance               → cautious
 //  otherwise                       → balanced
 //
-// The starter flag determines the initial 11 vs the 4-player bench.
+// The starter flag determines the initial 11 vs the 5-player bench.
 // Up to 3 substitutions can be made per match (one GK sub slot is shared).
+// Having 5 bench players (1 GK, 2 DF, 1 MF, 1 FW) gives the manager
+// enough cover to make all 3 allowed subs and still leave 2 unused
+// options — matching standard football bench conventions.
 
 const TEAMS = {
   // ── Mars United ─────────────────────────────────────────────────────────────
@@ -67,6 +70,9 @@ const TEAMS = {
       // ── Bench ─────────────────────────────────────────────────────────────
       { name: "Bren Holloway",   position: "GK", starter: false, attacking: 42, defending: 78, mental: 70, athletic: 72, technical: 65 },
       { name: "Sael Dorin",      position: "DF", starter: false, attacking: 52, defending: 75, mental: 65, athletic: 74, technical: 62 },
+      // Second backup DF — provides defensive depth so the manager can rotate
+      // or cover injuries to the back four without burning the midfield sub.
+      { name: "Kai Voss",        position: "DF", starter: false, attacking: 54, defending: 76, mental: 66, athletic: 76, technical: 63 },
       { name: "Kyra Moss",       position: "MF", starter: false, attacking: 68, defending: 65, mental: 70, athletic: 72, technical: 70 },
       { name: "Jett Crane",      position: "FW", starter: false, attacking: 80, defending: 38, mental: 68, athletic: 82, technical: 75 },
     ],
@@ -107,6 +113,9 @@ const TEAMS = {
       // ── Bench ─────────────────────────────────────────────────────────────
       { name: "Finn Ardent",     position: "GK", starter: false, attacking: 41, defending: 79, mental: 71, athletic: 73, technical: 66 },
       { name: "Tara Veil",       position: "DF", starter: false, attacking: 53, defending: 76, mental: 66, athletic: 75, technical: 63 },
+      // Second backup DF — mirrors Mars United's bench depth so both squads
+      // have equivalent tactical flexibility in defensive cover situations.
+      { name: "Reese Dawn",      position: "DF", starter: false, attacking: 55, defending: 77, mental: 67, athletic: 77, technical: 64 },
       { name: "Corin Ash",       position: "MF", starter: false, attacking: 69, defending: 66, mental: 71, athletic: 73, technical: 71 },
       { name: "Mav Solaris",     position: "FW", starter: false, attacking: 81, defending: 37, mental: 69, athletic: 83, technical: 76 },
     ],

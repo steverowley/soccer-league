@@ -129,11 +129,14 @@ export default function TeamDetail() {
   return (
     <div>
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', padding: '48px 24px 32px' }}>
+      {/* .page-hero provides the standard centred layout and vertical padding
+          shared across all detail pages.  .subtitle inherits 14px / 0.7
+          opacity from the .page-hero .subtitle rule in index.css. */}
+      <div className="page-hero">
         <div className="container">
           <h1 style={{ marginBottom: '16px' }}>{team.name}</h1>
           <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
-          <p style={{ fontSize: '14px', opacity: 0.7 }}>{team.tagline}</p>
+          <p className="subtitle">{team.tagline}</p>
         </div>
       </div>
 
@@ -144,8 +147,9 @@ export default function TeamDetail() {
             prose.  Matches the prominent info block at the top of the mockup. */}
         <section className="section">
           <div className="card">
-            {/* Card heading — team name repeated inside the card per mockup */}
-            <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>{team.name}</h3>
+            {/* Card heading — .card-title (18px uppercase) is the standardised
+                in-card heading class; replaces the previous inline fontSize. */}
+            <h3 className="card-title">{team.name}</h3>
 
             {/* Structured metadata block */}
             <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>

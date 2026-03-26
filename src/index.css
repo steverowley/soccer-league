@@ -314,6 +314,22 @@ table {
   margin-bottom: var(--space-4);
 }
 
+/* ── Card title ─────────────────────────────────────────────────────────── */
+/* Heading used for h3 elements that appear *inside* card components.
+   Sits one step below .section-title (20px) in the hierarchy and is
+   intentionally smaller than the global h3 rule (28px) because card
+   headings are supplementary labels rather than page-level section titles.
+   Use .section-title for page section headings; use .card-title for the
+   primary name/label displayed within an individual card body. */
+
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
 /* ── Responsive grid helpers ───────────────────────────────────────────── */
 /* All two-column grids on listing/detail pages collapse to a single column
    below 640px.  The three classes are set inline by their components and
