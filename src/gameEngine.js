@@ -1787,8 +1787,17 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
           `🟥 ${player.name} loses all composure — takes out ${atk.name}. The referee has no choice.`,
         ])
       : card === 'yellow'
-      ? pick([`🟨 ${player.name} booked for a foul on ${atk.name}`, `🟨 Yellow card — ${player.name} won't be happy.`, `🟨 ${player.name}: reckless challenge. Booked.`])
-      : pick([`Foul by ${player.name} on ${atk.name}. Free kick.`, `${player.name} brings down ${atk.name}.`, `Clumsy foul from ${player.name}.`, `${player.name} clips ${atk.name}. Ref blows.`]);
+      ? pick([
+          `🟨 ${player.name} booked for a cynical trip on ${atk.name} — broke up a dangerous transition.`,
+          `🟨 Yellow card for ${player.name} — rash challenge that left ${atk.name} on the floor.`,
+          `🟨 ${player.name}: lunged in from the side, no ball. Referee had no choice. Booked.`,
+        ])
+      : pick([
+          `${player.name} clips ${atk.name} from behind — ref's whistle, free kick in midfield.`,
+          `${player.name} brings down ${atk.name} — catches the ankle going for the ball. Free kick awarded.`,
+          `Clumsy challenge from ${player.name} — mistimed the tackle and left his foot in. Free kick.`,
+          `${player.name} gets the body before the ball — ${atk.name} goes down. Ref blows.`,
+        ]);
     momentumChange = isHome ? [1, 0] : [0, 1];
     if (card === 'red') momentumChange = isHome ? [2, 0] : [0, 2];
     // fouledPlayer is stored on the event so the UI can display a secondary
@@ -2096,26 +2105,26 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     } else if (net > 0) {
       outcome = 'success';
       commentary = pick([
-        `${player.name} advances past ${defender.name}`,
-        `${player.name} beats ${defender.name}`,
-        `Neat skill from ${player.name}`,
-        `${player.name} ghosts past ${defender.name}`,
-        `${player.name} with a clever touch — past ${defender.name}.`,
-        `${defender.name} had him closed down — ${player.name} found a way through.`,
-        `Clever from ${player.name} — draws the defender and slips by.`,
-        `${player.name} holds off ${defender.name} and drives forward.`,
+        `${player.name} advances past ${defender.name} down the channel, opening up the attack.`,
+        `${player.name} beats ${defender.name} with a sharp stepover and drives into space.`,
+        `Neat skill from ${player.name} — a tight-space flick that leaves ${defender.name} stranded.`,
+        `${player.name} ghosts past ${defender.name} on the shoulder — barely a touch, pure timing.`,
+        `${player.name} with a clever touch — shifts it away from ${defender.name} and accelerates.`,
+        `${defender.name} had him closed down — ${player.name} found a way through with a quick turn.`,
+        `Clever from ${player.name} — shows it one way, draws ${defender.name} in, then slips by on the outside.`,
+        `${player.name} holds off ${defender.name} and drives forward into the half-space.`,
       ]);
       momentumChange = isHome ? [1, 0] : [0, 1];
     } else {
       outcome = 'intercepted';
       commentary = pick([
-        `${defender.name} intercepts ${player.name}`,
-        `${defender.name} reads it perfectly`,
-        `Great positioning from ${defender.name}`,
-        `${player.name} runs into a wall — ${defender.name} is immovable`,
-        `${defender.name} was always going to win that — brilliant reading of the game.`,
-        `${player.name} tried to force it — ${defender.name} had it read all along.`,
-        `${defender.name} closes down brilliantly — no room for ${player.name}.`,
+        `${defender.name} intercepts ${player.name}'s run — gets across, body between ball and goal.`,
+        `${defender.name} reads the run perfectly and gets a foot in before ${player.name} can accelerate.`,
+        `Great positioning from ${defender.name} — already goal-side before the dribble even started.`,
+        `${player.name} hits a wall — ${defender.name} stands firm and shepherds him away from danger.`,
+        `${defender.name} was always going to win that — brilliant reading of the run and the angle.`,
+        `${player.name} tried to force it — ${defender.name} had the channel covered all along.`,
+        `${defender.name} closes down brilliantly — no angle for ${player.name} to work with.`,
       ]);
       momentumChange = isHome ? [-1, 0] : [0, -1];
       if (Math.random() < 0.15) {
@@ -2171,24 +2180,24 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     }
     if (net > 10) {
       commentary = pick([
-        `Corner from ${player.name}! ${gk.name} punches clear!`,
-        `${gk.name} claims the corner confidently!`,
-        `Dangerous delivery — ${gk.name} tips it away!`,
-        `${gk.name} gets a fist to it!`,
-        `${gk.name} rises above the crowd — catches it cleanly. Comfortable.`,
-        `Corner well-taken — but ${gk.name} was always going to claim it.`,
-        `${gk.name} punches under pressure! The defence relieved.`,
+        `Corner from ${player.name}! ${gk.name} punches clear — two fists, decisive!`,
+        `${gk.name} claims the corner confidently — calls early, comes off the line and takes it at the highest point.`,
+        `Dangerous delivery — ${gk.name} tips it away around the post!`,
+        `${gk.name} gets two fists to it — punches clear beyond the penalty area!`,
+        `${gk.name} rises above the crowd — catches it cleanly under challenge. Solid.`,
+        `Corner well-taken — but ${gk.name} was always going to claim it. Commanded the box.`,
+        `${gk.name} punches under pressure! The defence let out a collective breath.`,
       ]);
       return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary, momentumChange: isHome ? [1, 0] : [0, 1] };
     }
     commentary = pick([
-      `Corner kick cleared by ${defTeam.shortName}`,
-      `Headed away! ${defTeam.shortName} survive`,
-      `${defTeam.shortName} scramble it clear!`,
-      `Blocked! ${defTeam.shortName} hold firm`,
-      `Punched clear — hacked away! ${defTeam.shortName} ride the pressure.`,
-      `Out for a throw. Corner comes to nothing.`,
-      `${defTeam.shortName} bodies on the line — cleared!`,
+      `Corner delivery cleared by ${defTeam.shortName} — headed away from the six-yard box.`,
+      `Headed away from danger! ${defTeam.shortName} survive the set piece under pressure.`,
+      `${defTeam.shortName} scramble it clear off the line — bodies everywhere, barely survive.`,
+      `First contact blocked! ${defTeam.shortName} hold firm at the back post and clear their lines.`,
+      `Punched clear — hacked away! ${defTeam.shortName} ride the pressure and get it upfield.`,
+      `Delivery drifts behind — out for a throw. ${defTeam.shortName} hold their shape; corner comes to nothing.`,
+      `${defTeam.shortName} bodies on the line — cleared away from the near post!`,
     ]);
     return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, outcome: 'cleared', commentary, momentumChange: [0, 0] };
 
@@ -2209,21 +2218,21 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
         commentary: pick([
           `😬 ${player.name} goes down clutching his leg... everybody stops. Physio sprints on.`,
           `⚠️ ${player.name} takes a knock — waves the physio away. Brave soul.`,
-          `😬 ${player.name} is down! Tense few moments... but he's back on his feet.`,
-          `${player.name} pulls up momentarily — plays on. Relief all round.`,
-          `⚠️ ${player.name} stumbles — the crowd holds its breath. He's okay. Play continues.`,
-          `😬 Collision! ${player.name} needs treatment... thank goodness, he's back up.`,
+          `😬 ${player.name} goes down holding the knee — play stops, everyone watching. Up again. Relief.`,
+          `${player.name} pulls up sharply on the left hamstring — waves the physio off. Plays on, tentatively.`,
+          `⚠️ ${player.name} takes a knock after the challenge — stays down a moment, then rises. Play continues.`,
+          `😬 Collision! ${player.name} needs treatment... thank goodness, he's back up and waving it off.`,
         ]), momentumChange: [0, 0] };
     }
     commentary = wx === WX.PLASMA && Math.random() < 0.5
       ? pick([`${player.name} collapses! The plasma winds have taken their toll!`, `${player.name} is DOWN — plasma exposure? Medics sprint on!`])
       : pick([
-          `${player.name} is down injured! Medics on!`,
-          `${player.name} pulls up! Looks serious.`,
-          `${player.name} takes a knock — stays down.`,
-          `${player.name} is in trouble. Trainer called onto the pitch.`,
-          `${player.name} writhes in pain — this looks bad.`,
-          `All play stops. ${player.name} needs attention.`,
+          `${player.name} is down — holding the ankle after that challenge. Medics sprint on immediately.`,
+          `${player.name} pulls up clutching the hamstring — can't continue. This looks serious.`,
+          `${player.name} takes a heavy knock and stays down, not moving. Stretcher may be needed.`,
+          `${player.name} is down and not responding to the physio — the trainer jogs on, concern on his face.`,
+          `${player.name} writhes on the turf after the impact — teammates urge the ref to stop play.`,
+          `All play stops. ${player.name} is down in the centre circle and needs immediate attention.`,
         ]);
     return { minute: min, type: 'injury', team: tm.shortName, player: player.name, outcome: 'injured', commentary, momentumChange: [0, 0], isInjury: true };
 
@@ -2272,25 +2281,25 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     } else if (net > 0) {
       outcome = 'success';
       commentary = pick([
-        `${defender.name} wins the ball off ${player.name}`,
-        `${defender.name} gets in the way of ${player.name}`,
-        `Solid defensive work from ${defender.name} — ${player.name} snuffed out.`,
-        `${defender.name} holds his ground against ${player.name}.`,
-        `${defender.name} positioned well — gets a foot in on ${player.name}.`,
-        `Good awareness from ${defender.name} — clears the danger ${tackleZone}.`,
-        `${defender.name} with a quiet, effective intervention on ${player.name}.`,
+        `${defender.name} wins the ball cleanly off ${player.name} — a perfectly timed standing tackle.`,
+        `${defender.name} blocks the path — gets a leg across ${player.name} and wins possession back.`,
+        `Solid defensive work from ${defender.name} — ${player.name} snuffed out before he could turn.`,
+        `${defender.name} holds his ground ${tackleZone} — absorbs the contact and comes away with the ball.`,
+        `${defender.name} positioned well — gets a foot in on ${player.name} and kills the move dead.`,
+        `Good awareness from ${defender.name} — steps across the channel and clears the danger ${tackleZone}.`,
+        `${defender.name} with a quiet, effective intervention — ${player.name} never had room to work.`,
       ]);
       momentumChange = isHome ? [0, -1] : [-1, 0];
     } else {
       outcome = 'failed';
       commentary = pick([
-        `${player.name} evades ${defender.name}`,
-        `${player.name} dances past ${defender.name}`,
-        `${player.name} leaves ${defender.name} for dead`,
-        `${defender.name} dives in — ${player.name} skips away`,
-        `${defender.name} had no answer — ${player.name} too quick.`,
-        `${player.name} — too sharp. ${defender.name} can only watch.`,
-        `${player.name} feints — ${defender.name} commits — gone.`,
+        `${player.name} evades ${defender.name} with a drop of the shoulder, bursting into the half-space.`,
+        `${player.name} dances past ${defender.name} with quick feet — left, right, gone.`,
+        `${player.name} leaves ${defender.name} for dead — turns him inside out and accelerates away.`,
+        `${defender.name} dives in — ${player.name} anticipates it, skips away and has daylight.`,
+        `${defender.name} had no answer — ${player.name} too quick through the gap.`,
+        `${player.name} — too sharp. ${defender.name} is caught flat-footed and can only watch.`,
+        `${player.name} feints — ${defender.name} commits — gone, clean through the channel.`,
       ]);
       momentumChange = isHome ? [1, 0] : [0, 1];
     }
@@ -2370,27 +2379,29 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
         phase === 'early' && `${player.name} with an early probe through the lines to ${passTarget?.name || 'a teammate'}. Testing the shape.`,
         scoreDiff > 1     && `${player.name} keeping it — no risks needed. The lead is comfortable.`,
         `${player.name} with a precise pass to ${passTarget?.name || 'a teammate'}`,
-        `${player.name} picks out ${passTarget?.name || 'a teammate'} in space`,
-        `${player.name} plays it through the lines`,
-        `Neat footwork from ${player.name} — ${passTarget?.name || 'a teammate'} is in.`,
-        `${player.name} finds ${passTarget?.name || 'space'} and uses it`,
-        `Lovely touch from ${player.name} — the move continues.`,
-        `${player.name} plays the one-two and finds ${passTarget?.name || 'his man'}.`,
-        `Sharp combination — ${player.name} threads the needle to ${passTarget?.name || 'a runner'}.`,
-        `Simple but effective — ${player.name} plays it forward with purpose.`,
+        `${player.name} picks out ${passTarget?.name || 'a teammate'} in space on the right — cutting through the press.`,
+        `${player.name} plays it through the lines, splitting the midfield press cleanly.`,
+        `Neat footwork from ${player.name} — ${passTarget?.name || 'a teammate'} is in behind the line.`,
+        `${player.name} finds ${passTarget?.name || 'space'} in behind the midfield and drives into it.`,
+        `Lovely first touch from ${player.name} — sets the attack flowing into the final third.`,
+        `${player.name} plays the one-two and finds ${passTarget?.name || 'his man'} on the overlap.`,
+        `Sharp combination — ${player.name} threads the needle to ${passTarget?.name || 'a runner'} beyond the last line.`,
+        `Simple but effective — ${player.name} switches it forward with pace and purpose.`,
       ].filter(Boolean));
       momentumChange = isHome ? [1, 0] : [0, 1];
     } else if (net > dustThreshold) {
       outcome = 'continue';
       commentary = pick([
-        `${player.name} keeps possession`,
-        `${player.name} holds up the ball`,
-        `${player.name} shields it well`,
-        `${player.name} keeps it simple`,
-        `Controlled possession. ${player.name} in no rush.`,
-        `${player.name} recycles — looking for an angle.`,
-        `Patient build-up. ${player.name} holds it under pressure.`,
-        `${player.name} links the play — nothing on yet, waits.`,
+        `${player.name} keeps the ball under pressure — shields it, waits for options to open up.`,
+        `${player.name} holds up play in the channel, back to goal, buying time for the runners.`,
+        `${player.name} shields the ball along the touchline — drawing the challenge before laying it off.`,
+        `${player.name} keeps it simple, recycling sideways — nothing on forward yet.`,
+        `Controlled possession. ${player.name} sits deep, inviting the press before switching it.`,
+        `${player.name} recycles to the left — waiting for the runners to find the pocket of space.`,
+        `Patient build-up. ${player.name} absorbs pressure deep in his own half and holds shape.`,
+        `${player.name} drops off to collect between the lines — third man still making the run.`,
+        `${player.name} spins away from the challenge and steadies the attack in midfield.`,
+        `Ball comes back to ${player.name} on the edge — holds it, draws two defenders, buys time.`,
       ]);
       momentumChange = [0, 0];
     } else {
@@ -2398,14 +2409,14 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
       commentary = wx === WX.DUST && Math.random() < 0.4
         ? pick([`${player.name}'s pass lost in the dust storm!`, `Visibility near-zero — ${player.name} plays it straight to ${defender.name}!`])
         : pick([
-            `${defender.name} reads the play`,
-            `${defender.name} sniffs it out!`,
-            `Clever positioning from ${defender.name}`,
-            `${defender.name} anticipates — intercepts!`,
-            `${defender.name} was always in position — ${player.name} never had a chance.`,
-            `That pass was there to be stolen — ${defender.name} obliges.`,
-            `${defender.name} gets a foot in — ball won!`,
-            `Telegraphed — ${defender.name} picks it off with ease.`,
+            `${defender.name} reads the pass early and steps into the lane to kill the move.`,
+            `${defender.name} sniffs out the through-ball and steps in front of it!`,
+            `Clever positioning from ${defender.name} — cuts off the passing lane before the ball even arrives.`,
+            `${defender.name} anticipates the through ball — steps across and intercepts!`,
+            `${defender.name} was already in position between the lines — ${player.name} played it straight to him.`,
+            `That pass was there to be stolen — ${defender.name} reads the weight and obliges.`,
+            `${defender.name} gets a foot in — ball won and the move turned over.`,
+            `Too slow, too obvious — ${defender.name} sees it coming and picks it off in the centre circle.`,
           ]);
       momentumChange = isHome ? [0, -1] : [-1, 0];
     }
