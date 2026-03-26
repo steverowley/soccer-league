@@ -233,8 +233,12 @@ if (typeof document !== 'undefined' && !document.getElementById('architect-pulse
   style.id = 'architect-pulse-style';
   style.textContent = `
     @keyframes architectPulse {
-      0%, 100% { box-shadow: 0 0 6px 1px rgba(124,58,237,0.35); }
-      50%       { box-shadow: 0 0 14px 3px rgba(124,58,237,0.65); }
+      /* Resting state: tight glow + subtle inset ring to anchor the card
+         against the pure-black background without washing out neighbours. */
+      0%, 100% { box-shadow: 0 0 8px 2px rgba(124,58,237,0.55), 0 0 0 1px rgba(124,58,237,0.20); }
+      /* Peak: spread widens and a second softer halo blooms outward, giving
+         a two-layer "deep space nebula" pulse effect. */
+      50%       { box-shadow: 0 0 22px 6px rgba(124,58,237,0.90), 0 0 40px 12px rgba(124,58,237,0.30); }
     }
   `;
   document.head.appendChild(style);
@@ -271,17 +275,22 @@ export const ArchitectCard = ({ item }) => {
   // The Architect's fixed accent colour.  Defined as a constant here rather
   // than reading item.color so the visual identity is enforced even if the
   // feed item is constructed with a different value.
-  const ARCHITECT_COLOR = '#7C3AED';
+  const ARCHITECT_COLOR = '#9D6FFB';  // brighter violet — legible on pure black
 
   return (
     <div style={{
       padding:         '12px',
       marginBottom:    '10px',
-      backgroundColor: '#0D0A14',  // near-black cosmic void
-      border:          `1px solid ${ARCHITECT_COLOR}`,
+      // Pure black void — deeper than the surrounding card backgrounds so the
+      // Architect's card feels like a window into a different plane of existence.
+      backgroundColor: '#050308',
+      // Subtle radial glow emanating from the left edge where the border is —
+      // reinforces the sense that the light source is the Architect themselves.
+      backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.10) 0%, transparent 65%)',
+      border:          `1px solid ${ARCHITECT_COLOR}55`,
       animation:       'architectPulse 3s ease-in-out infinite',
-      // Slightly wider left accent than AgentCard to reinforce authority.
-      borderLeft:      `3px solid ${ARCHITECT_COLOR}`,
+      // 4px left accent (vs 2px on AgentCard) to signal cosmic authority.
+      borderLeft:      `4px solid ${ARCHITECT_COLOR}`,
     }}>
 
       {/* ── Header: entity identity + minute ──────────────────────────────── */}
@@ -296,10 +305,11 @@ export const ArchitectCard = ({ item }) => {
           fontSize:      '10px',
           fontWeight:    700,
           letterSpacing: '0.12em',
-          // Small-caps via text-transform — matches the "cosmically ancient"
-          // aesthetic without requiring a special font.
           textTransform: 'uppercase',
           color:         ARCHITECT_COLOR,
+          // Layered text-shadow: tight inner glow for crispness + wider outer
+          // bloom for the "emitting its own light" effect.
+          textShadow:    `0 0 10px rgba(124,58,237,0.9), 0 0 22px rgba(124,58,237,0.45)`,
         }}>
           The Architect
         </span>
@@ -449,13 +459,20 @@ export const ArchitectInterferenceCard = ({ item }) => {
     <div style={{
       padding: '13px',
       marginBottom: '10px',
-      backgroundColor: `rgba(0,0,0,0.6)`,
+      // Pure black — matches ArchitectCard so all Architect surfaces share the
+      // same "void plane" aesthetic regardless of interference category colour.
+      backgroundColor: '#000000',
+      // Subtle radial bloom from the left border, tinted in the category accent
+      // colour so the background itself hints at the type of interference.
+      backgroundImage: `radial-gradient(ellipse at 15% 50%, ${accent}0D 0%, transparent 60%)`,
       border: `1px ${borderStyle} ${accent}`,
       borderLeft: `4px ${borderStyle} ${accent}`,
-      // Box-shadow fades from a vivid bloom (entry flare) to a subtle ambient
-      // glow over 2.5 s.  The transition provides the ease-out; the flared flag
-      // switches the target value once the timeout fires.
-      boxShadow: flared ? `0 0 20px 5px ${accent}55` : `0 0 6px 1px ${accent}33`,
+      // Entry flare: vivid double-layer bloom (28px + 55% alpha outer, 8px tight
+      // inner) catches the reader's eye on arrival, then the transition walks it
+      // back to a calm ambient glow over 2.5 s.
+      boxShadow: flared
+        ? `0 0 28px 8px ${accent}66, 0 0 8px 2px ${accent}99`
+        : `0 0 8px 2px ${accent}44`,
       transition: 'box-shadow 2.5s ease-out',
     }}>
       {/* Header row: emoji icon, label stack (type + subtitle), and match minute */}
@@ -960,6 +977,25 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
 
   const fontSize = larger ? '12px' : '10px';
 
+  // ── Cosmic event override ─────────────────────────────────────────────────
+  // Events flagged architectForced or architectConjured were produced by The
+  // Architect's interference rather than normal play.  The in-universe characters
+  // don't know the source; to them these are simply inexplicable occurrences.
+  //
+  // We signal cosmic origin to the viewer via a subtle violet tint and a ✦
+  // marker — but we do NOT surface "The Architect" text here.  The commentary
+  // strings on these events are already written as mysterious (e.g. "A goal —
+  // but from where?"), so the ✦ is the only hint of something beyond the game.
+  //
+  // We deliberately preserve the normal accent/icon (⚽, 🟥, etc.) so the
+  // event reads as a real match event first and a cosmic anomaly second.
+  const isCosmicEvent = !!(item.architectForced || item.architectConjured);
+  if (isCosmicEvent) {
+    // Override the background tint to a faint violet wash regardless of event
+    // type — keeps the cosmic card visually distinct from a normal goal/card.
+    bgTint = 'rgba(124,58,237,0.07)';
+  }
+
   // ── Score badge (goals only) ──────────────────────────────────────────────
   // When a goal event carries a live `score` array we render a compact badge
   // on the right edge: "2-1" — so the scoreline is visible inline without
@@ -1013,6 +1049,20 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
       {/* Event type icon */}
       <span style={{ fontSize: '12px', flexShrink: 0 }}>{icon}</span>
 
+      {/* ✦ Cosmic marker — shown only for architect-forced/conjured events.
+          Placed between the icon and description text so it reads as a prefix
+          to the event copy rather than a standalone symbol.  Violet glow
+          matches the ArchitectCard identity without naming the source. */}
+      {isCosmicEvent && (
+        <span style={{
+          fontSize: '10px',
+          flexShrink: 0,
+          color: '#9D6FFB',
+          textShadow: '0 0 6px rgba(124,58,237,0.8)',
+          marginRight: '2px',
+        }}>✦</span>
+      )}
+
       {/* Event description text */}
       <span style={{
         fontSize,
@@ -1042,6 +1092,25 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
             ANNULLED
           </span>
         )}
+        {/* ── Secondary context line ───────────────────────────────────────
+            Shown only for card events that carry a fouledPlayer field.
+            Addresses the viewer's natural question "what was it FOR?" without
+            requiring them to parse the commentary string.
+            Uses display:block inside the flex span so it sits on its own line
+            beneath the main commentary text rather than flowing inline. */}
+        {item.fouledPlayer && (item.cardType === 'red' || item.cardType === 'yellow') && (
+          <span style={{
+            display: 'block',
+            marginTop: '3px',
+            fontSize: '9px',
+            opacity: 0.55,
+            letterSpacing: '0.04em',
+            textDecoration: 'none',
+            color: 'inherit',
+          }}>
+            Foul on {item.fouledPlayer}
+          </span>
+        )}
       </span>
 
       {scoreBadge}
@@ -1055,9 +1124,10 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
  * The primary match-viewing panel — a single chronological stream of every
  * event and Vox commentary reaction, newest at the top.
  *
- * This replaces the three-column Nexus / Vox / Zara broadcast booth as the
- * default viewing mode.  The booth is still accessible via the "Detailed"
- * toggle in App.jsx.
+ * The primary match-viewing panel — supercedes the removed three-column
+ * Nexus / Vox / Zara broadcast booth as the default mode.  The "Pitch Side"
+ * view (toggled in App.jsx) shows only player/manager/referee content without
+ * this commentary layer.
  *
  * DESIGN INTENT (Blaseball model)
  * ─────────────────────────────────

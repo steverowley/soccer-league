@@ -1772,14 +1772,29 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
         penaltySequence: pseq.sequence, penaltyTaker: pseq.penaltyTaker,
         isRedCard: pseq.isRed, isYellowCard: pseq.isYellow };
     }
+    // ── Location context ──────────────────────────────────────────────────
+    // `inBox` is already computed above for penalty/free-kick routing.
+    // We reuse it in commentary strings so the viewer knows whether the foul
+    // was a penalty-box challenge or an open-field incident.
+    const zoneLabel = inBox ? 'in the box' : (phase === 'late' || phase === 'dying') ? 'late in the game' : 'in midfield';
     commentary = card === 'red'
-      ? pick([`🟥 RED CARD! ${player.name} is SENT OFF!`, `🟥 STRAIGHT RED! ${player.name} — see you in the tunnel!`, `🟥 ${player.name} GONE! Incredible scenes!`])
+      // Red card commentary names the fouled player and notes the location —
+      // addressing the viewer's natural question of "what was it FOR and WHERE?"
+      ? pick([
+          `🟥 RED CARD! ${player.name} — reckless challenge on ${atk.name} ${inBox ? 'inside the area' : 'in open play'}!`,
+          `🟥 STRAIGHT RED! Brutal foul on ${atk.name} — ${player.name} is off!`,
+          `🟥 ${player.name} GONE! Inexcusable challenge on ${atk.name} ${zoneLabel}.`,
+          `🟥 ${player.name} loses all composure — takes out ${atk.name}. The referee has no choice.`,
+        ])
       : card === 'yellow'
       ? pick([`🟨 ${player.name} booked for a foul on ${atk.name}`, `🟨 Yellow card — ${player.name} won't be happy.`, `🟨 ${player.name}: reckless challenge. Booked.`])
       : pick([`Foul by ${player.name} on ${atk.name}. Free kick.`, `${player.name} brings down ${atk.name}.`, `Clumsy foul from ${player.name}.`, `${player.name} clips ${atk.name}. Ref blows.`]);
     momentumChange = isHome ? [1, 0] : [0, 1];
     if (card === 'red') momentumChange = isHome ? [2, 0] : [0, 2];
-    const foulEvt = { minute: min, type: 'foul', team: defTeam.shortName, player: player.name, outcome: card || 'foul', commentary, momentumChange: [0, 0], cardType: card };
+    // fouledPlayer is stored on the event so the UI can display a secondary
+    // context line ("Foul on X") beneath the card icon without parsing the
+    // commentary string — keeping display logic out of the engine.
+    const foulEvt = { minute: min, type: 'foul', team: defTeam.shortName, player: player.name, fouledPlayer: atk.name, outcome: card || 'foul', commentary, momentumChange: [0, 0], cardType: card };
     if (card === 'red' && Math.random() < 0.40) {
       const cSeq = genConfrontationSeq(min, player, atk, aim?.referee, Math.random() < 0.25, aim?.getAgentByName(player.name), aim?.getAgentByName(atk.name));
       return { ...foulEvt, momentumChange: isHome ? [2, 0] : [0, 2], confrontationSequence: cSeq.sequence };
@@ -2227,30 +2242,43 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     if (!defender || !player) return null;
     const net = (defender.defending + defender.athletic) / 2 + rnd(-20, 20)
               - ((player.technical + player.athletic) / 2 + rnd(-20, 20));
+
+    // ── Location context for tackle commentary ────────────────────────────
+    // `isHome` tells us which team is defending.  When the defending team (defTeam)
+    // is defending their own half they are the team NOT in possession.  The
+    // attacking side (posTeam) is in the defTeam's territory, so their advances
+    // read as "pushing into the box" or "just outside the area".
+    // We use `phase` as a secondary cue to vary the language across the match.
+    const tackleZone = phase === 'dying' || phase === 'late'
+      ? 'deep into stoppage time'
+      : phase === 'early'
+      ? 'early in the half'
+      : 'in the middle third';
+
     if (net > 20) {
       outcome = 'clean_tackle';
       commentary = pick([
         phase === 'dying' && `VITAL TACKLE! ${defender.name} denies ${player.name} with everything he has!`,
-        `Perfect tackle from ${defender.name}!`,
-        `${defender.name} THUNDERS in! Ball won cleanly!`,
-        `Textbook defending from ${defender.name}!`,
-        `${defender.name} times it perfectly — ball and all!`,
-        `LAST DITCH! ${defender.name} slides in and takes the ball cleanly!`,
-        `${defender.name} — a masterclass in defending. Never in doubt.`,
-        `Superb from ${defender.name} — anticipates the pass and nicks it!`,
+        `Perfect tackle from ${defender.name} — ${player.name} had nowhere to go!`,
+        `${defender.name} THUNDERS in on ${player.name}! Ball won cleanly!`,
+        `Textbook defending from ${defender.name} — ${player.name} stopped cold!`,
+        `${defender.name} times it perfectly — ball and all! ${player.name} can't believe it.`,
+        `LAST DITCH! ${defender.name} slides in on ${player.name} and takes the ball cleanly!`,
+        `${defender.name} — a masterclass in defending ${tackleZone}. Never in doubt.`,
+        `Superb from ${defender.name} — anticipates ${player.name}'s run and nicks it!`,
         `${defender.name} absolutely dominates ${player.name} in that challenge.`,
       ].filter(Boolean));
       momentumChange = isHome ? [0, -2] : [-2, 0];
     } else if (net > 0) {
       outcome = 'success';
       commentary = pick([
-        `${defender.name} wins the ball`,
-        `${defender.name} gets in the way`,
-        `Solid defensive work from ${defender.name}`,
-        `${defender.name} holds his ground`,
-        `${defender.name} positioned well — gets a foot in.`,
-        `Good awareness from ${defender.name} — clears the danger.`,
-        `${defender.name} with a quiet, effective intervention.`,
+        `${defender.name} wins the ball off ${player.name}`,
+        `${defender.name} gets in the way of ${player.name}`,
+        `Solid defensive work from ${defender.name} — ${player.name} snuffed out.`,
+        `${defender.name} holds his ground against ${player.name}.`,
+        `${defender.name} positioned well — gets a foot in on ${player.name}.`,
+        `Good awareness from ${defender.name} — clears the danger ${tackleZone}.`,
+        `${defender.name} with a quiet, effective intervention on ${player.name}.`,
       ]);
       momentumChange = isHome ? [0, -1] : [-1, 0];
     } else {
@@ -2329,17 +2357,26 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
 
     if (net > 10) {
       outcome = 'good_pass';
+      // ── Pass target ───────────────────────────────────────────────────────
+      // Pick an attacking-oriented receiver so the commentary reads as a
+      // forward ball rather than a lateral keep.  Falls back to athletic if no
+      // attacker is available.  The passer (`player`) is already the most
+      // technical player on the team, so we deliberately pick a different skill
+      // type to avoid "Player passes to Player" commentary.
+      const passTarget = getPlayer(posTeam, posActive, 'attacking') || getPlayer(posTeam, posActive, 'athletic');
+      // Use a named target in roughly half the commentary options so passing
+      // events gain a second name without feeling repetitive across many lines.
       commentary = pick([
-        phase === 'early' && `${player.name} with an early probe through the lines. Testing the shape.`,
+        phase === 'early' && `${player.name} with an early probe through the lines to ${passTarget?.name || 'a teammate'}. Testing the shape.`,
         scoreDiff > 1     && `${player.name} keeping it — no risks needed. The lead is comfortable.`,
-        `${player.name} with a precise pass`,
-        `${player.name} picks out a teammate`,
+        `${player.name} with a precise pass to ${passTarget?.name || 'a teammate'}`,
+        `${player.name} picks out ${passTarget?.name || 'a teammate'} in space`,
         `${player.name} plays it through the lines`,
-        `Neat footwork from ${player.name}`,
-        `${player.name} finds space and uses it`,
+        `Neat footwork from ${player.name} — ${passTarget?.name || 'a teammate'} is in.`,
+        `${player.name} finds ${passTarget?.name || 'space'} and uses it`,
         `Lovely touch from ${player.name} — the move continues.`,
-        `${player.name} plays the one-two — comes out the other side.`,
-        `Sharp combination — ${player.name} threads the needle.`,
+        `${player.name} plays the one-two and finds ${passTarget?.name || 'his man'}.`,
+        `Sharp combination — ${player.name} threads the needle to ${passTarget?.name || 'a runner'}.`,
         `Simple but effective — ${player.name} plays it forward with purpose.`,
       ].filter(Boolean));
       momentumChange = isHome ? [1, 0] : [0, 1];
