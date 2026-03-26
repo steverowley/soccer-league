@@ -1891,6 +1891,7 @@ const MatchSimulator = ({
     const EXCLUDE_TYPES = new Set([
       'team_talk', 'manager_shout', 'captain_rally',
       'desperate_sub', 'manager_sentoff', 'siege_start',
+      'manager_decision',  // AI tactical decision — verbose rationale, not match action
     ]);
 
     let h = 0;  // running home score
