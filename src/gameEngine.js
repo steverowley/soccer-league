@@ -739,12 +739,53 @@ export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
   const confident = flavour.includes('confident');
   const creative  = flavour.includes('creative');
   const low_conf  = flavour.includes('low_confidence');
-  const { min = 45, scoreDiff = 0, playerGoals = 0 } = ctx;
+  const { min = 45, scoreDiff = 0, playerGoals = 0, isArchitectFeatured = false } = ctx;
+  // phase — divides the match into four narrative windows that gate different
+  // template pools.  Boundaries match real football's structural beats:
+  //   early   (≤25)  — first impressions, shape-setting, fewer committed runs
+  //   midgame (≤65)  — tactical battle, momentum shifts, tactical substitutions
+  //   late    (≤82)  — increasing urgency, manager interventions, tired legs
+  //   dying   (>82)  — stoppage time, last-gasp territory, everything on the line
   const phase      = min <= 25 ? 'early' : min <= 65 ? 'midgame' : min <= 82 ? 'late' : 'dying';
+  // desperate — trailing by 2+ after the 65th minute: panic, desperation, all-in.
+  // chasing   — trailing by 2+ before that window: tactical pressure, still composed
+  //             but the team knows they have ground to make up.  Separate from
+  //             desperate so the two registers stay tonally distinct.
+  // protecting — leading by 2+: no need to take risks, tempo control, confidence.
   const desperate  = scoreDiff < -1 && min > 65;
+  const chasing    = scoreDiff < -1 && !desperate;
   const protecting = scoreDiff > 1;
   const onFire     = playerGoals > 0;
   const hatTrick   = playerGoals >= 2;
+
+  // ── Blaseball-style weirdness pool ────────────────────────────────────────
+  // A small chance (3%) that any non-goal event quietly replaces its normal
+  // template with an unsettling, player-name-aware line that implies something
+  // is subtly wrong — without ever explaining what.  This is the template-layer
+  // equivalent of the Architect's presence: not every interference is a
+  // proclamation; sometimes reality just slips a little.
+  //
+  // The rate doubles to 8% when the Architect has actively featured this player
+  // via an intention or sealed fate, surfacing their cosmic attention in the
+  // mechanical feed without any additional API calls.
+  //
+  // Goal outcomes are intentionally excluded: goals trigger celebration
+  // sequences and need unambiguous text for the UI scoring logic to function.
+  if (outcome !== 'goal' && Math.random() < (isArchitectFeatured ? 0.08 : 0.03)) {
+    return pick([
+      `${atk} holds the ball for slightly too long. Something is wrong.`,
+      `${atk} glances toward the sideline. The sideline glances back.`,
+      `A pause. ${def} does not move. Then does. Normal play resumes.`,
+      `${atk} completes the action. The crowd goes quiet for exactly one second.`,
+      `${def} is in position. Has been in that position longer than seems right.`,
+      `Play continues. ${atk} shows no reaction. This is noted.`,
+      `${atk} looks up. Something in the upper tier catches his eye. He does not say what.`,
+      `The moment passes. ${def} seems unaware that anything happened.`,
+      `${atk} receives the ball. Passes it. Something about the weight felt off.`,
+      `The referee watches ${atk}. ${atk} does not notice the referee watching.`,
+    ]);
+  }
+
   const T = {
     shot: {
       goal: [
@@ -773,7 +814,10 @@ export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
       saved: [
         phase === 'dying' && `Agonising! ${atk} fires — ${def} SAVES THE DAY in stoppage time!`,
         phase === 'dying' && `NO! ${def} throws himself at the effort — KEPT OUT! Agony for ${atk}!`,
+        phase === 'dying' && `${def} DOES NOT YIELD! Everything ${atk} had — and ${def} had more!`,
         desperate  && `${atk} gets a shot off — but ${def} absolutely REFUSES to be beaten!`,
+        desperate  && `Desperate attempt from ${atk} — ${def} was ready. Saved. Time is running out.`,
+        chasing    && `${atk} tries to spark something — ${def} dealing with it comfortably.`,
         onFire     && `${atk} tries to add to his tally — ${def} says NO this time!`,
         protecting && `${def} comfortable — ${atk} didn't trouble him. Lead intact.`,
         anxious    && `${atk} hesitates a fraction — ${def} reads the delay perfectly. Saved.`,
@@ -792,8 +836,10 @@ export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
       ].filter(Boolean),
       miss: [
         phase === 'dying' && `${atk} BLAZES OVER! Oh, that will haunt him! The clock is running out!`,
+        phase === 'dying' && `OVER THE BAR! That was their last real chance — the clock is merciless.`,
         phase === 'early' && `${atk} lifts his head too early — dragged wide. Early chance gone.`,
         desperate  && `${atk} rushes the effort in desperation — WIDE! The head drops.`,
+        chasing    && `${atk} forces the issue from distance — sails over. Not the answer.`,
         onFire     && `Can't believe it — ${atk} was looking for more after scoring earlier. Blazes over.`,
         anxious    && `${atk} rushes the shot — balloons it over. The pressure showing.`,
         exhausted  && `The legs are gone. ${atk}'s effort drifts harmlessly wide.`,
@@ -901,22 +947,39 @@ export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
         `⚽ ${atk} attacks the ball and THUNDERS it home! Headers don't get better!`,
       ].filter(Boolean),
       saved: [
+        // Dying-phase saves carry the same weight as dying-phase goals — the
+        // crowd reacts to near-misses just as intensely in the final minutes.
+        phase === 'dying' && `${def} CLAWS IT OUT IN STOPPAGE TIME! ${atk} cannot believe it!`,
+        phase === 'dying' && `Breathtaking save! ${def} tips the header over with SECONDS left!`,
+        desperate  && `${atk} throws himself at it — ${def} was equal to the header!`,
+        chasing    && `${atk} attacks the cross — but ${def} reads it well. No goal.`,
         `${def} claws it away! What a header from ${atk} — even better save!`,
         `${def} tips the header over the bar!`,
         `${atk} gets good contact — but ${def} was perfectly positioned.`,
         `Full-stretch from ${def} — the header turned behind!`,
-      ],
+        `${def} rises with ${atk} — and gets there first. Commanding.`,
+      ].filter(Boolean),
       miss: [
+        phase === 'dying' && `${atk} heads WIDE with the goal gaping! The agony is unbearable!`,
+        phase === 'late'  && `${atk} gets above everyone — but directs it straight at ${def}.`,
+        desperate  && `${atk} can only glance it wide — they needed that!`,
         `${atk} gets above everyone but glances it wide.`,
         `Header from ${atk} — just over the crossbar!`,
         `${atk} meets it at the far post — angles it wide. Should've done better.`,
         `Too much power — ${atk}'s header clears the bar by a distance.`,
-      ],
+        `${def} didn't even have to move. The header was always missing.`,
+      ].filter(Boolean),
     },
     tackle: {
       won: [
+        // Dying-phase and desperate tackles carry specific urgency lines
+        // because a single clean challenge in those minutes can decide the match.
         phase === 'dying' && `CRUCIAL TACKLE! ${atk} wins it cleanly — what composure under pressure!`,
-        confident && `${atk} reads it perfectly — the ball is theirs! Clean as you like.`,
+        phase === 'dying' && `LAST-DITCH DEFENDING! ${atk} slides in and gets every bit of ball!`,
+        desperate  && `${atk} HAD to win that — and does! Buys them precious seconds!`,
+        chasing    && `${atk} breaks up the move — exactly the kind of intervention they need.`,
+        protecting && `${atk} snuffs it out early — no need for heroics when you're on top.`,
+        confident  && `${atk} reads it perfectly — the ball is theirs! Clean as you like.`,
         `${atk} times the tackle to perfection!`,
         `Crunching challenge from ${atk} — ball won!`,
         `${atk} arrives a fraction before ${def}. Quality defending.`,
@@ -924,16 +987,20 @@ export function buildCommentary(type, actors, outcome, flavour = [], ctx = {}) {
         `${atk} slides in — and gets every bit of ball. Brilliant.`,
       ].filter(Boolean),
       contested: [
+        phase === 'dying' && `Fifty-fifty in stoppage time! Both players leave everything in. Play on!`,
         `Fifty-fifty! Both players want it — neither gives an inch.`,
         `Contested ball — falls loose in midfield.`,
         `Both go in together — the referee watches carefully. Play on.`,
         `Battle for possession — nobody wins it cleanly.`,
-      ],
+      ].filter(Boolean),
       lost: [
-        exhausted && `${atk} lunges — but the legs aren't there. Beaten.`,
+        phase === 'dying' && `${atk} lunges — too late! ${def} is through! DANGER!`,
+        desperate  && `${atk} had to go — but ${def} steps around it! They're in trouble.`,
+        exhausted  && `${atk} lunges — but the legs aren't there. Beaten.`,
         `${atk} mistimes it — ${def} skips past!`,
         `${def} sees it coming a mile off — steps over and goes.`,
         `${atk} dives in — ${def} rides the challenge with ease.`,
+        `Too eager. ${atk} commits — ${def} goes the other way without breaking stride.`,
       ].filter(Boolean),
     },
   };
@@ -1464,7 +1531,17 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   const defActive = isHome ? activePlayers.away : activePlayers.home;
   const scoreDiff = isHome ? (score[0] - score[1]) : (score[1] - score[0]);
   const phase     = min <= 25 ? 'early' : min <= 65 ? 'midgame' : min <= 82 ? 'late' : 'dying';
-  const matchCtx  = (pName) => ({ min, scoreDiff, playerGoals: playerStats[pName]?.goals || 0 });
+  // matchCtx — builds the context object passed to buildCommentary() for a
+  // specific player.  isArchitectFeatured boosts the weird-pool probability
+  // from 3% → 8% when the Cosmic Architect has an active intention or sealed
+  // fate targeting this player, making the template layer subtly reflect
+  // cosmic attention without any additional API calls.
+  const matchCtx  = (pName) => ({
+    min,
+    scoreDiff,
+    playerGoals:        playerStats[pName]?.goals || 0,
+    isArchitectFeatured: genCtx.architect?.getFeaturedMortals?.()?.includes(pName) ?? false,
+  });
 
   // ── Near-miss pressure bonus ───────────────────────────────────────────────
   // When a team has been unlucky enough times in a row (near-misses threshold
@@ -2364,6 +2441,34 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
       return { minute: min, type: 'atmosphere_moment', team: posTeam.shortName, commentary: pick(atmComms), momentumChange: [0, 0] };
     }
 
+    // ── Possession scoreline/phase context ────────────────────────────────
+    // These match the flags used by buildCommentary() so possession events
+    // shift register at the same match-state boundaries as shot/tackle events.
+    const posScoreDiff   = isHome ? (score[0] - score[1]) : (score[1] - score[0]);
+    const posDesperate   = posScoreDiff < -1 && min > 65;  // trailing 2+, late game
+    const posChasing     = posScoreDiff < -1 && !posDesperate; // trailing 2+, still early/mid
+    const posProtecting  = posScoreDiff > 1;                // leading 2+, comfortable
+    // ── Possession weird-pool ─────────────────────────────────────────────
+    // Mirror of the weird pool in buildCommentary() for the inline possession
+    // branch — same rates, same intent, applied to the passer/dribbler rather
+    // than the shot taker.  Runs before the net check so even successful passes
+    // can be quietly unsettling.
+    const posWeirdFeatured = genCtx.architect?.getFeaturedMortals?.()?.includes(player.name) ?? false;
+    if (Math.random() < (posWeirdFeatured ? 0.08 : 0.03)) {
+      outcome    = 'continue';
+      commentary = pick([
+        `${player.name} holds the ball for slightly too long. Something is wrong.`,
+        `${player.name} passes it sideways. The receiving player does not acknowledge the pass.`,
+        `${player.name} looks up. There is no one where there should be someone.`,
+        `The ball reaches ${player.name}. He pauses. Play continues regardless.`,
+        `${player.name} finds a teammate. Both of them look at the same spot on the pitch. Nothing is there.`,
+        `${player.name} recycles. The crowd reacts — one beat too late. Nobody mentions it.`,
+        `${player.name} receives the ball. Completes the pass. Glances back once.`,
+        `Something crosses ${player.name}'s face. He keeps running. The move continues.`,
+      ]);
+      return { minute: min, type: 'pass', team: posTeam.shortName, player: player.name, outcome, commentary, momentumChange: [0, 0] };
+    }
+
     if (net > 10) {
       outcome = 'good_pass';
       // ── Pass target ───────────────────────────────────────────────────────
@@ -2376,8 +2481,13 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
       // Use a named target in roughly half the commentary options so passing
       // events gain a second name without feeling repetitive across many lines.
       commentary = pick([
-        phase === 'early' && `${player.name} with an early probe through the lines to ${passTarget?.name || 'a teammate'}. Testing the shape.`,
-        scoreDiff > 1     && `${player.name} keeping it — no risks needed. The lead is comfortable.`,
+        phase === 'dying'  && `${player.name} DRIVES IT FORWARD — no time for patience now!`,
+        phase === 'dying'  && `${player.name} finds ${passTarget?.name || 'a runner'} in behind — URGENT ball!`,
+        posDesperate       && `${player.name} plays it forward with everything on the line. They NEED this.`,
+        posChasing         && `${player.name} builds with purpose — they have ground to make up.`,
+        posProtecting      && `${player.name} keeps it moving forward — comfortable and in control.`,
+        phase === 'early'  && `${player.name} with an early probe through the lines to ${passTarget?.name || 'a teammate'}. Testing the shape.`,
+        scoreDiff > 1      && `${player.name} keeping it — no risks needed. The lead is comfortable.`,
         `${player.name} with a precise pass to ${passTarget?.name || 'a teammate'}`,
         `${player.name} picks out ${passTarget?.name || 'a teammate'} in space on the right — cutting through the press.`,
         `${player.name} plays it through the lines, splitting the midfield press cleanly.`,
@@ -2391,7 +2501,22 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
       momentumChange = isHome ? [1, 0] : [0, 1];
     } else if (net > dustThreshold) {
       outcome = 'continue';
+      // The 'continue' pool is the most common event type in the feed — the
+      // neutral possession recycle.  Without scoreline/phase variants these
+      // all read at the same register regardless of match state.  The guards
+      // below shift tone from patient (protecting) → purposeful (chasing) →
+      // urgent (desperate) → frantic (dying) so the accumulated feel of the
+      // feed changes as the game's stakes change.
       commentary = pick([
+        phase === 'dying'  && `${player.name} FORCES IT FORWARD — no time left for sideways passes!`,
+        phase === 'dying'  && `Every touch precious. ${player.name} recycles, but the clock won't stop.`,
+        phase === 'late'   && `${player.name} carries it — the crowd urging them forward.`,
+        posDesperate       && `${player.name} drives into the half-space. This team CANNOT keep recycling.`,
+        posDesperate       && `${player.name} holds it up — the frustration is starting to show. Need more.`,
+        posChasing         && `${player.name} keeps it moving — probing, looking. The right moment hasn't arrived.`,
+        posChasing         && `Steady from ${player.name} but this team needs to find another gear.`,
+        posProtecting      && `${player.name} recycles calmly — no need to rush. The clock is their friend.`,
+        posProtecting      && `Comfortable possession. ${player.name} keeps it simple — protecting what they have.`,
         `${player.name} keeps the ball under pressure — shields it, waits for options to open up.`,
         `${player.name} holds up play in the channel, back to goal, buying time for the runners.`,
         `${player.name} shields the ball along the touchline — drawing the challenge before laying it off.`,
@@ -2402,7 +2527,7 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
         `${player.name} drops off to collect between the lines — third man still making the run.`,
         `${player.name} spins away from the challenge and steadies the attack in midfield.`,
         `Ball comes back to ${player.name} on the edge — holds it, draws two defenders, buys time.`,
-      ]);
+      ].filter(Boolean));
       momentumChange = [0, 0];
     } else {
       outcome = 'intercepted';
