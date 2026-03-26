@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Play, Pause, RotateCcw, Settings } from "lucide-react";
 import TEAMS from "./teams.js";
-import { AgentSystem, CosmicArchitect, COMMENTATOR_PROFILES } from "./agents.js";
+import { AgentSystem, CosmicArchitect } from "./agents.js";
 import {
   createAgent, createAIManager,
   getActive, teamStats, getPlayer, formBonus,
@@ -445,7 +445,7 @@ function _applyInterferenceToState(prev, r) {
         if (side && other) {
           activePlayers[side]  = activePlayers[side].filter(n => n !== name);
           activePlayers[other] = [...activePlayers[other], name];
-          events = [...events, synthEvt({ type: 'player_swap', player: name, architectForced: true, commentary: `${name} crosses the divide — the Architect has rewritten their allegiance.` })];
+          events = [...events, synthEvt({ type: 'player_swap', player: name, architectForced: true, commentary: `${name} crosses the divide — found wearing different colours. No one can explain it.` })];
         }
       }
       break;
@@ -482,7 +482,7 @@ function _applyInterferenceToState(prev, r) {
       if (victim) {
         activePlayers[side] = activePlayers[side].filter(n => n !== victim);
         playerStats = { ...playerStats, [victim]: { ...playerStats[victim], redCard: true } };
-        events = [...events, synthEvt({ type: 'card', cardType: 'red', player: victim, architectForced: true, team: shortOf(side), commentary: `The Architect's quill writes a red card into the void. ${victim} sees it materialise in the referee's hand.` })];
+        events = [...events, synthEvt({ type: 'card', cardType: 'red', player: victim, architectForced: true, team: shortOf(side), commentary: `A red card appears in the referee's hand. ${victim} stares at it — nobody saw a foul. The referee looks as confused as anyone.` })];
       }
       break;
     }
@@ -566,7 +566,7 @@ function _applyInterferenceToState(prev, r) {
       const losing     = score[0] < score[1] ? 'home' : score[1] < score[0] ? 'away' : 'home';
       const losingShort = shortOf(losing);
       score[losing === 'home' ? 0 : 1]++;
-      events = [...events, synthEvt({ type: 'goal', isGoal: true, architectConjured: true, team: losingShort, commentary: 'The Architect smiles upon the defeated — a gift goal manifests from cosmic amusement.' })];
+      events = [...events, synthEvt({ type: 'goal', isGoal: true, architectConjured: true, team: losingShort, commentary: 'A goal — but from where? Nobody touched it. The stadium falls silent.' })];
       // Annul a yellow card if any booked player is still on the pitch
       const bookedPlayer = activePlayers[losing].find(n => playerStats[n]?.yellowCard);
       if (bookedPlayer) playerStats = { ...playerStats, [bookedPlayer]: { ...playerStats[bookedPlayer], yellowCard: false } };
@@ -1925,21 +1925,22 @@ const MatchSimulator = ({
   const commentaryReversed    = useMemo(() => [...commentaryFeed].reverse(),    [commentaryFeed]);
   // ── Per-voice commentary splits for the broadcast booth ─────────────────
   // Each memo filters the shared commentaryReversed array to produce the item
-  // list for one booth column.  Memos depend only on commentaryReversed so
-  // they do not recompute on unrelated state changes (score, possession, etc.).
+  // Commentary stream slices — each memo filters commentaryReversed to a
+  // specific voice/type so individual panels only recompute when their own
+  // slice changes, not on unrelated state changes (score, possession, etc.).
   //
-  // Column routing:
-  //   nexus7      → nexusItems      — Nexus-7 commentator reactions only
+  // Stream routing:
+  //   nexus7      → nexusItems      — combined into commItems (feed right panel)
   //   architect   → architectItems  — cosmic proclamations + interference cards
-  //   captain_vox → voxItems        — play_by_play + procedural fallback
-  //   zara_bloom  → zaraItems       — Zara Bloom commentator reactions only
+  //   captain_vox → voxItems        — play_by_play interleaved in UnifiedFeed
+  //   zara_bloom  → zaraItems       — combined into commItems (feed right panel)
   //
-  // Referee decisions are intentionally excluded from all commentary columns;
-  // the Referee info card in the Officials section is the sole referee display.
+  // Referee decisions are excluded from all commentary slices;
+  // the Referee Decisions card in the Pitch Side centre column is their sole display.
   const nexusItems     = useMemo(() => commentaryReversed.filter(i => i.commentatorId === 'nexus7'), [commentaryReversed]);
   // architectItems feeds the Architect zone inside the Chaos Meter card.
-  // Architect types are excluded from voxItems so they appear only there,
-  // not duplicated in Vox's broadcast booth column.
+  // Architect types are excluded from voxItems so they appear only there —
+  // the in-universe characters react to outcomes, not to cosmic decrees.
   const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference'), [commentaryReversed]);
 
   // refItems feeds the Referee Decisions feed in the centre column (bottom).
@@ -2167,7 +2168,7 @@ const MatchSimulator = ({
         {aiManager&&(
           <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
             <div className="card" style={{padding:'10px'}}>
-              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Referee</div>
+              <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)',marginBottom:'8px'}}>Referee</div>
               <div style={{fontSize:'20px',marginBottom:'4px'}}>{aiManager.referee.leniency>70?'😊':aiManager.referee.leniency>40?'😐':'😠'}</div>
               <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.referee.name}</div>
               <div style={{fontSize:'11px',marginTop:'4px',color:aiManager.referee.leniency>70?'#A5D6A7':aiManager.referee.leniency>40?'#E3E0D5':'#E05252'}}>
@@ -2175,12 +2176,12 @@ const MatchSimulator = ({
               </div>
             </div>
             <div className="card" style={{padding:'10px'}}>
-              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Stadium</div>
+              <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)',marginBottom:'8px'}}>Stadium</div>
               <div style={{fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{aiManager.stadium.name}</div>
               <div style={{fontSize:'11px',opacity:0.5}}>Cap. {aiManager.stadium.capacity?.toLocaleString()??'–'}</div>
             </div>
             <div className="card" style={{padding:'10px'}}>
-              <div style={{fontSize:'11px',opacity:0.5,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>Conditions</div>
+              <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)',marginBottom:'8px'}}>Conditions</div>
               <div style={{fontSize:'20px',marginBottom:'4px'}}>{WX_ICON[aiManager.weather]||'🌌'}</div>
               <div style={{fontSize:'13px',fontWeight:700}}>{aiManager.weather.replace(/_/g,' ').toUpperCase()}</div>
               <div style={{fontSize:'11px',opacity:0.5,marginTop:'4px'}}>{aiManager.temperature}°C · {aiManager.timeOfDay}</div>
@@ -2199,7 +2200,7 @@ const MatchSimulator = ({
           {/* ── Chaos bar zone ── */}
           <div style={{padding:'12px 16px',flexShrink:0}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-              <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Chaos Meter</div>
+              <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Chaos Meter</div>
               <div style={{fontSize:'11px',fontWeight:700,color:chaosColor}}>{chaosLabel}</div>
             </div>
             <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
@@ -2226,7 +2227,10 @@ const MatchSimulator = ({
               stays pinned to the top of the zone rather than scrolling out
               of view when the Architect feed grows long.  Only the item list
               below it scrolls. */}
-          <div style={{padding:'6px 12px 4px',flexShrink:0,fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#7C3AED',opacity:0.7}}>✦ The Architect</div>
+          {/* Full opacity + text-shadow so the label itself glows — matching
+              the ArchitectCard header treatment and reinforcing that this zone
+              is the Architect's domain within the chaos meter card. */}
+          <div style={{padding:'6px 12px 4px',flexShrink:0,fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9D6FFB',textShadow:'0 0 8px rgba(124,58,237,0.8)'}}>✦ The Architect</div>
           <div style={{flex:1,minHeight:0,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
             {architectItems.length===0
               ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',padding:'8px 12px 12px',fontStyle:'italic'}}>The void stirs...</div>
@@ -2265,7 +2269,9 @@ const MatchSimulator = ({
             >
               ▶ Feed
             </button>
-            {/* Detailed View button — active when feedView=false */}
+            {/* Pitch Side button — active when feedView=false.
+                Renamed from "Detailed": shows only player/manager/referee
+                content without the commentary broadcast booth. */}
             <button
               onClick={()=>setFeedView(false)}
               style={{
@@ -2280,7 +2286,7 @@ const MatchSimulator = ({
                 color:!feedView?C.purple:'rgba(227,224,213,0.4)',
               }}
             >
-              ☰ Detailed
+              ⚑ Pitch Side
             </button>
           </div>
         )}
@@ -2341,7 +2347,9 @@ const MatchSimulator = ({
                           <span style={{color:C.purple,fontWeight:700,flexShrink:0,minWidth:'22px'}}>{e.minute}'</span>
                           <span style={{flexShrink:0}}>{icon}</span>
                           <span style={{color:tc,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                            {e.player||e.type}
+                            {/* player is always preferred; fall back to event type formatted
+                                as Title Case so "architect_goal" doesn't leak raw snake_case */}
+                            {e.player || (e.type||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}
                           </span>
                         </div>
                       );
@@ -2358,8 +2366,8 @@ const MatchSimulator = ({
                   wants extra colour.  Newest item at the top (commItems
                   is already sorted minute-desc). */}
               <div className="card" style={{flex:1,minHeight:0,padding:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-                <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',opacity:0.5}}>
-                  💬 Commentary
+                <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)'}}>
+                  Commentary
                 </div>
                 <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${C.purple} #111`}}>
                   {commItems.length===0
@@ -2389,10 +2397,12 @@ const MatchSimulator = ({
           </div>
         )}
 
-        {/* ── DETAILED VIEW: legacy 3-column booth ────────────────────────── */}
-        {/* Preserved unchanged — all existing manager shouts, player thoughts,
-            live pitch, Nexus-7, Vox, and Zara Bloom columns.  Hidden by
-            default in favour of the unified feed view above. */}
+        {/* ── PITCH SIDE VIEW ──────────────────────────────────────────────── */}
+        {/* Three-column pitch-level perspective: manager/player content on the
+            flanks, live pitch + referee decisions in the centre.  The broadcast
+            commentary booth (Nexus-7, Vox, Zara) has been removed — in-universe
+            characters react to events through their own columns without an
+            omniscient narrator layer interrupting the pitch-side atmosphere. */}
         {aiManager&&!feedView&&(
           <>
           <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1.4fr 1fr',gap:'8px',height:'580px',alignItems:'stretch'}}>
@@ -2420,7 +2430,7 @@ const MatchSimulator = ({
                 </div>
               </div>
               <div className="card" style={{padding:0,overflow:'hidden'}}>
-                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Manager Shouts</div>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Manager Shouts</div>
                 <div style={{padding:'8px',overflowY:'auto',height:'120px',scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeManagerFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
@@ -2444,7 +2454,7 @@ const MatchSimulator = ({
                   to let a flex child scroll within its allocated space rather than
                   expanding past it). */}
               <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
-                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Player Thoughts</div>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.homeTeam.color}}>Player Thoughts</div>
                 <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:`${ms.homeTeam.color} #111`}}>
                   {homeThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
@@ -2466,7 +2476,7 @@ const MatchSimulator = ({
             {/* ── CENTRE: pitch + commentary ──────────────────────────── */}
             <div style={{display:'flex',flexDirection:'column',gap:'8px',overflow:'hidden'}}>
               <div className="card" style={{padding:'12px'}}>
-                <div style={{fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
+                <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9A5CF4',marginBottom:'10px',textAlign:'center'}}>Live Pitch</div>
                 {/* ── Live Pitch (event cinema) ───────────────────────────────
                     Calm state: minimal pitch outline + ball tracking possession.
                     Cinema state: when a significant event fires (goal, save,
@@ -2681,8 +2691,8 @@ const MatchSimulator = ({
                       the top.  Gold (#FFD700) accent matches the referee
                       return type colour in agents.js generateRefDecision(). */}
                   <div className="card" style={{flex:1,minHeight:0,padding:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-                    <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',opacity:0.6,display:'flex',alignItems:'center',gap:'6px'}}>
-                      ⚖️ Referee Decisions
+                    <div style={{padding:'8px 12px',flexShrink:0,borderBottom:'1px solid rgba(227,224,213,0.08)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'rgba(227,224,213,0.4)'}}>
+                      Referee Decisions
                     </div>
                     <div style={{flex:1,minHeight:0,padding:'8px',overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#FFD700 #111'}}>
                       {refItems.length===0
@@ -2717,7 +2727,7 @@ const MatchSimulator = ({
                 </div>
               </div>
               <div className="card" style={{padding:0,overflow:'hidden'}}>
-                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Manager Shouts</div>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Manager Shouts</div>
                 <div style={{padding:'8px',overflowY:'auto',height:'120px',scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayManagerFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'48px'}}>Watching from the touchline...</div>
@@ -2738,7 +2748,7 @@ const MatchSimulator = ({
                   the card lets the scroll div use flex:1 + minHeight:0 so it
                   expands to fill allocated space without a fixed pixel height. */}
               <div className="card" style={{padding:0,overflow:'hidden',flex:1,display:'flex',flexDirection:'column'}}>
-                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Player Thoughts</div>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(227,224,213,0.1)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:ms.awayTeam.color}}>Player Thoughts</div>
                 <div style={{padding:'8px',overflowY:'auto',flex:1,minHeight:0,scrollbarWidth:'thin',scrollbarColor:`${ms.awayTeam.color} #111`}}>
                   {awayThoughtsFeed.length===0
                     ?<div style={{textAlign:'center',opacity:0.3,fontSize:'12px',paddingTop:'64px'}}>Quiet minds...</div>
@@ -2759,134 +2769,7 @@ const MatchSimulator = ({
 
           </div>
 
-          {/* ── Broadcast Booth ─────────────────────────────────────────────
-              Full-width 3-column panel, one column per commentary voice.
-              Rendered as a single COMMENTATOR_PROFILES.map() pass so each
-              column's header and scroll content are produced by the same loop
-              iteration — structural misalignment is impossible.
-
-              Items routed per voice via the memos above:
-                nexus7      → nexusItems  (Nexus-7 commentator reactions)
-                captain_vox → voxItems    (play_by_play + architect cards + fallback)
-                zara_bloom  → zaraItems   (Zara Bloom commentator reactions)
-
-              Architect proclamations/interference also appear in the centre
-              feed column above (The Architect card below Match Events).
-
-              Referee commentary is intentionally excluded from all columns;
-              the Referee info card in the Officials section is its sole display.
-
-              Column layout: each column is display:flex flex-direction:column
-              inside a 360px grid row.  The header is auto-height; the scroll
-              div fills remaining space with flex:1 + minHeight:0. */}
-          <div className="card section" style={{padding:0,overflow:'hidden'}}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',height:'360px'}}>
-              {COMMENTATOR_PROFILES.map((p,ci)=>{
-                // ── Resolve items for this voice ──────────────────────────
-                const items = p.id==='nexus7'     ? nexusItems
-                            : p.id==='zara_bloom' ? zaraItems
-                            : voxItems;
-                const isVox = p.id==='captain_vox';
-                const emptyMsg = isVox
-                  ? (ms.minute===0?'Press Kick Off to begin':'Awaiting first play...')
-                  : p.id==='nexus7' ? 'Compiling data...' : 'Watching the game...';
-
-                return(
-                  // height:'100%' ensures the column fills its 360px grid cell.
-                  // overflow:'hidden' is the KEY fix: it creates a block formatting
-                  // context (BFC) that forces the CSS flex algorithm to treat the
-                  // grid track's definite 360px as the container height.  Without
-                  // it, flex:1 on the scroll div below expands unbounded — the outer
-                  // card clips content with overflow:hidden but there is no finite-
-                  // height scroll container, so the user cannot scroll at all.
-                  <div key={p.id} style={{
-                    display:'flex',flexDirection:'column',
-                    height:'100%',overflow:'hidden',
-                    borderRight:ci<2?'1px solid rgba(227,224,213,0.08)':'none',
-                  }}>
-                    {/* ── Column header ───────────────────────────────────── */}
-                    <div style={{
-                      padding:'10px 14px',flexShrink:0,
-                      borderBottom:'1px solid rgba(227,224,213,0.08)',
-                      display:'flex',alignItems:'center',gap:'10px',
-                      backgroundColor:`${p.color}0A`,
-                    }}>
-                      <span style={{fontSize:'18px'}}>{p.emoji}</span>
-                      <div>
-                        <div style={{fontSize:'11px',fontWeight:700,color:p.color,textTransform:'uppercase',letterSpacing:'0.07em'}}>{p.name}</div>
-                        <div style={{fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.05em'}}>{p.role}</div>
-                      </div>
-                      {/* AI key affordance on Vox's header only — single entry
-                          point for enabling the LLM agent system. */}
-                      {isVox&&!agentSystemRef.current&&!apiKey&&(
-                        <button onClick={()=>setShowApiKeyModal(true)} style={{marginLeft:'auto',fontSize:'10px',padding:'3px 8px',border:`1px solid ${p.color}80`,backgroundColor:'transparent',color:p.color,cursor:'pointer',fontFamily:"'Space Mono',monospace",textTransform:'uppercase',letterSpacing:'0.06em'}}>⚙ AI</button>
-                      )}
-                      {isVox&&!agentSystemRef.current&&apiKey&&(
-                        <span style={{marginLeft:'auto',fontSize:'10px',opacity:0.35}}>key set — next kickoff</span>
-                      )}
-                    </div>
-
-                    {/* ── Scroll content ──────────────────────────────────── */}
-                    {/* flex:1 + minHeight:0: standard trick to let a flex child
-                        scroll within its allocated space rather than expanding
-                        past it.  evtLogRef / onScroll live on Vox's column. */}
-                    <div
-                      {...(isVox?{ref:evtLogRef,onScroll:handleCommentaryScroll}:{})}
-                      style={{flex:1,minHeight:0,padding:'10px',overflowY:'auto',
-                              scrollbarWidth:'thin',scrollbarColor:`${p.color} #111`}}>
-                      {items.length===0
-                        ?<div style={{textAlign:'center',opacity:0.25,fontSize:'11px',paddingTop:'60px',fontStyle:'italic'}}>{emptyMsg}</div>
-                        :items.map((item,i)=>{
-                          // ── Vox column: architect cards + play_by_play ───────
-                          if(isVox){
-                            if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
-                            if(item.type==='architect_proclamation') return <ArchitectCard key={i} item={item}/>;
-                            if(item.type==='play_by_play') return(
-                              <div key={i} style={{marginBottom:'14px',borderLeft:`3px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}06`}}>
-                                <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                                  <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                                  <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
-                                </div>
-                                <div style={{fontSize:'12px',lineHeight:1.55,opacity:0.95,fontStyle:'italic',fontWeight:500}}>
-                                  "{item.text}{item.isStreaming?'▋':''}"
-                                </div>
-                              </div>
-                            );
-                            // ── Procedural fallback (no API key) ──────────────
-                            // Annulled goals are struck through and dimmed so the
-                            // Architect's retrospective rewrites remain readable.
-                            const annulled=item.architectAnnulled;
-                            const bc=annulled?'rgba(185,28,28,0.4)':item.isGoal?'#9A5CF4':item.cardType==='red'?'#E05252':item.cardType==='yellow'?'#FFD700':'rgba(227,224,213,0.2)';
-                            return(
-                              <div key={i} style={{marginBottom:'6px',borderLeft:`1px solid ${bc}`,paddingLeft:'8px',opacity:annulled?0.35:0.65,backgroundColor:annulled?'rgba(185,28,28,0.04)':item.isGoal?'rgba(154,92,244,0.05)':item.cardType==='red'?'rgba(224,82,82,0.04)':undefined}}>
-                                <div style={{display:'flex',gap:'8px',fontSize:'10px',lineHeight:1.5,alignItems:'center'}}>
-                                  <span style={{fontWeight:700,color:annulled?'#B91C1C':'#9A5CF4',flexShrink:0}}>{item.minute}'</span>
-                                  <span style={{opacity:0.8,textDecoration:annulled?'line-through':'none'}}>{item.text}</span>
-                                  {annulled&&<span style={{fontSize:'8px',padding:'1px 4px',border:'1px solid rgba(185,28,28,0.5)',color:'#FCA5A5',letterSpacing:'0.08em',flexShrink:0}}>ANNULLED</span>}
-                                </div>
-                              </div>
-                            );
-                          }
-                          // ── Nexus-7 + Zara: standard commentator reaction card ─
-                          return(
-                            <div key={i} style={{marginBottom:'12px',borderLeft:`2px solid ${item.color}`,paddingLeft:'10px',backgroundColor:`${item.color}0A`}}>
-                              <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',fontSize:'11px'}}>
-                                <span>{item.emoji}</span>
-                                <span style={{fontWeight:700,color:item.color}}>{item.name}</span>
-                                <span style={{marginLeft:'auto',opacity:0.3,fontSize:'10px'}}>{item.minute}'</span>
-                              </div>
-                              <div style={{fontSize:'11px',lineHeight:1.5,opacity:0.9,fontStyle:'italic'}}>"{item.text}"</div>
-                            </div>
-                          );
-                        })
-                      }
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          </>
+</>
         )}
 
         {/* Pre-match prompt (no AI manager set up yet) */}
@@ -2906,7 +2789,7 @@ const MatchSimulator = ({
         <div className="section" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}}>
           {[['home',ms.homeTeam,aiManager?.homeAgents,ms.homeTeam.color],['away',ms.awayTeam,aiManager?.awayAgents,ms.awayTeam.color]].map(([k,team,agents,color])=>(
             <div key={k} className="card" style={{padding:0,overflow:'hidden'}}>
-              <div style={{padding:'10px 16px',borderBottom:'1px solid rgba(227,224,213,0.15)',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color}}>
+              <div style={{padding:'10px 16px',borderBottom:'1px solid rgba(227,224,213,0.15)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color}}>
                 {team.name} · {ms.substitutionsUsed[k]}/3 Subs
               </div>
               <div style={{padding:'8px 0'}}>
