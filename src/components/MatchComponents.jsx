@@ -14,7 +14,7 @@
 //   PERS   — personality key constants
 //   PERS_ICON — maps personality key → emoji
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { C, bdr, PERS, PERS_ICON } from "../constants.js";
 import { COMMENTATOR_PROFILES } from "../agents.js";
 
@@ -244,18 +244,9 @@ if (typeof document !== 'undefined' && !document.getElementById('architect-pulse
   document.head.appendChild(style);
 }
 
-if (typeof document !== 'undefined' && !document.getElementById('architect-interference-style')) {
-  const style = document.createElement('style');
-  style.id = 'architect-interference-style';
-  style.textContent = `
-    @keyframes interferenceFlare {
-      0%   { opacity: 1; }
-      50%  { opacity: 0.85; }
-      100% { opacity: 1; }
-    }
-  `;
-  document.head.appendChild(style);
-}
+// interferenceFlare keyframe removed — ArchitectInterferenceCard now uses
+// the shared architectPulse animation for visual consistency across all
+// Architect surfaces (proclamation card, interference card, post-match verdict).
 
 /**
  * ArchitectCard — feed entry for a Proclamation from THE ARCHITECT.
@@ -385,7 +376,7 @@ export const ArchitectCard = ({ item }) => {
  * inside the component so it can be dropped into any feed without external context.
  *
  * @param {{ item: {
- *   interferenceType: string,  // snake_case key from CATEGORY_ACCENT / BORDER_STYLE
+ *   interferenceType: string,  // snake_case key from CATEGORY_ACCENT (drives header text colour)
  *   emoji: string,             // visual icon for the interference type
  *   subtitle?: string,         // optional human-readable subtitle; falls back to interferenceType
  *   minute: number,            // match minute at which the interference occurred
@@ -398,13 +389,6 @@ export const ArchitectCard = ({ item }) => {
  * @returns {JSX.Element}
  */
 export const ArchitectInterferenceCard = ({ item }) => {
-  // flared starts true so the card opens with a vivid box-shadow bloom,
-  // then the effect is cut off after 2 500 ms via the transition (2.5 s ease-out).
-  const [flared, setFlared] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setFlared(false), 2500);
-    return () => clearTimeout(t);
-  }, []);
 
   // Per-category accent colours — each colour group encodes the nature of the
   // interference so readers can parse the feed at a glance:
@@ -441,39 +425,29 @@ export const ArchitectInterferenceCard = ({ item }) => {
     architect_amusement: '#10B981', architect_sabotage: '#F59E0B',
   };
 
-  // Border style encodes the mechanical category:
-  //   dashed — annulment / removal (something is being struck out)
-  //   dotted — time / momentum manipulation (flow of the match is disrupted)
-  //   solid  — all other interference types (default)
-  const BORDER_STYLE = {
-    annul_goal: 'dashed', annul_red_card: 'dashed', annul_yellow_card: 'dashed',
-    steal_goal: 'dashed', score_reset: 'dashed', score_mirror: 'dashed',
-    add_stoppage: 'dotted', momentum_vacuum: 'dotted', time_rewind: 'dotted',
-    goal_drought: 'dotted', commentary_void: 'dotted',
-  };
-
+  // accent is used only for text labels (header type name, subtitle, target
+  // line) so readers can still parse interference category at a glance.
+  // The card border and glow are always fixed violet — see container styling.
   const accent = CATEGORY_ACCENT[item.interferenceType] || '#7C3AED';
-  const borderStyle = BORDER_STYLE[item.interferenceType] || 'solid';
 
   return (
     <div style={{
       padding: '13px',
       marginBottom: '10px',
-      // Pure black — matches ArchitectCard so all Architect surfaces share the
-      // same "void plane" aesthetic regardless of interference category colour.
-      backgroundColor: '#000000',
-      // Subtle radial bloom from the left border, tinted in the category accent
-      // colour so the background itself hints at the type of interference.
-      backgroundImage: `radial-gradient(ellipse at 15% 50%, ${accent}0D 0%, transparent 60%)`,
-      border: `1px ${borderStyle} ${accent}`,
-      borderLeft: `4px ${borderStyle} ${accent}`,
-      // Entry flare: vivid double-layer bloom (28px + 55% alpha outer, 8px tight
-      // inner) catches the reader's eye on arrival, then the transition walks it
-      // back to a calm ambient glow over 2.5 s.
-      boxShadow: flared
-        ? `0 0 28px 8px ${accent}66, 0 0 8px 2px ${accent}99`
-        : `0 0 8px 2px ${accent}44`,
-      transition: 'box-shadow 2.5s ease-out',
+      // Deep void black — same as ArchitectCard so all three Architect surfaces
+      // (proclamation, interference, post-match verdict) share one visual identity.
+      backgroundColor: '#050308',
+      // Fixed violet radial bloom from the left edge — matches ArchitectCard's
+      // background treatment exactly, independent of interference category.
+      backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.10) 0%, transparent 65%)`,
+      // Fixed violet border — same colour (#9D6FFB) as ArchitectCard regardless
+      // of interference type.  Category information is conveyed through text
+      // labels only, not through border colour.
+      border: '1px solid rgba(157,111,251,0.35)',
+      borderLeft: '4px solid #9D6FFB',
+      // Shared pulse animation — identical to ArchitectCard so all Architect
+      // surfaces glow in the same rhythm and colour.
+      animation: 'architectPulse 3s ease-in-out infinite',
     }}>
       {/* Header row: emoji icon, label stack (type + subtitle), and match minute */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px' }}>
@@ -1522,17 +1496,22 @@ export const PostMatchSummary = ({
         )}
 
         {/* ── Architect's Verdict ───────────────────────────────────────────── */}
+        {/* Uses the same void-black + fixed-violet-border + architectPulse
+            treatment as ArchitectCard and ArchitectInterferenceCard so all
+            three Architect surfaces share one visual identity. */}
         {architectVerdict && (
           <div style={{
             marginBottom: '20px',
             padding: '12px 14px',
-            backgroundColor: 'rgba(124,58,237,0.06)',
-            border: '1px solid rgba(124,58,237,0.25)',
-            borderLeft: '3px solid #7C3AED',
+            backgroundColor: '#050308',
+            border: '1px solid rgba(157,111,251,0.35)',
+            borderLeft: '4px solid #9D6FFB',
+            animation: 'architectPulse 3s ease-in-out infinite',
           }}>
             <div style={{
               fontSize: '9px', fontWeight: 700, letterSpacing: '0.14em',
-              textTransform: 'uppercase', color: '#7C3AED', marginBottom: '6px',
+              textTransform: 'uppercase', color: '#9D6FFB', marginBottom: '6px',
+              textShadow: '0 0 10px rgba(124,58,237,0.9), 0 0 22px rgba(124,58,237,0.45)',
             }}>
               ✦ The Architect's Verdict
             </div>

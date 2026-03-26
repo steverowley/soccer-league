@@ -2088,7 +2088,10 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
    */
   async maybeInterfereWith(minute, matchState, allAgents) {
     // ── Cooldown guard ────────────────────────────────────────────────────────
-    if (this.lastInterferenceMinute !== -1 && minute - this.lastInterferenceMinute < 20) return null;
+    // 12-minute minimum gap between interventions.  Short enough that a
+    // typical 90-minute match can see 4–5 interferences; long enough that
+    // they feel like punctuation rather than white noise.
+    if (this.lastInterferenceMinute !== -1 && minute - this.lastInterferenceMinute < 12) return null;
 
     // ── Content availability flags ────────────────────────────────────────────
     const goals = (matchState.events || []).filter(e => e.isGoal && !e.architectAnnulled && !e.isVAROverturned);
@@ -2126,18 +2129,22 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     if (canEchoGoal)    availableTypes.push('echo_goal');
 
     // ── Probability gate ──────────────────────────────────────────────────────
-    // Base probability: 10% per check. Pressure and tension variant add up to
-    // ~8% and ~4% respectively. Chaos polarity triples total; any edict 1.5×.
+    // Base probability: 13% per check.  Raised from 10% so the Architect acts
+    // on its own initiative rather than feeling like it waits for the game to
+    // hand it permission.  Pressure and tension variant add up to ~8% and ~4%
+    // respectively on top.  Chaos polarity triples total; any edict 1.5×.
     const edict       = this.cosmicEdict;
     const residue     = matchState.narrativeResidue;
     const polarityMult= edict?.polarity === 'chaos' ? 3.0 : edict?.polarity ? 1.5 : 1.0;
     const avgPressure = ((residue?.pressure?.home || 0) + (residue?.pressure?.away || 0)) / 2;
     const pressureBonus = (avgPressure / 100) * 0.08;   // 0–0.08 scaling with narrative pressure (0–100)
     const variantBonus  = ['frantic','back_and_forth'].includes(matchState.tensionVariant) ? 0.04 : 0;
-    const finalProb     = (0.10 + pressureBonus + variantBonus) * polarityMult;
+    const finalProb     = (0.13 + pressureBonus + variantBonus) * polarityMult;
 
-    // Test override: guarantee first interference fires at min 30+
-    const testOverride = this.interferenceCount === 0 && minute >= 30;
+    // Early-entry override: guarantee the first interference fires by min 8
+    // so the Architect establishes its presence in the opening exchanges
+    // rather than sitting silent until the second half.
+    const testOverride = this.interferenceCount === 0 && minute >= 8;
     if (!testOverride && Math.random() > finalProb) return null;
 
     // Increment counters BEFORE async call to prevent concurrent races
