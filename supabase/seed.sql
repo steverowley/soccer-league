@@ -16,6 +16,20 @@
 --        • Kuiper Belt League S1        (league, round_robin, 8 teams)
 --        • ISL Champions Cup S1         (cup, group_knockout, 8 teams)
 --   5. competition_teams rows for all five competitions
+--   6. 512 players (32 teams × 16 players each):
+--        • 11 starters per team: 1 GK, 4 DF, 3 MF, 3 FW  (starter = true)
+--        • 5 bench per team:     1 GK, 2 DF, 1 MF, 1 FW  (starter = false)
+--      Names are themed to each team's planet/location.
+--      Saturn Rings FC uses the exact names from teams.js (the simulator file)
+--      so the match simulator and roster browser show the same squad.
+--      overall_rating range: 65–90 (starters avg ~81, bench avg ~74).
+--
+-- PLAYERS IDEMPOTENCY NOTE
+-- ────────────────────────
+-- Players use gen_random_uuid() so ON CONFLICT DO NOTHING cannot deduplicate
+-- them by PK on re-run.  The players section therefore uses TRUNCATE before
+-- the INSERT — safe to run on a fresh DB, but will wipe any live player data
+-- (match_player_stats references players via FK; truncate cascade if needed).
 --
 -- LEAGUE ID NOTE
 -- ──────────────

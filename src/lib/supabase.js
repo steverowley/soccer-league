@@ -276,13 +276,17 @@ export async function getMatch(matchId) {
  * Fetch teams, optionally scoped to one league.
  * Returns teams alphabetically — the UI can re-sort if needed.
  *
- * @param {string|null} leagueId - slug like 'rocky-inner', or null for all teams
+ * @param {string|null} leagueId   - slug like 'rocky-inner', or null for all teams
+ * @param {boolean}     withPlayers - when true, include nested players array
  * @returns {Promise<Array>} team rows with their parent league's name/shortName
  */
-export async function getTeams(leagueId = null) {
+export async function getTeams(leagueId = null, withPlayers = false) {
+  const playerSelect = withPlayers
+    ? ', players(id, name, position, nationality, age, overall_rating, personality, starter)'
+    : '';
   let query = supabase
     .from('teams')
-    .select('*, leagues(id, name, short_name)');
+    .select(`*, leagues(id, name, short_name)${playerSelect}`);
   if (leagueId) query = query.eq('league_id', leagueId);
   const { data, error } = await query.order('name');
   if (error) throw error;
