@@ -43,6 +43,55 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// ── Field normalisation helpers ───────────────────────────────────────────────
+// The database uses snake_case column names (home_ground, league_id, short_name)
+// while the front-end components were originally written against the camelCase
+// shape defined in leagueData.js (homeGround, leagueId, shortName).
+//
+// These helpers bridge that gap so page components can use consistent property
+// names regardless of whether the data came from the DB or the static file.
+// They are thin — they spread all original fields and add camelCase aliases —
+// so every DB field is still accessible directly if needed.
+
+/**
+ * Normalises a raw team row returned by Supabase into the camelCase shape
+ * expected by page components (TeamCard, TeamDetail, TeamRosterCard, etc.).
+ *
+ * Aliases added:
+ *   home_ground  → homeGround   (used by MetaRow labels and TeamCard)
+ *   league_id    → leagueId     (used for routing /leagues/:leagueId)
+ *
+ * The nested `leagues` object (present when the query joins the leagues table)
+ * is left intact so callers can access `team.leagues.name` for the league name.
+ *
+ * @param {object} team  Raw team row from Supabase (snake_case fields).
+ * @returns {object}     Team with both snake_case originals and camelCase aliases.
+ */
+export function normalizeTeam(team) {
+  return {
+    ...team,
+    homeGround: team.home_ground,
+    leagueId:   team.league_id,
+  };
+}
+
+/**
+ * Normalises a raw league row returned by Supabase into the camelCase shape
+ * expected by page components (filter tabs in Players.jsx, etc.).
+ *
+ * Alias added:
+ *   short_name → shortName   (used by the league filter tab labels)
+ *
+ * @param {object} league  Raw league row from Supabase (snake_case fields).
+ * @returns {object}       League with both snake_case original and camelCase alias.
+ */
+export function normalizeLeague(league) {
+  return {
+    ...league,
+    shortName: league.short_name,
+  };
+}
+
 // ── Seasons ───────────────────────────────────────────────────────────────────
 // Seasons are the outermost container.  All competitions, matches, and
 // standings are scoped to a season.  Exactly one season has is_active=true;
@@ -75,6 +124,30 @@ export async function getActiveSeason() {
     .select('*')
     .eq('is_active', true)
     .single();  // enforced by DB: at most one active season
+  if (error) throw error;
+  return data;
+}
+
+// ── Leagues ───────────────────────────────────────────────────────────────────
+// Leagues are the top-level structural containers for teams and competitions.
+// There are four active leagues: rocky-inner, gas-giants, outer-reaches,
+// kuiper-belt.  League rows are stable reference data — they change very rarely
+// and can be fetched once and cached at the page level.
+
+/**
+ * Fetch all ISL leagues ordered alphabetically by name.
+ *
+ * Returns the raw DB shape (id, name, short_name, description).  Pass each
+ * result through normalizeLeague() when the caller needs the camelCase
+ * shortName alias used by filter-tab components.
+ *
+ * @returns {Promise<Array<{id: string, name: string, short_name: string, description: string}>>}
+ */
+export async function getLeagues() {
+  const { data, error } = await supabase
+    .from('leagues')
+    .select('*')
+    .order('name');
   if (error) throw error;
   return data;
 }

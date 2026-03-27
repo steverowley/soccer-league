@@ -54,11 +54,11 @@ export const LEAGUES = [
       'Cold, dark, and distant—these teams play like survivors. The Outer Reaches League thrives on underdog energy and raw ambition. Pluto Rebels fight with scrappy defiance, often turning chaos into strategy. Ceres Miners are brutal and workmanlike, grinding opponents down as if chiseling through stone. Europa Explorers bring a touch of science and discovery to the pitch, their style experimental but brilliant. And the Titan Titans? They\'re towering, slow-burning, and impossible to shake once they gather momentum. Out here, the void watches—but never blinks.',
   },
   {
-    id: 'interstellar',
-    name: 'Interstellar League',
-    shortName: 'ISL',
+    id: 'kuiper-belt',
+    name: 'Kuiper Belt League',
+    shortName: 'KBL',
     description:
-      'The Interstellar League is something else entirely—where myth meets mastery. These teams hail from across the stars, powered by technologies and philosophies that stretch imagination. Cosmos FC is a disciplined federation of champions from every quadrant, playing like celestial clockwork. Andromeda Galaxy is chaos incarnate: stars crashing into style, with flair from galaxies away. Milky Way Stars represent legacy and light, shining with historic greatness. And Orion Belt? Mercenaries, mystics, and mavericks. If soccer is a religion, this is where the gods play.',
+      'The most distant league in the ISL. Clubs from trans-Neptunian objects brave the deepest cold of the outer system. The longest travel distances in the ISL create unique home-advantage effects—visiting teams arrive exhausted, and home sides exploit every atmospheric and psychological edge the void has to offer.',
   },
 ];
 

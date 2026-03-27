@@ -11,6 +11,7 @@
 //   │ LOCATION: Mercury                       │
 //   │ HOME GROUND: Solar Sprint Stadium…      │
 //   │ CAPACITY: 35,000                        │
+//   │ LEAGUE: Rocky Inner League (link)       │
 //   │                                         │
 //   │ [description paragraphs]                │
 //   └─────────────────────────────────────────┘
@@ -23,16 +24,28 @@
 //   TOP CLEAN SHEETS                ← light table, half-width + SEE MORE
 //   MOST YELLOW CARDS | MOST RED CARDS  ← light tables, 2-col + SEE MORE
 //
-// A 404-style fallback is shown for unknown teamId params.
-// Description strings may contain \n characters which are split into separate
-// <p> elements so paragraph breaks are preserved.
+// DATA SOURCE
+// ───────────
+// Team data is fetched from Supabase via getTeam(teamId) on mount (and when
+// the :teamId route param changes).  getTeam() returns the full team row joined
+// with its parent league (for the League link) plus players[] and managers[]
+// (currently empty in the DB — reserved for future use).
+//
+// normalizeTeam() maps snake_case DB fields to the camelCase aliases (homeGround,
+// leagueId) used throughout the component.  The league name is taken from the
+// nested `leagues` object returned by the join rather than calling getLeagueName().
+//
+// A loading skeleton, 404 fallback, and error state are all handled before the
+// main render, keeping the happy-path JSX clean.
 
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
-import { findTeam, getLeagueName, PLAYER_STAT_COLS, placeholderPlayerRows } from '../data/leagueData';
+import { getTeam, normalizeTeam } from '../lib/supabase';
+import { PLAYER_STAT_COLS, placeholderPlayerRows } from '../data/leagueData';
 
 // ── Season / Historic stats column definitions ────────────────────────────────
 // Shared by both the Season Stats and Historic Stats tables — same columns,
@@ -63,7 +76,7 @@ const TROPHY_COLS = [
  *
  * Used for Season Stats and Historic Stats tables pre-season.
  * When match results are persisted, the caller will replace this with
- * a selector reading from a results store.
+ * a selector reading from the results store.
  *
  * @param {string} teamName - The team's display name for the row label.
  * @returns {Array<{id: string, team: string, played: 0, wins: 0,
@@ -87,21 +100,63 @@ function zeroTrophies(teamName) {
 /**
  * Team Detail page.
  *
- * Reads :teamId from the URL, resolves the team record from leagueData, and
- * renders the full team page: hero, info card, season/historic stats, trophy
- * cabinet, and all five player stat tables.
+ * Reads :teamId from the URL, fetches the team from Supabase (including its
+ * parent league and squad), and renders the full team page: hero, info card,
+ * season/historic stats, trophy cabinet, and all five player stat tables.
  *
- * Renders a "team not found" fallback for unknown IDs.
+ * Renders loading, "team not found" (404), and generic error fallbacks as
+ * appropriate.  The main render only runs once all data is ready.
  *
  * @returns {JSX.Element}
  */
 export default function TeamDetail() {
-  // ── Route param resolution ─────────────────────────────────────────────────
+  // ── Route param ────────────────────────────────────────────────────────────
   const { teamId } = useParams();
-  const team = findTeam(teamId);
+
+  // ── Data fetch ────────────────────────────────────────────────────────────
+  // Re-fetch whenever teamId changes so navigating between team pages (e.g.
+  // via the teams listing) always loads the correct data without a full remount.
+  const [team,    setTeam]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [error,   setError]   = useState(false);
+
+  useEffect(() => {
+    // Reset state before each fetch so stale data from a previous team doesn't
+    // flash while the new request is in flight.
+    setTeam(null);
+    setLoading(true);
+    setNotFound(false);
+    setError(false);
+
+    getTeam(teamId)
+      .then(raw => {
+        setTeam(normalizeTeam(raw));
+        setLoading(false);
+      })
+      .catch(err => {
+        // Supabase returns an error (not null data) when .single() finds no row.
+        // Treat "no rows" as a 404; all other errors as generic failures.
+        if (err?.code === 'PGRST116') {
+          setNotFound(true);
+        } else {
+          setError(true);
+        }
+        setLoading(false);
+      });
+  }, [teamId]);
+
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
+        <p style={{ opacity: 0.5, fontSize: '14px' }}>Loading team…</p>
+      </div>
+    );
+  }
 
   // ── 404 fallback ──────────────────────────────────────────────────────────
-  if (!team) {
+  if (notFound) {
     return (
       <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
         <h2>Team not found</h2>
@@ -115,15 +170,33 @@ export default function TeamDetail() {
     );
   }
 
-  // Pre-compute row data so JSX below stays readable.
-  const seasonRows  = zeroRecord(team.name);
+  // ── Generic error fallback ────────────────────────────────────────────────
+  if (error || !team) {
+    return (
+      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
+        <h2>Something went wrong</h2>
+        <p style={{ marginTop: '16px', opacity: 0.6 }}>
+          Could not load team data. Please try again later.
+        </p>
+        <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
+          <Button variant="primary">View All Teams</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // ── Derived display values ────────────────────────────────────────────────
+  // Pre-compute row data and the league name so JSX below stays readable.
+  // leagues is the nested join object from getTeam(); it contains id and name.
+  const seasonRows   = zeroRecord(team.name);
   const historicRows = zeroRecord(team.name);
-  const trophyRows  = zeroTrophies(team.name);
-  const playerRows  = placeholderPlayerRows();
-  const leagueName  = getLeagueName(team.leagueId);
+  const trophyRows   = zeroTrophies(team.name);
+  const playerRows   = placeholderPlayerRows();
+  const leagueId     = team.leagues?.id;
+  const leagueName   = team.leagues?.name;
 
   // Split description on newline characters into separate paragraphs.
-  // The data file uses \n as a paragraph separator within description strings.
+  // The DB stores \n as a paragraph separator within description strings.
   const descParagraphs = (team.description ?? '').split('\n').filter(Boolean);
 
   return (
@@ -157,15 +230,16 @@ export default function TeamDetail() {
               <MetaRow label="Home Ground" value={team.homeGround} />
               <MetaRow label="Capacity"    value={team.capacity} />
               {/* ── League membership ──────────────────────────────────────────
-                  Derived rather than stored on the team object so it stays in
-                  sync if a team moves between leagues.  The value is a Link so
-                  users can navigate directly from a team to its parent league. */}
+                  Sourced from the nested leagues join object rather than a
+                  separate lookup — avoids an extra Supabase round-trip and
+                  keeps the data consistent with what the DB actually says.
+                  The value is a Link so users can navigate to the league page. */}
               {leagueName && (
                 <MetaRow
                   label="League"
                   value={
                     <Link
-                      to={`/leagues/${team.leagueId}`}
+                      to={`/leagues/${leagueId}`}
                       style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.3)' }}
                     >
                       {leagueName}
@@ -189,20 +263,24 @@ export default function TeamDetail() {
         {/* ── Cross-feature actions ──────────────────────────────────────────── */}
         {/* Positioned immediately after the team info card so all key actions
             are visible before the user scrolls into the stats tables.
-            - Simulate a Match → Matches page (fixture selector pre-loaded)
-            - Browse League    → parent league's standings + player stat tables
+            - Simulate a Match → Matches page (fixture selector)
+            - Browse League    → parent league's standings + player-stat tables
             - View Players     → Players page filtered to this league's clubs   */}
         <section className="section" style={{ paddingTop: '8px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <Link to="/matches">
               <Button variant="tertiary">Simulate a Match</Button>
             </Link>
-            <Link to={`/leagues/${team.leagueId}`}>
-              <Button variant="primary">Browse League</Button>
-            </Link>
-            <Link to={`/players?league=${team.leagueId}`}>
-              <Button variant="primary">View Players</Button>
-            </Link>
+            {leagueId && (
+              <Link to={`/leagues/${leagueId}`}>
+                <Button variant="primary">Browse League</Button>
+              </Link>
+            )}
+            {leagueId && (
+              <Link to={`/players?league=${leagueId}`}>
+                <Button variant="primary">View Players</Button>
+              </Link>
+            )}
           </div>
         </section>
 
@@ -253,4 +331,3 @@ export default function TeamDetail() {
     </div>
   );
 }
-
