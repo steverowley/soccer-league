@@ -9,25 +9,21 @@
 //
 //   Rocky Inner League  ← section heading (links to /leagues/rocky-inner)
 //     Mercury Runners FC  ·  Location: Mercury  ·  [View Team →]
-//       Roster pending —  (placeholder row — no detailed data yet)
-//     …
-//     Saturn Rings FC  ·  Location: Saturn Rings  ·  [View Team →]
-//       Eon Vasquez   GK  ★ Starter  DEF 84
-//       Nora Blaze    DF  ★ Starter  DEF 86
+//       Eon Vasquez   GK  ★ Starter  OVR 84
+//       Nora Blaze    DF  ★ Starter  OVR 86
 //       …
 //
 // DATA SOURCES
 // ────────────
-//   - Leagues + teams → Supabase (fetched on mount)
-//   - Player rosters  → teams.js (static, for teams with full simulator data)
+//   - Leagues + teams + players → Supabase (all fetched on mount via
+//     getTeams(null, true) which returns nested players arrays per team)
 //
-// ROSTER MATCHING
-// ───────────────
-// teams.js keys ('mars', 'saturn') are matched to DB team ids via the
-// ROSTER_MAP constant below.  Only 'saturn-rings' currently maps to a full
-// squad ('saturn' key in teams.js); all other teams show a "roster pending"
-// placeholder.  When the DB players table is populated, this page will be
-// updated to fetch rosters from Supabase instead.
+// STAT DISPLAY
+// ────────────
+// The DB players table stores a single overall_rating (integer 65–90) rather
+// than the five per-position simulator stats in teams.js.  All player rows
+// therefore display "OVR <rating>" regardless of position — a deliberate
+// simplification until per-attribute data is stored in the DB.
 //
 // QUERY PARAM FILTER
 // ──────────────────
@@ -39,34 +35,6 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { getLeagues, getTeams, normalizeTeam, normalizeLeague } from '../lib/supabase';
-import TEAMS from '../teams';
-
-// ── Roster map ────────────────────────────────────────────────────────────────
-// Maps DB team ids to teams.js keys where a full player roster exists.
-// When a DB id appears here, its team section expands to show individual
-// player rows; all other teams display a "roster pending" placeholder instead.
-//
-// Only 'saturn-rings' is mapped for now — its name "Saturn Rings FC" and
-// colour match teams.js 'saturn' exactly.  The simulator's "Mars United" has
-// no direct DB counterpart yet, so Mars league teams remain pending.
-const ROSTER_MAP = {
-  'saturn-rings': 'saturn',
-};
-
-// ── Position primary-stat key ─────────────────────────────────────────────────
-// For each position, we surface the most meaningful attribute in the compact
-// player row so the roster browser gives an at-a-glance skill read without
-// needing to show all five attributes.
-//   GK → defending  (shot-stopping is the critical keeper stat)
-//   DF → defending  (tackling / blocking)
-//   MF → technical  (passing / dribbling — midfield's core output)
-//   FW → attacking  (finishing — the forward's primary contribution)
-const POSITION_STAT = {
-  GK: { key: 'defending', label: 'DEF' },
-  DF: { key: 'defending', label: 'DEF' },
-  MF: { key: 'technical',  label: 'TEC' },
-  FW: { key: 'attacking',  label: 'ATK' },
-};
 
 // ── Filter tab sentinel value ─────────────────────────────────────────────────
 // Using a dedicated constant (rather than null or '') makes comparisons
@@ -111,7 +79,12 @@ export default function Players() {
   const [error,         setError]         = useState(false);
 
   useEffect(() => {
-    Promise.all([getLeagues(), getTeams()])
+    // ── Parallel fetch: leagues + teams with nested players ────────────────
+    // withPlayers=true causes getTeams() to JOIN the players table so each
+    // team object arrives with a team.players[] array pre-attached, avoiding
+    // a subsequent per-team round-trip.  League rows are fetched in the same
+    // Promise.all to minimise total latency.
+    Promise.all([getLeagues(), getTeams(null, true)])
       .then(([leagueRows, teamRows]) => {
         // ── Group normalised teams by league_id ────────────────────────────
         // Build leagueId → team[] map so the render loop can look up each
@@ -229,28 +202,35 @@ export default function Players() {
 // ── TeamRosterCard ─────────────────────────────────────────────────────────────
 // Internal sub-component for a single team's roster block.
 // Shows the team header row (name, location, View Team button) followed by
-// either the full player list (if a teams.js roster entry exists) or a
-// "roster pending" placeholder.  Not exported — only meaningful within this page.
+// the full player list fetched from Supabase (starters first, then bench,
+// sorted by overall_rating descending within each group).
+// Not exported — only meaningful within this page.
 
 /**
  * Single team roster card within the Players page.
  *
- * Checks ROSTER_MAP to determine whether a full player list is available
- * for this team in teams.js.  If yes, renders a compact player row for each
- * squad member.  If no, renders a "Full roster details coming soon" placeholder.
+ * Renders the team's header (name, location, View Team button) and the full
+ * 16-player squad sourced directly from `team.players` (populated by
+ * getTeams(null, true)).  Players are sorted starters-first, then by
+ * overall_rating descending so the best players appear at the top of each
+ * group.  Falls back to a "roster pending" placeholder if the players array
+ * is empty or absent (e.g. if a team was added to the DB but not yet seeded).
  *
- * @param {{ id: string, name: string, location: string, color: string }} team
- *   Normalised team record from Supabase via normalizeTeam().
+ * @param {{ id: string, name: string, location: string, color: string,
+ *            players: Array }} team
+ *   Normalised team record from Supabase including nested players[].
  * @returns {JSX.Element}
  */
 function TeamRosterCard({ team }) {
   // ── Roster resolution ─────────────────────────────────────────────────────
-  // Look up whether this DB team id has a matching teams.js key.
-  // If so, pull the full player array; otherwise leave players as null so the
-  // pending placeholder renders instead.
-  const teamsJsKey = ROSTER_MAP[team.id];
-  const rosterData = teamsJsKey ? TEAMS[teamsJsKey] : null;
-  const players    = rosterData?.players ?? null;
+  // Sort starters before bench (true > false numerically), then by
+  // overall_rating descending within each group so the strongest players
+  // appear first.  We spread to avoid mutating the original array from state.
+  const players = team.players?.length > 0
+    ? [...team.players].sort((a, b) =>
+        b.starter - a.starter || b.overall_rating - a.overall_rating
+      )
+    : null;
 
   return (
     <div className="card" style={{ padding: '16px' }}>
@@ -289,8 +269,9 @@ function TeamRosterCard({ team }) {
       {/* ── Player list or pending placeholder ─────────────────────────────── */}
       {players ? (
         // ── Full roster ───────────────────────────────────────────────────
-        // Starters are listed before bench players (teams.js defines them in
-        // that order).  A column header row labels each field.
+        // Starters appear first (sorted by the TeamRosterCard resolver above),
+        // then bench players at reduced opacity.  A column header row labels
+        // each field.
         <div>
           {/* Column header row */}
           <div
@@ -306,18 +287,17 @@ function TeamRosterCard({ team }) {
             <span>Name</span>
             <span>Pos</span>
             <span>Role</span>
-            <span style={{ textAlign: 'right' }}>Stat</span>
+            <span style={{ textAlign: 'right' }}>OVR</span>
           </div>
 
-          {/* Player rows — starters first, then bench (natural array order) */}
+          {/* Player rows — starters first (sorted above), then bench */}
           {players.map((player, idx) => (
             <PlayerRow key={idx} player={player} />
           ))}
         </div>
       ) : (
         // ── Pending placeholder ────────────────────────────────────────────
-        // Shown for all teams without a teams.js roster entry.  The message
-        // is honest about state without blocking page utility.
+        // Shown when a team has no players seeded in the DB yet.
         <p style={{ fontSize: '12px', opacity: 0.45, fontStyle: 'italic', marginTop: '8px' }}>
           Full roster details coming soon.
         </p>
@@ -329,29 +309,30 @@ function TeamRosterCard({ team }) {
 
 // ── PlayerRow ─────────────────────────────────────────────────────────────────
 // Compact single-player display row used inside TeamRosterCard.
-// Shows name, position badge, starter/bench role, and the position's primary
-// stat value.  Bench players are dimmed to visually separate them from starters.
+// Shows name, position badge, starter/bench role, and the player's overall
+// rating.  Bench players are dimmed to visually separate them from starters.
+//
+// The DB stores a single overall_rating (65–90) rather than per-attribute
+// simulator stats, so we display "OVR" for all positions.  When individual
+// attribute data is added to the DB this component can be updated to surface
+// the position-specific primary stat (DEF/TEC/ATK) as before.
 
 /**
  * Single player row within a team's roster card.
  *
- * Displays: player name · position badge · starter/bench label · primary stat.
- * The primary stat is position-dependent (GK/DF → DEF, MF → TEC, FW → ATK)
- * as defined by POSITION_STAT.
+ * Displays: player name · position badge · starter/bench label · OVR rating.
+ * Uses `player.overall_rating` from the DB (integer 65–90) for the stat
+ * column since the DB does not yet store per-attribute values.
  *
  * Bench players render at reduced opacity (0.65) to reflect substitute status
  * without hiding them from view.
  *
  * @param {{ name: string, position: string, starter: boolean,
- *            attacking: number, defending: number, mental: number,
- *            athletic: number, technical: number }} player
- *   Player object from teams.js players array.
+ *            overall_rating: number }} player
+ *   Player object from the Supabase players table.
  * @returns {JSX.Element}
  */
 function PlayerRow({ player }) {
-  const statDef = POSITION_STAT[player.position] ?? { key: 'attacking', label: 'ATK' };
-  const statVal = player[statDef.key];
-
   return (
     <div
       style={{
@@ -377,10 +358,11 @@ function PlayerRow({ player }) {
         {player.starter ? '★ Starter' : 'Bench'}
       </span>
 
-      {/* Primary stat — right-aligned to match table conventions */}
+      {/* Overall rating — right-aligned to match table conventions.
+          OVR is the single composite skill value stored in the DB (65–90). */}
       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        <span style={{ fontSize: '10px', opacity: 0.5 }}>{statDef.label} </span>
-        {statVal}
+        <span style={{ fontSize: '10px', opacity: 0.5 }}>OVR </span>
+        {player.overall_rating}
       </span>
     </div>
   );
