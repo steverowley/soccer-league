@@ -25,22 +25,64 @@
 // matching the mockup, then a free-text tagline, and a VIEW TEAM button.
 //
 // The 2-column grid collapses to 1 column on mobile.
+//
+// DATA SOURCE
+// ───────────
+// Both leagues and teams are fetched from Supabase on mount via a single
+// Promise.all call to minimise round-trips.  Teams are then grouped client-side
+// by league_id to drive the section layout.  normalizeTeam() is applied so
+// component code can continue using the camelCase field names (homeGround,
+// leagueId) that were established in the original leagueData.js shape.
 
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
-import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
+import { getLeagues, getTeams, normalizeTeam } from '../lib/supabase';
 
 /**
  * "Our Heroic Teams" listing page.
  *
- * Iterates over every league in display order, rendering a section heading
- * and a 2-column grid of team cards for each.  Each card links to
- * /teams/:teamId for the Team Detail page.
+ * Fetches all leagues and teams from Supabase, groups the teams by their
+ * parent league, and renders a section per league with a 2-column grid of
+ * team cards.  Each card links to /teams/:teamId for the Team Detail page.
+ *
+ * Shows a loading state while the fetch is in flight.  Leagues with no
+ * teams (shouldn't happen with correct seed data) are silently skipped.
  *
  * @returns {JSX.Element}
  */
 export default function Teams() {
+  // ── Data fetch ────────────────────────────────────────────────────────────
+  // Fetch leagues (for ordered section headings) and all teams in one go.
+  // Teams are then grouped by league_id client-side — no second query needed.
+  const [leagues,       setLeagues]       = useState([]);
+  const [teamsByLeague, setTeamsByLeague] = useState({});
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(false);
+
+  useEffect(() => {
+    Promise.all([getLeagues(), getTeams()])
+      .then(([leagueRows, teamRows]) => {
+        // ── Group teams by league ──────────────────────────────────────────
+        // Build a map of leagueId → normalised team array so the render loop
+        // can look up each league's clubs in O(1) rather than filtering each time.
+        const grouped = {};
+        teamRows.forEach(t => {
+          const lid = t.league_id;
+          if (!grouped[lid]) grouped[lid] = [];
+          grouped[lid].push(normalizeTeam(t));
+        });
+        setLeagues(leagueRows);
+        setTeamsByLeague(grouped);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
+  }, []); // empty deps: run once on mount
+
   return (
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>
 
@@ -54,12 +96,24 @@ export default function Teams() {
         <p className="subtitle">Lorem ipsum dolor sit amet.</p>
       </div>
 
+      {/* ── Loading / error states ──────────────────────────────────────────── */}
+      {loading && (
+        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>
+          Loading teams…
+        </p>
+      )}
+      {error && (
+        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>
+          Could not load teams. Please try again later.
+        </p>
+      )}
+
       {/* ── League sections ───────────────────────────────────────────────────── */}
-      {/* Render one section per league.  Only leagues that have entries in
-          TEAMS_BY_LEAGUE are rendered; unknown league IDs are silently skipped
-          so adding a new league to LEAGUES without team data doesn't crash. */}
-      {LEAGUES.map(league => {
-        const teams = TEAMS_BY_LEAGUE[league.id];
+      {/* Render one section per league, in the order returned by getLeagues().
+          Leagues with no teams in teamsByLeague are silently skipped so a
+          partially-seeded DB doesn't crash the page. */}
+      {!loading && !error && leagues.map(league => {
+        const teams = teamsByLeague[league.id];
         if (!teams || teams.length === 0) return null;
 
         return (
@@ -111,9 +165,11 @@ export default function Teams() {
  * VIEW TEAM button is always flush to the card's bottom edge, keeping all
  * cards in a row visually aligned.
  *
+ * Expects a normalised team object (homeGround camelCase alias present).
+ *
  * @param {{ id: string, name: string, location: string, homeGround: string,
  *           capacity: string, tagline: string }} team
- *   Team data object from TEAMS_BY_LEAGUE.
+ *   Normalised team object from Supabase via normalizeTeam().
  * @returns {JSX.Element}
  */
 function TeamCard({ team }) {
@@ -148,4 +204,3 @@ function TeamCard({ team }) {
     </div>
   );
 }
-

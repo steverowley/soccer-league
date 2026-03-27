@@ -5,7 +5,7 @@
 // ──────
 //   H1: PLAYERS
 //   ────────────────────────────────────────
-//   Filter tabs: [All] [Rocky Inner] [Gas/Ice Giants] [Outer Reaches] [Kuiper Belt]
+//   Filter tabs: [All] [RIL] [GGL] [ORL] [KBL]
 //
 //   Rocky Inner League  ← section heading (links to /leagues/rocky-inner)
 //     Mercury Runners FC  ·  Location: Mercury  ·  [View Team →]
@@ -18,16 +18,16 @@
 //
 // DATA SOURCES
 // ────────────
-//   - LEAGUES / TEAMS_BY_LEAGUE from leagueData.js  — all 28 ISL clubs
-//   - TEAMS from teams.js                           — full rosters for Mars United
-//                                                     and Saturn Rings FC only
+//   - Leagues + teams → Supabase (fetched on mount)
+//   - Player rosters  → teams.js (static, for teams with full simulator data)
 //
 // ROSTER MATCHING
 // ───────────────
-// teams.js keys ('mars', 'saturn') are matched to leagueData team ids via the
-// ROSTER_MAP constant below.  'saturn-rings' matches by name; 'mars' has no
-// direct leagueData counterpart (the simulator team "Mars United" predates the
-// final leagueData naming) so it is currently unmapped and shows the pending row.
+// teams.js keys ('mars', 'saturn') are matched to DB team ids via the
+// ROSTER_MAP constant below.  Only 'saturn-rings' currently maps to a full
+// squad ('saturn' key in teams.js); all other teams show a "roster pending"
+// placeholder.  When the DB players table is populated, this page will be
+// updated to fetch rosters from Supabase instead.
 //
 // QUERY PARAM FILTER
 // ──────────────────
@@ -35,20 +35,20 @@
 // This lets league/team pages deep-link into the Players page already filtered
 // to the relevant division.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
-import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
+import { getLeagues, getTeams, normalizeTeam, normalizeLeague } from '../lib/supabase';
 import TEAMS from '../teams';
 
 // ── Roster map ────────────────────────────────────────────────────────────────
-// Maps leagueData team ids to teams.js keys where a full player roster exists.
-// When a leagueData id appears here, its team section expands to show individual
+// Maps DB team ids to teams.js keys where a full player roster exists.
+// When a DB id appears here, its team section expands to show individual
 // player rows; all other teams display a "roster pending" placeholder instead.
 //
-// Only 'saturn-rings' is mapped for now — its name "Saturn Rings FC" and colour
-// match teams.js 'saturn' exactly.  The simulator's "Mars United" has no direct
-// leagueData counterpart yet, so Mars league teams remain pending.
+// Only 'saturn-rings' is mapped for now — its name "Saturn Rings FC" and
+// colour match teams.js 'saturn' exactly.  The simulator's "Mars United" has
+// no direct DB counterpart yet, so Mars league teams remain pending.
 const ROSTER_MAP = {
   'saturn-rings': 'saturn',
 };
@@ -68,18 +68,21 @@ const POSITION_STAT = {
   FW: { key: 'attacking',  label: 'ATK' },
 };
 
-// ── Filter tab id for "show all leagues" ──────────────────────────────────────
-// Using a dedicated sentinel value (rather than null or '') makes comparisons
+// ── Filter tab sentinel value ─────────────────────────────────────────────────
+// Using a dedicated constant (rather than null or '') makes comparisons
 // explicit and avoids falsy-check bugs when the league id could be any string.
 const ALL_LEAGUES = 'all';
 
 /**
  * Players listing page.
  *
- * Renders a browsable roster across all ISL clubs, grouped by league.
- * A filter tab row lets users narrow the view to a single division.
- * Teams with full roster data (currently Saturn Rings FC only) expand to show
- * individual player rows; all others display a "roster pending" placeholder.
+ * Fetches all leagues and teams from Supabase on mount, then renders a
+ * browsable roster across all ISL clubs grouped by league.  A filter tab row
+ * lets users narrow the view to a single division.
+ *
+ * Teams with full roster data in teams.js (currently Saturn Rings FC only)
+ * expand to show individual player rows; all others display a "roster pending"
+ * placeholder until the DB players table is populated.
  *
  * Reads an optional `?league=<leagueId>` query param on mount to pre-select
  * the corresponding filter tab — allows deep-linking from league and team pages.
@@ -88,69 +91,109 @@ const ALL_LEAGUES = 'all';
  */
 export default function Players() {
   // ── Query-param pre-selection ──────────────────────────────────────────────
-  // If the user arrives via /players?league=gas-giants (e.g. from a team page's
-  // "View Players" button), initialise the filter to that league so they land
-  // directly in the relevant division rather than having to find it manually.
+  // If the user arrives via /players?league=gas-giants (e.g. from a team
+  // page's "View Players" button), initialise the filter to that league so
+  // they land directly in the relevant division.
   const [searchParams] = useSearchParams();
-  const initialLeague = searchParams.get('league') ?? ALL_LEAGUES;
+  const initialLeague  = searchParams.get('league') ?? ALL_LEAGUES;
 
   // ── Filter state ───────────────────────────────────────────────────────────
-  // Tracks which league tab is active.  ALL_LEAGUES shows every division;
-  // any other value hides all other league sections.
   const [activeLeague, setActiveLeague] = useState(initialLeague);
 
+  // ── Data fetch ────────────────────────────────────────────────────────────
+  // Fetch leagues (for filter tabs and section headings) and all teams in one
+  // Promise.all to minimise round-trips.  normalizeLeague() adds the shortName
+  // alias used by the filter tab labels; normalizeTeam() adds homeGround /
+  // leagueId aliases used by TeamRosterCard.
+  const [leagues,       setLeagues]       = useState([]);
+  const [teamsByLeague, setTeamsByLeague] = useState({});
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(false);
+
+  useEffect(() => {
+    Promise.all([getLeagues(), getTeams()])
+      .then(([leagueRows, teamRows]) => {
+        // ── Group normalised teams by league_id ────────────────────────────
+        // Build leagueId → team[] map so the render loop can look up each
+        // league's clubs in O(1).
+        const grouped = {};
+        teamRows.forEach(t => {
+          const lid = t.league_id;
+          if (!grouped[lid]) grouped[lid] = [];
+          grouped[lid].push(normalizeTeam(t));
+        });
+        setLeagues(leagueRows.map(normalizeLeague));
+        setTeamsByLeague(grouped);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
+  }, []); // empty deps: run once on mount
+
   // ── Filtered league list ───────────────────────────────────────────────────
-  // When a specific league is selected we still pass the full LEAGUES array to
-  // the renderer but let it skip non-matching sections, so the section heading
-  // structure is preserved even in filtered view.
+  // When a specific league tab is active we filter to just that league.
+  // The full leagues array drives the tab strip regardless of the active tab.
   const visibleLeagues = activeLeague === ALL_LEAGUES
-    ? LEAGUES
-    : LEAGUES.filter(l => l.id === activeLeague);
+    ? leagues
+    : leagues.filter(l => l.id === activeLeague);
 
   return (
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
 
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      {/* .page-hero provides the standard centred layout and vertical padding
-          shared across all listing pages.  .subtitle inherits 14px / 0.7
-          opacity from the .page-hero .subtitle rule in index.css. */}
       <div className="page-hero">
         <h1>Players</h1>
         <hr className="divider" style={{ maxWidth: '500px', margin: '16px auto 16px' }} />
         <p className="subtitle">Browse all ISL squads across every division.</p>
       </div>
 
+      {/* ── Loading / error states ──────────────────────────────────────────── */}
+      {loading && (
+        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px', marginBottom: '32px' }}>
+          Loading players…
+        </p>
+      )}
+      {error && (
+        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px', marginBottom: '32px' }}>
+          Could not load data. Please try again later.
+        </p>
+      )}
+
       {/* ── League filter tabs ────────────────────────────────────────────────── */}
-      {/* Inline tab strip — each button toggles the activeLeague state.  The
-          active tab uses the primary variant for visual contrast; inactive tabs
-          use the tertiary (flat) variant to stay recessed.
+      {/* Rendered once leagues have loaded so the shortName labels are correct.
+          The active tab uses the primary variant for visual contrast; inactive
+          tabs use the secondary (outlined) variant to stay recessed.
           "All" resets to ALL_LEAGUES sentinel so every section is visible. */}
-      <div
-        style={{
-          display: 'flex', gap: '8px', flexWrap: 'wrap',
-          marginBottom: '32px', justifyContent: 'center',
-        }}
-      >
-        <button
-          className={`btn ${activeLeague === ALL_LEAGUES ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveLeague(ALL_LEAGUES)}
+      {!loading && !error && (
+        <div
+          style={{
+            display: 'flex', gap: '8px', flexWrap: 'wrap',
+            marginBottom: '32px', justifyContent: 'center',
+          }}
         >
-          All
-        </button>
-        {LEAGUES.map(league => (
           <button
-            key={league.id}
-            className={`btn ${activeLeague === league.id ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveLeague(league.id)}
+            className={`btn ${activeLeague === ALL_LEAGUES ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveLeague(ALL_LEAGUES)}
           >
-            {league.shortName}
+            All
           </button>
-        ))}
-      </div>
+          {leagues.map(league => (
+            <button
+              key={league.id}
+              className={`btn ${activeLeague === league.id ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveLeague(league.id)}
+            >
+              {league.shortName}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── League sections ───────────────────────────────────────────────────── */}
-      {visibleLeagues.map(league => {
-        const teams = TEAMS_BY_LEAGUE[league.id];
+      {!loading && !error && visibleLeagues.map(league => {
+        const teams = teamsByLeague[league.id];
         if (!teams || teams.length === 0) return null;
 
         return (
@@ -186,23 +229,23 @@ export default function Players() {
 // ── TeamRosterCard ─────────────────────────────────────────────────────────────
 // Internal sub-component for a single team's roster block.
 // Shows the team header row (name, location, View Team button) followed by
-// either the full player list (if roster data exists) or a pending placeholder.
-// Not exported — only meaningful within this page.
+// either the full player list (if a teams.js roster entry exists) or a
+// "roster pending" placeholder.  Not exported — only meaningful within this page.
 
 /**
  * Single team roster card within the Players page.
  *
  * Checks ROSTER_MAP to determine whether a full player list is available
- * for this team.  If yes, renders a compact player row for each squad member.
- * If no, renders a single "Full roster details coming soon" placeholder row.
+ * for this team in teams.js.  If yes, renders a compact player row for each
+ * squad member.  If no, renders a "Full roster details coming soon" placeholder.
  *
  * @param {{ id: string, name: string, location: string, color: string }} team
- *   Team record from TEAMS_BY_LEAGUE.
+ *   Normalised team record from Supabase via normalizeTeam().
  * @returns {JSX.Element}
  */
 function TeamRosterCard({ team }) {
   // ── Roster resolution ─────────────────────────────────────────────────────
-  // Look up whether this leagueData team id has a matching teams.js key.
+  // Look up whether this DB team id has a matching teams.js key.
   // If so, pull the full player array; otherwise leave players as null so the
   // pending placeholder renders instead.
   const teamsJsKey = ROSTER_MAP[team.id];
@@ -247,7 +290,7 @@ function TeamRosterCard({ team }) {
       {players ? (
         // ── Full roster ───────────────────────────────────────────────────
         // Starters are listed before bench players (teams.js defines them in
-        // that order).  A subtle divider separates the two groups.
+        // that order).  A column header row labels each field.
         <div>
           {/* Column header row */}
           <div
@@ -287,7 +330,7 @@ function TeamRosterCard({ team }) {
 // ── PlayerRow ─────────────────────────────────────────────────────────────────
 // Compact single-player display row used inside TeamRosterCard.
 // Shows name, position badge, starter/bench role, and the position's primary
-// stat value.  A subtle separator line runs between starters and bench players.
+// stat value.  Bench players are dimmed to visually separate them from starters.
 
 /**
  * Single player row within a team's roster card.
@@ -296,20 +339,18 @@ function TeamRosterCard({ team }) {
  * The primary stat is position-dependent (GK/DF → DEF, MF → TEC, FW → ATK)
  * as defined by POSITION_STAT.
  *
- * A slightly stronger divider is drawn above the first bench player (index 11,
- * since starters are always indices 0-10 in teams.js) to visually separate the
- * first-eleven from the substitutes without needing a separate section heading.
+ * Bench players render at reduced opacity (0.65) to reflect substitute status
+ * without hiding them from view.
  *
  * @param {{ name: string, position: string, starter: boolean,
  *            attacking: number, defending: number, mental: number,
  *            athletic: number, technical: number }} player
  *   Player object from teams.js players array.
- * @param {number} idx  — Array index used to detect the bench boundary (index 11).
  * @returns {JSX.Element}
  */
 function PlayerRow({ player }) {
-  const statDef  = POSITION_STAT[player.position] ?? { key: 'attacking', label: 'ATK' };
-  const statVal  = player[statDef.key];
+  const statDef = POSITION_STAT[player.position] ?? { key: 'attacking', label: 'ATK' };
+  const statVal = player[statDef.key];
 
   return (
     <div
@@ -321,32 +362,22 @@ function PlayerRow({ player }) {
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         fontSize: '12px',
         // ── Bench dimming ───────────────────────────────────────────────────
-        // Bench players are rendered at reduced opacity (0.65 vs 1.0 for
-        // starters) to reflect their substitute status without hiding them.
+        // 0.65 opacity for bench; 1.0 for starters — subtle enough to not
+        // hide the player while clearly signalling their squad role.
         opacity: player.starter ? 1 : 0.65,
       }}
     >
-      {/* Player name */}
       <span>{player.name}</span>
 
-      {/* Position badge */}
-      <span
-        style={{
-          fontSize: '10px',
-          fontWeight: 'bold',
-          letterSpacing: '0.06em',
-          opacity: 0.7,
-        }}
-      >
+      <span style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.06em', opacity: 0.7 }}>
         {player.position}
       </span>
 
-      {/* Starter / Bench label */}
       <span style={{ fontSize: '10px', opacity: 0.5 }}>
         {player.starter ? '★ Starter' : 'Bench'}
       </span>
 
-      {/* Primary stat value — right-aligned to match table conventions */}
+      {/* Primary stat — right-aligned to match table conventions */}
       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         <span style={{ fontSize: '10px', opacity: 0.5 }}>{statDef.label} </span>
         {statVal}

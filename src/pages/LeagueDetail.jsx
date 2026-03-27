@@ -13,27 +13,27 @@
 //   TOP SCORERS  |  TOP ASSISTS       ← live data; empty state shown pre-season
 //   MOST YELLOW CARDS  |  MOST RED CARDS
 //
-// LIVE DATA STRATEGY
-// ──────────────────
-// matchResultsService reads from localStorage (written by the simulator on
-// full-time).  All stat functions (getTopScorers, getTopAssists, getTopCards)
-// return empty arrays before any matches have been played — the tables render
-// an appropriate "—" empty state via placeholderPlayerRows().
+// DATA STRATEGY
+// ─────────────
+// League metadata (name, description) is fetched from Supabase on mount —
+// the DB is the source of truth for display copy.
 //
-// computeStandings() merges real W/D/L/GD/Pts into the full team list so
-// the table always shows all teams in the league, not just those that have
-// played.
+// Standings and player-stat tables are driven by localStorage via
+// matchResultsService — the DB matches table is empty pre-season so there is
+// no point querying it for standings yet.  buildStandingsRows() (from
+// leagueData.js) supplies the zeroed base rows for every team in the league so
+// the table always shows the full club list even before any match is played.
 //
-// A 404-style fallback is rendered if :leagueId does not match any known
-// league — important because users can hand-type URLs.
+// A 404-style fallback is rendered if :leagueId does not match any league
+// in the DB — important because users can hand-type URLs.
 
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
 import {
-  LEAGUES, STANDINGS_COLS,
+  STANDINGS_COLS,
   SCORER_COLS, ASSISTS_COLS, CARDS_COLS,
   buildStandingsRows, placeholderPlayerRows,
 } from '../data/leagueData';
@@ -43,47 +43,63 @@ import {
   getTopAssists,
   getTopCards,
 } from '../lib/matchResultsService';
+import { getLeagues } from '../lib/supabase';
 
 /**
  * League Detail page.
  *
- * Reads the :leagueId URL param, looks up the matching league record, and
+ * Fetches the league record from Supabase by the :leagueId URL param, then
  * renders the full league page: hero, live standings, and all four player-stat
  * tables.  Falls back to zeroed placeholder data before any matches are played.
  *
  * DATA FLOW
  * ─────────
- * All live data is derived from localStorage via matchResultsService on each
- * render — no async fetch, no loading state.  useMemo gates prevent redundant
- * recomputation on unrelated re-renders (e.g. hover effects).
+ * League metadata  → Supabase (single fetch on mount / leagueId change)
+ * League standings → localStorage via matchResultsService (synchronous)
+ * Player stats     → localStorage via matchResultsService (synchronous)
  *
  * @returns {JSX.Element}
  */
 export default function LeagueDetail() {
-  // ── Route param resolution ─────────────────────────────────────────────────
+  // ── Route param ────────────────────────────────────────────────────────────
   const { leagueId } = useParams();
-  const league = LEAGUES.find(l => l.id === leagueId);
 
-  // ── 404 fallback ───────────────────────────────────────────────────────────
-  if (!league) {
-    return (
-      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
-        <h2>League not found</h2>
-        <p style={{ marginTop: '16px', opacity: 0.6 }}>
-          No league exists with the id "{leagueId}".
-        </p>
-        <Link to="/leagues" style={{ display: 'inline-block', marginTop: '24px' }}>
-          <Button variant="primary">View All Leagues</Button>
-        </Link>
-      </div>
-    );
-  }
+  // ── Data fetch ────────────────────────────────────────────────────────────
+  // Fetch all leagues then find the one matching the URL param.  We fetch all
+  // rather than a single-row query so the result can be cached or reused by
+  // other pages without an additional network call.
+  const [league,   setLeague]   = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [error,    setError]    = useState(false);
+
+  useEffect(() => {
+    setLeague(null);
+    setLoading(true);
+    setNotFound(false);
+    setError(false);
+
+    getLeagues()
+      .then(all => {
+        const match = all.find(l => l.id === leagueId);
+        if (!match) {
+          setNotFound(true);
+        } else {
+          setLeague(match);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
+  }, [leagueId]);
 
   // ── Live standings ─────────────────────────────────────────────────────────
   // buildStandingsRows() produces the zeroed base list (all teams in the
-  // league).  computeStandings() merges in real W/D/L/GD/Pts from localStorage
-  // for any team mapped in TEAM_LEAGUE_MAP, leaving unplayed teams at zero.
-  // useMemo prevents a full localStorage read on every render.
+  // league from leagueData.js).  computeStandings() merges in real W/D/L/GD/Pts
+  // from localStorage for any team whose results have been saved by the
+  // simulator.  useMemo prevents a full localStorage read on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const standingsRows = useMemo(
     () => computeStandings(leagueId, buildStandingsRows(leagueId)),
@@ -99,24 +115,63 @@ export default function LeagueDetail() {
   // "SEE MORE" button appears.  Matches placeholderPlayerRows()'s row count
   // so the table height is stable as data populates.
   const scorerRows = useMemo(() => {
-    const live = getTopScorers(leagueId, 6);   // top 6 goal scorers
+    const live = getTopScorers(leagueId, 6);
     return live.length > 0 ? live : placeholderPlayerRows();
   }, [leagueId]);
 
   const assistRows = useMemo(() => {
-    const live = getTopAssists(leagueId, 6);   // top 6 assist providers
+    const live = getTopAssists(leagueId, 6);
     return live.length > 0 ? live : placeholderPlayerRows();
   }, [leagueId]);
 
   const yellowRows = useMemo(() => {
-    const live = getTopCards(leagueId, 'yellow', 6);  // top 6 yellow-card recipients
+    const live = getTopCards(leagueId, 'yellow', 6);
     return live.length > 0 ? live : placeholderPlayerRows();
   }, [leagueId]);
 
   const redRows = useMemo(() => {
-    const live = getTopCards(leagueId, 'red', 6);     // top 6 red-card recipients
+    const live = getTopCards(leagueId, 'red', 6);
     return live.length > 0 ? live : placeholderPlayerRows();
   }, [leagueId]);
+
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
+        <p style={{ opacity: 0.5, fontSize: '14px' }}>Loading league…</p>
+      </div>
+    );
+  }
+
+  // ── 404 fallback ───────────────────────────────────────────────────────────
+  if (notFound) {
+    return (
+      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
+        <h2>League not found</h2>
+        <p style={{ marginTop: '16px', opacity: 0.6 }}>
+          No league exists with the id "{leagueId}".
+        </p>
+        <Link to="/leagues" style={{ display: 'inline-block', marginTop: '24px' }}>
+          <Button variant="primary">View All Leagues</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // ── Generic error fallback ────────────────────────────────────────────────
+  if (error || !league) {
+    return (
+      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
+        <h2>Something went wrong</h2>
+        <p style={{ marginTop: '16px', opacity: 0.6 }}>
+          Could not load league data. Please try again later.
+        </p>
+        <Link to="/leagues" style={{ display: 'inline-block', marginTop: '24px' }}>
+          <Button variant="primary">View All Leagues</Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>

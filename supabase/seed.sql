@@ -7,22 +7,20 @@
 -- WHAT THIS FILE SEEDS
 -- ────────────────────
 --   1. Four leagues (matching TEAMS_BY_LEAGUE keys in leagueData.js)
---   2. All 28 clubs across those four leagues
+--   2. All 32 clubs across those four leagues
 --   3. Season 1 (year 2600), marked as active
 --   4. Five competitions for Season 1:
 --        • Rocky Inner League S1        (league, round_robin, 8 teams)
 --        • Gas/Ice Giants League S1     (league, round_robin, 8 teams)
---        • Outer Reaches League S1      (league, round_robin, 6 teams)
---        • Kuiper Belt League S1        (league, round_robin, 6 teams)
+--        • Outer Reaches League S1      (league, round_robin, 8 teams)
+--        • Kuiper Belt League S1        (league, round_robin, 8 teams)
 --        • ISL Champions Cup S1         (cup, group_knockout, 8 teams)
 --   5. competition_teams rows for all five competitions
 --
 -- LEAGUE ID NOTE
 -- ──────────────
--- The LEAGUES array in leagueData.js has 'interstellar' as the 4th entry,
--- but TEAMS_BY_LEAGUE uses 'kuiper-belt' as the 4th key.  The DB follows
--- TEAMS_BY_LEAGUE because it holds the actual team data; 'interstellar' is
--- a future/lore concept with no active clubs yet.
+-- The DB uses 'kuiper-belt' as the 4th league id, matching TEAMS_BY_LEAGUE
+-- in leagueData.js.  The old 'interstellar' placeholder has been removed.
 --
 -- COMPETITION UUIDs
 -- ─────────────────
@@ -106,36 +104,60 @@ INSERT INTO teams (id, league_id, name, location, home_ground, capacity, color, 
    'Famous for unpredictable play style.')
 ON CONFLICT (id) DO NOTHING;
 
--- Outer Reaches League — 6 clubs from the asteroid belt between Mars and Jupiter
-INSERT INTO teams (id, league_id, name, location, home_ground, capacity, color, tagline) VALUES
+-- Outer Reaches League — 8 clubs from the asteroid belt between Mars and Jupiter
+INSERT INTO teams (id, league_id, name, location, home_ground, capacity, color, tagline, description) VALUES
   ('ceres-miners',     'outer-reaches', 'Ceres Miners FC',  'Ceres',  'Dwarf Planet Field "The Rock"',        '29,000', '#8B7355',
-   'Oldest and toughest club in the Asteroid Belt.'),
+   'Oldest and toughest club in the Asteroid Belt.',
+   'The Miners represent the grit and determination of the asteroid belt. Their grinding style of play wears down opponents like rock against rock.'),
   ('vesta',            'outer-reaches', 'Vesta FC',         'Vesta',  'Protoplanet Arena "The Crater"',       '24,000', '#C0C0C0',
-   'Masters of low-gravity football.'),
+   'Masters of low-gravity football.',
+   'Vesta FC have mastered the art of football in low gravity. Their floating passing game and long-range shooting make them one of the most entertaining sides in the league.'),
   ('pallas-wanderers', 'outer-reaches', 'Pallas Wanderers', 'Pallas', 'Nomad Stadium "The Drifter"',          '21,000', '#DEB887',
-   'Known for adaptability in tactics.'),
+   'Known for adaptability in tactics.',
+   'The Wanderers live up to their name—they adapt their system each match, unpredictable and versatile in equal measure.'),
   ('hygiea-united',    'outer-reaches', 'Hygiea United',    'Hygiea', 'Subterranean Field "The Dark Pitch"',  '18,000', '#696969',
-   'Famous for solid defensive structures.'),
+   'Famous for solid defensive structures.',
+   'Playing in the darkest reaches of the asteroid belt, Hygiea United have built a fortress. Their defensive record is the best in the outer reaches.'),
   ('psyche-metallics', 'outer-reaches', 'Psyche Metallics', 'Psyche', 'Core Ore Stadium "The Forge"',         '22,000', '#B8860B',
-   'Known for physical strength and power.'),
+   'Known for physical strength and power.',
+   'Playing on a metallic asteroid has given the Metallics an almost supernatural physicality. They are the strongest side in the belt, pound for pound.'),
   ('juno-city',        'outer-reaches', 'Juno City FC',     'Juno',   'Juno Memorial Stadium "The Temple"',   '31,000', '#9370DB',
-   'Values discipline and tactical organisation.')
+   'Values discipline and tactical organisation.',
+   'Juno City FC are the most tactically disciplined club in the outer reaches. Their rigid organisational structure rarely concedes—or entertains—but delivers results.'),
+  ('beltway',          'outer-reaches', 'Beltway FC',       'Asteroid Belt Colony', 'Transit Hub Arena "The Junction"', '19,000', '#4A4A8A',
+   'Tactical and gritty, forged in the lawless belt colonies.',
+   E'Born from the intersection of a dozen asteroid belt trade routes, Beltway FC represent the pragmatic, opportunistic spirit of colony life. Their tactics mirror the belt itself: adaptable, layered, and always looking for the gap. Formed by workers who played football in cargo bays and pressurised corridors, they carry a blue-collar heart into every match.\n\nWith the smallest budget in the Outer Reaches League, Beltway punch well above their weight through organised counterattacking and relentless set-piece preparation. The Junction has an atmosphere disproportionate to its size—belt colony fans are loud, passionate, and unafraid of a fight.'),
+  ('solar-miners',     'outer-reaches', 'Solar Miners FC',  'Asteroid Belt Colony', 'Extraction Field "The Dig"',       '17,000', '#E8C84A',
+   'They drill for every inch of the pitch.',
+   E'Solar Miners FC channel the exhausting, relentless work ethic of asteroid mining operations directly into their football. They drill through defences, press without mercy, and never stop running—even when the match is lost. Originally a recreational side for workers at the Kepler-7 extraction colony, they earned promotion through sheer collective effort.\n\nPhysical and direct, Solar Miners rarely produce beautiful football—but they produce results. The Dig is an intimidating venue built partly underground in a decommissioned ore shaft, and visiting teams hate its uneven acoustics and faintly sulfurous atmosphere.')
 ON CONFLICT (id) DO NOTHING;
 
--- Kuiper Belt League — 6 clubs from trans-Neptunian objects
-INSERT INTO teams (id, league_id, name, location, home_ground, capacity, color, tagline) VALUES
+-- Kuiper Belt League — 8 clubs from trans-Neptunian objects
+INSERT INTO teams (id, league_id, name, location, home_ground, capacity, color, tagline, description) VALUES
   ('pluto-frost',     'kuiper-belt', 'Pluto Frost FC',   'Pluto',    'Nitrogen Icebox "The Deep Freeze"',     '25,000', '#B0E0E6',
-   'Former giants of outer solar system football.'),
+   'Former giants of outer solar system football.',
+   'Still mourning their planet''s demotion, Pluto Frost channel their righteous anger into football. They are perpetual underdogs with the spirit of former champions.'),
   ('charon-united',   'kuiper-belt', 'Charon United',    'Charon',   'Binary Lagrange Arena "The Moon"',      '18,000', '#A9A9A9',
-   'Developing their own identity.'),
+   'Developing their own identity.',
+   'Long overshadowed by their larger neighbour Pluto, Charon United are in the process of forging an identity entirely their own. A young club on the rise.'),
   ('eris-wanderers',  'kuiper-belt', 'Eris Wanderers',   'Eris',     'Distant Objects Stadium "The Outpost"', '16,000', '#DDA0DD',
-   'Most distant club in the league.'),
+   'Most distant club in the league.',
+   'Eris Wanderers travel the longest distances for away matches, and it shows in their mental fortitude. No club trains harder between fixtures.'),
   ('haumea-spinners', 'kuiper-belt', 'Haumea Spinners',  'Haumea',   'Centrifuge Field "The Oval"',           '14,000', '#F0E68C',
-   'Known for unusual elliptical wide-area play.'),
+   'Known for unusual elliptical wide-area play.',
+   'Playing on Haumea''s egg-shaped surface has given the Spinners an eccentric wide-play style. Their wingers operate at unusual angles that disorient conventional defences.'),
   ('makemake',        'kuiper-belt', 'Makemake FC',      'Makemake', 'Creation Stadium "The Cradle"',         '12,000', '#CD853F',
-   'Specialists in creating chances from nothing.'),
+   'Specialists in creating chances from nothing.',
+   'As their planetary name suggests, Makemake FC are creators. Their attacking play conjures chances from almost nothing—one of the most inventive clubs in the ISL.'),
   ('orcus-athletic',  'kuiper-belt', 'Orcus Athletic',   'Orcus',    'Underworld Arena "The Pit"',            '11,000', '#2F4F4F',
-   'Dark horses who excel at free-kicks.')
+   'Dark horses who excel at free-kicks.',
+   'From the darkest corner of the Kuiper Belt, Orcus Athletic are the ultimate dark horse. Their dead-ball specialists have decided more matches than any other set-piece team in the league.'),
+  ('sedna-mariners',  'kuiper-belt', 'Sedna FC Mariners','Sedna',    'Perihelion Park "The Long Way Round"',  '9,000',  '#8B0000',
+   'The most patient team in the outer system.',
+   E'Sedna FC Mariners play like their home world orbits: with vast, unhurried patience. Sedna''s extraordinary 11,400-year elliptical orbit has instilled in its inhabitants a philosophical relationship with time—and their football reflects it. They build slowly, absorb pressure without breaking, and strike only when the moment is certain.\n\nPerihelion Park is among the most remote stadiums in the known solar system, and home advantage here is almost mythological. Visiting teams must travel further than anyone else in the ISL, and they arrive already drained. The Mariners have never beaten a top-four side away from home—but they have never been relegated either.'),
+  ('scattered-disc',  'kuiper-belt', 'Scattered Disc FC Rangers', 'Outer Kuiper Belt', 'Void Stadium "The Scatter"', '8,000', '#556B2F',
+   'Wild, untamed football from the edge of everything.',
+   E'Scattered Disc FC Rangers play from the absolute fringe of the solar system, in a region so loosely defined that cartographers argue about whether it technically exists. Their football is similarly hard to classify: chaotic, improvisational, and occasionally brilliant. Tactics arrive by committee, change at half-time, and are abandoned by the 70th minute.\n\nThe Void Stadium''s sparse attendance and enormous silence create a unique atmosphere—not intimidating so much as deeply unsettling. Opponents describe games there as "playing against the cosmos itself." In their few seasons in the Kuiper Belt League, the Rangers have delivered both the highest-scoring victory and the most embarrassing defeat in the division''s history.')
 ON CONFLICT (id) DO NOTHING;
 
 -- ── SEASON 1 ─────────────────────────────────────────────────────────────────
@@ -169,13 +191,13 @@ INSERT INTO competitions (id, season_id, league_id, name, type, format, status) 
    'Gas/Ice Giants League — Season 1',
    'league', 'round_robin', 'upcoming'),
 
-  -- Outer Reaches League S1 — 6 teams, home + away = 30 fixtures
+  -- Outer Reaches League S1 — 8 teams, home + away = 56 fixtures
   ('10000000-0000-0000-0000-000000000003',
    '00000000-0000-0000-0000-000000000001', 'outer-reaches',
    'Outer Reaches League — Season 1',
    'league', 'round_robin', 'upcoming'),
 
-  -- Kuiper Belt League S1 — 6 teams, home + away = 30 fixtures
+  -- Kuiper Belt League S1 — 8 teams, home + away = 56 fixtures
   ('10000000-0000-0000-0000-000000000004',
    '00000000-0000-0000-0000-000000000001', 'kuiper-belt',
    'Kuiper Belt League — Season 1',
@@ -217,24 +239,28 @@ INSERT INTO competition_teams (competition_id, team_id) VALUES
   ('10000000-0000-0000-0000-000000000002', 'uranus-sidewinders')
 ON CONFLICT DO NOTHING;
 
--- Outer Reaches League S1: all 6 ORL clubs
+-- Outer Reaches League S1: all 8 ORL clubs
 INSERT INTO competition_teams (competition_id, team_id) VALUES
   ('10000000-0000-0000-0000-000000000003', 'ceres-miners'),
   ('10000000-0000-0000-0000-000000000003', 'vesta'),
   ('10000000-0000-0000-0000-000000000003', 'pallas-wanderers'),
   ('10000000-0000-0000-0000-000000000003', 'hygiea-united'),
   ('10000000-0000-0000-0000-000000000003', 'psyche-metallics'),
-  ('10000000-0000-0000-0000-000000000003', 'juno-city')
+  ('10000000-0000-0000-0000-000000000003', 'juno-city'),
+  ('10000000-0000-0000-0000-000000000003', 'beltway'),
+  ('10000000-0000-0000-0000-000000000003', 'solar-miners')
 ON CONFLICT DO NOTHING;
 
--- Kuiper Belt League S1: all 6 KBL clubs
+-- Kuiper Belt League S1: all 8 KBL clubs
 INSERT INTO competition_teams (competition_id, team_id) VALUES
   ('10000000-0000-0000-0000-000000000004', 'pluto-frost'),
   ('10000000-0000-0000-0000-000000000004', 'charon-united'),
   ('10000000-0000-0000-0000-000000000004', 'eris-wanderers'),
   ('10000000-0000-0000-0000-000000000004', 'haumea-spinners'),
   ('10000000-0000-0000-0000-000000000004', 'makemake'),
-  ('10000000-0000-0000-0000-000000000004', 'orcus-athletic')
+  ('10000000-0000-0000-0000-000000000004', 'orcus-athletic'),
+  ('10000000-0000-0000-0000-000000000004', 'sedna-mariners'),
+  ('10000000-0000-0000-0000-000000000004', 'scattered-disc')
 ON CONFLICT DO NOTHING;
 
 -- ISL Champions Cup S1: 8 placeholder qualifiers, 2 groups of 4.
