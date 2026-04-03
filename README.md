@@ -190,12 +190,14 @@ Open `http://localhost:5173` in your browser.
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root with your Supabase credentials:
 
 ```
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
+
+**Security Note**: Supabase credentials are read from environment variables at runtime and never included in source code. The Anthropic API key is user-entered at runtime and stored in the browser's `localStorage` for convenience — it never touches the server or source control.
 
 ### Database Setup
 
@@ -268,6 +270,14 @@ soccer-league/
 └── .github/workflows/
     └── deploy.yml               # GitHub Pages deployment
 ```
+
+## Code Quality & Reliability
+
+- **Error Boundary Component** — Top-level error handler (`ErrorBoundary.jsx`) catches React errors with ISL-themed fallback UI; prevents blank screens on runtime errors
+- **Comprehensive Error Logging** — All async `.catch()` handlers include console logging with context for easier debugging
+- **Constants Management** — `CLAUDE_MODEL` constant extracted to `src/constants.js` for single-source-of-truth; avoids hardcoded model strings across agents and components
+- **React Key Stability** — All list rendering uses stable, semantic keys (player IDs, content hashes) instead of array indices to prevent render bugs during list updates
+- **Dynamic Copyright** — Footer year updates automatically with `new Date().getFullYear()` instead of manual year bumps
 
 ## Deployment
 

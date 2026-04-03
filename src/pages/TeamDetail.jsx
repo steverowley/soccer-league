@@ -371,10 +371,13 @@ export default function TeamDetail() {
               )}
             </div>
 
-            {/* Description paragraphs — split from the \n-delimited string */}
+            {/* Description paragraphs — split from the \n-delimited string.
+                Key uses the paragraph text (sliced to 60 chars) rather than
+                array index so React can correctly reconcile if the text order
+                ever changes between renders. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {descParagraphs.map((para, i) => (
-                <p key={i} style={{ fontSize: '13px', lineHeight: 1.8, opacity: 0.85 }}>
+              {descParagraphs.map((para) => (
+                <p key={para.slice(0, 60)} style={{ fontSize: '13px', lineHeight: 1.8, opacity: 0.85 }}>
                   {para}
                 </p>
               ))}

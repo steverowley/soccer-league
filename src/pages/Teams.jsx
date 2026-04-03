@@ -77,7 +77,8 @@ export default function Teams() {
         setTeamsByLeague(grouped);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[ISL] Teams fetch failed:', err);
         setError(true);
         setLoading(false);
       });

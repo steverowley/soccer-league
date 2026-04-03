@@ -4,6 +4,12 @@
 //
 // Nothing here is calculated at runtime — it is purely look-up data.
 
+// ── AI model identifier ───────────────────────────────────────────────────────
+// Single source of truth for the Claude model used by all AI commentary and
+// Architect systems.  Update here to roll the entire app to a new model version
+// without hunting for individual call sites in agents.js and MatchComponents.jsx.
+export const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+
 // ── UI Colour palette ─────────────────────────────────────────────────────────
 // Used by components to keep the dark sci-fi aesthetic consistent.
 export const C = {

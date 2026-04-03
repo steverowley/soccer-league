@@ -38,8 +38,10 @@ import { createClient } from '@supabase/supabase-js';
 // The anon key is safe to expose in browser bundles — Supabase enforces
 // Row Level Security policies on the database side.  All tables are readable
 // by anonymous users; writes require an authenticated session.
-const SUPABASE_URL  = 'https://ddtpbipkqamuxnvupddc.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkdHBiaXBrcWFtdXhudnVwZGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMDMzODgsImV4cCI6MjA4OTU3OTM4OH0.L8Vv2mxDlhXa3hl9xhR0MWNd1JYoooZH0HqRi_LJyAw';
+// Credentials are loaded from .env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
+// so they are not committed to version control.
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 

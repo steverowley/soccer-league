@@ -33,6 +33,7 @@ import './index.css';
 
 // ── Layout shell ──────────────────────────────────────────────────────────────
 import Layout from './components/layout/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // ── Page components ───────────────────────────────────────────────────────────
 // Each import corresponds to one route in the table above.
@@ -48,6 +49,11 @@ import Login        from './pages/Login';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
+    {/* ── Error Boundary ──────────────────────────────────────────────────── */}
+    {/* Wraps the entire app so any unhandled render error shows the ISL
+        fallback UI rather than a blank screen.  Must sit outside the Router
+        so routing errors are also caught. */}
+    <ErrorBoundary>
     {/* ── Router ──────────────────────────────────────────────────────────── */}
     {/* BrowserRouter enables HTML5 history API navigation with clean URLs.
         Vite's dev server serves index.html for all paths automatically, so
@@ -89,5 +95,6 @@ createRoot(document.getElementById('root')).render(
         </Route>
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -1019,7 +1019,7 @@ const MatchSimulator = ({
             }
           });
         })
-        .catch(() => {}); // fire-and-forget; LLM failures must not break match flow
+        .catch((err) => { console.warn('[ISL] mystified reaction failed:', err); }); // LLM failures must not break match flow
     } else {
       // ── Procedural fallback bewilderment ──────────────────────────────────
       // Pre-written confused reactions for the five most impactful interference
@@ -1138,7 +1138,7 @@ const MatchSimulator = ({
     if(sys&&arch){
       arch.maybeUpdate(matchState.minute,newEvents,gameState,allAgents)
         .then(proclamation=>{if(proclamation)routeAgentResult(proclamation);})
-        .catch(()=>{});
+        .catch((err)=>{ console.warn('[ISL] Architect maybeUpdate failed:', err); });
 
       // ── Architect Interference: one probability check per batch ────────────
       // maybeInterfereWith() has its own 20-minute cooldown guard and a
@@ -1148,7 +1148,7 @@ const MatchSimulator = ({
       // at least one interference fires per match for easier QA.
       arch.maybeInterfereWith(matchState.minute, matchState, allAgents)
         .then(r => { if (r) applyArchitectInterference(r); })
-        .catch(() => {});
+        .catch((err) => { console.warn('[ISL] Architect maybeInterfereWith failed:', err); });
     }
 
     // ── Feature 6: pendingInterferences — architect boredom cascade ──────────

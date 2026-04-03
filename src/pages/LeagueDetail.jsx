@@ -89,7 +89,8 @@ export default function LeagueDetail() {
         }
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[ISL] LeagueDetail fetch failed:', err);
         setError(true);
         setLoading(false);
       });
