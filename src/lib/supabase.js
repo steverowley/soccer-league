@@ -317,6 +317,147 @@ export async function getTeam(teamId) {
   return data;
 }
 
+// ── Match engine helpers ───────────────────────────────────────────────────────
+// The match engine (gameEngine.js / createAIManager) expects team objects in a
+// specific camelCase shape with five individual player stats per player
+// (attacking, defending, mental, athletic, technical) and a top-level manager
+// object carrying name + personality.
+//
+// The Supabase schema stores teams in snake_case and historically kept player
+// stats in a single overall_rating column — the individual stats were only in
+// the static teams.js file.  After adding the five stat columns + jersey_number
+// to the players table (and populating them in seed.sql via position-weighted
+// UPDATE), getTeamForEngine() + normalizeTeamForEngine() bridge the DB rows into
+// the engine shape so every seeded team can run a live simulation.
+//
+// FALLBACK STRATEGY
+// ─────────────────
+// Individual stats default to 70 if the DB row has NULLs (e.g. a newly-inserted
+// player whose stats haven't been populated yet).  70 is a deliberately average
+// value — it keeps the simulation functional without skewing match outcomes.
+// Teams that have been seeded through seed.sql will always have non-null stats.
+
+/**
+ * Transform a raw Supabase team row (with nested players and managers arrays)
+ * into the engine-compatible object shape expected by createAIManager().
+ *
+ * FIELD MAPPING
+ * ─────────────
+ *   DB field          → engine field
+ *   ──────────────────────────────────
+ *   short_name        → shortName          (camelCase alias)
+ *   home_ground       → stadium.name       (displayed in weather cards)
+ *   location          → stadium.planet     (drives PLANET_WX weather pool in engine)
+ *   capacity          → stadium.capacity   (flavour; not mechanically used yet)
+ *   managers[0].style → tactics            (snake_cased, e.g. 'high_pressing')
+ *   managers[0]       → manager            (name + personality for AI commentary)
+ *   players[*]        → players            (individual stats; nulls default to 70)
+ *
+ * MANAGER PERSONALITY
+ * ───────────────────
+ * The engine's manager AI uses personality to weight touchline decisions
+ * (aggressive → more substitutions, possession → fewer risky changes, etc.).
+ * The DB stores the style as a human-readable string ('High Pressing'); this
+ * function passes it through unchanged as personality because the manager AI
+ * accepts the raw style string and maps it internally.
+ *
+ * PLAYER STAT FALLBACK
+ * ────────────────────
+ * Individual stats (attacking … technical) fall back to 70 for any NULL.
+ * 70 sits just below the average starter rating (~81) — low enough to not
+ * produce unusually good results but high enough to avoid division-by-zero or
+ * degenerate simulation branches that expect non-trivial stat values.
+ *
+ * @param {{ name: string, short_name: string, color: string|null,
+ *           home_ground: string|null, location: string|null,
+ *           capacity: string|null,
+ *           players: Array<{name,position,starter,attacking,defending,
+ *                           mental,athletic,technical,jersey_number}>,
+ *           managers: Array<{name,style}> }} team
+ *   Raw row returned by a `teams.select('*, players(*), managers(*)')` query.
+ * @returns {{ name, shortName, color, stadium, tactics, manager, players }}
+ *   Engine-format team object ready to pass to createAIManager().
+ */
+export function normalizeTeamForEngine(team) {
+  // Use the first manager row; teams should have exactly one active manager.
+  // If no manager row exists (e.g. a freshly-added club) the manager field is
+  // omitted so createAIManager() falls back to its own defaults.
+  const manager = team.managers?.[0];
+
+  return {
+    name:      team.name,
+    shortName: team.short_name,
+    // Fallback colour prevents transparent/invisible team accents in the UI
+    // if a team row was inserted without a brand colour.
+    color:     team.color || '#888888',
+
+    // Stadium drives weather selection: PLANET_WX[planet] picks the pool of
+    // possible weather conditions for the match.  If location is unknown the
+    // engine falls through to the generic WX pool.
+    stadium: {
+      name:     team.home_ground || team.name,
+      planet:   team.location   || 'Unknown',
+      capacity: team.capacity   || '50,000',
+    },
+
+    // Tactics: lowercase + underscores to match the engine's internal keys
+    // (e.g. 'High Pressing' → 'high_pressing').  Null if no manager row.
+    tactics: manager?.style?.toLowerCase().replace(/\s+/g, '_') || null,
+
+    // Manager identity used by the commentary AI and halftime report.
+    // personality is the raw style string ('Possession', 'Aggressive', etc.)
+    // which the manager AI accepts directly.
+    manager: manager
+      ? { name: manager.name, personality: manager.style || 'Balanced' }
+      : undefined,
+
+    // Strip DB-specific fields (id, team_id, created_at, nationality, age)
+    // and keep only the fields genEvent() and createAgent() actually read.
+    players: (team.players || []).map(p => ({
+      name:          p.name,
+      position:      p.position,
+      starter:       p.starter ?? true,
+      // Individual stats: fall back to 70 (functional average) if not seeded.
+      attacking:     p.attacking  ?? 70,
+      defending:     p.defending  ?? 70,
+      mental:        p.mental     ?? 70,
+      athletic:      p.athletic   ?? 70,
+      technical:     p.technical  ?? 70,
+      jersey_number: p.jersey_number,
+    })),
+  };
+}
+
+/**
+ * Fetch a single team with its full squad and manager, returned already
+ * normalised into the engine format ready to pass directly to createAIManager().
+ *
+ * This is the primary entry-point for the Matches page: before launching a
+ * simulation the page calls getTeamForEngine() for both clubs in parallel so
+ * the engine receives live DB data (real manager names, real player rosters,
+ * and position-derived individual stats) instead of the hardcoded teams.js stub.
+ *
+ * The query selects all columns (`*`) so newly-added player or team fields are
+ * automatically included without a query change.  managers(*) pulls every
+ * manager row for the team; normalizeTeamForEngine() uses only managers[0]
+ * (the active / most recently inserted manager).
+ *
+ * @param {string} teamId - Supabase team slug, e.g. 'saturn-rings'
+ * @returns {Promise<object>} Engine-format team object (see normalizeTeamForEngine)
+ * @throws {Error} Re-throws the Supabase error if the team is not found or the
+ *   query fails — callers should catch and fall back to teams.js if needed.
+ */
+export async function getTeamForEngine(teamId) {
+  const { data, error } = await supabase
+    .from('teams')
+    .select('*, players(*), managers(*)')
+    .eq('id', teamId)
+    .single();
+  if (error) throw error;
+  return normalizeTeamForEngine(data);
+}
+
+
 // ── Player detail ─────────────────────────────────────────────────────────────
 // Used by the PlayerDetail page (/players/:playerId).
 //

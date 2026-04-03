@@ -854,6 +854,63 @@ INSERT INTO players (team_id, name, position, nationality, age, overall_rating, 
   ('sedna-mariners','Abandoned Martinez','DF','Sednan',21,73,'balanced',false),
   ('sedna-mariners','Solitude Chandra','MF','Sednan',22,72,'creative',false);
 
+-- ── PLAYER SIMULATION STATS ───────────────────────────────────────────────────
+-- Derive attacking/defending/mental/athletic/technical from overall_rating and
+-- position.  Values are clamped to [38, 95] to keep the engine rolls balanced.
+-- GK:  high defending, low attacking
+-- DF:  high defending, moderate attacking
+-- MF:  balanced across all stats, slight mental/technical lean
+-- FW:  high attacking and athletic, low defending
+UPDATE players SET
+  attacking = CASE position
+    WHEN 'GK' THEN GREATEST(38, overall_rating - 30)
+    WHEN 'DF' THEN GREATEST(42, overall_rating - 15)
+    WHEN 'MF' THEN GREATEST(48, overall_rating - 5)
+    WHEN 'FW' THEN LEAST(95, overall_rating + 10)
+  END,
+  defending = CASE position
+    WHEN 'GK' THEN LEAST(95, overall_rating + 10)
+    WHEN 'DF' THEN LEAST(95, overall_rating + 8)
+    WHEN 'MF' THEN GREATEST(42, overall_rating - 10)
+    WHEN 'FW' THEN GREATEST(38, overall_rating - 20)
+  END,
+  mental = CASE position
+    WHEN 'GK' THEN overall_rating
+    WHEN 'DF' THEN overall_rating - 2
+    WHEN 'MF' THEN LEAST(95, overall_rating + 5)
+    WHEN 'FW' THEN overall_rating - 3
+  END,
+  athletic = CASE position
+    WHEN 'GK' THEN GREATEST(38, overall_rating - 5)
+    WHEN 'DF' THEN overall_rating
+    WHEN 'MF' THEN overall_rating
+    WHEN 'FW' THEN LEAST(95, overall_rating + 5)
+  END,
+  technical = CASE position
+    WHEN 'GK' THEN GREATEST(38, overall_rating - 15)
+    WHEN 'DF' THEN GREATEST(42, overall_rating - 10)
+    WHEN 'MF' THEN LEAST(95, overall_rating + 3)
+    WHEN 'FW' THEN GREATEST(42, overall_rating - 5)
+  END;
+
+-- ── JERSEY NUMBERS ────────────────────────────────────────────────────────────
+-- Assign shirt numbers per team: starters first (GK=1, DF=2–5, MF=6–8,
+-- FW=9–11), bench from 12 upward.  Within each position+starter group players
+-- are ordered by overall_rating DESC so the best player gets the lower number.
+UPDATE players p SET jersey_number = sub.rn
+FROM (
+  SELECT id,
+    ROW_NUMBER() OVER (
+      PARTITION BY team_id
+      ORDER BY
+        starter DESC,
+        CASE position WHEN 'GK' THEN 1 WHEN 'DF' THEN 2 WHEN 'MF' THEN 3 WHEN 'FW' THEN 4 END,
+        overall_rating DESC
+    ) AS rn
+  FROM players
+) sub
+WHERE p.id = sub.id;
+
 -- ── MANAGERS ──────────────────────────────────────────────────────────────────
 -- One manager per team. DELETE before insert keeps this idempotent since
 -- the managers table has no unique constraint on team_id.

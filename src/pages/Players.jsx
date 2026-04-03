@@ -323,15 +323,20 @@ function TeamRosterCard({ team }) {
 /**
  * Single player row within a team's roster card.
  *
- * Displays: player name · position badge · starter/bench label · OVR rating.
- * Uses `player.overall_rating` from the DB (integer 65–90) for the stat
- * column since the DB does not yet store per-attribute values.
+ * Four-column grid:
+ *   jersey_number (28 px) · player name (flex) · position badge (40 px) · OVR (40 px)
  *
- * Bench players render at reduced opacity (0.65) to reflect substitute status
- * without hiding them from view.
+ * Jersey number is the primary squad-role signal: numbers 1–11 indicate
+ * starters, 12+ indicate bench.  The old explicit "★ Starter / Bench" label
+ * column has been removed — squad role is now self-evident from the number.
+ * All players render at full opacity; there is no bench dimming on this page.
  *
- * @param {{ name: string, position: string, starter: boolean,
- *            overall_rating: number }} player
+ * Uses `player.overall_rating` from the DB (integer 65–90) for the OVR
+ * column; individual attribute stats are stored in the DB but not surfaced
+ * here to keep the list compact.
+ *
+ * @param {{ id: string, name: string, position: string,
+ *            overall_rating: number, jersey_number: number|null }} player
  *   Player object from the Supabase players table.
  * @returns {JSX.Element}
  */
@@ -340,17 +345,30 @@ function PlayerRow({ player }) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 40px 60px 40px',
+        // 28 px number · flexible name · fixed position · fixed OVR.
+        // Matches the column widths used in TeamDetail.jsx SquadRow for
+        // visual consistency between the two squad list contexts.
+        gridTemplateColumns: '28px 1fr 40px 40px',
         gap: '8px',
         padding: '6px 0',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         fontSize: '12px',
-        // ── Bench dimming ───────────────────────────────────────────────────
-        // 0.65 opacity for bench; 1.0 for starters — subtle enough to not
-        // hide the player while clearly signalling their squad role.
-        opacity: player.starter ? 1 : 0.65,
       }}
     >
+      {/* Jersey number — right-aligned within its fixed column.
+          Muted at 0.5 opacity so it reads as metadata rather than primary
+          content; tabular-nums keeps 1-digit and 2-digit numbers aligned. */}
+      <span style={{
+        fontSize: '10px',
+        fontVariantNumeric: 'tabular-nums',
+        opacity: 0.5,
+        textAlign: 'right',
+        paddingRight: '4px',
+        alignSelf: 'center',
+      }}>
+        {player.jersey_number ?? '—'}
+      </span>
+
       {/* Name links to the player's individual profile page (/players/:id) */}
       <Link
         to={`/players/${player.id}`}
@@ -365,10 +383,6 @@ function PlayerRow({ player }) {
 
       <span style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.06em', opacity: 0.7 }}>
         {player.position}
-      </span>
-
-      <span style={{ fontSize: '10px', opacity: 0.5 }}>
-        {player.starter ? '★ Starter' : 'Bench'}
       </span>
 
       {/* Overall rating — right-aligned to match table conventions.

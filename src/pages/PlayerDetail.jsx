@@ -240,8 +240,14 @@ export default function PlayerDetail() {
           <div className="card">
             <h3 className="card-title">{player.name}</h3>
 
-            {/* Structured metadata block */}
+            {/* Structured metadata block.
+                Number is listed first — it is the most immediately recognisable
+                identifier for a player (fans say "the number 9" more often than
+                "the forward").  jersey_number is null for players whose seed
+                UPDATE has not yet run; the '—' fallback keeps the row visible
+                without showing a confusing "null" or "0". */}
             <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <MetaRow label="Number"         value={player.jersey_number != null ? `#${player.jersey_number}` : '—'} />
               <MetaRow label="Age"            value={player.age} />
               <MetaRow label="Nationality"    value={player.nationality} />
               <MetaRow label="Overall Rating" value={player.overall_rating} />
