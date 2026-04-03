@@ -86,43 +86,48 @@ const POS_LABEL = {
 };
 
 /**
- * Group a flat players array into position buckets sorted GK → DF → MF → FW,
- * with starters separated from bench within each bucket.
- *
- * Sort order within a bucket:
- *   1. Starters before bench (boolean sort: true > false numerically)
- *   2. Overall rating descending within each sub-group (best first)
+ * Group a flat players array into position buckets sorted GK → DF → MF → FW.
+ * Within each bucket players are sorted by jersey_number ascending so the squad
+ * list reads in shirt-number order (1, 2, 3 … 16) without any starter/bench
+ * split — bench players appear inline between their positional peers, numbered
+ * after the starters in the same position group.
  *
  * Positions not recognised in POS_ORDER fall to the end (weight 9) so that
  * any future position codes degrade gracefully rather than crashing.
  *
- * @param {Array<{position: string, starter: boolean, overall_rating: number}>} players
+ * Players without a jersey_number (e.g. a freshly-inserted DB row whose seed
+ * UPDATE has not yet run) sort to the end of their position group via the
+ * ?? 99 fallback — they remain visible rather than being hidden or erroring.
+ *
+ * @param {Array<{position: string, jersey_number: number|null,
+ *                overall_rating: number}>} players
  *   Raw players array from the Supabase team join.
- * @returns {Array<{position: string, starters: Array, bench: Array}>}
+ * @returns {Array<{position: string, players: Array}>}
  *   One entry per distinct position, sorted in field order (GK first).
+ *   Each entry's players array is sorted by jersey_number ascending.
  */
 function buildSquadGroups(players) {
   if (!players?.length) return [];
 
   // Sort a copy so we never mutate the original state array.
+  // Primary key: position order (GK=0, DF=1, MF=2, FW=3).
+  // Secondary key: jersey_number ascending — starters get lower numbers
+  // (1–11) and bench players get higher numbers (12–16) from the seed, so
+  // this naturally shows starters first without an explicit starter sort.
   const sorted = [...players].sort((a, b) => {
-    // Primary: position order (GK=0, DF=1, MF=2, FW=3)
     const posDiff = (POS_ORDER[a.position] ?? 9) - (POS_ORDER[b.position] ?? 9);
     if (posDiff !== 0) return posDiff;
-    // Secondary: starters before bench (true=1 > false=0)
-    if (b.starter !== a.starter) return b.starter - a.starter;
-    // Tertiary: best overall_rating first within starter/bench sub-group
-    return b.overall_rating - a.overall_rating;
+    return (a.jersey_number ?? 99) - (b.jersey_number ?? 99);
   });
 
-  // Build a map keyed by position so each player is appended exactly once.
+  // Build a map keyed by position; all players for a position go into a single
+  // flat array — no starter/bench split.
   const groups = {};
   for (const p of sorted) {
     if (!groups[p.position]) {
-      groups[p.position] = { position: p.position, starters: [], bench: [] };
+      groups[p.position] = { position: p.position, players: [] };
     }
-    if (p.starter) groups[p.position].starters.push(p);
-    else           groups[p.position].bench.push(p);
+    groups[p.position].players.push(p);
   }
 
   // Return as an array in POS_ORDER sequence (GK → DF → MF → FW).
@@ -134,28 +139,43 @@ function buildSquadGroups(players) {
 /**
  * Single player row in the Squad section of the team page.
  *
- * Three-column grid: player name (linked to /players/:id) · position code ·
- * OVR rating.  Bench players render at 0.65 opacity to visually separate them
- * from the starting eleven without hiding them.
+ * Four-column grid:
+ *   jersey_number (28 px) · player name (flex) · position code (40 px) · OVR (48 px)
+ *
+ * All players — starters and bench alike — render at full opacity.  The bench
+ * divider that previously separated them has been removed; jersey numbers give
+ * enough context (1–11 = starters, 12+ = bench) without hiding bench players.
  *
  * @param {{ id: string, name: string, position: string,
- *            overall_rating: number, starter: boolean }} player
- * @param {boolean} [isBench=false] - When true renders at reduced opacity.
+ *            overall_rating: number, jersey_number: number|null }} player
  * @returns {JSX.Element}
  */
-function SquadRow({ player, isBench = false }) {
+function SquadRow({ player }) {
   return (
     <div style={{
       display: 'grid',
-      // Name takes remaining space; position badge and OVR are fixed-width.
-      gridTemplateColumns: '1fr 40px 48px',
+      // Fixed 28 px number column · flexible name · fixed position · fixed OVR.
+      // 28 px comfortably fits two-digit numbers (10, 11 … 16) at 10 px font.
+      gridTemplateColumns: '28px 1fr 40px 48px',
       gap: '8px',
       padding: '5px 0',
       borderBottom: '1px solid rgba(255,255,255,0.06)',
       fontSize: '12px',
-      // 0.65 for bench mirrors the dimming in Players.jsx PlayerRow
-      opacity: isBench ? 0.65 : 1,
     }}>
+      {/* Jersey number — right-aligned within its column so single- and
+          double-digit numbers align along the right edge.  Muted at 0.5
+          opacity so it reads as metadata rather than primary content. */}
+      <span style={{
+        fontSize: '10px',
+        fontVariantNumeric: 'tabular-nums',
+        opacity: 0.5,
+        textAlign: 'right',
+        paddingRight: '4px',
+        alignSelf: 'center',
+      }}>
+        {player.jersey_number ?? '—'}
+      </span>
+
       {/* Player name — links to their individual profile page */}
       <Link
         to={`/players/${player.id}`}
@@ -420,6 +440,10 @@ export default function TeamDetail() {
           <section className="section">
             <h2 className="section-title">Squad</h2>
 
+            {/* buildSquadGroups returns one bucket per position (GK→DF→MF→FW).
+                Within each bucket all players — starters and bench — are listed
+                together in jersey-number order.  No bench divider is shown;
+                the number itself signals squad role (1–11 = starter, 12+ = sub). */}
             {buildSquadGroups(team.players).map(group => (
               <div key={group.position} style={{ marginBottom: '24px' }}>
 
@@ -437,30 +461,9 @@ export default function TeamDetail() {
                   {POS_LABEL[group.position]}
                 </h3>
 
-                {/* Starting eleven players for this position */}
-                {group.starters.map(p => (
+                {/* All players for this position in jersey-number order */}
+                {group.players.map(p => (
                   <SquadRow key={p.id} player={p} />
-                ))}
-
-                {/* "Bench" divider — only shown when both starters and bench
-                    players exist for this position, so a GK group with one
-                    starter and one bench sub doesn't show an orphaned label */}
-                {group.bench.length > 0 && group.starters.length > 0 && (
-                  <div style={{
-                    fontSize: '10px',
-                    opacity: 0.35,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    padding: '4px 0',
-                    marginTop: '4px',
-                  }}>
-                    Bench
-                  </div>
-                )}
-
-                {/* Substitute players — dimmed by SquadRow's isBench prop */}
-                {group.bench.map(p => (
-                  <SquadRow key={p.id} player={p} isBench />
                 ))}
               </div>
             ))}

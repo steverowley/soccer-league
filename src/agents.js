@@ -2066,7 +2066,14 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
         // Deep violet — visually distinct from all commentator and manager
         // colours so Architect cards are immediately identifiable in the feed.
         color:           '#7C3AED',
-        text:            parsed.proclamation,
+        // Guarantee sentence-case even when the LLM returns a lowercase opening
+        // word.  Claude Haiku occasionally starts proclamations with lowercase
+        // ("the stars weep…") which looks wrong in the feed card.  Uppercasing
+        // only the first character preserves the Architect's deliberate stylistic
+        // choices elsewhere in the text (e.g. mid-sentence EMPHATIC CAPS).
+        text: parsed.proclamation
+          ? parsed.proclamation.charAt(0).toUpperCase() + parsed.proclamation.slice(1)
+          : parsed.proclamation,
         narrativeArc:    parsed.narrativeArc    || '',
         featuredMortals: parsed.featuredMortals || [],
         cosmicThread:    parsed.cosmicThread    || '',
