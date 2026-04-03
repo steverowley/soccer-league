@@ -315,6 +315,111 @@ export async function getTeam(teamId) {
   return data;
 }
 
+// ── Player detail ─────────────────────────────────────────────────────────────
+// Used by the PlayerDetail page (/players/:playerId).
+//
+// Season stats are NOT stored as a summary row — they are computed on read by
+// summing all match_player_stats rows for the player.  This keeps the match row
+// as the single source of truth (same philosophy as getStandings) and means
+// stats automatically reflect newly simulated matches without any extra writes.
+//
+// match_player_stats.rating is nullable (not every appearance is rated), so
+// avg_rating is tracked via a separate count (_rcnt) to avoid dividing by zero
+// or diluting the average with zero-rated rows.
+
+/**
+ * Fetch a single player by UUID, including their parent team name and all
+ * aggregated season stats computed from match_player_stats.
+ *
+ * Two Supabase queries run in parallel to minimise latency:
+ *   1. The player row joined with teams(id, name) — used for the hero breadcrumb.
+ *      The join key is players.team_id → teams.id (FK).  PostgREST resolves it
+ *      automatically and returns the team object at player.teams (table name,
+ *      plural).
+ *   2. All match_player_stats rows for the player — aggregated in JS because
+ *      PostgREST's select DSL does not support SUM/AVG on nested relations.
+ *
+ * If the player has never appeared in a match, seasonStats is returned with
+ * all-zero counters and avg_rating: null (so the UI can display "—" rather
+ * than "0.0").
+ *
+ * @param {string} playerId - UUID of the target player (from players.id)
+ * @returns {Promise<{
+ *   id: string, name: string, position: string, age: number,
+ *   nationality: string, overall_rating: number, personality: string,
+ *   starter: boolean, team_id: string,
+ *   teams: { id: string, name: string },
+ *   seasonStats: {
+ *     goals: number, assists: number, yellow_cards: number,
+ *     red_cards: number, minutes_played: number,
+ *     matches_played: number, avg_rating: number|null
+ *   }
+ * }>}
+ */
+export async function getPlayer(playerId) {
+  // ── Parallel fetch ────────────────────────────────────────────────────────
+  // Run both queries simultaneously; neither depends on the other's result.
+  const [playerResult, statsResult] = await Promise.all([
+    supabase
+      .from('players')
+      .select('*, teams(id, name)')
+      .eq('id', playerId)
+      .single(),
+    supabase
+      .from('match_player_stats')
+      .select('goals, assists, yellow_cards, red_cards, minutes_played, rating')
+      .eq('player_id', playerId),
+  ]);
+
+  if (playerResult.error) throw playerResult.error;
+  if (statsResult.error)  throw statsResult.error;
+
+  // ── Aggregate match stats in JavaScript ───────────────────────────────────
+  // Accumulate per-appearance values into season totals.  _rsum / _rcnt are
+  // private accumulators for the weighted average; they are stripped from the
+  // final seasonStats object below.
+  //
+  // ?? 0 guards against null columns (schema defaults are 0, but defensive).
+  // rating uses a separate null check because 0.0 is a valid (if rare) rating
+  // and should not be excluded from the average — only truly null values are.
+  const statRows = statsResult.data ?? [];
+  const agg = statRows.reduce(
+    (acc, row) => ({
+      goals:          acc.goals          + (row.goals          ?? 0),
+      assists:        acc.assists        + (row.assists        ?? 0),
+      yellow_cards:   acc.yellow_cards   + (row.yellow_cards   ?? 0),
+      red_cards:      acc.red_cards      + (row.red_cards      ?? 0),
+      minutes_played: acc.minutes_played + (row.minutes_played ?? 0),
+      matches_played: acc.matches_played + 1,
+      _rsum:          acc._rsum          + (row.rating         ?? 0),
+      _rcnt:          acc._rcnt          + (row.rating != null ? 1 : 0),
+    }),
+    { goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
+      minutes_played: 0, matches_played: 0, _rsum: 0, _rcnt: 0 }
+  );
+
+  // ── Average rating ────────────────────────────────────────────────────────
+  // Only computed when at least one rated appearance exists.  toFixed(1)
+  // produces a 1-decimal string; unary + converts it back to a number so
+  // consumers can format it themselves (e.g. "7.4" or "—").
+  const avg_rating = agg._rcnt > 0
+    ? +(agg._rsum / agg._rcnt).toFixed(1)
+    : null;
+
+  return {
+    ...playerResult.data,
+    seasonStats: {
+      goals:          agg.goals,
+      assists:        agg.assists,
+      yellow_cards:   agg.yellow_cards,
+      red_cards:      agg.red_cards,
+      minutes_played: agg.minutes_played,
+      matches_played: agg.matches_played,
+      avg_rating,     // null when player has no rated appearances
+    },
+  };
+}
+
 // ── Standings ─────────────────────────────────────────────────────────────────
 // Standings are NOT stored in the database — they are computed on read from
 // the completed matches in a competition.  This avoids the complexity of

@@ -41,9 +41,10 @@ import Leagues     from './pages/Leagues';
 import LeagueDetail from './pages/LeagueDetail';
 import Teams       from './pages/Teams';
 import TeamDetail  from './pages/TeamDetail';
-import Players     from './pages/Players';
-import Matches     from './pages/Matches';
-import Login       from './pages/Login';
+import Players      from './pages/Players';
+import PlayerDetail from './pages/PlayerDetail';
+import Matches      from './pages/Matches';
+import Login        from './pages/Login';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -73,8 +74,11 @@ createRoot(document.getElementById('root')).render(
           {/* /teams/:teamId → individual team info + stats */}
           <Route path="teams/:teamId" element={<TeamDetail />} />
 
-          {/* /players → player roster (design pending) */}
+          {/* /players → player roster browser (all teams, filterable by league) */}
           <Route path="players" element={<Players />} />
+
+          {/* /players/:playerId → individual player profile + season stats */}
+          <Route path="players/:playerId" element={<PlayerDetail />} />
 
           {/* /matches → MatchSimulator wrapped in the site shell */}
           <Route path="matches" element={<Matches />} />

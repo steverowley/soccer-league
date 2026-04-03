@@ -853,3 +853,46 @@ INSERT INTO players (team_id, name, position, nationality, age, overall_rating, 
   ('sedna-mariners','Exile Anderson','DF','Sednan',30,75,'team_player',false),
   ('sedna-mariners','Abandoned Martinez','DF','Sednan',21,73,'balanced',false),
   ('sedna-mariners','Solitude Chandra','MF','Sednan',22,72,'creative',false);
+
+-- ── MANAGERS ──────────────────────────────────────────────────────────────────
+-- One manager per team. DELETE before insert keeps this idempotent since
+-- the managers table has no unique constraint on team_id.
+DELETE FROM managers;
+
+INSERT INTO managers (team_id, name, nationality, style) VALUES
+  -- Rocky Inner League
+  ('mercury-runners',   'Solano Vex',          'Mercurian',         'High Pressing'),
+  ('earth-united',      'Priya Okafor',         'Earthian',          'Possession'),
+  ('venus-volcanic',    'Ignis Ferrara',        'Venusian',          'Aggressive'),
+  ('terra-nova',        'Dominic Harrow',       'Earthian',          'Offensive'),
+  ('mars-athletic',     'Dustin Kael',          'Martian',           'Counterattacking'),
+  ('olympus-mons',      'Caldera Osei',         'Martian',           'Direct'),
+  ('valles-mariners',   'Rift Nkosi',           'Martian',           'Possession'),
+  ('solar-city',        'Luma Vasquez',         'Orbital Colonist',  'Balanced'),
+  -- Gas/Ice Giants League
+  ('jupiter-titans',    'Titan Krell',          'Jovian',            'Aggressive'),
+  ('europa-oceanic',    'Marina Crestfall',     'Europan',           'Possession'),
+  ('ganymede-united',   'Ore Iwata',            'Ganymedean',        'Defensive'),
+  ('callisto-wolves',   'Frost Adeyemi',        'Callistoan',        'High Pressing'),
+  ('saturn-rings',      'Helios Voss',          'Saturnian',         'Possession'),
+  ('titan-methane',     'Haze Kowalski',        'Titanian',          'Counterattacking'),
+  ('enceladus-geysers', 'Crystal Murai',        'Enceladean',        'High Pressing'),
+  ('uranus-sidewinders','Axis Brennan',         'Uranian',           'Offensive'),
+  -- Outer Reaches League
+  ('ceres-miners',      'Gravel Asante',        'Cerean',            'Defensive'),
+  ('vesta',             'Float Inoue',          'Vestan',            'Direct'),
+  ('pallas-wanderers',  'Nomad Ferreira',       'Palladian',         'Balanced'),
+  ('hygiea-united',     'Shadow Diallo',        'Hygiean',           'Defensive'),
+  ('psyche-metallics',  'Forge Petrov',         'Psychean',          'Aggressive'),
+  ('juno-city',         'Order Mensah',         'Junoan',            'Balanced'),
+  ('beltway',           'Transit Obi',          'Belt Colonist',     'Counterattacking'),
+  ('solar-miners',      'Drill Rashidi',        'Belt Colonist',     'High Pressing'),
+  -- Kuiper Belt League
+  ('pluto-frost',       'Glacis Montoya',       'Plutonian',         'Defensive'),
+  ('charon-united',     'Binary Nakamura',      'Charonian',         'Balanced'),
+  ('eris-wanderers',    'Distant Cruz',         'Eridean',           'Counterattacking'),
+  ('haumea-spinners',   'Ellipse Yamamoto',     'Haumeian',          'Offensive'),
+  ('makemake',          'Genesis Solano',       'Makemakean',        'Possession'),
+  ('orcus-athletic',    'Abyss Ivanova',        'Orcian',            'Direct'),
+  ('sedna-mariners',    'Patient Okonkwo',      'Sednan',            'Defensive'),
+  ('scattered-disc',    'Void Larsen',          'Trans-Neptunian',   'Balanced');

@@ -348,7 +348,17 @@ function PlayerRow({ player }) {
         opacity: player.starter ? 1 : 0.65,
       }}
     >
-      <span>{player.name}</span>
+      {/* Name links to the player's individual profile page (/players/:id) */}
+      <Link
+        to={`/players/${player.id}`}
+        style={{
+          color: 'inherit',
+          textDecoration: 'underline',
+          textDecorationColor: 'rgba(255,255,255,0.3)',
+        }}
+      >
+        {player.name}
+      </Link>
 
       <span style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.06em', opacity: 0.7 }}>
         {player.position}
