@@ -283,6 +283,8 @@ soccer-league/
 
 The project deploys automatically to GitHub Pages on push to `main`/`master` via GitHub Actions.
 
+**Build Configuration**: The `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` environment variables are injected into the GitHub Actions build step (`.github/workflows/deploy.yml`). These are public-facing credentials; the anon key is Supabase's publishable key with Row Level Security enforced on the database. If you fork this project, update `.github/workflows/deploy.yml` to set your own Supabase credentials in the `Build` step's `env` block.
+
 ## Tech Stack
 
 - **React 18** + **Vite 6** — frontend framework and build tool
