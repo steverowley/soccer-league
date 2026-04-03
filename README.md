@@ -17,7 +17,8 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Home page with league standings carousel and latest news
 - Leagues listing and individual league detail pages with standings tables (live from DB)
 - Teams listing and team detail pages (live from DB)
-- **Players listing page** — Shows all 512 players (32 teams × 16 players) organized by league and team, with starters listed first, sorted by overall rating. All data fetched directly from Supabase via nested player queries.
+- **Players listing page** — Shows all 512 players (32 teams × 16 players) organized by league and team, with starters listed first, sorted by overall rating. All player names are clickable links to detailed profile pages. All data fetched directly from Supabase via nested player queries.
+- **Player detail pages** (`/players/:playerId`) — Full player profiles showing position, age, nationality, overall rating, personality type with mechanical descriptions, team affiliation, and aggregated season statistics (goals, assists, saves, cards, injuries) pulled from match_player_stats
 - Matches schedule page
 - Login page (placeholder — auth to be wired up)
 - Shared header/footer layout with navigation
@@ -73,7 +74,9 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 
 ### Teams & Players
 - 32 planetary teams across 4 leagues, each with 16 players (11 starters + 5 bench), unique formations, managers, and home stadiums
-- All player data (names, positions, ratings, starter status) sourced from Supabase, enabling the web roster browser and match simulator to reference the same squads
+- All player data (names, positions, ratings, starter status) and manager information sourced from Supabase, enabling the web roster browser and match simulator to reference the same squads
+- **Team squad pages** now display a full roster section organized by position group (GK → DF → MF → FW) with starters and bench separated; all player names link to their profile pages
+- **Manager and Tactical Style** information displayed prominently in team info cards for quick tactical reference
 - 4 regional leagues: Rocky Inner (8 teams), Gas/Ice Giants (8 teams), Outer Reaches (8 teams), Kuiper Belt (8 teams)
 - 5 formation options: 4-3-3, 4-4-2, 3-5-2, 5-4-1, 5-3-2
 - Substitution system (3 per team) and tactical manager personalities
@@ -199,7 +202,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 Run the SQL files in order in the Supabase SQL Editor:
 
 1. `supabase/schema.sql` — creates all tables with row-level security
-2. `supabase/seed.sql` — populates leagues, teams, seasons, competitions, and **512 players** (16 per team, with starters/bench and overall ratings)
+2. `supabase/seed.sql` — populates leagues, teams, seasons, competitions, **512 players** (16 per team, with starters/bench and overall ratings), and **32 managers** with space-themed names, planetary nationalities, and tactical styles (apply the final `-- ── MANAGERS ──` block in your Supabase SQL editor)
 
 ### API Key Setup
 
@@ -233,6 +236,8 @@ soccer-league/
 │   │                             # - getLeagues() — fetch all 4 leagues from DB
 │   │                             # - getTeams(leagueId, withPlayers) — fetch teams,
 │   │                             #   optionally with nested players array
+│   │                             # - getPlayer(playerId) — fetch individual player with
+│   │                             #   aggregated season stats from match_player_stats
 │   │                             # - normalizeTeam() — map DB fields to app format
 │   │                             # - normalizeLeague() — map DB fields to app format
 │   ├── pages/
@@ -240,8 +245,9 @@ soccer-league/
 │   │   ├── Leagues.jsx          # Leagues listing
 │   │   ├── LeagueDetail.jsx     # Individual league page with standings table
 │   │   ├── Teams.jsx            # Teams listing
-│   │   ├── TeamDetail.jsx       # Individual team page
-│   │   ├── Players.jsx          # Players listing
+│   │   ├── TeamDetail.jsx       # Individual team page with squad section
+│   │   ├── Players.jsx          # Players listing with clickable profile links
+│   │   ├── PlayerDetail.jsx     # Individual player profile page with stats
 │   │   ├── Matches.jsx          # Match schedule
 │   │   └── Login.jsx            # Login page (placeholder)
 │   └── components/
