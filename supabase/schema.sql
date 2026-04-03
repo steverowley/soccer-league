@@ -170,6 +170,14 @@ CREATE TABLE IF NOT EXISTS matches (
 -- position values: 'GK' | 'DF' | 'MF' | 'FW'  (matches POS_ORDER in constants.js)
 -- overall_rating: 1–99 scale used by the match simulator for shot/tackle rolls
 -- personality:    one of the PERS keys from constants.js (balanced, selfish, etc.)
+-- Individual simulation stats (1–99 scale, derived from overall_rating + position
+-- if not explicitly set):
+--   attacking  – shooting / forward runs
+--   defending  – tackling / blocking / goalkeeping
+--   mental     – composure / decision-making / set pieces
+--   athletic   – speed / stamina / heading
+--   technical  – passing / dribbling / free-kick delivery
+-- jersey_number – shirt number worn; assigned per-team in seed order (GK=1 …)
 CREATE TABLE IF NOT EXISTS players (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id        text REFERENCES teams(id),
@@ -179,6 +187,13 @@ CREATE TABLE IF NOT EXISTS players (
   age            smallint,
   overall_rating smallint CHECK (overall_rating BETWEEN 1 AND 99),
   personality    text,   -- maps to PERS constants: 'balanced' | 'selfish' | 'aggressive' | …
+  jersey_number  smallint,
+  attacking      smallint,
+  defending      smallint,
+  mental         smallint,
+  athletic       smallint,
+  technical      smallint,
+  starter        boolean NOT NULL DEFAULT true,
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 

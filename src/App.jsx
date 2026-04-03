@@ -655,14 +655,27 @@ function applyManagerTactics(manager, stance, minute, rationale = '') {
 const MatchSimulator = ({
   homeTeamKey = 'mars',
   awayTeamKey = 'saturn',
+  // ── DB-sourced team objects (preferred over key-based lookup) ──────────────
+  // When Matches.jsx fetches team data from Supabase via getTeamForEngine()
+  // before launching the sim, it passes the full engine-format team objects
+  // here.  initState() and the autoStart effect both prefer these props over
+  // the TEAMS[key] fallback so the engine runs with live DB data (real manager
+  // names, real player rosters, position-derived individual stats).
+  //
+  // The key-based props are kept for backward-compat: compact auto-start cards
+  // that run without a DB fetch still work via homeTeamKey / awayTeamKey.
+  homeTeam: homeTeamProp = null,
+  awayTeam: awayTeamProp = null,
   compact = false,
   autoStart = false,
   startDelay = 500,
   onExpand = null,
 } = {}) => {
   const initState=()=>{
-    const homeTeam = TEAMS[homeTeamKey]||TEAMS.mars;
-    const awayTeam = TEAMS[awayTeamKey]||TEAMS.saturn;
+    // Prefer the pre-fetched DB team object; fall back to the static teams.js
+    // lookup for the legacy key-based path (compact cards, direct URL access).
+    const homeTeam = homeTeamProp || TEAMS[homeTeamKey]||TEAMS.mars;
+    const awayTeam = awayTeamProp || TEAMS[awayTeamKey]||TEAMS.saturn;
     return {
       minute:0,score:[0,0],possession:[50,50],momentum:[0,0],
       events:[],isPlaying:false,
@@ -1232,7 +1245,9 @@ const MatchSimulator = ({
   useEffect(()=>{
     if(!autoStart)return;
     const timer=setTimeout(()=>{
-      const mgr=createAIManager(TEAMS[homeTeamKey]||TEAMS.mars,TEAMS[awayTeamKey]||TEAMS.saturn);
+      // Use pre-fetched DB team objects if available, otherwise fall back to
+      // the static teams.js lookup (same precedence as initState above).
+      const mgr=createAIManager(homeTeamProp||TEAMS[homeTeamKey]||TEAMS.mars,awayTeamProp||TEAMS[awayTeamKey]||TEAMS.saturn);
       aiRef.current=mgr;
       setAiManager(mgr);
       setSpeed(200); // turbo — compact cards run fast
