@@ -32,7 +32,7 @@
 //  'skip'    (penalty sub-steps, VAR sub-steps, social) → nothing generated
 
 import Anthropic from '@anthropic-ai/sdk';
-import { PERS_ICON } from './constants.js';
+import { PERS_ICON, CLAUDE_MODEL } from './constants.js';
 import { rnd, rndI } from './utils.js';
 
 // ── Commentator Personalities ─────────────────────────────────────────────────
@@ -195,7 +195,7 @@ export class AgentSystem {
    */
   async _call(system, messages, maxTokens = 120) {
     const response = await this.client.messages.create({
-      model:      'claude-haiku-4-5-20251001',
+      model:      CLAUDE_MODEL,
       max_tokens: maxTokens,
       system,
       messages,
@@ -227,7 +227,7 @@ export class AgentSystem {
   async _callStream(system, messages, maxTokens = 100, onChunk) {
     let text = '';
     const stream = this.client.messages.stream({
-      model:      'claude-haiku-4-5-20251001',
+      model:      CLAUDE_MODEL,
       max_tokens: maxTokens,
       system,
       messages,
@@ -1943,7 +1943,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
 
     try {
       const raw = await this.client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: CLAUDE_MODEL,
         // 450 tokens — increased from 300 to accommodate edict + intentions +
         // sealedFate fields without truncation.
         max_tokens: 450,
@@ -2186,7 +2186,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
 
     try {
       const raw = await this.client.messages.create({
-        model:      'claude-haiku-4-5-20251001',
+        model:      CLAUDE_MODEL,
         max_tokens: 350,
         system:     CosmicArchitect.SYSTEM,
         messages:   [...this.history.slice(-4), { role: 'user', content: userMsg }],
@@ -2355,7 +2355,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
 
     try {
       const raw = await this.client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: CLAUDE_MODEL,
         // 550 tokens — lore saves now include playerRelationshipUpdates in
         // addition to player arcs and the Verdict, so they need more room.
         max_tokens: 550,

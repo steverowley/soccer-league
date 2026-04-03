@@ -56,7 +56,8 @@ export default function Leagues() {
         setLeagues(data);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[ISL] Leagues fetch failed:', err);
         setError(true);
         setLoading(false);
       });

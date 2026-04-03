@@ -99,7 +99,8 @@ export default function Players() {
         setTeamsByLeague(grouped);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[ISL] Players fetch failed:', err);
         setError(true);
         setLoading(false);
       });
@@ -290,9 +291,11 @@ function TeamRosterCard({ team }) {
             <span style={{ textAlign: 'right' }}>OVR</span>
           </div>
 
-          {/* Player rows — starters first (sorted above), then bench */}
-          {players.map((player, idx) => (
-            <PlayerRow key={idx} player={player} />
+          {/* Player rows — starters first (sorted above), then bench.
+              Key on player.id (DB UUID) rather than array index so React
+              correctly reconciles rows if the roster order changes. */}
+          {players.map((player) => (
+            <PlayerRow key={player.id} player={player} />
           ))}
         </div>
       ) : (

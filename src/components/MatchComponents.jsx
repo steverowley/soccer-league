@@ -15,7 +15,7 @@
 //   PERS_ICON — maps personality key → emoji
 
 import { useState } from "react";
-import { C, bdr, PERS, PERS_ICON } from "../constants.js";
+import { C, bdr, PERS, PERS_ICON, CLAUDE_MODEL } from "../constants.js";
 import { COMMENTATOR_PROFILES } from "../agents.js";
 
 // ── Stat ──────────────────────────────────────────────────────────────────────
@@ -505,7 +505,26 @@ export const ArchitectInterferenceCard = ({ item }) => {
 
 /**
  * Full-screen modal for entering and testing an Anthropic API key.
- * The key is persisted to localStorage and never sent to any server.
+ *
+ * SECURITY NOTE — localStorage key storage
+ * ─────────────────────────────────────────
+ * The key is written to localStorage so it survives page refreshes without
+ * the user having to re-enter it each session.  This is a deliberate UX
+ * trade-off for a client-side-only app with no backend proxy available.
+ *
+ * Known risk: any script running on the same origin (e.g. via an XSS
+ * vulnerability in a dependency) could read localStorage and exfiltrate the
+ * key.  Mitigations in place:
+ *   • Content-Security-Policy headers should be configured at the host level
+ *     to minimise XSS surface.
+ *   • The Anthropic SDK requires dangerouslyAllowBrowser: true, which is
+ *     intentional and documented — this app calls the API directly from the
+ *     browser by design (no server-side proxy exists).
+ *   • Users are advised to use a key scoped to minimal permissions and to
+ *     rotate it if they suspect compromise.
+ *
+ * The proper long-term fix is a thin backend proxy that holds the key
+ * server-side and forwards requests, so the key never touches the browser.
  *
  * @param {{ apiKey: string, setApiKey: Function, setShowApiKeyModal: Function }} props
  * @returns {JSX.Element}
@@ -516,6 +535,8 @@ export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
   const [testResult, setTestResult] = useState(null);
 
   const save = () => {
+    // Persist to localStorage so the key survives page refresh.
+    // See the security note in the JSDoc above for the known risk and rationale.
     localStorage.setItem('isi_api_key', draft);
     setApiKey(draft);
     setShowApiKeyModal(false);
@@ -528,7 +549,7 @@ export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
       const { default: Anthropic } = await import('@anthropic-ai/sdk');
       const client = new Anthropic({ apiKey: draft, dangerouslyAllowBrowser: true });
       await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: CLAUDE_MODEL,
         max_tokens: 5,
         messages: [{ role: 'user', content: 'hi' }],
       });
