@@ -991,6 +991,117 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
   } else if (item.type === 'team_talk') {
     icon   = '📢';
     accent = teamColor;
+
+  // ── Structural match milestones ─────────────────────────────────────────
+  // These events mark the rhythm of a real football match: kick-off signals,
+  // stoppage time boards, and referee whistles.  Each has a distinct colour
+  // so the viewer can scan the feed and immediately locate match structure.
+  //
+  // kickoff / second_half_kickoff  → green (go signal; matches traffic-light
+  //   convention that viewers intuitively parse as "match starts now").
+  // stoppage_time                  → amber (the board is a warning / delay;
+  //   amber sits between yellow cards and neutral events).
+  // halftime_whistle               → slate-blue (a pause, cooler than active
+  //   play; distinct from fulltime so first and second half read differently).
+  // fulltime_whistle               → near-white (the match is over; high
+  //   contrast against the dark feed background draws the eye to the final
+  //   result line).
+  } else if (item.type === 'kickoff' || item.type === 'second_half_kickoff') {
+    icon   = '⚽';
+    accent = 'rgba(34,197,94,0.9)';   // green — match starts / resumes
+    bgTint = 'rgba(34,197,94,0.06)';
+    bold   = true;
+    larger = true;
+  } else if (item.type === 'stoppage_time') {
+    icon   = '🪧';
+    accent = '#F59E0B';               // amber — fourth official board signal
+    bgTint = 'rgba(245,158,11,0.06)';
+    larger = true;
+  } else if (item.type === 'halftime_whistle') {
+    icon   = '📯';
+    accent = '#94A3B8';               // slate — interval; cooler tone for break
+    bgTint = 'rgba(148,163,184,0.07)';
+    bold   = true;
+    larger = true;
+  } else if (item.type === 'fulltime_whistle') {
+    icon   = '📯';
+    accent = '#E2E8F0';               // near-white — match over; maximum contrast
+    bgTint = 'rgba(226,232,240,0.08)';
+    bold   = true;
+    larger = true;
+
+  // ── Substitution ────────────────────────────────────────────────────────
+  // First-class standalone entry that fires whenever a player comes on.
+  // Uses a double-arrow ↕ and subdued styling — important but not dramatic.
+  } else if (item.type === 'substitution') {
+    icon   = '↕';
+    accent = 'rgba(148,163,184,0.7)'; // muted slate; subs are routine changes
+    bgTint = 'rgba(148,163,184,0.05)';
+
+  // ── Second yellow → red ─────────────────────────────────────────────────
+  // isSecondYellow overrides the standard red-card path so the icon can
+  // show the double-badge (🟨🟥) rather than a plain 🟥.
+  } else if (item.cardType === 'red' && item.isSecondYellow) {
+    icon   = '🟨🟥';
+    accent = '#E05252';               // same red accent as straight red
+    bgTint = 'rgba(224,82,82,0.06)';
+    larger = true;
+
+  // ── Offside ─────────────────────────────────────────────────────────────
+  // A flag raise is a frequent, low-drama interruption.  Orange flag emoji
+  // and a muted accent keep it visible without competing with cards or goals.
+  } else if (item.type === 'offside') {
+    icon   = '🚩';
+    accent = 'rgba(251,146,60,0.8)';  // orange — assistant referee flag colour
+    bgTint = 'rgba(251,146,60,0.05)';
+
+  // ── Post / crossbar hit ──────────────────────────────────────────────────
+  // A dramatic near-miss deserves more prominence than a regular shot save.
+  // Gold accent echoes the referee's whistle (unused for goals), and +larger
+  // gives it the same visual weight as a yellow card.
+  } else if (item.type === 'post_hit') {
+    icon   = '🏃';
+    accent = '#FBBF24';               // gold — agonising near-miss colour
+    bgTint = 'rgba(251,191,36,0.06)';
+    bold   = true;
+    larger = true;
+
+  // ── Time-wasting yellow ──────────────────────────────────────────────────
+  // Shares the yellow card styling path above but this branch is never
+  // reached for cardType:'yellow' events (those hit the cardType check first).
+  // Kept here as a defensive fallback in case isTimeWasting events lose their
+  // cardType field during sequence flattening.
+  } else if (item.type === 'foul' && item.isTimeWasting) {
+    icon   = '🟨';
+    accent = '#FFD700';
+
+  // ── VAR no-action ────────────────────────────────────────────────────────
+  // Styled identically to a real VAR check (purple, 📺) but without the
+  // heightened background tint used for goal reviews — it's a non-event by
+  // definition, and the understated treatment reflects that.
+  } else if (item.type === 'var_no_action') {
+    icon   = '📺';
+    accent = C.purple;                // #9A5CF4 — consistent with var_review
+
+  // ── Goal-line clearance ──────────────────────────────────────────────────
+  // Nearly a goal — warrants the same visual weight as a post hit.
+  // Red tint (defensive heroics) distinguishes it from the gold post hit
+  // (attacking misfortune) while both sit in the "nearly" tier.
+  } else if (item.type === 'clearance_line') {
+    icon   = '🚫';
+    accent = '#F87171';               // soft red — last-ditch defensive act
+    bgTint = 'rgba(248,113,113,0.06)';
+    bold   = true;
+    larger = true;
+
+  // ── Goalkeeper claim ─────────────────────────────────────────────────────
+  // A confident GK claim is a positive defensive moment but not dramatic
+  // enough for a large row.  Subdued green-teal accent signals the keeper
+  // "winning" their zone without the intensity of a save or card.
+  } else if (item.type === 'gk_claim') {
+    icon   = '✋';
+    accent = 'rgba(52,211,153,0.75)'; // teal-green — keeper authority colour
+    bgTint = 'rgba(52,211,153,0.05)';
   }
 
   const fontSize = larger ? '12px' : '10px';

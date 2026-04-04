@@ -1730,6 +1730,38 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const atk = getPlayer(posTeam, posActive, 'attacking');
     if (!player || !atk) return null;
 
+    // ── Time-wasting yellow — 7 % in late/dying phases when team is leading ──
+    // Real football sees this constantly when a winning side slows restarts,
+    // holds the ball in the corner, or takes forever over throw-ins.
+    // We only fire it in the foul branch (the defending team is already
+    // acting as the obstructing side) to keep the probability realistic.
+    //
+    // Conditions:
+    //   phase late/dying  — minute 70+; the side protecting a lead is
+    //                       under pressure and tempted to waste time.
+    //   defTeam winning   — `scoreDiff` is from posTeam's perspective, so
+    //                       defTeam leads when scoreDiff < 0 (home-relative).
+    //   7 % roll          — about once every 14 late-game foul windows;
+    //                       roughly 1–2 per match when leading, matching real stats.
+    if ((phase === 'late' || phase === 'dying') && scoreDiff < 0 && Math.random() < 0.07) {
+      // Pick the player most likely to waste time — use mental stat as a proxy
+      // for composure under pressure (a composed player is more calculated).
+      const waster = getPlayer(defTeam, defActive, 'mental') || player;
+      return { minute: min, type: 'foul',
+        team: defTeam.shortName, player: waster.name,
+        cardType: 'yellow',
+        isTimeWasting: true,
+        commentary: pick([
+          `🟨 TIME WASTING! ${waster.name} booked — referee's patience finally runs out.`,
+          `🟨 ${waster.name} yellow for deliberate time-wasting. The crowd jeers; ${defTeam.shortName} couldn't care less.`,
+          `🟨 Ref books ${waster.name} for the delay. No more warnings — ${defTeam.shortName} have pushed it too far.`,
+          `🟨 ${waster.name} takes an age over the restart — yellow card. Worth every second, say ${defTeam.shortName}.`,
+        ]),
+        // Small positive swing for the scoring team whose momentum builds
+        // from the frustration; minor negative for the time-wasting side.
+        momentumChange: isHome ? [-1, 1] : [1, -1] };
+    }
+
     // ── Feature 5: Relationship rival-selection bias ─────────────────────
     // If the Architect has spotlighted active rivalry/grudge relationships,
     // bias the foul toward those specific player pairings so long-running
@@ -1825,7 +1857,15 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     }
     const sev = Math.min(100, sevRaw);
     let card = aim ? aim.shouldGiveCard(sev) : (sev > 85 ? 'red' : sev > 60 ? 'yellow' : null);
-    if (card === 'yellow' && playerStats[player.name]?.yellowCard) card = 'red';
+
+    // ── Second-yellow detection ───────────────────────────────────────────
+    // Must be evaluated BEFORE architectTantrum so the flag is accurate even
+    // when the tantrum escalation also fires.
+    // `isSecondYellow` drives a distinct commentary branch ("two yellows!")
+    // that is more dramatic and realistic than treating it like a straight red.
+    const isSecondYellow = card === 'yellow' && !!(playerStats[player.name]?.yellowCard);
+    if (isSecondYellow) card = 'red';
+
     // ── Feature 6: architectTantrum — cosmic rage, all yellows become reds ──
     // The Architect's tantrum suspends normal disciplinary thresholds.  Any
     // challenge that would earn a yellow is escalated to a straight red while
@@ -1844,18 +1884,53 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
         defender: penGk?.name, outcome: pseq.isGoal ? 'goal' : 'saved',
         commentary: pseq.outcomeCommentary,
         momentumChange: isHome ? [pseq.isGoal ? 6 : 1, 0] : [0, pseq.isGoal ? 6 : 1],
-        cardType: card, isPenalty: true, isGoal: pseq.isGoal,
+        cardType: card, isPenalty: true, isGoal: pseq.isGoal, isSecondYellow,
         animation: pseq.isGoal ? { type: 'goal', color: posTeam.color } : null,
         penaltySequence: pseq.sequence, penaltyTaker: pseq.penaltyTaker,
         isRedCard: pseq.isRed, isYellowCard: pseq.isYellow };
+    }
+    // ── VAR no-action check — 6 % on borderline non-penalty box incidents ───
+    // Real VAR reviews many incidents (especially box challenges) and finds
+    // nothing to overturn.  These "checked and confirmed" moments build
+    // paranoia without changing anything — pure Blaseball-style atmosphere.
+    //
+    // Conditions:
+    //   !inBox, !card  — the foul was waved away without punishment; had it
+    //                    been a clear red or inside the box it would already
+    //                    have gone through the penalty / card branches above.
+    //   6 % roll       — roughly 1 per match; the commentators note it and
+    //                    move on, which matches broadcast reality.
+    if (!inBox && !card && Math.random() < 0.06) {
+      const refName = aim?.referee?.name || 'The referee';
+      return { minute: min, type: 'var_no_action',
+        team: defTeam.shortName, player: player.name,
+        commentary: pick([
+          `📺 VAR checks the incident... nothing to see here. Original decision stands. Play on.`,
+          `📺 ${refName} is asked to review the challenge — VAR confirms: no clear and obvious error.`,
+          `📺 Brief VAR review. Multiple angles. ${refName} waves it away — nothing to overturn.`,
+          `📺 VAR: No penalty. No card. The original call is upheld. ${posTeam.shortName} protest, but it's final.`,
+          `📺 Checked and confirmed. ${refName} needed thirty seconds. The answer was always no.`,
+        ]),
+        momentumChange: [0, 0] };
     }
     // ── Location context ──────────────────────────────────────────────────
     // `inBox` is already computed above for penalty/free-kick routing.
     // We reuse it in commentary strings so the viewer knows whether the foul
     // was a penalty-box challenge or an open-field incident.
     const zoneLabel = inBox ? 'in the box' : (phase === 'late' || phase === 'dying') ? 'late in the game' : 'in midfield';
-    commentary = card === 'red'
-      // Red card commentary names the fouled player and notes the location —
+    commentary = isSecondYellow
+      // Second-yellow commentary is uniquely dramatic: the crowd knew the risk,
+      // the player ignored it, the referee had no choice.  Distinct from a
+      // straight red so the viewer understands the disciplinary history.
+      ? pick([
+          `🟨🟥 SECOND YELLOW! ${player.name} — booked again! He's off!`,
+          `🟨🟥 Two yellows — and ${player.name} is DISMISSED! Couldn't stay out of trouble!`,
+          `🟨🟥 ${player.name} already on a booking — fouls ${atk.name} and walks! Madness!`,
+          `🟨🟥 The second yellow was coming. ${player.name} had been warned. Now he's gone.`,
+          `🟨🟥 ${player.name}: yellow, yellow, RED. The most avoidable sending-off you'll see.`,
+        ])
+      : card === 'red'
+      // Straight red commentary names the fouled player and notes the location —
       // addressing the viewer's natural question of "what was it FOR and WHERE?"
       ? pick([
           `🟥 RED CARD! ${player.name} — reckless challenge on ${atk.name} ${inBox ? 'inside the area' : 'in open play'}!`,
@@ -1880,7 +1955,9 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     // fouledPlayer is stored on the event so the UI can display a secondary
     // context line ("Foul on X") beneath the card icon without parsing the
     // commentary string — keeping display logic out of the engine.
-    const foulEvt = { minute: min, type: 'foul', team: defTeam.shortName, player: player.name, fouledPlayer: atk.name, outcome: card || 'foul', commentary, momentumChange: [0, 0], cardType: card };
+    // isSecondYellow is forwarded so FeedRow can render a 🟨🟥 double-badge
+    // instead of a plain 🟥, making the dismissal reason immediately visible.
+    const foulEvt = { minute: min, type: 'foul', team: defTeam.shortName, player: player.name, fouledPlayer: atk.name, outcome: card || 'foul', commentary, momentumChange: [0, 0], cardType: card, isSecondYellow };
     if (card === 'red' && Math.random() < 0.40) {
       const cSeq = genConfrontationSeq(min, player, atk, aim?.referee, Math.random() < 0.25, aim?.getAgentByName(player.name), aim?.getAgentByName(atk.name));
       return { ...foulEvt, momentumChange: isHome ? [2, 0] : [0, 2], confrontationSequence: cSeq.sequence };
@@ -2066,6 +2143,29 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
       if (wx === WX.MAG && Math.random() < 0.28) {
         return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'goal', commentary: pick([`⚽ ${gk.name}'s gloves MALFUNCTION in the magnetic storm! It rolls in! 🧲`, `⚽ MAGNETIC INTERFERENCE! ${gk.name} drops it — ${player.name} can't believe it! 🧲`]), momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, animation: { type: 'goal', color: posTeam.color }, isWeatherGoal: true };
       }
+      // ── Post / crossbar hit — 15 % of shots in the near-goal band ──────────
+      // Only fires when net > 13 (the shot was genuinely close — the keeper
+      // was beaten or just got a fingertip) and a 15 % random roll succeeds.
+      // This range sits at the top of the saved band (net 5–15) so it
+      // represents balls that grazed the woodwork rather than comfortable holds.
+      //
+      // net threshold: 13 chosen so roughly the top ~15 % of the saved band
+      // produces woodwork drama — matches the ~5–8 post hits a real 90-min game sees.
+      if (net > 13 && Math.random() < 0.15) {
+        const woodwork = Math.random() < 0.6 ? 'post' : 'crossbar';
+        return { minute: min, type: 'post_hit',
+          team: posTeam.shortName, player: player.name, defender: gk.name,
+          outcome: 'post',
+          commentary: pick([
+            `🏃 ${woodwork.toUpperCase()}! ${player.name} finds the corner — it RATTLES the ${woodwork}! Agonising!`,
+            `🏃 OFF THE ${woodwork.toUpperCase()}! ${player.name} had ${gk.name} beaten — cruel geometry!`,
+            `🏃 ${player.name} curls it round ${gk.name} — but the ${woodwork} comes to ${defTeam.shortName}'s rescue!`,
+            `🏃 ${gk.name} beaten — but the ${woodwork} saves ${defTeam.shortName}! ${player.name} can't believe it!`,
+            `🏃 The ${woodwork} trembles — ${player.name}'s effort was that close to a goal!`,
+          ]),
+          // +2 momentum: nearly scored builds pressure even without a goal
+          momentumChange: isHome ? [2, 0] : [0, 2] };
+      }
       const saveComm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'saved', shotFlavour, matchCtx(player.name));
       // Counter-attack (20%)
       if (Math.random() < 0.20) {
@@ -2152,6 +2252,28 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     const net = player.attacking * 0.7 + player.athletic * 0.3 + rnd(-15, 15)
               - (defender.defending * 0.7 + defender.athletic * 0.3 + rnd(-15, 15));
     if (net > 20) {
+      // ── Offside flag — 10 % of breakthrough attempts ─────────────────────
+      // Offsides only occur when the attacker has beaten the defensive line
+      // (net > 20) — a player who gets intercepted or just makes progress
+      // could not have been offside.  The 10 % rate reflects real football
+      // where roughly 1 in 10 promising runs is flagged.
+      //
+      // We return immediately so no skill_moment or breakthrough event fires,
+      // matching real football where an offside call cancels the phase of play.
+      if (Math.random() < 0.10) {
+        return { minute: min, type: 'offside',
+          team: posTeam.shortName, player: player.name,
+          commentary: pick([
+            `🚩 OFFSIDE! ${player.name} caught in an advanced position — the flag goes up.`,
+            `🚩 ${player.name} breaks clear... but the assistant referee's flag is already raised. Offside.`,
+            `🚩 Flag! ${player.name} was marginally ahead of the last defender. ${defTeam.shortName} breathe again.`,
+            `🚩 ${player.name} thought he was through — but the linesman's flag cuts short the celebration.`,
+            `🚩 Tight call — ${player.name} offside by the narrowest of margins. Replays will debate this.`,
+          ]),
+          // Small negative momentum: the attacking team loses a promising run
+          // but there's no shot to show for it, so the swing is minor.
+          momentumChange: isHome ? [-1, 0] : [0, -1] };
+      }
       if (Math.random() < 0.22) {
         const skills = ['rabona', 'nutmeg', 'elastico', 'heel flick', 'step-over sequence', 'Cruyff turn', 'shoulder drop'];
         const skill  = pick(skills);
@@ -2232,9 +2354,16 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
     // net = (header.athletic×0.5 + header.attacking×0.5 + rnd) −
     //        (gk.defending×0.7 + gk.athletic×0.3 + rnd) − wxGkPen
     //
-    //   net > 20 → GOAL (headed in)
-    //   net > 10 → keeper catches/punches clear
-    //   else     → scramble / blocked / cleared
+    // Net outcome bands (tightened to add clearance_line tier):
+    //   net > 20      → GOAL (headed in past keeper)
+    //   net 16–20     → goal-line clearance (header beaten the keeper but a
+    //                   defender cleared it off / from the line)
+    //   net 11–15     → gk_claim (keeper commands the box cleanly or punches)
+    //   net ≤ 10      → scramble / blocked / cleared
+    //
+    // The clearance_line band (16–20) occupies the contested zone where the
+    // keeper is beaten but a last defender can still intervene — roughly
+    // matching the ~3–5 goal-line clearances a real match sees per season.
     player        = getPlayer(posTeam, posActive, 'technical');
     const gk      = getPlayer(defTeam, defActive, 'defending', 'GK');
     const header  = getPlayer(posTeam, posActive, 'athletic');
@@ -2255,26 +2384,47 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
       ].filter(Boolean));
       return { minute: min, type: 'corner_goal', team: posTeam.shortName, player: header.name, outcome: 'goal', commentary, momentumChange: isHome ? [3, 0] : [0, 3], isGoal: true, animation: { type: 'goal', color: posTeam.color } };
     }
+    // ── Goal-line clearance band (net 16–20) ──────────────────────────────
+    // The keeper is beaten; a last-ditch defender clears it on or behind the
+    // line.  `clearingPlayer` is the best defensive outfield player — picked
+    // by 'defending' stat rather than 'GK' to represent an outfield hero.
+    if (net > 15) {
+      const clearingPlayer = getPlayer(defTeam, defActive, 'defending') ?? gk;
+      return { minute: min, type: 'clearance_line',
+        team: posTeam.shortName, player: header.name, defender: clearingPlayer.name,
+        commentary: pick([
+          `🚫 OFF THE LINE! ${header.name}'s header had ${gk.name} beaten — ${clearingPlayer.name} clears on the line!`,
+          `🚫 GOAL-LINE CLEARANCE! ${clearingPlayer.name} gets there JUST in time. ${posTeam.shortName} can't believe it!`,
+          `🚫 Cleared off the line by ${clearingPlayer.name}! That was going in — incredible defending!`,
+          `🚫 ${header.name} thought he'd scored — but ${clearingPlayer.name} swoops to hack it away. Miraculous.`,
+          `🚫 ${defTeam.shortName} survive! ${clearingPlayer.name} with the most important touch of the game.`,
+        ]),
+        // +3 momentum: nearly-scored headers shift the game's narrative pressure
+        momentumChange: isHome ? [3, 0] : [0, 3] };
+    }
+    // ── Goalkeeper claim band (net 11–15) ─────────────────────────────────
+    // The keeper is comfortable enough to claim or punch confidently.
+    // Uses type 'gk_claim' (distinct from generic 'corner') so FeedRow can
+    // render a ✋ icon and the AI manager can react to dominant keeper displays.
     if (net > 10) {
-      commentary = pick([
-        `Corner from ${player.name}! ${gk.name} punches clear — two fists, decisive!`,
-        `${gk.name} claims the corner confidently — calls early, comes off the line and takes it at the highest point.`,
-        `Dangerous delivery — ${gk.name} tips it away around the post!`,
-        `${gk.name} gets two fists to it — punches clear beyond the penalty area!`,
-        `${gk.name} rises above the crowd — catches it cleanly under challenge. Solid.`,
-        `Corner well-taken — but ${gk.name} was always going to claim it. Commanded the box.`,
-        `${gk.name} punches under pressure! The defence let out a collective breath.`,
-      ]);
-      return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary, momentumChange: isHome ? [1, 0] : [0, 1] };
+      return { minute: min, type: 'gk_claim',
+        team: defTeam.shortName, player: gk.name,
+        commentary: pick([
+          `✋ ${gk.name} CLAIMS IT! Comes off the line to take it cleanly at the highest point.`,
+          `✋ Corner from ${player.name}! ${gk.name} punches clear — two fists, decisive command!`,
+          `✋ ${gk.name} rises above the crowd and catches it cleanly under challenge. Total authority.`,
+          `✋ Corner well-taken — but ${gk.name} was always going to claim it. Box dominated.`,
+          `✋ ${gk.name} punches it into the stands with both fists — no messing about.`,
+        ]),
+        momentumChange: [0, 0] };
     }
     commentary = pick([
       `Corner delivery cleared by ${defTeam.shortName} — headed away from the six-yard box.`,
       `Headed away from danger! ${defTeam.shortName} survive the set piece under pressure.`,
-      `${defTeam.shortName} scramble it clear off the line — bodies everywhere, barely survive.`,
+      `${defTeam.shortName} scramble it clear — bodies everywhere, barely survive.`,
       `First contact blocked! ${defTeam.shortName} hold firm at the back post and clear their lines.`,
       `Punched clear — hacked away! ${defTeam.shortName} ride the pressure and get it upfield.`,
       `Delivery drifts behind — out for a throw. ${defTeam.shortName} hold their shape; corner comes to nothing.`,
-      `${defTeam.shortName} bodies on the line — cleared away from the near post!`,
     ]);
     return { minute: min, type: 'corner', team: posTeam.shortName, player: player.name, outcome: 'cleared', commentary, momentumChange: [0, 0] };
 
