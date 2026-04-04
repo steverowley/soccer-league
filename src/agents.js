@@ -1441,6 +1441,10 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
   // ── Constructor ────────────────────────────────────────────────────────────
 
   constructor(apiKey, { homeTeam, awayTeam, homeManager, awayManager, stadium, weather }) {
+    // Store the raw key so guards that need to check key presence (e.g.
+    // getPreMatchOmen) can do so without inspecting the Anthropic client object,
+    // which is always constructed regardless of whether apiKey is truthy.
+    this.apiKey       = apiKey;
     this.client       = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     this.homeTeam     = homeTeam;
     this.awayTeam     = awayTeam;
@@ -1505,6 +1509,120 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     this.activeCurses = [];       // [{ playerName, magnitude, startMin }]
     this.activeBlesses = [];      // [{ playerName, magnitude, startMin }]
     this.activePossessions = [];  // [{ playerName, magnitude, startMin, window }]
+  }
+
+  // ── Pre-match Omen ────────────────────────────────────────────────────────
+
+  /**
+   * Generates a cryptic pre-match omen and cosmic match title before kickoff.
+   *
+   * Called once when the match page loads (before the user clicks Kick Off).
+   * The omen and title set atmospheric tone without revealing any mechanics —
+   * fans should sense The Architect's presence and wonder what it means, not
+   * be told what will happen.
+   *
+   * WHY CALL THIS BEFORE KICKOFF
+   * ─────────────────────────────
+   * Blaseball's core UX insight: the cosmic horror should feel like it was
+   * *already there* before the game started, not something that materialises
+   * mid-match.  The pre-match omen establishes The Architect as a pre-existing
+   * watcher, not a commentary voice.
+   *
+   * RIVALRY LORE INJECTION
+   * ───────────────────────
+   * If `rivalryThreads[key]` exists in the persisted lore, the omen alludes to
+   * prior encounters obliquely.  This rewards returning fans without spelling
+   * out the history — they recognise the reference; new fans sense depth.
+   *
+   * TOKEN BUDGET
+   * ─────────────
+   * 80 max tokens — enough for one omen sentence + a short title.  Keeping
+   * this tiny ensures the pre-match call resolves before the user can click
+   * Kick Off on any reasonable connection.
+   *
+   * @returns {Promise<{omen:string, matchTitle:string, rivalryContext:boolean}>}
+   *   omen          — one cryptic sentence, never longer than ~20 words
+   *   matchTitle    — 3–5 word cosmic name for this specific match
+   *   rivalryContext — true if prior encounter lore exists for these teams
+   */
+  async getPreMatchOmen() {
+    // Check whether lore exists for this specific matchup so the omen can
+    // allude to past encounters.  _rivalryKey() sorts team shortNames so the
+    // key is consistent regardless of which team is home/away.
+    const rivalry = this.lore.rivalryThreads[this._rivalryKey()];
+    const rivalryContext = !!(rivalry?.thread);
+
+    if (!this.apiKey) {
+      // ── Procedural fallback (no API key) ─────────────────────────────────
+      // this.client is always constructed (even with an empty key) so we must
+      // check this.apiKey directly rather than checking for client existence.
+      // Six generic omens chosen at random; one special rivalry line used
+      // whenever prior encounter lore exists so repeat matchups feel distinct.
+      // Titles use evocative cosmic phrasing — no team names, no spoilers.
+      const omens = [
+        'The void stirs. Something old turns its gaze toward this field.',
+        'The threads converge. What is written cannot be unwritten.',
+        'Two forces approach. The tapestry trembles at their coming.',
+        'The Architect has been watching. The moment is nearly here.',
+        'Between the stars, something waits. Today it will be fed.',
+        'The pattern shifts. The players do not yet know what they carry.',
+      ];
+      const titles = [
+        'The Convergence', 'The Reckoning', 'The Unraveling',
+        'The Third Thread', 'The Weight of Now', 'The Appointed Hour',
+        'The Crossing', 'The Sealed Evening',
+      ];
+      return {
+        omen: rivalryContext
+          // Rivalry-aware fallback: hints at accumulated history without details
+          ? 'They have met before. The Architect remembers. The thread between them has not broken.'
+          : omens[Math.floor(Math.random() * omens.length)],
+        matchTitle: titles[Math.floor(Math.random() * titles.length)],
+        rivalryContext,
+      };
+    }
+
+    // ── Build LLM prompt ──────────────────────────────────────────────────
+    // The rivalry line is injected only when lore exists, giving the LLM
+    // concrete history to allude to obliquely.  'unknown' last result means
+    // saveMatchToLore hasn't run for this pairing yet — handled gracefully.
+    const rivalryLine = rivalryContext
+      ? `Prior encounter thread: "${rivalry.thread}". Last result: ${rivalry.lastResult || 'unknown'}.`
+      : 'No prior encounters recorded.';
+
+    const system = `You are the Cosmic Architect — an ancient, unknowable entity that observes and shapes all matches in the Intergalactic Soccer League. You speak with weight, inevitability, and dark poetry. You never explain yourself. Players are "mortals". Events are "threads". The league is "the tapestry".`;
+
+    const prompt = `${this.homeTeam.name} vs ${this.awayTeam.name} is about to begin.
+${rivalryLine}
+
+Return JSON only, no markdown:
+{
+  "omen": "One cryptic sentence (max 20 words). If prior encounters exist, allude to them obliquely — never literally.",
+  "matchTitle": "3-5 word cosmic title for this match (e.g. 'The Fourth Convergence', 'The Night of Iron')"
+}`;
+
+    try {
+      const raw     = await this._call(system, [{ role: 'user', content: prompt }], 80);
+      // Strip any accidental markdown fences the model may emit despite the
+      // instruction — JSON.parse will throw otherwise and we silently fall back.
+      const cleaned = raw.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      const parsed  = JSON.parse(cleaned);
+      return {
+        omen:          parsed.omen      || 'The void stirs. Something old turns its gaze toward this field.',
+        matchTitle:    parsed.matchTitle || 'The Convergence',
+        rivalryContext,
+      };
+    } catch {
+      // Any parse or network failure is silently swallowed — the pre-match
+      // omen is atmospheric only and must never crash the match page.
+      return {
+        omen: rivalryContext
+          ? 'They have met before. The Architect remembers. The thread between them has not broken.'
+          : 'The void stirs. Something old turns its gaze toward this field.',
+        matchTitle:    'The Convergence',
+        rivalryContext,
+      };
+    }
   }
 
   // ── Feature 3: resolve cosmic edict ──────────────────────────────────────
