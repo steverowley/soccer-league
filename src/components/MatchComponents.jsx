@@ -49,19 +49,25 @@ export const Stat = ({ label, a, b, homeColor, awayColor }) => (
  *   Active (on pitch)  — full opacity, name tinted in team colour, clickable to
  *                        open the PlayerCard detail modal.
  *   Inactive (bench)   — 50 % opacity, default cursor, not interactive.
+ *   Featured mortal    — ✦ glyph prepended with violet glow; signals that The
+ *                        Architect is watching this player.  No tooltip or label
+ *                        is shown — fans must infer the meaning themselves.
  *
  * @param {Object}   props
- * @param {Object}   props.player     Player data object (name, position, stats)
- * @param {Object}   props.stats      Live match stats keyed by player name
- * @param {boolean}  props.isActive   True when the player is currently on pitch
- * @param {string}   props.teamColor  Hex team accent colour for name highlight
- * @param {Array}    props.agents     AI agent array for the team (may be null)
- * @param {boolean}  props.isHome     Whether this player belongs to the home team
- * @param {string}   props.teamName   Short team name shown in the PlayerCard modal
- * @param {Function} props.onSelect   Callback invoked with player data when clicked
+ * @param {Object}   props.player      Player data object (name, position, stats)
+ * @param {Object}   props.stats       Live match stats keyed by player name
+ * @param {boolean}  props.isActive    True when the player is currently on pitch
+ * @param {string}   props.teamColor   Hex team accent colour for name highlight
+ * @param {Array}    props.agents      AI agent array for the team (may be null)
+ * @param {boolean}  props.isHome      Whether this player belongs to the home team
+ * @param {string}   props.teamName    Short team name shown in the PlayerCard modal
+ * @param {Function} props.onSelect    Callback invoked with player data when clicked
+ * @param {boolean}  [props.isFeatured] True when The Architect has designated this
+ *                                      player as a featured mortal for this match.
+ *                                      Triggers the ✦ violet glow marker.
  * @returns {JSX.Element}
  */
-export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, teamName, onSelect }) => {
+export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, teamName, onSelect, isFeatured }) => {
   const s = stats[player.name] || {};
   const agent = agents?.find(a => a.player.name === player.name);
   const emo = agent?.emotion;
@@ -97,6 +103,18 @@ export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, 
             }}>
               {player.jersey_number}
             </span>
+          )}
+          {/* ── Featured mortal marker ───────────────────────────────────────
+              The ✦ glyph signals that The Architect has designated this player
+              as a featured mortal in the current proclamation.  No explanation
+              is provided — intentionally cryptic so fans notice and wonder.
+              The violet glow matches the Architect's signature #9D6FFB colour. */}
+          {isFeatured && (
+            <span style={{
+              color: '#9D6FFB',
+              textShadow: '0 0 6px rgba(157,111,251,0.6)',
+              flexShrink: 0,
+            }}>✦</span>
           )}
           {s.subbedOn ? '🔺 ' : ''}{player.name}
           {PERS_ICON[agent?.personality]
@@ -521,6 +539,357 @@ export const ArchitectInterferenceCard = ({ item }) => {
     </div>
   );
 };
+
+// ── PreMatchArchitectZone ─────────────────────────────────────────────────────
+
+/**
+ * Pre-match atmospheric panel shown in the Architect zone before kickoff.
+ *
+ * Establishes The Architect as a pre-existing cosmic presence rather than a
+ * mid-match commentary voice — the core Blaseball UX insight that the horror
+ * should feel like it was *already there* before play began.
+ *
+ * The panel has three visual layers:
+ *   1. A cosmic match title in small-caps above the omen — gives each fixture
+ *      a unique identity before a single minute has passed.
+ *   2. The omen text — one cryptic sentence, no attribution, no explanation.
+ *   3. A "rivalry memory" line shown only when prior encounter lore exists —
+ *      rewards returning fans who recognise the reference.
+ *
+ * If `omen` is null (still loading or no API key before teams are selected)
+ * a single pulsing "The Architect stirs…" placeholder is shown instead.
+ *
+ * WHY NO TOOLTIP / LABEL
+ * ───────────────────────
+ * Blaseball's power came from unexplained weirdness.  Fans theorised, wikis
+ * were built.  Providing a label ("This is The Architect's pre-match omen")
+ * collapses that mystery.  The void-black aesthetic is enough signal.
+ *
+ * @param {Object}  props
+ * @param {Object|null} props.omen   Result of CosmicArchitect.getPreMatchOmen()
+ *                                   Shape: { omen, matchTitle, rivalryContext }
+ *                                   null while the async call is in-flight.
+ * @returns {JSX.Element}
+ */
+export const PreMatchArchitectZone = ({ omen }) => {
+  // The Architect's canonical colour used across all cosmic surfaces.
+  const ARCHITECT_COLOR = '#9D6FFB';  // brighter violet — legible on pure black
+
+  return (
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px 16px',
+      // Deep void black — same as ArchitectCard/ArchitectInterferenceCard so
+      // all Architect surfaces share one visual identity.
+      backgroundColor: '#050308',
+      // Subtle radial bloom from the left echoes the in-match Architect cards,
+      // making the zone feel like a window into the same cosmic plane.
+      backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.08) 0%, transparent 70%)',
+      // architectPulse is defined inline in App.jsx's <style> block — 3 s
+      // ease-in-out infinite glow shared by all Architect UI surfaces.
+      animation: 'architectPulse 3s ease-in-out infinite',
+      textAlign: 'center',
+      minHeight: '120px',
+    }}>
+      {omen ? (
+        <>
+          {/* ── Cosmic match title ────────────────────────────────────────────
+              3-5 word title generated by The Architect before kickoff.
+              Upper-case small-caps with wide letter-spacing — distinct from
+              every other text element on the page so it reads as a title, not
+              commentary.  The ∷ delimiters are borrowed from philosophical
+              notation, reinforcing the ancient/cosmic voice. */}
+          <div style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: ARCHITECT_COLOR,
+            textShadow: `0 0 10px rgba(157,111,251,0.5)`,
+            marginBottom: '10px',
+            opacity: 0.9,
+          }}>
+            ∷ {omen.matchTitle} ∷
+          </div>
+
+          {/* ── Omen text ────────────────────────────────────────────────────
+              One cryptic sentence.  Italic to visually distinguish it from
+              play-by-play commentary.  Muted lavender (#E2D9F3) matches the
+              colour used for proclamation text in ArchitectCard. */}
+          <div style={{
+            fontSize: '12px',
+            fontStyle: 'italic',
+            lineHeight: '1.6',
+            color: '#E2D9F3',
+            maxWidth: '280px',
+            marginBottom: omen.rivalryContext ? '10px' : '12px',
+          }}>
+            "{omen.omen}"
+          </div>
+
+          {/* ── Rivalry memory line ───────────────────────────────────────────
+              Only rendered when the Architect's lore records a prior encounter
+              between these teams.  A single cryptic acknowledgement — no
+              details, no spoilers.  Fans who were there before will feel it;
+              new fans sense accumulated depth without knowing what it means.
+              Displayed at lower opacity so it reads as a secondary signal. */}
+          {omen.rivalryContext && (
+            <div style={{
+              fontSize: '10px',
+              color: ARCHITECT_COLOR,
+              opacity: 0.5,
+              letterSpacing: '0.06em',
+            }}>
+              The Architect has watched this before.
+            </div>
+          )}
+
+          {/* ── Observing indicator ───────────────────────────────────────────
+              Minimal blink animation signals The Architect is active / present.
+              CSS `blink` keyframe defined in App.jsx's <style> block (1 s
+              step-end infinite). The text alone is enough — no label needed. */}
+          <div style={{
+            marginTop: '14px',
+            fontSize: '10px',
+            color: ARCHITECT_COLOR,
+            opacity: 0.35,
+            letterSpacing: '0.10em',
+            animation: 'blink 1s step-end infinite',
+          }}>
+            The Architect observes.
+          </div>
+        </>
+      ) : (
+        /* ── Loading / no-omen placeholder ──────────────────────────────────
+           Shown while getPreMatchOmen() is still in-flight or when teams have
+           not yet been resolved.  Uses the same dim-lavender colour so the
+           zone never feels broken — just expectant. */
+        <div style={{
+          fontSize: '11px',
+          fontStyle: 'italic',
+          color: '#E2D9F3',
+          opacity: 0.25,
+          animation: 'blink 1s step-end infinite',
+        }}>
+          The void stirs…
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── SealedFateCard ────────────────────────────────────────────────────────────
+
+/**
+ * Pinned prophecy card shown inside the Architect zone once The Architect
+ * issues a sealedFate during an in-match proclamation.
+ *
+ * The card is pinned *above* the scrollable proclamation feed so it remains
+ * visible at all times — fans watch the match looking for the moment the
+ * prophecy is fulfilled.  This is the single most Blaseball-like mechanic in
+ * the Architect surface: a public prediction with unknown timing that resolves
+ * during play, creating shared anticipation without explanation.
+ *
+ * TWO STATES
+ * ───────────
+ *   Pending   — violet-red gradient border with architectPulse animation.
+ *               Header reads "A FATE HAS BEEN SEALED" in small caps.
+ *               Prophecy text in italics.  No further explanation.
+ *
+ *   Fulfilled — border and header transition to amber/gold.
+ *               Header becomes "THE PROPHECY HAS COME TO PASS".
+ *               Text colour shifts to gold (#FBD38D) to signal resolution.
+ *               The same text is shown so fans can match what was predicted
+ *               against what just happened.
+ *
+ * WHY NO EXPLANATION OF WHICH EVENT FULFILLED IT
+ * ────────────────────────────────────────────────
+ * Keeping the resolution ambiguous (just the glow change + header swap)
+ * lets fans argue about *which* moment counts as fulfilment.  That debate
+ * is the social glue.
+ *
+ * @param {Object}  props
+ * @param {Object}  props.sealedProphecy   Shape: { prophecy: string, fulfilled: boolean }
+ * @returns {JSX.Element}
+ */
+export const SealedFateCard = ({ sealedProphecy }) => {
+  const { prophecy, fulfilled } = sealedProphecy;
+
+  // ── Colour tokens for pending vs fulfilled states ──────────────────────────
+  // Pending:   violet-red gradient border — unresolved, foreboding
+  // Fulfilled: amber/gold border + text — resolved, momentous
+  const borderColor   = fulfilled ? '#F59E0B' : '#9D6FFB';       // amber vs violet
+  const glowColor     = fulfilled ? 'rgba(245,158,11,0.5)' : 'rgba(157,111,251,0.4)';
+  const headerColor   = fulfilled ? '#F59E0B' : '#C084FC';        // amber vs soft violet
+  const textColor     = fulfilled ? '#FBD38D' : '#E2D9F3';        // gold vs lavender
+
+  return (
+    <div style={{
+      margin: '0 0 6px 0',
+      padding: '10px 12px',
+      backgroundColor: '#050308',
+      backgroundImage: `radial-gradient(ellipse at 20% 50%, ${fulfilled ? 'rgba(245,158,11,0.08)' : 'rgba(124,58,237,0.10)'} 0%, transparent 65%)`,
+      border: `1px solid rgba(${fulfilled ? '245,158,11' : '157,111,251'},0.3)`,
+      borderLeft: `3px solid ${borderColor}`,
+      // Only animate in the pending state — fulfilled cards should feel settled,
+      // not still pulsing with uncertainty.
+      animation: fulfilled ? 'none' : 'architectPulse 3s ease-in-out infinite',
+      // Amber outer glow on fulfillment draws the eye without a sound/notification
+      boxShadow: fulfilled ? `0 0 12px ${glowColor}` : 'none',
+      transition: 'all 0.8s ease',
+    }}>
+      {/* ── State header ──────────────────────────────────────────────────── */}
+      <div style={{
+        fontSize: '8px',
+        fontWeight: 700,
+        letterSpacing: '0.14em',
+        textTransform: 'uppercase',
+        color: headerColor,
+        marginBottom: '5px',
+      }}>
+        {fulfilled ? 'THE PROPHECY HAS COME TO PASS' : 'A FATE HAS BEEN SEALED'}
+      </div>
+
+      {/* ── Prophecy text ─────────────────────────────────────────────────── */}
+      <div style={{
+        fontSize: '11px',
+        fontStyle: 'italic',
+        lineHeight: '1.5',
+        color: textColor,
+        transition: 'color 0.8s ease',
+      }}>
+        "{prophecy}"
+      </div>
+    </div>
+  );
+};
+
+// ── EdictBadge ────────────────────────────────────────────────────────────────
+
+/**
+ * Compact glyph badge rendered in the Cosmic Pressure header showing the
+ * current cosmic edict's polarity and magnitude.
+ *
+ * WHY GLYPHS INSTEAD OF WORDS
+ * ────────────────────────────
+ * Showing "BOON magnitude 7" tells fans exactly what's happening mechanically,
+ * which collapses the mystery.  Glyphs with no label invite fans to notice
+ * patterns ("✦✦✦ appeared before a big home win — what does it mean?") and
+ * theorise.  The three polarity glyphs are visually distinct enough to
+ * differentiate without explanation once fans have seen them a few times.
+ *
+ * GLYPH SEMANTICS
+ * ────────────────
+ *   ✦  (gold)   — boon:  something favourable has been decreed
+ *   ⌀  (red)    — curse: something burdensome has been decreed
+ *   ⟁  (violet) — chaos: the edict's effect is unpredictable
+ *
+ * MAGNITUDE ENCODING
+ * ───────────────────
+ * The glyph is repeated 1–3 times based on magnitude:
+ *   1–3  → one glyph   (subtle influence)
+ *   4–7  → two glyphs  (moderate force)
+ *   8–10 → three glyphs (overwhelming decree)
+ *
+ * @param {Object} props
+ * @param {Object} props.edict   Shape: { polarity: 'boon'|'curse'|'chaos', magnitude: number }
+ * @returns {JSX.Element}
+ */
+export const EdictBadge = ({ edict }) => {
+  // ── Polarity → glyph + colour mapping ─────────────────────────────────────
+  // Each polarity has a unique glyph so they are distinguishable even for
+  // colour-blind users (different shapes, not just different hues).
+  const POLARITY_GLYPH = {
+    boon:  { glyph: '✦', color: '#F59E0B' },  // gold  — favourable
+    curse: { glyph: '⌀', color: '#EF4444' },  // red   — burdensome
+    chaos: { glyph: '⟁', color: '#9D6FFB' },  // violet — unpredictable
+  };
+
+  const config = POLARITY_GLYPH[edict.polarity] || POLARITY_GLYPH.chaos;
+  const mag    = Math.min(10, Math.max(1, edict.magnitude || 5));
+
+  // ── Magnitude → repeat count ───────────────────────────────────────────────
+  // Three tiers so the badge scales visually with the edict's strength without
+  // becoming unreadably wide at high magnitudes.
+  //   1–3: one glyph   (subtle — fans may miss it at first)
+  //   4–7: two glyphs  (noticeable — most common range)
+  //   8–10: three glyphs (impossible to ignore)
+  const repeatCount = mag <= 3 ? 1 : mag <= 7 ? 2 : 3;
+  const glyphs = config.glyph.repeat(repeatCount);
+
+  return (
+    <span style={{
+      fontSize: '10px',
+      fontWeight: 700,
+      color: config.color,
+      // Glow intensity scales with magnitude — higher magnitude = brighter glow.
+      // 0.3 base opacity + 0.07 per tier (1 tier = 0.37, 2 = 0.44, 3 = 0.51)
+      textShadow: `0 0 ${6 + repeatCount * 2}px ${config.color}${Math.round((0.3 + repeatCount * 0.07) * 255).toString(16).padStart(2, '0')}`,
+      letterSpacing: '0.06em',
+      flexShrink: 0,
+      // Pill styling — keeps the badge visually distinct from the text labels
+      // around it while remaining compact.
+      padding: '1px 6px',
+      border: `1px solid ${config.color}40`,  // 25% alpha border
+      borderRadius: '3px',
+    }}>
+      {glyphs}
+    </span>
+  );
+};
+
+// ── ArchitectFlashCard ────────────────────────────────────────────────────────
+
+/**
+ * Ephemeral flash entry that appears in the Architect feed immediately before
+ * an interference card, creating a brief moment of anticipation.
+ *
+ * WHY THIS EXISTS
+ * ────────────────
+ * Without a warning, interference cards appear abruptly.  A 1–2 second flash
+ * before the card transforms the experience from "something happened" to
+ * "something is about to happen" — the distinction between surprise and dread.
+ * Dread is more Blaseball.
+ *
+ * IMPLEMENTATION NOTE
+ * ────────────────────
+ * This component renders with a `fadeInOut` CSS animation (defined in
+ * index.css: fade in over 0.3 s, hold, fade out by 2.5 s total).  App.jsx
+ * removes the flash feed item after 2500 ms so it does not persist in the
+ * scrollable history.
+ *
+ * @param {Object}  props
+ * @param {Object}  props.item   Feed item shape: { type:'architect_flash', text, minute }
+ * @returns {JSX.Element}
+ */
+export const ArchitectFlashCard = ({ item }) => (
+  <div style={{
+    padding: '8px 12px',
+    marginBottom: '6px',
+    textAlign: 'center',
+    // No border, no background — the text alone floats in the void.
+    // This deliberate sparseness makes it feel like a transmission, not a card.
+    backgroundColor: 'transparent',
+    animation: 'fadeInOut 2.5s ease forwards',
+  }}>
+    <span style={{
+      fontSize: '10px',
+      fontWeight: 700,
+      letterSpacing: '0.18em',
+      textTransform: 'uppercase',
+      color: '#9D6FFB',
+      // Pulsing glow on the text itself — the only visual element, so it
+      // needs to carry the full weight of "something cosmic is happening".
+      textShadow: '0 0 12px rgba(157,111,251,0.8)',
+    }}>
+      {item.text}
+    </span>
+  </div>
+);
 
 // ── ApiKeyModal ───────────────────────────────────────────────────────────────
 
