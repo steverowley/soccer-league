@@ -358,3 +358,42 @@ table {
   border-top: 1px solid rgba(227,224,213,0.1);
   margin-top: var(--space-16);
 }
+
+/* ── Cosmic Architect animations ───────────────────────────────────────── */
+/* Shared keyframes used by all Architect UI surfaces across the app.
+   Defined here (global CSS) rather than in App.jsx's inline <style> block
+   so they are available on pages outside the MatchSimulator (e.g. PlayerDetail
+   uses architectPulse on the Architect's Record lore cards).
+
+   architectPulse  — 3 s ease-in-out infinite violet box-shadow glow.
+                     Applied to ArchitectCard, ArchitectInterferenceCard,
+                     SealedFateCard (pending state), and PlayerDetail lore cards.
+                     The 3 s period is slow enough to feel geological / cosmic
+                     rather than urgent.
+
+   blink           — 1 s step-end infinite opacity toggle (1 → 0 → 1).
+                     Used for the "The Architect observes." indicator in
+                     PreMatchArchitectZone.  step-end produces a hard cut
+                     rather than a fade, which feels more like a cursor blink.
+
+   fadeInOut       — 2.5 s ease forwards: fade in (0→1 over 15%), hold (to 70%),
+                     fade out (to 100%).  Used by ArchitectFlashCard for the
+                     "∷ THE THREADS SHIFT ∷" pre-interference warning. */
+
+@keyframes architectPulse {
+  0%,100% { box-shadow: 0 0 6px 1px rgba(124,58,237,0.3); }
+  50%      { box-shadow: 0 0 14px 3px rgba(124,58,237,0.6); }
+}
+
+@keyframes blink {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0; }
+}
+
+@keyframes fadeInOut {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
