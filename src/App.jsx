@@ -17,7 +17,7 @@ import {
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
-import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary } from "./components/MatchComponents.jsx";
+import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
 
@@ -763,6 +763,47 @@ const MatchSimulator = ({
   // cinemaKey — incremented each time cinemaEvent changes; used as the React
   // key on the overlay div so CSS animations restart cleanly for every new event.
   const [cinemaKey,setCinemaKey]=useState(0);
+
+  // ── Architect surface state ────────────────────────────────────────────────
+  // These five pieces of state are derived from the CosmicArchitect instance
+  // (architectRef.current) but live in React state so components re-render
+  // when they change.  The Architect instance itself is mutated in place on
+  // every tick; we extract only the values the UI needs.
+  //
+  //   preMatchOmen        — result of getPreMatchOmen(): { omen, matchTitle,
+  //                         rivalryContext }.  Fetched once when teams are
+  //                         resolved, before the user clicks Kick Off.  Drives
+  //                         the PreMatchArchitectZone panel.
+  //
+  //   sealedProphecy      — the active sealedFate prophecy extracted from the
+  //                         latest proclamation: { prophecy: string,
+  //                         fulfilled: boolean }.  null until the Architect
+  //                         first issues a sealedFate.  Drives SealedFateCard.
+  //
+  //   featuredMortals     — array of player name strings currently designated
+  //                         by the Architect in the latest proclamation.  Used
+  //                         to render the ✦ marker in PlayerRow.  Reset to []
+  //                         at match start; updated on each proclamation.
+  //
+  //   currentEdict        — the active cosmic edict: { polarity, magnitude }.
+  //                         null until first proclamation with an edict.
+  //                         Drives the EdictBadge in the Cosmic Pressure header.
+  //
+  //   architectFinalVerdict — the Architect's closing judgment string returned
+  //                           by saveMatchToLore() after the final whistle.
+  //                           Takes priority over the fallback (last in-match
+  //                           proclamation text) passed to PostMatchSummary.
+  const [preMatchOmen,setPreMatchOmen]=useState(null);
+  const [sealedProphecy,setSealedProphecy]=useState(null);
+  const [featuredMortals,setFeaturedMortals]=useState([]);
+  const [currentEdict,setCurrentEdict]=useState(null);
+  const [architectFinalVerdict,setArchitectFinalVerdict]=useState(null);
+  // architectFlash — true for 2 500 ms immediately before an interference card
+  // appears, rendering a "∷ THE THREADS SHIFT ∷" overlay inside the Architect
+  // zone.  Boolean rather than a feed item so it doesn't pollute commentaryFeed
+  // and has no routing ambiguity.  Auto-cleared by setTimeout in the handler.
+  const [architectFlash,setArchitectFlash]=useState(false);
+
   const agentSystemRef=useRef(null);
   // Ref for the CosmicArchitect instance.  Kept as a ref (not state) for the
   // same reason as agentSystemRef: the Architect is mutated in place across
@@ -802,6 +843,56 @@ const MatchSimulator = ({
   // event always visible" default while letting users read history freely.
   useEffect(()=>{if(evtLogRef.current&&!commentaryUserScrolledRef.current)evtLogRef.current.scrollTop=0;},[commentaryFeed]);
   useEffect(()=>{return()=>{clearInterval(intervalRef.current);};},[]);
+
+  // ── Pre-match Architect omen ───────────────────────────────────────────────
+  // Fetches a cryptic omen + cosmic match title from the Architect before the
+  // user clicks Kick Off.  This establishes The Architect as a pre-existing
+  // cosmic watcher — not a mid-match voice — which is the core Blaseball UX
+  // insight: the horror was already there when you arrived.
+  //
+  // WHY A TEMPORARY INSTANCE
+  // ─────────────────────────
+  // The full CosmicArchitect (with homeManager, stadium, weather context) is
+  // only created in startMatch() once createAIManager() has run.  getPreMatchOmen()
+  // only needs homeTeam.name/shortName and the lore store, so we create a
+  // lightweight instance with null values for the unused fields.
+  // homeManager / awayManager / stadium / weather are null — safe because
+  // getPreMatchOmen() never reads them.
+  //
+  // WHY NOT STORE THIS INSTANCE
+  // ────────────────────────────
+  // startMatch() creates the authoritative instance with full context.  We
+  // deliberately don't store this one in architectRef so there is no risk of
+  // the full instance being skipped if the user has an API key.
+  //
+  // Runs once on mount (teams are stable props / initState values).
+  useEffect(()=>{
+    const homeTeam=matchState.homeTeam;
+    const awayTeam=matchState.awayTeam;
+    if(!homeTeam||!awayTeam)return;
+
+    // Create a minimal Architect instance just for the omen call.
+    // null fields are safe: getPreMatchOmen() only uses homeTeam, awayTeam,
+    // and this.lore (loaded from localStorage in the constructor).
+    const arch=new CosmicArchitect(apiKey||'',{
+      homeTeam,awayTeam,
+      homeManager:null,awayManager:null,stadium:null,weather:null,
+    });
+
+    arch.getPreMatchOmen()
+      .then(omen=>setPreMatchOmen(omen))
+      .catch(()=>{
+        // Silently fall back — the pre-match omen is atmospheric only and
+        // must never crash or block the match page on a network hiccup.
+        setPreMatchOmen({
+          omen:'The void stirs. Something old turns its gaze toward this field.',
+          matchTitle:'The Convergence',
+          rivalryContext:false,
+        });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]); // intentionally run once on mount — teams are stable for the match lifetime
+
   // ── Tick engine — normal speeds use setInterval; DRAMATIC uses a tick-locked
   // async loop that awaits LLM drain before each advance.
   //
@@ -1151,7 +1242,34 @@ const MatchSimulator = ({
     // major-event check), so this is safe to call on every tick.
     if(sys&&arch){
       arch.maybeUpdate(matchState.minute,newEvents,gameState,allAgents)
-        .then(proclamation=>{if(proclamation)routeAgentResult(proclamation);})
+        .then(proclamation=>{
+          if(!proclamation)return;
+          routeAgentResult(proclamation);
+
+          // ── Extract derived Architect state into React ──────────────────
+          // The Architect instance is mutated in place on every tick; we
+          // pull the values that drive UI components into React state here
+          // so components re-render immediately after each proclamation.
+          //
+          // featuredMortals — drives ✦ markers on PlayerRow; spread into a
+          //   new array so React detects the change (the instance array mutates).
+          if(arch.featuredMortals?.length){
+            setFeaturedMortals([...arch.featuredMortals]);
+          }
+
+          // currentEdict — drives EdictBadge in the Cosmic Pressure header.
+          //   Only set when a polarity exists (null = no edict yet).
+          if(arch.cosmicEdict?.polarity){
+            setCurrentEdict({polarity:arch.cosmicEdict.polarity,magnitude:arch.cosmicEdict.magnitude||5});
+          }
+
+          // sealedProphecy — drives SealedFateCard; only set once per match
+          //   (the first proclamation that carries a sealedFate).  Guard
+          //   against overwriting a still-pending prophecy with a null one.
+          if(arch.sealedFate?.prophecy&&!arch.sealedFate.consumed){
+            setSealedProphecy(p=>p&&!p.fulfilled?p:{prophecy:arch.sealedFate.prophecy,fulfilled:false});
+          }
+        })
         .catch((err)=>{ console.warn('[ISL] Architect maybeUpdate failed:', err); });
 
       // ── Architect Interference: one probability check per batch ────────────
@@ -1161,8 +1279,41 @@ const MatchSimulator = ({
       // The test-override (interferenceCount === 0 && minute >= 30) guarantees
       // at least one interference fires per match for easier QA.
       arch.maybeInterfereWith(matchState.minute, matchState, allAgents)
-        .then(r => { if (r) applyArchitectInterference(r); })
-        .catch((err) => { console.warn('[ISL] Architect maybeInterfereWith failed:', err); });
+        .then(r=>{
+          if(!r)return;
+          // ── Pre-interference flash ────────────────────────────────────────
+          // Set architectFlash true so ArchitectFlashCard renders immediately
+          // in the Architect zone; the actual interference card follows after
+          // 1 000 ms.  This gives fans a brief moment of dread before the
+          // interference is revealed — "something cosmic is moving".
+          //
+          // architectFlash is a simple boolean (not a feed item) so it has no
+          // routing ambiguity and does not pollute commentaryFeed history.
+          //
+          // 1 000 ms interference delay — long enough to let the flash register
+          // at NORMAL speed (1 000 ms/tick) without lingering at TURBO (200 ms).
+          // 2 500 ms flash duration — matches the CSS fadeInOut animation length.
+          setArchitectFlash(true);
+          setTimeout(()=>setArchitectFlash(false),2500); // 2 500 ms: fadeInOut duration
+          setTimeout(()=>applyArchitectInterference(r),1000); // 1 000 ms post-flash delay
+        })
+        .catch((err)=>{ console.warn('[ISL] Architect maybeInterfereWith failed:', err); });
+    }
+
+    // ── Sealed fate fulfillment detection ─────────────────────────────────────
+    // genEvent() calls arch.consumeFate() when a sealedFate fires, setting
+    // arch.sealedFate.consumed = true.  We check for this transition here (in
+    // the events useEffect) so the SealedFateCard flips to its fulfilled state
+    // immediately after the triggering event resolves — without needing an extra
+    // state field or a dedicated interval.
+    //
+    // WHY A FUNCTIONAL UPDATE
+    // ────────────────────────
+    // setSealedProphecy(p => ...) reads the latest React state rather than the
+    // closure-captured value so we never accidentally clear a prophecy that was
+    // just set by the proclamation handler in the same tick.
+    if(arch?.sealedFate?.consumed){
+      setSealedProphecy(p=>p&&!p.fulfilled?{...p,fulfilled:true}:p);
     }
 
     // ── Feature 6: pendingInterferences — architect boredom cascade ──────────
@@ -1714,6 +1865,14 @@ const MatchSimulator = ({
     // Reset feed UI state so the next match starts in Feed View with no
     // lingering post-match overlay from the previous game.
     setShowPostMatch(false);setFeedView(true);
+    // Reset Architect surface state so the next match starts clean.
+    // preMatchOmen is intentionally NOT reset — the omen persists until a new
+    // match is loaded (component remount), since it's fetched once on mount.
+    setSealedProphecy(null);
+    setFeaturedMortals([]);
+    setCurrentEdict(null);
+    setArchitectFinalVerdict(null);
+    setArchitectFlash(false);
   };
 
   useEffect(()=>{
@@ -1727,9 +1886,16 @@ const MatchSimulator = ({
       // can pass richer context (season, matchday) in a future integration.
       const arch=architectRef.current;
       if(arch){
+        // Capture the verdict string returned by saveMatchToLore() so it can
+        // be surfaced in PostMatchSummary.  The existing "Architect's Verdict"
+        // section already renders it — this just supplies a proper post-match
+        // judgment rather than reusing the last in-match proclamation text.
+        // .then() is safe here because saveMatchToLore returns a Promise; any
+        // rejection is silently absorbed since the verdict is cosmetic only.
         arch.saveMatchToLore(matchState,{
           league: matchState.homeTeam?.league || 'Intergalactic Soccer League',
-        });
+        }).then(verdict=>{ if(verdict) setArchitectFinalVerdict(verdict); })
+          .catch(()=>{});
       }
 
       // ── Mechanical result persistence ─────────────────────────────────────
@@ -2197,7 +2363,25 @@ const MatchSimulator = ({
           <h1 style={{color:'#E3E0D5',marginBottom:'8px'}}>
             {ms.homeTeam.shortName} <span style={{color:'#9A5CF4'}}>vs</span> {ms.awayTeam.shortName}
           </h1>
-
+          {/* ── Cosmic match title ─────────────────────────────────────────
+              Generated by getPreMatchOmen() before kickoff; persists for the
+              match lifetime.  Small-caps with ∷ delimiters signal The Architect's
+              voice without requiring a label.  Rendered only when the omen has
+              resolved (non-null matchTitle).  No tooltip or explanation — fans
+              infer meaning from repeated observation across matches. */}
+          {preMatchOmen?.matchTitle&&(
+            <div style={{
+              fontSize:'9px',
+              fontWeight:700,
+              letterSpacing:'0.16em',
+              textTransform:'uppercase',
+              color:'#9D6FFB',
+              opacity:0.6,
+              textShadow:'0 0 8px rgba(157,111,251,0.4)',
+            }}>
+              ∷ {preMatchOmen.matchTitle} ∷
+            </div>
+          )}
         </div>
 
         {/* ── Scoreboard card ───────────────────────────────────────────── */}
@@ -2317,57 +2501,99 @@ const MatchSimulator = ({
           </div>
         )}
 
-        {/* ── Chaos meter + Architect ────────────────────────────────────────
-            The card is split into two zones stacked vertically:
-              top   — chaos bar + status tags (flexShrink:0, auto height)
-              bottom — Architect feed (flex:1, scrollable)
-            padding:0 + overflow:'hidden' on the card itself keeps the inner
-            flex children flush to the card edges, matching the broadcast
-            booth and other multi-zone card patterns in this layout. */}
+        {/* ── Cosmic Pressure + Architect ───────────────────────────────────
+            Formerly "Chaos Meter" — renamed to "Cosmic Pressure" to frame
+            the same underlying value as The Architect's level of interest
+            rather than a generic intensity gauge.  Same mechanics, more
+            atmospheric framing that reinforces the Blaseball-style conceit.
+            The card is split into three zones stacked vertically:
+              top    — pressure bar + status tags (flexShrink:0, auto height)
+              middle — Architect zone: header + optional SealedFateCard pinned
+                       (flexShrink:0), then scrollable proclamation feed (flex:1)
+            The Architect zone is shown regardless of aiManager status so fans
+            see the pre-match panel before clicking Kick Off.
+            padding:0 + overflow:'hidden' keeps inner flex children flush. */}
         <div className="card section" style={{display:'flex',flexDirection:'column',height:'260px',padding:0,overflow:'hidden'}}>
-          {/* ── Chaos bar zone ── */}
-          <div style={{padding:'12px 16px',flexShrink:0}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-              <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Chaos Meter</div>
-              <div style={{fontSize:'11px',fontWeight:700,color:chaosColor}}>{chaosLabel}</div>
+          {/* ── Cosmic Pressure bar zone — only shown during an active match ── */}
+          {aiManager&&(
+            <div style={{padding:'12px 16px',flexShrink:0}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                {/* Header row: "Cosmic Pressure" title on left, EdictBadge (when
+                    active) and chaos label on right.  EdictBadge is tooltip-free
+                    — fans must infer what the glyphs mean from observation. */}
+                <div style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:chaosColor}}>Cosmic Pressure</div>
+                <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                  {currentEdict&&<EdictBadge edict={currentEdict}/>}
+                  <div style={{fontSize:'11px',fontWeight:700,color:chaosColor}}>{chaosLabel}</div>
+                </div>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
+                <span>Calm</span><span>Tense</span><span>Mayhem</span>
+              </div>
+              {/* Pressure bar — width driven by chaosLevel 0–100 */}
+              <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'8px'}}>
+                <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
+                {ms.minute>80&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Late Game</span>}
+                {ms.minute>70&&ms.minute<=80&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Final Stretch</span>}
+                {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span style={{padding:'4px 10px',backgroundColor:'#7A3ED4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Tied</span>}
+                {Math.abs(ms.score[0]-ms.score[1])===1&&<span style={{padding:'4px 10px',backgroundColor:'#333',border:'1px solid #666',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Close Match</span>}
+                {(ms.redCards.home+ms.redCards.away)>0&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Red Cards</span>}
+                {[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length>0&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Heated Bench</span>}
+                {ms.mvp&&<span style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #9A5CF4',color:'#9A5CF4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Full Time</span>}
+              </div>
             </div>
-            <div style={{display:'flex',justifyContent:'space-between',fontSize:'10px',opacity:0.5,marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.06em'}}>
-              <span>Calm</span><span>Tense</span><span>Mayhem</span>
-            </div>
-            {/* Chaos bar — width driven by chaosLevel 0–100 */}
-            <div style={{height:'8px',backgroundColor:'#111111',position:'relative',marginBottom:'8px'}}>
-              <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${chaosLevel}%`,backgroundColor:chaosColor,boxShadow:`0 0 8px ${chaosColor}`,transition:'width 0.5s'}}/>
-            </div>
-            <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
-              {ms.minute>80&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Late Game</span>}
-              {ms.minute>70&&ms.minute<=80&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Final Stretch</span>}
-              {Math.abs(ms.score[0]-ms.score[1])===0&&ms.minute>30&&<span style={{padding:'4px 10px',backgroundColor:'#7A3ED4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Tied</span>}
-              {Math.abs(ms.score[0]-ms.score[1])===1&&<span style={{padding:'4px 10px',backgroundColor:'#333',border:'1px solid #666',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Close Match</span>}
-              {(ms.redCards.home+ms.redCards.away)>0&&<span style={{padding:'4px 10px',backgroundColor:'#E05252',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Red Cards</span>}
-              {aiManager&&[...aiManager.activeHomeAgents,...aiManager.activeAwayAgents].filter(a=>a.emotion==='ecstatic'||a.emotion==='anxious').length>0&&<span style={{padding:'4px 10px',backgroundColor:'#FFA500',color:'#111',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Heated Bench</span>}
-              {ms.mvp&&<span style={{padding:'4px 10px',backgroundColor:'#1F1F1F',border:'1px solid #9A5CF4',color:'#9A5CF4',fontSize:'11px',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>Full Time</span>}
-            </div>
-          </div>
-          {/* ── Divider ── */}
-          <div style={{borderTop:'1px solid rgba(124,58,237,0.2)',flexShrink:0}}/>
-          {/* ── Architect feed zone ── */}
-          {/* Header kept outside the scroll container (flexShrink:0) so it
-              stays pinned to the top of the zone rather than scrolling out
-              of view when the Architect feed grows long.  Only the item list
-              below it scrolls. */}
-          {/* Full opacity + text-shadow so the label itself glows — matching
-              the ArchitectCard header treatment and reinforcing that this zone
-              is the Architect's domain within the chaos meter card. */}
-          <div style={{padding:'6px 12px 4px',flexShrink:0,fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9D6FFB',textShadow:'0 0 8px rgba(124,58,237,0.8)'}}>✦ The Architect</div>
-          <div style={{flex:1,minHeight:0,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
-            {architectItems.length===0
-              ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',padding:'8px 12px 12px',fontStyle:'italic'}}>The void stirs...</div>
-              :architectItems.map((item,i)=>{
-                if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
-                return <ArchitectCard key={i} item={item}/>;
-              })
-            }
-          </div>
+          )}
+          {/* ── Divider — only shown when pressure bar is visible ── */}
+          {aiManager&&<div style={{borderTop:'1px solid rgba(124,58,237,0.2)',flexShrink:0}}/>}
+          {/* ── Architect zone ─────────────────────────────────────────────────
+              Always rendered (ungated from aiManager) so The Architect is present
+              before kickoff.  Pre-match: shows PreMatchArchitectZone.
+              In-match: shows the pinned header, optional SealedFateCard, and the
+              scrollable proclamation/interference feed. */}
+          {!aiManager?(
+            // ── Pre-match: full-height atmospheric omen panel ──────────────
+            // Takes the entire card height since the pressure bar is hidden.
+            // PreMatchArchitectZone renders the cosmic match title, omen text,
+            // and rivalry memory line (if applicable).
+            <PreMatchArchitectZone omen={preMatchOmen}/>
+          ):(
+            // ── In-match: pinned header + optional fate card + scrollable feed
+            <>
+              {/* Header pinned at top of zone — glows with Architect violet.
+                  Kept outside scroll container (flexShrink:0) so it never
+                  scrolls out of view as the feed grows. */}
+              <div style={{padding:'6px 12px 4px',flexShrink:0,fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#9D6FFB',textShadow:'0 0 8px rgba(124,58,237,0.8)'}}>✦ The Architect</div>
+              {/* ArchitectFlashCard — ephemeral overlay shown for 2 500 ms
+                  immediately before an interference card appears.  Rendered
+                  conditionally on architectFlash boolean; the fadeInOut CSS
+                  animation handles the visual fade independently of React
+                  re-renders so no cleanup animation is needed. */}
+              {architectFlash&&(
+                <ArchitectFlashCard item={{type:'architect_flash',text:'∷ THE THREADS SHIFT ∷',minute:matchState.minute}}/>
+              )}
+              {/* SealedFateCard — pinned between header and scrollable feed.
+                  Only rendered once the Architect has issued a sealedFate.
+                  Shows the prophecy text; transitions to amber "fulfilled" state
+                  when genEvent() consumes the fate (arch.sealedFate.consumed). */}
+              {sealedProphecy&&(
+                <div style={{padding:'0 8px',flexShrink:0}}>
+                  <SealedFateCard sealedProphecy={sealedProphecy}/>
+                </div>
+              )}
+              {/* Scrollable proclamation + interference feed */}
+              <div style={{flex:1,minHeight:0,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:'#7C3AED #111'}}>
+                {architectItems.length===0
+                  ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',padding:'8px 12px 12px',fontStyle:'italic'}}>The void stirs...</div>
+                  :architectItems.map((item,i)=>{
+                    if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                    return <ArchitectCard key={i} item={item}/>;
+                  })
+                }
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Feed / Detailed view toggle ────────────────────────────────── */}
@@ -2924,11 +3150,14 @@ const MatchSimulator = ({
                 <div style={{padding:'4px 16px',fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.08em'}}>On Pitch</div>
                 {ms.activePlayers[k].map((name,i)=>{
                   const p=team.players.find(x=>x.name===name);
-                  return p?<PlayerRow key={i} player={p} stats={ms.playerStats} isActive={true} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName} onSelect={setSelectedPlayer}/>:null;
+                  // isFeatured — true when The Architect has designated this player
+                  // as a featured mortal in the current proclamation.  Renders the
+                  // ✦ violet-glow marker in PlayerRow without any label or tooltip.
+                  return p?<PlayerRow key={i} player={p} stats={ms.playerStats} isActive={true} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName} onSelect={setSelectedPlayer} isFeatured={featuredMortals.includes(p.name)}/>:null;
                 })}
                 <div style={{padding:'4px 16px',fontSize:'10px',opacity:0.4,textTransform:'uppercase',letterSpacing:'0.08em',marginTop:'8px'}}>Bench</div>
                 {team.players.filter(p=>!ms.activePlayers[k].includes(p.name)).sort((a,b)=>POS_ORDER[a.position]-POS_ORDER[b.position]).map((p,i)=>(
-                  <PlayerRow key={i} player={p} stats={ms.playerStats} isActive={false} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName} onSelect={setSelectedPlayer}/>
+                  <PlayerRow key={i} player={p} stats={ms.playerStats} isActive={false} teamColor={color} agents={agents} isHome={k==='home'} teamName={team.shortName} onSelect={setSelectedPlayer} isFeatured={featuredMortals.includes(p.name)}/>
                 ))}
               </div>
             </div>
@@ -3040,7 +3269,10 @@ const MatchSimulator = ({
           matchState={ms}
           // Last architect proclamation text shown as the "Verdict" section.
           // Pull the most recent proclamation from architectItems (newest first).
-          architectVerdict={architectItems.find(i=>i.type==='architect_proclamation')?.text||null}
+          {/* architectFinalVerdict (from saveMatchToLore) takes priority over the
+              fallback (last in-match proclamation) — it is a proper closing judgment
+              rather than a recycled mid-match decree. */}
+          architectVerdict={architectFinalVerdict||architectItems.find(i=>i.type==='architect_proclamation')?.text||null}
           onPlayAgain={()=>{
             setShowPostMatch(false);
             // Brief delay so the overlay fade is visible before the reset clears it.
@@ -3067,6 +3299,8 @@ const MatchSimulator = ({
         @keyframes cinemaPulse{0%{transform:scale(0.4);}65%{transform:scale(1.15);}100%{transform:scale(1);}}
         @keyframes livePulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
         @keyframes architectPulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,58,237,0.3);}50%{box-shadow:0 0 14px 3px rgba(124,58,237,0.6);}}
+        @keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
+        @keyframes fadeInOut{0%{opacity:0;}15%{opacity:1;}70%{opacity:1;}100%{opacity:0;}}
       `}</style>
     </div>
   );
