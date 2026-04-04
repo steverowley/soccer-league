@@ -1308,19 +1308,19 @@ const MatchSimulator = ({
       // viewer sees how many added minutes have been signalled before play continues.
       if(prev.minute===45&&!prev.inStoppageTime){
         const stopMins=rndI(1,3);
-        const stoppageEvt={minute:45,type:'stoppage_time',commentary:`🪧 The fourth official signals ${stopMins} minute${stopMins>1?'s':''} of added time.`,momentumChange:[0,0]};
+        const stoppageEvt={minute:45,type:'stoppage_time',commentary:`The fourth official signals ${stopMins} minute${stopMins>1?'s':''} of added time.`,momentumChange:[0,0]};
         return{...prev,stoppageTime:stopMins,inStoppageTime:true,events:[...prev.events,stoppageEvt].slice(-150)};
       }
       if(prev.minute===90&&!prev.inStoppageTime){
         const stopMins=rndI(2,5);
-        const stoppageEvt={minute:90,type:'stoppage_time',commentary:`🪧 The fourth official signals ${stopMins} minute${stopMins>1?'s':''} of added time!`,momentumChange:[0,0]};
+        const stoppageEvt={minute:90,type:'stoppage_time',commentary:`The fourth official signals ${stopMins} minute${stopMins>1?'s':''} of added time!`,momentumChange:[0,0]};
         return{...prev,stoppageTime:stopMins,inStoppageTime:true,events:[...prev.events,stoppageEvt].slice(-150)};
       }
       // ── Full-time whistle ──────────────────────────────────────────────────
       if(prev.minute>=90&&prev.inStoppageTime&&prev.stoppageTime===0){
         clearInterval(intervalRef.current);
         const mvp=calcMVP(prev.playerStats,prev.homeTeam,prev.awayTeam);
-        const ftWhistle={minute:prev.minute,type:'fulltime_whistle',commentary:`📯 FULL TIME — ${prev.score[0]}–${prev.score[1]}. The final whistle blows!`,momentumChange:[0,0]};
+        const ftWhistle={minute:prev.minute,type:'fulltime_whistle',commentary:`FULL TIME — ${prev.score[0]}–${prev.score[1]}. The final whistle blows!`,momentumChange:[0,0]};
         return{...prev,isPlaying:false,mvp,events:[...prev.events,ftWhistle].slice(-150)};
       }
       // ── Half-time whistle ──────────────────────────────────────────────────
@@ -1334,7 +1334,7 @@ const MatchSimulator = ({
         const homeQuote=pick(hDiff>=0?TUNNEL_Q[1]:TUNNEL_Q[0]);
         const awayQuote=pick(hDiff<=0?TUNNEL_Q[1]:TUNNEL_Q[0]);
         setTimeout(()=>setHtReport({score:[...prev.score],goals:htGoals,cards:htCards,shots:htShots.length,homeManager:mgr?.homeManager.name||'Home Manager',awayManager:mgr?.awayManager.name||'Away Manager',homeQuote,awayQuote,homeTeam:prev.homeTeam,awayTeam:prev.awayTeam,playerStats:prev.playerStats}),50);
-        const htWhistle={minute:45,type:'halftime_whistle',commentary:`📯 HALF TIME — ${prev.score[0]}–${prev.score[1]}. The referee blows for the break.`,momentumChange:[0,0]};
+        const htWhistle={minute:45,type:'halftime_whistle',commentary:`HALF TIME — ${prev.score[0]}–${prev.score[1]}. The referee blows for the break.`,momentumChange:[0,0]};
         return{...prev,isPlaying:false,inStoppageTime:false,stoppageTime:0,events:[...prev.events,htWhistle].slice(-150)};
       }
       const newMin=prev.inStoppageTime?prev.minute:prev.minute+1;
@@ -1353,14 +1353,14 @@ const MatchSimulator = ({
         const hLabel=prev.homeTeam?.shortName||prev.homeTeam?.name||'Home';
         const aLabel=prev.awayTeam?.shortName||prev.awayTeam?.name||'Away';
         interventions.push({minute:1,type:'kickoff',
-          commentary:`⚽ KICK OFF — ${hLabel} vs ${aLabel}. The match is underway!`,
+          commentary:`KICK OFF — ${hLabel} vs ${aLabel}. The match is underway!`,
           momentumChange:[0,0]});
       }
       if(newMin===46){
         const hLabel=prev.homeTeam?.shortName||prev.homeTeam?.name||'Home';
         const aLabel=prev.awayTeam?.shortName||prev.awayTeam?.name||'Away';
         interventions.push({minute:46,type:'second_half_kickoff',
-          commentary:`⚽ SECOND HALF — ${hLabel} vs ${aLabel} are underway again.`,
+          commentary:`SECOND HALF — ${hLabel} vs ${aLabel} are underway again.`,
           momentumChange:[0,0]});
       }
       let newSocial=[...prev.socialFeed];
@@ -1383,9 +1383,9 @@ const MatchSimulator = ({
         }
         if(newMin===46){
           const ht=aim.giveTeamTalk(true,prev.score[0]-prev.score[1]);
-          if(ht)interventions.push({minute:45,commentary:`⏸️ HALFTIME - ${ht.commentary}`,team:prev.homeTeam.shortName,type:'team_talk',momentumChange:[0,0]});
+          if(ht)interventions.push({minute:45,commentary:`HALFTIME - ${ht.commentary}`,team:prev.homeTeam.shortName,type:'team_talk',momentumChange:[0,0]});
           const at=aim.giveTeamTalk(false,prev.score[1]-prev.score[0]);
-          if(at)interventions.push({minute:45,commentary:`⏸️ HALFTIME - ${at.commentary}`,team:prev.awayTeam.shortName,type:'team_talk',momentumChange:[0,0]});
+          if(at)interventions.push({minute:45,commentary:`HALFTIME - ${at.commentary}`,team:prev.awayTeam.shortName,type:'team_talk',momentumChange:[0,0]});
         }
         if(newMin>70){
           applyLateGameLogic(aim,prev,newMin,interventions,newActive,newSubsUsed,newStats,newManagerSentOff);
