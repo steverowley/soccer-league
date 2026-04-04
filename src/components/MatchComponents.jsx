@@ -1233,7 +1233,15 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
             #{playerNum}
           </span>
         )}
-        {item.commentary || item.text || ''}
+        {/* Strip any leading emoji + optional VS16 (U+FE0F) from commentary.
+            FeedRow renders an event-type icon independently, so commentary
+            strings that open with an emoji (e.g. "⚠️ PENALTY", "🟨 Yellow
+            card") produce a duplicate.  \p{Emoji} covers both Emoji_Presentation
+            characters (⚽, 📢…) and text-default characters shown as emoji via
+            the VS16 variation selector (⚠️, ↕️…), which \p{Emoji_Presentation}
+            misses.  The u flag is required for Unicode property escapes and is
+            supported in all evergreen browsers (Chrome 64+, Firefox 78+, Safari 11.1+). */}
+        {(item.commentary || item.text || '').replace(/^\p{Emoji}[\uFE0F]?\s*/u, '')}
         {annulled && (
           <span style={{
             marginLeft: '6px',
