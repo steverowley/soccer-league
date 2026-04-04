@@ -82,6 +82,22 @@ export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, 
       {/* ── Player name + personality icon ──────────────────────────────── */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: isActive ? teamColor : C.dust }}>
+          {/* ── Jersey number badge ──────────────────────────────────────────
+              Subdued pill to the left of the name — matches the squad-list
+              convention in TeamDetail and Players pages.  Kept at low opacity
+              so the team-coloured name remains the primary visual element. */}
+          {player.jersey_number != null && (
+            <span style={{
+              fontSize: '10px',
+              opacity: 0.55,
+              border: '1px solid rgba(227,224,213,0.3)',
+              borderRadius: '2px',
+              padding: '1px 4px',
+              flexShrink: 0,
+            }}>
+              {player.jersey_number}
+            </span>
+          )}
           {s.subbedOn ? '🔺 ' : ''}{player.name}
           {PERS_ICON[agent?.personality]
             ? <span style={{ opacity: 0.6 }}>{PERS_ICON[agent.personality]}</span>

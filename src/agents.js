@@ -172,13 +172,46 @@ export class AgentSystem {
    * @returns {string}      – pipe-delimited fact string, e.g.
    *   "Action: shot | Player: Kael Vorn | Against: Keeper-9000 | Result: goal | [GOAL SCORED]"
    */
+  /**
+   * Looks up the jersey number for a player by name across both squads.
+   *
+   * Events carry only name strings (not IDs or objects), so we scan the full
+   * home+away player arrays to find the matching squad member.  With at most
+   * 16 players per side this O(n) scan is negligible — no caching needed.
+   *
+   * @param {string|null} name  – player name as it appears in match events
+   * @returns {number|null}     – jersey_number from the player record, or null
+   *                             if the player isn't found or has no number
+   */
+  _jerseyFor(name) {
+    if (!name) return null;
+    const all = [...(this.homeTeam?.players || []), ...(this.awayTeam?.players || [])];
+    return all.find(p => p.name === name)?.jersey_number ?? null;
+  }
+
+  /**
+   * Formats a player name with their jersey number prefix for commentary prompts.
+   *
+   * Produces "#9 Kael Vorn" when a number is found, or the bare name as a
+   * fallback.  The "#N" notation is unambiguous in LLM context — commentators
+   * will naturally say "Number 9" or "the number nine" without extra prompting.
+   *
+   * @param {string|null} name  – raw player name from the event object
+   * @returns {string}          – formatted string, e.g. "#9 Kael Vorn" or "Kael Vorn"
+   */
+  _fmt(name) {
+    if (!name) return name;
+    const n = this._jerseyFor(name);
+    return n != null ? `#${n} ${name}` : name;
+  }
+
   _describeEvent(event) {
     const parts = [];
     if (event.type)       parts.push(`Action: ${event.type.replace(/_/g, ' ')}`);
-    if (event.player)     parts.push(`Player: ${event.player}`);
-    if (event.defender)   parts.push(`Against: ${event.defender}`);
-    if (event.foulerName) parts.push(`Fouler: ${event.foulerName}`);
-    if (event.assister)   parts.push(`Assisted by: ${event.assister}`);
+    if (event.player)     parts.push(`Player: ${this._fmt(event.player)}`);
+    if (event.defender)   parts.push(`Against: ${this._fmt(event.defender)}`);
+    if (event.foulerName) parts.push(`Fouler: ${this._fmt(event.foulerName)}`);
+    if (event.assister)   parts.push(`Assisted by: ${this._fmt(event.assister)}`);
     if (event.outcome)    parts.push(`Result: ${event.outcome}`);
     if (event.team)       parts.push(`Team: ${event.team}`);
     if (event.isGoal)     parts.push('[GOAL SCORED]');

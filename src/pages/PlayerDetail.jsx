@@ -195,6 +195,29 @@ export default function PlayerDetail() {
           <hr className="divider" style={{ maxWidth: '500px', margin: '0 auto 16px' }} />
 
           <p className="subtitle">
+            {/* ── Jersey number badge ─────────────────────────────────────────
+                Appears before the position pill so the hero reads as
+                "#9 · FW · Club" — the natural way fans refer to players.
+                Slightly lower opacity (0.75) than the position badge so
+                number and position form a clear hierarchy at a glance.
+                jersey_number is null for players whose seed has not yet run;
+                the conditional guard prevents rendering an empty badge. */}
+            {player.jersey_number != null && (
+              <span style={{
+                display: 'inline-block',
+                padding: '2px 8px',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: '3px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                letterSpacing: '0.08em',
+                marginRight: '10px',
+                opacity: 0.75,
+              }}>
+                #{player.jersey_number}
+              </span>
+            )}
+
             {/* ── Position badge ──────────────────────────────────────────────
                 Inline bordered pill showing the two/three-letter position code.
                 Uses the same border-opacity convention as other ghost elements. */}
