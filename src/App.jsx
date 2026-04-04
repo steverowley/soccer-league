@@ -1348,13 +1348,19 @@ const MatchSimulator = ({
       // Minute 46 → second-half kick-off: picked up here alongside the
       //   team_talk events that are pushed a few lines below (newMin===46).
       if(newMin===1){
+        // Use shortName where available (TEAMS objects), fall back to full name
+        // for DB-sourced team objects that may not carry the abbreviation.
+        const hLabel=prev.homeTeam?.shortName||prev.homeTeam?.name||'Home';
+        const aLabel=prev.awayTeam?.shortName||prev.awayTeam?.name||'Away';
         interventions.push({minute:1,type:'kickoff',
-          commentary:`⚽ KICK OFF — ${prev.homeTeam.shortName} vs ${prev.awayTeam.shortName}. The match is underway!`,
+          commentary:`⚽ KICK OFF — ${hLabel} vs ${aLabel}. The match is underway!`,
           momentumChange:[0,0]});
       }
       if(newMin===46){
+        const hLabel=prev.homeTeam?.shortName||prev.homeTeam?.name||'Home';
+        const aLabel=prev.awayTeam?.shortName||prev.awayTeam?.name||'Away';
         interventions.push({minute:46,type:'second_half_kickoff',
-          commentary:`⚽ SECOND HALF — ${prev.homeTeam.name} vs ${prev.awayTeam.name} are underway again.`,
+          commentary:`⚽ SECOND HALF — ${hLabel} vs ${aLabel} are underway again.`,
           momentumChange:[0,0]});
       }
       let newSocial=[...prev.socialFeed];
