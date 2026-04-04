@@ -1303,10 +1303,28 @@ const MatchSimulator = ({
   const simulateMinute=()=>{
     setMatchState(prev=>{
       const aim=aiRef.current;
-      if(prev.minute===45&&!prev.inStoppageTime)return{...prev,stoppageTime:rndI(1,3),inStoppageTime:true};
-      if(prev.minute===90&&!prev.inStoppageTime)return{...prev,stoppageTime:rndI(2,5),inStoppageTime:true};
-      if((prev.minute===45&&prev.inStoppageTime&&prev.stoppageTime===0)||(prev.minute>=90&&prev.inStoppageTime&&prev.stoppageTime===0)){
-        if(prev.minute>=90){clearInterval(intervalRef.current);const mvp=calcMVP(prev.playerStats,prev.homeTeam,prev.awayTeam);return{...prev,isPlaying:false,mvp};}
+      // ── Stoppage time announcement ─────────────────────────────────────────
+      // When inStoppageTime flips on, inject a board-announcement event so the
+      // viewer sees how many added minutes have been signalled before play continues.
+      if(prev.minute===45&&!prev.inStoppageTime){
+        const stopMins=rndI(1,3);
+        const stoppageEvt={minute:45,type:'stoppage_time',commentary:`🪧 The fourth official signals ${stopMins} minute${stopMins>1?'s':''} of added time.`,momentumChange:[0,0]};
+        return{...prev,stoppageTime:stopMins,inStoppageTime:true,events:[...prev.events,stoppageEvt].slice(-150)};
+      }
+      if(prev.minute===90&&!prev.inStoppageTime){
+        const stopMins=rndI(2,5);
+        const stoppageEvt={minute:90,type:'stoppage_time',commentary:`🪧 The fourth official signals ${stopMins} minute${stopMins>1?'s':''} of added time!`,momentumChange:[0,0]};
+        return{...prev,stoppageTime:stopMins,inStoppageTime:true,events:[...prev.events,stoppageEvt].slice(-150)};
+      }
+      // ── Full-time whistle ──────────────────────────────────────────────────
+      if(prev.minute>=90&&prev.inStoppageTime&&prev.stoppageTime===0){
+        clearInterval(intervalRef.current);
+        const mvp=calcMVP(prev.playerStats,prev.homeTeam,prev.awayTeam);
+        const ftWhistle={minute:prev.minute,type:'fulltime_whistle',commentary:`📯 FULL TIME — ${prev.score[0]}–${prev.score[1]}. The final whistle blows!`,momentumChange:[0,0]};
+        return{...prev,isPlaying:false,mvp,events:[...prev.events,ftWhistle].slice(-150)};
+      }
+      // ── Half-time whistle ──────────────────────────────────────────────────
+      if(prev.minute===45&&prev.inStoppageTime&&prev.stoppageTime===0){
         clearInterval(intervalRef.current);
         const htGoals=prev.events.filter(e=>e.isGoal);
         const htCards=prev.events.filter(e=>e.cardType);
@@ -1316,11 +1334,29 @@ const MatchSimulator = ({
         const homeQuote=pick(hDiff>=0?TUNNEL_Q[1]:TUNNEL_Q[0]);
         const awayQuote=pick(hDiff<=0?TUNNEL_Q[1]:TUNNEL_Q[0]);
         setTimeout(()=>setHtReport({score:[...prev.score],goals:htGoals,cards:htCards,shots:htShots.length,homeManager:mgr?.homeManager.name||'Home Manager',awayManager:mgr?.awayManager.name||'Away Manager',homeQuote,awayQuote,homeTeam:prev.homeTeam,awayTeam:prev.awayTeam,playerStats:prev.playerStats}),50);
-        return{...prev,isPlaying:false,inStoppageTime:false,stoppageTime:0};
+        const htWhistle={minute:45,type:'halftime_whistle',commentary:`📯 HALF TIME — ${prev.score[0]}–${prev.score[1]}. The referee blows for the break.`,momentumChange:[0,0]};
+        return{...prev,isPlaying:false,inStoppageTime:false,stoppageTime:0,events:[...prev.events,htWhistle].slice(-150)};
       }
       const newMin=prev.inStoppageTime?prev.minute:prev.minute+1;
       const newStop=prev.inStoppageTime&&prev.stoppageTime>0?prev.stoppageTime-1:prev.stoppageTime;
       let interventions=[];
+      // ── Structural kick-off events ────────────────────────────────────────
+      // These are injected into interventions (not genEvent) so they always
+      // appear in the feed regardless of the event-gate probability roll.
+      //
+      // Minute 1  → kick-off: the match begins.
+      // Minute 46 → second-half kick-off: picked up here alongside the
+      //   team_talk events that are pushed a few lines below (newMin===46).
+      if(newMin===1){
+        interventions.push({minute:1,type:'kickoff',
+          commentary:`⚽ KICK OFF — ${prev.homeTeam.shortName} vs ${prev.awayTeam.shortName}. The match is underway!`,
+          momentumChange:[0,0]});
+      }
+      if(newMin===46){
+        interventions.push({minute:46,type:'second_half_kickoff',
+          commentary:`⚽ SECOND HALF — ${prev.homeTeam.name} vs ${prev.awayTeam.name} are underway again.`,
+          momentumChange:[0,0]});
+      }
       let newSocial=[...prev.socialFeed];
       let newThoughts=[...prev.aiThoughts];
       let aiInfluence=null;
@@ -1555,6 +1591,34 @@ const MatchSimulator = ({
         else event.substituteInfo={out:event.player,in:null};
       }
       let allEvents=flattenSequences(prev,event,interventions);
+
+      // ── Substitution standalone event ─────────────────────────────────────
+      // Injury and red-card events attach `substituteInfo` to themselves, but
+      // the substitution is buried inside a broader event (injury, foul, etc.).
+      // In real football a substitution always appears as a dedicated board —
+      // player coming off, player coming on.  We append a first-class
+      // `substitution` event so:
+      //   1. The feed shows a clear ↕ entry that the AI manager trigger at
+      //      line ~1858 ("Trigger 5 — Opponent substitution") can react to.
+      //   2. The player tracking strip and post-match summary can filter by
+      //      type:'substitution' rather than probing substituteInfo on every event.
+      //
+      // Only fires when `in` is non-null — a red-card removal has `in: null`
+      // (no substitute) and must NOT generate a false substitution entry.
+      if(event.substituteInfo?.in){
+        allEvents=[...allEvents,{
+          minute:newMin,
+          type:'substitution',
+          team:event.team,
+          // `player` carries the incoming player so jersey-number lookups and
+          // the AI manager's sub-reaction trigger work without extra parsing.
+          player:event.substituteInfo.in,
+          commentary:`↕ ${event.substituteInfo.in} comes on for ${event.substituteInfo.out}.`,
+          substituteInfo:event.substituteInfo,
+          momentumChange:[0,0],
+        }];
+      }
+
       // Post-goal: VAR + celebration + comeback + hat-trick + sub impact
       const pgExtras=buildPostGoalExtras(aim,event,prev,newMin,newScore,newStats,allEvents);
       allEvents=pgExtras.allEvents; newScore=pgExtras.newScore;
