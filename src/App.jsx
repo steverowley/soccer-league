@@ -724,6 +724,7 @@ const MatchSimulator = ({
   const dramaticModeRef=useRef(false);
   const evtLogRef=useRef(null);
   const [htReport,setHtReport]=useState(null);
+  const [htCountdown,setHtCountdown]=useState(null);
   const [selectedPlayer,setSelectedPlayer]=useState(null);
 
   const [apiKey,setApiKey]=useState(()=>localStorage.getItem('isi_api_key')||'');
@@ -1233,6 +1234,48 @@ const MatchSimulator = ({
     sys.generateHalftimeQuote(false,htReport.score,htReport.goals||[]).then(q=>{
       if(q)setHtLlmQuotes(prev=>({...prev||{},away:q}));
     });
+  },[!!htReport]);
+
+  // ── Halftime auto-resume ───────────────────────────────────────────────────
+  // Rather than requiring the user to click "Kick Off — Second Half", we wait
+  // a proportional amount of real time that mirrors how long a 15-minute
+  // halftime break would feel at the current simulation speed, then restart
+  // automatically.  The button remains visible so the user can still skip
+  // ahead by clicking it.
+  //
+  // Duration formula:  halftimeMs = tickMs × 15
+  //   SLOW    2 000 ms/tick  →  30 s halftime
+  //   NORMAL  1 000 ms/tick  →  15 s halftime
+  //   FAST      500 ms/tick  →   7.5 s halftime
+  //   TURBO     200 ms/tick  →   3 s halftime
+  //   DRAMATIC 15 000 ms/tick → ~3.75 min halftime
+  //
+  // DRAMATIC mode note: when isPlaying flips back to true via startSecondHalf,
+  // the main match useEffect (dep: [speed, isPlaying]) re-runs and restarts the
+  // async tick loop — no special handling needed here.
+  useEffect(()=>{
+    if(!htReport){setHtCountdown(null);return;}
+    // Resolve the effective tick duration — DRAMATIC uses 15 s ticks encoded
+    // as speed === -1, all other modes store their interval directly in `speed`.
+    const tickMs=speed===-1?15_000:speed;
+    // 15 ticks ≈ 15 simulated game-minutes, matching a real halftime break.
+    const totalMs=tickMs*15;
+    const totalSec=Math.round(totalMs/1000);
+    setHtCountdown(totalSec);
+    // Tick the visible countdown down by 1 every real second so the user can
+    // see how long remains before the second half kicks off automatically.
+    const interval=setInterval(()=>{
+      setHtCountdown(prev=>{
+        if(prev==null||prev<=1){clearInterval(interval);return 0;}
+        return prev-1;
+      });
+    },1000);
+    // Fire the actual resume after the full halftime window has elapsed.
+    const timer=setTimeout(()=>{
+      clearInterval(interval);
+      startSecondHalf();
+    },totalMs);
+    return()=>{clearTimeout(timer);clearInterval(interval);};
   },[!!htReport]);
 
   // ── Auto-start effect ─────────────────────────────────────────────────────
@@ -2883,6 +2926,16 @@ const MatchSimulator = ({
                 ))}
               </div>
 
+              {/* Auto-resume countdown — shows seconds remaining before the
+                  second half kicks off automatically.  Disappears (shows
+                  "Kicking off…") in the final moment before startSecondHalf
+                  fires so there is no jarring jump cut. */}
+              <div style={{textAlign:'center',fontSize:'11px',opacity:0.5,marginBottom:'8px',fontFamily:"'Space Mono',monospace"}}>
+                {htCountdown!=null&&htCountdown>0
+                  ?`Second half begins in ${htCountdown}s`
+                  :'Kicking off…'}
+              </div>
+              {/* Button remains active so the user can skip the wait. */}
               <button
                 onClick={startSecondHalf}
                 style={{
