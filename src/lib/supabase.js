@@ -386,7 +386,15 @@ export function normalizeTeamForEngine(team) {
 
   return {
     name:      team.name,
-    shortName: team.short_name,
+    // short_name was added to the teams table after initial deployment.
+    // The fallback derives a 3-char abbreviation from the team's URL slug
+    // (e.g. 'saturn-rings' → 'SAT') so match commentary never renders
+    // "undefined" for teams that were inserted before the column existed.
+    // Run the seed.sql UPDATE block to populate proper values for all clubs.
+    shortName: team.short_name
+      || team.id?.split('-')[0]?.slice(0, 3).toUpperCase()
+      || team.name?.slice(0, 3).toUpperCase()
+      || 'UNK',
     // Fallback colour prevents transparent/invisible team accents in the UI
     // if a team row was inserted without a brand colour.
     color:     team.color || '#888888',

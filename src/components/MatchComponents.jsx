@@ -494,13 +494,18 @@ export const ArchitectInterferenceCard = ({ item }) => {
         </div>
       )}
 
-      {/* Proclamation / flavour text delivered by The Architect */}
-      <div style={{
-        fontSize: '12px', fontStyle: 'italic', lineHeight: '1.55',
-        color: '#E2D9F3', marginBottom: 0,
-      }}>
-        "{item.text}"
-      </div>
+      {/* Proclamation / flavour text delivered by The Architect.
+          Only rendered when the LLM returned non-empty text — an empty
+          proclamation (network hiccup, truncated response) must not display
+          as a bare pair of quotes. */}
+      {item.text && (
+        <div style={{
+          fontSize: '12px', fontStyle: 'italic', lineHeight: '1.55',
+          color: '#E2D9F3', marginBottom: 0,
+        }}>
+          "{item.text}"
+        </div>
+      )}
 
       {/* Annulment notice — only shown for annul_goal with a known annulMinute,
           clearly surfacing which goal has been struck from the record */}
