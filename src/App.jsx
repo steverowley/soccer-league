@@ -3267,11 +3267,9 @@ const MatchSimulator = ({
       {showPostMatch&&ms.mvp&&(
         <PostMatchSummary
           matchState={ms}
-          // Last architect proclamation text shown as the "Verdict" section.
-          // Pull the most recent proclamation from architectItems (newest first).
-          {/* architectFinalVerdict (from saveMatchToLore) takes priority over the
-              fallback (last in-match proclamation) — it is a proper closing judgment
-              rather than a recycled mid-match decree. */}
+          // architectFinalVerdict (from saveMatchToLore) takes priority over the
+          // fallback (last in-match proclamation) — it is a proper closing judgment
+          // rather than a recycled mid-match decree.
           architectVerdict={architectFinalVerdict||architectItems.find(i=>i.type==='architect_proclamation')?.text||null}
           onPlayAgain={()=>{
             setShowPostMatch(false);
