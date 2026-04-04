@@ -84,6 +84,7 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
 - **Team squad pages** now display a full roster section organized by jersey number; all players sorted by number with starters and bench in sequence; all player names link to their profile pages
 - **Player stats in match simulator** — Each player now carries live Supabase stats (attacking, defending, mental, athletic, technical ratings) which feed directly into match engine decisions and probabilities
 - **Manager and Tactical Style** information displayed prominently in team info cards for quick tactical reference
+- **Team abbreviations in match commentary** — All 32 teams have 3-4 character short names (e.g., MRC for Mercury Runners, SAT for Saturn Rings) used in scoreboard displays and match event text (e.g., "MRC 2-1 SAT"). Sourced from the `short_name` column in the teams table.
 - 4 regional leagues: Rocky Inner (8 teams), Gas/Ice Giants (8 teams), Outer Reaches (8 teams), Kuiper Belt (8 teams)
 - 5 formation options: 4-3-3, 4-4-2, 3-5-2, 5-4-1, 5-3-2
 - Substitution system (3 per team) and tactical manager personalities
