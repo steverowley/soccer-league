@@ -1233,7 +1233,13 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
             #{playerNum}
           </span>
         )}
-        {item.commentary || item.text || ''}
+        {/* Strip any leading emoji from commentary — FeedRow already renders the
+            event-type icon separately, so commentary strings that open with the
+            same emoji (e.g. "⚽ KICK OFF…", "📯 HALF TIME…") would otherwise
+            produce a double-icon.  The Unicode property \p{Emoji_Presentation}
+            matches only standalone emoji glyphs at the very start of the string,
+            leaving mid-text emojis and text entirely untouched. */}
+        {(item.commentary || item.text || '').replace(/^\p{Emoji_Presentation}\s*/u, '')}
         {annulled && (
           <span style={{
             marginLeft: '6px',
