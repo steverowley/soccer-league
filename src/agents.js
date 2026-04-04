@@ -163,16 +163,6 @@ export class AgentSystem {
   }
 
   /**
-   * Builds a human-readable summary of a raw event object for use in the
-   * play-by-play prompt.  This gives Captain Vox structured facts rather than
-   * forcing him to infer what happened from the terse procedural commentary
-   * string — the root cause of the "hard to understand" problem.
-   *
-   * @param {object} event  – match event object from genEvent()
-   * @returns {string}      – pipe-delimited fact string, e.g.
-   *   "Action: shot | Player: Kael Vorn | Against: Keeper-9000 | Result: goal | [GOAL SCORED]"
-   */
-  /**
    * Looks up the jersey number for a player by name across both squads.
    *
    * Events carry only name strings (not IDs or objects), so we scan the full
@@ -326,7 +316,12 @@ export class AgentSystem {
       `RAW EVENT: ${eventDesc}`,
       // Provide the procedural text only as supplementary context, not as the primary source
       event.commentary ? `(Procedural note: "${event.commentary}")` : '',
-      '\nYou are the PRIMARY narrator. Describe EXACTLY what happened — who, what action, what outcome — so any listener understands. Clarity first, theatrical flair second. 1-2 sentences.',
+      // Explicit jersey-number instruction: the RAW EVENT fact string already
+      // contains "#N Name" entries (built by _fmt / _describeEvent), but LLMs
+      // tend to silently drop structural markup unless told to reproduce it.
+      // This line locks in the behaviour — Vox says "Number 9" or "#9", and
+      // the reactor commentators (Nexus-7, Zara) will echo that naturally.
+      '\nYou are the PRIMARY narrator. Describe EXACTLY what happened — who, what action, what outcome — so any listener understands. When a player has a jersey number (shown as #N in the event data), USE it — say "Number 9" or "the number nine" when naming them. Clarity first, theatrical flair second. 1-2 sentences.',
     ].filter(Boolean).join('\n');
 
     // Append the primary-narrator instruction to the existing Vox system prompt

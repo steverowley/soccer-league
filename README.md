@@ -67,7 +67,7 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Net result: Commentary latency reduced from ~3 s to ~500 ms at TURBO speed
 
 **Commentary Personas** — Three distinct voices:
-- **Captain Vox** — primary narrator, bombastic veteran with cosmic metaphors; styled with gold accent border (#FFD700) and name badge for visual consistency across feed layouts
+- **Captain Vox** — primary narrator, bombastic veteran with cosmic metaphors; styled with gold accent border (#FFD700) and name badge for visual consistency across feed layouts. Jersey numbers are integrated into play-by-play narration — Vox will say "Number 9 Asha Renn drives forward..." when referencing players with numbers
 - **Nexus-7** — clinical AI analyst, data-driven and precise
 - **Zara Bloom** — ex-striker color analyst, tactically sharp
 
@@ -93,6 +93,10 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
   - **Ball Movement** — horizontal tracking by possession percentage + vertical randomization on each new event (25–75% range), creating a sense of dynamic pitch flow
   - **Momentum Pressure Overlay** — subtle team-colored gradient on the dominant side when momentum gap ≥ 2, fading when teams are balanced
   - **Goal Flash** — highlights the scoring team's goal end with a 2-second fade for visual drama
+- **Player Roster** — Live squad list showing:
+  - Jersey numbers displayed as subdued left-aligned badges next to each player name (both on pitch and bench)
+  - Live stats (goals, assists, saves, cards, injuries) updated in real time
+  - Formation-based positioning with substitution indicators (🔺 for players subbed on)
 - **Chaos Meter Card** (260px, two-zone layout):
   - **Top zone** — Chaos bar with scale labels (Calm–Tense–Mayhem) and dynamic event pills:
     - **Late Game** (red) — minute > 80

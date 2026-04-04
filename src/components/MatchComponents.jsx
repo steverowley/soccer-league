@@ -937,6 +937,15 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
   const teamColor  = item.teamColor || (isHome ? homeTeam?.color : awayTeam?.color) || C.purple;
   const annulled   = item.architectAnnulled;
 
+  // ── Jersey number lookup ──────────────────────────────────────────────────
+  // Events carry player names as strings (not IDs).  Scan both squads to find
+  // the matching player and pull their jersey_number — used for the #N badge
+  // displayed before the commentary text so readers can cross-reference the
+  // squad list without memorising every name.
+  const allPlayers = [...(homeTeam?.players || []), ...(awayTeam?.players || [])];
+  const jerseyFor  = name => allPlayers.find(p => p.name === name)?.jersey_number ?? null;
+  const playerNum  = item.player ? jerseyFor(item.player) : null;
+
   let icon   = '·';
   // Default accent: visible but subdued so routine events don't compete with
   // goals.  Higher alpha (0.45) than the old value (0.2) for legible contrast.
@@ -1085,6 +1094,29 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
         textDecoration: annulled ? 'line-through' : 'none',
         color: item.isGoal ? accent : 'inherit',
       }}>
+        {/* ── Jersey number badge ─────────────────────────────────────────────
+            Shown when the event has an identified player with a known jersey
+            number.  Sits inline before the commentary text — readers can glance
+            left at the squad panel to confirm who "#9" is without reading the
+            full name in the commentary string.
+            Excluded from play_by_play / manager items (those have no item.player
+            or a different visual treatment handled above). */}
+        {playerNum != null && (
+          <span style={{
+            display: 'inline-block',
+            fontSize: '9px',
+            fontWeight: 700,
+            opacity: 0.6,
+            border: `1px solid ${accent}55`,
+            borderRadius: '2px',
+            padding: '0 3px',
+            marginRight: '5px',
+            verticalAlign: 'middle',
+            letterSpacing: '0.02em',
+          }}>
+            #{playerNum}
+          </span>
+        )}
         {item.commentary || item.text || ''}
         {annulled && (
           <span style={{
