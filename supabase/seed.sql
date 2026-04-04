@@ -174,6 +174,45 @@ INSERT INTO teams (id, league_id, name, location, home_ground, capacity, color, 
    E'Scattered Disc FC Rangers play from the absolute fringe of the solar system, in a region so loosely defined that cartographers argue about whether it technically exists. Their football is similarly hard to classify: chaotic, improvisational, and occasionally brilliant. Tactics arrive by committee, change at half-time, and are abandoned by the 70th minute.\n\nThe Void Stadium''s sparse attendance and enormous silence create a unique atmosphere—not intimidating so much as deeply unsettling. Opponents describe games there as "playing against the cosmos itself." In their few seasons in the Kuiper Belt League, the Rangers have delivered both the highest-scoring victory and the most embarrassing defeat in the division''s history.')
 ON CONFLICT (id) DO NOTHING;
 
+-- ── TEAM SHORT NAMES ─────────────────────────────────────────────────────────
+-- 3-4 character abbreviations used by the match engine for scoreboard display
+-- and event commentary (e.g. "MRC 2-1 SAT").  These UPDATE statements are
+-- idempotent; re-running seed.sql will simply overwrite with the same values.
+-- Missing short_name is the root cause of "undefined" appearing in match feed
+-- commentary for DB-sourced teams, so every team must have a value here.
+UPDATE teams SET short_name = 'MRC' WHERE id = 'mercury-runners';
+UPDATE teams SET short_name = 'EUN' WHERE id = 'earth-united';
+UPDATE teams SET short_name = 'VEN' WHERE id = 'venus-volcanic';
+UPDATE teams SET short_name = 'TER' WHERE id = 'terra-nova';
+UPDATE teams SET short_name = 'MAR' WHERE id = 'mars-athletic';
+UPDATE teams SET short_name = 'OLY' WHERE id = 'olympus-mons';
+UPDATE teams SET short_name = 'VAL' WHERE id = 'valles-mariners';
+UPDATE teams SET short_name = 'SOL' WHERE id = 'solar-city';
+UPDATE teams SET short_name = 'JUP' WHERE id = 'jupiter-titans';
+UPDATE teams SET short_name = 'EUR' WHERE id = 'europa-oceanic';
+UPDATE teams SET short_name = 'GAN' WHERE id = 'ganymede-united';
+UPDATE teams SET short_name = 'CAL' WHERE id = 'callisto-wolves';
+UPDATE teams SET short_name = 'SAT' WHERE id = 'saturn-rings';
+UPDATE teams SET short_name = 'TTN' WHERE id = 'titan-methane';
+UPDATE teams SET short_name = 'ENC' WHERE id = 'enceladus-geysers';
+UPDATE teams SET short_name = 'URA' WHERE id = 'uranus-sidewinders';
+UPDATE teams SET short_name = 'CER' WHERE id = 'ceres-miners';
+UPDATE teams SET short_name = 'VES' WHERE id = 'vesta';
+UPDATE teams SET short_name = 'PAL' WHERE id = 'pallas-wanderers';
+UPDATE teams SET short_name = 'HYG' WHERE id = 'hygiea-united';
+UPDATE teams SET short_name = 'PSY' WHERE id = 'psyche-metallics';
+UPDATE teams SET short_name = 'JNO' WHERE id = 'juno-city';
+UPDATE teams SET short_name = 'BLT' WHERE id = 'beltway';
+UPDATE teams SET short_name = 'SMN' WHERE id = 'solar-miners';
+UPDATE teams SET short_name = 'PLU' WHERE id = 'pluto-frost';
+UPDATE teams SET short_name = 'CHR' WHERE id = 'charon-united';
+UPDATE teams SET short_name = 'ERI' WHERE id = 'eris-wanderers';
+UPDATE teams SET short_name = 'HAU' WHERE id = 'haumea-spinners';
+UPDATE teams SET short_name = 'MAK' WHERE id = 'makemake';
+UPDATE teams SET short_name = 'ORC' WHERE id = 'orcus-athletic';
+UPDATE teams SET short_name = 'SDN' WHERE id = 'sedna-mariners';
+UPDATE teams SET short_name = 'SCA' WHERE id = 'scattered-disc';
+
 -- ── SEASON 1 ─────────────────────────────────────────────────────────────────
 -- Fixed UUID so downstream scripts can reference it without a lookup.
 -- is_active = true; the partial unique index in schema.sql ensures only one

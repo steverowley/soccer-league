@@ -28,6 +28,11 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Full 90-minute matches with stoppage time, powered by live Supabase data
 - **All 32 planetary teams simulatable** — Match simulator now fetches live roster data from Supabase before each match, ensuring games use real team lineups, managers, and player stats
 - Procedurally generated events: goals, free kicks, penalties, cards, injuries, VAR reviews, confrontations, and more
+- **13 new match event types** with dedicated visual styling:
+  - **Structural Milestones** — Kick-off (min 1), second-half kick-off (min 46), stoppage time announcements (min 45/90), half-time whistle, full-time whistle
+  - **Substitutions** — Standalone substitution events fire after injury/red-card-forced subs, enabling clean AI manager reactions and feed entries
+  - **Discipline** — Second-yellow → red card uses distinct `🟨🟥` commentary and `isSecondYellow` flag, distinguishing it from straight reds
+  - **Play Events** — Offside (10% of attacks), post hits (15% of near-goal shots), time wasting (7% in late phase when winning), VAR no-action reviews (6% of borderline fouls), goal-line clearances (16–20 net band), goalkeeper claims on corners
 - Dynamic possession, momentum, and chaos level tracking
 - Planetary weather systems — rain, solar storms, zero-gravity, magnetic fields, and others
 - **Tension Curves**: 10-segment time-weighted probability curve for events, with 5 pre-match tension variants (standard/frantic/cagey/slow_burn/back_and_forth)
