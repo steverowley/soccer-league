@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS teams (
   id          text PRIMARY KEY,       -- URL slug matching leagueData.js, e.g. 'mercury-runners'
   league_id   text REFERENCES leagues(id),  -- parent league; NULL would mean an unaffiliated/guest team
   name        text NOT NULL,          -- Full club name, e.g. 'Mercury Runners FC'
+  short_name  text,                   -- 3-4 char abbreviation for match feed / scoreboard, e.g. 'MRC'
   location    text,                   -- Planet / moon / body the club represents
   home_ground text,                   -- Stadium name with nickname, e.g. 'Solar Sprint Stadium "The Heat Box"'
   capacity    text,                   -- Formatted seating capacity, e.g. '35,000'
@@ -58,6 +59,9 @@ CREATE TABLE IF NOT EXISTS teams (
   tagline     text,                   -- One-line descriptor shown on the teams listing card
   description text                    -- Long-form prose for the team detail page
 );
+-- Add short_name to existing tables that were created before this column was added.
+-- The IF NOT EXISTS guard makes this idempotent on a fresh schema run.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS short_name text;
 
 -- ── 3. SEASONS ────────────────────────────────────────────────────────────────
 -- A season is the outermost container for all competition activity.
