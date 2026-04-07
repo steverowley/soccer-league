@@ -424,115 +424,112 @@ export default function PlayerDetail() {
           <IslTable variant="dark" columns={SEASON_STAT_COLS} rows={statsRow} />
         </section>
 
-        {/* ── The Architect's Record ─────────────────────────────────────────
-            Only rendered when lore exists for this player in localStorage.
-            This section intentionally provides NO explanation of what it is
-            or what the content means — the Blaseball design principle that
-            unexplained weirdness creates mystery and theorycrafting.
-            Fans who have watched matches will recognise arcs and bonds;
-            new fans sense depth without being handed a tutorial. */}
+        {/* ── The Convergence ───────────────────────────────────────────────
+            The Architect's accumulated record for this mortal — arcs and
+            bonds written across every match they have appeared in.
+            Only rendered when lore exists in localStorage.  No explanation
+            is given; fans sense the depth and theorise. */}
         {(playerArc || relationships.length > 0) && (
           <section className="section">
-            {/* Section title in the Architect's voice — cryptic small-caps
-                with the ∷ delimiter that marks all Architect text surfaces. */}
-            <h2 className="section-title" style={{
-              color: '#9D6FFB',
-              textShadow: '0 0 8px rgba(157,111,251,0.3)',
-              letterSpacing: '0.14em',
-            }}>
-              ∷ The Architect's Record ∷
-            </h2>
 
-            {/* ── Player arc card ───────────────────────────────────────────
-                The Architect's running narrative for this player across all
-                matches they have appeared in.  Updated by saveMatchToLore()
-                after each game; accumulates into a season-long story arc.
-                Void-black + violet border matches all other Architect surfaces. */}
-            {playerArc?.arc && (
+            {/* ── Outer void container ─────────────────────────────────────
+                The whole section sits inside a void-black portal matching
+                the match-page Architect aesthetic: deep black bg, radial
+                violet bloom, architectPulse glow, 4 px left accent border. */}
+            <div style={{
+              backgroundColor: '#050308',
+              backgroundImage: 'radial-gradient(ellipse at 15% 40%, rgba(124,58,237,0.10) 0%, transparent 60%)',
+              border: '1px solid rgba(157,111,251,0.20)',
+              borderLeft: '4px solid #9D6FFB',
+              animation: 'architectPulse 3s ease-in-out infinite',
+              padding: '20px 20px 16px',
+            }}>
+
+              {/* ── Section title ─────────────────────────────────────────
+                  Styled identically to the match title in App.jsx:
+                  small uppercase text, wide letter-spacing, ∷ delimiters,
+                  violet glow.  The title IS the only explanation — no
+                  sub-heading, no description beneath it. */}
               <div style={{
-                padding: '14px 16px',
-                marginBottom: '12px',
-                backgroundColor: '#050308',
-                backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.08) 0%, transparent 65%)',
-                border: '1px solid rgba(157,111,251,0.25)',
-                borderLeft: '3px solid #9D6FFB',
-                animation: 'architectPulse 3s ease-in-out infinite',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.20em',
+                textTransform: 'uppercase',
+                color: '#9D6FFB',
+                textShadow: '0 0 10px rgba(157,111,251,0.55)',
+                marginBottom: '18px',
+                textAlign: 'center',
               }}>
-                {/* Label — small-caps, no explanation of what an "arc" is */}
-                <div style={{
-                  fontSize: '8px', fontWeight: 700, letterSpacing: '0.14em',
-                  textTransform: 'uppercase', color: '#9D6FFB', marginBottom: '6px',
-                }}>
-                  Cosmic Arc
-                </div>
-                {/* Arc text — italic lavender matching proclamation text colour */}
+                ∷ THE CONVERGENCE ∷
+              </div>
+
+              {/* ── Player arc ────────────────────────────────────────────
+                  The Architect's running thread for this player across all
+                  matches.  Displayed as a plain italic quote — no label,
+                  no sub-heading — so it reads as a decree, not a data field. */}
+              {playerArc?.arc && (
                 <p style={{
-                  fontSize: '13px', fontStyle: 'italic',
-                  lineHeight: 1.6, color: '#E2D9F3', margin: 0,
+                  fontSize: '13px',
+                  fontStyle: 'italic',
+                  lineHeight: 1.65,
+                  color: '#E2D9F3',
+                  margin: '0 0 16px',
+                  paddingBottom: relationships.length > 0 ? '16px' : 0,
+                  borderBottom: relationships.length > 0
+                    ? '1px solid rgba(157,111,251,0.15)'
+                    : 'none',
                 }}>
                   "{playerArc.arc}"
                 </p>
-              </div>
-            )}
+              )}
 
-            {/* ── Relationship bonds ────────────────────────────────────────
-                Each entry is a dynamic player-pair bond recorded by the
-                Architect across matches.  Sorted by intensity so the most
-                significant bond appears first.  Type labels (from
-                RELATIONSHIP_LABELS) are intentionally terse — no mechanical
-                description is given, only the label and the thread text.
-                The intensity dot (●) is the only numeric indicator; its size
-                and opacity encode 0–1 without using a number or percentage. */}
-            {relationships.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {relationships.map((rel, i) => (
-                  <div key={i} style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#050308',
-                    backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.06) 0%, transparent 65%)',
-                    border: '1px solid rgba(157,111,251,0.18)',
-                    borderLeft: '2px solid #9D6FFB',
-                  }}>
-                    {/* Header row: relationship type + other player name */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center',
-                      justifyContent: 'space-between', marginBottom: '5px',
+              {/* ── Relationship bonds ────────────────────────────────────
+                  Each entry is a player-pair bond.  The type label + other
+                  player name are on one line; the thread (Architect's prose)
+                  sits below.  Intensity encoded as a ● dot — size and
+                  opacity scale with 0–1 intensity, no numeric label shown. */}
+              {relationships.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {relationships.map((rel, i) => (
+                    <div key={i} style={{
+                      padding: '10px 0 10px 12px',
+                      borderLeft: '2px solid rgba(157,111,251,0.35)',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {/* Type label — cryptic but human-parseable */}
-                        <span style={{
-                          fontSize: '8px', fontWeight: 700, letterSpacing: '0.12em',
-                          textTransform: 'uppercase', color: '#9D6FFB',
-                        }}>
-                          {RELATIONSHIP_LABELS[rel.type] || rel.type}
-                        </span>
-                        {/* Other player name — the mortal on the other side of the bond */}
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#E3E0D5' }}>
-                          {rel.otherName}
-                        </span>
-                      </div>
-                      {/* Intensity indicator — ● scaled by 0–1 intensity value.
-                          fontSize 8–14 px gives a visible size range across the
-                          full 0–1 scale; opacity 0.3–1.0 doubles the contrast. */}
-                      <span style={{
-                        color: '#9D6FFB',
-                        fontSize: `${8 + Math.round((rel.intensity || 0) * 6)}px`,
-                        opacity: 0.3 + (rel.intensity || 0) * 0.7,
-                      }}>●</span>
-                    </div>
-                    {/* Thread text — the Architect's description of this bond */}
-                    {rel.thread && (
-                      <p style={{
-                        fontSize: '11px', fontStyle: 'italic',
-                        color: '#C4B5D9', lineHeight: 1.5, margin: 0,
+                      <div style={{
+                        display: 'flex', alignItems: 'center',
+                        justifyContent: 'space-between', marginBottom: '5px',
                       }}>
-                        {rel.thread}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            fontSize: '8px', fontWeight: 700, letterSpacing: '0.14em',
+                            textTransform: 'uppercase', color: '#9D6FFB', opacity: 0.7,
+                          }}>
+                            {RELATIONSHIP_LABELS[rel.type] || rel.type}
+                          </span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#E3E0D5' }}>
+                            {rel.otherName}
+                          </span>
+                        </div>
+                        <span style={{
+                          color: '#9D6FFB',
+                          fontSize: `${8 + Math.round((rel.intensity || 0) * 6)}px`,
+                          opacity: 0.3 + (rel.intensity || 0) * 0.7,
+                        }}>●</span>
+                      </div>
+                      {rel.thread && (
+                        <p style={{
+                          fontSize: '11px', fontStyle: 'italic',
+                          color: '#C4B5D9', lineHeight: 1.5, margin: 0,
+                        }}>
+                          {rel.thread}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
           </section>
         )}
 
