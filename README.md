@@ -18,7 +18,7 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Leagues listing and individual league detail pages with standings tables (live from DB)
 - Teams listing and team detail pages (live from DB)
 - **Players listing page** — Shows all 512 players (32 teams × 16 players) organized by league and team, sorted by jersey number. All player names are clickable links to detailed profile pages. Jersey numbers and match stats displayed alongside player names. All data fetched directly from Supabase via nested player queries.
-- **Player detail pages** (`/players/:playerId`) — Full player profiles showing jersey number, position, age, nationality, overall rating, personality type with mechanical descriptions, team affiliation, and aggregated season statistics (goals, assists, saves, cards, injuries) pulled from match_player_stats
+- **Player detail pages** (`/players/:playerId`) — Full player profiles showing jersey number, position, age, nationality, overall rating, personality type with mechanical descriptions, team affiliation, aggregated season statistics (goals, assists, saves, cards, injuries) pulled from match_player_stats, **Cosmic Lore sections** including the player's narrative arc from The Architect and all dynamic relationships (rivalries, partnerships, feuds) with other players tracked across matches
 - Matches schedule page
 - Login page (placeholder — auth to be wired up)
 - Shared header/footer layout with navigation
@@ -46,20 +46,37 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 
 ### AI Commentary (powered by Claude)
 **The Architect System** — A Lovecraftian cosmic entity that shapes the narrative:
+
+**Pre-Match Presence** — The Architect manifests before kickoff:
+- **Pre-Match Omen** (`getPreMatchOmen()`) — Before the user clicks Kick Off, The Architect generates a cryptic one-sentence omen and a unique cosmic match title (e.g., "The Convergence", "The Reckoning")
+  - Establishes The Architect as a pre-existing watcher rather than a mid-match voice — the core Blaseball UX insight that cosmic horror should feel like it was *already there* before play began
+  - If prior encounter lore exists between the teams, the omen alludes obliquely to past encounters, rewarding returning fans
+  - Procedural fallback includes six generic omens and rivalry-aware variants when no API key is present
+  - **PreMatchArchitectZone UI** — Void-black panel with pulsing violet glow, displaying the cosmic title, omen, and rivalry memory (if applicable); animates with the same `architectPulse` effect as in-match cards
+
+**In-Match Narrative** — The Architect shapes play through:
 - Issues cosmic **Proclamations** every ~10 minutes (or immediately after goals/red cards)
 - Maintains persistent **cosmic lore** in localStorage — accumulated player arcs, manager fates, team rivalry threads, and season arcs across all matches and leagues
 - When teams meet a second time, the Architect recalls their history and previous encounters
 - Context is injected into every AI prompt, so all voices speak with narrative coherence
 - Influences matches through four layers:
-  - **Cosmic Edicts** (polarity/magnitude modifiers)
+  - **Cosmic Edicts** (polarity/magnitude modifiers) — Visualized in the match UI via **EdictBadge**, displaying edict emoji, polarity, and magnitude
   - **Intentions** (12 types with directed outcomes)
-  - **Sealed Fate** (prophecy-driven forced outcomes)
+  - **Sealed Fate** (prophecy-driven forced outcomes) — Displayed via **SealedFateCard**, showing the prophecy text and fulfillment status (✓ when achieved)
   - **Architect Interference** (10 active flags: keeperParalysed, goalDrought, gravityFlipped, architectTantrum, commentaryVoid, voidCreature, eldritchPortal, pendingInterferences, pendingPenalty, reversalBoost — each flag fires once per event batch with 20-min cooldown, probability scaling with edict polarity)
+    - Triggers **ArchitectFlashCard** overlay with "∷ THE THREADS SHIFT ∷" effect 2.5 seconds before the interference card appears
+- **Featured Mortals** — The Architect designates key players as featured mortals; they appear with a glowing **✦** marker in the PlayerRow and pitch visualization, creating mystery without explanation
 - **Mortal Bewilderment** — When The Architect interferes, affected characters (players, managers, referees) react with confusion and disbelief:
   - Characters have **zero knowledge** of The Architect or any cosmic cause — they only sense the inexplicable effect
   - System prompts inject bewilderment directives steering reactions toward confusion rather than acceptance
   - LLM-powered reactions fire in parallel after each interference, generating targeted player thoughts and manager responses
   - **Procedural fallback** (no API key): Canned bewildered commentary lines for high-impact interference types (vanished goals, forced red cards, phantom injuries, unexplained score resets) ensure character confusion even in procedural-only matches
+
+**Player Cosmic Lore** — The Architect's narrative persistence extends to player detail pages:
+- **Player Arcs** — Each player's running narrative from the Architect (e.g., "Rising Star", "Marked by Fate") displayed in the player detail card
+- **Player Relationships** — Dynamic relationships between players (rivalry, partnership, grudge, mentor_pupil, former_teammates, mutual_respect, national_rivals, captain_vs_rebel) with intensity tracking and narrative threads, shown in a dedicated section
+  - Relationships are bidirectional and are read from localStorage lore, updated after each match by `saveMatchToLore()`
+  - Fans can trace the history of on-pitch feuds and partnerships across seasons without explicit labeling
 
 **Commentary Pipeline** — Optimized for minimal latency between match events and AI commentary:
 - All voices (Captain Vox, Nexus-7, Zara Bloom) run in **parallel** rather than sequentially, eliminating the 300–800 ms blocking wait for Vox's narration
