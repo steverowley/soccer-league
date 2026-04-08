@@ -2262,17 +2262,47 @@ Return JSON only, no markdown:
     const canEchoGoal     = (matchState.events || []).some(e => !e.isGoal && (e.outcome === 'saved' || e.outcome === 'miss'));
     const hasActiveEdict  = !!this.cosmicEdict;
 
-    // Always-available types
+    // Always-available interference types offered to the LLM.
+    //
+    // Phase 1A removed: keeper_paralysis, goal_drought, reversal_of_fortune,
+    // commentary_void, eldritch_portal, void_creature, gravity_flip,
+    // architect_tantrum — these all required matchState flags that have been
+    // removed from the simulator.  The surviving set still gives the Architect
+    // a rich palette while keeping the mechanical surface area manageable.
     const availableTypes = [
-      'grant_goal','force_red_card','force_injury','curse_player','bless_player',
-      'add_stoppage','dimension_shift','mass_curse','possession','score_mirror',
-      'keeper_paralysis','goal_drought','double_goals','reversal_of_fortune',
-      'time_rewind','phantom_foul','cosmic_own_goal','goalkeeper_swap',
-      'formation_override','score_amplifier','equalizer_decree','talent_drain',
-      'prophecy_reset','commentary_void','eldritch_portal','void_creature',
-      'gravity_flip','cosmic_weather','pitch_collapse','architect_boredom',
-      'architect_tantrum','architect_amusement','architect_sabotage',
-      'identity_swap','player_swap','lucky_penalty',
+      // ── Direct score / card effects ─────────────────────────────────────
+      'grant_goal',          // force a goal for the target team immediately
+      'lucky_penalty',       // award a free penalty to the target team
+      'force_red_card',      // send a target player off this minute
+      'force_injury',        // injure a target player (triggers sub)
+      'cosmic_own_goal',     // compel a defender to score against their own side
+      'double_goals',        // next goal counts as 2
+      'score_amplifier',     // all goals for 5 min count as 3
+      'equalizer_decree',    // immediately level the scores
+      // ── Player fate ─────────────────────────────────────────────────────
+      'curse_player',        // mark a player for reduced performance this match
+      'bless_player',        // mark a player for elevated performance this match
+      'mass_curse',          // curse all players on the target team simultaneously
+      'talent_drain',        // permanently reduce a player's stats for this match
+      'possession',          // cosmically possess a player (erratic behaviour)
+      // ── Match structure ──────────────────────────────────────────────────
+      'add_stoppage',        // inject 5–10 minutes of extra stoppage time
+      'time_rewind',         // roll the match clock back by a few minutes
+      'phantom_foul',        // issue a red card for a foul that did not happen
+      'score_mirror',        // make both teams' scores equal the higher value
+      'formation_override',  // seize tactical command of the target team
+      // ── Cosmic spectacle ─────────────────────────────────────────────────
+      'dimension_shift',     // teleport a player out of the match briefly
+      'goalkeeper_swap',     // swap both goalkeepers mid-match
+      'identity_swap',       // swap two players' stats for the rest of the match
+      'player_swap',         // reassign a player to the opposing team
+      'cosmic_weather',      // tear apart the weather with cosmic will
+      'pitch_collapse',      // pitch collapses — brief chaos event
+      'prophecy_reset',      // wipe the sealed fate and seal a new one
+      // ── Architect mood ───────────────────────────────────────────────────
+      'architect_boredom',   // queue 3 mild interferences (Architect is restless)
+      'architect_amusement', // gift the leading team a buff (Architect is pleased)
+      'architect_sabotage',  // turn against the Architect's own edict target
     ];
     if (canAnnulGoal)   availableTypes.push('annul_goal','steal_goal');
     if (canAnnulRed)    availableTypes.push('annul_red_card');

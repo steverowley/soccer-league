@@ -155,10 +155,7 @@ function buildInterferenceFeedItem(r) {
     // ── Cosmic Chaos ─────────────────────────────────────────────────────────
     player_swap:         { emoji: '🌀', subtitle: 'PLAYER SWITCHED ALLEGIANCE'        },
     echo_goal:           { emoji: '🌀', subtitle: 'HISTORY REWRITTEN — GOAL ALWAYS WENT IN' },
-    keeper_paralysis:    { emoji: '👁️', subtitle: 'KEEPER PARALYSED BY COSMIC TREMOR' },
-    goal_drought:        { emoji: '🕳️', subtitle: 'NET SEALED SHUT'                   },
     double_goals:        { emoji: '⚡', subtitle: 'TEMPORAL RESONANCE — NEXT GOAL COUNTS TWICE' },
-    reversal_of_fortune: { emoji: '✨', subtitle: 'COSMOS BACKS THE UNDERDOG'         },
     time_rewind:         { emoji: '⏳', subtitle: 'CLOCK ROLLS BACK'                  },
     phantom_foul:        { emoji: '💀', subtitle: 'PHANTOM RED CARD INSCRIBED'        },
     cosmic_own_goal:     { emoji: '🌌', subtitle: 'COMPELLED TO BETRAY THEIR OWN NET' },
@@ -168,16 +165,9 @@ function buildInterferenceFeedItem(r) {
     equalizer_decree:    { emoji: '♾️', subtitle: 'COSMIC MERCY — SCORES LEVELLED'    },
     talent_drain:        { emoji: '🩸', subtitle: 'TALENT SIPHONED'                   },
     prophecy_reset:      { emoji: '🌌', subtitle: 'FATE REWRITTEN — NEW PROPHECY SEALED' },
-    commentary_void:     { emoji: '🕳️', subtitle: 'COSMIC STATIC — COMMENTARY SILENCED' },
-    // ── Eldritch / Reality ───────────────────────────────────────────────────
-    eldritch_portal:     { emoji: '🌀', subtitle: 'PORTAL OPENS — ELDRITCH FORCES POUR THROUGH' },
-    void_creature:       { emoji: '👁️', subtitle: 'VOID CREATURE MANIFESTS ON THE PITCH' },
-    gravity_flip:        { emoji: '⚡', subtitle: 'GRAVITY INVERTED — PHYSICS BETRAYED' },
     cosmic_weather:      { emoji: '🌌', subtitle: 'WEATHER TORN APART BY COSMIC WILL' },
-    pitch_collapse:      { emoji: '🕳️', subtitle: 'PITCH COLLAPSES — PLAYERS SWALLOWED' },
     // ── Architect Mood ───────────────────────────────────────────────────────
     architect_boredom:   { emoji: '♾️', subtitle: 'THE ARCHITECT GROWS BORED — CHAOS CASCADE' },
-    architect_tantrum:   { emoji: '💀', subtitle: 'COSMIC TANTRUM — ALL RULES SUSPENDED' },
     architect_amusement: { emoji: '✨', subtitle: 'THE ARCHITECT IS PLEASED — GIFTS GIVEN' },
     architect_sabotage:  { emoji: '🌀', subtitle: 'THE ARCHITECT TURNS ON THEIR OWN DECREE' },
   };
@@ -243,19 +233,22 @@ function _applyInterferenceToState(prev, r) {
   // ── Early-return helpers for flag-only types ──────────────────────────────
   // These set a single flag on matchState; no other fields change.
   // Using early-return avoids the default spread at the bottom.
-  if (t === 'lucky_penalty')    return { ...prev, pendingPenalty: { team: r.targetTeam } };
-  if (t === 'keeper_paralysis') return { ...prev, keeperParalysed: { team: r.targetTeam === 'away' ? shortOf('away') : shortOf('home'), expiresMin: min + 10 } };
-  if (t === 'goal_drought')     return { ...prev, goalDrought:  { expiresMin: min + 15 } };
-  if (t === 'double_goals')     return { ...prev, doubleGoalActive: true };
-  if (t === 'commentary_void')  return { ...prev, commentaryVoid:  { expiresMin: min + 10 } };
-  if (t === 'eldritch_portal')  return { ...prev, eldritchPortal:  { teamArea: r.targetTeam === 'away' ? shortOf('away') : shortOf('home'), expiresMin: min + 10 } };
-  if (t === 'void_creature')    return { ...prev, voidCreature:    { expiresMin: min + 5  } };
-  if (t === 'gravity_flip')     return { ...prev, gravityFlipped:  { expiresMin: min + 10 } };
-  if (t === 'score_amplifier')  return { ...prev, scoreAmplifier:  { expiresMin: min + 5, multiplier: 3 } };
-  if (t === 'architect_tantrum') return { ...prev, architectTantrum: { expiresMin: min + 10 } };
+  // ── Flag-only early returns ───────────────────────────────────────────────
+  // These set a single matchState flag and return immediately.  No event is
+  // emitted; the flag is read on subsequent ticks by genEvent() or the in-tick
+  // post-processing block below.
+  //
+  // lucky_penalty   – force a penalty for the target team on the next shot event.
+  //                   This is the Phase 1A survivor of the old force_goal family:
+  //                   it hijacks the shot branch rather than overriding resolveContest.
+  // double_goals    – the next goal scored counts as 2 (consumed on use).
+  // score_amplifier – every goal for the next 5 minutes counts as 3 (expiresMin).
+  if (t === 'lucky_penalty')   return { ...prev, pendingPenalty:   { team: r.targetTeam } };
+  if (t === 'double_goals')    return { ...prev, doubleGoalActive: true };
+  if (t === 'score_amplifier') return { ...prev, scoreAmplifier:   { expiresMin: min + 5, multiplier: 3 } };
   // architect_boredom: queue 3 mild types to process one per simulateMinute tick
   if (t === 'architect_boredom') {
-    const mild = ['add_stoppage', 'momentum_vacuum', 'curse_player', 'bless_player', 'commentary_void'];
+    const mild = ['add_stoppage', 'curse_player', 'bless_player'];
     const picks = mild.sort(() => Math.random() - 0.5).slice(0, 3);
     return { ...prev, pendingInterferences: picks };
   }
@@ -1580,41 +1573,17 @@ const MatchSimulator = ({
 
       let event=genEvent(newMin,prev.homeTeam,prev.awayTeam,prev.momentum,prev.possession,prev.playerStats,prev.score,prev.activePlayers,prev.substitutionsUsed,aiInfluence,aim,chaosLevel,prev.lastEventType,genCtx);
 
-      // ── Feature 6: event post-processing for interference flags ──────────
-      // Applied immediately after genEvent() returns so that all downstream
-      // logic (score increment, stats, commentary feed) sees the modified event.
+      // ── Event post-processing for interference flags ──────────────────────
+      // Applied immediately after genEvent() returns so all downstream logic
+      // (score increment, stats, commentary feed) sees the modified event.
       //
-      // commentaryVoid: blanket commentary replacement while the flag is active.
-      //   Applied unconditionally to EVERY event in the window — substitutes,
-      //   fouls, goals alike — so the feed reads as impenetrable static.
-      //   Preserves all other event fields so stats / score still update correctly.
+      // clearPendingPenalty: genEvent() sets this sentinel on the penalty-sequence
+      //   event when consuming the lucky_penalty flag.  Cleared here atomically
+      //   with the rest of the tick state so the next minute cannot fire a second
+      //   free penalty from the same decree.
       //
-      // gravityFlipped: inverts isGoal on any shot/goal event.
-      //   A natural goal (isGoal: true) becomes a non-goal (cosmos deflects it);
-      //   a natural save/miss (isGoal: false) becomes a goal (cosmos guides it in).
-      //   Only applied to events that carry isGoal (shots, penalties, counters).
-      //   We also patch the outcome field for commentary consistency ('goal'/'saved').
-      //
-      // clearPendingPenalty: genEvent() sets this sentinel on the penalty sequence
-      //   it generates when consuming the lucky_penalty flag.  We clear the flag
-      //   from matchState here via a spread in the final return rather than in a
-      //   separate setState call, keeping the mutation atomic with the tick.
-      if(event){
-        // commentaryVoid — replace commentary text
-        if(prev.commentaryVoid && newMin<=prev.commentaryVoid.expiresMin){
-          event={...event,commentary:'〰〰〰 [COSMIC STATIC] 〰〰〰'};
-        }
-        // gravityFlipped — invert isGoal on shot-type events
-        if(prev.gravityFlipped && newMin<=prev.gravityFlipped.expiresMin && event.isGoal!==undefined){
-          const flipped=!event.isGoal;
-          // Patch outcome string so buildCommentary / stats logic stays consistent
-          const flippedOutcome=flipped?'goal':'saved';
-          const flipNote=flipped?' [GRAVITY INVERTED — IT CURVES IN!]':' [GRAVITY INVERTED — IT CURVES OUT!]';
-          event={...event,isGoal:flipped,outcome:flippedOutcome,
-            commentary:(event.commentary||'')+flipNote,
-            animation:flipped?{type:'goal',color:event.team===prev.homeTeam.shortName?prev.homeTeam.color:prev.awayTeam.color}:null};
-        }
-      }
+      // Phase 1A removed the commentaryVoid and gravityFlipped post-processors
+      // (those flags are no longer set by _applyInterferenceToState).
 
       if(!event){
         // No event this minute — carry prev state forward with updated minute/stoppage.
