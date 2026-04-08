@@ -999,11 +999,11 @@ export class AgentSystem {
    * This gives arc-relevant moments more voice coverage without touching the
    * event generation logic.
    *
-   * ── Reactor count ────────────────────────────────────────────────────────
-   * Captain Vox is included in the parallel pool (no longer a separate step).
-   *   full    → Vox + 2 reactors (Nexus-7 + Zara)
-   *   medium  → Vox + 1 reactor  (random from Nexus-7 / Zara)
-   *   minor / manager → Vox only  (quiet moments don't need the full ensemble)
+   * ── Reactor count (Phase 1A — cameo mode) ───────────────────────────────
+   * Captain Vox is the primary voice on every event.  Nexus-7 and Zara Bloom
+   * are cameo analysts who appear at ~25% probability on full-tier events only:
+   *   full    → Vox + 1 reactor at 25% chance (goal / red card only)
+   *   medium / minor / manager → Vox only
    *
    * @param {object}   event      – the match event object from genEvent()
    * @param {object}   gameState  – { score, minute }
@@ -1054,17 +1054,22 @@ export class AgentSystem {
     // Hoisted outside the parallel/staggered branch so the same randomised
     // reactor draw and thought-eligibility roll applies to both paths.
 
-    // Reactor count by tier:
-    //   full   (goal / red card) → 2 reactors — biggest moments need the full ensemble
-    //   medium (yellow / injury / controversy) → 1 reactor at 50% probability.
-    //           The 0.5 roll keeps commentary commentary fresh: not every yellow
-    //           card or knock needs a Nexus-7 / Zara take, and the lower density
-    //           makes reactions to significant moments feel more impactful when
-    //           they do appear.  At ~3–5 medium events per half this yields
-    //           ~1–2 analyst reactions per half on average.
-    //   minor / manager → 0 reactors — quiet moments don't need the full bench
-    const numReactors = tier === 'full' ? 2
-                      : tier === 'medium' && Math.random() < 0.50 ? 1  // 50% chance
+    // Reactor count by tier (Phase 1A — demoted to ~25% cameos):
+    //   full   (goal / red card)   → 1 reactor at 25% probability.
+    //           Nexus-7 and Zara are now cameo voices — their sharp takes are
+    //           more impactful when they appear rarely than when they echo every
+    //           goal.  Captain Vox's narration is the primary voice; reactors
+    //           punctuate the biggest moments roughly once every 4 goals.
+    //   medium (yellow / injury)   → 0 reactors (too frequent for cameo density)
+    //   minor / manager            → 0 reactors
+    //
+    // WHY 25%
+    // ───────
+    // With ~4–6 goals per match, 25% yields roughly 1 reactor cameo per match —
+    // exactly the "occasional colour analyst" feel of a real sports broadcast.
+    // Previously at 50–100% the feed was dominated by analyst lines; this change
+    // makes Vox's narration and player inner thoughts the primary texture.
+    const numReactors = tier === 'full' && Math.random() < 0.25 ? 1  // ~25% cameo
                       : 0;
 
     // Shuffle the non-Vox pool so the same pair doesn't always react together.
