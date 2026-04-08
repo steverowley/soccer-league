@@ -179,15 +179,6 @@ export function createAIManager(homeTeam, awayTeam) {
   const homeM     = { name: homeTeam.manager?.name || 'Manager Alpha', emotion: MGER_EMO.CALM, personality: homeTeam.manager?.personality || 'Aggressive', team: homeTeam };
   const awayM     = { name: awayTeam.manager?.name || 'Manager Beta',  emotion: MGER_EMO.CALM, personality: awayTeam.manager?.personality || 'Calculated', team: awayTeam };
 
-  // ── Near-miss thresholds ──────────────────────────────────────────────────
-  // How many consecutive near-misses (saved shots / posts) a team must
-  // accumulate before the next shot attempt gets a conversion bonus.
-  // Randomised per-team at match start so pressure "breaks" at different
-  // points every game — sometimes a single near-miss is enough, sometimes
-  // the crowd has to wait through four before the dam bursts.
-  // Range: 2–4 (rndI inclusive on both ends).
-  const nearMissThreshold = { home: rndI(2, 4), away: rndI(2, 4) };
-
   // ── Manager tactics state (Feature 4) ────────────────────────────────────
   // Each manager carries a live `tactics` object that genEvent() consults on
   // every tick.  Values are written by applyManagerTactics() in App.jsx when
@@ -226,7 +217,6 @@ export function createAIManager(homeTeam, awayTeam) {
     homeFormation: homeTeam.formation || '4-4-2',
     awayFormation: awayTeam.formation || '4-3-3',
     referee: ref, homeManager: homeM, awayManager: awayM,
-    nearMissThreshold,
     getAgentByName(name) { return [...allH, ...allA].find(a => a.player.name === name) || null; },
     updateAllAgents(mins) { [...activeH, ...activeA].forEach(a => { a.updateFatigue(mins); a.updateEmotion(mins); }); },
     handleSubstitution(out, inName, isHome) {
@@ -424,26 +414,12 @@ export function calcMVP(stats, home, away) {
 // Returns { outcome, margin: net, flavour: string[] }
 // The flavour array describes which modifiers fired (used by buildCommentary).
 export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {}) {
-  const { type = 'shot', weather = WX.CLEAR, isClutch = false, flashpoints = [],
-          architectIntentions = [], relationship = null,
-          // ── Feature 6: Architect Interference — persistent player fate ────────
-          // architectCurses      – active curse objects { playerName, magnitude }
-          //                        applied to the attacker: atkMod -= magnitude*2 (max −20)
+  const { type = 'shot', weather = WX.CLEAR, isClutch = false,
+          architectIntentions = [],
+          // ── Architect Interference — persistent player fate ────────
           // architectBlesses     – active bless objects  { playerName, magnitude }
           //                        applied to the attacker: atkMod += magnitude*2 (max +20)
-          // architectPossessions – active possession windows { playerName, magnitude, window }
-          //                        random ±30 swing each contest while the window is open;
-          //                        coin-flip polarity makes the player unpredictably erratic
-          // currentMinute        – needed to test possession window [startMin, startMin+15]
-          architectCurses = [], architectBlesses = [], architectPossessions = [],
-          currentMinute = 0,
-          // ── Feature 6: matchState interference flags forwarded via archModCtx ──────
-          // voidCreatureActive – true while a void creature is on the pitch (expiresMin
-          //   already resolved to a boolean outside so resolveContest stays stateless)
-          // reversalBoostSide  – 'home' | 'away' | null; the cosmos-backed side whose
-          //   attackers receive a permanent +15 atkMod for the rest of the match
-          voidCreatureActive = false,
-          reversalBoostSide  = null } = ctx;
+          architectBlesses = [] } = ctx;
   const atkStat = type === 'freekick' ? (atkPlayer.technical || 70) * 0.6 + (atkPlayer.mental || 70) * 0.4
     : type === 'penalty' ? (atkPlayer.technical || 70) * 0.5 + (atkPlayer.mental || 70) * 0.5
     : type === 'header'  ? (atkPlayer.athletic  || 70) * 0.7 + (atkPlayer.mental || 70) * 0.3
@@ -454,48 +430,6 @@ export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {
     : (defPlayer?.defending || 70) * 0.7 + (defPlayer?.mental   || 70) * 0.3;
   const flavour = []; let atkMod = 0, defMod = 0;
 
-  // ── Feature 2: Flashpoint modifiers ─────────────────────────────────────
-  // Active flashpoints from narrativeResidue apply contestMod adjustments to
-  // attacker and/or defender before the roll is computed.
-  //
-  // HOW FLASHPOINTS STACK
-  // ─────────────────────
-  // Multiple flashpoints can apply to the same player simultaneously
-  // (e.g. retaliation + momentum_surge).  All contestMods are summed.
-  // This means drama compounds — a player with retaliation AND momentum_surge
-  // is significantly more potent, which is intentional: big moments breed
-  // bigger moments.
-  //
-  // cardBias on flashpoints is not applied here; it is consumed in the foul
-  // branch of _genEventBranches when shouldGiveCard() is called.
-  if (flashpoints.length) {
-    // Attacker-side flashpoints
-    for (const fp of flashpoints) {
-      if (!fp.contestMod) continue;
-      if (fp.primaryPlayer === atkPlayer?.name) {
-        atkMod += fp.contestMod;
-        flavour.push(`fp_${fp.type}`);
-      }
-      // Team-wide flashpoints (primaryPlayer === null) apply when atkPlayer's
-      // team matches the flashpoint's teamKey — resolved via atkAgent
-      if (fp.primaryPlayer === null && fp.teamKey === (atkAgent?.isHome ? 'home' : 'away')) {
-        atkMod += fp.contestMod;
-        flavour.push(`fp_${fp.type}_team`);
-      }
-    }
-    // Defender-side flashpoints (goalkeeper_nervous, penalty_trauma if GK)
-    for (const fp of flashpoints) {
-      if (!fp.contestMod) continue;
-      if (fp.primaryPlayer === defPlayer?.name) {
-        defMod += fp.contestMod; // negative contestMod on GK = harder to save
-        flavour.push(`fp_${fp.type}_def`);
-      }
-      if (fp.primaryPlayer === null && fp.teamKey === (defAgent?.isHome ? 'home' : 'away')) {
-        defMod += fp.contestMod;
-        flavour.push(`fp_${fp.type}_def_team`);
-      }
-    }
-  }
   // ── Feature 3: Architect intentions — contestBonus ──────────────────────
   // The first active intention that names the attacker applies its
   // contestBonus to atkMod.  Bonuses are positive for blessed arcs
@@ -517,164 +451,33 @@ export function resolveContest(atkPlayer, atkAgent, defPlayer, defAgent, ctx = {
     }
   }
 
-  // ── Feature 6: Architect Interference — curse / bless / possession ────────
+  // ── Architect Interference — bless ────────────────────────────────────────
   // Applied after intentions so interference fate can override narrative arcs.
   //
-  // CURSE  — the Architect has marked this player for failure.  Magnitude 1–10
-  //          maps to a –2 to –20 atkMod penalty.  Capped at −20 so a cursed
-  //          player is badly hampered but not completely unable to score.
+  // BLESS  — the Architect has granted cosmic favour.  Magnitude 1–10 maps to
+  //          a +2 to +20 atkMod boost (capped at +20 so a heavily blessed
+  //          player becomes a near-unstoppable force for the rest of the match
+  //          without fully guaranteeing every shot).
   //
-  // BLESS  — the Architect has granted cosmic favour.  Same scale as curse but
-  //          positive: +2 to +20 atkMod.  A heavily blessed player becomes a
-  //          near-unstoppable force for the rest of the match.
-  //
-  // POSSESSION — the Architect has cosmically possessed the player.  Each contest
-  //          during the active 15-minute window rolls a ±30 coin-flip swing
-  //          making the player wildly erratic — sometimes brilliant, sometimes
-  //          catastrophic.  Random polarity is intentional: the cosmos does not
-  //          favour or punish, it just destabilises.
+  // NOTE: The curse / possession / void creature / reversal-of-fortune
+  // interference flags were removed in Phase 1A — bless is the only persistent
+  // per-player fate effect that survives because it is the simplest and most
+  // legible to viewers ("the Architect has blessed X"). Force-goal and
+  // force-red-card remain as one-shot interference flags handled in genEvent.
   if (atkPlayer?.name) {
-    const curse = architectCurses.find(c => c.playerName === atkPlayer.name);
-    if (curse) {
-      // magnitude * 2 converts the 1–10 scale to a 2–20 point penalty
-      atkMod -= Math.min(20, (curse.magnitude || 5) * 2);
-      flavour.push('architect_cursed');
-    }
-
     const bless = architectBlesses.find(b => b.playerName === atkPlayer.name);
     if (bless) {
-      // Same scale as curse but positive — magnitude * 2, capped at +20
+      // magnitude * 2 converts the 1–10 scale to a 2–20 point boost, capped at +20
       atkMod += Math.min(20, (bless.magnitude || 5) * 2);
       flavour.push('architect_blessed');
     }
-
-    // Possession: only fires during the active [startMin, startMin+15] window
-    const possessed = architectPossessions.find(
-      p => p.playerName === atkPlayer.name
-        && currentMinute >= (p.window?.[0] ?? 0)
-        && currentMinute <= (p.window?.[1] ?? 0),
-    );
-    if (possessed) {
-      // ±30 coin-flip: half the time a massive boost, half the time a crippling penalty.
-      // 30 was chosen so possession swings are larger than any single intention bonus
-      // (max ±26) — making a possessed player genuinely unpredictable to observers.
-      atkMod += Math.random() < 0.5 ? 30 : -30;
-      flavour.push('architect_possessed');
-    }
   }
 
-  // ── Feature 6: Void creature — reality-destabilising contest swing ────────
-  // While a void creature from the eldritch depths stalks the pitch, every
-  // resolveContest() call receives a random ±25 swing with a coin-flip polarity.
-  //
-  // WHY ±25 AND NOT A FIXED SIGN
-  // ─────────────────────────────
-  // The creature's presence should feel chaotic and unpredictable to BOTH sides.
-  // A fixed sign (always +25 or always -25) would just be another buff/debuff.
-  // The coin-flip means a striker might be helped or hindered on the SAME shot —
-  // which is narratively more interesting ("the creature brushed past the ball")
-  // and mechanically prevents exploitation.
-  //
-  // 25 points sits between the curse/bless cap (±20) and the possession swing
-  // (±30) — significant enough to feel cosmic but not absolutely game-deciding.
-  if (voidCreatureActive) {
-    atkMod += Math.random() < 0.5 ? 25 : -25;
-    flavour.push('void_creature');
-  }
-
-  // ── Feature 6: Reversal of fortune — permanent boost for the losing side ──
-  // When the cosmos decrees a reversal, the trailing team's attackers gain a
-  // flat +15 atkMod for every contest for the rest of the match.
-  //
-  // WHY +15 (FLAT)
-  // ──────────────
-  // +15 is meaningful (roughly equivalent to a strong relationship bonus) but
-  // not so large that it guarantees the comeback — the trailing team still needs
-  // good play to score.  It tips the scales without removing human drama.
-  //
-  // We check atkAgent.isHome rather than the team name because atkAgent is the
-  // reliable source of team affiliation inside resolveContest() — atkPlayer is
-  // a data object and may not carry a team field.
-  if (reversalBoostSide && atkAgent) {
-    const atkSide = atkAgent.isHome ? 'home' : 'away';
-    if (atkSide === reversalBoostSide) {
-      atkMod += 15;
-      flavour.push('reversal_of_fortune');
-    }
-  }
-
-  // ── Feature 5: Player relationship modifiers ─────────────────────────────
-  // When the two players involved in this contest have a known relationship
-  // (looked up via genEvent() calling getRelationshipFor() and passed in via
-  // ctx.relationship), apply intensity-scaled modifiers to atkMod / defMod
-  // and cardBiasMod.
-  //
-  // INTENSITY SCALING
-  // ─────────────────
-  // All modifiers are multiplied by relationship.intensity (0–1) so a
-  // newly-established rivalry has a modest effect while a long-standing feud
-  // at intensity 0.9+ feels genuinely dangerous.  This also means a
-  // relationship that starts at 0.5 and climbs over multiple matches
-  // gradually becomes more impactful — the graph is "alive".
-  //
-  // WHY NOT CLAMP cardBiasMod
-  // ─────────────────────────
-  // cardBiasMod is a multiplier fed to aim.shouldGiveCard().  We let rivalry
-  // and grudge stack freely; a rnd(1.5, 2.1) × intensity can push a normally
-  // borderline challenge into a red card, which is the intended drama.
-  //
-  // Note: `relationship` is null if no lore entry exists — this block is a
-  // strict no-op in that case, maintaining backward compatibility.
-  let cardBiasMod = 1.0;
-  if (relationship) {
-    const scaled = (mod) => Math.round(mod * (relationship.intensity || 0.5));
-    switch (relationship.type) {
-      case 'rivalry':
-      case 'grudge':
-        // Rivalries and grudges raise card severity and confrontation risk.
-        // The range rnd(1.3,1.9) is baked at call time, not pre-baked, so
-        // every contest between rivals feels slightly different.
-        cardBiasMod *= rnd(1.3, 1.9) * (relationship.intensity || 0.5);
-        flavour.push(`rel_${relationship.type}`);
-        break;
-      case 'partnership':
-        // Partnership chemistry boosts the attacker's margin — two players
-        // who have built trust finish each other's runs.
-        atkMod += scaled(rnd(8, 16));
-        flavour.push('rel_partnership_chemistry');
-        break;
-      case 'mentor_pupil':
-        // The pupil performs better with their mentor active on the same team.
-        atkMod += scaled(rnd(5, 11));
-        flavour.push('rel_mentor_guidance');
-        break;
-      case 'former_teammates':
-        // Old friends hesitate against each other — attacker doesn't go full
-        // out, defender doesn't commit to the challenge.
-        atkMod -= scaled(rnd(4, 8));
-        flavour.push('rel_old_friends_hesitate');
-        break;
-      case 'mutual_respect':
-        // Players who respect each other play cleaner — lower card risk.
-        cardBiasMod *= Math.max(0.3, 1 - (relationship.intensity || 0.5) * 0.5);
-        flavour.push('rel_mutual_respect');
-        break;
-      case 'national_rivals':
-        // National rivalries intensify card risk moderately (less than a
-        // personal grudge, more than a neutral contest).
-        cardBiasMod *= rnd(1.1, 1.4) * (relationship.intensity || 0.5);
-        flavour.push('rel_national_rivals');
-        break;
-      case 'captain_vs_rebel':
-        // The rebel player performs individually well but creates team friction
-        // — modelled as an atkMod boost for the rebel in direct contests.
-        atkMod += scaled(rnd(6, 12));
-        flavour.push('rel_captain_vs_rebel');
-        break;
-      default:
-        break;
-    }
-  }
+  // cardBiasMod is returned so callers that compute card severity can apply it
+  // to shouldGiveCard(). After Phase 1A (player-relationship removal) it is
+  // always 1.0 — kept in the return shape so existing callers don't need to
+  // be reworked.
+  const cardBiasMod = 1.0;
 
   if (atkAgent) {
     if (atkAgent.confidence > 75)  { atkMod += 8;  flavour.push('confident'); }
@@ -1042,8 +845,8 @@ export function genFreekickSeq(min, taker, gk, posTeam, defTeam, aim, ctx = {}) 
       commentary: pick([`${taker.name} motions to a teammate... something unconventional is brewing.`, `TWO PLAYERS over the ball! This could be unusual!`, `${taker.name} whispers something. The wall looks nervous.`]), momentumChange: [0,0] });
   }
   const gkAgent = aim?.getAgentByName(gk?.name);
-  // Spread architect interference fields from ctx if present (passed from genEvent via archModCtx)
-  const result  = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'freekick', weather: aim?.weather, architectCurses: ctx.architectCurses ?? [], architectBlesses: ctx.architectBlesses ?? [], architectPossessions: ctx.architectPossessions ?? [], currentMinute: ctx.currentMinute ?? 0 });
+  // Spread architect bless field from ctx if present (passed from genEvent via archModCtx)
+  const result  = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'freekick', weather: aim?.weather, architectBlesses: ctx.architectBlesses ?? [] });
   const isGoal  = result.outcome === 'goal';
   const outcomeCommentary = buildCommentary('freekick', { attacker: taker.name, defender: gk?.name || 'the keeper' }, result.outcome, result.flavour, ctx);
   return { sequence: seq, isGoal, outcomeCommentary };
@@ -1294,8 +1097,8 @@ export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, c
   seq.push({ minute: min, type: 'penalty_runup',   commentary: pick([`${taker.name} begins his run-up...`, `Three steps back. ${taker.name} focuses.`, `${taker.name} eyes the corner. Steps forward.`]), team: team.shortName, momentumChange: [0,0] });
   const takerAgent = aim?.getAgentByName(taker.name);
   const gkAgent    = aim?.getAgentByName(gk?.name);
-  // Spread architect interference fields from ctx if present (passed from genEvent via archModCtx)
-  const result     = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'penalty', weather: aim?.weather, architectCurses: ctx.architectCurses ?? [], architectBlesses: ctx.architectBlesses ?? [], architectPossessions: ctx.architectPossessions ?? [], currentMinute: ctx.currentMinute ?? 0 });
+  // Spread architect bless field from ctx if present (passed from genEvent via archModCtx)
+  const result     = resolveContest(taker, takerAgent, gk || {}, gkAgent, { type: 'penalty', weather: aim?.weather, architectBlesses: ctx.architectBlesses ?? [] });
   const scored     = result.outcome === 'goal';
   const outcomeComm = buildCommentary('penalty', { attacker: taker.name, defender: gk?.name || 'the keeper' }, result.outcome, result.flavour, ctx);
   seq.push({ minute: min, type: 'penalty_shot', commentary: outcomeComm, team: team.shortName, isGoal: scored, outcome: result.outcome, momentumChange: [0,0] });
@@ -1361,16 +1164,14 @@ export function genPenaltySeq(min, atk, def, team, defTeam, cardType, aim, gk, c
  *   eventProbability {number}   – pre-computed gate from getEventProbability()
  *                                 in simulateHelpers.js.  Defaults to the
  *                                 original flat 0.35 if not supplied.
- *   narrativeResidue {object}   – current matchState.narrativeResidue; used
- *                                 to read near-miss counts and flashpoints.
  *   architectIntentions {Array} – active CosmicArchitect intentions for this
  *                                 minute (Feature 3).
  *   architectEdictFn {Function} – (isHome) => edictModifiers object (Feature 3).
  *   architectFate {object}      – active sealed-fate decree (Feature 3).
  *   consumeFate {Function}      – marks the fate as consumed on the Architect
  *                                 instance (Feature 3).
- *   flashpoints {Array}         – active narrative-residue flashpoints used
- *                                 for player-selection bias (Feature 2).
+ *   architectBlesses {Array}    – persistent bless list from CosmicArchitect
+ *                                 instance.  Forwarded to resolveContest().
  *
  * @returns {object|null} event object or null (no event this minute)
  */
@@ -1378,29 +1179,22 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   // ── Event gate ────────────────────────────────────────────────────────────
   // Determines whether this minute produces a notable event at all.
   //
-  // Feature 1 (Tension Curves): the gate probability is now supplied by
-  // getEventProbability() in simulateHelpers.js, which uses a time-weighted
-  // curve instead of the original flat 35% value.  The curve varies by match
-  // phase (low opening → first-half peak → reset → late surge) and is shifted
-  // by the match's tension variant and per-match jitter baked at kick-off.
+  // The gate probability is supplied by getEventProbability() in
+  // simulateHelpers.js — a simple minute-only curve (low opening → first-half
+  // peak → reset → late surge). Phase 1A removed the tension-variant /
+  // narrative-residue / pressure inputs that used to further modulate the
+  // probability; the flat minute-based curve is close enough that matches
+  // still feel varied without the extra systems.
   //
   // When genCtx is not supplied (e.g. tests or legacy callers) eventProbability
   // falls back to 0.35 — identical behaviour to the original flat gate.
-  const { eventProbability = 0.35, narrativeResidue, flashpoints = [],
+  const { eventProbability = 0.35,
           architectIntentions = [], architectEdictFn = null,
           architectFate = null, consumeFate = null,
-          // ── Feature 6: Architect Interference — persistent effects ────────
+          // ── Architect Interference — persistent bless effect ──────────────
           // Destructured here and bundled into archModCtx (below) so every
-          // resolveContest() call receives them without repeating the fields.
-          // currentMinute is passed as genEvent's `min` parameter.
-          architectCurses = [], architectBlesses = [], architectPossessions = [],
-        // ── Feature 6: matchState interference flags ──────────────────────────
-        // matchFlags is a snapshot of the active cosmic flag objects set by
-        // _applyInterferenceToState (App.jsx).  Each flag has an expiresMin field
-        // so genEvent() can self-expire them without a separate cleanup pass.
-        // Defaults to null so legacy / test callers that don't supply genCtx are
-        // completely unaffected.
-        matchFlags = null } = genCtx;
+          // resolveContest() call receives it without repeating the field.
+          architectBlesses = [] } = genCtx;
 
   // ── Feature 3: Cosmic Edict — event-gate modifier ────────────────────────
   // The edict's rollMod shifts the probability gate before the roll.
@@ -1472,30 +1266,16 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
     // but mark it as fated for commentary hooks.
   }
 
-  // ── Feature 6: Architect Interference — shared contest context ───────────
+  // ── Architect Interference — shared contest context ─────────────────────
   // Built once per genEvent() call and spread into every resolveContest() ctx
-  // so curse / bless / possession modifiers apply uniformly across all contest
-  // types (shot, freekick, penalty, counter, interception) without duplicating
-  // the three field names at every call site.
+  // so bless modifiers apply uniformly across all contest types (shot,
+  // freekick, penalty, counter, interception) without repeating the field name
+  // at every call site.
   //
-  // currentMinute is the `min` parameter (already in scope) — possession windows
-  // are checked per-contest against [startMin, startMin+15].
+  // Phase 1A removed curses, possessions, void creatures, and the reversal
+  // boost — bless is the only persistent per-player effect that survived.
   const archModCtx = {
-    architectCurses,       // persistent debuff list from CosmicArchitect instance
-    architectBlesses,      // persistent buff list from CosmicArchitect instance
-    architectPossessions,  // active possession windows (erratic ±30 swing per contest)
-    currentMinute: min,    // needed to gate possession windows correctly
-    // ── Resolved boolean/value flags for resolveContest() ─────────────────
-    // We resolve expiresMin comparisons HERE (once per genEvent call) rather
-    // than inside resolveContest() so the contest function stays stateless —
-    // it receives plain booleans / scalars instead of flag objects.
-    //
-    // voidCreatureActive: true only while the void creature's window is open.
-    //   Drives the ±25 random swing inside resolveContest().
-    // reversalBoostSide: forwarded as-is — resolveContest() checks atkAgent.isHome
-    //   to decide whether this attacker is on the boosted side.
-    voidCreatureActive: !!(matchFlags?.voidCreature && min <= matchFlags.voidCreature.expiresMin),
-    reversalBoostSide:  matchFlags?.reversalBoost ?? null,
+    architectBlesses, // persistent bless list from CosmicArchitect instance
   };
 
   // Weather modifiers — computed once per event call and threaded through
@@ -1543,32 +1323,13 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
     isArchitectFeatured: genCtx.architect?.getFeaturedMortals?.()?.includes(pName) ?? false,
   });
 
-  // ── Near-miss pressure bonus ───────────────────────────────────────────────
-  // When a team has been unlucky enough times in a row (near-misses threshold
-  // reached) their next possession carries extra attacking energy — the crowd
-  // senses a goal is coming and the team pushes harder.
-  //
-  // The bonus is injected as an eventProbability boost AFTER the gate has
-  // already passed (we're already generating an event), so it manifests as a
-  // bias in the roll rather than a second gate roll.  We fold it into a
-  // `nmRollReduction` that subtracts from `roll` below — lower roll pushes
-  // the event into the shot/foul branches.
-  //
-  // Threshold is team-specific (2–4, set in createAIManager at match start).
-  // Bonus magnitude is randomised per activation: rnd(0.15, 0.28) to avoid
-  // the "every third near-miss = goal" predictability.
-  const nmKey       = isHome ? 'home' : 'away';
-  const nmThreshold = aim?.nearMissThreshold?.[nmKey] ?? 3;
-  const nmCount     = narrativeResidue?.nearMisses?.[nmKey] ?? 0;
-  const nmRollReduction = nmCount >= nmThreshold ? rnd(0.15, 0.28) : 0;
-
   // Build the roll value that selects which event branch fires
   const momTeam    = isHome ? momentum[0] : momentum[1];
   // High momentum reduces the roll → pushes into shot/foul territory
   const momBoost   = momTeam > 5 ? 0.08 : momTeam > 3 ? 0.04 : 0;
   // Chain boosts: consecutive shots/corners keep pressure on
   const chainBoost = lastEventType === 'shot' ? 0.04 : lastEventType === 'corner' ? 0.02 : 0;
-  let roll = Math.max(0, Math.random() - momBoost - chainBoost - wxShotBoost - nmRollReduction);
+  let roll = Math.max(0, Math.random() - momBoost - chainBoost - wxShotBoost);
   // AI influence: teams with many shoot-happy or attack-minded agents get more shots
   if (aiInfluence) { const td = isHome ? aiInfluence.home : aiInfluence.away; if (td.SHOOT > 3) roll *= 0.7; if (td.ATTACK > 5) roll *= 0.8; }
   // Desperate late-game mode: losing after minute 80 → nearly every event is an attack
@@ -1681,18 +1442,15 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
 //   • Shot / long shot / goal / save / miss / counter / near-miss (roll < 0.20)
 function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxGkPen, wxStatPen, wxDustFail, playerStats, score, aim, momentum, genCtx = {}) {
 
-  // ── Feature 6: extract interference context from genCtx ──────────────────
+  // ── Architect Interference context for resolveContest() ─────────────────
   // _genEventBranches is a top-level function (not a closure inside genEvent),
-  // so matchFlags / archModCtx from genEvent's scope are NOT available here.
-  // Reconstruct them from genCtx which is already passed as the last argument.
-  const { architectCurses: _bac = [], architectBlesses: _bab = [], architectPossessions: _bap = [], matchFlags = null } = genCtx;
+  // so archModCtx from genEvent's scope is NOT available here. Reconstruct it
+  // from genCtx which is already passed as the last argument.
+  // Phase 1A keeps only `architectBlesses` (the curse/possession/void/reversal
+  // flags were removed); see resolveContest() for the bless-application logic.
+  const { architectBlesses: _bab = [] } = genCtx;
   const archModCtx = {
-    architectCurses:      _bac,
-    architectBlesses:     _bab,
-    architectPossessions: _bap,
-    currentMinute:        min,
-    voidCreatureActive:   !!(matchFlags?.voidCreature && min <= matchFlags.voidCreature.expiresMin),
-    reversalBoostSide:    matchFlags?.reversalBoost ?? null,
+    architectBlesses: _bab,
   };
 
   // ── Controversy events (3% chance, fires before roll check) ───────────────
@@ -1762,119 +1520,23 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
         momentumChange: isHome ? [-1, 1] : [1, -1] };
     }
 
-    // ── Feature 5: Relationship rival-selection bias ─────────────────────
-    // If the Architect has spotlighted active rivalry/grudge relationships,
-    // bias the foul toward those specific player pairings so long-running
-    // feuds manifest mechanically, not just in commentary.
-    //
-    // HOW IT WORKS
-    // ────────────
-    // For each active rivalry/grudge/national_rivals relationship, we check if
-    // one player is in posActive and the other in defActive.  If so, the
-    // probability of forcing that specific matchup scales with intensity:
-    //   base 40% + intensity × 25% → maximum 65% at intensity 1.0.
-    // This keeps normal randomness alive at low intensity while making
-    // established feuds feel inevitable at high intensity.
-    const architect = genCtx?.architect;
-    if (architect) {
-      const activeRels = architect.getActiveRelationships?.() ?? [];
-      for (const rel of activeRels) {
-        if (!['rivalry', 'grudge', 'national_rivals'].includes(rel.type)) continue;
-        // Keys use _vs_ separator; split to get the two player names
-        const parts = rel.key?.split('_vs_');
-        if (!parts || parts.length !== 2) continue;
-        const [rA, rB] = parts;
-        // Check if one player is on pos side and the other on def side
-        const aOnPos = posActive.includes(rA), bOnPos = posActive.includes(rB);
-        const aOnDef = defActive.includes(rA), bOnDef = defActive.includes(rB);
-        if ((aOnPos && bOnDef) || (bOnPos && aOnDef)) {
-          // Probability scales with relationship intensity (0–1)
-          const prob = 0.40 + (rel.intensity || 0.5) * 0.25;
-          if (Math.random() < prob) {
-            const defName = aOnDef ? rA : rB;
-            const rival   = defTeam.players.find(p => p.name === defName);
-            if (rival) player = rival; // override foul defender selection
-            break;
-          }
-        }
-      }
-    }
-
-    // ── Feature 2: Flashpoint player-selection bias ──────────────────────
-    // If a retaliation flashpoint exists where the fouled player (primary) is
-    // on the defending team AND the fouling player (secondary) is on the
-    // possessing team, bias the selection toward that matchup.
-    //
-    // 45% chance to enforce the retaliation pairing — not guaranteed, so the
-    // flashpoint doesn't override all other drama, just tilts probability.
-    //
-    // Similarly, a grudge_tackle flashpoint makes that specific player more
-    // likely to be chosen as the fouler (selectBias already applied to
-    // getPlayer-level calls; here we do the explicit override for fouls).
-    const flashpoints = genCtx?.flashpoints ?? [];
-    const retFP = flashpoints.find(
-      f => f.type === 'retaliation' &&
-           defActive.includes(f.primaryPlayer) &&
-           posActive.includes(f.secondaryPlayer),
-    );
-    if (retFP && Math.random() < 0.45) {
-      const retTarget = defTeam.players.find(p => p.name === retFP.primaryPlayer);
-      if (retTarget) player = retTarget; // bias: fouled player now the defender
-    }
-    const grudgeFP = flashpoints.find(
-      f => f.type === 'grudge_tackle' && defActive.includes(f.primaryPlayer),
-    );
-    if (grudgeFP && Math.random() < 0.50) {
-      const grudgeTarget = defTeam.players.find(p => p.name === grudgeFP.primaryPlayer);
-      if (grudgeTarget) player = grudgeTarget;
-    }
-
-    // ── Feature 2: Flashpoint card-severity bias ─────────────────────────
-    // Some flashpoints increase the severity of this specific contest.
-    // cardBias values on flashpoints are multipliers applied to the raw
-    // severity roll before passing to shouldGiveCard().
-    // ref_controversy applies league-wide (teamKey: null).
+    // ── Foul location roll ────────────────────────────────────────────────
+    // 15% of fouls happen inside the defending penalty area, triggering a
+    // penalty sequence. Otherwise it's a regular free kick or no-card foul.
     const inBox = Math.random() < 0.15;
-    let sevRaw = rnd(0, 100);
-    for (const fp of flashpoints) {
-      if (!fp.cardBias) continue;
-      const teamMatches = fp.teamKey === null ||
-        fp.teamKey === (isHome ? 'away' : 'home'); // defender's team
-      const playerMatches = fp.primaryPlayer === player.name || fp.primaryPlayer === null;
-      if (teamMatches && playerMatches) sevRaw *= fp.cardBias;
-    }
 
-    // ── Feature 5: Relationship card-severity bias ────────────────────────
-    // A rivalry or grudge between the fouling defender and the fouled attacker
-    // makes challenges more dangerous — they go in harder, the referee reads
-    // the intent.  The multiplier is intensity-scaled so a new rivalry barely
-    // nudges the needle while a long-standing grudge can turn a yellow into red.
-    const foulRel = architect?.getRelationshipFor?.(player.name, atk.name);
-    if (foulRel && ['rivalry', 'grudge', 'national_rivals'].includes(foulRel.type)) {
-      // rnd(1.2, 1.8): lower range than full rivalry/grudge in resolveContest
-      // because the foul branch already has its own flashpoint multipliers.
-      sevRaw *= rnd(1.2, 1.8) * (foulRel.intensity || 0.5);
-    }
-    const sev = Math.min(100, sevRaw);
+    // ── Card severity ─────────────────────────────────────────────────────
+    // Raw severity on a 0–100 scale, passed to aim.shouldGiveCard() which
+    // applies the manager's disciplinary thresholds. No flashpoint or
+    // relationship multipliers in Phase 1A — the raw roll alone decides.
+    const sev = rnd(0, 100);
     let card = aim ? aim.shouldGiveCard(sev) : (sev > 85 ? 'red' : sev > 60 ? 'yellow' : null);
 
     // ── Second-yellow detection ───────────────────────────────────────────
-    // Must be evaluated BEFORE architectTantrum so the flag is accurate even
-    // when the tantrum escalation also fires.
     // `isSecondYellow` drives a distinct commentary branch ("two yellows!")
     // that is more dramatic and realistic than treating it like a straight red.
     const isSecondYellow = card === 'yellow' && !!(playerStats[player.name]?.yellowCard);
     if (isSecondYellow) card = 'red';
-
-    // ── Feature 6: architectTantrum — cosmic rage, all yellows become reds ──
-    // The Architect's tantrum suspends normal disciplinary thresholds.  Any
-    // challenge that would earn a yellow is escalated to a straight red while
-    // the tantrum window is active.
-    // We apply this AFTER the double-yellow → red promotion above so a player
-    // who already has a yellow card is sent off correctly regardless of tantrum.
-    if (card === 'yellow' && matchFlags?.architectTantrum && min <= matchFlags.architectTantrum.expiresMin) {
-      card = 'red';
-    }
     if (inBox) {
       const penGk  = getPlayer(defTeam, defActive, 'defending', 'GK');
       // Merge archModCtx so curse/bless/possession modifiers reach resolveContest inside genPenaltySeq
@@ -2073,53 +1735,10 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const shooterAgent   = aim?.getAgentByName(player.name);
     const gkAgent        = aim?.getAgentByName(gk.name);
     const isClutchMoment = shooterAgent?.isClutch && min >= 80 && Math.abs(score[0] - score[1]) <= 1;
-    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null, ...archModCtx });
+    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, architectIntentions: genCtx.architectIntentions ?? [], ...archModCtx });
     const formAdj        = formBonus(player.name, playerStats) - formBonus(gk.name, playerStats) + (aim?.getAgentByName(player.name)?.getDecisionBonus() || 0) - wxStatPen + wxGkPen;
     const net            = shotResult.margin + formAdj;
     const shotFlavour    = shotResult.flavour;
-
-    // ── Feature 6: matchState flag overrides — applied after resolveContest ──
-    // These checks override the natural outcome AFTER the contest has run so
-    // that flavour tags and formAdj are still computed (they feed commentary
-    // and post-match lore).  The outcome is simply replaced.
-    //
-    // ORDER MATTERS
-    // ─────────────
-    // 1. keeperParalysed: checked first — the keeper literally cannot move, so
-    //    goalDrought and tantrum cannot override a paralysis.
-    // 2. goalDrought: second — the cosmos has sealed the net; even a tantrum
-    //    cannot score through a drought (drought wins the priority battle).
-    // 3. architectTantrum: last — turns saves into goals only when neither of
-    //    the higher-priority flags is active.
-    if (matchFlags) {
-      // 1. Keeper paralysis — guarantee a goal against the frozen keeper
-      //    expiresMin uses the match minute (min), not real time.
-      //    defTeam.shortName identifies which keeper is the target so only shots
-      //    AGAINST the paralysed team are affected, not shots the other way.
-      const kp = matchFlags.keeperParalysed;
-      if (kp && min <= kp.expiresMin && defTeam.shortName === kp.team) {
-        const comm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'goal', [...shotFlavour, 'keeper_paralysed'], matchCtx(player.name));
-        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, assister: null, outcome: 'goal', commentary: comm, momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, architectForced: true, animation: { type: 'goal', color: posTeam.color } };
-      }
-
-      // 2. Goal drought — collapse any goal-bound shot (net > 15) into a save
-      //    The drought does NOT affect shots that would naturally miss (net ≤ 5);
-      //    those still miss, preserving the full outcome distribution minus goals.
-      const gd = matchFlags.goalDrought;
-      if (gd && min <= gd.expiresMin && net > 15) {
-        const comm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'saved', shotFlavour, matchCtx(player.name));
-        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: comm, momentumChange: isHome ? [2, 0] : [0, 2], architectForced: true, animation: { type: 'saved', color: defTeam.color } };
-      }
-
-      // 3. Architect tantrum — every save becomes a goal; misses are unaffected
-      //    net > 5 && net <= 15 is the 'saved' band from the normal shot logic.
-      //    Misses (net ≤ 5) stay misses — the cosmos is enraged, not omnipotent.
-      const at = matchFlags.architectTantrum;
-      if (at && min <= at.expiresMin && net > 5 && net <= 15) {
-        const comm = buildCommentary('shot', { attacker: player.name, defender: gk.name }, 'goal', [...shotFlavour, 'architect_tantrum'], matchCtx(player.name));
-        return { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, assister: null, outcome: 'goal', commentary: comm, momentumChange: isHome ? [5, 0] : [0, 5], isGoal: true, architectForced: true, animation: { type: 'goal', color: posTeam.color } };
-      }
-    }
 
     // Own goal
     if (net > 10 && Math.random() < 0.05) {
@@ -2177,7 +1796,7 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
           const cAtkAgent   = aim?.getAgentByName(cPlayer.name);
           const cGkAgent    = aim?.getAgentByName(cGk.name);
           const cIsClutch   = cAtkAgent?.isClutch && min >= 80;
-          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null, ...archModCtx });
+          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, architectIntentions: genCtx.architectIntentions ?? [], ...archModCtx });
           const cGoal       = cResult.outcome === 'goal';
           const cIsHome     = defTeam === homeTeam;
           const savedSeqEvt = { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: saveComm, momentumChange: [0, 0] };
@@ -2203,20 +1822,13 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
 function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posActive, defActive, scoreDiff, phase, matchCtx, roll, wx, wxDustFail, playerStats, score, aim, momentum, genCtx = {}) {
   let player, defender, outcome, commentary, momentumChange = [0, 0];
 
-  // ── Feature 6: rebuild archModCtx from genCtx ────────────────────────────
-  // archModCtx is built in _genEventBranches (the Part 2 function) and is
-  // needed here for the counter-attack resolveContest call at the bottom of
-  // the attack/dribble branch.  Rather than expanding the already-long
-  // parameter list, we reconstruct it from genCtx which is already passed.
-  const { architectCurses: _ac = [], architectBlesses: _ab = [], architectPossessions: _ap = [], matchFlags: _mf = null } = genCtx;
-  const archModCtx = {
-    architectCurses:      _ac,
-    architectBlesses:     _ab,
-    architectPossessions: _ap,
-    currentMinute:        min,
-    voidCreatureActive:   !!(_mf?.voidCreature && min <= _mf.voidCreature.expiresMin),
-    reversalBoostSide:    _mf?.reversalBoost ?? null,
-  };
+  // ── Architect Interference context for resolveContest() ─────────────────
+  // archModCtx is built in _genEventBranches (Part 2) and is needed here for
+  // the counter-attack resolveContest call at the bottom of the attack/dribble
+  // branch. Reconstructed from genCtx rather than expanding the param list.
+  // Phase 1A kept only `architectBlesses` — see resolveContest() for details.
+  const { architectBlesses: _ab = [] } = genCtx;
+  const archModCtx = { architectBlesses: _ab };
 
   // ── Feature 4: defenseBias — widen / narrow the tackle branch ────────────
   // The manager's active tactical stance can expand or contract the roll
@@ -2334,7 +1946,7 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
           const cSeq      = genCounterSeq(min, cPlayer, cGk, defTeam, cSupport);
           const cAtkAgent = aim?.getAgentByName(cPlayer.name);
           const cGkAgent  = aim?.getAgentByName(cGk.name);
-          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null, ...archModCtx });
+          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, architectIntentions: genCtx.architectIntentions ?? [], ...archModCtx });
           const cGoal     = cResult.outcome === 'goal';
           const cIsHome   = defTeam === homeTeam;
           const intEvt    = { minute: min, type: 'attack', team: posTeam.shortName, player: player.name, defender: defender.name, outcome: 'intercepted', commentary, momentumChange: [0, 0] };
