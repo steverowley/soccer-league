@@ -18,7 +18,7 @@ import {
 } from "./constants.js";
 import { rnd, rndI, pick } from "./utils.js";
 import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
-import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
+import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability } from "./simulateHelpers.js";
 import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
@@ -224,7 +224,6 @@ function _applyInterferenceToState(prev, r) {
   let events           = prev.events;           // replaced wholesale only when needed
   let activePlayers    = { home: [...prev.activePlayers.home], away: [...prev.activePlayers.away] };
   let playerStats      = prev.playerStats;      // replaced wholesale only when needed
-  let narrativeResidue = prev.narrativeResidue;
   let stoppageTime     = prev.stoppageTime;
   let minute           = prev.minute;
 
@@ -429,12 +428,6 @@ function _applyInterferenceToState(prev, r) {
       break;
     }
 
-    case 'momentum_vacuum': {
-      // Wipe all narrative residue — pressure, near-misses, and active flashpoints
-      narrativeResidue = { pressure: { home: 0, away: 0 }, nearMisses: { home: 0, away: 0 }, flashpoints: [] };
-      break;
-    }
-
     // ── Cosmic Chaos ─────────────────────────────────────────────────────────
 
     case 'player_swap': {
@@ -582,7 +575,7 @@ function _applyInterferenceToState(prev, r) {
       break;
   }
 
-  return { ...prev, score, events, activePlayers, playerStats, narrativeResidue, stoppageTime, minute };
+  return { ...prev, score, events, activePlayers, playerStats, stoppageTime, minute };
 }
 
 // ── applyManagerTactics ────────────────────────────────────────────────────────
@@ -688,28 +681,6 @@ const MatchSimulator = ({
       aiThoughts:[],socialFeed:[],lastEventType:null,
       managerSentOff:{home:false,away:false},
 
-      // ── Feature 1: Narrative Tension Curves ──────────────────────────────
-      // tensionVariant determines the match's event-frequency shape for its
-      // entire duration — chosen once at kick-off based on team attack stats.
-      // See pickTensionVariant() and getEventProbability() in simulateHelpers.js.
-      //
-      // tensionJitter is an array of 10 per-segment random offsets (±0–0.03)
-      // so that even two 'standard' matches never produce an identical curve.
-      // Index maps to the same segment order as the curve[] array in
-      // getEventProbability().
-      tensionVariant: pickTensionVariant(homeTeam, awayTeam),
-      tensionJitter:  Array.from({ length: 10 }, () => rnd(-0.03, 0.03)),
-
-      // ── Feature 2: Narrative Residue ─────────────────────────────────────
-      // Tracks causal state that bleeds between events: accumulated pressure
-      // from shots/corners, consecutive near-misses per team, and active
-      // flashpoints (short-lived player/team states that bias future events).
-      // Populated and updated by updateNarrativeResidue() in simulateHelpers.js.
-      narrativeResidue: {
-        pressure:   { home: 0, away: 0 }, // 0–100; feeds getEventProbability()
-        nearMisses: { home: 0, away: 0 }, // consecutive near-miss count per team
-        flashpoints: [],                   // active flashpoint objects
-      },
     };
   };
   const [matchState,setMatchState]=useState(initState());
@@ -1575,71 +1546,35 @@ const MatchSimulator = ({
         }
       }
 
-      // ── Feature 1: compute dynamic event probability ──────────────────────
-      // getEventProbability() replaces the old flat 35% gate.  It reads the
-      // match's pre-determined tension variant and per-match jitter (both set
-      // in initState), then adds a pressure bonus from accumulated narrative
-      // residue so that a siege of near-misses makes further events more likely.
-      const residue = prev.narrativeResidue;
-      const eventProbability = getEventProbability(
-        newMin,
-        residue?.pressure?.home ?? 0,
-        residue?.pressure?.away ?? 0,
-        prev.tensionVariant  ?? 'standard',
-        prev.tensionJitter   ?? [],
-      );
+      // ── Compute event probability for this minute ─────────────────────────
+      // getEventProbability() uses a simple minute-based curve (Phase 1A).
+      // The tension-variant and narrative-residue inputs were removed; the
+      // plain time-weighted curve produces sufficient match-to-match variance.
+      const eventProbability = getEventProbability(newMin);
 
-      // genCtx bundles all Feature 1–5 context so genEvent() can read it
-      // without expanding the already-long positional argument list.
+      // genCtx bundles Architect context so genEvent() can access it without
+      // expanding the already-long positional argument list.
       //
-      // Feature 3 fields:
-      //   architectIntentions — active Architect intentions for this minute;
-      //     filtered by window so stale proclamations are excluded automatically.
-      //   architectEdictFn    — (isHome: bool) => edictModifiers object; called
-      //     inside genEvent() to compute the gate modifier and passed to
-      //     resolveContest() for contestMod / conversionBonus.
-      //   architectFate       — active sealed-fate decree (null outside window
-      //     or after consumption); genEvent() rolls against its probability.
-      //   consumeFate         — callback that marks the fate consumed on the
-      //     CosmicArchitect instance so it cannot fire twice.
+      //   architectIntentions — active intentions filtered to this minute window.
+      //   architectEdictFn    — (isHome: bool) => edictModifiers; called inside
+      //                         genEvent() to compute the gate modifier.
+      //   architectFate       — active sealed-fate decree (null if none / consumed).
+      //   consumeFate         — callback to mark the fate consumed on the Architect.
+      //   architectBlesses    — live bless array forwarded to resolveContest().
+      //   pendingPenalty      — force-penalty flag set by Architect interference;
+      //                         { team: 'home'|'away' } or null.
       const arch = architectRef.current;
       const genCtx = {
         eventProbability,
-        narrativeResidue: residue,
-        flashpoints:          residue?.flashpoints ?? [],
         architectIntentions:  arch?.getIntentions(newMin)      ?? [],
         architectEdictFn:     arch ? (isHome) => arch.getEdictModifiers(isHome) : null,
         architectFate:        arch?.getFate(newMin)            ?? null,
         consumeFate:          arch ? () => arch.consumeFate()  : null,
-        // Feature 5: pass the Architect instance so genEvent() can call
-        // getRelationshipFor() and getActiveRelationships() for rival-selection
-        // bias in the foul branch and partnership bonuses in resolveContest().
-        architect:            arch ?? null,
-        // ── Feature 6: Architect Interference — persistent player fate ────────
-        // Live curse / bless / possession arrays from the Architect instance;
-        // forwarded to resolveContest() via archModCtx in genEvent().
-        // Passing the arrays (not the instance) keeps genEvent pure and avoids
-        // stale-closure issues if arch is replaced mid-match.
-        architectCurses:      arch ? arch.activeCurses      : [],
-        architectBlesses:     arch ? arch.activeBlesses     : [],
-        architectPossessions: arch ? arch.activePossessions : [],
-        // ── Feature 6: matchState interference flags ─────────────────────────
-        // A snapshot of active cosmic flags so genEvent() can apply flag-based
-        // overrides (keeper paralysis, goal drought, tantrum, etc.) without
-        // receiving the entire matchState.  All flags carry an expiresMin field;
-        // genEvent() is responsible for the expiry comparison so App.jsx never
-        // needs a separate cleanup pass.
-        //
-        // reversalBoost is the side string ('home'|'away') that the cosmos is
-        // backing — forwarded into archModCtx → resolveContest() as reversalBoostSide.
+        architectBlesses:     arch ? arch.activeBlesses        : [],
+        // pendingPenalty: force-penalty interference flag (the only surviving
+        // matchState flag after Phase 1A; equivalent to a force_goal decree).
         matchFlags: {
-          keeperParalysed:  prev.keeperParalysed  ?? null, // { team: shortName, expiresMin }
-          goalDrought:      prev.goalDrought      ?? null, // { expiresMin }
-          architectTantrum: prev.architectTantrum ?? null, // { expiresMin }
-          commentaryVoid:   prev.commentaryVoid   ?? null, // { expiresMin }
-          voidCreature:     prev.voidCreature     ?? null, // { expiresMin }
-          pendingPenalty:   prev.pendingPenalty   ?? null, // { team: 'home'|'away' }
-          reversalBoost:    prev.reversalBoost    ?? null, // 'home' | 'away'
+          pendingPenalty: prev.pendingPenalty ?? null, // { team: 'home'|'away' }
         },
       };
 
@@ -1682,8 +1617,7 @@ const MatchSimulator = ({
       }
 
       if(!event){
-        // Spread prev first so tensionVariant, tensionJitter, and narrativeResidue
-        // are carried forward untouched — Feature 1-5 state must survive quiet minutes.
+        // No event this minute — carry prev state forward with updated minute/stoppage.
         return{...prev,minute:newMin,stoppageTime:newStop,events:[...prev.events,...interventions].filter(Boolean),aiThoughts:newThoughts.slice(-30),socialFeed:newSocial.slice(-20),lastEventType:prev.lastEventType};
       }
       const socialPosts=genSocial(event,newMin,prev);
@@ -1781,16 +1715,8 @@ const MatchSimulator = ({
       allEvents=pgExtras.allEvents; newScore=pgExtras.newScore;
       const varOverturned=pgExtras.varOverturned;
 
-      // ── Feature 2: update narrative residue ──────────────────────────────
-      // Tag VAR-overturned goals on the event so updateNarrativeResidue can
-      // treat them as non-goals (pressure/near-miss resets should not fire).
-      // We derive the next residue state after post-goal extras so that VAR
-      // overturns are already reflected in the event object.
-      const eventWithVAR = varOverturned ? { ...event, isVAROverturned: true } : event;
-      const newResidue = updateNarrativeResidue(prev, eventWithVAR, newMin, aim);
-
       const isKey=event.isGoal&&!varOverturned&&event.animation?.type==='goal';
-      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff,narrativeResidue:newResidue,
+      return{...prev,minute:isKey?prev.minute:newMin,stoppageTime:newStop,score:newScore,momentum:newMom,possession:newPoss,events:allEvents.filter(Boolean).slice(-150),currentAnimation:isKey?event.animation:null,isPaused:isKey,pauseCommentary:isKey?event.commentary:null,playerStats:newStats,activePlayers:newActive,substitutionsUsed:newSubsUsed,redCards:newRedCards,aiThoughts:newThoughts.slice(-30),socialFeed:newSocial,lastEventType:event.type||prev.lastEventType,managerSentOff:newManagerSentOff,
         // ── Feature 6: one-shot interference flag clearances ─────────────────
         // These are spread last so their values win over the prev spread above.
         //

@@ -2282,17 +2282,18 @@ Return JSON only, no markdown:
     if (canEchoGoal)    availableTypes.push('echo_goal');
 
     // ── Probability gate ──────────────────────────────────────────────────────
-    // Base probability: 13% per check.  Raised from 10% so the Architect acts
-    // on its own initiative rather than feeling like it waits for the game to
-    // hand it permission.  Pressure and tension variant add up to ~8% and ~4%
-    // respectively on top.  Chaos polarity triples total; any edict 1.5×.
+    // Base probability: 13% per check — raised from 10% so the Architect acts
+    // on its own initiative rather than waiting for the game to hand it permission.
+    // An active cosmic edict multiplies the total: chaos polarity ×3 (maximum
+    // urgency), any other polarity ×1.5 (moderate nudge).  No edict = ×1.0.
+    //
+    // Phase 1A removed the narrative-residue pressure bonus and tension-variant
+    // bonus that used to add up to ~12% on top of the base.  The gate is now a
+    // simpler flat × edict multiplier, keeping the Architect active without
+    // depending on the removed state.
     const edict       = this.cosmicEdict;
-    const residue     = matchState.narrativeResidue;
     const polarityMult= edict?.polarity === 'chaos' ? 3.0 : edict?.polarity ? 1.5 : 1.0;
-    const avgPressure = ((residue?.pressure?.home || 0) + (residue?.pressure?.away || 0)) / 2;
-    const pressureBonus = (avgPressure / 100) * 0.08;   // 0–0.08 scaling with narrative pressure (0–100)
-    const variantBonus  = ['frantic','back_and_forth'].includes(matchState.tensionVariant) ? 0.04 : 0;
-    const finalProb     = (0.13 + pressureBonus + variantBonus) * polarityMult;
+    const finalProb   = 0.13 * polarityMult;
 
     // Early-entry override: guarantee the first interference fires by min 8
     // so the Architect establishes its presence in the opening exchanges
@@ -2313,18 +2314,19 @@ Return JSON only, no markdown:
       : 'No fate has been sealed yet.';
 
     // Mood hint: steers the LLM's tone without constraining its choice of action.
-    // Flat match → boredom; cursed team scoring → enrage; frantic/high-scoring → amusement.
-    const isFlat     = avgPressure < 20 && goals.length === 0;
+    // Flat match (no goals, quiet) → boredom; cursed team scoring → enrage;
+    // high-scoring → amusement; otherwise → impassive calculation.
+    const isFlat     = goals.length === 0 && (matchState.events || []).length < 5;
     const isEnraged  = edict?.polarity === 'curse' && goals.some(g => g.team === (edict.target === 'home' ? this.homeTeam?.shortName : this.awayTeam?.shortName));
-    const isAmused   = matchState.tensionVariant === 'frantic' || goals.length >= 3;
-    const moodHint   = isFlat ? 'The Architect grows bored — the mortals perform without drama.'
+    const isAmused   = goals.length >= 3;
+    const moodHint   = isFlat    ? 'The Architect grows bored — the mortals perform without drama.'
                      : isEnraged ? 'The Architect seethes. The cursed have dared to score.'
-                     : isAmused ? 'The Architect is entertained — but perhaps wishes to escalate further.'
+                     : isAmused  ? 'The Architect is entertained — but perhaps wishes to escalate further.'
                      : 'The Architect watches, impassive, calculating whether to intervene.';
 
     const userMsg = `THE ARCHITECT CONSIDERS INTERVENTION.\n\n` +
       `Match: ${scoreSummary} | Minute ${minute}'. ` +
-      `Tension: ${matchState.tensionVariant || 'standard'}. Edict: ${edict?.polarity || 'none set'} (magnitude ${edict?.magnitude || 0}).\n` +
+      `Edict: ${edict?.polarity || 'none set'} (magnitude ${edict?.magnitude || 0}).\n` +
       `${fateSummary}\n` +
       `Cosmic thread: ${this.cosmicThread || 'none yet'}.\n` +
       `Recent events: ${recentCommentary || 'none'}.\n` +
