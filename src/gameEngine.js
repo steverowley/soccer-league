@@ -1188,83 +1188,29 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   //
   // When genCtx is not supplied (e.g. tests or legacy callers) eventProbability
   // falls back to 0.35 — identical behaviour to the original flat gate.
-  const { eventProbability = 0.35,
-          architectIntentions = [], architectEdictFn = null,
-          architectFate = null, consumeFate = null,
-          // ── Architect Interference — persistent bless effect ──────────────
-          // Destructured here and bundled into archModCtx (below) so every
-          // resolveContest() call receives it without repeating the field.
-          architectBlesses = [] } = genCtx;
-
-  // ── Feature 3: Cosmic Edict — event-gate modifier ────────────────────────
-  // The edict's rollMod shifts the probability gate before the roll.
-  // A boon lowers the gate (more events for that side), a curse raises it.
-  // edictFn is called with a temporary isHome=true to get the home-side mods;
-  // we don't know which team will possess yet, so we average both sides.
-  // This is intentional: the edict affects the match as a whole at gate level;
-  // per-team effects are applied later in resolveContest via contestMod.
-  const homeEdictMods = architectEdictFn ? architectEdictFn(true)  : {};
-  const awayEdictMods = architectEdictFn ? architectEdictFn(false) : {};
-  const edictGateMod  = ((homeEdictMods.rollMod ?? 0) + (awayEdictMods.rollMod ?? 0)) / 2;
-
-  if (Math.random() > eventProbability + edictGateMod) return null;
-
-  // ── Feature 3: Sealed Fate — force-construct a fated event ───────────────
-  // The Architect sealed a fate at the second Proclamation.  When the match
-  // minute falls inside the fate's window, roll against the fate's probability.
-  // On success, construct the fated event directly and return it — bypassing
-  // all normal branch logic.  The event is built using existing helpers so all
-  // downstream hooks (VAR, celebration, hat-trick) still fire normally.
+  // genCtx fields used by genEvent():
+  //   eventProbability   – minute-based gate from getEventProbability() (default 0.35)
+  //   architectIntentions – active Architect intentions for this minute; used by
+  //                         the rivalry_flashpoint roll modifier and resolveContest()
+  //                         contestBonus.  Empty array = no-op.
+  //   architectBlesses   – persistent bless list forwarded to resolveContest() via
+  //                         archModCtx so blessed players get their atkMod boost on
+  //                         every contest without repeated field passing.
+  //   matchFlags          – thin object with the surviving interference flags
+  //                         (pendingPenalty only after Phase 1A).
   //
-  // WHY BYPASS NORMAL BRANCHES
-  // ───────────────────────────
-  // The fate must override whatever roll the normal flow would produce.
-  // Building it here (before posTeam determination) keeps the logic clean:
-  // we determine which team the fated player belongs to, construct a minimal
-  // event, and return.  The match state handles everything else.
-  if (architectFate && !architectFate.consumed && Math.random() < architectFate.probability) {
-    if (typeof consumeFate === 'function') consumeFate();
-    const fatedPlayer  = architectFate.player;
-    const fatedTeam    = fatedPlayer
-      ? (homeTeam.players.some(p => p.name === fatedPlayer) ? homeTeam : awayTeam)
-      : (Math.random() < possession[0] / 100 ? homeTeam : awayTeam);
-    const fatedIsHome  = fatedTeam === homeTeam;
+  // Removed in Phase 1A: architectEdictFn, architectFate, consumeFate — the
+  // Cosmic Edict gate modifier and Sealed Fate force-event machinery.
+  const { eventProbability = 0.35,
+          architectIntentions = [],
+          architectBlesses = [],
+          matchFlags = null } = genCtx;
 
-    if (architectFate.outcome === 'goal' && fatedPlayer) {
-      const gk = getPlayer(fatedIsHome ? awayTeam : homeTeam,
-        fatedIsHome ? activePlayers.away : activePlayers.home, 'defending', 'GK');
-      return {
-        minute: min, type: 'goal', team: fatedTeam.shortName, player: fatedPlayer,
-        defender: gk?.name, outcome: 'goal', isGoal: true,
-        commentary: `✨ ${fatedPlayer} — it was written. The cosmos delivers.`,
-        momentumChange: fatedIsHome ? [15, -10] : [-10, 15],
-        animation: { type: 'goal', color: fatedTeam.color },
-        isFatedEvent: true,
-      };
-    }
-    if (architectFate.outcome === 'red_card' && fatedPlayer) {
-      return {
-        minute: min, type: 'foul', team: fatedTeam.shortName, player: fatedPlayer,
-        cardType: 'red',
-        commentary: `🟥 ${fatedPlayer} — fate demanded it. Straight red.`,
-        momentumChange: fatedIsHome ? [-8, 5] : [5, -8],
-        isFatedEvent: true,
-      };
-    }
-    if (architectFate.outcome === 'wonder_save' && fatedPlayer) {
-      return {
-        minute: min, type: 'shot', team: (fatedIsHome ? awayTeam : homeTeam).shortName,
-        player: getPlayer(fatedIsHome ? awayTeam : homeTeam,
-          fatedIsHome ? activePlayers.away : activePlayers.home, 'attacking')?.name || 'Unknown',
-        defender: fatedPlayer, outcome: 'saved',
-        commentary: `🧤 ${fatedPlayer} — the save that was always going to happen.`,
-        momentumChange: fatedIsHome ? [0, 6] : [6, 0],
-        isFatedEvent: true,
-      };
-    }
-    // chaos / injury / fallthrough — let normal branches handle the event type
-    // but mark it as fated for commentary hooks.
-  }
+  // ── Event gate ─────────────────────────────────────────────────────────────
+  // Phase 1A removed the Cosmic Edict rollMod gate modifier that used to
+  // average home/away edict modifiers and add them to eventProbability here.
+  // The plain minute-based curve from getEventProbability() is sufficient.
+  if (Math.random() > eventProbability) return null;
 
   // ── Architect Interference — shared contest context ─────────────────────
   // Built once per genEvent() call and spread into every resolveContest() ctx
@@ -1448,7 +1394,10 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
   // from genCtx which is already passed as the last argument.
   // Phase 1A keeps only `architectBlesses` (the curse/possession/void/reversal
   // flags were removed); see resolveContest() for the bless-application logic.
-  const { architectBlesses: _bab = [] } = genCtx;
+  // matchFlags carries the surviving Phase 1A interference flag (pendingPenalty)
+  // needed by the shot branch below.  architectBlesses is forwarded to every
+  // resolveContest() call via archModCtx.
+  const { architectBlesses: _bab = [], matchFlags = null } = genCtx;
   const archModCtx = {
     architectBlesses: _bab,
   };

@@ -1625,61 +1625,32 @@ Return JSON only, no markdown:
     }
   }
 
-  // ── Feature 3: resolve cosmic edict ──────────────────────────────────────
+  // ── Cosmic Edict — narrative record only (Phase 1A) ──────────────────────
 
   /**
-   * Converts the Architect's freeform edict declaration (polarity + magnitude)
-   * into resolved numeric modifiers baked at call time with rnd/rndI.
+   * Records the Architect's edict declaration as a narrative object.
    *
-   * WHY BAKE VALUES AT PARSE TIME
-   * ──────────────────────────────
-   * We want the edict's effects to be consistent for the entire match — a
-   * "boon" shouldn't vary in strength minute-to-minute.  Pre-baking also
-   * makes the values inspectable (e.g. in the browser console) for debugging.
+   * Phase 1A removed the polarity/magnitude mechanical modifier system:
+   * rollMod, contestMod, conversionBonus, and cardSeverityMult no longer
+   * feed back into genEvent() or resolveContest().  The edict now exists
+   * purely for display (the UI badge) and for multiplying the Architect's
+   * interference-check probability (chaos ×3, any edict ×1.5).
    *
-   * POLARITY SEMANTICS
-   * ──────────────────
-   *   boon   – favours the target: lower roll gate (more events), positive
-   *            contestMod, higher shot conversion.
-   *   curse  – burdens the target: higher roll gate (fewer events for cursed
-   *            side), negative contestMod, elevated card severity.
-   *   chaos  – unpredictable: roll gate and contestMod randomly flip sign,
-   *            cardSeverityMult swings wide.  chaosDouble (40% chance) means
-   *            BOTH a bonus AND a penalty apply simultaneously — the blessing
-   *            is also a curse.
+   * Keeping the polarity/target fields lets the Proclamation UI show a
+   * meaningful badge ("CHAOS EDICT — TARGET: AWAY") and lets the probability
+   * gate in considerIntervention() distinguish chaos from boon/curse.
    *
-   * @param {string} polarity  – 'boon' | 'curse' | 'chaos'
-   * @param {number} magnitude – 1–10 (LLM-supplied, clamped)
+   * @param {string} polarity – 'boon' | 'curse' | 'chaos'
+   * @param {number} magnitude – 1–10 (LLM-supplied; stored but not used mechanically)
    * @param {string} target    – 'home' | 'away' | 'both' | playerName
    * @param {string} rawText   – the Architect's freeform declaration sentence
-   * @returns {object} resolved edict modifiers
+   * @returns {object} edict narrative record
    */
   _resolveCosmicEdict(polarity, magnitude, target, rawText) {
-    const mag   = Math.min(10, Math.max(1, Number(magnitude) || 5));
-    const scale = mag / 10; // 0.1 – 1.0
-
-    // roll direction helpers
-    const boonRoll  = () => -(rnd(0.03, 0.10) * scale);  // lower gate = more events
-    const curseRoll = () =>  (rnd(0.02, 0.08) * scale);  // higher gate = fewer events
-    const chaosRoll = () =>  (Math.random() < 0.5 ? boonRoll() : curseRoll()) * rnd(0.8, 1.4);
-
-    const rollMod          = polarity === 'boon'  ? boonRoll()
-                           : polarity === 'curse' ? curseRoll()
-                           : chaosRoll();
-    const conversionBonus  = polarity === 'boon'  ? rnd(0.04, 0.12) * scale : 0;
-    const cardSeverityMult = polarity === 'curse' ? 1 + rnd(0.2, 0.8) * scale
-                           : polarity === 'chaos' ? rnd(0.6, 1.8)
-                           : 1.0;
-    // contestMod: direction depends on polarity; chaos can flip
-    const baseContest      = rnd(5, 18) * scale;
-    const contestMod       = polarity === 'boon'  ?  baseContest
-                           : polarity === 'curse' ? -baseContest
-                           : (Math.random() < 0.5 ? 1 : -1) * baseContest;
-
-    // chaosDouble: 40% chance — both bonus AND penalty apply at once
-    const chaosDouble = polarity === 'chaos' && Math.random() < 0.40;
-
-    return { target, polarity, rollMod, conversionBonus, cardSeverityMult, contestMod, chaosDouble, raw: rawText };
+    // magnitude is stored for display (the UI badge shows it) and future use,
+    // but is not applied to any numeric modifier after Phase 1A.
+    const mag = Math.min(10, Math.max(1, Number(magnitude) || 5));
+    return { target, polarity, magnitude: mag, raw: rawText };
   }
 
   // ── Lore persistence ──────────────────────────────────────────────────────
@@ -1906,53 +1877,12 @@ Return JSON only, no markdown:
     return this.intentions.filter(i => minute >= i.window[0] && minute <= i.window[1]);
   }
 
-  /**
-   * Returns the cosmic edict's resolved modifiers for a given team side,
-   * or an empty object if no edict has been set or the edict does not
-   * apply to this side.
-   *
-   * Called by App.jsx as `architectEdictFn(isHome)` and passed into genCtx
-   * so genEvent() can apply rollMod before the early-exit gate.
-   *
-   * @param {boolean} isHome – true if we're asking about the home team
-   * @returns {object} edict modifier bag, or {} if not applicable
-   */
-  getEdictModifiers(isHome) {
-    if (!this.cosmicEdict) return {};
-    const e = this.cosmicEdict;
-    const teamKey = isHome ? 'home' : 'away';
-    const appliesToTeam = e.target === 'both' || e.target === teamKey;
-    // Player-named targets: genEvent passes the player name through ctx
-    // separately; here we only resolve team-level applicability.
-    if (!appliesToTeam && !['home', 'away', 'both'].includes(e.target)) return {};
-    if (!appliesToTeam) return {};
-    return e;
-  }
-
-  /**
-   * Returns the sealed fate if its time window is currently active and it
-   * has not yet been consumed.  Returns null otherwise.
-   *
-   * genEvent() calls this once per minute and force-constructs the fated
-   * event type if the probability roll succeeds.
-   *
-   * @param {number} minute – current match minute
-   * @returns {object|null} sealedFate object, or null
-   */
-  getFate(minute) {
-    if (!this.sealedFate || this.sealedFate.consumed) return null;
-    if (minute < this.sealedFate.window[0] || minute > this.sealedFate.window[1]) return null;
-    return this.sealedFate;
-  }
-
-  /**
-   * Marks the sealed fate as consumed so it can never fire again.
-   * Called by App.jsx's consumeFate callback immediately after genEvent()
-   * force-constructs the fated event, ensuring exactly one execution.
-   */
-  consumeFate() {
-    if (this.sealedFate) this.sealedFate.consumed = true;
-  }
+  // NOTE: getEdictModifiers(), getFate(), and consumeFate() were removed in
+  // Phase 1A.  The Cosmic Edict is now narrative-only (stored as this.cosmicEdict
+  // for display and probability-gate multiplier) and the Sealed Fate no longer
+  // force-constructs events in genEvent().  The sealedFate field is still
+  // populated from the second Proclamation for display in the UI but carries no
+  // mechanical effect on the simulator.
 
   // ── Canonical rivalry key ─────────────────────────────────────────────────
 
@@ -2164,22 +2094,15 @@ Return JSON only, no markdown:
           }));
       }
 
-      // ── Feature 3: Parse sealed fate (second proclamation only) ──────────
-      // Fate is immutable once set — same reasoning as the edict.
+      // ── Parse sealed fate (second proclamation only) — narrative record ───
+      // Phase 1A: sealedFate is stored for UI display (SealedFateCard) but the
+      // force-event machinery in genEvent() has been removed.  The prophecy text
+      // still appears in the feed and the fateSummary prompt string so the LLM's
+      // narrative arc is preserved, but it no longer bypasses resolveContest.
       if (isSecondProclamation && parsed.sealedFate && !this.sealedFate) {
-        const VALID_FATES = ['goal', 'red_card', 'injury', 'wonder_save', 'chaos'];
-        const outcome  = VALID_FATES.includes(parsed.fatedOutcome) ? parsed.fatedOutcome : 'chaos';
-        // fatedMinute clamped to 55–88 so the fate fires during meaningful play.
-        const fateMin  = Math.min(88, Math.max(55, Number(parsed.fatedMinute) || 72));
         this.sealedFate = {
-          outcome,
-          player:    typeof parsed.fatedPlayer === 'string' ? parsed.fatedPlayer : null,
-          // ±2–5 minute window around the stated minute for organic timing.
-          window:    [fateMin - rndI(2, 4), fateMin + rndI(2, 5)],
-          // 78–94% probability — not 100%, because the cosmos is capricious.
-          probability: rnd(0.78, 0.94),
-          prophecy:  parsed.sealedFate || '',
-          consumed:  false,
+          prophecy: parsed.sealedFate || '',
+          consumed: false, // kept for UI badge compatibility; never set to true now
         };
       }
 

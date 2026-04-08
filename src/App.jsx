@@ -1557,15 +1557,25 @@ const MatchSimulator = ({
       //   pendingPenalty      — force-penalty flag set by Architect interference;
       //                         { team: 'home'|'away' } or null.
       const arch = architectRef.current;
+      // genCtx bundles Architect context for genEvent().
+      //
+      // Phase 1A removed: architectEdictFn (Cosmic Edict gate modifier),
+      // architectFate / consumeFate (Sealed Fate force-event machinery).
+      // These are now narrative-only — the LLM still writes edict and fate
+      // text into Proclamations for commentary, but they no longer alter
+      // the probability gate or force-construct bypassing events.
+      //
+      // Survivors:
+      //   architectIntentions – contestBonus and rivalry_flashpoint roll modifier
+      //   architectBlesses    – persistent atkMod boost in resolveContest()
+      //   matchFlags          – pendingPenalty only (lucky_penalty interference)
       const genCtx = {
         eventProbability,
-        architectIntentions:  arch?.getIntentions(newMin)      ?? [],
-        architectEdictFn:     arch ? (isHome) => arch.getEdictModifiers(isHome) : null,
-        architectFate:        arch?.getFate(newMin)            ?? null,
-        consumeFate:          arch ? () => arch.consumeFate()  : null,
-        architectBlesses:     arch ? arch.activeBlesses        : [],
-        // pendingPenalty: force-penalty interference flag (the only surviving
-        // matchState flag after Phase 1A; equivalent to a force_goal decree).
+        architectIntentions: arch?.getIntentions(newMin) ?? [],
+        architectBlesses:    arch ? arch.activeBlesses   : [],
+        // pendingPenalty: the one surviving matchState flag — set by lucky_penalty
+        // interference, consumed by genEvent() when it fires the penalty sequence,
+        // cleared from matchState atomically via clearPendingPenalty sentinel.
         matchFlags: {
           pendingPenalty: prev.pendingPenalty ?? null, // { team: 'home'|'away' }
         },
