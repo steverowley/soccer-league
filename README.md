@@ -252,6 +252,22 @@ soccer-league/
 │   ├── constants.js             # Enums, personalities, weather, formations
 │   ├── teams.js                 # All 15 teams and 240+ players
 │   ├── utils.js                 # Random number utilities
+│   ├── features/                # Feature modules (Phase -1 foundation)
+│   │   ├── architect/           # Cosmic narrator and match interference
+│   │   ├── auth/                # Authentication (placeholder)
+│   │   ├── betting/             # Wager system
+│   │   ├── design-system/       # Component library and theme
+│   │   ├── entities/            # Player, team, season data models
+│   │   ├── finance/             # Prize pools, revenue streams
+│   │   ├── match/               # Match scheduling and simulation
+│   │   ├── training/            # Player development and skills
+│   │   └── voting/              # Community voting and governance
+│   ├── shared/                  # Cross-feature infrastructure
+│   │   ├── events/              # Typed event bus (match.completed, wager.placed, etc.)
+│   │   ├── supabase/            # Singleton client + React DI context
+│   │   ├── test/                # Test setup (jest-dom matchers)
+│   │   ├── types/               # Application types (database.ts)
+│   │   └── utils/               # Shared utilities (random.ts + tests)
 │   ├── data/
 │   │   └── leagueData.js        # League/team reference data (used by match simulator)
 │   ├── lib/
@@ -285,37 +301,74 @@ soccer-league/
 │           ├── MetaRow.jsx      # Label/value metadata row
 │           └── StatTable.jsx    # Stats-specific table variant
 ├── supabase/
-│   ├── schema.sql               # Database schema (run first)
+│   ├── migrations/              # Timestamped schema migrations
+│   │   └── 0000_init.sql        # Initial schema (from schema.sql)
+│   ├── schema.sql               # Database schema (legacy; use migrations going forward)
 │   └── seed.sql                 # Seed data for leagues, teams, seasons
-├── vite.config.js
+├── tsconfig.json                # TypeScript strict mode config
+├── eslint.config.js             # Flat ESLint config with feature boundary rules
+├── prettier.config.js           # Code formatting config
+├── vitest.config.ts             # Unit test runner config (jsdom + coverage)
+├── vite.config.js               # Vite build config with path aliases
+├── CLAUDE.md                    # Vision anchor and engineering principles
 └── .github/workflows/
     └── deploy.yml               # GitHub Pages deployment
 ```
 
 ## Code Quality & Reliability
 
-### Quality Tooling (Phase -1)
-The project is now equipped with comprehensive developer tooling enforced in CI:
+### Foundation Architecture (Phase -1)
+Phase -1 establishes the engineering foundation that all subsequent features build on.
 
-- **TypeScript** (`strict: true`) — All source files are typed; critical for catching bugs at compile time
-- **ESLint + TypeScript Plugin** — Static analysis with rules enforcing imports, variable usage, and React best practices
-- **Prettier** — Consistent code formatting (ran automatically in CI)
-- **Vitest** — Unit test framework co-located with production code under `logic/` and `api/` directories; target 80%+ coverage
-- **Path Aliases** — Cleaner imports: `@` = `src/`, `@features` = `src/features/`, `@shared` = `src/shared/` (mirrors `tsconfig.json` and `vite.config.js`)
+#### TypeScript & Static Analysis
+- **TypeScript** (`strict: true`, `allowJs: true`) — All new source files are strictly typed; legacy JS files have a migration window
+- **Strict type features enabled** — `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` catch edge-case bugs
+- **ESLint + TypeScript Plugin** — Flat config enforcing:
+  - Feature boundary rules (no cross-feature deep imports via `no-restricted-imports`)
+  - Consistent type imports (`import type { T } from '...'`)
+  - React hooks rules and best practices
+  - Node globals in root config files
+- **Prettier** — Consistent code formatting with single quotes, trailing commas, and generated file exclusions
 
-Run `npm run check` before committing to catch all issues locally.
+#### Testing & CI
+- **Vitest + jsdom** — Unit test framework targeting `logic/` and `shared/` directories with 80%+ coverage goal
+- **Jest-dom matchers** — Global test setup for DOM assertions
+- **Path Aliases in Tests** — `@`, `@features`, `@shared` work seamlessly in unit tests
+- **CI Gate** — `npm run check` runs full typecheck + lint + test suite; must pass before merge
 
-### Architecture & Best Practices
-- **Feature-based folder layout** (future Phase -1 completion): `src/features/{auth,betting,entities,voting,training,architect,match,finance}/{api,logic,ui}/`
-- **Clear layer boundaries**: `api/` (Supabase + Zod), `logic/` (pure TS, 100% unit-testable), `ui/` (React components)
-- **Dependency injection** — Features consume Supabase client via `useSupabase()` hook, not direct imports; enables testability
-- **Event-driven architecture** — Cross-feature communication via typed in-app event bus (`src/shared/events/bus.ts`)
-- **No dead code or speculative abstractions** — Refactor when a second consumer appears
+#### Code Organization
+- **Feature-based folder structure**: `src/features/{auth,betting,entities,voting,training,architect,match,finance,design-system}/`
+  - Each feature has documented `index.ts` barrel exports
+  - Future expansion: `{api,logic,ui}/` subdirectories within each feature
+- **Shared layer** — Cross-feature concerns live in `src/shared/`:
+  - `events/bus.ts` — Typed event bus for feature communication
+  - `supabase/` — Singleton typed client + React DI context
+  - `utils/` — Utilities (random.ts with unit tests)
+  - `types/` — Application types (database schema, etc.)
+  - `test/` — Test setup and fixtures
+- **Clear layer boundaries**: API (Supabase queries), Logic (pure TS, 100% unit-testable), UI (React)
+
+#### Dependency Injection & Composability
+- **Supabase Context** — Features inject the typed client via `useSupabase()` hook, not direct imports; enables testing
+- **Typed Event Bus** — `src/shared/events/bus.ts` defines:
+  - `match.completed` — Match simulator → analytics
+  - `wager.placed` — Betting feature → leaderboard
+  - `season.ended` — Season data → archive
+  - `architect.intervened` — Cosmic events → match log
+- **No speculative code** — Refactor abstractions only when a second consumer appears
+
+#### Database & Migrations
+- **Typed database schema** — Hand-written `src/types/database.ts` until Supabase MCP code generation available
+- **Migration discipline** — Schema changes live in timestamped `supabase/migrations/` files (e.g., `0000_init.sql`), enabling version control and safe rollbacks
+- **Row-Level Security** — All tables enforce RLS policies
+
+#### Best Practices
 - **Error Boundary Component** — Top-level error handler (`ErrorBoundary.jsx`) catches React errors with ISL-themed fallback UI; prevents blank screens on runtime errors
 - **Comprehensive Error Logging** — All async `.catch()` handlers include console logging with context for easier debugging
 - **Constants Management** — `CLAUDE_MODEL` constant extracted to `src/constants.js` for single-source-of-truth; avoids hardcoded model strings across agents and components
 - **React Key Stability** — All list rendering uses stable, semantic keys (player IDs, content hashes) instead of array indices to prevent render bugs during list updates
 - **Dynamic Copyright** — Footer year updates automatically with `new Date().getFullYear()` instead of manual year bumps
+- **Inline Documentation** — JSDoc blocks on all exported functions; header comments explaining logic and invariants; annotated magic numbers and thresholds
 
 ### Critical Engineering Invariants
 See `CLAUDE.md` for detailed engineering principles. Key constraints:
