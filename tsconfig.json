@@ -1,0 +1,79 @@
+{
+  // ── TypeScript project configuration ────────────────────────────────────────
+  // WHY: Phase -1 adopts TypeScript as the project language for safer rewrites,
+  // modular feature boundaries, and typed Supabase access. During the migration
+  // window `allowJs` is ON so existing .js/.jsx files continue to compile while
+  // modules are converted in small batches. Once the migration is complete the
+  // `allowJs` flag can be turned OFF to enforce .ts/.tsx across the codebase.
+  //
+  // STRICTNESS: we run the strongest practical set of strict flags from day 1
+  // so newly-authored TS code is held to the highest standard. `checkJs` is
+  // deliberately OFF so legacy .js files don't break the typecheck while they
+  // are still being migrated — once converted, `strict` applies automatically.
+  //
+  // PATHS: import aliases mirror the feature-based folder layout defined in
+  // the plan (src/app, src/features/*, src/shared/*, src/types/*). Keeping the
+  // aliases in tsconfig + vite + vitest in sync is critical; any change here
+  // must also be made in vite.config.js and vitest.config.ts.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Allow existing .js/.jsx files through the compiler during the
+    // incremental TS migration. `checkJs` stays false so legacy files do
+    // not have to satisfy strict types until they're converted.
+    "allowJs": true,
+    "checkJs": false,
+
+    // Strictness: catch the broadest possible set of bugs at compile time.
+    // - strict: enables all core strict checks (strictNullChecks, etc.)
+    // - noUncheckedIndexedAccess: arr[i] returns T|undefined so optional
+    //   access must be handled explicitly
+    // - exactOptionalPropertyTypes: { x?: number } no longer accepts x:undefined
+    // - noImplicitOverride: child class methods must use `override` keyword
+    // - noFallthroughCasesInSwitch: missing break in switch is an error
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // We don't emit JS — Vite handles the actual build. tsc is used purely
+    // for type-checking (`tsc --noEmit`) in the CI gate.
+    "noEmit": true,
+    // verbatimModuleSyntax forces explicit `import type` for type-only
+    // imports which helps tree-shaking and prevents accidental runtime
+    // dependencies on type-only modules.
+    "verbatimModuleSyntax": true,
+
+    // Path aliases matching the feature-based layout. Keep in sync with
+    // vite.config.js and vitest.config.ts — drift here will surface as
+    // "cannot find module" errors at runtime OR in tests but not both.
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@app/*": ["src/app/*"],
+      "@features/*": ["src/features/*"],
+      "@shared/*": ["src/shared/*"],
+      "@types/*": ["src/types/*"]
+    },
+
+    // Ambient types: Vite client types (import.meta.env, etc.), Vitest
+    // globals (describe/it/expect without imports), and jest-dom's custom
+    // matchers (toBeInTheDocument, etc.).
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src/**/*", "vite.config.ts", "vitest.config.ts", "eslint.config.js"],
+  // Supabase Edge Functions run on Deno, not Node, and have their own
+  // tsconfig inside supabase/functions/. Exclude them so the frontend
+  // typecheck doesn't try to compile Deno-flavoured code.
+  "exclude": ["node_modules", "dist", "supabase/functions/**"]
+}

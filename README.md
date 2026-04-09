@@ -229,6 +229,15 @@ AI commentary requires a Claude API key. When the app loads, click the key icon 
 | `npm run dev` | Start local dev server |
 | `npm run build` | Build for production |
 | `npm run preview` | Preview production build |
+| `npm run typecheck` | Run TypeScript type checking (non-emitting) |
+| `npm run lint` | Run ESLint checks |
+| `npm run lint:fix` | Run ESLint and auto-fix issues |
+| `npm run format` | Format code with Prettier |
+| `npm run format:check` | Check code formatting without modifying |
+| `npm run test` | Run Vitest unit tests once |
+| `npm run test:watch` | Run Vitest in watch mode (re-runs on file changes) |
+| `npm run test:coverage` | Run Vitest with coverage reporting |
+| `npm run check` | Run typecheck, lint, and test together (full CI suite) |
 
 ## Project Structure
 
@@ -285,11 +294,33 @@ soccer-league/
 
 ## Code Quality & Reliability
 
+### Quality Tooling (Phase -1)
+The project is now equipped with comprehensive developer tooling enforced in CI:
+
+- **TypeScript** (`strict: true`) — All source files are typed; critical for catching bugs at compile time
+- **ESLint + TypeScript Plugin** — Static analysis with rules enforcing imports, variable usage, and React best practices
+- **Prettier** — Consistent code formatting (ran automatically in CI)
+- **Vitest** — Unit test framework co-located with production code under `logic/` and `api/` directories; target 80%+ coverage
+- **Path Aliases** — Cleaner imports: `@` = `src/`, `@features` = `src/features/`, `@shared` = `src/shared/` (mirrors `tsconfig.json` and `vite.config.js`)
+
+Run `npm run check` before committing to catch all issues locally.
+
+### Architecture & Best Practices
+- **Feature-based folder layout** (future Phase -1 completion): `src/features/{auth,betting,entities,voting,training,architect,match,finance}/{api,logic,ui}/`
+- **Clear layer boundaries**: `api/` (Supabase + Zod), `logic/` (pure TS, 100% unit-testable), `ui/` (React components)
+- **Dependency injection** — Features consume Supabase client via `useSupabase()` hook, not direct imports; enables testability
+- **Event-driven architecture** — Cross-feature communication via typed in-app event bus (`src/shared/events/bus.ts`)
+- **No dead code or speculative abstractions** — Refactor when a second consumer appears
 - **Error Boundary Component** — Top-level error handler (`ErrorBoundary.jsx`) catches React errors with ISL-themed fallback UI; prevents blank screens on runtime errors
 - **Comprehensive Error Logging** — All async `.catch()` handlers include console logging with context for easier debugging
 - **Constants Management** — `CLAUDE_MODEL` constant extracted to `src/constants.js` for single-source-of-truth; avoids hardcoded model strings across agents and components
 - **React Key Stability** — All list rendering uses stable, semantic keys (player IDs, content hashes) instead of array indices to prevent render bugs during list updates
 - **Dynamic Copyright** — Footer year updates automatically with `new Date().getFullYear()` instead of manual year bumps
+
+### Critical Engineering Invariants
+See `CLAUDE.md` for detailed engineering principles. Key constraints:
+- `src/gameEngine.js` consumes player data via `normalizeTeamForEngine()` — never drop `attacking`, `defending`, `mental`, `athletic`, `technical`, `jersey_number`, or `starter` columns
+- `CosmicArchitect.getContext()` is called synchronously on every LLM prompt (5–10 times in <500ms during goal bursts) — never block it on DB round-trips
 
 ## Deployment
 
