@@ -33,7 +33,8 @@ export default defineConfig({
       '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
       '@features': fileURLToPath(new URL('./src/features', import.meta.url)),
       '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
-      '@types': fileURLToPath(new URL('./src/types', import.meta.url)),
+      // NOTE: @types is intentionally omitted — TypeScript reserves that
+      // namespace for DefinitelyTyped. Use @/* instead: '@/types/database'.
     },
   },
 });

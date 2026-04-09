@@ -165,9 +165,38 @@ export default tseslint.config(
       'no-restricted-imports': 'off',
       'no-unused-vars': 'off',
       'no-undef': 'off',
+      // Legacy JSX files contain bare quotes/entities in JSX text that are
+      // technically valid HTML5. Fixing them in Phase -1 would be pure churn —
+      // they'll be cleaned up when the component is migrated to TSX.
+      'react/no-unescaped-entities': 'off',
+      // Legacy files may use regex character classes with combined characters
+      // (emoji, Unicode ligatures) as visual styling. Defer fixing to the TS
+      // migration of each file.
+      'no-misleading-character-class': 'off',
+      // Duplicate else-if conditions flagged in pre-existing simulation
+      // branching logic. Defer to the TS migration commit of that file.
+      'no-dupe-else-if': 'off',
+      // react-hooks/preserve-manual-memoization and set-state-in-effect are
+      // new rules from eslint-plugin-react-hooks that fire on patterns the
+      // legacy components used intentionally. Suppressed for the migration
+      // window — each file gets these fixed when it moves to TSX.
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/set-state-in-effect': 'off',
     },
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
+    },
+  },
+
+  // ── Root-level config files ────────────────────────────────────────────────
+  // vite.config.js, vitest.config.ts, eslint.config.js, prettier.config.js
+  // all run in Node, not in the browser, so they need Node globals (URL,
+  // process, __dirname, etc.). These files live at the repo root (not under
+  // src/) so they don't match the other per-directory overrides.
+  {
+    files: ['*.config.{js,ts}', 'eslint.config.js', 'prettier.config.js'],
+    languageOptions: {
+      globals: { ...globals.node },
     },
   },
 

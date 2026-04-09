@@ -166,10 +166,14 @@ class EventBus implements IslEventBus {
   on<E extends keyof IslEvents>(event: E, listener: Listener<E>): () => void {
     // Initialise the listener array for this event on first subscription.
     if (!this.listeners[event]) {
-      // TypeScript needs the cast because ListenerMap values are union arrays.
-      (this.listeners[event] as Array<Listener<E>>) = [];
+      // TypeScript needs the double cast (via unknown) here because
+      // `this.listeners[event]` is typed as the union of all listener array
+      // types, and assigning a concrete `Array<Listener<E>>` to a union slot
+      // is not directly assignable. The `unknown` intermediate breaks the
+      // overlap check while keeping the intent clear.
+      (this.listeners[event] as unknown as Array<Listener<E>>) = [];
     }
-    (this.listeners[event] as Array<Listener<E>>).push(listener);
+    (this.listeners[event] as unknown as Array<Listener<E>>).push(listener);
 
     // Return an unsubscribe function that filters this listener out.
     return () => {

@@ -19,7 +19,8 @@
 //     into version control. The service-role key bypasses RLS entirely.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@types/database';
+// NOTE: @types/* alias is reserved by TypeScript for DefinitelyTyped — use @/* instead.
+import type { Database } from '@/types/database';
 
 // ── Environment variables ─────────────────────────────────────────────────────
 // Vite exposes VITE_* env vars on import.meta.env. These must be defined in

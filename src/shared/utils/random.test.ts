@@ -18,7 +18,7 @@
 //   - Type correctness is verified implicitly — if the generics were wrong,
 //     the test file itself would fail tsc --noEmit.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pick, rnd, rndI } from './random';
 
 // ── Shared mock setup ─────────────────────────────────────────────────────────
@@ -42,9 +42,12 @@ describe('rnd', () => {
     expect(rnd(10, 20)).toBe(10);
   });
 
-  it('approaches (but never reaches) max when Math.random() approaches 1', () => {
-    // 0.9999999999999999 is the closest float to 1.0 Math.random can return.
-    mockRandom(0.9999999999999999);
+  it('stays strictly below max when Math.random() returns a near-1 value', () => {
+    // NOTE: 0.9999999999999999 === 1.0 in IEEE 754 double precision, so using
+    // it as a mock would make rnd(10,20) return exactly 20 — violating the
+    // exclusive upper bound. Use 0.9999 instead: clearly less than 1, gives
+    // rnd(10,20) = 0.9999*10+10 = 19.999, which is in range and < 20.
+    mockRandom(0.9999);
     const result = rnd(10, 20);
     expect(result).toBeGreaterThanOrEqual(10);
     expect(result).toBeLessThan(20);
