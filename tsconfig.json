@@ -57,13 +57,18 @@
     // Path aliases matching the feature-based layout. Keep in sync with
     // vite.config.js and vitest.config.ts — drift here will surface as
     // "cannot find module" errors at runtime OR in tests but not both.
-    "baseUrl": ".",
+    //
+    // NOTE: baseUrl is omitted intentionally. With moduleResolution:"Bundler",
+    // paths entries are resolved relative to the tsconfig.json directory
+    // without needing baseUrl (which is deprecated in TS 6 for bundler mode).
+    // NOTE: @types/* is intentionally absent. TypeScript reserves the @types
+    // namespace for DefinitelyTyped packages. Use @/* instead:
+    //   import type { Database } from '@/types/database'
     "paths": {
-      "@/*": ["src/*"],
-      "@app/*": ["src/app/*"],
-      "@features/*": ["src/features/*"],
-      "@shared/*": ["src/shared/*"],
-      "@types/*": ["src/types/*"]
+      "@/*": ["./src/*"],
+      "@app/*": ["./src/app/*"],
+      "@features/*": ["./src/features/*"],
+      "@shared/*": ["./src/shared/*"]
     },
 
     // Ambient types: Vite client types (import.meta.env, etc.), Vitest
