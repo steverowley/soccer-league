@@ -1,37 +1,12 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
 
-/* ── ISL Design System ─────────────────────────────────────────────────── */
-
-:root {
-  /* Colours */
-  --color-abyss:   #111111;
-  --color-ash:     #1F1F1F;
-  --color-dust:    #E3E0D5;
-  --color-purple:  #9A5CF4;
-  --color-purple-dark: #5B2E9E;
-  --color-purple-mid:  #7A3ED4;
-  --color-red:     #E05252;
-  --color-red-dark:#8B1A1A;
-  --color-green:   #A5D6A7;
-
-  /* Typography */
-  --font-mono: 'Space Mono', monospace;
-
-  /* Spacing scale (multiples of 4) */
-  --space-1:  4px;
-  --space-2:  8px;
-  --space-3:  12px;
-  --space-4:  16px;
-  --space-5:  20px;
-  --space-6:  24px;
-  --space-8:  32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-
-  /* Layout */
-  --max-width: 1312px;
-}
+/* ── ISL Design System ───────────────────────────────────────────────────
+ * All design tokens (colours, typography, spacing, layout, component
+ * sizings, transitions) live in src/styles/tokens.css and are imported
+ * above. This file owns element base styles and component classes only.
+ * If you need a new token, add it to tokens.css FIRST — never hard-code
+ * a hex value or a raw pixel size in the component rules below. */
 
 /* ── Base ──────────────────────────────────────────────────────────────── */
 /* All base resets and element defaults live inside @layer base so that    */
