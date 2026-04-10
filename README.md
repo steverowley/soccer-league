@@ -44,6 +44,14 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Per-player confidence, fatigue, morale, and emotion tracking
 - Stats shift dynamically throughout the match based on events and form
 
+### Training Minigame (Phase 6)
+- **Clicker-style training facility** where fans collectively boost player stats between matches by directing XP into individual players
+- **Geometric XP curve** — Each click awards XP; accumulated XP crosses thresholds that award stat bumps on a round-robin basis (BASE_XP_COST=100, CURVE_MULTIPLIER=1.5)
+- **Fair stat distribution** — Bumps rotate fairly across all 5 core stats: attacking → defending → mental → athletic → technical
+- **Rate limiting** — 1.5s per-click cooldown + 500-click rolling session cap (1h window) prevents abuse while keeping the experience fluid
+- **Append-only audit trail** — `player_training_log` table records every click (player, user, xp_added, stat_bumped) with RLS ensuring users can only write their own clicks; public read enables player pages to display lifetime XP and social leaderboards
+- **API layer** — Pure, deterministic logic (xpCurve.ts, cooldown.ts) fully unit-tested (51 new tests); API functions (trainingLog.ts) parallelize DB reads for responsiveness
+
 ### AI Commentary (powered by Claude)
 **The Architect System** — A Lovecraftian cosmic entity that shapes the narrative:
 - Issues cosmic **Proclamations** every ~10 minutes (or immediately after goals/red cards)
