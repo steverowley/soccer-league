@@ -27,7 +27,37 @@
 //   others. Phase 5 adds entity graph context so the Architect can reference
 //   specific journalists/pundits/owners in its pronouncements.
 //
-// STATUS: scaffold only — Phase 5.1 and Phase 8 populate this with real code.
-//   The active implementation is currently in `src/agents.js`.
+// STATUS: Phase 5.1 complete — LoreStore + DB hydration lifecycle.
+//   The active CosmicArchitect class is still in `src/agents.js`; wire it
+//   to LoreStore by replacing _loadLore() → hydrate() and _saveLore() →
+//   persistAll() when migrating to TypeScript.
 
-export {};
+// ── Types ──────────────────────────────────────────────────────────────────
+export type {
+  ArchitectLoreRow,
+  LoreScopePrefix,
+  PlayerArc,
+  ManagerFate,
+  RivalryThread,
+  SeasonArc,
+  PlayerRelationship,
+  MatchLedgerEntry,
+  ArchitectLore,
+} from './types';
+
+// ── API (Supabase queries) ─────────────────────────────────────────────────
+export {
+  loadAllLore,
+  loadLoreByScopes,
+  upsertLoreRow,
+  batchUpsertLore,
+} from './api/lore';
+
+// ── Logic (pure TS) ────────────────────────────────────────────────────────
+export {
+  emptyLore,
+  rowsToLore,
+  loreToRows,
+  LoreStore,
+  MAX_LEDGER,
+} from './logic/loreStore';
