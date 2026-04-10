@@ -13,6 +13,51 @@
 //     `wager_leaderboard` SQL view exposes aggregates without leaking
 //     individual bets.
 //
-// STATUS: scaffold only — Phase 2 of the plan populates this with real code.
+// STATUS: Phase 2 complete — odds engine, settlement, wager API, odds repo.
 
-export {};
+// ── Types ──────────────────────────────────────────────────────────────────
+export type {
+  WagerStatus,
+  TeamChoice,
+  Wager,
+  MatchOdds,
+  TeamFinances,
+  TeamOddsInput,
+  MatchProbabilities,
+  ComputedOdds,
+  WagerLeaderboardEntry,
+} from './types';
+
+// ── Logic (pure TS) ────────────────────────────────────────────────────────
+export {
+  effectiveRating,
+  computeProbabilities,
+  probsToOdds,
+  computeMatchOdds,
+  computeAvgRating,
+  computeForm,
+  HOUSE_MARGIN,
+  FORM_WINDOW,
+} from './logic/odds';
+
+export {
+  determineOutcome,
+  resolveWager,
+  calculatePayout,
+  netCreditChange,
+  houseProfitFromWager,
+} from './logic/settlement';
+
+// ── API (Supabase queries) ─────────────────────────────────────────────────
+export {
+  placeWager,
+  getUserWagers,
+  getOpenWagersForMatch,
+  settleMatchWagers,
+} from './api/wagers';
+
+export {
+  getMatchOdds,
+  getOddsForMatches,
+  saveMatchOdds,
+} from './api/oddsRepo';
