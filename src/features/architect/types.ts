@@ -127,6 +127,61 @@ export interface MatchLedgerEntry {
   mvp: string;
 }
 
+// ── Phase 8: Architect interventions ───────────────────────────────────────
+
+/**
+ * A row in `architect_interventions` — the audit trail for every historic
+ * rewrite the Architect performs. Append-only; once written a row is
+ * treated as canonical history of the meddling.
+ *
+ * Stored `old_value`/`new_value` are unconstrained JSONB so any shape can
+ * round-trip. The `field` column is null for multi-column rewrites where
+ * the snapshot is the full row.
+ */
+export interface ArchitectInterventionRow {
+  id: string;
+  target_table: string;
+  target_id: string | null;
+  field: string | null;
+  old_value: unknown;
+  new_value: unknown;
+  reason: string;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+/**
+ * Shape the Architect passes to `logInterventionAndRewrite()` when it
+ * decides to meddle. All required fields must be present; the API layer
+ * will reject a rewrite whose old_value is undefined (we NEVER write an
+ * audit row without the snapshot).
+ */
+export interface InterventionRequest {
+  targetTable: string;
+  targetId: string | null;
+  field: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  reason: string;
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * A narrative row produced by the out-of-match Architect tick. Mirrors
+ * the `narratives` table (Phase 5) but with stronger typing for the
+ * specific cases the Edge Function emits.
+ */
+export interface ScheduledNarrativeDraft {
+  kind:
+    | 'news'
+    | 'political_shift'
+    | 'geological_event'
+    | 'architect_whisper'
+    | 'economic_tremor';
+  summary: string;
+  entitiesInvolved: string[];
+}
+
 /**
  * The complete in-memory lore object shape used by CosmicArchitect in
  * agents.js. This is the canonical type for the `this.lore` property.
