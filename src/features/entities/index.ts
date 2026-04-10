@@ -25,6 +25,23 @@
 //   - Planetary/colony entities for each team's home world
 //   - Bookie entity ("Galactic Sportsbook") — counterparty to all wagers
 //
-// STATUS: scaffold only — Phase 5 of the plan populates this with real code.
+// BARREL: re-exports everything downstream features need. Import from
+// `@features/entities` — never deep-import from `api/` or `types` directly.
 
-export {};
+// ── Types ──────────────────────────────────────────────────────────────────
+export type {
+  EntityKind,
+  Entity,
+  EntityTrait,
+  EntityRelationship,
+  Narrative,
+} from './types';
+
+// ── API (Supabase queries) ─────────────────────────────────────────────────
+export {
+  getEntitiesByKind,
+  getEntityById,
+  getEntityTraits,
+  getRecentNarratives,
+  insertNarrative,
+} from './api/entities';
