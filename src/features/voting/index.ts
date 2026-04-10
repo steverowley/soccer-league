@@ -23,6 +23,36 @@
 //   - Debits `profiles.credits` via the auth feature's profilesApi (never
 //     imports auth internals — only the public barrel).
 //
-// STATUS: scaffold only — Phase 4 of the plan populates this with real code.
+// STATUS: Phase 4 complete — tally logic, focus templates, voting API.
 
-export {};
+// ── Types ──────────────────────────────────────────────────────────────────
+export type {
+  FocusTier,
+  FocusOption,
+  FocusVote,
+  FocusTallyEntry,
+  EnactedFocuses,
+  FocusOptionTemplate,
+} from './types';
+
+// ── Logic (pure TS) ────────────────────────────────────────────────────────
+export {
+  pickWinner,
+  determineTeamFocuses,
+  computeVotePercentages,
+} from './logic/tally';
+
+export {
+  MAJOR_FOCUS_TEMPLATES,
+  MINOR_FOCUS_TEMPLATES,
+  ALL_FOCUS_TEMPLATES,
+} from './logic/focusTemplates';
+
+// ── API (Supabase queries) ─────────────────────────────────────────────────
+export {
+  generateFocusOptions,
+  getTeamFocusOptions,
+  castVote,
+  getUserVotesForSeason,
+  getTeamTally,
+} from './api/focuses';
