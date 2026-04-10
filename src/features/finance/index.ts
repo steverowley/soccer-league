@@ -26,6 +26,25 @@
 //   - `api/finances.ts`        — Supabase reads/writes wrapped in Zod schemas.
 //   - `ui/FinancePanel.tsx`    — React component shown on team detail page.
 //
-// STATUS: scaffold only — Phase 3 of the plan populates this with real code.
+// STATUS: Phase 3 complete — fan boost logic, ticket pricing, attendance API.
 
-export {};
+// ── Logic (pure TS) ────────────────────────────────────────────────────────
+export {
+  calculateFanBoost,
+  FAN_BOOST_POINTS,
+  FAN_PRESENCE_WINDOW_MS,
+  type FanBoostResult,
+} from './logic/fanBoost';
+
+export {
+  calculateTicketRevenue,
+  DEFAULT_TICKET_PRICE,
+} from './logic/ticketPricing';
+
+// ── API (Supabase queries) ─────────────────────────────────────────────────
+export {
+  countPresentFans,
+  recordMatchAttendance,
+  getMatchAttendance,
+  type MatchAttendanceRow,
+} from './api/attendance';
