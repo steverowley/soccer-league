@@ -1,0 +1,201 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ISL Design Tokens — single source of truth
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY THIS FILE EXISTS:
+ *   Phase 0 of the plan consolidates the foundation design tokens (colours,
+ *   typography, spacing, layout, component sizings) into one file so that a
+ *   single edit propagates everywhere. Before this file, tokens were defined
+ *   inline in src/index.css alongside component styles, which meant visual
+ *   changes required hunting through 400+ lines of mixed concerns.
+ *
+ * SOURCE OF TRUTH:
+ *   The authoritative values come from the ISL Figma file (Soccer-Game,
+ *   node 47:20 "Design System"), pulled via the Figma MCP during Phase 0.
+ *   Each token below is annotated with its Figma name where one exists.
+ *
+ *   Figma link: https://www.figma.com/design/oGdHNw4ap5TY5R5ey28FDP/Soccer-Game
+ *
+ * HOW IT IS CONSUMED:
+ *   - src/index.css @imports this file at the top, before any component CSS.
+ *     Component classes reference tokens via var(--color-abyss), etc.
+ *   - Tailwind v4 (`@import "tailwindcss"`) picks up these custom properties
+ *     automatically — any utility like bg-[--color-abyss] will work.
+ *   - Future components should NEVER hard-code hex values; always use the
+ *     corresponding var(--…). If a new value is needed, add it here first.
+ *
+ * ADDING A NEW TOKEN:
+ *   1. Confirm it exists in the Figma file and copy its display name.
+ *   2. Add a line below, grouped by section, with the Figma name in the
+ *      inline comment (e.g. "Lunar Dust — primary light").
+ *   3. Reference it from component CSS with var(--token-name).
+ *   4. Never introduce raw colour hex values in component stylesheets —
+ *      that defeats the whole purpose of this file.
+ *
+ * INVARIANT-LEVEL TOKENS (marked [INVARIANT]):
+ *   Values that weren't in the Figma spec but are needed for stateful
+ *   variants (hover darker shades, error red tones). They are locally
+ *   defined here and marked clearly so a future Figma pass can lock them
+ *   down or replace them.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Colours ──────────────────────────────────────────────────────────────
+   * The ISL palette is intentionally narrow: one dark, one light, one focus
+   * colour, plus a secondary green for "positive" accents and a warning red.
+   * Keeping the palette tight enforces the retro-minimalist aesthetic — any
+   * "just add a new shade" temptation should be resisted. */
+
+  /* Primary dark — Figma: "Galactic Abyss" (#111111)
+     Used for page backgrounds, primary button fills, and all dark-table text. */
+  --color-abyss:         #111111;
+
+  /* Secondary dark — Figma: "Phobos Ash" (#1F1F1F)
+     Used for card backgrounds and dark table rows. Sits one step lighter
+     than Galactic Abyss so cards read as raised surfaces. */
+  --color-ash:           #1F1F1F;
+
+  /* Primary light — Figma: "Lunar Dust" (#E3E0D5)
+     Used for body text on dark backgrounds, secondary button fills, borders,
+     and light-table backgrounds. A warm off-white rather than pure #FFFFFF
+     to echo the "retro / analogue" vibe. */
+  --color-dust:          #E3E0D5;
+
+  /* Focus / brand accent — Figma: "Quantum Purple" (#9A5CF4)
+     The ONLY chromatic accent in the normal flow. Used for active nav links,
+     tertiary buttons, focus outlines, and all Cosmic Architect UI surfaces.
+     Over-using purple dilutes its signal — reserve it for intentional moments. */
+  --color-purple:        #9A5CF4;
+
+  /* [INVARIANT] Darker purple for hover/active states on purple fills.
+     Not in Figma; manually mixed to sit ~15% darker than Quantum Purple. */
+  --color-purple-mid:    #7A3ED4;
+
+  /* [INVARIANT] Even darker purple for pressed states or deep accents.
+     Not in Figma; manually mixed to sit ~35% darker than Quantum Purple. */
+  --color-purple-dark:   #5B2E9E;
+
+  /* Error / warning — Figma: "Solar Flare"
+     NOTE: the Figma metadata for this swatch displays "#9A5CF4" in its label,
+     which is a copy-paste typo of the Quantum Purple hex. The actual fill
+     rectangle in Figma is a red/orange, and a red is the only semantically
+     correct value for a warning colour — so we keep #E05252 here, which was
+     the pre-Phase-0 value already in index.css. Verify against the Figma
+     source and correct the Figma label if/when pulling a fresh token set. */
+  --color-red:           #E05252;
+
+  /* [INVARIANT] Darker red for pressed/hover states on red fills.
+     Not in Figma; manually mixed. */
+  --color-red-dark:      #8B1A1A;
+
+  /* Secondary accent — Figma: "Terra Nova" (#A5D6A7)
+     A muted pastel green used for positive accents (e.g. upward-trending form
+     indicators). Intentionally desaturated so it doesn't fight with the purple. */
+  --color-green:         #A5D6A7;
+
+  /* ── Typography ───────────────────────────────────────────────────────────
+   * Space Mono is the only font family in the ISL. The monospace feel is
+   * core to the retro aesthetic; a sans or serif would break the look.
+   * The scale below matches the authoritative Figma "typography" frame. */
+
+  --font-mono:           'Space Mono', monospace;
+
+  /* Heading & body sizes — Figma "typography" frame (node 50:27).
+     H1 40 / H2 32 / H3 28 / P 16. These flow through to the base
+     element styles in index.css (h1, h2, h3, p). */
+  --font-size-h1:        40px;  /* Figma: H1 */
+  --font-size-h2:        32px;  /* Figma: H2 */
+  --font-size-h3:        28px;  /* Figma: H3 */
+  --font-size-body:      16px;  /* Figma: P  */
+
+  /* [INVARIANT] Small text used for nav links, button labels, and table cells.
+     Not a discrete Figma size; measured from button/nav mockups. */
+  --font-size-small:     13px;
+
+  /* [INVARIANT] Micro text used for footer legalese and caption rows. */
+  --font-size-micro:     12px;
+
+  /* Letter-spacing — all headings and button labels are uppercase with a
+     mild tracking boost to improve readability at small sizes. These values
+     come from the Figma button and header mocks. */
+  --letter-spacing-wide:    0.05em;
+  --letter-spacing-wider:   0.08em;
+  --letter-spacing-widest:  0.1em;
+
+  /* ── Spacing scale ────────────────────────────────────────────────────────
+   * Figma "spacings" frame (node 49:32) explicitly calls out: "Use multiples
+   * of 4 or 8. Apply it to typography, buttons, spacings, etc."
+   *
+   * The full Figma-shown column heights are 4, 8, 16, 24, 32, 40, 48, 56,
+   * 64, 80, 100. We also keep 12px and 20px because legacy components rely
+   * on them (close to a 4-multiple and a 4-multiple respectively — these
+   * were pre-Figma values that the Figma spec does not forbid). */
+
+  --space-1:             4px;    /* Figma: smallest column */
+  --space-2:             8px;    /* Figma */
+  --space-3:             12px;   /* [INVARIANT] legacy, kept for existing components */
+  --space-4:             16px;   /* Figma */
+  --space-5:             20px;   /* [INVARIANT] legacy */
+  --space-6:             24px;   /* Figma */
+  --space-8:             32px;   /* Figma — also the standard card padding */
+  --space-10:            40px;   /* Figma */
+  --space-12:            48px;   /* Figma */
+  --space-14:            56px;   /* Figma — button height */
+  --space-16:            64px;   /* Figma */
+  --space-20:            80px;   /* Figma — desktop grid column width */
+  --space-25:            100px;  /* Figma — largest column in spacing frame */
+
+  /* ── Layout ───────────────────────────────────────────────────────────────
+   * Figma defines two layout grids (nodes 49:88 desktop, 49:113 mobile):
+   *   Desktop: 12 columns × 80px wide, 32px gutter → 1312px total
+   *   Mobile:  12 columns × 40px wide, 28px gutter → 380px total  */
+
+  /* Desktop max content width — direct from Figma desktop grid spec. */
+  --max-width:                 1312px;
+
+  /* Desktop grid: 12 × 80 + 11 × 32 gutter = 1312. */
+  --grid-column-width-desktop: 80px;
+  --grid-gutter-desktop:       32px;
+
+  /* Mobile grid: 12 × 40 + 11 × 28 gutter = 788 — wider than the 380 the
+     Figma label says, but Figma's 380 is the container width and the mobile
+     grid is intended to fit within that. We store both values here and let
+     individual components decide which dimension to use. */
+  --grid-column-width-mobile:  40px;
+  --grid-gutter-mobile:        28px;
+  --max-width-mobile:          380px;
+
+  /* Mobile breakpoint — below this width, two-column grids collapse to one
+     and mobile grid tokens apply. Matches the media query in index.css. */
+  --breakpoint-mobile:         640px;
+
+  /* ── Component sizings ───────────────────────────────────────────────────
+   * Reusable dimensions pulled from Figma component frames. Keeping these
+   * as tokens (rather than inline values in component CSS) means a single
+   * edit changes every instance of a button/card at once. */
+
+  /* Button — Figma primary/secondary/tertiary button frames all use a 170×56
+     bounding box. Padding is derived from the 32 y-offset / 16 x-offset of
+     the label inside the frame. */
+  --button-width:        170px;
+  --button-height:       56px;
+  --button-padding-y:    16px;
+  --button-padding-x:    32px;
+
+  /* Card padding — Figma card frames (Large 640×263, Medium 416×334, Small
+     304×358) all use 32px internal padding on all sides. */
+  --card-padding:        32px;
+
+  /* Card border — Figma cards show a subtle 1px border in Lunar Dust at 20%
+     alpha. This is an alpha-composited value rather than a discrete token
+     because alpha colours don't round-trip cleanly through custom properties
+     in every browser. Kept here as documentation. */
+  /* border: 1px solid rgba(227, 224, 213, 0.2)  →  Lunar Dust @ 20% */
+
+  /* ── Transitions ─────────────────────────────────────────────────────────
+   * The retro aesthetic calls for snappy, near-instant feedback on state
+   * changes rather than long fade animations. 150 ms is short enough to feel
+   * immediate but long enough to register as a transition rather than a pop. */
+
+  --transition-fast:     0.15s;
+  --transition-medium:   0.3s;
+}
