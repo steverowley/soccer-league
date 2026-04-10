@@ -44,6 +44,14 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Per-player confidence, fatigue, morale, and emotion tracking
 - Stats shift dynamically throughout the match based on events and form
 
+### Training Minigame (Phase 6)
+- **Clicker-style training facility** where fans collectively boost player stats between matches by directing XP into individual players
+- **Geometric XP curve** — Each click awards XP; accumulated XP crosses thresholds that award stat bumps on a round-robin basis (BASE_XP_COST=100, CURVE_MULTIPLIER=1.5)
+- **Fair stat distribution** — Bumps rotate fairly across all 5 core stats: attacking → defending → mental → athletic → technical
+- **Rate limiting** — 1.5s per-click cooldown + 500-click rolling session cap (1h window) prevents abuse while keeping the experience fluid
+- **Append-only audit trail** — `player_training_log` table records every click (player, user, xp_added, stat_bumped) with RLS ensuring users can only write their own clicks; public read enables player pages to display lifetime XP and social leaderboards
+- **API layer** — Pure, deterministic logic (xpCurve.ts, cooldown.ts) fully unit-tested (51 new tests); API functions (trainingLog.ts) parallelize DB reads for responsiveness
+
 ### AI Commentary (powered by Claude)
 **The Architect System** — A Lovecraftian cosmic entity that shapes the narrative:
 - Issues cosmic **Proclamations** every ~10 minutes (or immediately after goals/red cards)
@@ -229,6 +237,15 @@ AI commentary requires a Claude API key. When the app loads, click the key icon 
 | `npm run dev` | Start local dev server |
 | `npm run build` | Build for production |
 | `npm run preview` | Preview production build |
+| `npm run typecheck` | Run TypeScript type checking (non-emitting) |
+| `npm run lint` | Run ESLint checks |
+| `npm run lint:fix` | Run ESLint and auto-fix issues |
+| `npm run format` | Format code with Prettier |
+| `npm run format:check` | Check code formatting without modifying |
+| `npm run test` | Run Vitest unit tests once |
+| `npm run test:watch` | Run Vitest in watch mode (re-runs on file changes) |
+| `npm run test:coverage` | Run Vitest with coverage reporting |
+| `npm run check` | Run typecheck, lint, and test together (full CI suite) |
 
 ## Project Structure
 
@@ -243,6 +260,22 @@ soccer-league/
 │   ├── constants.js             # Enums, personalities, weather, formations
 │   ├── teams.js                 # All 15 teams and 240+ players
 │   ├── utils.js                 # Random number utilities
+│   ├── features/                # Feature modules (Phase -1 foundation)
+│   │   ├── architect/           # Cosmic narrator and match interference
+│   │   ├── auth/                # Authentication (placeholder)
+│   │   ├── betting/             # Wager system
+│   │   ├── design-system/       # Component library and theme
+│   │   ├── entities/            # Player, team, season data models
+│   │   ├── finance/             # Prize pools, revenue streams
+│   │   ├── match/               # Match scheduling and simulation
+│   │   ├── training/            # Player development and skills
+│   │   └── voting/              # Community voting and governance
+│   ├── shared/                  # Cross-feature infrastructure
+│   │   ├── events/              # Typed event bus (match.completed, wager.placed, etc.)
+│   │   ├── supabase/            # Singleton client + React DI context
+│   │   ├── test/                # Test setup (jest-dom matchers)
+│   │   ├── types/               # Application types (database.ts)
+│   │   └── utils/               # Shared utilities (random.ts + tests)
 │   ├── data/
 │   │   └── leagueData.js        # League/team reference data (used by match simulator)
 │   ├── lib/
@@ -276,20 +309,79 @@ soccer-league/
 │           ├── MetaRow.jsx      # Label/value metadata row
 │           └── StatTable.jsx    # Stats-specific table variant
 ├── supabase/
-│   ├── schema.sql               # Database schema (run first)
+│   ├── migrations/              # Timestamped schema migrations
+│   │   └── 0000_init.sql        # Initial schema (from schema.sql)
+│   ├── schema.sql               # Database schema (legacy; use migrations going forward)
 │   └── seed.sql                 # Seed data for leagues, teams, seasons
-├── vite.config.js
+├── tsconfig.json                # TypeScript strict mode config
+├── eslint.config.js             # Flat ESLint config with feature boundary rules
+├── prettier.config.js           # Code formatting config
+├── vitest.config.ts             # Unit test runner config (jsdom + coverage)
+├── vite.config.js               # Vite build config with path aliases
+├── CLAUDE.md                    # Vision anchor and engineering principles
 └── .github/workflows/
     └── deploy.yml               # GitHub Pages deployment
 ```
 
 ## Code Quality & Reliability
 
+### Foundation Architecture (Phase -1)
+Phase -1 establishes the engineering foundation that all subsequent features build on.
+
+#### TypeScript & Static Analysis
+- **TypeScript** (`strict: true`, `allowJs: true`) — All new source files are strictly typed; legacy JS files have a migration window
+- **Strict type features enabled** — `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` catch edge-case bugs
+- **ESLint + TypeScript Plugin** — Flat config enforcing:
+  - Feature boundary rules (no cross-feature deep imports via `no-restricted-imports`)
+  - Consistent type imports (`import type { T } from '...'`)
+  - React hooks rules and best practices
+  - Node globals in root config files
+- **Prettier** — Consistent code formatting with single quotes, trailing commas, and generated file exclusions
+
+#### Testing & CI
+- **Vitest + jsdom** — Unit test framework targeting `logic/` and `shared/` directories with 80%+ coverage goal
+- **Jest-dom matchers** — Global test setup for DOM assertions
+- **Path Aliases in Tests** — `@`, `@features`, `@shared` work seamlessly in unit tests
+- **CI Gate** — `npm run check` runs full typecheck + lint + test suite; must pass before merge
+
+#### Code Organization
+- **Feature-based folder structure**: `src/features/{auth,betting,entities,voting,training,architect,match,finance,design-system}/`
+  - Each feature has documented `index.ts` barrel exports
+  - Future expansion: `{api,logic,ui}/` subdirectories within each feature
+- **Shared layer** — Cross-feature concerns live in `src/shared/`:
+  - `events/bus.ts` — Typed event bus for feature communication
+  - `supabase/` — Singleton typed client + React DI context
+  - `utils/` — Utilities (random.ts with unit tests)
+  - `types/` — Application types (database schema, etc.)
+  - `test/` — Test setup and fixtures
+- **Clear layer boundaries**: API (Supabase queries), Logic (pure TS, 100% unit-testable), UI (React)
+
+#### Dependency Injection & Composability
+- **Supabase Context** — Features inject the typed client via `useSupabase()` hook, not direct imports; enables testing
+- **Typed Event Bus** — `src/shared/events/bus.ts` defines:
+  - `match.completed` — Match simulator → analytics
+  - `wager.placed` — Betting feature → leaderboard
+  - `season.ended` — Season data → archive
+  - `architect.intervened` — Cosmic events → match log
+- **No speculative code** — Refactor abstractions only when a second consumer appears
+
+#### Database & Migrations
+- **Typed database schema** — Hand-written `src/types/database.ts` until Supabase MCP code generation available
+- **Migration discipline** — Schema changes live in timestamped `supabase/migrations/` files (e.g., `0000_init.sql`), enabling version control and safe rollbacks
+- **Row-Level Security** — All tables enforce RLS policies
+
+#### Best Practices
 - **Error Boundary Component** — Top-level error handler (`ErrorBoundary.jsx`) catches React errors with ISL-themed fallback UI; prevents blank screens on runtime errors
 - **Comprehensive Error Logging** — All async `.catch()` handlers include console logging with context for easier debugging
 - **Constants Management** — `CLAUDE_MODEL` constant extracted to `src/constants.js` for single-source-of-truth; avoids hardcoded model strings across agents and components
 - **React Key Stability** — All list rendering uses stable, semantic keys (player IDs, content hashes) instead of array indices to prevent render bugs during list updates
 - **Dynamic Copyright** — Footer year updates automatically with `new Date().getFullYear()` instead of manual year bumps
+- **Inline Documentation** — JSDoc blocks on all exported functions; header comments explaining logic and invariants; annotated magic numbers and thresholds
+
+### Critical Engineering Invariants
+See `CLAUDE.md` for detailed engineering principles. Key constraints:
+- `src/gameEngine.js` consumes player data via `normalizeTeamForEngine()` — never drop `attacking`, `defending`, `mental`, `athletic`, `technical`, `jersey_number`, or `starter` columns
+- `CosmicArchitect.getContext()` is called synchronously on every LLM prompt (5–10 times in <500ms during goal bursts) — never block it on DB round-trips
 
 ## Deployment
 
