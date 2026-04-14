@@ -172,7 +172,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json(
       {
         ok: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: 'Internal server error',
       },
       500,
     );
