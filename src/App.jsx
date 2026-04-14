@@ -727,7 +727,7 @@ const MatchSimulator = ({
   const [htCountdown,setHtCountdown]=useState(null);
   const [selectedPlayer,setSelectedPlayer]=useState(null);
 
-  const [apiKey,setApiKey]=useState(()=>localStorage.getItem('isi_api_key')||'');
+  const [apiKey,setApiKey]=useState(()=>sessionStorage.getItem('isi_api_key')||'');
   const [showApiKeyModal,setShowApiKeyModal]=useState(false);
   const [commentaryFeed,setCommentaryFeed]=useState([]);
   const [homeManagerFeed,setHomeManagerFeed]=useState([]);
