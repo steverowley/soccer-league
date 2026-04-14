@@ -925,9 +925,7 @@ export const ApiKeyModal = ({ apiKey, setApiKey, setShowApiKeyModal }) => {
   const [testResult, setTestResult] = useState(null);
 
   const save = () => {
-    // Persist to localStorage so the key survives page refresh.
-    // See the security note in the JSDoc above for the known risk and rationale.
-    localStorage.setItem('isi_api_key', draft);
+    // Keep API key in memory only (React state); avoid browser storage.
     setApiKey(draft);
     setShowApiKeyModal(false);
   };
