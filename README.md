@@ -52,6 +52,13 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - **Append-only audit trail** — `player_training_log` table records every click (player, user, xp_added, stat_bumped) with RLS ensuring users can only write their own clicks; public read enables player pages to display lifetime XP and social leaderboards
 - **API layer** — Pure, deterministic logic (xpCurve.ts, cooldown.ts) fully unit-tested (51 new tests); API functions (trainingLog.ts) parallelize DB reads for responsiveness
 
+### Out-of-Match Architect & Interventions Audit (Phase 8)
+- **Scheduled news generation** — Edge Function (`architect-galaxy-tick`) runs between matches to emit in-world narratives via Claude Sonnet, generating 1-3 thematic news fragments without revealing mechanics or stats
+- **Historic rewrite audit** — `architect_interventions` append-only table records every rewrite (target table, field, old/new snapshots, reason, metadata) with indexed searches for dev audit pages and per-match banners
+- **Edict validation** — Whitelist-enforced rewrites (matches, match_player_stats, narratives only) prevent the Architect from unfairly modifying player profiles, wagers, or training logs; no-op guard rejects redundant changes
+- **Failure resilience** — Audit writes happen BEFORE mutations; if a mutation fails, a compensating row with `meta.failed=true` preserves audit integrity so the log never lies
+- **API layer** — `logIntervention()` validates and audits; `logInterventionAndRewrite()` is the production path (audit-first, then mutate); 23 unit tests lock validation rules and error codes
+
 ### AI Commentary (powered by Claude)
 **The Architect System** — A Lovecraftian cosmic entity that shapes the narrative:
 - Issues cosmic **Proclamations** every ~10 minutes (or immediately after goals/red cards)

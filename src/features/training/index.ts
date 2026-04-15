@@ -63,3 +63,12 @@ export {
 } from './api/trainingLog';
 
 export type { RecordClickResult } from './api/trainingLog';
+
+// ── UI (React components) ──────────────────────────────────────────────────
+// TrainingPage is the route-level container; ClickerWidget is exported
+// separately so it can be embedded on PlayerDetail later without going
+// through the picker UI.
+export { TrainingPage } from './ui/TrainingPage';
+
+export { ClickerWidget } from './ui/ClickerWidget';
+export type { ClickerPlayer, ClickerWidgetProps } from './ui/ClickerWidget';

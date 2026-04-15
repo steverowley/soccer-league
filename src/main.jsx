@@ -35,6 +35,17 @@ import './index.css';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
+// ── Auth + Supabase providers (Phase -1 / Phase 1 wiring) ─────────────────────
+// SupabaseProvider injects the typed Supabase client into React context so
+// every feature consumes it via `useSupabase()` instead of importing the
+// module directly. AuthProvider is a child of SupabaseProvider because it
+// calls `useSupabase()` to fetch profiles, restore sessions, and listen for
+// onAuthStateChange events. This MUST sit outside the Router so every route
+// (including /login) has access to the auth context.
+import { SupabaseProvider } from './shared/supabase/SupabaseProvider';
+import { supabaseClient } from './shared/supabase/client';
+import { AuthProvider } from './features/auth';
+
 // ── Page components ───────────────────────────────────────────────────────────
 // Each import corresponds to one route in the table above.
 import Home        from './pages/Home';
@@ -54,47 +65,55 @@ createRoot(document.getElementById('root')).render(
         fallback UI rather than a blank screen.  Must sit outside the Router
         so routing errors are also caught. */}
     <ErrorBoundary>
-    {/* ── Router ──────────────────────────────────────────────────────────── */}
-    {/* BrowserRouter enables HTML5 history API navigation with clean URLs.
-        Vite's dev server serves index.html for all paths automatically, so
-        direct URL access and page refresh work correctly in development. */}
-    <BrowserRouter basename="/soccer-league/">
-      <Routes>
-        {/* ── Shell route — renders Layout (Header + Outlet + Footer) ───────── */}
-        {/* path="/" with no exact prop matches all child routes because React
-            Router v6 uses relative matching by default on parent routes. */}
-        <Route element={<Layout />}>
+    {/* ── Supabase + Auth providers ───────────────────────────────────────── */}
+    {/* SupabaseProvider must be outermost (AuthProvider depends on it via
+        useSupabase()). Both sit OUTSIDE the Router so every route — including
+        /login itself — has access to the auth context. */}
+    <SupabaseProvider client={supabaseClient}>
+      <AuthProvider>
+        {/* ── Router ──────────────────────────────────────────────────────── */}
+        {/* BrowserRouter enables HTML5 history API navigation with clean URLs.
+            Vite's dev server serves index.html for all paths automatically, so
+            direct URL access and page refresh work correctly in development. */}
+        <BrowserRouter basename="/soccer-league/">
+          <Routes>
+            {/* ── Shell route — renders Layout (Header + Outlet + Footer) ──── */}
+            {/* path="/" with no exact prop matches all child routes because React
+                Router v6 uses relative matching by default on parent routes. */}
+            <Route element={<Layout />}>
 
-          {/* index route → / → Home */}
-          <Route index element={<Home />} />
+              {/* index route → / → Home */}
+              <Route index element={<Home />} />
 
-          {/* /leagues → four-league card grid */}
-          <Route path="leagues" element={<Leagues />} />
+              {/* /leagues → four-league card grid */}
+              <Route path="leagues" element={<Leagues />} />
 
-          {/* /leagues/:leagueId → individual league standings + stats */}
-          <Route path="leagues/:leagueId" element={<LeagueDetail />} />
+              {/* /leagues/:leagueId → individual league standings + stats */}
+              <Route path="leagues/:leagueId" element={<LeagueDetail />} />
 
-          {/* /teams → all teams grouped by league */}
-          <Route path="teams" element={<Teams />} />
+              {/* /teams → all teams grouped by league */}
+              <Route path="teams" element={<Teams />} />
 
-          {/* /teams/:teamId → individual team info + stats */}
-          <Route path="teams/:teamId" element={<TeamDetail />} />
+              {/* /teams/:teamId → individual team info + stats */}
+              <Route path="teams/:teamId" element={<TeamDetail />} />
 
-          {/* /players → player roster browser (all teams, filterable by league) */}
-          <Route path="players" element={<Players />} />
+              {/* /players → player roster browser (all teams, filterable by league) */}
+              <Route path="players" element={<Players />} />
 
-          {/* /players/:playerId → individual player profile + season stats */}
-          <Route path="players/:playerId" element={<PlayerDetail />} />
+              {/* /players/:playerId → individual player profile + season stats */}
+              <Route path="players/:playerId" element={<PlayerDetail />} />
 
-          {/* /matches → MatchSimulator wrapped in the site shell */}
-          <Route path="matches" element={<Matches />} />
+              {/* /matches → MatchSimulator wrapped in the site shell */}
+              <Route path="matches" element={<Matches />} />
 
-          {/* /login → authentication form (design pending) */}
-          <Route path="login" element={<Login />} />
+              {/* /login → authentication form (design pending) */}
+              <Route path="login" element={<Login />} />
 
-        </Route>
-      </Routes>
-    </BrowserRouter>
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </SupabaseProvider>
     </ErrorBoundary>
   </StrictMode>,
 );
