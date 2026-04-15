@@ -44,6 +44,20 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - Per-player confidence, fatigue, morale, and emotion tracking
 - Stats shift dynamically throughout the match based on events and form
 
+### Betting System (Phase 2)
+- **Odds engine** — Home/draw/away three-way odds with dynamic calculation based on team ratings
+- **Wager settlement** — Automatic resolution after match completion with payout calculation
+- **WagerWidget** — Three-way odds buttons (home/draw/away), stake input with live payout preview, kickoff-timer gate (auto-fire at exact kickoff instant), eligibility guards for anonymous/no-credits/already-started match states
+- **BetHistory** — Self-fetching wager ledger with status pills (WON/LOST/OPEN/VOID), net-profit column, loading skeleton, refreshKey prop for parent-triggered re-fetches
+- **Database** — `wagers` and `wager_outcomes` tables with RLS ensuring users can only view/modify their own wagers
+
+### Focus Voting System (Phase 4)
+- **End-of-season voting** — Fans vote on team focus improvements (e.g., "improve defensive positioning")
+- **Tier-based credit spend** — Major focus costs 10 credits, minor focus costs 5 credits; tiered into major/minor categories
+- **VotingPage** — Team-scoped focus picker with Major/Minor grouping, fetches focus options + running tally in parallel, triggers re-fetch of tally and profile after each vote
+- **FocusCard** — Per-option card displaying tally bar (visual share % of tier credits), inline spend form with confirmation, tier badge and cost display, honest fallbacks for no-credits or closed voting states
+- **Database** — `focus_options` and `focus_votes` tables; realtime tally aggregates votes by tier
+
 ### Training Minigame (Phase 6)
 - **Clicker-style training facility** where fans collectively boost player stats between matches by directing XP into individual players
 - **Geometric XP curve** — Each click awards XP; accumulated XP crosses thresholds that award stat bumps on a round-robin basis (BASE_XP_COST=100, CURVE_MULTIPLIER=1.5)
@@ -51,6 +65,8 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - **Rate limiting** — 1.5s per-click cooldown + 500-click rolling session cap (1h window) prevents abuse while keeping the experience fluid
 - **Append-only audit trail** — `player_training_log` table records every click (player, user, xp_added, stat_bumped) with RLS ensuring users can only write their own clicks; public read enables player pages to display lifetime XP and social leaderboards
 - **API layer** — Pure, deterministic logic (xpCurve.ts, cooldown.ts) fully unit-tested (51 new tests); API functions (trainingLog.ts) parallelize DB reads for responsiveness
+- **TrainingPage** — Roster picker for user's favourite team; remounts ClickerWidget via key= when selection changes to reset all internal state
+- **ClickerWidget** — XP progress bar toward next stat bump, cooldown countdown with 100ms tick, session-cap guard, bump toast (stat name flashes for 2.5s), all driven by pure xpCurve/cooldown logic layer
 
 ### Out-of-Match Architect & Interventions Audit (Phase 8)
 - **Scheduled news generation** — Edge Function (`architect-galaxy-tick`) runs between matches to emit in-world narratives via Claude Sonnet, generating 1-3 thematic news fragments without revealing mechanics or stats
@@ -58,6 +74,7 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - **Edict validation** — Whitelist-enforced rewrites (matches, match_player_stats, narratives only) prevent the Architect from unfairly modifying player profiles, wagers, or training logs; no-op guard rejects redundant changes
 - **Failure resilience** — Audit writes happen BEFORE mutations; if a mutation fails, a compensating row with `meta.failed=true` preserves audit integrity so the log never lies
 - **API layer** — `logIntervention()` validates and audits; `logInterventionAndRewrite()` is the production path (audit-first, then mutate); 23 unit tests lock validation rules and error codes
+- **ArchitectLogPage** — Dev-only audit table displaying all interventions with JSON snapshots pretty-printed, ROLLBACK NOTICE rows highlighted, manual refresh button. Route should be gated behind `import.meta.env.DEV`
 
 ### AI Commentary (powered by Claude)
 **The Architect System** — A Lovecraftian cosmic entity that shapes the narrative:
@@ -167,6 +184,16 @@ Commentary also includes player inner thoughts, manager reactions, and referee j
     - A 1 px border outline on all sides (~25% opacity) — closes the card so each voice reads as a discrete unit
     - `border-radius: 3px` for a polished card appearance
   - Pause/resume controls apply to all speeds
+
+## App Architecture & Provider Wiring
+
+The application uses a feature-folder structure with context providers at the root level:
+
+- **SupabaseProvider** — Initializes authenticated Supabase client, manages RLS policies, and provides singleton instance to all routes
+- **AuthProvider** — Wraps SupabaseProvider; manages user authentication state, credit balances, and login/logout lifecycle
+- **BrowserRouter** — Wrapped by both providers so every route has access to auth context and Supabase instance
+
+All child routes mounted under `<BrowserRouter>` can freely use `useAuth()` and `useSupabase()` hooks to fetch user state and execute queries.
 
 ## Game Engine Architecture
 
