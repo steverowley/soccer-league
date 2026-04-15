@@ -62,6 +62,26 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 - **FocusCard** — Per-option card displaying tally bar (visual share % of tier credits), inline spend form with confirmation, tier badge and cost display, honest fallbacks for no-credits or closed voting states
 - **Database** — `focus_options` and `focus_votes` tables; realtime tally aggregates votes by tier
 
+### Entity System & Relationships (Phase 5)
+- **Entity Factories** (`entityFactory.ts`) — Pure TypeScript factory functions for creating entities of all kinds:
+  - Kind-specific factories for every `EntityKind` (player, manager, referee, pundit, journalist, media company, association, bookie)
+  - `createTrait` / `createTraits` — Builders for entity personality/style attributes stored in `entity_traits` table
+  - `createRelationship` / `createMutualRelationship` — Typed relationship edge creators with strength clamping (0–100 scale)
+  - All meta shapes structurally synchronized with seed migrations so runtime and DB stay in sync
+- **Relationship Graph** (`relationshipGraph.ts`) — Pure graph utilities for querying pre-fetched entity relationships:
+  - `buildGraph` — O(E) adjacency index with outgoing and incoming edge maps
+  - `outgoing` / `incoming` / `neighbours` / `neighbourIds` — Directed and undirected relationship queries with optional kind/strength filters
+  - `findRelationship` / `areConnected` — Single-edge lookups and connectivity checks
+  - `findPath` — BFS path-finder with configurable max hops (default 4) and edge filters for Architect narrative chain queries
+  - `totalStrength` / `degree` — Aggregates for character colour coding (embattled vs. beloved)
+- **Entity Backfill Script** (`migrate-to-entities.ts`) — Re-runnable migration utility:
+  - Iterates through legacy `players` and `managers` rows with null `entity_id`
+  - Creates matching `entities` rows via the shared factories, copying personality/style to `entity_traits`
+  - Writes entity FK back to original records
+  - Supports `--dry-run` and `--verbose` flags; exits non-zero on failures
+  - Complements `0002_entities.sql` migration block for rows added after initial migration
+- **Database** — `entities` and `entity_traits` and `entity_relationships` tables with structured graph schema
+
 ### Training Minigame (Phase 6)
 - **Clicker-style training facility** where fans collectively boost player stats between matches by directing XP into individual players
 - **Geometric XP curve** — Each click awards XP; accumulated XP crosses thresholds that award stat bumps on a round-robin basis (BASE_XP_COST=100, CURVE_MULTIPLIER=1.5)
@@ -303,7 +323,11 @@ soccer-league/
 │   │   ├── auth/                # Authentication (placeholder)
 │   │   ├── betting/             # Wager system
 │   │   ├── design-system/       # Component library and theme
-│   │   ├── entities/            # Player, team, season data models
+│   │   ├── entities/            # Entity graph system and relationship logic
+│   │   │   ├── logic/           # Pure TS modules (Phase 5)
+│   │   │   │   ├── entityFactory.ts — Factory functions for all entity kinds
+│   │   │   │   └── relationshipGraph.ts — Graph traversal and path-finding
+│   │   │   └── index.ts         # Barrel exports
 │   │   ├── finance/             # Prize pools, revenue streams
 │   │   ├── match/               # Match scheduling and simulation
 │   │   ├── training/            # Player development and skills
@@ -316,6 +340,8 @@ soccer-league/
 │   │   └── utils/               # Shared utilities (random.ts + tests)
 │   ├── data/
 │   │   └── leagueData.js        # League/team reference data (used by match simulator)
+│   ├── scripts/
+│   │   └── migrate-to-entities.ts # Backfill players/managers into entity system (Phase 5)
 │   ├── lib/
 │   │   └── supabase.js          # Supabase client and data-fetching helpers
 │   │                             # - getLeagues() — fetch all 4 leagues from DB
