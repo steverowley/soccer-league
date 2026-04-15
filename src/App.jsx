@@ -20,6 +20,12 @@ import { rnd, rndI, pick } from "./utils.js";
 import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
+import { supabase } from "./lib/supabase.js";
+import {
+  calculateFanBoost,
+  countPresentFans,
+  recordMatchAttendance,
+} from "./features/finance";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
 // Two quote buckets selected by scoreline when the whistle blows at 45':
@@ -652,6 +658,58 @@ function applyManagerTactics(manager, stance, minute, rationale = '') {
   };
 }
 
+// ── applyFanBoostToTeam ─────────────────────────────────────────────────────
+// Returns a SHALLOW CLONE of an engine-format team object with every player's
+// five stat categories (attacking, defending, mental, athletic, technical)
+// increased by `points`.  Used at kickoff to implement the Phase 3 fan-support
+// boost: the team with more logged-in fans (profiles.last_seen_at within the
+// last 5 minutes) gets a small stat bump that flows through createAgent() and
+// every downstream contest resolution.
+//
+// WHY a clone rather than in-place mutation:
+//   - The input team object may be shared with other state (matchState, team
+//     detail pages, react-query caches).  Mutating its player array would
+//     leak the boost into unrelated views for the rest of the session.
+//   - createAgent() reads the stats ONCE at construction to pick personalities
+//     and penalty ability.  Boosting before the clone-and-map call is the
+//     only moment the bonus can take effect; after construction, agents cache
+//     their own numbers.
+//
+// WHY +points on every stat (not just attacking):
+//   - Base 1–99 scale: +2 is roughly the delta between "well-rested" and
+//     "tired" in the engine's stat consumption.  Subtle but meaningful in
+//     close matches — exactly the design goal of fan support (see
+//     FAN_BOOST_POINTS in features/finance/logic/fanBoost.ts).
+//   - Applying uniformly (rather than biasing attacking or defending)
+//     preserves the team's tactical shape; it simply sharpens every player.
+//
+// Non-player fields (stadium, manager, tactics, etc.) are reused by
+// reference — they're immutable within a match so sharing them is safe.
+//
+// @param {object} team   Engine-format team (from normalizeTeamForEngine or TEAMS).
+// @param {number} points Stat points to add to each category (0 = pass-through).
+// @returns {object}      New team object with a new players[] array.
+function applyFanBoostToTeam(team, points) {
+  // Zero-point boost is the common case (no fans online, or fan counts tied).
+  // Fast-path to avoid the array clone so repeated kickoffs with no fans
+  // don't allocate a pointless new players[] every match.
+  if (!points || !team || !Array.isArray(team.players)) return team;
+  return {
+    ...team,
+    players: team.players.map(p => ({
+      ...p,
+      // Defaults match normalizeTeamForEngine()'s 70-point fallback so an
+      // unseeded player still gets a sensible boosted total (72 instead of
+      // silently dropping to `NaN + 2`).
+      attacking: (p.attacking ?? 70) + points,
+      defending: (p.defending ?? 70) + points,
+      mental:    (p.mental    ?? 70) + points,
+      athletic:  (p.athletic  ?? 70) + points,
+      technical: (p.technical ?? 70) + points,
+    })),
+  };
+}
+
 const MatchSimulator = ({
   homeTeamKey = 'mars',
   awayTeamKey = 'saturn',
@@ -666,6 +724,24 @@ const MatchSimulator = ({
   // that run without a DB fetch still work via homeTeamKey / awayTeamKey.
   homeTeam: homeTeamProp = null,
   awayTeam: awayTeamProp = null,
+  // ── Phase 3: Fan support boost + match_attendance persistence ──────────────
+  // homeTeamId / awayTeamId are the Supabase teams.id slugs (e.g. 'mars-athletic').
+  // When provided, startMatch() counts present fans (profiles.last_seen_at within
+  // 5 minutes) for both sides and computes a small stat boost for the team with
+  // more fan support.  These slugs are NOT the same as homeTeamKey / awayTeamKey:
+  // the keys are the legacy teams.js simulator keys ('mars', 'saturn'); the IDs
+  // are DB slugs used by the finance feature's Supabase queries.
+  //
+  // matchId / seasonId: if both are supplied, recordMatchAttendance() is fired
+  // at kickoff to persist the per-team fan_count and ticket_revenue into
+  // match_attendance and update team_finances.  When either is omitted (e.g.
+  // compact auto-start cards, legacy key-only entry points) the boost is still
+  // computed but no DB write is attempted — the attendance table has a FK to
+  // matches.id so writing without a real match row would fail.
+  homeTeamId = null,
+  awayTeamId = null,
+  matchId = null,
+  seasonId = null,
   compact = false,
   autoStart = false,
   startDelay = 500,
@@ -816,6 +892,30 @@ const MatchSimulator = ({
   const managerDecisionRef=useRef({ homeLastMin: -99, awayLastMin: -99 });
   const lastEventCountRef=useRef(0);
   const lastThoughtsCountRef=useRef(0);
+  // ── Phase 3: Fan support boost result ───────────────────────────────────────
+  // Stores the FanBoostResult computed at kickoff (see
+  // features/finance/logic/fanBoost.ts).  The boost is applied ONCE when the
+  // match engine's AIManager is first created — agents cache their stats at
+  // construction, so the boost must be baked into player.attacking/defending/
+  // mental/athletic/technical BEFORE createAIManager() is called.
+  //
+  // Kept here as a ref (not state) for three reasons:
+  //   1. Stable across re-renders — the boost doesn't change once kickoff is
+  //      past, so coupling it to React state would be wasteful.
+  //   2. Survives pause/resume without triggering a re-application of the
+  //      stat bump (we check aiRef.current to detect first-kickoff).
+  //   3. Accessible synchronously by diagnostic tooling or Architect context
+  //      injection without forcing a hook re-read.
+  //
+  // Initial value { boostedSide: 'none', boostAmount: 0, ... } mirrors the
+  // FanBoostResult shape so consumers can read it without null-checks; the
+  // actual counts are filled in at startMatch() time.
+  const fanBoostRef=useRef({
+    boostedSide: 'none',
+    boostAmount: 0,
+    homeFanCount: 0,
+    awayFanCount: 0,
+  });
   // cinemaTimeoutRef — holds the setTimeout handle that clears cinemaEvent
   // after the overlay display window (3 s).  Stored in a ref so the timer can
   // be cancelled synchronously when a new event fires mid-display, preventing
@@ -1809,10 +1909,90 @@ const MatchSimulator = ({
     setHtReport(null);
     setMatchState(p=>({...p,minute:46,isPlaying:true,isPaused:false}));
   };
-  const startMatch=()=>{
+  /**
+   * Begin (or resume) the simulation.  On the very first kickoff of a match
+   * this also:
+   *   1. Counts how many fans are currently "present" for each side (profiles
+   *      with favourite_team_id = teamId AND last_seen_at within the last
+   *      5 minutes — see features/finance for details).
+   *   2. Computes a FanBoostResult and applies a small stat bump to every
+   *      player on the side with more fans (FAN_BOOST_POINTS = 2 — subtle
+   *      but meaningful in close matches).
+   *   3. If matchId + seasonId are both provided, fires the DB write that
+   *      records attendance into match_attendance and updates
+   *      team_finances.ticket_revenue / balance.  Without those props we
+   *      still compute the boost client-side but skip the DB write — the
+   *      match_attendance table has a FK to matches(id) so an insert
+   *      without a real match row would fail.
+   *
+   * Async because steps 1 and 3 both await Supabase round-trips.  The
+   * one-time ~100-300 ms latency before kickoff is an acceptable tradeoff
+   * for baking the boost into the agents up-front (agents cache their
+   * stats at construction so a post-kickoff boost application would
+   * require rebuilding the entire agent pool mid-match).
+   *
+   * No-op if the match is already playing (guards against double-click).
+   * Idempotent on resume: the fan boost is only applied the first time
+   * aiRef.current is null; paused-then-resumed matches re-use the
+   * existing boosted agents.
+   */
+  const startMatch=async()=>{
     if(matchState.isPlaying)return;
     let mgr=aiRef.current;
-    if(!mgr){mgr=createAIManager(matchState.homeTeam,matchState.awayTeam);aiRef.current=mgr;setAiManager(mgr);}
+    if(!mgr){
+      // ── Phase 3: Fan support boost + attendance recording ─────────────────
+      // Default boost is "no boost" — this path runs whenever homeTeamId /
+      // awayTeamId props are missing (legacy key-based entry points, compact
+      // cards) or when the fan-count query fails for any reason.  A failed
+      // Supabase round-trip must never block kickoff.
+      let boost={boostedSide:'none',boostAmount:0,homeFanCount:0,awayFanCount:0};
+      if(homeTeamId&&awayTeamId){
+        try{
+          let homeFans=0,awayFans=0;
+          if(matchId&&seasonId){
+            // ── Full persistence path ────────────────────────────────────────
+            // recordMatchAttendance counts fans, writes match_attendance rows
+            // and updates team_finances atomically per team.  Returning the
+            // fan counts here lets us re-use that single round-trip for the
+            // boost calculation rather than issuing a second count query.
+            // Null result indicates the insert failed (FK violation, RLS
+            // rejection) — we fall through to boost=0 rather than crashing.
+            const res=await recordMatchAttendance(
+              supabase,matchId,homeTeamId,awayTeamId,seasonId,
+            );
+            if(res){homeFans=res.homeFans;awayFans=res.awayFans;}
+          }else{
+            // ── Boost-only path ──────────────────────────────────────────────
+            // No matchId/seasonId available (legacy flow): just count fans
+            // so we can still award the stat bump.  No DB writes occur.
+            // Parallel queries because the two counts are independent.
+            const counts=await Promise.all([
+              countPresentFans(supabase,homeTeamId),
+              countPresentFans(supabase,awayTeamId),
+            ]);
+            homeFans=counts[0];awayFans=counts[1];
+          }
+          boost=calculateFanBoost(homeFans,awayFans);
+        }catch(e){
+          // Fan boost is a nice-to-have — swallow errors so a Supabase
+          // outage doesn't break the simulator.  Boost stays at zero.
+          console.warn('[ISL] fan boost setup failed:',e);
+        }
+      }
+      fanBoostRef.current=boost;
+
+      // ── Apply the boost BEFORE createAIManager ───────────────────────────
+      // createAgent() reads each player's stats once at construction and
+      // caches derived values (personality, penaltyAbility, isCaptain).
+      // Boosting the team objects here — rather than mutating agents after
+      // the fact — is the only window where the bonus can take effect
+      // across every contest resolution for the rest of the match.
+      const homeBoost=boost.boostedSide==='home'?boost.boostAmount:0;
+      const awayBoost=boost.boostedSide==='away'?boost.boostAmount:0;
+      const boostedHome=applyFanBoostToTeam(matchState.homeTeam,homeBoost);
+      const boostedAway=applyFanBoostToTeam(matchState.awayTeam,awayBoost);
+      mgr=createAIManager(boostedHome,boostedAway);aiRef.current=mgr;setAiManager(mgr);
+    }
     if(apiKey&&!agentSystemRef.current){
       // ── Create the Architect before AgentSystem so it can be passed in ───
       // The Architect loads its persistent lore from localStorage at construction
@@ -1858,6 +2038,13 @@ const MatchSimulator = ({
     architectRef.current=null;
     lastEventCountRef.current=0;
     lastThoughtsCountRef.current=0;
+    // ── Reset fan boost so the next kickoff re-queries fresh fan counts ─────
+    // The next startMatch() will recompute from Supabase; without this reset
+    // a re-played match would silently re-use the stale boost state from the
+    // previous kickoff (wrong counts displayed in any diagnostic UI).
+    fanBoostRef.current={
+      boostedSide:'none',boostAmount:0,homeFanCount:0,awayFanCount:0,
+    };
     setAiManager(null);setMatchState(initState());
     setHtReport(null);setSelectedPlayer(null);setCommentaryFeed([]);
     setHomeManagerFeed([]);setAwayManagerFeed([]);setHomeThoughtsFeed([]);
