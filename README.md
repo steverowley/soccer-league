@@ -74,6 +74,12 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 - Rate limited: 1.5s cooldown + 500-click rolling session cap
 - Append-only audit trail in `player_training_log`
 
+### Entity System
+- Unified `entities` + `entity_traits` + `entity_relationships` tables — every player, manager, referee, pundit, journalist, media company, association, and bookie is a first-class entity
+- Pure TypeScript factories (`entityFactory.ts`) produce insert rows with meta shapes matching seed migrations exactly
+- Graph utilities (`relationshipGraph.ts`) for Architect narrative queries — directed/undirected adjacency, kind/strength filters, BFS path-finding (default max 4 hops), degree aggregates
+- Re-runnable backfill script (`scripts/migrate-to-entities.ts`) with `--dry-run` and `--verbose` flags for linking new `players`/`managers` rows to entities post-migration
+
 ### Website
 - League standings, team/player profiles, match schedule
 - Player detail pages with aggregated season statistics
