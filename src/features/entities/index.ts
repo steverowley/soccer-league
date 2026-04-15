@@ -45,3 +45,55 @@ export {
   getRecentNarratives,
   insertNarrative,
 } from './api/entities';
+
+// ── Logic (pure — no React, no Supabase) ───────────────────────────────────
+// Factory functions for building well-shaped `entities`/`entity_traits`/
+// `entity_relationships` insert rows. The shapes mirror the seed migration
+// (0002_entities.sql) exactly so runtime code and seed data stay in sync.
+export {
+  STRENGTH_MAX,
+  STRENGTH_MIN,
+  clampStrength,
+  createAssociationEntity,
+  createBookieEntity,
+  createEntity,
+  createJournalistEntity,
+  createManagerEntity,
+  createMediaCompanyEntity,
+  createMutualRelationship,
+  createPlayerEntity,
+  createPunditEntity,
+  createRefereeEntity,
+  createRelationship,
+  createTrait,
+  createTraits,
+} from './logic/entityFactory';
+export type {
+  CreateEntityOptions,
+  EntityInsert,
+  EntityRelationshipInsert,
+  EntityTraitInsert,
+} from './logic/entityFactory';
+
+// Graph utilities over a pre-fetched relationship list. Use `buildGraph()`
+// once per match during Architect pre-hydration, then run cheap synchronous
+// traversals (`neighbours`, `findPath`, `totalStrength`) against the
+// returned object.
+export {
+  DEFAULT_MAX_HOPS,
+  areConnected,
+  buildGraph,
+  degree,
+  findPath,
+  findRelationship,
+  incoming,
+  neighbourIds,
+  neighbours,
+  outgoing,
+  totalStrength,
+} from './logic/relationshipGraph';
+export type {
+  FindPathOptions,
+  RelationshipFilter,
+  RelationshipGraph,
+} from './logic/relationshipGraph';
