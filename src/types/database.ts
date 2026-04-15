@@ -28,6 +28,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      architect_interventions: {
+        Row: {
+          created_at: string
+          field: string | null
+          id: string
+          meta: Json
+          new_value: Json
+          old_value: Json
+          reason: string
+          target_id: string | null
+          target_table: string
+        }
+        Insert: {
+          created_at?: string
+          field?: string | null
+          id?: string
+          meta?: Json
+          new_value: Json
+          old_value: Json
+          reason: string
+          target_id?: string | null
+          target_table: string
+        }
+        Update: {
+          created_at?: string
+          field?: string | null
+          id?: string
+          meta?: Json
+          new_value?: Json
+          old_value?: Json
+          reason?: string
+          target_id?: string | null
+          target_table?: string
+        }
+        Relationships: []
+      }
+      architect_lore: {
+        Row: {
+          id: string
+          key: string
+          payload: Json
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          payload?: Json
+          scope: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          payload?: Json
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       competition_teams: {
         Row: {
           competition_id: string
@@ -112,6 +172,185 @@ export type Database = {
           },
         ]
       }
+      entities: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          kind: string
+          meta: Json | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          kind: string
+          meta?: Json | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          kind?: string
+          meta?: Json | null
+          name?: string
+        }
+        Relationships: []
+      }
+      entity_relationships: {
+        Row: {
+          from_id: string
+          kind: string
+          meta: Json | null
+          strength: number
+          to_id: string
+        }
+        Insert: {
+          from_id: string
+          kind: string
+          meta?: Json | null
+          strength?: number
+          to_id: string
+        }
+        Update: {
+          from_id?: string
+          kind?: string
+          meta?: Json | null
+          strength?: number
+          to_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_relationships_from_id_fkey"
+            columns: ["from_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entity_relationships_to_id_fkey"
+            columns: ["to_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_traits: {
+        Row: {
+          entity_id: string
+          trait_key: string
+          trait_value: Json
+        }
+        Insert: {
+          entity_id: string
+          trait_key: string
+          trait_value?: Json
+        }
+        Update: {
+          entity_id?: string
+          trait_key?: string
+          trait_value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_traits_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      focus_options: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          label: string
+          option_key: string
+          season_id: string
+          team_id: string
+          tier: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          label: string
+          option_key: string
+          season_id: string
+          team_id: string
+          tier: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          label?: string
+          option_key?: string
+          season_id?: string
+          team_id?: string
+          tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_options_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_options_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      focus_votes: {
+        Row: {
+          created_at: string
+          credits_spent: number
+          focus_option_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_spent: number
+          focus_option_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_spent?: number
+          focus_option_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_votes_focus_option_id_fkey"
+            columns: ["focus_option_id"]
+            isOneToOne: false
+            referencedRelation: "focus_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_votes_focus_option_id_fkey"
+            columns: ["focus_option_id"]
+            isOneToOne: false
+            referencedRelation: "focus_tally"
+            referencedColumns: ["option_id"]
+          },
+        ]
+      }
       leagues: {
         Row: {
           description: string | null
@@ -136,6 +375,7 @@ export type Database = {
       managers: {
         Row: {
           created_at: string
+          entity_id: string | null
           id: string
           name: string
           nationality: string | null
@@ -144,6 +384,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          entity_id?: string | null
           id?: string
           name: string
           nationality?: string | null
@@ -152,6 +393,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          entity_id?: string | null
           id?: string
           name?: string
           nationality?: string | null
@@ -160,10 +402,91 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "managers_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "managers_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_attendance: {
+        Row: {
+          created_at: string
+          fan_count: number
+          id: string
+          match_id: string
+          team_id: string
+          ticket_revenue: number
+        }
+        Insert: {
+          created_at?: string
+          fan_count?: number
+          id?: string
+          match_id: string
+          team_id: string
+          ticket_revenue?: number
+        }
+        Update: {
+          created_at?: string
+          fan_count?: number
+          id?: string
+          match_id?: string
+          team_id?: string
+          ticket_revenue?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_attendance_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_attendance_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_odds: {
+        Row: {
+          away_odds: number
+          computed_at: string
+          draw_odds: number
+          home_odds: number
+          match_id: string
+        }
+        Insert: {
+          away_odds: number
+          computed_at?: string
+          draw_odds: number
+          home_odds: number
+          match_id: string
+        }
+        Update: {
+          away_odds?: number
+          computed_at?: string
+          draw_odds?: number
+          home_odds?: number
+          match_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_odds_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
             referencedColumns: ["id"]
           },
         ]
@@ -299,6 +622,71 @@ export type Database = {
           },
         ]
       }
+      narratives: {
+        Row: {
+          acknowledged_by: Json | null
+          created_at: string
+          entities_involved: Json | null
+          id: string
+          kind: string
+          source: string
+          summary: string
+        }
+        Insert: {
+          acknowledged_by?: Json | null
+          created_at?: string
+          entities_involved?: Json | null
+          id?: string
+          kind: string
+          source?: string
+          summary: string
+        }
+        Update: {
+          acknowledged_by?: Json | null
+          created_at?: string
+          entities_involved?: Json | null
+          id?: string
+          kind?: string
+          source?: string
+          summary?: string
+        }
+        Relationships: []
+      }
+      player_training_log: {
+        Row: {
+          created_at: string
+          id: string
+          player_id: string
+          stat_bumped: string | null
+          user_id: string
+          xp_added: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_id: string
+          stat_bumped?: string | null
+          user_id: string
+          xp_added: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_id?: string
+          stat_bumped?: string | null
+          user_id?: string
+          xp_added?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_training_log_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           age: number | null
@@ -306,6 +694,7 @@ export type Database = {
           attacking: number | null
           created_at: string
           defending: number | null
+          entity_id: string | null
           id: string
           jersey_number: number | null
           mental: number | null
@@ -324,6 +713,7 @@ export type Database = {
           attacking?: number | null
           created_at?: string
           defending?: number | null
+          entity_id?: string | null
           id?: string
           jersey_number?: number | null
           mental?: number | null
@@ -342,6 +732,7 @@ export type Database = {
           attacking?: number | null
           created_at?: string
           defending?: number | null
+          entity_id?: string | null
           id?: string
           jersey_number?: number | null
           mental?: number | null
@@ -356,8 +747,60 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "players_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "players_team_id_fkey"
             columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          credits: number
+          favourite_player_id: string | null
+          favourite_team_id: string | null
+          id: string
+          last_seen_at: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          credits?: number
+          favourite_player_id?: string | null
+          favourite_team_id?: string | null
+          id: string
+          last_seen_at?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          favourite_player_id?: string | null
+          favourite_team_id?: string | null
+          id?: string
+          last_seen_at?: string | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_favourite_player_id_fkey"
+            columns: ["favourite_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_favourite_team_id_fkey"
+            columns: ["favourite_team_id"]
             isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
@@ -393,6 +836,48 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      team_finances: {
+        Row: {
+          balance: number
+          season_id: string
+          team_id: string
+          ticket_revenue: number
+          updated_at: string
+          wage_bill: number
+        }
+        Insert: {
+          balance?: number
+          season_id: string
+          team_id: string
+          ticket_revenue?: number
+          updated_at?: string
+          wage_bill?: number
+        }
+        Update: {
+          balance?: number
+          season_id?: string
+          team_id?: string
+          ticket_revenue?: number
+          updated_at?: string
+          wage_bill?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_finances_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_finances_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teams: {
         Row: {
@@ -441,9 +926,142 @@ export type Database = {
           },
         ]
       }
+      wagers: {
+        Row: {
+          created_at: string
+          id: string
+          match_id: string
+          odds_snapshot: number
+          payout: number | null
+          stake: number
+          status: string
+          team_choice: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_id: string
+          odds_snapshot: number
+          payout?: number | null
+          stake: number
+          status?: string
+          team_choice: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_id?: string
+          odds_snapshot?: number
+          payout?: number | null
+          stake?: number
+          status?: string
+          team_choice?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wagers_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      focus_tally: {
+        Row: {
+          description: string | null
+          label: string | null
+          option_id: string | null
+          option_key: string | null
+          season_id: string | null
+          team_id: string | null
+          tier: string | null
+          total_credits: number | null
+          vote_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_options_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_options_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_profiles: {
+        Row: {
+          created_at: string | null
+          favourite_player_id: string | null
+          favourite_team_id: string | null
+          id: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          favourite_player_id?: string | null
+          favourite_team_id?: string | null
+          id?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          favourite_player_id?: string | null
+          favourite_team_id?: string | null
+          id?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_favourite_player_id_fkey"
+            columns: ["favourite_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_favourite_team_id_fkey"
+            columns: ["favourite_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wager_leaderboard: {
+        Row: {
+          favourite_team_id: string | null
+          losses: number | null
+          net_profit: number | null
+          total_bets: number | null
+          total_staked: number | null
+          total_won: number | null
+          user_id: string | null
+          username: string | null
+          wins: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_favourite_team_id_fkey"
+            columns: ["favourite_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never
