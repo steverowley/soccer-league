@@ -13,15 +13,19 @@ All league and team data is fetched live from Supabase, ensuring consistency bet
 ## Features
 
 ### Website
-- Multi-page app with client-side routing and live Supabase data fetching
-- Home page with league standings carousel and latest news
-- Leagues listing and individual league detail pages with standings tables (live from DB)
-- Teams listing and team detail pages (live from DB)
-- **Players listing page** — Shows all 512 players (32 teams × 16 players) organized by league and team, sorted by jersey number. All player names are clickable links to detailed profile pages. Jersey numbers and match stats displayed alongside player names. All data fetched directly from Supabase via nested player queries.
-- **Player detail pages** (`/players/:playerId`) — Full player profiles showing jersey number, position, age, nationality, overall rating, personality type with mechanical descriptions, team affiliation, and aggregated season statistics (goals, assists, saves, cards, injuries) pulled from match_player_stats
-- Matches schedule page
-- Login page (placeholder — auth to be wired up)
-- Shared header/footer layout with navigation
+- **Multi-page app** with client-side routing and live Supabase data fetching:
+  - **Home** (`/`) — Landing page with league standings carousel and **Galaxy Dispatch** (real-time narratives feed from Architect)
+  - **Leagues** (`/leagues`) — All four regional leagues; **League Detail** (`/leagues/:leagueId`) with standings tables (live from DB)
+  - **Teams** (`/teams`) — All 32 teams grouped by league; **Team Detail** (`/teams/:teamId`) with squad rosters and stats
+  - **Players** (`/players`) — All 512 players organized by league and team with jersey number sorting and profile links; **Player Detail** (`/players/:playerId`) with stats and personality types
+  - **Matches** (`/matches`) — Match schedule and live simulator; **Match Detail** (`/matches/:matchId`) with odds display and **WagerWidget** for live betting
+  - **Account Features** (authenticated):
+    - **Profile** (`/profile`) — Account summary, IC credit balance, team/player preference selection (grouped by league), and personal **BetHistory**
+    - **Voting** (`/voting`) — End-of-season fan voting on team focus improvements (Major/Minor tier options with cost display)
+    - **Training** (`/training`) — Training facility clicker minigame where fans collectively boost player stats between matches via XP accumulation
+  - **Developer** (`/architect-log`, DEV-only) — Intervention audit table showing all Architect rewrites with JSON snapshots and ROLLBACK notices
+  - **Login** (`/login`) — Authentication (Supabase magic link)
+- Shared header/footer layout with authenticated account menu (login state, IC balance display, dropdown navigation)
 - Loading states, error handling, and 404 pages for missing resources
 
 ### Match Simulator
@@ -322,15 +326,20 @@ soccer-league/
 │   │                             # - normalizeTeam() — map DB fields to app format
 │   │                             # - normalizeLeague() — map DB fields to app format
 │   ├── pages/
-│   │   ├── Home.jsx             # Landing page with standings carousel and news
+│   │   ├── Home.jsx             # Landing page with standings carousel and Galaxy Dispatch
 │   │   ├── Leagues.jsx          # Leagues listing
 │   │   ├── LeagueDetail.jsx     # Individual league page with standings table
 │   │   ├── Teams.jsx            # Teams listing
 │   │   ├── TeamDetail.jsx       # Individual team page with squad section
 │   │   ├── Players.jsx          # Players listing with clickable profile links
 │   │   ├── PlayerDetail.jsx     # Individual player profile page with stats
-│   │   ├── Matches.jsx          # Match schedule
-│   │   └── Login.jsx            # Login page (placeholder)
+│   │   ├── Matches.jsx          # Match schedule and simulator
+│   │   ├── MatchDetail.jsx      # Single fixture with WagerWidget and BetHistory
+│   │   ├── Profile.jsx          # Account summary, preferences, and BetHistory
+│   │   ├── Voting.jsx           # End-of-season focus voting interface
+│   │   ├── Training.jsx         # Training facility clicker minigame
+│   │   ├── ArchitectLog.jsx     # Dev-only intervention audit table
+│   │   └── Login.jsx            # Login page (Supabase magic link auth)
 │   └── components/
 │       ├── MatchComponents.jsx  # Match simulator UI components
 │       ├── layout/
