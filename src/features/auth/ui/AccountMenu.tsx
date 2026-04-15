@@ -13,6 +13,7 @@
 //     popover library, keeping the bundle lean.
 
 import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 
 /**
@@ -102,22 +103,29 @@ export function AccountMenu() {
             Intergalactic Credits: {profile.credits}
           </div>
 
-          {/* Favourite team (if set) */}
-          {profile.favourite_team_id && (
-            <div
-              style={{
-                padding: 'var(--space-3) var(--space-4)',
-                borderBottom: '1px solid rgba(227,224,213,0.1)',
-                fontSize: 'var(--font-size-micro)',
-                fontFamily: 'var(--font-mono)',
-                color: 'rgba(227,224,213,0.6)',
-                textTransform: 'uppercase',
-                letterSpacing: 'var(--letter-spacing-wider)',
-              }}
-            >
-              Team: {profile.favourite_team_id}
-            </div>
-          )}
+          {/* ── Profile link ───────────────────────────────────────────────── */}
+          {/* Primary navigation destination for the logged-in user — account
+              summary, preferences editor, and full bet history all live there.
+              Placed before Sign Out so the destructive action is at the bottom,
+              matching standard UX conventions. */}
+          <Link
+            to="/profile"
+            onClick={() => setOpen(false)}
+            style={{
+              display: 'block',
+              padding: 'var(--space-3) var(--space-4)',
+              borderBottom: '1px solid rgba(227,224,213,0.1)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--font-size-small)',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: 'var(--letter-spacing-wider)',
+              color: 'var(--color-dust)',
+              textDecoration: 'none',
+            }}
+          >
+            Profile
+          </Link>
 
           {/* Sign out */}
           <button
