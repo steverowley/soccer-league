@@ -15,17 +15,21 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { useAuth, AccountMenu } from '../../features/auth';
 
 // ── Navigation link definitions ───────────────────────────────────────────────
 // Ordered as they appear left-to-right in the design mockup.
 // Each entry maps a display label to its route path.
+// "Log In" is NOT in this list — it is rendered conditionally at the end of
+// the nav row (replaced by <AccountMenu> when the user is authenticated).
 const NAV_LINKS = [
-  { label: 'Home',    to: '/' },
-  { label: 'Leagues', to: '/leagues' },
-  { label: 'Teams',   to: '/teams' },
-  { label: 'Players', to: '/players' },
-  { label: 'Matches', to: '/matches' },
-  { label: 'Log In',  to: '/login' },
+  { label: 'Home',     to: '/' },
+  { label: 'Leagues',  to: '/leagues' },
+  { label: 'Teams',    to: '/teams' },
+  { label: 'Players',  to: '/players' },
+  { label: 'Matches',  to: '/matches' },
+  { label: 'Voting',   to: '/voting' },
+  { label: 'Training', to: '/training' },
 ];
 
 /**
@@ -35,6 +39,10 @@ const NAV_LINKS = [
  * depending on viewport width via CSS media queries.  Logo and nav links
  * are vertically centred on the same row, separated by a bottom divider.
  *
+ * Auth state drives the rightmost nav item:
+ *   - Anonymous  → "Log In" link (navigates to /login)
+ *   - Logged in  → <AccountMenu> (shows username + credits + dropdown)
+ *
  * @returns {JSX.Element}
  */
 export default function Header() {
@@ -42,6 +50,12 @@ export default function Header() {
   // Closes automatically when the user navigates to a new page (via the
   // NavLink onClick handler) so they are never left with an open drawer.
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ── Auth state ─────────────────────────────────────────────────────────
+  // `user` is null until Supabase resolves the session (or if anonymous).
+  // We use it purely to decide which auth control to render; all the
+  // account detail (username, credits) lives inside <AccountMenu> itself.
+  const { user } = useAuth();
 
   const location = useLocation();
 
@@ -110,6 +124,23 @@ export default function Header() {
               {label}
             </Link>
           ))}
+
+          {/* ── Auth control ─────────────────────────────────────────────── */}
+          {/* Authenticated users get a compact AccountMenu widget showing
+              their username and IC balance — the two numbers they care about
+              most between matches. Anonymous users get a plain "Log In" link
+              that navigates to /login. The AccountMenu's dropdown also
+              contains the Profile link so the nav row stays compact. */}
+          {user ? (
+            <AccountMenu />
+          ) : (
+            <Link
+              to="/login"
+              className={`nav-link${isActive('/login') ? ' active' : ''}`}
+            >
+              Log In
+            </Link>
+          )}
         </nav>
 
         {/* ── Mobile hamburger button ──────────────────────────────────────── */}
@@ -172,6 +203,24 @@ export default function Header() {
               {label}
             </Link>
           ))}
+
+          {/* ── Mobile auth control ───────────────────────────────────────── */}
+          {/* Mirrors the desktop auth control. AccountMenu renders inline
+              in the stacked drawer; tapping a dropdown item closes the
+              drawer via its own outside-click handler so no extra glue
+              is needed here. Anonymous users get a nav-style Log In link
+              that also closes the drawer on tap. */}
+          {user ? (
+            <AccountMenu />
+          ) : (
+            <Link
+              to="/login"
+              className={`nav-link${isActive('/login') ? ' active' : ''}`}
+              onClick={() => setMobileOpen(false)}
+            >
+              Log In
+            </Link>
+          )}
         </nav>
       )}
 
