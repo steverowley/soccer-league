@@ -85,3 +85,9 @@ export {
   shallowEqual,
   interventionToRow,
 } from './logic/edicts';
+
+// ── UI (React components) ──────────────────────────────────────────────────
+// Dev-only audit-log viewer. The route that mounts this should gate it
+// behind import.meta.env.DEV (or a feature flag) so it never reaches
+// production users.
+export { ArchitectLogPage } from './ui/ArchitectLogPage';

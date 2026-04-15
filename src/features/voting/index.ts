@@ -56,3 +56,13 @@ export {
   getUserVotesForSeason,
   getTeamTally,
 } from './api/focuses';
+
+// ── UI (React components) ──────────────────────────────────────────────────
+// VotingPage is the route-level component (mounted at /voting). FocusCard
+// is the per-option subcomponent — exported separately so other surfaces
+// (e.g. a season-recap dashboard) can render individual cards in isolation.
+export { VotingPage } from './ui/VotingPage';
+export type { VotingPageProps } from './ui/VotingPage';
+
+export { FocusCard } from './ui/FocusCard';
+export type { FocusCardProps } from './ui/FocusCard';

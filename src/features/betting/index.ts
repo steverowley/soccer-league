@@ -61,3 +61,14 @@ export {
   getOddsForMatches,
   saveMatchOdds,
 } from './api/oddsRepo';
+
+// ── UI (React components) ──────────────────────────────────────────────────
+// The widget is the user's primary on-ramp; the history list is the personal
+// counterpart to the public `wager_leaderboard` view. Both are exported via
+// the barrel so feature pages can import them with `@features/betting`
+// instead of poking into the ui/ folder directly.
+export { WagerWidget } from './ui/WagerWidget';
+export type { WagerWidgetMatch, WagerWidgetProps } from './ui/WagerWidget';
+
+export { BetHistory } from './ui/BetHistory';
+export type { BetHistoryProps } from './ui/BetHistory';
