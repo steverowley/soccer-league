@@ -27,12 +27,14 @@
 // All layout follows the 1312px desktop grid (12 cols, 32px gutter) from
 // the design spec, achieved via the `.container` utility class.
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import IslTable from '../components/ui/IslTable';
 import { LEAGUES, STANDINGS_COLS, buildStandingsRows } from '../data/leagueData';
 import { computeStandings, generateNewsItems } from '../lib/matchResultsService';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { getRecentNarratives } from '../features/entities';
 
 /**
  * ISL Home page component.
@@ -46,6 +48,24 @@ import { computeStandings, generateNewsItems } from '../lib/matchResultsService'
  * @returns {JSX.Element}
  */
 export default function Home() {
+  const db = useSupabase();
+
+  // ── Architect narratives (Galaxy Dispatch) ────────────────────────────────
+  // WHY: The Architect's scheduled galaxy-tick Edge Function writes narrative
+  // rows (news, political shifts, geological events, cosmic whispers) to the
+  // `narratives` table. We surface the six most recent here so the Home page
+  // feels like a living news wire rather than a static matchday report.
+  //
+  // We only fetch `source='scheduled'` rows — match-generated narrative rows
+  // are already covered by the match-results section below. Limiting to 6
+  // matches the existing match-news cap for visual parity.
+  const [narratives, setNarratives] = useState([]);
+  useEffect(() => {
+    getRecentNarratives(db, 6, 'scheduled')
+      .then(setNarratives)
+      .catch((e) => console.warn('[Home] narratives fetch failed:', e));
+  }, [db]);
+
   // ── League standings carousel state ───────────────────────────────────────
   // `leagueIdx` is an index into the LEAGUES array (0 = Rocky Inner, …).
   // Clicking prev/next wraps using modular arithmetic so there is no dead end.
@@ -81,6 +101,7 @@ export default function Home() {
   const shiftLeague = (delta) => {
     setLeagueIdx(prev => (prev + delta + LEAGUES.length) % LEAGUES.length);
   };
+
 
   return (
     <div>
@@ -186,6 +207,76 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ── GALAXY DISPATCH ───────────────────────────────────────────────────── */}
+        {/* Architect-generated narrative rows from the `narratives` table.
+            Only rendered when at least one row is available — the section
+            stays completely hidden before the first galaxy-tick runs so the
+            page never shows an empty "Galaxy Dispatch" heading. Each card
+            uses a kind-derived accent colour to give cosmic events a visually
+            distinct identity from the match-report news below. */}
+        {narratives.length > 0 && (
+          <section className="section">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Galaxy Dispatch</h2>
+              {/* Small "Architect" label so players know these are cosmic events,
+                  not match results, and understand their mysterious provenance. */}
+              <span style={{
+                fontSize: '10px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: 'var(--color-purple)',
+                border: '1px solid var(--color-purple)',
+                padding: '1px 6px',
+                fontFamily: 'var(--font-mono)',
+              }}>
+                Architect
+              </span>
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '16px',
+              maxWidth: '960px',
+            }}>
+              {narratives.map((item) => (
+                <div
+                  key={item.id}
+                  className="card"
+                  style={{
+                    // Left border accent differentiates narrative kinds so the
+                    // reader can visually parse "political" vs "cosmic" vs "news"
+                    // at a glance — same pattern as the match-report cards below.
+                    borderLeft: `3px solid ${kindColor(item.kind)}`,
+                  }}
+                >
+                  {/* Kind badge + timestamp */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{
+                      fontSize: '10px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: kindColor(item.kind),
+                      fontFamily: 'var(--font-mono)',
+                    }}>
+                      {kindLabel(item.kind)}
+                    </span>
+                    <span style={{ fontSize: '10px', opacity: 0.35 }}>
+                      {formatNarrativeDate(item.created_at)}
+                    </span>
+                  </div>
+
+                  {/* Summary — the Architect's actual words. Never edited or
+                      summarised — shown verbatim to preserve the Lovecraftian
+                      voice and keep mechanics hidden. */}
+                  <p style={{ fontSize: '13px', lineHeight: 1.6, opacity: 0.9 }}>
+                    {item.summary}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── LATEST NEWS ───────────────────────────────────────────────────────── */}
         {/* Dynamic news cards generated from match results.  Falls back to the
             static welcome card before any matches have been simulated so the
@@ -285,4 +376,65 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+// ── Narrative display helpers ─────────────────────────────────────────────────
+// Pure functions used only by the Galaxy Dispatch section. Module-level so
+// they aren't re-created on every render. No game logic lives here — these
+// are presentation-layer only.
+
+/**
+ * Map a narrative `kind` string to a CSS colour variable. Each kind gets
+ * a distinct accent so readers can visually classify events at a glance:
+ *   - news              → dust white  (ordinary reportage)
+ *   - political_shift   → amber       (power / governance events)
+ *   - geological_event  → orange-red  (planetary / physical events)
+ *   - architect_whisper → purple      (direct Architect voice)
+ *   - economic_tremor   → teal-ish    (market / financial events)
+ *   - unknown           → muted dust  (safe fallback for future kinds)
+ *
+ * @param {string} kind  The narrative.kind string from the DB row.
+ * @returns {string}     A CSS colour value for the left-border accent.
+ */
+function kindColor(kind) {
+  switch (kind) {
+    case 'news':              return 'rgba(227,224,213,0.6)';
+    case 'political_shift':   return '#c8a84b';   // amber — power events
+    case 'geological_event':  return '#c85a2a';   // orange-red — physical disruption
+    case 'architect_whisper': return 'var(--color-purple)'; // direct Architect voice
+    case 'economic_tremor':   return '#4bc8b8';   // teal — market events
+    default:                  return 'rgba(227,224,213,0.3)';
+  }
+}
+
+/**
+ * Convert a narrative `kind` to a short human-readable label shown in the
+ * card's kind badge. Kept uppercase to match the ISL retro-mono aesthetic.
+ *
+ * @param {string} kind  The narrative.kind string from the DB row.
+ * @returns {string}     Display label, always uppercase.
+ */
+function kindLabel(kind) {
+  switch (kind) {
+    case 'news':              return 'News';
+    case 'political_shift':   return 'Political';
+    case 'geological_event':  return 'Geological';
+    case 'architect_whisper': return 'Transmission';
+    case 'economic_tremor':   return 'Economic';
+    default:                  return kind ?? 'Unknown';
+  }
+}
+
+/**
+ * Format an ISO timestamp as a compact relative-or-absolute date for the
+ * narrative card's timestamp badge. Returns the raw ISO string unchanged
+ * if Date.parse fails — better to show a weird date than crash.
+ *
+ * @param {string} iso  ISO 8601 timestamp string from the DB row.
+ * @returns {string}    Short formatted date, e.g. "Apr 15".
+ */
+function formatNarrativeDate(iso) {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
