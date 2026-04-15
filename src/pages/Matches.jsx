@@ -145,7 +145,14 @@ export default function Matches() {
         getTeamForEngine(homeTeamId),
         getTeamForEngine(awayTeamId),
       ]);
-      setSimTeams({ home, away });
+      // ── Carry the Supabase team slugs alongside the engine-format objects ──
+      // getTeamForEngine() strips the raw DB fields (id, created_at, etc.) to
+      // keep the engine lean, so the slugs would otherwise be unreachable by
+      // downstream consumers.  MatchSimulator needs them at kickoff to count
+      // present fans (profiles.favourite_team_id = slug) for the Phase 3 fan
+      // support boost and, when a fixture row exists, to key the
+      // match_attendance insert.
+      setSimTeams({ home, away, homeSlug: homeTeamId, awaySlug: awayTeamId });
     } catch (err) {
       setFetchError('Could not load team data — please try again.');
       console.error('launchSim fetch error:', err);
@@ -186,6 +193,16 @@ export default function Matches() {
           key={`${simTeams.home.name}-${simTeams.away.name}`}
           homeTeam={simTeams.home}
           awayTeam={simTeams.away}
+          /*
+           * Supabase team slugs — required for the Phase 3 fan support boost.
+           * Without these the simulator falls back to zero-boost mode (no fan
+           * count query, no attendance DB write).  matchId / seasonId are
+           * intentionally omitted until fixture-scheduling integration lands
+           * in a later phase; the simulator gracefully skips the attendance
+           * write when either is absent.
+           */
+          homeTeamId={simTeams.homeSlug}
+          awayTeamId={simTeams.awaySlug}
         />
       </div>
     );
