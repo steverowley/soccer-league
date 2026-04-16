@@ -26,6 +26,7 @@ import {
   countPresentFans,
   recordMatchAttendance,
 } from "./features/finance";
+import { LoreStore } from "./features/architect";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
 // Two quote buckets selected by scoreline when the whistle blows at 45':
@@ -885,6 +886,17 @@ const MatchSimulator = ({
   // same reason as agentSystemRef: the Architect is mutated in place across
   // every minute tick and we don't want React to re-render on each mutation.
   const architectRef=useRef(null);
+  // ── Phase 5.1: LoreStore ref ────────────────────────────────────────────────
+  // Holds the LoreStore instance created at kickoff when an API key is present.
+  // The store is responsible for hydrating the Architect's lore from the DB
+  // before the match (replacing the legacy localStorage read in _loadLore()) and
+  // for persisting the mutated lore back to architect_lore after saveMatchToLore()
+  // has run (replacing the legacy localStorage write in _saveLore()).
+  //
+  // Null when no API key is set — the Architect isn't created in that case so
+  // there is nothing to hydrate or persist.  Reset by resetMatch() so a fresh
+  // match re-hydrates from the DB rather than re-using stale in-memory state.
+  const loreStoreRef=useRef(null);
   // Tracks the last minute a manager decision was triggered for each team.
   // Prevents the same trigger from firing repeatedly for the same team within
   // the minimum gap window (rndI(8,14) mins, enforced in the useEffect below).
@@ -1994,15 +2006,51 @@ const MatchSimulator = ({
       mgr=createAIManager(boostedHome,boostedAway);aiRef.current=mgr;setAiManager(mgr);
     }
     if(apiKey&&!agentSystemRef.current){
-      // ── Create the Architect before AgentSystem so it can be passed in ───
-      // The Architect loads its persistent lore from localStorage at construction
-      // time, meaning cross-match rivalries and player arcs are available from
-      // the very first Proclamation of this match.
+      // ── Phase 5.1: Hydrate lore from DB before creating the Architect ─────
+      //
+      // WHY we hydrate here, not in the constructor:
+      //   The constructor calls `_loadLore()` synchronously, which can only
+      //   read localStorage.  Overwriting `arch.lore` immediately after
+      //   construction substitutes the richer, shared-DB lore for the
+      //   browser-local copy.  This keeps the Architect's constructor
+      //   unchanged and gives us a clean injection point that is easy to
+      //   pull out once agents.js is migrated to TypeScript.
+      //
+      // WHY await here (before setMatchState isPlaying=true):
+      //   `getContext()` is called synchronously on every AI prompt — up to
+      //   10 times in <500ms during a goal burst.  The lore MUST be resident
+      //   in memory before the first tick fires or the Architect's first
+      //   Proclamation will reference empty player-arc data.  The one-time
+      //   hydration round-trip (~100 ms) is acceptable at kickoff when the
+      //   user has just clicked Start.
+      //
+      // Error handling: if the DB query fails the Architect falls back to
+      //   whatever `_loadLore()` already put in `arch.lore` (localStorage or
+      //   emptyLore).  A failed hydration must never block kickoff.
+      const loreStore=new LoreStore(supabase);
+      loreStoreRef.current=loreStore;
+      let dbLore=null;
+      try{
+        dbLore=await loreStore.hydrate();
+      }catch(e){
+        console.warn('[ISL] LoreStore.hydrate() failed — falling back to localStorage lore:',e);
+      }
+
+      // ── Create the Architect ─────────────────────────────────────────────
+      // Constructor still runs `_loadLore()` (reads localStorage) so the
+      // Architect has SOME lore even if the DB hydration above failed.
       const arch=new CosmicArchitect(apiKey,{
         homeTeam:matchState.homeTeam,awayTeam:matchState.awayTeam,
         homeManager:mgr.homeManager,awayManager:mgr.awayManager,
         stadium:mgr.stadium,weather:mgr.weather,
       });
+
+      // ── Inject DB lore over the localStorage copy ────────────────────────
+      // If hydration succeeded, the DB copy wins.  It contains all lore that
+      // any browser session has ever contributed — not just this browser's
+      // localStorage — so the Architect has the richest possible context.
+      if(dbLore) arch.lore=dbLore;
+
       architectRef.current=arch;
 
       // Pass the Architect instance into AgentSystem so _ctx() can inject its
@@ -2036,6 +2084,11 @@ const MatchSimulator = ({
     // state (narrativeArc, characterArcs, featuredMortals).  The persistent
     // lore in localStorage is NOT cleared — that accumulates across resets.
     architectRef.current=null;
+    // Clear the LoreStore so the next kickoff re-hydrates from the DB.
+    // Any pending fire-and-forget writes from the just-ended match may still
+    // be in-flight; they hold their own promise reference internally so
+    // clearing the ref here doesn't cancel them — they will resolve normally.
+    loreStoreRef.current=null;
     lastEventCountRef.current=0;
     lastThoughtsCountRef.current=0;
     // ── Reset fan boost so the next kickoff re-queries fresh fan counts ─────
@@ -2081,8 +2134,26 @@ const MatchSimulator = ({
         // rejection is silently absorbed since the verdict is cosmetic only.
         arch.saveMatchToLore(matchState,{
           league: matchState.homeTeam?.league || 'Intergalactic Soccer League',
-        }).then(verdict=>{ if(verdict) setArchitectFinalVerdict(verdict); })
-          .catch(()=>{});
+        }).then(verdict=>{
+          if(verdict) setArchitectFinalVerdict(verdict);
+          // ── Phase 5.1: Persist lore to DB after saveMatchToLore completes ─
+          // WHY .then() rather than a separate setTimeout:
+          //   saveMatchToLore() mutates arch.lore (player arcs, rivalry threads,
+          //   match ledger) before resolving.  Calling persistAll() inside
+          //   .then() guarantees we capture the fully-updated lore object — not
+          //   an intermediate state.  The write is fire-and-forget: persistAll()
+          //   enqueues a batch upsert without blocking this callback.  Errors
+          //   in the write are absorbed by the API layer (warn-level only) so a
+          //   transient Supabase outage never surfaces to the user.
+          //
+          // WHY persist here (not inside agents.js _saveLore()):
+          //   _saveLore() is still the localStorage write path for backward
+          //   compat.  We don't modify agents.js in this PR — the DB write is
+          //   an additive layer on top, not a replacement.  Both writes run
+          //   post-match: localStorage for offline/browser resilience,
+          //   architect_lore for shared cross-browser accumulation.
+          loreStoreRef.current?.persistAll(arch.lore);
+        }).catch(()=>{});
       }
 
       // ── Mechanical result persistence ─────────────────────────────────────
