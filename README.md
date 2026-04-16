@@ -61,7 +61,7 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 ### Betting System
 - Three-way odds (home/draw/away) calculated from team ratings
 - Minimum bet: 10 Intergalactic Credits
-- Wager settlement auto-fires after match completion
+- **Event-driven settlement**: `MatchSimulator` emits `match.completed` on the shared event bus after result persistence; `WagerSettlementListener` (mounted in the app root) subscribes to the event and auto-settles all open wagers, crediting winners — decoupled via the event bus so betting feature has no direct dependency on match feature
 - Kickoff-timer gate prevents bets after the match starts
 - Wager ledger with status pills (WON/LOST/OPEN/VOID) and net-profit column
 
