@@ -108,10 +108,10 @@ export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, 
               The ✦ glyph signals that The Architect has designated this player
               as a featured mortal in the current proclamation.  No explanation
               is provided — intentionally cryptic so fans notice and wonder.
-              The violet glow matches the Architect's signature #9D6FFB colour. */}
+              The violet glow matches the Architect's signature colour. */}
           {isFeatured && (
             <span style={{
-              color: '#9D6FFB',
+              color: 'var(--color-architect-accent)',
               textShadow: '0 0 6px rgba(157,111,251,0.6)',
               flexShrink: 0,
             }}>✦</span>
@@ -298,7 +298,7 @@ export const ArchitectCard = ({ item }) => {
   // The Architect's fixed accent colour.  Defined as a constant here rather
   // than reading item.color so the visual identity is enforced even if the
   // feed item is constructed with a different value.
-  const ARCHITECT_COLOR = '#9D6FFB';  // brighter violet — legible on pure black
+  const ARCHITECT_COLOR = 'var(--color-architect-accent)';  // brighter violet — legible on pure black
 
   return (
     <div style={{
@@ -306,11 +306,11 @@ export const ArchitectCard = ({ item }) => {
       marginBottom:    '10px',
       // Pure black void — deeper than the surrounding card backgrounds so the
       // Architect's card feels like a window into a different plane of existence.
-      backgroundColor: '#050308',
+      backgroundColor: 'var(--color-architect-bg)',
       // Subtle radial glow emanating from the left edge where the border is —
       // reinforces the sense that the light source is the Architect themselves.
       backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.10) 0%, transparent 65%)',
-      border:          `1px solid ${ARCHITECT_COLOR}55`,
+      border:          '1px solid rgba(157,111,251,0.33)',
       animation:       'architectPulse 3s ease-in-out infinite',
       // 4px left accent (vs 2px on AgentCard) to signal cosmic authority.
       borderLeft:      `4px solid ${ARCHITECT_COLOR}`,
@@ -349,7 +349,7 @@ export const ArchitectCard = ({ item }) => {
         fontSize:    '12px',
         fontStyle:   'italic',
         lineHeight:  '1.5',
-        color:       '#E2D9F3',  // muted lavender — readable on void background
+        color:       'var(--color-architect-text)',  // muted lavender — readable on void background
         marginBottom: item.featuredMortals?.length || item.cosmicThread ? '8px' : 0,
       }}>
         "{item.text}"
@@ -468,15 +468,15 @@ export const ArchitectInterferenceCard = ({ item }) => {
       marginBottom: '10px',
       // Deep void black — same as ArchitectCard so all three Architect surfaces
       // (proclamation, interference, post-match verdict) share one visual identity.
-      backgroundColor: '#050308',
+      backgroundColor: 'var(--color-architect-bg)',
       // Fixed violet radial bloom from the left edge — matches ArchitectCard's
       // background treatment exactly, independent of interference category.
       backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.10) 0%, transparent 65%)`,
-      // Fixed violet border — same colour (#9D6FFB) as ArchitectCard regardless
+      // Fixed violet border — same colour as ArchitectCard regardless
       // of interference type.  Category information is conveyed through text
       // labels only, not through border colour.
       border: '1px solid rgba(157,111,251,0.35)',
-      borderLeft: '4px solid #9D6FFB',
+      borderLeft: '4px solid var(--color-architect-accent)',
       // Shared pulse animation — identical to ArchitectCard so all Architect
       // surfaces glow in the same rhythm and colour.
       animation: 'architectPulse 3s ease-in-out infinite',
@@ -519,7 +519,7 @@ export const ArchitectInterferenceCard = ({ item }) => {
       {item.text && (
         <div style={{
           fontSize: '12px', fontStyle: 'italic', lineHeight: '1.55',
-          color: '#E2D9F3', marginBottom: 0,
+          color: 'var(--color-architect-text)', marginBottom: 0,
         }}>
           "{item.text}"
         </div>
@@ -573,7 +573,7 @@ export const ArchitectInterferenceCard = ({ item }) => {
  */
 export const PreMatchArchitectZone = ({ omen }) => {
   // The Architect's canonical colour used across all cosmic surfaces.
-  const ARCHITECT_COLOR = '#9D6FFB';  // brighter violet — legible on pure black
+  const ARCHITECT_COLOR = 'var(--color-architect-accent)';  // brighter violet — legible on pure black
 
   return (
     <div style={{
@@ -585,7 +585,7 @@ export const PreMatchArchitectZone = ({ omen }) => {
       padding: '20px 16px',
       // Deep void black — same as ArchitectCard/ArchitectInterferenceCard so
       // all Architect surfaces share one visual identity.
-      backgroundColor: '#050308',
+      backgroundColor: 'var(--color-architect-bg)',
       // Subtle radial bloom from the left echoes the in-match Architect cards,
       // making the zone feel like a window into the same cosmic plane.
       backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.08) 0%, transparent 70%)',
@@ -618,13 +618,13 @@ export const PreMatchArchitectZone = ({ omen }) => {
 
           {/* ── Omen text ────────────────────────────────────────────────────
               One cryptic sentence.  Italic to visually distinguish it from
-              play-by-play commentary.  Muted lavender (#E2D9F3) matches the
-              colour used for proclamation text in ArchitectCard. */}
+              play-by-play commentary.  Uses var(--color-architect-text) to match
+              the colour used for proclamation text in ArchitectCard. */}
           <div style={{
             fontSize: '12px',
             fontStyle: 'italic',
             lineHeight: '1.6',
-            color: '#E2D9F3',
+            color: 'var(--color-architect-text)',
             maxWidth: '280px',
             marginBottom: omen.rivalryContext ? '10px' : '12px',
           }}>
@@ -671,7 +671,7 @@ export const PreMatchArchitectZone = ({ omen }) => {
         <div style={{
           fontSize: '11px',
           fontStyle: 'italic',
-          color: '#E2D9F3',
+          color: 'var(--color-architect-text)',
           opacity: 0.25,
           animation: 'blink 1s step-end infinite',
         }}>
@@ -722,16 +722,16 @@ export const SealedFateCard = ({ sealedProphecy }) => {
   // ── Colour tokens for pending vs fulfilled states ──────────────────────────
   // Pending:   violet-red gradient border — unresolved, foreboding
   // Fulfilled: amber/gold border + text — resolved, momentous
-  const borderColor   = fulfilled ? '#F59E0B' : '#9D6FFB';       // amber vs violet
+  const borderColor   = fulfilled ? '#F59E0B' : 'var(--color-architect-accent)'; // amber vs violet
   const glowColor     = fulfilled ? 'rgba(245,158,11,0.5)' : 'rgba(157,111,251,0.4)';
   const headerColor   = fulfilled ? '#F59E0B' : '#C084FC';        // amber vs soft violet
-  const textColor     = fulfilled ? '#FBD38D' : '#E2D9F3';        // gold vs lavender
+  const textColor     = fulfilled ? '#FBD38D' : 'var(--color-architect-text)'; // gold vs lavender
 
   return (
     <div style={{
       margin: '0 0 6px 0',
       padding: '10px 12px',
-      backgroundColor: '#050308',
+      backgroundColor: 'var(--color-architect-bg)',
       backgroundImage: `radial-gradient(ellipse at 20% 50%, ${fulfilled ? 'rgba(245,158,11,0.08)' : 'rgba(124,58,237,0.10)'} 0%, transparent 65%)`,
       border: `1px solid rgba(${fulfilled ? '245,158,11' : '157,111,251'},0.3)`,
       borderLeft: `3px solid ${borderColor}`,
@@ -806,7 +806,7 @@ export const EdictBadge = ({ edict }) => {
   const POLARITY_GLYPH = {
     boon:  { glyph: '✦', color: '#F59E0B' },  // gold  — favourable
     curse: { glyph: '⌀', color: '#EF4444' },  // red   — burdensome
-    chaos: { glyph: '⟁', color: '#9D6FFB' },  // violet — unpredictable
+    chaos: { glyph: '⟁', color: 'var(--color-architect-accent)' },  // violet — unpredictable
   };
 
   const config = POLARITY_GLYPH[edict.polarity] || POLARITY_GLYPH.chaos;
@@ -881,7 +881,7 @@ export const ArchitectFlashCard = ({ item }) => (
       fontWeight: 700,
       letterSpacing: '0.18em',
       textTransform: 'uppercase',
-      color: '#9D6FFB',
+      color: 'var(--color-architect-accent)',
       // Pulsing glow on the text itself — the only visual element, so it
       // needs to carry the full weight of "something cosmic is happening".
       textShadow: '0 0 12px rgba(157,111,251,0.8)',
@@ -1558,7 +1558,7 @@ export const FeedRow = ({ item, homeTeam, awayTeam }) => {
         <span style={{
           fontSize: '10px',
           flexShrink: 0,
-          color: '#9D6FFB',
+          color: 'var(--color-architect-accent)',
           textShadow: '0 0 5px rgba(124,58,237,0.5)',
           marginRight: '2px',
         }}>✦</span>
@@ -2061,21 +2061,21 @@ export const PostMatchSummary = ({
           <div style={{
             marginBottom: '20px',
             padding: '12px 14px',
-            backgroundColor: '#050308',
+            backgroundColor: 'var(--color-architect-bg)',
             border: '1px solid rgba(157,111,251,0.35)',
-            borderLeft: '4px solid #9D6FFB',
+            borderLeft: '4px solid var(--color-architect-accent)',
             animation: 'architectPulse 3s ease-in-out infinite',
           }}>
             <div style={{
               fontSize: '9px', fontWeight: 700, letterSpacing: '0.14em',
-              textTransform: 'uppercase', color: '#9D6FFB', marginBottom: '6px',
+              textTransform: 'uppercase', color: 'var(--color-architect-accent)', marginBottom: '6px',
               textShadow: '0 0 10px rgba(124,58,237,0.9), 0 0 22px rgba(124,58,237,0.45)',
             }}>
               ✦ The Architect's Verdict
             </div>
             <div style={{
               fontSize: '11px', fontStyle: 'italic', lineHeight: 1.6,
-              color: '#E2D9F3', opacity: 0.9,
+              color: 'var(--color-architect-text)', opacity: 0.9,
             }}>
               "{architectVerdict}"
             </div>

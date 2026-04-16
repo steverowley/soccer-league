@@ -159,7 +159,7 @@ function SquadRow({ player }) {
       gridTemplateColumns: '28px 1fr 40px 48px',
       gap: '8px',
       padding: '5px 0',
-      borderBottom: '1px solid rgba(255,255,255,0.06)',
+      borderBottom: '1px solid rgba(227,224,213,0.06)',
       fontSize: '12px',
     }}>
       {/* Jersey number — right-aligned within its column so single- and
@@ -182,7 +182,7 @@ function SquadRow({ player }) {
         style={{
           color: 'inherit',
           textDecoration: 'underline',
-          textDecorationColor: 'rgba(255,255,255,0.3)',
+          textDecorationColor: 'rgba(227,224,213,0.3)',
         }}
       >
         {player.name}
@@ -371,7 +371,7 @@ export default function TeamDetail() {
                   value={
                     <Link
                       to={`/leagues/${leagueId}`}
-                      style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.3)' }}
+                      style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(227,224,213,0.3)' }}
                     >
                       {leagueName}
                     </Link>
@@ -455,7 +455,7 @@ export default function TeamDetail() {
                   textTransform: 'uppercase',
                   opacity: 0.5,
                   marginBottom: '6px',
-                  borderBottom: '1px solid rgba(255,255,255,0.1)',
+                  borderBottom: '1px solid rgba(227,224,213,0.1)',
                   paddingBottom: '4px',
                 }}>
                   {POS_LABEL[group.position]}
