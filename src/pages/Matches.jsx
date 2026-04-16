@@ -67,9 +67,9 @@ const FEATURED_LEAGUES = new Set(['rocky-inner', 'gas-giants']);
 // dark theme without needing a dedicated Select component.
 const selectStyle = {
   width: '100%',
-  background: 'var(--color-surface, #1a1a1a)',
-  color: 'var(--color-dust, #E3E0D5)',
-  border: '1px solid rgba(255,255,255,0.2)',
+  background: 'var(--color-ash)',
+  color: 'var(--color-dust)',
+  border: '1px solid rgba(227,224,213,0.2)',
   borderRadius: '4px',
   padding: '8px 10px',
   fontSize: '13px',
@@ -325,7 +325,7 @@ export default function Matches() {
           {/* Shown if getTeamForEngine() throws (e.g. network issue or team not
               yet seeded).  Kept inline so the selector remains usable. */}
           {fetchError && (
-            <p style={{ fontSize: '12px', color: '#f87171', marginBottom: '12px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--color-red)', marginBottom: '12px' }}>
               {fetchError}
             </p>
           )}

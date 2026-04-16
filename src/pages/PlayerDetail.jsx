@@ -305,7 +305,7 @@ export default function PlayerDetail() {
               <span style={{
                 display: 'inline-block',
                 padding: '2px 8px',
-                border: '1px solid rgba(255,255,255,0.3)',
+                border: '1px solid rgba(227,224,213,0.3)',
                 borderRadius: '3px',
                 fontSize: '11px',
                 fontWeight: 'bold',
@@ -323,7 +323,7 @@ export default function PlayerDetail() {
             <span style={{
               display: 'inline-block',
               padding: '2px 8px',
-              border: '1px solid rgba(255,255,255,0.3)',
+              border: '1px solid rgba(227,224,213,0.3)',
               borderRadius: '3px',
               fontSize: '11px',
               fontWeight: 'bold',
@@ -342,7 +342,7 @@ export default function PlayerDetail() {
                 style={{
                   color: 'inherit',
                   textDecoration: 'underline',
-                  textDecorationColor: 'rgba(255,255,255,0.4)',
+                  textDecorationColor: 'rgba(227,224,213,0.4)',
                 }}
               >
                 {teamName}
@@ -383,7 +383,7 @@ export default function PlayerDetail() {
                 the description (from PERS_DESC) explains the mechanical effect
                 in plain language. */}
             <div style={{
-              borderTop: '1px solid rgba(255,255,255,0.12)',
+              borderTop: '1px solid rgba(227,224,213,0.12)',
               paddingTop: '12px',
               marginTop: '4px',
             }}>
@@ -437,10 +437,10 @@ export default function PlayerDetail() {
                 the match-page Architect aesthetic: deep black bg, radial
                 violet bloom, architectPulse glow, 4 px left accent border. */}
             <div style={{
-              backgroundColor: '#050308',
+              backgroundColor: 'var(--color-architect-bg)',
               backgroundImage: 'radial-gradient(ellipse at 15% 40%, rgba(124,58,237,0.10) 0%, transparent 60%)',
               border: '1px solid rgba(157,111,251,0.20)',
-              borderLeft: '4px solid #9D6FFB',
+              borderLeft: '4px solid var(--color-architect-accent)',
               animation: 'architectPulse 3s ease-in-out infinite',
               padding: '20px 20px 16px',
             }}>
@@ -455,7 +455,7 @@ export default function PlayerDetail() {
                 fontWeight: 700,
                 letterSpacing: '0.20em',
                 textTransform: 'uppercase',
-                color: '#9D6FFB',
+                color: 'var(--color-architect-accent)',
                 textShadow: '0 0 10px rgba(157,111,251,0.55)',
                 marginBottom: '18px',
                 textAlign: 'center',
@@ -472,7 +472,7 @@ export default function PlayerDetail() {
                   fontSize: '13px',
                   fontStyle: 'italic',
                   lineHeight: 1.65,
-                  color: '#E2D9F3',
+                  color: 'var(--color-architect-text)',
                   margin: '0 0 16px',
                   paddingBottom: relationships.length > 0 ? '16px' : 0,
                   borderBottom: relationships.length > 0
@@ -502,7 +502,7 @@ export default function PlayerDetail() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{
                             fontSize: '8px', fontWeight: 700, letterSpacing: '0.14em',
-                            textTransform: 'uppercase', color: '#9D6FFB', opacity: 0.7,
+                            textTransform: 'uppercase', color: 'var(--color-architect-accent)', opacity: 0.7,
                           }}>
                             {RELATIONSHIP_LABELS[rel.type] || rel.type}
                           </span>
@@ -511,7 +511,7 @@ export default function PlayerDetail() {
                           </span>
                         </div>
                         <span style={{
-                          color: '#9D6FFB',
+                          color: 'var(--color-architect-accent)',
                           fontSize: `${8 + Math.round((rel.intensity || 0) * 6)}px`,
                           opacity: 0.3 + (rel.intensity || 0) * 0.7,
                         }}>●</span>
@@ -519,7 +519,7 @@ export default function PlayerDetail() {
                       {rel.thread && (
                         <p style={{
                           fontSize: '11px', fontStyle: 'italic',
-                          color: '#C4B5D9', lineHeight: 1.5, margin: 0,
+                          color: 'var(--color-architect-muted)', lineHeight: 1.5, margin: 0,
                         }}>
                           {rel.thread}
                         </p>
