@@ -34,6 +34,7 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
 - Tension curves, narrative residue, and momentum tracking
 - Manager AI that makes tactical decisions mid-match in response to game state
 - Player psychology: 8 personality types with per-player confidence, fatigue, and morale
+- **Fan support boost** — teams with more present fans (logged-in profiles within 5 minutes) receive a +2 stat bump across all five player categories at kickoff, affecting all subsequent contests and tactical outcomes
 
 ### The Cosmic Architect
 - Lovecraftian cosmic entity that shapes every match through four interference layers:
@@ -42,6 +43,8 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
   - **Sealed Fate** — prophecy-driven forced outcomes (goals, red cards, wonder saves)
   - **Interference Flags** — 10 reality-rewrite flags (gravityFlipped, voidCreature, eldritchPortal, etc.)
 - Persistent lore accumulates across matches — rivalries, player arcs, season storylines
+  - **Database-backed**: Pre-match `LoreStore.hydrate()` loads all `architect_lore` DB rows into memory; lore is immediately injected before match start so Architect sees cross-session state from first Proclamation
+  - **Post-match persistence**: `LoreStore.persistAll()` chains onto match completion to batch-upsert fully-updated lore to DB; localStorage writes preserved for offline resilience
 - All AI voices speak with narrative coherence via injected Architect context
 - Affected characters react with confusion and disbelief; they have zero knowledge of any cosmic cause
 
