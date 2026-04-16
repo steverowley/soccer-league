@@ -92,6 +92,35 @@
      indicators). Intentionally desaturated so it doesn't fight with the purple. */
   --color-green:         #A5D6A7;
 
+  /* [INVARIANT] Darker Lunar Dust for hover/pressed states on dust-filled surfaces.
+     Used by .btn-secondary:hover. Manually mixed at ~12% darker than Lunar Dust. */
+  --color-dust-dark:     #ccc9be;
+
+  /* ── Cosmic Architect surface tokens ─────────────────────────────────────────
+   * The Architect UI (match cards, player lore section) uses a distinct palette
+   * that sits outside the main ISL palette — deeper, more cosmic.  These tokens
+   * are intentionally not in the main colour set; they are exclusively for
+   * Architect-branded surfaces.  Each is [INVARIANT] until Figma adds them to
+   * the design spec. */
+
+  /* Near-void background — deeper black than Galactic Abyss to evoke cosmic void.
+     Used in ArchitectCard, ArchitectInterferenceCard, SealedFateCard, and the
+     PlayerDetail "Convergence" lore section. */
+  --color-architect-bg:       #050308;
+
+  /* Brighter violet accent — legible on the near-void background.
+     Sits ~1 tone above Quantum Purple to give the Architect its own visual signal.
+     Used for title text, left-border accents, and glow effects on Architect cards. */
+  --color-architect-accent:   #9D6FFB;
+
+  /* Muted lavender — readable body text on the near-void background.
+     Used for Architect commentary text and player arc prose. */
+  --color-architect-text:     #E2D9F3;
+
+  /* Secondary lavender — slightly more muted; used for relationship bond labels
+     and secondary annotation text inside Architect cards. */
+  --color-architect-muted:    #C4B5D9;
+
   /* ── Typography ───────────────────────────────────────────────────────────
    * Space Mono is the only font family in the ISL. The monospace feel is
    * core to the retro aesthetic; a sans or serif would break the look.
