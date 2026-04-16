@@ -151,6 +151,22 @@ Run the SQL files in order in the Supabase SQL Editor:
 | `npm run test:coverage` | Run tests with coverage |
 | `npm run check` | Full CI suite (typecheck + lint + test) |
 
+## Design System
+
+The ISL uses a **centralized design token architecture** to maintain visual consistency across all pages and components:
+
+- **`src/styles/tokens.css`** — Single source of truth for all design tokens:
+  - **Colours**: Galactic Abyss (primary dark), Phobos Ash (card dark), Lunar Dust (light text), Quantum Purple (focus accent), Solar Flare (error red), Terra Nova (positive green), plus dedicated Cosmic Architect palette
+  - **Typography**: Space Mono monospace family with size scale (40px H1 → 12px micro) and letter-spacing tokens
+  - **Spacing**: 4–100px scale in multiples of 4/8, matching Figma spec (nodes 49:32)
+  - **Layout**: Desktop (12×80px + 32px gutter) and mobile (12×40px + 28px gutter) grid tokens
+  - **Component sizings**: Button (170×56px), card padding (32px), transitions (150ms fast, 300ms medium)
+
+- **All colours, sizes, and spacing are pulled from authoritative Figma file** (`oGdHNw4ap5TY5R5ey28FDP`, node 47:20 "Design System")
+- **Figma MCP integration** — `.mcp.json` configured to sync design updates; run Phase 0 prompt in new sessions to pull latest tokens
+
+- **Component CSS best practice**: Import `src/styles/tokens.css` in `src/index.css` and reference tokens via `var(--color-abyss)`, `var(--font-size-h1)`, etc. Never hard-code hex values or pixel sizes.
+
 ## Project Structure
 
 ```
@@ -161,6 +177,9 @@ soccer-league/
 │   ├── agents.js                # Claude AI commentary and Architect system
 │   ├── simulateHelpers.js       # Chaos, sequences, late-game logic
 │   ├── constants.js             # Enums, personalities, weather, formations
+│   ├── styles/
+│   │   └── tokens.css           # Design system: colours, typography, spacing, layout, sizing
+│   ├── index.css                # Base styles, component classes, animations (imports tokens.css)
 │   ├── features/                # Feature modules
 │   │   ├── architect/           # Cosmic narrator and match interference
 │   │   ├── auth/                # Authentication and user profiles
@@ -192,6 +211,7 @@ soccer-league/
 │   ├── migrations/              # Timestamped schema migrations
 │   ├── schema.sql               # Database schema snapshot
 │   └── seed.sql                 # Seed data
+├── .mcp.json                    # Figma MCP server configuration
 ├── tsconfig.json                # TypeScript strict mode config
 ├── eslint.config.js             # Flat ESLint config with feature boundary rules
 ├── vitest.config.ts             # Unit test runner
