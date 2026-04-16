@@ -52,6 +52,17 @@ import { SupabaseProvider } from './shared/supabase/SupabaseProvider';
 import { supabaseClient }   from './shared/supabase/client';
 import { AuthProvider }     from './features/auth';
 
+// ── Cross-feature side-effect listeners ───────────────────────────────────────
+// These components render null and exist purely to register event-bus listeners
+// that cross feature boundaries.  They are mounted once here — inside
+// <SupabaseProvider> — so they always have a DB client available.
+//
+// WagerSettlementListener: subscribes to `match.completed` and calls
+//   settleMatchWagers() to resolve open bets when a fixture finishes.
+//   Mounted here (not in the Match feature) because the betting feature must
+//   never be imported by the match feature — the bus keeps them decoupled.
+import { WagerSettlementListener } from './features/betting';
+
 // ── Page components ───────────────────────────────────────────────────────────
 // Each import corresponds to one route in the table above.
 import Home         from './pages/Home';
@@ -81,6 +92,11 @@ createRoot(document.getElementById('root')).render(
         useSupabase()). Both sit OUTSIDE the Router so every route — including
         /login itself — has access to the auth context. */}
     <SupabaseProvider client={supabaseClient}>
+      {/* ── Side-effect listeners ──────────────────────────────────────────── */}
+      {/* Mounted inside SupabaseProvider (needs useSupabase()) but outside the
+          Router (must survive full route transitions so no in-flight settlement
+          is cancelled mid-navigation).  Renders null — pure side-effects only. */}
+      <WagerSettlementListener />
       <AuthProvider>
         {/* ── Router ──────────────────────────────────────────────────────── */}
         {/* BrowserRouter enables HTML5 history API navigation with clean URLs.
