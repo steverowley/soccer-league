@@ -27,6 +27,7 @@ import {
   recordMatchAttendance,
 } from "./features/finance";
 import { LoreStore } from "./features/architect";
+import { bus } from "./shared/events/bus";
 
 // ── Halftime tunnel quotes ─────────────────────────────────────────────────────
 // Two quote buckets selected by scoreline when the whistle blows at 45':
@@ -743,6 +744,14 @@ const MatchSimulator = ({
   awayTeamId = null,
   matchId = null,
   seasonId = null,
+  // ── Phase 2: Betting settlement ────────────────────────────────────────────
+  // competitionId: UUID of the competition this fixture belongs to.  When
+  // present alongside matchId, homeTeamId, and awayTeamId the post-match
+  // useEffect emits a `match.completed` event on the shared bus so the
+  // WagerSettlementListener (mounted in main.jsx) can settle open wagers.
+  // When absent — e.g. ad-hoc simulator runs from the Matches page that
+  // have no real fixture row — the event is skipped and no settlement runs.
+  competitionId = null,
   compact = false,
   autoStart = false,
   startDelay = 500,
@@ -2171,6 +2180,33 @@ const MatchSimulator = ({
       } catch(e) {
         // Non-fatal: a result-save failure should never crash the simulator.
         console.warn('[ISL] result save failed:', e);
+      }
+
+      // ── Phase 2: Emit match.completed for betting settlement ──────────────
+      // WHY here (after saveResult, before the PostMatchSummary timeout):
+      //   The result is fully committed to localStorage at this point.  Emitting
+      //   the event here rather than inside the Architect .then() keeps betting
+      //   settlement independent of the Architect — it runs even when no API key
+      //   is set and the Architect is absent.  The bus is synchronous so all
+      //   downstream listeners (WagerSettlementListener) are invoked inline
+      //   before execution continues to the setTimeout below.
+      //
+      // WHY gate on matchId && homeTeamId && awayTeamId && competitionId:
+      //   Open wagers are keyed by matchId in the DB.  Without a real fixture
+      //   UUID there is nothing to settle.  The gate mirrors the same pattern
+      //   used by recordMatchAttendance (Phase 3) — the enriched props are only
+      //   wired when a real fixture row exists (e.g. launched from MatchDetail).
+      //   Ad-hoc simulator runs from the /matches team-selector have no real
+      //   matchId and will skip this block silently.
+      if(matchId&&homeTeamId&&awayTeamId&&competitionId){
+        bus.emit('match.completed',{
+          matchId,
+          homeTeamId,
+          awayTeamId,
+          homeScore: matchState.score[0],
+          awayScore: matchState.score[1],
+          competitionId,
+        });
       }
 
       // Show the PostMatchSummary overlay after a short delay so the final

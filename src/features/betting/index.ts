@@ -72,3 +72,9 @@ export type { WagerWidgetMatch, WagerWidgetProps } from './ui/WagerWidget';
 
 export { BetHistory } from './ui/BetHistory';
 export type { BetHistoryProps } from './ui/BetHistory';
+
+// ── Side-effect listener ────────────────────────────────────────────────────
+// WagerSettlementListener registers a `match.completed` bus subscription and
+// renders null.  Mount it once inside <SupabaseProvider> at the app root so
+// it has DB client access for every settlement write.
+export { WagerSettlementListener } from './ui/WagerSettlementListener';
