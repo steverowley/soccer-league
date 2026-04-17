@@ -417,11 +417,13 @@ export default function PlayerDetail() {
 
         {/* ── Season Stats ──────────────────────────────────────────────────── */}
         {/* Dark table variant (matching Season Stats on TeamDetail) rather than
-            the light StatTable variant, since this is primary data not a
-            comparison widget.  All-zero rows are expected pre-season. */}
+            Light variant — cream/dust background contrasts against the
+            Galactic Abyss page background, matching the Figma design spec
+            for all data tables on detail pages.
+            All-zero rows are expected pre-season. */}
         <section className="section">
           <h2 className="section-title">Season Stats</h2>
-          <IslTable variant="dark" columns={SEASON_STAT_COLS} rows={statsRow} />
+          <IslTable variant="light" columns={SEASON_STAT_COLS} rows={statsRow} />
         </section>
 
         {/* ── The Convergence ───────────────────────────────────────────────

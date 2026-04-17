@@ -121,11 +121,19 @@ export default function Teams() {
           <section key={league.id} className="section">
 
             {/* ── League group heading ────────────────────────────────────────── */}
-            {/* Displayed in the section-title style (20px bold uppercase) with a
-                bottom margin that separates it from the card grid below. */}
-            <h2 className="section-title" style={{ marginBottom: '16px' }}>
-              {league.name}
-            </h2>
+            {/* The ◄ ► chevrons are a purely decorative ISL design-system
+                motif — every section header on a listing page uses this
+                pattern to frame the league name.  They are not interactive
+                here because all leagues are shown simultaneously on one page;
+                carousels that need real prev/next navigation (e.g. the Home
+                standings) attach onClick handlers to their own arrow buttons. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>◄</span>
+              <h2 className="section-title" style={{ margin: 0 }}>
+                {league.name}
+              </h2>
+              <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>►</span>
+            </div>
 
             {/* ── 2-column team card grid ─────────────────────────────────────── */}
             {/* align-items: stretch ensures paired cards share the same height
@@ -158,9 +166,10 @@ export default function Teams() {
 /**
  * Individual team listing card.
  *
- * Displays the team's structured metadata (Location, Home Ground, Capacity)
- * in bold-label style, a free-text tagline, and a VIEW TEAM primary button
- * that navigates to the team detail page.
+ * Displays a circular brand-colour badge (logo placeholder until real crests
+ * are uploaded), the team's structured metadata (Location, Home Ground,
+ * Capacity) in bold-label style, a free-text tagline, and a VIEW TEAM primary
+ * button that navigates to the team detail page.
  *
  * The card uses flexbox column layout with `flex: 1` on the tagline so the
  * VIEW TEAM button is always flush to the card's bottom edge, keeping all
@@ -169,8 +178,9 @@ export default function Teams() {
  * Expects a normalised team object (homeGround camelCase alias present).
  *
  * @param {{ id: string, name: string, location: string, homeGround: string,
- *           capacity: string, tagline: string }} team
+ *           capacity: string, tagline: string, color: string }} team
  *   Normalised team object from Supabase via normalizeTeam().
+ *   `color` is the team's primary brand hex used to tint the badge circle.
  * @returns {JSX.Element}
  */
 function TeamCard({ team }) {
@@ -179,6 +189,23 @@ function TeamCard({ team }) {
       className="card"
       style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
     >
+      {/* ── Brand badge circle ────────────────────────────────────────────── */}
+      {/* 64×64px circle — matches the Figma listing card spec.  Until real
+          team crests are available, the circle is filled with the team's
+          primary brand colour at 20% opacity so each card has a distinct
+          identity without a full logo asset.  The 1px border at 40% opacity
+          gives the circle a visible edge even on teams whose brand colour is
+          very close to the card background. */}
+      <div style={{
+        width: 64,
+        height: 64,
+        borderRadius: '50%',
+        backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
+        border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,
+        marginBottom: '12px',
+        flexShrink: 0,
+      }} />
+
       {/* ── Team name heading ─────────────────────────────────────────────── */}
       {/* .card-title (18px uppercase) — standardised in-card heading class. */}
       <h3 className="card-title" style={{ marginBottom: '8px' }}>{team.name}</h3>
