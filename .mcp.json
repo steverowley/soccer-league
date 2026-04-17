@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "figma": {
-      "type": "http",
-      "url": "https://mcp.figma.com/mcp"
+      "command": "npx",
+      "args": ["-y", "figma-developer-mcp", "--stdio"],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
+      }
     }
   }
 }
