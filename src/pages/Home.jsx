@@ -193,9 +193,8 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Dark standings table — team names link to /teams/:id */}
           <IslTable
-            variant="dark"
+            variant="light"
             columns={STANDINGS_COLS}
             rows={standingsRows}
           />

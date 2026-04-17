@@ -534,6 +534,21 @@ export const CARDS_COLS = [
 ];
 
 /**
+ * Column definitions for the Top Clean Sheets player-stat table.
+ *
+ * The `clean_sheets` key maps to the aggregated total returned by
+ * matchResultsService.getTopCleanSheets().  Only meaningful for goalkeepers
+ * (GK position) but rendered for all positions for simplicity.
+ *
+ * @type {Array<{key: string, label: string, align?: string}>}
+ */
+export const CLEAN_SHEETS_COLS = [
+  { key: 'player',       label: 'Player'       },
+  { key: 'team',         label: 'Team'         },
+  { key: 'clean_sheets', label: 'Clean Sheets', align: 'right' },
+];
+
+/**
  * Column definitions shared by all five player-stat tables.
  *
  * Kept for backward-compatibility with existing imports.
