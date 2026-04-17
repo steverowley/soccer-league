@@ -198,16 +198,33 @@ soccer-league/
 └── .github/workflows/deploy.yml # GitHub Pages deployment
 ```
 
+## Design System
+
+### Design Tokens
+The project maintains a **centralized design token system** in `src/styles/tokens.css` to serve as the single source of truth for colours, typography, and spacing. All tokens are:
+- Sourced from the [ISL Figma design file](https://www.figma.com/design/oGdHNw4ap5TY5R5ey28FDP/Soccer-Game)
+- Defined as CSS custom properties (`:root` scope) with comprehensive inline documentation
+- Referenced throughout component styles using `var(--token-name)` to prevent hard-coded hex values
+- Automatically available to Tailwind v4 utilities (e.g. `bg-[--color-abyss]`)
+
+**Key token groups:**
+- **Core palette**: Galactic Abyss (dark), Lunar Dust (light), Quantum Purple (accent), Solar Flare (error), Terra Nova (positive)
+- **Architect surface palette**: Near-void background, brighter violet accent, and muted lavender text — distinct from the main palette to signal cosmic authority
+- **Invariant tokens**: Hover/pressed state variants marked `[INVARIANT]` and manually tuned until Figma locks them down
+
+This structure enforces design consistency and makes global visual updates a single edit.
+
 ## Tech Stack
 
 - **React 18** + **Vite 6** — frontend framework and build tool
 - **React Router DOM 7** — client-side routing
-- **Tailwind CSS 4** — styling
+- **Tailwind CSS 4** — styling with design token integration
 - **Supabase** — PostgreSQL database with row-level security
 - **Anthropic SDK** (Claude Haiku 4.5) — AI commentary and Architect
 - **TypeScript** (`strict: true`) — all new code is strictly typed
 - **Vitest** — unit tests co-located with logic modules (80%+ coverage target)
 - **GitHub Pages** — hosting via GitHub Actions
+- **Figma MCP** — design system sync (experimental; authenticated via OAuth)
 
 ## Deployment
 
