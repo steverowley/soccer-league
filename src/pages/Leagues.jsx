@@ -109,6 +109,21 @@ export default function Leagues() {
               className="card"
               style={{ display: 'flex', flexDirection: 'column' }}
             >
+              {/* ── League badge circle ──────────────────────────────────────
+                  64×64px circular placeholder matching the Figma listing card
+                  spec.  Neutral dust tint — leagues have no brand colour field
+                  in the DB.  Will be replaced by a real league crest image
+                  once assets are added to the schema. */}
+              <div style={{
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                backgroundColor: 'rgba(227,224,213,0.1)',
+                border: '1px solid rgba(227,224,213,0.2)',
+                marginBottom: '16px',
+                flexShrink: 0,
+              }} />
+
               {/* League name — .card-title gives the standardised in-card
                   heading size (18px uppercase) shared across all listing cards. */}
               <h3 className="card-title">{league.name}</h3>

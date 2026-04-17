@@ -1,51 +1,53 @@
 // ── TeamDetail.jsx ────────────────────────────────────────────────────────────
-// Individual team page.  Implements the "Mercury Runners FC" mockup layout
-// (generalised for all teams via the :teamId URL param):
+// Individual team page.  Implements the Figma team detail layout for all teams
+// via the :teamId URL param:
 //
-//   H1: MERCURY RUNNERS FC
+//   H1: MERCURY RUNNERS FC   ← centred page title + tagline
 //   ─────────────────────────────
-//   Subtitle (tagline)
+//   ┌──────────────────────────────────────────────────────────┐
+//   │ ○  MERCURY RUNNERS FC   ← info card: badge + meta + prose│
+//   │    LOCATION / HOME GROUND / CAPACITY / MANAGER          │
+//   │    [description paragraphs]                             │
+//   └──────────────────────────────────────────────────────────┘
 //
-//   ┌─────────────────────────────────────────┐
-//   │ MERCURY RUNNERS FC                      │  ← team info card (dark)
-//   │ LOCATION: Mercury                       │
-//   │ HOME GROUND: Solar Sprint Stadium…      │
-//   │ CAPACITY: 35,000                        │
-//   │ LEAGUE: Rocky Inner League (link)       │
-//   │                                         │
-//   │ [description paragraphs]                │
-//   └─────────────────────────────────────────┘
+//   ┌─────────────────────┐  ┌──────────────────────────────┐
+//   │  NEXT MATCH         │  │  TEAM FORM                   │
+//   │  (next fixture)     │  │  (last 5 W/D/L indicators)   │
+//   └─────────────────────┘  └──────────────────────────────┘
 //
-//   SEASON STATS          ← dark table
-//   HISTORIC STATS        ← dark table
-//   TROPHY CABINET        ← dark table (TEAM | LEAGUE CUPS | CELESTIAL CUPS | SOLAR CUPS)
+//   SQUAD                 ← GK→DF→MF→FW, jersey-number order
+//   SEASON STATS          ← light table
+//   HISTORIC STATS        ← light table
+//   TROPHY CABINET        ← light table
 //
-//   TOP SCORERS | TOP ASSISTS       ← light tables, 2-col + SEE MORE
-//   TOP CLEAN SHEETS                ← light table, half-width + SEE MORE
-//   MOST YELLOW CARDS | MOST RED CARDS  ← light tables, 2-col + SEE MORE
+//   TOP SCORERS | TOP ASSISTS       ← StatTable (light, SEE MORE)
+//   TOP CLEAN SHEETS                ← StatTable half-width (light, SEE MORE)
+//   MOST YELLOW CARDS | MOST RED CARDS  ← StatTable (light, SEE MORE)
+//
+//   ◄ LEAGUE STANDINGS — {LEAGUE} ►  ← light table, bottom anchor
 //
 // DATA SOURCE
 // ───────────
-// Team data is fetched from Supabase via getTeam(teamId) on mount (and when
-// the :teamId route param changes).  getTeam() returns the full team row joined
-// with its parent league (for the League link) plus players[] and managers[]
-// (currently empty in the DB — reserved for future use).
-//
-// normalizeTeam() maps snake_case DB fields to the camelCase aliases (homeGround,
-// leagueId) used throughout the component.  The league name is taken from the
-// nested `leagues` object returned by the join rather than calling getLeagueName().
-//
-// A loading skeleton, 404 fallback, and error state are all handled before the
-// main render, keeping the happy-path JSX clean.
+// Team data is fetched from Supabase via getTeam(teamId) on mount.
+// Next match is fetched from the `matches` table filtered to this team
+// with status='scheduled', ordered by created_at ASC (earliest first).
+// Team form (last 5 W/D/L) is computed from localStorage via getResults().
+// League standings are computed the same way as LeagueDetail via
+// computeStandings() + buildStandingsRows() — no extra Supabase call needed.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
 import { getTeam, normalizeTeam } from '../lib/supabase';
-import { PLAYER_STAT_COLS, placeholderPlayerRows } from '../data/leagueData';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import {
+  PLAYER_STAT_COLS, SCORER_COLS, ASSISTS_COLS, CARDS_COLS, CLEAN_SHEETS_COLS,
+  STANDINGS_COLS, placeholderPlayerRows, buildStandingsRows,
+} from '../data/leagueData';
+import { computeStandings, getResults } from '../lib/matchResultsService';
 import { POS_ORDER } from '../constants';
 
 // ── Season / Historic stats column definitions ────────────────────────────────
@@ -244,6 +246,11 @@ export default function TeamDetail() {
   // ── Route param ────────────────────────────────────────────────────────────
   const { teamId } = useParams();
 
+  // ── Supabase client (dependency injection) ─────────────────────────────────
+  // Components never import the supabase singleton directly — they consume it
+  // via context so unit tests can swap in a mock client without patching modules.
+  const db = useSupabase();
+
   // ── Data fetch ────────────────────────────────────────────────────────────
   // Re-fetch whenever teamId changes so navigating between team pages (e.g.
   // via the teams listing) always loads the correct data without a full remount.
@@ -251,6 +258,51 @@ export default function TeamDetail() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error,   setError]   = useState(false);
+
+  // ── Next match fetch ──────────────────────────────────────────────────────
+  // Fetches the earliest scheduled fixture involving this team from Supabase.
+  // WHY a separate useEffect: the team fetch and next-match fetch are
+  // independent — the team page should render fully even if the matches
+  // query fails, so we keep them separate rather than blocking on both.
+  const [nextMatch, setNextMatch] = useState(null);
+  useEffect(() => {
+    if (!teamId) return;
+    // Two parallel queries (home and away) because Supabase .or() on FK
+    // columns requires explicit casting that varies by Postgres version —
+    // querying separately and merging is more portable and easier to read.
+    Promise.all([
+      db
+        .from('matches')
+        .select('id, round, stadium, played_at, away_team:teams!matches_away_team_id_fkey(id, name, color)')
+        .eq('home_team_id', teamId)
+        .eq('status', 'scheduled')
+        .order('created_at', { ascending: true })
+        .limit(1),
+      db
+        .from('matches')
+        .select('id, round, stadium, played_at, home_team:teams!matches_home_team_id_fkey(id, name, color)')
+        .eq('away_team_id', teamId)
+        .eq('status', 'scheduled')
+        .order('created_at', { ascending: true })
+        .limit(1),
+    ]).then(([homeRes, awayRes]) => {
+      // Merge the two single-row results, attach a venue flag so the card
+      // can label the fixture "(H)" or "(A)", then pick the earliest one.
+      const candidates = [
+        ...(homeRes.data ?? []).map(m => ({ ...m, venue: 'H' })),
+        ...(awayRes.data  ?? []).map(m => ({ ...m, venue: 'A' })),
+      ];
+      if (candidates.length === 0) { setNextMatch(null); return; }
+      // Sort by played_at ascending; rows without a date sort to the end.
+      candidates.sort((a, b) => {
+        if (!a.played_at && !b.played_at) return 0;
+        if (!a.played_at) return 1;
+        if (!b.played_at) return -1;
+        return new Date(a.played_at) - new Date(b.played_at);
+      });
+      setNextMatch(candidates[0]);
+    }).catch(() => setNextMatch(null)); // non-fatal — card shows "TBD"
+  }, [teamId, db]);
 
   useEffect(() => {
     // Reset state before each fetch so stale data from a previous team doesn't
@@ -330,6 +382,45 @@ export default function TeamDetail() {
   // The DB stores \n as a paragraph separator within description strings.
   const descParagraphs = (team.description ?? '').split('\n').filter(Boolean);
 
+  // ── League standings ───────────────────────────────────────────────────────
+  // Reuses the same two-step pattern as LeagueDetail: buildStandingsRows()
+  // provides the zeroed base list, computeStandings() merges localStorage
+  // W/D/L data on top.  Guarded on leagueId so teams without a league join
+  // (shouldn't happen with correct seed data) don't throw.
+  const standingsRows = useMemo(
+    () => leagueId
+      ? computeStandings(leagueId, buildStandingsRows(leagueId))
+      : [],
+    [leagueId]
+  );
+
+  // ── Team form (last 5 results) ─────────────────────────────────────────────
+  // Scans localStorage results for matches involving this team and derives the
+  // W/D/L outcome for each.  Sliced to 5 — the Figma form strip shows exactly
+  // five indicators.  Returns an empty array pre-season (no results saved yet).
+  const teamForm = useMemo(() => {
+    if (!team?.id) return [];
+    const all = getResults();
+    const teamResults = all
+      .filter(r => r.homeTeamId === team.id || r.awayTeamId === team.id)
+      .slice(0, 5)  // 5 = Figma form-strip width
+      .map(r => {
+        const isHome = r.homeTeamId === team.id;
+        const gf = isHome ? r.homeScore : r.awayScore;   // goals for
+        const ga = isHome ? r.awayScore : r.homeScore;   // goals against
+        if (gf > ga)  return { result: 'W', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
+        if (gf === ga) return { result: 'D', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
+        return           { result: 'L', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
+      });
+    return teamResults;
+  }, [team?.id]);
+
+  // ── Clean sheet rows (placeholder) ────────────────────────────────────────
+  // getTopCleanSheets() does not yet exist in matchResultsService.
+  // Falls back to placeholderPlayerRows() so the table renders at correct
+  // height with "—" values until the aggregator is implemented.
+  const cleanSheetRows = useMemo(() => placeholderPlayerRows(), []);
+
   return (
     <div>
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
@@ -347,10 +438,26 @@ export default function TeamDetail() {
       <div className="container" style={{ paddingBottom: '40px' }}>
 
         {/* ── Team info card ────────────────────────────────────────────────── */}
-        {/* Dark bordered card containing structured metadata and description
-            prose.  Matches the prominent info block at the top of the mockup. */}
+        {/* Full-width card: badge circle (top-left) → team name → meta rows →
+            description prose.  Matches the Figma team detail info block.
+            The badge circle uses the team's primary brand colour at 20% opacity
+            as a fill so each club has a distinct identity before real crests
+            are added — same pattern as the Teams listing cards. */}
         <section className="section">
           <div className="card">
+            {/* ── Brand badge circle ──────────────────────────────────────────
+                64×64px — matches Figma listing and detail card spec.
+                team.color is the primary brand hex from the DB seed. */}
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
+              border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,
+              marginBottom: '16px',
+              flexShrink: 0,
+            }} />
+
             {/* Card heading — .card-title (18px uppercase) is the standardised
                 in-card heading class; replaces the previous inline fontSize. */}
             <h3 className="card-title">{team.name}</h3>
@@ -429,6 +536,128 @@ export default function TeamDetail() {
           </div>
         </section>
 
+        {/* ── NEXT MATCH | TEAM FORM — 2-column ────────────────────────────────── */}
+        {/* Figma spec: two equal-width cards side by side immediately below the
+            info card.  Left card shows the next scheduled fixture; right card
+            shows the last 5 W/D/L indicators as coloured dots.
+            The stats-two-col responsive class collapses to 1-col on mobile. */}
+        <section className="section">
+          <div
+            className="stats-two-col"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
+          >
+            {/* ── NEXT MATCH card ─────────────────────────────────────────────
+                nextMatch is null when the fetch is still in flight OR when no
+                scheduled fixture exists — both render the same "TBD" state so
+                the layout is stable rather than shifting. */}
+            <div className="card">
+              <h3 className="section-title" style={{ marginBottom: '16px' }}>Next Match</h3>
+              {nextMatch ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* Venue indicator — "(H)" home or "(A)" away */}
+                  {nextMatch.venue && (
+                    <span style={{ fontSize: '11px', opacity: 0.5, letterSpacing: '0.08em' }}>
+                      {nextMatch.venue === 'H' ? 'HOME' : 'AWAY'}
+                    </span>
+                  )}
+                  {/* Opponent name + their badge circle */}
+                  {(nextMatch.away_team || nextMatch.home_team) && (() => {
+                    const opp = nextMatch.away_team ?? nextMatch.home_team;
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: '50%',
+                          backgroundColor: opp.color ? `${opp.color}33` : 'rgba(227,224,213,0.1)',
+                          border: `1px solid ${opp.color ? `${opp.color}66` : 'rgba(227,224,213,0.2)'}`,
+                          flexShrink: 0,
+                        }} />
+                        <span style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {opp.name}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  {/* Date/time — shown when played_at is set; "TBD" otherwise */}
+                  <p style={{ fontSize: '12px', opacity: 0.6, marginTop: '4px' }}>
+                    {nextMatch.played_at
+                      ? new Date(nextMatch.played_at).toLocaleString(undefined, {
+                          month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })
+                      : 'Date TBD'}
+                  </p>
+                  {nextMatch.stadium && (
+                    <MetaRow label="Ground" value={nextMatch.stadium} fontSize="11px" />
+                  )}
+                  {nextMatch.round && (
+                    <MetaRow label="Round" value={nextMatch.round} fontSize="11px" />
+                  )}
+                </div>
+              ) : (
+                <p style={{ fontSize: '13px', opacity: 0.5 }}>No fixture scheduled.</p>
+              )}
+            </div>
+
+            {/* ── TEAM FORM card ───────────────────────────────────────────────
+                Shows the last 5 match outcomes as coloured dot indicators:
+                  Green (#4caf50) = Win, Grey (dust @ 30%) = Draw,
+                  Red (#e05252)   = Loss
+                Pre-season (no results in localStorage) renders 5 grey dots
+                as placeholder so the card height is stable. */}
+            <div className="card">
+              <h3 className="section-title" style={{ marginBottom: '16px' }}>Team Form</h3>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {(teamForm.length > 0 ? teamForm : Array(5).fill(null)).map((entry, i) => {
+                  // Colour map: W=green, D=muted dust, L=Solar Flare red.
+                  // These values mirror the pill colours used in the match
+                  // feed so the visual language is consistent across pages.
+                  const color =
+                    entry?.result === 'W' ? '#4caf50' :
+                    entry?.result === 'L' ? 'var(--color-red)' :
+                    'rgba(227,224,213,0.3)';
+                  const label = entry?.result ?? '—';
+                  return (
+                    <div
+                      key={i}
+                      title={entry ? `${entry.result} ${entry.gf}–${entry.ga} vs ${entry.opponent}` : 'No result'}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: '50%',
+                        backgroundColor: color,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: entry?.result ? 'var(--color-abyss)' : 'rgba(227,224,213,0.4)',
+                        letterSpacing: '0.05em',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {label}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Recent result scorelines below the dots — gives context without
+                  exposing raw match stats, in keeping with the hidden-mechanics
+                  design principle. */}
+              {teamForm.length > 0 && (
+                <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {teamForm.map((entry, i) => (
+                    <p key={i} style={{ fontSize: '11px', opacity: 0.55 }}>
+                      {entry.result} {entry.gf}–{entry.ga} vs {entry.opponent}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* ── SQUAD ─────────────────────────────────────────────────────────────── */}
         {/* Only rendered when the DB has player rows for this team.  Gated on
             team.players?.length so the section is absent (not empty) for any
@@ -471,46 +700,78 @@ export default function TeamDetail() {
         )}
 
         {/* ── SEASON STATS ──────────────────────────────────────────────────── */}
+        {/* Light variant — cream/dust background against the Galactic Abyss
+            page background, matching the Figma design spec for all data
+            tables on detail pages. */}
         <section className="section">
           <h2 className="section-title">Season Stats</h2>
-          <IslTable variant="dark" columns={RECORD_COLS} rows={seasonRows} />
+          <IslTable variant="light" columns={RECORD_COLS} rows={seasonRows} />
         </section>
 
         {/* ── HISTORIC STATS ────────────────────────────────────────────────── */}
         <section className="section">
           <h2 className="section-title">Historic Stats</h2>
-          <IslTable variant="dark" columns={RECORD_COLS} rows={historicRows} />
+          <IslTable variant="light" columns={RECORD_COLS} rows={historicRows} />
         </section>
 
         {/* ── TROPHY CABINET ────────────────────────────────────────────────── */}
         <section className="section">
           <h2 className="section-title">Trophy Cabinet</h2>
-          <IslTable variant="dark" columns={TROPHY_COLS} rows={trophyRows} />
+          <IslTable variant="light" columns={TROPHY_COLS} rows={trophyRows} />
         </section>
 
         {/* ── TOP SCORERS | TOP ASSISTS — 2-column ──────────────────────────── */}
+        {/* Use the specific SCORER_COLS / ASSISTS_COLS so header labels match
+            what the data actually contains (Goals / Assists). */}
         <div
           className="stats-two-col"
           style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
         >
-          <StatTable title="Top Scorers" columns={PLAYER_STAT_COLS} rows={playerRows} />
-          <StatTable title="Top Assists" columns={PLAYER_STAT_COLS} rows={playerRows} />
+          <StatTable title="Top Scorers" columns={SCORER_COLS}  rows={playerRows} />
+          <StatTable title="Top Assists" columns={ASSISTS_COLS} rows={playerRows} />
         </div>
 
         {/* ── TOP CLEAN SHEETS — half-width ─────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
-          <StatTable title="Top Clean Sheets" columns={PLAYER_STAT_COLS} rows={playerRows} />
-          <div /> {/* Intentional empty right column per mockup */}
-        </div>
-
-        {/* ── MOST YELLOW CARDS | MOST RED CARDS — 2-column ─────────────────── */}
+        {/* CLEAN_SHEETS_COLS key:'clean_sheets' — uses cleanSheetRows placeholder
+            until matchResultsService.getTopCleanSheets() is implemented.
+            Empty right column matches Figma half-width placement. */}
         <div
           className="stats-two-col"
           style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
         >
-          <StatTable title="Most Yellow Cards" columns={PLAYER_STAT_COLS} rows={playerRows} />
-          <StatTable title="Most Red Cards"    columns={PLAYER_STAT_COLS} rows={playerRows} />
+          <StatTable title="Top Clean Sheets" columns={CLEAN_SHEETS_COLS} rows={cleanSheetRows} />
+          <div aria-hidden="true" /> {/* intentional empty right column per Figma */}
         </div>
+
+        {/* ── MOST YELLOW CARDS | MOST RED CARDS — 2-column ─────────────────── */}
+        {/* CARDS_COLS key:'cards' — playerRows placeholder pre-season. */}
+        <div
+          className="stats-two-col"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
+        >
+          <StatTable title="Most Yellow Cards" columns={CARDS_COLS} rows={playerRows} />
+          <StatTable title="Most Red Cards"    columns={CARDS_COLS} rows={playerRows} />
+        </div>
+
+        {/* ── LEAGUE STANDINGS ──────────────────────────────────────────────── */}
+        {/* Placed last per the Figma team detail spec — gives fans a quick
+            read of where their club sits in the table without navigating away.
+            Only rendered when leagueId is present (every seeded team has one).
+            standingsRows is pre-computed via useMemo above. */}
+        {leagueId && standingsRows.length > 0 && (
+          <section className="section">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>◄</span>
+              <h2 className="section-title" style={{ margin: 0 }}>
+                League Standings — {leagueName}
+              </h2>
+              <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>►</span>
+            </div>
+            {/* Light variant — cream/dust bg matching all other data tables
+                on detail pages per the Figma design spec. */}
+            <IslTable variant="light" columns={STANDINGS_COLS} rows={standingsRows} />
+          </section>
+        )}
 
       </div>
 
