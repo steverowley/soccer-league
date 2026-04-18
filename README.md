@@ -14,7 +14,10 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
 
 ### Website
 - Multi-page app with client-side routing and live Supabase data fetching
-- **Home** (`/`) — League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
+- **Home** (`/`) — Hero section with:
+  - **Live Games** — displays all active matches (status='active') with pulsing cards when matches are in progress; section hidden when no live matches
+  - **Upcoming Games** — shows next 6 scheduled fixtures (status='upcoming') sorted by scheduled time; empty-state CTA when no fixtures available
+  - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
