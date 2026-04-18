@@ -247,6 +247,29 @@ export async function getMatchesForCompetition(competitionId) {
 }
 
 /**
+ * Fetch matches for a competition with extended team detail needed for the
+ * fixture listing page: location and home_ground are included so cards can
+ * render venue metadata without a separate team query.
+ *
+ * @param {string} competitionId - UUID of the competition
+ * @returns {Promise<Array>} match rows with home_team and away_team objects
+ */
+export async function getMatchesWithTeamDetail(competitionId) {
+  const { data, error } = await supabase
+    .from('matches')
+    .select(`
+      *,
+      home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
+      away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
+    `)
+    .eq('competition_id', competitionId)
+    .order('round', { nullsFirst: true })
+    .order('played_at', { nullsFirst: true });
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Fetch a single match with its full player stats breakdown.
  * Used by the match scoreboard / detail page.
  *
