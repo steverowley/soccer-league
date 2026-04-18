@@ -270,6 +270,49 @@ export async function getMatchesWithTeamDetail(competitionId) {
 }
 
 /**
+ * Fetch all currently-live matches (status='active') across every competition,
+ * with team detail needed for Home page Live Games cards.
+ *
+ * @returns {Promise<Array>} match rows with home_team and away_team objects
+ */
+export async function getLiveMatches() {
+  const { data, error } = await supabase
+    .from('matches')
+    .select(`
+      *,
+      home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
+      away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
+    `)
+    .eq('status', 'active')
+    .order('scheduled_at', { nullsFirst: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Fetch the next N upcoming fixtures (status='upcoming') ordered by
+ * scheduled_at, with team detail for Home page Upcoming Games cards.
+ *
+ * @param {number} limit - maximum number of fixtures to return (default 6)
+ * @returns {Promise<Array>} match rows with home_team and away_team objects
+ */
+export async function getUpcomingMatches(limit = 6) {
+  const { data, error } = await supabase
+    .from('matches')
+    .select(`
+      *,
+      home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
+      away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
+    `)
+    .eq('status', 'upcoming')
+    .not('scheduled_at', 'is', null)
+    .order('scheduled_at', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
  * Fetch a single match with its full player stats breakdown.
  * Used by the match scoreboard / detail page.
  *
