@@ -43,6 +43,7 @@ import IslTable from '../components/ui/IslTable';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
 import { getPlayer } from '../lib/supabase';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { PERS_ICON } from '../constants';
 
 // ── Cosmic Architect lore key ─────────────────────────────────────────────────
@@ -118,6 +119,8 @@ const SEASON_STAT_COLS = [
  * @returns {JSX.Element}
  */
 export default function PlayerDetail() {
+  const db = useSupabase();
+
   // ── Route param ────────────────────────────────────────────────────────────
   const { playerId } = useParams();
 
@@ -154,7 +157,7 @@ export default function PlayerDetail() {
     setNotFound(false);
     setError(false);
 
-    getPlayer(playerId)
+    getPlayer(db, playerId)
       .then(data => {
         setPlayer(data);
         setLoading(false);

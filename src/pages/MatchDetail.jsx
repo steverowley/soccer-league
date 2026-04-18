@@ -149,7 +149,7 @@ export default function MatchDetail() {
     setError(null);
     try {
       const [matchRow, oddsRow] = await Promise.all([
-        getMatch(matchId),
+        getMatch(db, matchId),
         getMatchOdds(db, matchId),
       ]);
 

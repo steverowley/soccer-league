@@ -71,7 +71,7 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getLiveMatches(), getUpcomingMatches(6)])
+    Promise.all([getLiveMatches(db), getUpcomingMatches(db, 6)])
       .then(([live, upcoming]) => {
         if (!cancelled) {
           setLiveMatches(live);

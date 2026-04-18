@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { getActiveSeason } from '../lib/supabase';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { VotingPage } from '../features/voting';
 
 /**
@@ -24,11 +25,13 @@ import { VotingPage } from '../features/voting';
  * @returns {JSX.Element}
  */
 export default function Voting() {
+  const db = useSupabase();
+
   const [seasonId, setSeasonId] = useState(null);
   const [error, setError]       = useState(null);
 
   useEffect(() => {
-    getActiveSeason()
+    getActiveSeason(db)
       .then((season) => setSeasonId(season?.id ?? null))
       .catch((e)     => setError(e?.message ?? 'Could not load active season'));
   }, []);
