@@ -36,6 +36,7 @@ import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
 import MatchSimulator from '../App';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
   getActiveSeason,
   getCompetitionsForSeason,
@@ -310,6 +311,8 @@ function ScoreRow({ team, score, large, style: extraStyle }) {
  * @returns {JSX.Element}
  */
 export default function Matches() {
+  const db = useSupabase();
+
   // ── Fixture data ───────────────────────────────────────────────────────────
   const [leagueComps,   setLeagueComps]   = useState([]);
   const [matchesByComp, setMatchesByComp] = useState({});
@@ -336,8 +339,8 @@ export default function Matches() {
     let cancelled = false;
     async function load() {
       try {
-        const season = await getActiveSeason();
-        const comps  = await getCompetitionsForSeason(season.id);
+        const season = await getActiveSeason(db);
+        const comps  = await getCompetitionsForSeason(db, season.id);
 
         // Order competitions to match the canonical LEAGUES array so the
         // ◄► navigation stays consistent with the rest of the app.
@@ -346,7 +349,7 @@ export default function Matches() {
           .filter(Boolean);
 
         // Fetch all league competition matches in parallel.
-        const matchArrays = await Promise.all(lc.map(c => getMatchesWithTeamDetail(c.id)));
+        const matchArrays = await Promise.all(lc.map(c => getMatchesWithTeamDetail(db, c.id)));
 
         if (!cancelled) {
           setLeagueComps(lc);
@@ -392,8 +395,8 @@ export default function Matches() {
     setFetchError(null);
     try {
       const [home, away] = await Promise.all([
-        getTeamForEngine(homeTeamId),
-        getTeamForEngine(awayTeamId),
+        getTeamForEngine(db, homeTeamId),
+        getTeamForEngine(db, awayTeamId),
       ]);
       setSimTeams({ home, away, homeSlug: homeTeamId, awaySlug: awayTeamId });
     } catch (err) {

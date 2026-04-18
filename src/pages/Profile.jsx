@@ -25,7 +25,7 @@ import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '../features/auth';
 import { BetHistory } from '../features/betting';
-import { getTeams } from '../lib/supabase';
+import { getTeams, getPlayersForTeam } from '../lib/supabase';
 import Button from '../components/ui/Button';
 
 // ── Save-state labels ──────────────────────────────────────────────────────
@@ -86,25 +86,22 @@ export default function Profile() {
   // legacy getTeams() returns rows sorted by name and includes the
   // parent league so we can group-label the <optgroup> blocks.
   useEffect(() => {
-    getTeams(null, false)
+    getTeams(db, null, false)
       .then(setTeams)
       .catch((e) => console.warn('[Profile] teams fetch failed:', e));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch player roster when the selected team changes ────────────
-  // WHY: we only load players for the chosen team so we don't pull all
-  // 512+ players in one payload. We reuse getTeams with withPlayers=true
-  // scoped to one team rather than a dedicated call, because the legacy
-  // helper doesn't expose a single-team-players query.
+  // WHY: fetches only the chosen team's players rather than all 512+ players.
+  // getPlayersForTeam() queries players filtered by team_id directly.
   useEffect(() => {
     if (!teamId) { setPlayers([]); return; }
-    getTeams(null, true)
+    getPlayersForTeam(db, teamId)
       .then((rows) => {
-        const team = rows.find((t) => t.id === teamId);
-        setPlayers(team?.players ?? []);
+        setPlayers(rows);
         // If the current playerId is no longer valid for the new team,
         // clear it — don't let a stale player ID get saved.
-        if (team && !team.players?.find((p) => p.id === playerId)) {
+        if (!rows.find((p) => p.id === playerId)) {
           setPlayerId('');
         }
       })

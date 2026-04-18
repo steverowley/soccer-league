@@ -50,6 +50,7 @@ import {
   getTopCards,
 } from '../lib/matchResultsService';
 import { getLeagues } from '../lib/supabase';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 
 /**
  * League Detail page.
@@ -67,6 +68,8 @@ import { getLeagues } from '../lib/supabase';
  * @returns {JSX.Element}
  */
 export default function LeagueDetail() {
+  const db = useSupabase();
+
   // ── Route param ────────────────────────────────────────────────────────────
   const { leagueId } = useParams();
 
@@ -85,7 +88,7 @@ export default function LeagueDetail() {
     setNotFound(false);
     setError(false);
 
-    getLeagues()
+    getLeagues(db)
       .then(all => {
         const match = all.find(l => l.id === leagueId);
         if (!match) {
