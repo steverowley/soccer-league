@@ -13,9 +13,9 @@
         "-y",
         "@supabase/mcp-server-supabase@latest",
         "--access-token",
-        "${SUPABASE_ACCESS_TOKEN}",
+        "sbp_d1f7fcf775cb61a5c2a83b8c19c6228c0c4b4361",
         "--project-ref",
-        "${SUPABASE_PROJECT_REF}"
+        "ddtpbipkqamuxnvupddc"
       ]
     }
   }
