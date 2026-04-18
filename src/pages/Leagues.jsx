@@ -64,7 +64,7 @@ export default function Leagues() {
         setError(true);
         setLoading(false);
       });
-  }, []); // empty deps: run once on mount
+  }, [db]); // db is a stable context ref — adding it satisfies exhaustive-deps without causing re-fetches
 
   return (
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>

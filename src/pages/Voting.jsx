@@ -34,7 +34,7 @@ export default function Voting() {
     getActiveSeason(db)
       .then((season) => setSeasonId(season?.id ?? null))
       .catch((e)     => setError(e?.message ?? 'Could not load active season'));
-  }, []);
+  }, [db]); // db is a stable context ref — safe to add without causing re-fetches
 
   if (error) {
     return (

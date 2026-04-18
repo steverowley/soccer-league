@@ -365,7 +365,7 @@ export default function Matches() {
     }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [db]); // db is a stable context ref — safe to add without causing re-fetches
 
   // ── Active league matches grouped by matchday ─────────────────────────────
   const activeComp = leagueComps[activeIdx];
