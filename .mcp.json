@@ -6,6 +6,17 @@
       "env": {
         "FIGMA_API_KEY": "${FIGMA_API_KEY}"
       }
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "${SUPABASE_ACCESS_TOKEN}",
+        "--project-ref",
+        "${SUPABASE_PROJECT_REF}"
+      ]
     }
   }
 }

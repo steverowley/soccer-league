@@ -31,8 +31,10 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import IslTable from '../components/ui/IslTable';
+import MetaRow from '../components/ui/MetaRow';
 import { LEAGUES, STANDINGS_COLS, buildStandingsRows } from '../data/leagueData';
 import { computeStandings, generateNewsItems } from '../lib/matchResultsService';
+import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getRecentNarratives } from '../features/entities';
 
@@ -49,6 +51,33 @@ import { getRecentNarratives } from '../features/entities';
  */
 export default function Home() {
   const db = useSupabase();
+
+  // ── Live and upcoming fixture data ───────────────────────────────────────
+  // Fetched once on mount.  Live matches are rare (only during active simulations)
+  // so the section is hidden entirely when the array is empty — avoids a
+  // misleading "Live Games" heading with no content.  Upcoming fixtures are
+  // always shown so users can see what's on the calendar; an empty state prompts
+  // them to simulate a match instead.
+  const [liveMatches,     setLiveMatches]     = useState([]);
+  const [upcomingMatches, setUpcomingMatches] = useState([]);
+  const [matchesLoading,  setMatchesLoading]  = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getLiveMatches(), getUpcomingMatches(6)])
+      .then(([live, upcoming]) => {
+        if (!cancelled) {
+          setLiveMatches(live);
+          setUpcomingMatches(upcoming);
+          setMatchesLoading(false);
+        }
+      })
+      .catch((e) => {
+        console.warn('[Home] fixture fetch failed:', e);
+        if (!cancelled) setMatchesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Architect narratives (Galaxy Dispatch) ────────────────────────────────
   // WHY: The Architect's scheduled galaxy-tick Edge Function writes narrative
@@ -127,6 +156,69 @@ export default function Home() {
       </section>
 
       <div className="container">
+
+        {/* ── LIVE GAMES ────────────────────────────────────────────────────────── */}
+        {/* Only rendered when at least one match is active — avoids a heading
+            with no content during the typical between-match window.  The pulsing
+            border and ⚡ badge signal urgency without exposing any hidden stats. */}
+        {liveMatches.length > 0 && (
+          <section className="section">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Live Games</h2>
+              <span style={{
+                fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.1em', color: 'var(--color-dust)',
+                background: 'var(--color-purple)', padding: '2px 8px',
+                fontFamily: 'var(--font-mono)',
+              }}>
+                ⚡ Live
+              </span>
+            </div>
+            {/* Cap at 4 cards so the grid stays balanced on a 2-col desktop layout. */}
+            <div className="matches-grid">
+              {liveMatches.slice(0, 4).map(m => (
+                <HomeLiveCard key={m.id} match={m} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── UPCOMING GAMES ─────────────────────────────────────────────────────── */}
+        {/* Always visible once the initial fetch resolves so users can see the
+            fixture calendar even before any match has been played.  Shows the
+            next 6 scheduled fixtures across all leagues ordered by kick-off time.
+            Empty state prompts simulation so new users immediately have something
+            to do rather than staring at a blank calendar. */}
+        {!matchesLoading && (
+          <section className="section">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Upcoming Games</h2>
+              <Link to="/matches">
+                <Button variant="secondary">View All →</Button>
+              </Link>
+            </div>
+
+            {upcomingMatches.length === 0 ? (
+              // ── Pre-season / empty-fixture fallback ─────────────────────────────
+              // Shown when migration 0009 has not yet been applied (no fixture rows)
+              // or when all fixtures are already completed.
+              <div className="card" style={{ maxWidth: '480px' }}>
+                <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '16px' }}>
+                  No fixtures scheduled yet. Simulate a match to get the season started.
+                </p>
+                <Link to="/matches">
+                  <Button variant="primary">Simulate a Match</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="matches-grid">
+                {upcomingMatches.map(m => (
+                  <HomeUpcomingCard key={m.id} match={m} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ── CREATE ACCOUNT card ─────────────────────────────────────────────── */}
         <section className="section">
@@ -372,6 +464,171 @@ export default function Home() {
           )}
         </section>
 
+      </div>
+    </div>
+  );
+}
+
+// ── Match card helpers ────────────────────────────────────────────────────────
+// Compact card variants for the Home page Live / Upcoming sections.  Intentionally
+// simpler than the full Matches page cards: no simulator button, no bet widget.
+// If these components grow a second consumer they should move to a shared module.
+
+/**
+ * Format a UTC ISO timestamp as "8 Jan 2600 · 20:00" for fixture card display.
+ * Returns "TBD" when the value is null (fixture scheduled_at not yet set).
+ *
+ * @param {string|null} iso - ISO timestamptz string from Supabase, or null
+ * @returns {string}  Human-readable date/time string, or "TBD"
+ */
+function formatMatchDate(iso) {
+  if (!iso) return 'TBD';
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date} · ${time}`;
+}
+
+/**
+ * Coloured dot + team name row used in HomeUpcomingCard.
+ *
+ * @param {{ team: object }} props
+ */
+function HomeTeamRow({ team }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <span style={{
+        width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+        background: team?.color ?? 'rgba(227,224,213,0.3)',
+        display: 'inline-block',
+      }} />
+      <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {team?.name ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Team name + score on one line, used in HomeLiveCard.
+ * The `large` prop bumps the score font and applies the purple accent colour
+ * so live scoreboards feel more dramatic than completed-match readouts.
+ *
+ * @param {{ team: object, score: number, large?: boolean, style?: object }} props
+ */
+function HomeScoreRow({ team, score, large, style: extraStyle }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...extraStyle }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{
+          width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+          background: team?.color ?? 'rgba(227,224,213,0.3)',
+          display: 'inline-block',
+        }} />
+        <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {team?.name ?? '—'}
+        </span>
+      </div>
+      <span style={{
+        fontSize: large ? '22px' : '16px',
+        fontWeight: 700,
+        color: large ? 'var(--color-purple)' : 'inherit',
+      }}>
+        {score ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Home page card for a match currently in progress (status='active').
+ * Pulses with the architectPulse animation to signal live activity.
+ * Shows real-time score; scores default to 0 when not yet written to DB.
+ *
+ * @param {{ match: object }} props  - match row with home_team / away_team joined
+ */
+function HomeLiveCard({ match }) {
+  const { home_team, away_team, home_score, away_score } = match;
+
+  return (
+    <div
+      className="card"
+      style={{
+        display: 'flex', flexDirection: 'column',
+        // Purple border + pulse animation make live cards visually distinct from
+        // all other card types so users notice them at a glance.
+        border: '1px solid rgba(124,58,237,0.4)',
+        animation: 'architectPulse 3s ease-in-out infinite',
+      }}
+    >
+      {/* Live badge — no date shown because "now" is implied */}
+      <div style={{ marginBottom: '12px' }}>
+        <span style={{
+          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: 'var(--color-dust)',
+          background: 'var(--color-purple)', padding: '2px 8px',
+        }}>
+          ⚡ Live
+        </span>
+      </div>
+
+      {/* Venue metadata */}
+      {home_team?.location    && <MetaRow label="Location" value={home_team.location}    fontSize="11px" />}
+      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
+
+      {/* Live scoreboard — large scores with purple accent */}
+      <div style={{ margin: '14px 0', flex: 1 }}>
+        <HomeScoreRow team={home_team} score={home_score ?? 0} large />
+        <HomeScoreRow team={away_team} score={away_score ?? 0} large style={{ marginTop: '8px' }} />
+      </div>
+
+      {/* Cosmic interference footer — Architect flavour text */}
+      <div style={{ borderTop: '1px solid rgba(124,58,237,0.25)', paddingTop: '8px', textAlign: 'center' }}>
+        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '0.1em' }}>⚡ COSMIC INTERFERENCE ⚡</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Home page card for a scheduled fixture not yet played (status='upcoming').
+ * Shows the kick-off date, venue metadata, and both team names with colour dots.
+ * No simulator button or bet widget — those live on the full Matches page.
+ *
+ * @param {{ match: object }} props  - match row with home_team / away_team joined
+ */
+function HomeUpcomingCard({ match }) {
+  const { home_team, away_team, scheduled_at } = match;
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Status badge + kick-off date */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <span style={{
+          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: 'var(--color-purple)',
+          background: 'rgba(124,58,237,0.15)', padding: '2px 8px',
+        }}>
+          Upcoming
+        </span>
+        <span style={{ fontSize: '11px', opacity: 0.5 }}>{formatMatchDate(scheduled_at)}</span>
+      </div>
+
+      {/* Venue metadata */}
+      {home_team?.location    && <MetaRow label="Location" value={home_team.location}    fontSize="11px" />}
+      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
+
+      {/* Team matchup */}
+      <div style={{ margin: '14px 0', flex: 1 }}>
+        <HomeTeamRow team={home_team} />
+        <div style={{
+          fontSize: '10px', opacity: 0.35,
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          margin: '6px 0 6px 18px',
+        }}>
+          vs
+        </div>
+        <HomeTeamRow team={away_team} />
       </div>
     </div>
   );
