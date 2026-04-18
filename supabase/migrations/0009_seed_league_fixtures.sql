@@ -42,14 +42,15 @@ ALTER TABLE matches
   ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
 
 
--- ── 2. Unique constraint on (competition, home, away) ─────────────────────────
+-- ── 2. Unique index on (competition, home, away) ──────────────────────────────
 -- Prevents duplicate fixture rows if this migration is re-applied or if the
 -- fixture generator is run again.  A team cannot appear twice as home against
 -- the same away team in the same competition.
+-- NOTE: CREATE UNIQUE INDEX IF NOT EXISTS is used because ADD CONSTRAINT does
+-- not support IF NOT EXISTS in PostgreSQL.
 
-ALTER TABLE matches
-  ADD CONSTRAINT IF NOT EXISTS matches_fixture_unique
-    UNIQUE (competition_id, home_team_id, away_team_id);
+CREATE UNIQUE INDEX IF NOT EXISTS matches_fixture_unique
+  ON matches (competition_id, home_team_id, away_team_id);
 
 
 -- ── 3. Round-robin fixture generation ────────────────────────────────────────
