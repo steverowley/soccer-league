@@ -28,6 +28,12 @@ export default defineConfig({
   // Path aliases — MUST match tsconfig.json and vitest.config.ts exactly.
   // See the WHY block at the top of this file for the synchronization rule.
   resolve: {
+    // Prioritise .ts/.tsx over .js/.jsx so that src/lib/supabase.ts is
+    // resolved instead of src/lib/supabase.js for extensionless imports.
+    // Vite's default order puts .js before .ts, which is wrong for a
+    // mixed-JS/TS codebase where .ts files intentionally shadow .js ones.
+    extensions: ['.mts', '.ts', '.tsx', '.mjs', '.js', '.jsx', '.json'],
+
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
