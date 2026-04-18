@@ -565,6 +565,7 @@ export type Database = {
           played_at: string | null
           round: string | null
           stadium: string | null
+          scheduled_at: string | null
           status: string
           weather: string | null
         }
@@ -579,6 +580,7 @@ export type Database = {
           leg?: number | null
           played_at?: string | null
           round?: string | null
+          scheduled_at?: string | null
           stadium?: string | null
           status?: string
           weather?: string | null
@@ -594,6 +596,7 @@ export type Database = {
           leg?: number | null
           played_at?: string | null
           round?: string | null
+          scheduled_at?: string | null
           stadium?: string | null
           status?: string
           weather?: string | null

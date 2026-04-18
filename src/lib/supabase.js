@@ -270,7 +270,7 @@ export async function getMatchesWithTeamDetail(competitionId) {
 }
 
 /**
- * Fetch all currently-live matches (status='active') across every competition,
+ * Fetch all currently-live matches (status='in_progress') across every competition,
  * with team detail needed for Home page Live Games cards.
  *
  * @returns {Promise<Array>} match rows with home_team and away_team objects
@@ -283,14 +283,14 @@ export async function getLiveMatches() {
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
     `)
-    .eq('status', 'active')
+    .eq('status', 'in_progress')
     .order('scheduled_at', { nullsFirst: true });
   if (error) throw error;
   return data ?? [];
 }
 
 /**
- * Fetch the next N upcoming fixtures (status='upcoming') ordered by
+ * Fetch the next N upcoming fixtures (status='scheduled') ordered by
  * scheduled_at, with team detail for Home page Upcoming Games cards.
  *
  * @param {number} limit - maximum number of fixtures to return (default 6)
@@ -304,7 +304,7 @@ export async function getUpcomingMatches(limit = 6) {
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
     `)
-    .eq('status', 'upcoming')
+    .eq('status', 'scheduled')
     .not('scheduled_at', 'is', null)
     .order('scheduled_at', { ascending: true })
     .limit(limit);
