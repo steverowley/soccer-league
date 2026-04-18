@@ -1,189 +1,424 @@
 // ── Matches.jsx ───────────────────────────────────────────────────────────────
-// ISL Matches page — league-organised fixture selector.
+// ISL fixture listing page — shows scheduled, live, and completed matches for
+// each league, organised by matchday.
 //
 // LAYOUT
 // ──────
 //   H1: OUR ELECTRIFYING MATCHES
 //   ─────────────────────────────
-//   [Rocky Inner] [Gas/Ice Giants] [Outer Reaches] [Kuiper Belt]  ← league tabs
 //
-//   ┌──────────────────────────────────────────────────────────────┐
-//   │ Rocky Inner League                                           │
-//   │                                                              │
-//   │  Home Team   [dropdown ▾]   Away Team   [dropdown ▾]        │
-//   │                                                              │
-//   │  [SIMULATE MATCH]   ← active when both teams are selected    │
-//   │                                                              │
-//   │  ── Featured Fixture ──────────────────────────────────────  │
-//   │  [Mars Athletic vs Saturn Rings United]  ← always available  │
-//   └──────────────────────────────────────────────────────────────┘
+//   ◄  ROCKY INNER LEAGUE  ►    ← clickable league navigation
 //
-// SIMULATION FLOW
-// ───────────────
-// All 32 seeded teams can now be simulated.  When the user clicks "Simulate
-// Match", launchSim() fetches both teams from Supabase via getTeamForEngine()
-// (which returns players with full individual stats + manager name/style) and
-// passes those objects directly to MatchSimulator as homeTeam / awayTeam props.
-// The engine therefore uses live DB data: real manager names, real player
-// rosters, and position-derived individual stats.
+//   ── MATCHDAY 1 ──
+//   ┌──────────────┐  ┌──────────────┐
+//   │ UPCOMING     │  │ UPCOMING     │  ← 2-column match cards
+//   │ 8 Jan 2600   │  │ 8 Jan 2600   │
+//   │ LOCATION: …  │  │ LOCATION: …  │
+//   │ GROUND: …    │  │ GROUND: …    │
+//   │ ● Team A vs  │  │ ● Team C vs  │
+//   │ ● Team B     │  │ ● Team D     │
+//   │ [BET] [SIM►] │  │ [BET] [SIM►] │
+//   └──────────────┘  └──────────────┘
+//   … (more matchdays)
 //
-// FEATURED FIXTURE
-// ────────────────
-// "Mars Athletic vs Saturn Rings United" is surfaced in both the Rocky Inner
-// and Gas/Ice Giants league tabs (the home leagues of each club) so the main
-// demo fixture is always one click away regardless of which tab is active.
+//   ── SIMULATE A CUSTOM MATCH ──
+//   League picker + team dropdowns (always visible, for any cross-league sim)
 //
-// BACK NAVIGATION
-// ───────────────
-// When a simulation is running the league-selector collapses and a ← Back
-// button appears so the user can return to fixture selection without a reload.
+// DATA SOURCE
+// ───────────
+// Active season → competitions (type='league') → matches via
+// getMatchesWithTeamDetail().  All four leagues are fetched on mount in
+// parallel.  When DB has no fixtures (migration not yet applied), each league
+// shows an empty state and the custom simulator section is still usable.
 
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import Button from '../components/ui/Button';
+import MetaRow from '../components/ui/MetaRow';
 import MatchSimulator from '../App';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
-import { getTeamForEngine } from '../lib/supabase';
+import {
+  getActiveSeason,
+  getCompetitionsForSeason,
+  getMatchesWithTeamDetail,
+  getTeamForEngine,
+} from '../lib/supabase';
 
-// ── Featured fixture ──────────────────────────────────────────────────────────
-// The canonical demo pairing — Mars Athletic (rocky-inner) vs Saturn Rings
-// United (gas-giants).  Both clubs have full seeded rosters and managers in the
-// DB, so the featured button is always active and serves as the primary entry
-// point for first-time visitors.
-//
-// IDs must match Supabase team slugs (teams.id column), which are identical to
-// the leagueData.js team ids used for routing.
-const FEATURED = { home: 'mars-athletic', away: 'saturn-rings' };
-
-// ── League ids that host the featured fixture ─────────────────────────────────
-// Show the featured card in both leagues that contain the featured clubs so
-// visitors on either tab can reach it without switching.  Set for O(1) checks.
-const FEATURED_LEAGUES = new Set(['rocky-inner', 'gas-giants']);
-
-// ── selectStyle ───────────────────────────────────────────────────────────────
-// Inline style object for the team-selection <select> elements.
-// Defined at module scope to avoid a new object reference on every render.
-// Uses CSS custom properties from index.css to stay consistent with the ISL
-// dark theme without needing a dedicated Select component.
+// ── selectStyle ────────────────────────────────────────────────────────────────
+// Shared inline style for team-selection <select> elements in the custom
+// simulator section.  Defined at module scope to avoid creating a new object
+// reference on every render.
 const selectStyle = {
   width: '100%',
   background: 'var(--color-ash)',
   color: 'var(--color-dust)',
   border: '1px solid rgba(227,224,213,0.2)',
-  borderRadius: '4px',
   padding: '8px 10px',
   fontSize: '13px',
   cursor: 'pointer',
+  fontFamily: 'var(--font-mono)',
 };
 
 /**
- * Matches page — league-organised fixture selector with live simulation.
+ * Format a UTC timestamp as "8 Jan 2600 · 20:00" for fixture card display.
+ * Returns "TBD" when the value is null (unfixed scheduled_at).
+ *
+ * @param {string|null} iso - ISO timestamptz string from Supabase
+ * @returns {string}
+ */
+function formatMatchDate(iso) {
+  if (!iso) return 'TBD';
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date} · ${time}`;
+}
+
+/**
+ * Group an array of match rows by their `round` field.
+ * Returns an ordered array of { day, matches } objects so the render loop
+ * preserves the natural matchday order from the DB.
+ *
+ * @param {Array} matches - match rows with a `round` field
+ * @returns {Array<{day: string, matches: Array}>}
+ */
+function groupByMatchday(matches) {
+  const order = [];
+  const map = {};
+  for (const m of matches) {
+    const key = m.round ?? 'Unscheduled';
+    if (!map[key]) { map[key] = []; order.push(key); }
+    map[key].push(m);
+  }
+  return order.map(day => ({ day, matches: map[day] }));
+}
+
+// ── UpcomingCard ───────────────────────────────────────────────────────────────
+/**
+ * Fixture card for a scheduled (not yet played) match.
+ * Shows venue metadata, both team names with colour dots, a disabled bet-amount
+ * slider (Phase 2 placeholder), and a Simulate button.
+ *
+ * @param {{ match: object, onSimulate: Function, fetchingTeams: boolean }} props
+ */
+function UpcomingCard({ match, onSimulate, fetchingTeams }) {
+  const [betAmount, setBetAmount] = useState(100);
+  const { home_team, away_team, scheduled_at } = match;
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Status + date */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <span style={{
+          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: 'var(--color-purple)',
+          background: 'rgba(124,58,237,0.15)', padding: '2px 8px',
+        }}>
+          Upcoming
+        </span>
+        <span style={{ fontSize: '11px', opacity: 0.5 }}>{formatMatchDate(scheduled_at)}</span>
+      </div>
+
+      {/* Venue metadata */}
+      {home_team?.location   && <MetaRow label="Location" value={home_team.location}   fontSize="11px" />}
+      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
+
+      {/* Teams */}
+      <div style={{ margin: '14px 0', flex: 1 }}>
+        <TeamRow team={home_team} />
+        <div style={{ fontSize: '10px', opacity: 0.35, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '6px 0 6px 18px' }}>vs</div>
+        <TeamRow team={away_team} />
+      </div>
+
+      {/* Bet widget placeholder + Simulate */}
+      <div style={{ borderTop: '1px solid rgba(227,224,213,0.1)', paddingTop: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <span style={{ fontSize: '10px', opacity: 0.45, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Bet</span>
+          <input
+            type="range" min="10" max="1000" step="10"
+            value={betAmount} onChange={e => setBetAmount(Number(e.target.value))}
+            style={{ flex: 1, accentColor: 'var(--color-purple)', opacity: 0.4, cursor: 'not-allowed' }}
+            disabled
+          />
+          <span style={{ fontSize: '11px', opacity: 0.45, whiteSpace: 'nowrap' }}>{betAmount} cr</span>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className="btn btn-primary"
+            disabled
+            style={{ flex: 1, opacity: 0.25, cursor: 'not-allowed', fontSize: '11px', padding: '6px 10px' }}
+            title="Betting opens in Phase 2"
+          >
+            Confirm Bet
+          </button>
+          <button
+            className="btn btn-tertiary"
+            disabled={fetchingTeams || !home_team?.id || !away_team?.id}
+            onClick={() => onSimulate(home_team.id, away_team.id)}
+            style={{ flex: 1, fontSize: '11px', padding: '6px 10px', opacity: fetchingTeams ? 0.5 : 1 }}
+          >
+            {fetchingTeams ? 'Loading…' : 'Simulate ►'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CompletedCard ─────────────────────────────────────────────────────────────
+/**
+ * Fixture card for a completed match showing the final scoreline.
+ *
+ * @param {{ match: object }} props
+ */
+function CompletedCard({ match }) {
+  const { home_team, away_team, home_score, away_score, played_at, scheduled_at } = match;
+  const dateStr = formatMatchDate(played_at ?? scheduled_at);
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Status + date */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <span style={{
+          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: 'var(--color-abyss)',
+          background: 'var(--color-dust)', padding: '2px 8px',
+        }}>
+          Result
+        </span>
+        <span style={{ fontSize: '11px', opacity: 0.5 }}>{dateStr}</span>
+      </div>
+
+      {/* Venue metadata */}
+      {home_team?.location   && <MetaRow label="Location" value={home_team.location}   fontSize="11px" />}
+      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
+
+      {/* Scoreboard */}
+      <div style={{ margin: '14px 0', flex: 1 }}>
+        <ScoreRow team={home_team} score={home_score} />
+        <ScoreRow team={away_team} score={away_score} style={{ marginTop: '8px' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── LiveCard ──────────────────────────────────────────────────────────────────
+/**
+ * Fixture card for a match currently in progress.
+ * Pulses with the architectPulse animation to signal live activity.
+ *
+ * @param {{ match: object }} props
+ */
+function LiveCard({ match }) {
+  const { home_team, away_team, home_score, away_score } = match;
+
+  return (
+    <div
+      className="card"
+      style={{
+        display: 'flex', flexDirection: 'column',
+        border: '1px solid rgba(124,58,237,0.4)',
+        animation: 'architectPulse 3s ease-in-out infinite',
+      }}
+    >
+      {/* Live badge */}
+      <div style={{ marginBottom: '12px' }}>
+        <span style={{
+          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: 'var(--color-dust)',
+          background: 'var(--color-purple)', padding: '2px 8px',
+        }}>
+          ⚡ Live
+        </span>
+      </div>
+
+      {/* Venue metadata */}
+      {home_team?.location   && <MetaRow label="Location" value={home_team.location}   fontSize="11px" />}
+      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
+
+      {/* Live scoreboard */}
+      <div style={{ margin: '14px 0', flex: 1 }}>
+        <ScoreRow team={home_team} score={home_score ?? 0} large />
+        <ScoreRow team={away_team} score={away_score ?? 0} large style={{ marginTop: '8px' }} />
+      </div>
+
+      {/* Cosmic interference footer */}
+      <div style={{ borderTop: '1px solid rgba(124,58,237,0.25)', paddingTop: '8px', textAlign: 'center' }}>
+        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '0.1em' }}>⚡ COSMIC INTERFERENCE ⚡</span>
+      </div>
+    </div>
+  );
+}
+
+// ── TeamRow ───────────────────────────────────────────────────────────────────
+/** Coloured-dot + team name row used in UpcomingCard. */
+function TeamRow({ team }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <span style={{
+        width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+        background: team?.color ?? 'rgba(227,224,213,0.3)',
+        display: 'inline-block',
+      }} />
+      <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {team?.name ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+// ── ScoreRow ──────────────────────────────────────────────────────────────────
+/** Team name + score on one line, used in CompletedCard and LiveCard. */
+function ScoreRow({ team, score, large, style: extraStyle }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...extraStyle }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{
+          width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+          background: team?.color ?? 'rgba(227,224,213,0.3)',
+          display: 'inline-block',
+        }} />
+        <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {team?.name ?? '—'}
+        </span>
+      </div>
+      <span style={{ fontSize: large ? '22px' : '16px', fontWeight: 700, color: large ? 'var(--color-purple)' : 'inherit' }}>
+        {score ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+// ── Matches (main page) ───────────────────────────────────────────────────────
+/**
+ * ISL Matches page — fixture listing + custom match simulator.
  *
  * STATE
  * ─────
- *   activeLeague  {string}      — currently displayed league tab id
- *   homeId        {string}      — selected home team's leagueData / Supabase id
- *   awayId        {string}      — selected away team's leagueData / Supabase id
- *   simTeams      {object|null} — { home, away } engine-format team objects when
- *                                 a sim is running; null when selector is shown
- *   fetchingTeams {boolean}     — true while getTeamForEngine() calls are in
- *                                 flight; disables the Simulate button to prevent
- *                                 double-clicks
- *   fetchError    {string|null} — set if the DB fetch fails so the user sees a
- *                                 message rather than a silent broken sim
+ *   leagueComps      {Array}        — competitions filtered to type='league',
+ *                                     ordered to match the LEAGUES array
+ *   matchesByComp    {Object}       — map of competitionId → match rows
+ *   loading          {boolean}
+ *   error            {boolean}
+ *   activeIdx        {number}       — index into leagueComps for ◄► navigation
+ *   simTeams         {object|null}  — when set, full-page simulator is shown
+ *   fetchingTeams    {boolean}      — true while getTeamForEngine() is in flight
+ *   fetchError       {string|null}
+ *   pickerLeague     {string}       — league selected in custom simulator picker
+ *   pickerHome       {string}       — home team id in custom picker
+ *   pickerAway       {string}       — away team id in custom picker
  *
  * @returns {JSX.Element}
  */
 export default function Matches() {
-  // ── League tab state ───────────────────────────────────────────────────────
-  const [activeLeague, setActiveLeague] = useState(LEAGUES[0].id);
+  // ── Fixture data ───────────────────────────────────────────────────────────
+  const [leagueComps,   setLeagueComps]   = useState([]);
+  const [matchesByComp, setMatchesByComp] = useState({});
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(false);
 
-  // ── Team selection state ───────────────────────────────────────────────────
-  // homeId / awayId hold leagueData team ids (e.g. 'saturn-rings'), which are
-  // identical to the Supabase team slug primary keys.  Reset on league change
-  // so stale cross-league selections don't linger.
-  const [homeId, setHomeId] = useState('');
-  const [awayId, setAwayId] = useState('');
+  // ── League navigation ──────────────────────────────────────────────────────
+  const [activeIdx, setActiveIdx] = useState(0);
 
-  // ── Active simulation state ────────────────────────────────────────────────
-  // simTeams is non-null while a match is running.  It holds the two engine-
-  // format team objects returned by getTeamForEngine() so MatchSimulator
-  // receives live DB data (manager names, player rosters, individual stats).
-  const [simTeams, setSimTeams]       = useState(null);
-  const [fetchingTeams, setFetching]  = useState(false);
-  const [fetchError, setFetchError]   = useState(null);
+  // ── Simulator state ────────────────────────────────────────────────────────
+  const [simTeams,     setSimTeams]     = useState(null);
+  const [fetchingTeams, setFetchingTeams] = useState(false);
+  const [fetchError,   setFetchError]   = useState(null);
 
-  // ── League change handler ─────────────────────────────────────────────────
-  // Clear team dropdowns when switching leagues so the previous league's
-  // selections (invalid for the new team pool) don't persist.
-  function handleLeagueChange(leagueId) {
-    setActiveLeague(leagueId);
-    setHomeId('');
-    setAwayId('');
-  }
+  // ── Custom picker state ────────────────────────────────────────────────────
+  const [pickerLeague, setPickerLeague] = useState(LEAGUES[0].id);
+  const [pickerHome,   setPickerHome]   = useState('');
+  const [pickerAway,   setPickerAway]   = useState('');
 
-  // ── Readiness check ───────────────────────────────────────────────────────
-  // The Simulate button is active only when both dropdowns have a selection.
-  // Unlike the previous implementation there is no "coming soon" gate — every
-  // team in the DB has a seeded roster with individual stats, so any pairing
-  // can run a simulation.
-  const bothSelected = Boolean(homeId && awayId);
+  // ── Data loading ───────────────────────────────────────────────────────────
+  // Fetch season → league competitions → all matches in parallel.
+  // Uses a cancelled flag so stale setState calls are dropped on unmount.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const season = await getActiveSeason();
+        const comps  = await getCompetitionsForSeason(season.id);
 
-  // ── Launch handler ────────────────────────────────────────────────────────
-  // Fetches both teams from Supabase in parallel before starting the sim so
-  // the engine receives the real manager name, real player list, and real
-  // individual stats rather than falling back to the hardcoded teams.js stub.
-  //
-  // Error handling: if either fetch fails we surface a message and keep the
-  // selector visible so the user can try again rather than silently entering a
-  // broken sim with undefined team data.
+        // Order competitions to match the canonical LEAGUES array so the
+        // ◄► navigation stays consistent with the rest of the app.
+        const lc = LEAGUES
+          .map(l => comps.find(c => c.league_id === l.id && c.type === 'league'))
+          .filter(Boolean);
+
+        // Fetch all league competition matches in parallel.
+        const matchArrays = await Promise.all(lc.map(c => getMatchesWithTeamDetail(c.id)));
+
+        if (!cancelled) {
+          setLeagueComps(lc);
+          const byId = {};
+          lc.forEach((c, i) => { byId[c.id] = matchArrays[i]; });
+          setMatchesByComp(byId);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[ISL] Matches load failed:', err);
+        if (!cancelled) { setError(true); setLoading(false); }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Active league matches grouped by matchday ─────────────────────────────
+  const activeComp = leagueComps[activeIdx];
+  const currentMatches = useMemo(
+    () => (activeComp ? matchesByComp[activeComp.id] ?? [] : []),
+    [activeComp, matchesByComp],
+  );
+  const matchdays = useMemo(() => groupByMatchday(currentMatches), [currentMatches]);
+
+  // ── Active league display name ─────────────────────────────────────────────
+  const activeName = useMemo(() => {
+    if (leagueComps[activeIdx]) {
+      return LEAGUES.find(l => l.id === leagueComps[activeIdx].league_id)?.name
+        ?? leagueComps[activeIdx].name;
+    }
+    return LEAGUES[activeIdx]?.name ?? '…';
+  }, [leagueComps, activeIdx]);
+
+  // ── League navigation handlers ─────────────────────────────────────────────
+  const totalLeagues = leagueComps.length || LEAGUES.length;
+  function prevLeague() { setActiveIdx(i => (i - 1 + totalLeagues) % totalLeagues); }
+  function nextLeague() { setActiveIdx(i => (i + 1) % totalLeagues); }
+
+  // ── Simulator launch ───────────────────────────────────────────────────────
   async function launchSim(homeTeamId, awayTeamId) {
-    setFetching(true);
+    setFetchingTeams(true);
     setFetchError(null);
     try {
       const [home, away] = await Promise.all([
         getTeamForEngine(homeTeamId),
         getTeamForEngine(awayTeamId),
       ]);
-      // ── Carry the Supabase team slugs alongside the engine-format objects ──
-      // getTeamForEngine() strips the raw DB fields (id, created_at, etc.) to
-      // keep the engine lean, so the slugs would otherwise be unreachable by
-      // downstream consumers.  MatchSimulator needs them at kickoff to count
-      // present fans (profiles.favourite_team_id = slug) for the Phase 3 fan
-      // support boost and, when a fixture row exists, to key the
-      // match_attendance insert.
       setSimTeams({ home, away, homeSlug: homeTeamId, awaySlug: awayTeamId });
     } catch (err) {
       setFetchError('Could not load team data — please try again.');
-      console.error('launchSim fetch error:', err);
+      console.error('[ISL] launchSim error:', err);
     } finally {
-      setFetching(false);
+      setFetchingTeams(false);
     }
   }
 
-  // ── Back handler ──────────────────────────────────────────────────────────
-  // Clears the running simulation and returns to the selector UI.
-  function handleBack() {
-    setSimTeams(null);
+  // ── Custom picker league change ────────────────────────────────────────────
+  function handlePickerLeague(leagueId) {
+    setPickerLeague(leagueId);
+    setPickerHome('');
+    setPickerAway('');
   }
 
-  // ── Teams for the active league ────────────────────────────────────────────
-  const leagueTeams = TEAMS_BY_LEAGUE[activeLeague] ?? [];
-
-  // ── Currently active league record ────────────────────────────────────────
-  const currentLeague = LEAGUES.find(l => l.id === activeLeague);
-
-  // ── Simulation view ────────────────────────────────────────────────────────
-  // When a match is running, replace the entire page content with the simulator
-  // and a ← Back button.  The key is derived from team names so React fully
-  // unmounts the old simulator if the user returns and picks a different match.
+  // ── Full-page simulator view ───────────────────────────────────────────────
   if (simTeams) {
     return (
       <div style={{ paddingTop: '24px', paddingBottom: '60px' }}>
         <div className="container">
           <button
             className="btn btn-primary"
-            onClick={handleBack}
+            onClick={() => setSimTeams(null)}
             style={{ marginBottom: '16px' }}
           >
             ← Back to Matches
@@ -193,14 +428,6 @@ export default function Matches() {
           key={`${simTeams.home.name}-${simTeams.away.name}`}
           homeTeam={simTeams.home}
           awayTeam={simTeams.away}
-          /*
-           * Supabase team slugs — required for the Phase 3 fan support boost.
-           * Without these the simulator falls back to zero-boost mode (no fan
-           * count query, no attendance DB write).  matchId / seasonId are
-           * intentionally omitted until fixture-scheduling integration lands
-           * in a later phase; the simulator gracefully skips the attendance
-           * write when either is absent.
-           */
           homeTeamId={simTeams.homeSlug}
           awayTeamId={simTeams.awaySlug}
         />
@@ -208,217 +435,162 @@ export default function Matches() {
     );
   }
 
+  const pickerTeams = TEAMS_BY_LEAGUE[pickerLeague] ?? [];
+
   return (
-    <div style={{ paddingTop: '40px', paddingBottom: '60px' }}>
-      <div className="container">
+    <div className="container" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
 
-        {/* ── Page hero ─────────────────────────────────────────────────────── */}
-        <div className="page-hero" style={{ marginBottom: '32px' }}>
-          <h1>Our Electrifying Matches</h1>
-          <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
-          <p className="subtitle">
-            Pick a league, choose your teams, and simulate a live ISL fixture.
-          </p>
+      {/* ── Page hero ────────────────────────────────────────────────────────── */}
+      <div className="page-hero">
+        <h1>Our Electrifying Matches</h1>
+        <hr className="divider" style={{ maxWidth: '600px', margin: '16px auto' }} />
+        <p className="subtitle">Season 1 — 2600 · Fixtures, results, and live scores</p>
+      </div>
+
+      {/* ── League navigation ─────────────────────────────────────────────────── */}
+      {/* ◄ and ► cycle through the four league competitions.  Arrows are plain
+          buttons so they're keyboard-accessible without adding extra styling. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', justifyContent: 'center', marginBottom: '40px' }}>
+        <button
+          onClick={prevLeague}
+          aria-label="Previous league"
+          style={{ background: 'none', border: 'none', color: 'var(--color-dust)', cursor: 'pointer', fontSize: '18px', opacity: 0.55, padding: '4px 10px' }}
+        >◄</button>
+        <h2 className="section-title" style={{ margin: 0 }}>{activeName}</h2>
+        <button
+          onClick={nextLeague}
+          aria-label="Next league"
+          style={{ background: 'none', border: 'none', color: 'var(--color-dust)', cursor: 'pointer', fontSize: '18px', opacity: 0.55, padding: '4px 10px' }}
+        >►</button>
+      </div>
+
+      {/* ── Loading / error states ─────────────────────────────────────────────── */}
+      {loading && (
+        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px', marginBottom: '40px' }}>
+          Loading fixtures…
+        </p>
+      )}
+      {error && (
+        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px', marginBottom: '40px' }}>
+          Could not load fixtures. Please try again later.
+        </p>
+      )}
+
+      {/* Sim launch error */}
+      {fetchError && (
+        <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--color-red)', marginBottom: '16px' }}>
+          {fetchError}
+        </p>
+      )}
+
+      {/* ── Empty state ─────────────────────────────────────────────────────────── */}
+      {!loading && !error && matchdays.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0 60px', opacity: 0.45 }}>
+          <p style={{ fontSize: '14px', marginBottom: '6px' }}>No fixtures scheduled yet.</p>
+          <p style={{ fontSize: '12px' }}>Apply migration 0009 to generate the full Season 1 fixture list.</p>
+        </div>
+      )}
+
+      {/* ── Matchday sections ──────────────────────────────────────────────────── */}
+      {/* One section per matchday.  Each section has a ◄► decorated heading and a
+          2-column grid of match cards.  The .matches-grid class collapses to
+          single-column below 640 px (rule in index.css). */}
+      {!loading && !error && matchdays.map(({ day, matches }) => (
+        <section key={day} className="section">
+
+          {/* Matchday heading */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <span aria-hidden="true" style={{ opacity: 0.4, fontSize: '13px' }}>◄</span>
+            <h3 className="section-title" style={{ margin: 0, fontSize: '15px' }}>{day}</h3>
+            <span aria-hidden="true" style={{ opacity: 0.4, fontSize: '13px' }}>►</span>
+          </div>
+
+          {/* 2-column grid */}
+          <div className="matches-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            {matches.map(match => {
+              if (match.status === 'completed')   return <CompletedCard key={match.id} match={match} />;
+              if (match.status === 'in_progress') return <LiveCard      key={match.id} match={match} />;
+              return (
+                <UpcomingCard
+                  key={match.id}
+                  match={match}
+                  onSimulate={launchSim}
+                  fetchingTeams={fetchingTeams}
+                />
+              );
+            })}
+          </div>
+
+        </section>
+      ))}
+
+      {/* ── Custom match simulator ─────────────────────────────────────────────── */}
+      {/* Always rendered below the fixture list so users can simulate any
+          cross-league or hypothetical pairing regardless of the fixture schedule. */}
+      <section className="section">
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <span aria-hidden="true" style={{ opacity: 0.4, fontSize: '13px' }}>◄</span>
+          <h2 className="section-title" style={{ margin: 0 }}>Simulate a Custom Match</h2>
+          <span aria-hidden="true" style={{ opacity: 0.4, fontSize: '13px' }}>►</span>
         </div>
 
-        {/* ── League tabs ────────────────────────────────────────────────────── */}
-        {/* Each tab switches the team pool for the fixture selector below.
-            Active tab uses btn-primary; inactive tabs use btn-secondary. */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '28px', justifyContent: 'center' }}>
-          {LEAGUES.map(league => (
-            <button
-              key={league.id}
-              className={`btn ${activeLeague === league.id ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => handleLeagueChange(league.id)}
-            >
-              {league.shortName}
-            </button>
-          ))}
-        </div>
+        <div className="card" style={{ maxWidth: '640px' }}>
 
-        {/* ── Fixture selector card ─────────────────────────────────────────── */}
-        <div className="card" style={{ maxWidth: '640px', margin: '0 auto' }}>
+          {/* League tabs */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
+            {LEAGUES.map(league => (
+              <button
+                key={league.id}
+                className={`btn ${pickerLeague === league.id ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => handlePickerLeague(league.id)}
+                style={{ fontSize: '11px', padding: '6px 12px' }}
+              >
+                {league.shortName}
+              </button>
+            ))}
+          </div>
 
-          {/* ── League context header ───────────────────────────────────────── */}
-          {/* Links back to the league's detail page so users can check
-              standings before picking a fixture. */}
-          <h2 style={{ fontSize: '16px', marginBottom: '20px' }}>
-            <Link
-              to={`/leagues/${activeLeague}`}
-              style={{ color: 'inherit', textDecoration: 'none' }}
-            >
-              {currentLeague?.name} ›
-            </Link>
-          </h2>
-
-          {/* ── Team selection dropdowns ─────────────────────────────────────── */}
-          {/* Two selects side-by-side (stacked on narrow viewports via flex-wrap).
-              Each list excludes the other dropdown's current selection to prevent
-              a team playing itself. */}
-          <div
-            style={{
-              display: 'flex', gap: '16px', flexWrap: 'wrap',
-              alignItems: 'flex-end', marginBottom: '20px',
-            }}
-          >
-            {/* Home team */}
-            <div style={{ flex: '1', minWidth: '180px' }}>
-              <label style={{ fontSize: '11px', opacity: 0.6, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          {/* Team selectors */}
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
+            <div style={{ flex: 1, minWidth: '160px' }}>
+              <label style={{ fontSize: '11px', opacity: 0.55, display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Home Team
               </label>
-              <select
-                value={homeId}
-                onChange={e => setHomeId(e.target.value)}
-                style={selectStyle}
-              >
+              <select value={pickerHome} onChange={e => setPickerHome(e.target.value)} style={selectStyle}>
                 <option value="">Select team…</option>
-                {leagueTeams
-                  .filter(t => t.id !== awayId)
-                  .map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                {pickerTeams.filter(t => t.id !== pickerAway).map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
               </select>
             </div>
-
-            {/* VS divider */}
-            <div style={{ fontSize: '18px', opacity: 0.4, paddingBottom: '6px', flexShrink: 0 }}>vs</div>
-
-            {/* Away team */}
-            <div style={{ flex: '1', minWidth: '180px' }}>
-              <label style={{ fontSize: '11px', opacity: 0.6, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <div style={{ fontSize: '16px', opacity: 0.35, paddingBottom: '6px', flexShrink: 0 }}>vs</div>
+            <div style={{ flex: 1, minWidth: '160px' }}>
+              <label style={{ fontSize: '11px', opacity: 0.55, display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Away Team
               </label>
-              <select
-                value={awayId}
-                onChange={e => setAwayId(e.target.value)}
-                style={selectStyle}
-              >
+              <select value={pickerAway} onChange={e => setPickerAway(e.target.value)} style={selectStyle}>
                 <option value="">Select team…</option>
-                {leagueTeams
-                  .filter(t => t.id !== homeId)
-                  .map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                {pickerTeams.filter(t => t.id !== pickerHome).map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
               </select>
             </div>
           </div>
 
-          {/* ── Team profile quick-links ─────────────────────────────────────── */}
-          {/* When teams are selected, surface View Team links so users can
-              check squad details before committing to the simulation. */}
-          {(homeId || awayId) && (
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              {homeId && (
-                <Link to={`/teams/${homeId}`} style={{ fontSize: '12px', opacity: 0.7, textDecoration: 'underline' }}>
-                  View {leagueTeams.find(t => t.id === homeId)?.name} →
-                </Link>
-              )}
-              {awayId && (
-                <Link to={`/teams/${awayId}`} style={{ fontSize: '12px', opacity: 0.7, textDecoration: 'underline' }}>
-                  View {leagueTeams.find(t => t.id === awayId)?.name} →
-                </Link>
-              )}
-            </div>
-          )}
-
-          {/* ── Fetch error notice ───────────────────────────────────────────── */}
-          {/* Shown if getTeamForEngine() throws (e.g. network issue or team not
-              yet seeded).  Kept inline so the selector remains usable. */}
-          {fetchError && (
-            <p style={{ fontSize: '12px', color: 'var(--color-red)', marginBottom: '12px' }}>
-              {fetchError}
-            </p>
-          )}
-
-          {/* ── Simulate button ──────────────────────────────────────────────── */}
-          {/* Disabled until both teams are selected or while the DB fetch is
-              in flight (fetchingTeams).  All 32 seeded teams are simulatable
-              so there is no longer a "coming soon" state. */}
+          {/* Simulate button */}
           <button
             className="btn btn-tertiary"
-            disabled={!bothSelected || fetchingTeams}
-            onClick={() => launchSim(homeId, awayId)}
-            style={{
-              opacity: bothSelected && !fetchingTeams ? 1 : 0.4,
-              cursor: bothSelected && !fetchingTeams ? 'pointer' : 'not-allowed',
-            }}
+            disabled={!pickerHome || !pickerAway || fetchingTeams}
+            onClick={() => launchSim(pickerHome, pickerAway)}
+            style={{ opacity: pickerHome && pickerAway && !fetchingTeams ? 1 : 0.4 }}
           >
             {fetchingTeams ? 'Loading…' : 'Simulate Match'}
           </button>
 
-          {/* ── Featured fixture divider ─────────────────────────────────────── */}
-          {/* Surfaced in both Rocky Inner and Gas/Ice Giants tabs because the
-              two clubs are in different leagues — this way the card is reachable
-              regardless of which tab the user lands on. */}
-          {FEATURED_LEAGUES.has(activeLeague) && (
-            <div style={{ marginTop: '24px' }}>
-              <p style={{ fontSize: '11px', opacity: 0.4, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px' }}>
-                — Featured Fixture —
-              </p>
-
-              <div
-                className="card"
-                style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  display: 'flex', alignItems: 'center',
-                  justifyContent: 'space-between', flexWrap: 'wrap',
-                  gap: '12px', padding: '12px 16px',
-                }}
-              >
-                <div>
-                  {/* Team name pairing with brand-colour dots */}
-                  <p style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    <span style={{ color: '#FF4500' }}>●</span>
-                    {' '}Mars Athletic{' '}
-                    <span style={{ opacity: 0.4 }}>vs</span>
-                    {' '}Saturn Rings United{' '}
-                    <span style={{ color: '#9A5CF4' }}>●</span>
-                  </p>
-                  {/* Cross-links to each team's detail page */}
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <Link to="/teams/mars-athletic" style={{ fontSize: '11px', opacity: 0.6, textDecoration: 'underline' }}>
-                      Mars Athletic ›
-                    </Link>
-                    <Link to="/teams/saturn-rings" style={{ fontSize: '11px', opacity: 0.6, textDecoration: 'underline' }}>
-                      Saturn Rings United ›
-                    </Link>
-                  </div>
-                </div>
-
-                <button
-                  className="btn btn-primary"
-                  disabled={fetchingTeams}
-                  onClick={() => launchSim(FEATURED.home, FEATURED.away)}
-                >
-                  {fetchingTeams ? 'Loading…' : 'Launch →'}
-                </button>
-              </div>
-            </div>
-          )}
-
         </div>
+      </section>
 
-        {/* ── Browse teams prompt ──────────────────────────────────────────────── */}
-        {/* Secondary navigation row gives users an easy path to browse teams or
-            leagues before picking a fixture. */}
-        <div
-          style={{
-            display: 'flex', gap: '8px', justifyContent: 'center',
-            flexWrap: 'wrap', marginTop: '32px',
-          }}
-        >
-          <Link to="/teams">
-            <Button variant="primary">Browse Teams</Button>
-          </Link>
-          <Link to="/leagues">
-            <Button variant="primary">View Leagues</Button>
-          </Link>
-          <Link to="/players">
-            <Button variant="primary">View Players</Button>
-          </Link>
-        </div>
-
-      </div>
     </div>
   );
 }
