@@ -327,7 +327,34 @@ export default function TeamDetail() {
         }
         setLoading(false);
       });
-  }, [teamId]);
+  }, [teamId, db]);
+
+  // ── Derived memos — must be before early returns to satisfy Rules of Hooks ──
+  const standingsRows = useMemo(
+    () => {
+      const lid = team?.leagues?.id;
+      return lid ? computeStandings(lid, buildStandingsRows(lid)) : [];
+    },
+    [team?.leagues?.id]
+  );
+
+  const teamForm = useMemo(() => {
+    if (!team?.id) return [];
+    const all = getResults();
+    return all
+      .filter(r => r.homeTeamId === team.id || r.awayTeamId === team.id)
+      .slice(0, 5)
+      .map(r => {
+        const isHome = r.homeTeamId === team.id;
+        const gf = isHome ? r.homeScore : r.awayScore;
+        const ga = isHome ? r.awayScore : r.homeScore;
+        if (gf > ga)  return { result: 'W', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
+        if (gf === ga) return { result: 'D', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
+        return           { result: 'L', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
+      });
+  }, [team?.id]);
+
+  const cleanSheetRows = useMemo(() => placeholderPlayerRows(), []);
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
@@ -381,45 +408,6 @@ export default function TeamDetail() {
   // Split description on newline characters into separate paragraphs.
   // The DB stores \n as a paragraph separator within description strings.
   const descParagraphs = (team.description ?? '').split('\n').filter(Boolean);
-
-  // ── League standings ───────────────────────────────────────────────────────
-  // Reuses the same two-step pattern as LeagueDetail: buildStandingsRows()
-  // provides the zeroed base list, computeStandings() merges localStorage
-  // W/D/L data on top.  Guarded on leagueId so teams without a league join
-  // (shouldn't happen with correct seed data) don't throw.
-  const standingsRows = useMemo(
-    () => leagueId
-      ? computeStandings(leagueId, buildStandingsRows(leagueId))
-      : [],
-    [leagueId]
-  );
-
-  // ── Team form (last 5 results) ─────────────────────────────────────────────
-  // Scans localStorage results for matches involving this team and derives the
-  // W/D/L outcome for each.  Sliced to 5 — the Figma form strip shows exactly
-  // five indicators.  Returns an empty array pre-season (no results saved yet).
-  const teamForm = useMemo(() => {
-    if (!team?.id) return [];
-    const all = getResults();
-    const teamResults = all
-      .filter(r => r.homeTeamId === team.id || r.awayTeamId === team.id)
-      .slice(0, 5)  // 5 = Figma form-strip width
-      .map(r => {
-        const isHome = r.homeTeamId === team.id;
-        const gf = isHome ? r.homeScore : r.awayScore;   // goals for
-        const ga = isHome ? r.awayScore : r.homeScore;   // goals against
-        if (gf > ga)  return { result: 'W', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
-        if (gf === ga) return { result: 'D', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
-        return           { result: 'L', gf, ga, opponent: isHome ? r.awayTeamName : r.homeTeamName };
-      });
-    return teamResults;
-  }, [team?.id]);
-
-  // ── Clean sheet rows (placeholder) ────────────────────────────────────────
-  // getTopCleanSheets() does not yet exist in matchResultsService.
-  // Falls back to placeholderPlayerRows() so the table renders at correct
-  // height with "—" values until the aggregator is implemented.
-  const cleanSheetRows = useMemo(() => placeholderPlayerRows(), []);
 
   return (
     <div>
