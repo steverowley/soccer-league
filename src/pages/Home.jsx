@@ -84,7 +84,7 @@ export default function Home() {
         if (!cancelled) setMatchesLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [db]); // db is a stable context ref — safe to add without causing re-fetches
 
   // ── Architect narratives (Galaxy Dispatch) ────────────────────────────────
   // WHY: The Architect's scheduled galaxy-tick Edge Function writes narrative

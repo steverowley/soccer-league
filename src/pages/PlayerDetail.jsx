@@ -172,7 +172,7 @@ export default function PlayerDetail() {
         }
         setLoading(false);
       });
-  }, [playerId]);
+  }, [playerId, db]);
 
   // ── Cosmic lore read ──────────────────────────────────────────────────────
   // Reads the CosmicArchitect's persisted lore from localStorage once the

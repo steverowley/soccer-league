@@ -376,8 +376,8 @@ export async function getStandings(db: IslSupabaseClient, competitionId: string)
     ensure(homeTeam);
     ensure(awayTeam);
 
-    const h = table[m.home_team_id!];
-    const a = table[m.away_team_id!];
+    const h = table[m.home_team_id!]!;
+    const a = table[m.away_team_id!]!;
     h.played++; a.played++;
     h.gf += m.home_score ?? 0; h.ga += m.away_score ?? 0;
     a.gf += m.away_score ?? 0; a.ga += m.home_score ?? 0;
@@ -410,8 +410,8 @@ export async function saveMatchResult(
     .update({
       home_score: homeScore,
       away_score: awayScore,
-      weather,
-      stadium,
+      weather: weather ?? null,
+      stadium: stadium ?? null,
       status:    'completed',
       played_at: new Date().toISOString(),
     })

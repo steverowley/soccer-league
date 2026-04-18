@@ -103,14 +103,13 @@ export default function LeagueDetail() {
         setError(true);
         setLoading(false);
       });
-  }, [leagueId]);
+  }, [leagueId, db]);
 
   // ── Live standings ─────────────────────────────────────────────────────────
   // buildStandingsRows() produces the zeroed base list (all teams in the
   // league from leagueData.js).  computeStandings() merges in real W/D/L/GD/Pts
   // from localStorage for any team whose results have been saved by the
   // simulator.  useMemo prevents a full localStorage read on every render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const standingsRows = useMemo(
     () => computeStandings(leagueId, buildStandingsRows(leagueId)),
     [leagueId]

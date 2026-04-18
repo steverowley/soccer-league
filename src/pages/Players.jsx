@@ -107,7 +107,7 @@ export default function Players() {
         setError(true);
         setLoading(false);
       });
-  }, []); // empty deps: run once on mount
+  }, [db]); // db is a stable context ref — adding it satisfies exhaustive-deps without causing re-fetches
 
   // ── Filtered league list ───────────────────────────────────────────────────
   // When a specific league tab is active we filter to just that league.
