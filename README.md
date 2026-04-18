@@ -164,6 +164,8 @@ soccer-league/
 │   ├── agents.js                # Claude AI commentary and Architect system
 │   ├── simulateHelpers.js       # Chaos, sequences, late-game logic
 │   ├── constants.js             # Enums, personalities, weather, formations
+│   ├── lib/
+│   │   └── supabase.ts          # Typed TypeScript helpers for Supabase (15 query/mutation functions with injected client DI)
 │   ├── features/                # Feature modules
 │   │   ├── architect/           # Cosmic narrator and match interference
 │   │   ├── auth/                # Authentication and user profiles
@@ -176,7 +178,7 @@ soccer-league/
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
 │   │   ├── events/bus.ts        # Typed event bus (match.completed, wager.placed, …)
-│   │   ├── supabase/            # Singleton client + React DI context
+│   │   ├── supabase/            # Singleton client + React DI context (useSupabase hook)
 │   │   └── utils/               # Shared utilities
 │   ├── pages/
 │   │   ├── Home.jsx             # Landing page with standings and Galaxy Dispatch
@@ -200,6 +202,21 @@ soccer-league/
 ├── vitest.config.ts             # Unit test runner
 └── .github/workflows/deploy.yml # GitHub Pages deployment
 ```
+
+## Architecture
+
+### Database Client Dependency Injection
+All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injects the Supabase client as a dependency. This ensures:
+- **Testability**: Pages can be tested with a mock client (IslSupabaseClient interface)
+- **Decoupling**: Pages don't import the singleton; they receive it from context
+- **Type safety**: All helpers in `lib/supabase.ts` are strictly typed with `db: IslSupabaseClient` as the first parameter
+
+### Supabase Helpers (`src/lib/supabase.ts`)
+15 TypeScript helper functions for common queries/mutations:
+- `getPlayersForTeam(db, teamId)` — efficient team roster fetches (prevents 512-player over-fetch)
+- `getLeagueStandings()`, `getTeamDetail()`, `getMatchSchedule()`, etc.
+- Each function accepts `db` from context, enabling easy mocking in tests
+- `supabase.js` is preserved for backward compatibility with `App.jsx`'s match simulator writes (uses explicit `.js` import)
 
 ## Tech Stack
 
