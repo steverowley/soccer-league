@@ -15,6 +15,7 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
 ### Website
 - Multi-page app with client-side routing and live Supabase data fetching
 - **Home** (`/`) — Hero section with:
+  - **Create Account card** — visible only to unauthenticated users; deep-links to `/login?mode=signup` to pre-select signup tab
   - **Live Games** — displays all active matches (status='active') with pulsing cards when matches are in progress; section hidden when no live matches
   - **Upcoming Games** — shows next 6 scheduled fixtures (status='upcoming') sorted by scheduled time; empty-state CTA when no fixtures available
   - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
@@ -27,6 +28,7 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
   - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options
   - **Training** (`/training`) — Clicker minigame to collectively boost player stats
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
+  - **Login** (`/login`) — Tabbed authentication page with login/signup modes; `?mode=signup` query param pre-selects signup tab for deep-linking; already-authenticated users are redirected away immediately
 - Shared header/footer with authenticated account menu (login state, IC balance, dropdown nav)
 
 
