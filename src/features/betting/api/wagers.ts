@@ -2,19 +2,28 @@
 // WHY: Supabase queries for the wager lifecycle — placement, history, and
 // settlement. All queries take an injected Supabase client; no direct imports.
 //
-// The `wagers` table is created by migration 0004_betting.sql, which hasn't
-// been applied yet — so database.ts doesn't include it. We cast to `any`
-// (marked CAST:wagers) until types are regenerated.
+// The `wagers` table is created by migration 0004_betting.sql (applied).
+// database.ts predates that migration so the `wagers` table is absent from
+// generated types — we cast to `any` (marked CAST:wagers) until types are
+// regenerated after the next `supabase gen types` run.
+//
+// CREDIT MUTATION STRATEGY
+// ─────────────────────────
+// All credit changes (deduct on bet, credit on win) use a read-modify-write
+// pattern: read current balance → compute new value → write back. This is safe
+// at current traffic levels. When the simulator moves server-side, replace with
+// a single Supabase RPC wrapping the wager insert + credit deduct in one
+// transaction for true atomicity.
 //
 // SETTLEMENT FLOW:
-//   1. Match completes → `match.completed` event fires.
-//   2. Listener calls `settleMatchWagers()` with the match result.
+//   1. Match completes → `match.completed` event fires on the in-app bus.
+//   2. WagerSettlementListener calls `settleMatchWagers()` with the final score.
 //   3. For each open wager on that match:
-//      a. Determine outcome via `resolveWager()` (pure logic).
+//      a. Determine outcome via `resolveWager()` (pure logic, no Supabase).
 //      b. Update wager row (status + payout).
-//      c. Credit winner's profile balance.
-//   4. All updates happen sequentially to avoid race conditions.
-//      When the engine moves server-side, wrap in a Supabase RPC for atomicity.
+//      c. Credit the winner's profile balance (read-modify-write).
+//   4. Updates are sequential; individual failures are logged but don't abort
+//      the batch — partial settlement beats no settlement.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Wager, TeamChoice } from '../types';
@@ -68,37 +77,19 @@ export async function placeWager(
     return null;
   }
 
-  // 2. Deduct stake from the user's credit balance.
-  const { error: creditErr } = await (db as AnyDb) // CAST:profiles
+  // 2. Deduct stake from the user's credit balance (read-modify-write).
+  const { data: profile } = await (db as AnyDb) // CAST:profiles
     .from('profiles')
-    .update({ credits: (db as AnyDb).rpc ? undefined : undefined })
-    .eq('id', userId);
+    .select('credits')
+    .eq('id', userId)
+    .single();
 
-  // Use raw SQL via rpc for atomic decrement. Fallback: read-modify-write.
-  // For now, decrement via a raw update expression.
-  const { error: deductErr } = await (db as AnyDb)
-    .rpc('decrement_credits', { user_id: userId, amount: stake });
-
-  if (deductErr) {
-    // If we can't use RPC, fall back to read-modify-write.
-    // This is less safe but functional until the RPC is deployed.
-    const { data: profile } = await (db as AnyDb)
+  if (profile) {
+    await (db as AnyDb)
       .from('profiles')
-      .select('credits')
-      .eq('id', userId)
-      .single();
-
-    if (profile) {
-      await (db as AnyDb)
-        .from('profiles')
-        .update({ credits: (profile as { credits: number }).credits - stake })
-        .eq('id', userId);
-    }
+      .update({ credits: (profile as { credits: number }).credits - stake })
+      .eq('id', userId);
   }
-
-  // Suppress the unused variable warning — the first update attempt was
-  // replaced by the rpc/fallback pattern above.
-  void creditErr;
 
   return wager as Wager;
 }
@@ -212,25 +203,20 @@ export async function settleMatchWagers(
       continue;
     }
 
-    // Credit the winner's profile balance.
+    // Credit the winner's profile balance (read-modify-write).
+    // Only fires for won wagers — lost wagers have payout=0 and no credit change.
     if (status === 'won' && payout > 0) {
-      // Try atomic RPC first, fall back to read-modify-write.
-      const { error: rpcErr } = await (db as AnyDb)
-        .rpc('increment_credits', { user_id: wager.user_id, amount: payout });
+      const { data: profile } = await (db as AnyDb) // CAST:profiles
+        .from('profiles')
+        .select('credits')
+        .eq('id', wager.user_id)
+        .single();
 
-      if (rpcErr) {
-        const { data: profile } = await (db as AnyDb)
+      if (profile) {
+        await (db as AnyDb)
           .from('profiles')
-          .select('credits')
-          .eq('id', wager.user_id)
-          .single();
-
-        if (profile) {
-          await (db as AnyDb)
-            .from('profiles')
-            .update({ credits: (profile as { credits: number }).credits + payout })
-            .eq('id', wager.user_id);
-        }
+          .update({ credits: (profile as { credits: number }).credits + payout })
+          .eq('id', wager.user_id);
       }
     }
 
