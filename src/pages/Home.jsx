@@ -560,7 +560,7 @@ function HomeScoreRow({ team, score, large, style: extraStyle }) {
 }
 
 /**
- * Home page card for a match currently in progress (status='active').
+ * Home page card for a match currently in progress (status='in_progress').
  * Pulses with the architectPulse animation to signal live activity.
  * Shows real-time score; scores default to 0 when not yet written to DB.
  *
@@ -610,7 +610,7 @@ function HomeLiveCard({ match }) {
 }
 
 /**
- * Home page card for a scheduled fixture not yet played (status='upcoming').
+ * Home page card for a scheduled fixture not yet played (status='scheduled').
  * Shows the kick-off date, venue metadata, and both team names with colour dots.
  * No simulator button or bet widget — those live on the full Matches page.
  *
