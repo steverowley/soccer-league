@@ -29,6 +29,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { getLeagues } from '../lib/supabase';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 
 /**
  * Intergalactic Leagues listing page.
@@ -44,6 +45,8 @@ import { getLeagues } from '../lib/supabase';
  * @returns {JSX.Element}
  */
 export default function Leagues() {
+  const db = useSupabase();
+
   // ── Data fetch ────────────────────────────────────────────────────────────
   // Leagues are stable reference data — fetch once on mount, no polling needed.
   const [leagues, setLeagues]   = useState([]);
@@ -51,7 +54,7 @@ export default function Leagues() {
   const [error,   setError]     = useState(false);
 
   useEffect(() => {
-    getLeagues()
+    getLeagues(db)
       .then(data => {
         setLeagues(data);
         setLoading(false);
