@@ -314,7 +314,8 @@ table {
 @media (max-width: 640px) {
   .stats-two-col,
   .team-grid,
-  .leagues-grid {
+  .leagues-grid,
+  .matches-grid {
     grid-template-columns: 1fr !important;
   }
 }
