@@ -36,6 +36,7 @@ import { LEAGUES, STANDINGS_COLS, buildStandingsRows } from '../data/leagueData'
 import { computeStandings, generateNewsItems } from '../lib/matchResultsService';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useAuth } from '../features/auth';
 import { getRecentNarratives } from '../features/entities';
 
 /**
@@ -51,6 +52,12 @@ import { getRecentNarratives } from '../features/entities';
  */
 export default function Home() {
   const db = useSupabase();
+
+  // ── Auth state ─────────────────────────────────────────────────────────────
+  // The Create Account card is hidden for already-authenticated users so they
+  // aren't prompted to sign up when they're already signed in.  We only need
+  // `user` here — the full `profile` (with credits) is owned by AccountMenu.
+  const { user } = useAuth();
 
   // ── Live and upcoming fixture data ───────────────────────────────────────
   // Fetched once on mount.  Live matches are rare (only during active simulations)
@@ -221,29 +228,41 @@ export default function Home() {
         )}
 
         {/* ── CREATE ACCOUNT card ─────────────────────────────────────────────── */}
-        <section className="section">
-          <div className="card" style={{ maxWidth: '480px' }}>
-            <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Create Account</h3>
-            <p style={{ marginBottom: '12px', fontSize: '14px' }}>
-              The universe's most elite league is calling for fans—and it's your time to shine!
-            </p>
-            <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.85 }}>
-              Register now to:
-            </p>
-            <ul style={{ paddingLeft: '16px', marginBottom: '16px', fontSize: '13px', lineHeight: 1.8 }}>
-              <li>Place bets on wormhole goals, time-loop own goals, and referee implosions</li>
-              <li>Receive cryptic prophecies about your team's league standing</li>
-              <li>Lose everything to a black hole (emotionally, financially, spiritually)</li>
-            </ul>
-            <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.7 }}>
-              Creating an account is easy. Escaping the league? Not so much.
-            </p>
-            <p style={{ marginBottom: '20px', fontSize: '13px', opacity: 0.7 }}>
-              Click below to pledge allegiance. Or don't. You already have.
-            </p>
-            <Button variant="primary">Create Account</Button>
-          </div>
-        </section>
+        {/* Only shown to anonymous visitors. Authenticated users already have
+            an account, so showing this card would be noise. The `user` check
+            also prevents a flash: during the brief loading window the card is
+            hidden, which is preferable to showing it and then hiding it mid-
+            render once the session resolves. */}
+        {!user && (
+          <section className="section">
+            <div className="card" style={{ maxWidth: '480px' }}>
+              <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Create Account</h3>
+              <p style={{ marginBottom: '12px', fontSize: '14px' }}>
+                The universe's most elite league is calling for fans—and it's your time to shine!
+              </p>
+              <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.85 }}>
+                Register now to:
+              </p>
+              <ul style={{ paddingLeft: '16px', marginBottom: '16px', fontSize: '13px', lineHeight: 1.8 }}>
+                <li>Place bets on wormhole goals, time-loop own goals, and referee implosions</li>
+                <li>Receive cryptic prophecies about your team's league standing</li>
+                <li>Lose everything to a black hole (emotionally, financially, spiritually)</li>
+              </ul>
+              <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.7 }}>
+                Creating an account is easy. Escaping the league? Not so much.
+              </p>
+              <p style={{ marginBottom: '20px', fontSize: '13px', opacity: 0.7 }}>
+                Click below to pledge allegiance. Or don't. You already have.
+              </p>
+              {/* Link to /login?mode=signup so the signup tab is pre-selected
+                  rather than dropping the user on the login tab and making them
+                  hunt for the Create Account toggle. */}
+              <Link to="/login?mode=signup">
+                <Button variant="primary">Create Account</Button>
+              </Link>
+            </div>
+          </section>
+        )}
 
         {/* ── LEAGUE STANDINGS carousel ─────────────────────────────────────────── */}
         {/* Live data from computeStandings() — updates automatically after
