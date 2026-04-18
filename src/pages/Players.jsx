@@ -35,6 +35,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { getLeagues, getTeams, normalizeTeam, normalizeLeague } from '../lib/supabase';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 
 // ── Filter tab sentinel value ─────────────────────────────────────────────────
 // Using a dedicated constant (rather than null or '') makes comparisons
@@ -58,6 +59,8 @@ const ALL_LEAGUES = 'all';
  * @returns {JSX.Element}
  */
 export default function Players() {
+  const db = useSupabase();
+
   // ── Query-param pre-selection ──────────────────────────────────────────────
   // If the user arrives via /players?league=gas-giants (e.g. from a team
   // page's "View Players" button), initialise the filter to that league so
@@ -84,7 +87,7 @@ export default function Players() {
     // team object arrives with a team.players[] array pre-attached, avoiding
     // a subsequent per-team round-trip.  League rows are fetched in the same
     // Promise.all to minimise total latency.
-    Promise.all([getLeagues(), getTeams(null, true)])
+    Promise.all([getLeagues(db), getTeams(db, null, true)])
       .then(([leagueRows, teamRows]) => {
         // ── Group normalised teams by league_id ────────────────────────────
         // Build leagueId → team[] map so the render loop can look up each

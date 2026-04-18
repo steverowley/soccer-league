@@ -39,6 +39,7 @@ import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
 import { getLeagues, getTeams, normalizeTeam } from '../lib/supabase';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
 
 /**
  * "Our Heroic Teams" listing page.
@@ -53,6 +54,8 @@ import { getLeagues, getTeams, normalizeTeam } from '../lib/supabase';
  * @returns {JSX.Element}
  */
 export default function Teams() {
+  const db = useSupabase();
+
   // ── Data fetch ────────────────────────────────────────────────────────────
   // Fetch leagues (for ordered section headings) and all teams in one go.
   // Teams are then grouped by league_id client-side — no second query needed.
@@ -62,7 +65,7 @@ export default function Teams() {
   const [error,         setError]         = useState(false);
 
   useEffect(() => {
-    Promise.all([getLeagues(), getTeams()])
+    Promise.all([getLeagues(db), getTeams(db)])
       .then(([leagueRows, teamRows]) => {
         // ── Group teams by league ──────────────────────────────────────────
         // Build a map of leagueId → normalised team array so the render loop

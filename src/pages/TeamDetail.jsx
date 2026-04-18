@@ -312,7 +312,7 @@ export default function TeamDetail() {
     setNotFound(false);
     setError(false);
 
-    getTeam(teamId)
+    getTeam(db, teamId)
       .then(raw => {
         setTeam(normalizeTeam(raw));
         setLoading(false);
