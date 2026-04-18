@@ -18,7 +18,7 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
-- **Matches** (`/matches`, `/matches/:matchId`) — Match schedule, live simulator, and per-fixture WagerWidget
+- **Matches** (`/matches`, `/matches/:matchId`) — League fixture listing by matchday (upcoming, live, completed cards with venue info), league navigation, custom match simulator for any cross-league pairing, and per-fixture WagerWidget
 - **Authenticated routes**:
   - **Profile** (`/profile`) — IC credit balance, team/player preference, personal BetHistory
   - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options
@@ -26,6 +26,15 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
 - Shared header/footer with authenticated account menu (login state, IC balance, dropdown nav)
 
+
+### Fixture Listing
+- **League navigation** — cycle through all four ISL leagues to view their complete fixture calendars
+- **Fixture organization by matchday** — 14 matchdays spread across Season 1 (2600-01-08 → 2600-07-09) with 56 fixtures per league (full round-robin: each team plays every other team twice)
+- **Three card states**:
+  - **Upcoming** — venue location/ground metadata, team names, bet slider placeholder, Simulate button
+  - **Live** — pulsing architectural interference border, real-time scores, cosmic interference footer
+  - **Completed** — final scoreline with colour-coded team dots
+- **Custom match simulator** — always visible section below fixtures for simulating any cross-league pairing
 
 ### Match Simulator
 - Full 90-minute matches with stoppage time, powered by live Supabase roster data
@@ -135,6 +144,7 @@ Run the SQL files in order in the Supabase SQL Editor:
 
 1. `supabase/schema.sql` — creates all tables with row-level security
 2. `supabase/seed.sql` — populates 32 teams, 512 players, 32 managers, seasons, and competitions
+3. `supabase/migrations/0009_seed_league_fixtures.sql` — generates 224 league fixtures (56 per league, 14 matchdays per league with home/away fixtures)
 
 ## Available Scripts
 
