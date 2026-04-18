@@ -216,7 +216,7 @@ All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injec
 - `getPlayersForTeam(db, teamId)` — efficient team roster fetches (prevents 512-player over-fetch)
 - `getLeagueStandings()`, `getTeamDetail()`, `getMatchSchedule()`, etc.
 - Each function accepts `db` from context, enabling easy mocking in tests
-- `supabase.js` is preserved for backward compatibility with `App.jsx`'s match simulator writes (uses explicit `.js` import)
+- **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
 
 ## Tech Stack
 
