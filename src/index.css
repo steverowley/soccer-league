@@ -38,9 +38,11 @@
   /* ── Typography ──────────────────────────────────────────────────────── */
   /* Heading sizes match the ISL design spec.  All in @layer base so any   */
   /* utility class (text-2xl, font-normal, etc.) can override per-element. */
-  h1 { font-size: var(--font-size-h1); font-weight: 700; text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); }
-  h2 { font-size: var(--font-size-h2); font-weight: 700; text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); }
-  h3 { font-size: var(--font-size-h3); font-weight: 700; text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); }
+  /* Title Case per design spec — text-transform NOT set here; components apply
+     uppercase only for ALL CAPS labels (data, status tags, nav, buttons). */
+  h1 { font-size: var(--font-size-h1); font-weight: 700; line-height: 1; }
+  h2 { font-size: var(--font-size-h2); font-weight: 700; line-height: 1; }
+  h3 { font-size: var(--font-size-h3); font-weight: 700; line-height: 1; }
   p  { font-size: var(--font-size-body); font-weight: 400; }
 
   a {
@@ -110,16 +112,21 @@
 /* ── Buttons ───────────────────────────────────────────────────────────── */
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-mono);
   font-size: var(--font-size-small);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-wider);
-  padding: 10px 20px;
+  height: var(--button-height);
+  padding: 0 var(--button-padding-x);
+  border-radius: 0;
   cursor: pointer;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
   white-space: nowrap;
+  text-decoration: none;
 }
 
 /* Primary: dark bg, dust border & text */
@@ -129,9 +136,12 @@
   color: var(--color-dust);
 }
 .btn-primary:hover {
-  background-color: var(--color-ash);
+  box-shadow: 0 0 6px 6px rgba(227, 224, 213, 0.15);
 }
-.btn-primary:focus {
+.btn-primary:active, .btn-primary.active {
+  box-shadow: 0 0 6px 6px rgba(227, 224, 213, 0.3);
+}
+.btn-primary:focus-visible {
   outline: 2px dashed var(--color-purple);
   outline-offset: 2px;
 }
@@ -146,11 +156,11 @@
   background-color: var(--color-dust-dark);
 }
 
-/* Tertiary: purple bg, dust text */
+/* Tertiary: purple bg, dark (Abyss) text — confirmed in design review */
 .btn-tertiary {
   background-color: var(--color-purple);
   border: 1px solid var(--color-purple);
-  color: var(--color-dust);
+  color: var(--color-abyss);
 }
 .btn-tertiary:hover {
   background-color: var(--color-purple-mid);
@@ -160,8 +170,9 @@
 
 .card {
   background-color: var(--color-ash);
-  border: 1px solid rgba(227,224,213,0.2);
-  padding: var(--space-8);
+  border: 1px solid var(--color-dust);
+  padding: var(--card-padding);
+  border-radius: 0;
 }
 
 /* ── Tables ────────────────────────────────────────────────────────────── */
@@ -251,9 +262,12 @@ table {
   transition: color var(--transition-fast);
 }
 
-.nav-link:hover,
+.nav-link:hover {
+  color: var(--color-dust-dark);
+}
 .nav-link.active {
-  color: var(--color-purple);
+  color: var(--color-dust);
+  text-shadow: 0 0 12px rgba(227, 224, 213, 0.9), 0 0 4px rgba(227, 224, 213, 0.6);
 }
 
 /* ── Page hero ─────────────────────────────────────────────────────────── */
