@@ -164,21 +164,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(
     async (email: string, password: string, username: string): Promise<string | null> => {
-      const { data, error } = await db.auth.signUp({ email, password });
+      // Pass username in signUp metadata so the `handle_new_user` DB trigger
+      // can write it atomically when it creates the profile row. This avoids
+      // a second UPDATE round-trip that would fail under email-confirmation
+      // flows (no active session = RLS blocks the update).
+      //
+      // emailRedirectTo ensures confirmation links go to the deployed URL
+      // (GitHub Pages) rather than whatever localhost the Supabase project's
+      // "Site URL" is set to. import.meta.env.BASE_URL is '/soccer-league/'
+      // in production builds and '/' locally.
+      const { error } = await db.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+          data: { username: username.trim() },
+        },
+      });
       if (error) return error.message;
-
-      // The trigger `on_auth_user_created` auto-creates the profile with a
-      // placeholder username. If the user provided a real username during
-      // signup, update it immediately.
-      if (data.user && username) {
-        // CAST:profiles — profiles table not yet in generated database.ts.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (db as any)
-          .from('profiles')
-          .update({ username })
-          .eq('id', data.user.id);
-      }
-
       return null;
     },
     [db],
