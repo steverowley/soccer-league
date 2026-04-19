@@ -92,6 +92,9 @@
      indicators). Intentionally desaturated so it doesn't fight with the purple. */
   --color-green:         #A5D6A7;
 
+  /* Nexus-7 Blue — AI analyst commentary accent (#4FC3F7). */
+  --color-sky:           #4FC3F7;
+
   /* [INVARIANT] Darker Lunar Dust for hover/pressed states on dust-filled surfaces.
      Used by .btn-secondary:hover. Manually mixed at ~12% darker than Lunar Dust. */
   --color-dust-dark:     #ccc9be;
@@ -108,14 +111,13 @@
      PlayerDetail "Convergence" lore section. */
   --color-architect-bg:       #050308;
 
-  /* Brighter violet accent — legible on the near-void background.
-     Sits ~1 tone above Quantum Purple to give the Architect its own visual signal.
-     Used for title text, left-border accents, and glow effects on Architect cards. */
-  --color-architect-accent:   #9D6FFB;
+  /* Quantum Purple accent — used for Architect borders, titles, and glow effects.
+     Aligned to --color-purple per design system review (was #9D6FFB). */
+  --color-architect-accent:   #9A5CF4;
 
-  /* Muted lavender — readable body text on the near-void background.
+  /* Darker purple — readable body text on the near-void background.
      Used for Architect commentary text and player arc prose. */
-  --color-architect-text:     #E2D9F3;
+  --color-architect-text:     #7A3ED4;
 
   /* Secondary lavender — slightly more muted; used for relationship bond labels
      and secondary annotation text inside Architect cards. */
