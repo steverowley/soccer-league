@@ -218,6 +218,19 @@ All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injec
 - Each function accepts `db` from context, enabling easy mocking in tests
 - **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
 
+### Design System (`features/design-system/` & `src/styles/tokens.css`)
+Unified visual language and component library aligned to the Figma design specification:
+- **Color tokens** (`tokens.css`) — ISL brand palette with thematic names: Void (#050308), Abyss (#1a1625), Quantum Purple (#8B5AFF), Architect Purple variants, Nexus-7 Blue (#4FC3F7), Lunar Dust (#d4cfbe), Sage Green. All colors are CSS custom properties for easy theming.
+- **Self-hosted fonts** — Space Mono (Regular/Bold/Italic/BoldItalic) served from `public/fonts/`, eliminating Google Fonts dependency for improved performance and privacy.
+- **Logo & branding** — ISL shield crest (ISL letterform + soccer ball planet) as `public/isl-logo.svg`, replacing generic placeholder.
+- **Styled components**:
+  - `.btn` (primary/secondary/tertiary variants) — 56px height with inline-flex alignment and Lunar Dust glow on hover/active
+  - `.nav-link.active` — Lunar Dust text-shadow glow effect instead of color change
+  - `.card` — full-opacity dust border for better contrast
+  - Headings (h1–h3) — Title Case (not ALL CAPS) with cosmic sizing
+  - Footer — logo-left + secondary-nav-right layout matching design spec
+- **Component library** — Reusable React components in `features/design-system/components/` (Button, Card, Input, Badge, etc.) with prop-driven theming.
+
 ## Tech Stack
 
 - **React 18** + **Vite 6** — frontend framework and build tool
