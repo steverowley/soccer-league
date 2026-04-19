@@ -99,7 +99,7 @@ export default function Header() {
             in the overhang zone without creating a new stacking context issue. */}
         <Link to="/" style={{ display: 'block', flexShrink: 0, position: 'relative', zIndex: 1 }}>
           <img
-            src={`${import.meta.env.BASE_URL}isl-logo.png`}
+            src={`${import.meta.env.BASE_URL}isl-logo.svg`}
             alt="Intergalactic Soccer League"
             className="header-logo"
             style={{ width: 100, height: 'auto', display: 'block', marginBottom: '-60px' }}
