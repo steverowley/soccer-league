@@ -91,3 +91,9 @@ export {
 // behind import.meta.env.DEV (or a feature flag) so it never reaches
 // production users.
 export { ArchitectLogPage } from './ui/ArchitectLogPage';
+
+// ── In-match Architect (CosmicArchitect class) ─────────────────────────────
+// The class that drives in-match proclamations, interference, and persistent
+// lore. Satisfies IArchitect (match/types.ts) by structural typing.
+export { CosmicArchitect } from './logic/CosmicArchitect';
+export type { CosmicEdict } from './logic/CosmicArchitect';
