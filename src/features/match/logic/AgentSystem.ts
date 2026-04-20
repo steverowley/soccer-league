@@ -736,7 +736,7 @@ export class AgentSystem {
       if (!raw) return null;
       const clean   = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
       const parsed  = JSON.parse(clean) as { stance?: string; rationale?: string; reason?: string };
-      const stance  = options.includes(parsed.stance || '') ? parsed.stance! : options[0];
+      const stance  = options.includes(parsed.stance || '') ? parsed.stance! : (options[0] ?? '');
       const rationale = typeof parsed.rationale === 'string' ? parsed.rationale
                       : typeof parsed.reason    === 'string' ? parsed.reason : '';
       return { stance, rationale };
@@ -856,8 +856,10 @@ export class AgentSystem {
     } else {
       // ── Fast modes: all voices in parallel ─────────────────────────────
       promises.push(this.generatePlayByPlay(event, gameState, onResult).then(push));
-      for (let i = 0; i < numReactors; i++)
-        promises.push(this.generateCommentary(reactorPool[i].id, event, gameState, eventDesc).then(push));
+      for (let i = 0; i < numReactors; i++) {
+        const reactor = reactorPool[i];
+        if (reactor) promises.push(this.generateCommentary(reactor.id, event, gameState, eventDesc).then(push));
+      }
       if (thoughtAgent)
         promises.push(this.generatePlayerThought(thoughtAgent.player, thoughtAgent, event, gameState, eventDesc).then(push));
       if (tier === 'full') {
@@ -934,7 +936,9 @@ export class AgentSystem {
       return Promise.resolve([]);
 
     return new Promise(resolve => {
-      this._eventQueue.push({ event, gameState, allAgents, resolve, onResult });
+      const entry: QueueEntry = { event, gameState, allAgents, resolve };
+      if (onResult) entry.onResult = onResult;
+      this._eventQueue.push(entry);
       if (!this._draining) this._drainQueue();
     });
   }

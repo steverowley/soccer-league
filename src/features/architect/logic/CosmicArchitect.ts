@@ -291,8 +291,8 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       return {
         omen: rivalryContext
           ? 'They have met before. The Architect remembers. The thread between them has not broken.'
-          : omens[Math.floor(Math.random() * omens.length)],
-        matchTitle: titles[Math.floor(Math.random() * titles.length)],
+          : omens[Math.floor(Math.random() * omens.length)] ?? omens[0] ?? '',
+        matchTitle: titles[Math.floor(Math.random() * titles.length)] ?? titles[0] ?? 'The Convergence',
         rivalryContext,
       };
     }
@@ -381,9 +381,9 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     if (this.narrativeArc) parts.push(`THE ARCHITECT DECREES: ${this.narrativeArc}`);
 
     if (this.featuredMortals.length > 0) {
-      const mortal = this.featuredMortals[0];
-      const arc    = this.characterArcs[mortal] || this.lore.playerArcs[mortal]?.arc || '';
-      if (arc) parts.push(`MORTAL IN FOCUS: ${mortal} — ${arc}`);
+      const mortal = this.featuredMortals[0] ?? '';
+      const arc    = (mortal ? this.characterArcs[mortal] : undefined) || (mortal ? this.lore.playerArcs[mortal]?.arc : undefined) || '';
+      if (mortal && arc) parts.push(`MORTAL IN FOCUS: ${mortal} — ${arc}`);
     }
 
     if (this.cosmicEdict) {
@@ -400,9 +400,10 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     }
 
     const activeRels = this.getActiveRelationships();
-    if (activeRels.length > 0 && activeRels[0].thread) {
-      const display = activeRels[0].key.replace(/_vs_/g, ' vs ').replace(/_and_/g, ' & ');
-      parts.push(`MORTAL BOND: ${display} — ${activeRels[0].thread}`);
+    const firstRel = activeRels[0];
+    if (firstRel?.thread) {
+      const display = firstRel.key.replace(/_vs_/g, ' vs ').replace(/_and_/g, ' & ');
+      parts.push(`MORTAL BOND: ${display} — ${firstRel.thread}`);
     }
 
     return parts.join('\n');
@@ -955,7 +956,10 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       // Merge manager fates
       if (parsed['managerFateUpdate'] && typeof parsed['managerFateUpdate'] === 'object') {
         for (const [name, fate] of Object.entries(parsed['managerFateUpdate'] as Record<string, string>)) {
-          this.lore.managerFates[name] = { ...(this.lore.managerFates[name] || {}), fate };
+          this.lore.managerFates[name] = {
+            team: this.lore.managerFates[name]?.team ?? '',
+            fate,
+          };
         }
       }
 
