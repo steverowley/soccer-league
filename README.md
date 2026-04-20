@@ -161,21 +161,25 @@ soccer-league/
 ├── src/
 │   ├── App.jsx                  # Match simulator loop and root component
 │   ├── gameEngine.js            # Core simulation: events, contests, player logic
-│   ├── agents.js                # Claude AI commentary and Architect system
 │   ├── simulateHelpers.js       # Chaos, sequences, late-game logic
 │   ├── constants.js             # Enums, personalities, weather, formations
 │   ├── lib/
 │   │   └── supabase.ts          # Typed TypeScript helpers for Supabase (15 query/mutation functions with injected client DI)
 │   ├── features/                # Feature modules
 │   │   ├── architect/           # Cosmic narrator and match interference
+│   │   │   ├── index.ts         # Barrel export
+│   │   │   └── logic/
+│   │   │       └── CosmicArchitect.ts  # Cosmic lore, proclamations, interference, and effect accessors
 │   │   ├── auth/                # Authentication and user profiles
 │   │   ├── betting/             # Wager system and odds engine
 │   │   ├── design-system/       # Component library and theme tokens
 │   │   ├── entities/            # Player, team, season data models
 │   │   ├── finance/             # Fan boost and ticket revenue
 │   │   ├── match/               # Match simulator types and logic
+│   │   │   ├── index.ts         # Barrel exports
 │   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract)
-│   │   │   └── logic/           # Match simulation helpers
+│   │   │   └── logic/
+│   │   │       └── AgentSystem.ts     # AI commentary dispatcher, streaming, queue, voice generators
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
