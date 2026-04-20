@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Play, Pause, RotateCcw, Settings } from "lucide-react";
 import TEAMS from "./teams.js";
-import { AgentSystem, CosmicArchitect } from "./agents.js";
+import { AgentSystem } from "./features/match/index.ts";
+import { CosmicArchitect } from "./features/architect/index.ts";
 import {
   createAgent, createAIManager,
   getActive, teamStats, getPlayer, formBonus,
