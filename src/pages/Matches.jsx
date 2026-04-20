@@ -33,7 +33,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Button from '../components/ui/Button';
-import MetaRow from '../components/ui/MetaRow';
+import MatchCard from '../components/ui/MatchCard';
 import MatchSimulator from '../App';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -46,8 +46,7 @@ import {
 
 // ── selectStyle ────────────────────────────────────────────────────────────────
 // Shared inline style for team-selection <select> elements in the custom
-// simulator section.  Defined at module scope to avoid creating a new object
-// reference on every render.
+// simulator section. Defined at module scope to avoid object re-creation.
 const selectStyle = {
   width: '100%',
   background: 'var(--color-ash)',
@@ -58,21 +57,6 @@ const selectStyle = {
   cursor: 'pointer',
   fontFamily: 'var(--font-mono)',
 };
-
-/**
- * Format a UTC timestamp as "8 Jan 2600 · 20:00" for fixture card display.
- * Returns "TBD" when the value is null (unfixed scheduled_at).
- *
- * @param {string|null} iso - ISO timestamptz string from Supabase
- * @returns {string}
- */
-function formatMatchDate(iso) {
-  if (!iso) return 'TBD';
-  const d = new Date(iso);
-  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return `${date} · ${time}`;
-}
 
 /**
  * Group an array of match rows by their `round` field.
@@ -93,203 +77,9 @@ function groupByMatchday(matches) {
   return order.map(day => ({ day, matches: map[day] }));
 }
 
-// ── UpcomingCard ───────────────────────────────────────────────────────────────
-/**
- * Fixture card for a scheduled (not yet played) match.
- * Shows venue metadata, both team names with colour dots, a disabled bet-amount
- * slider (Phase 2 placeholder), and a Simulate button.
- *
- * @param {{ match: object, onSimulate: Function, fetchingTeams: boolean }} props
- */
-function UpcomingCard({ match, onSimulate, fetchingTeams }) {
-  const [betAmount, setBetAmount] = useState(100);
-  const { home_team, away_team, scheduled_at } = match;
-
-  return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Status + date */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: 'var(--color-purple)',
-          background: 'rgba(124,58,237,0.15)', padding: '2px 8px',
-        }}>
-          Upcoming
-        </span>
-        <span style={{ fontSize: '11px', opacity: 0.5 }}>{formatMatchDate(scheduled_at)}</span>
-      </div>
-
-      {/* Venue metadata */}
-      {home_team?.location   && <MetaRow label="Location" value={home_team.location}   fontSize="11px" />}
-      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
-
-      {/* Teams */}
-      <div style={{ margin: '14px 0', flex: 1 }}>
-        <TeamRow team={home_team} />
-        <div style={{ fontSize: '10px', opacity: 0.35, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '6px 0 6px 18px' }}>vs</div>
-        <TeamRow team={away_team} />
-      </div>
-
-      {/* Bet widget placeholder + Simulate */}
-      <div style={{ borderTop: '1px solid rgba(227,224,213,0.1)', paddingTop: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <span style={{ fontSize: '10px', opacity: 0.45, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Bet</span>
-          <input
-            type="range" min="10" max="1000" step="10"
-            value={betAmount} onChange={e => setBetAmount(Number(e.target.value))}
-            style={{ flex: 1, accentColor: 'var(--color-purple)', opacity: 0.4, cursor: 'not-allowed' }}
-            disabled
-          />
-          <span style={{ fontSize: '11px', opacity: 0.45, whiteSpace: 'nowrap' }}>{betAmount} cr</span>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            className="btn btn-primary"
-            disabled
-            style={{ flex: 1, opacity: 0.25, cursor: 'not-allowed', fontSize: '11px', padding: '6px 10px' }}
-            title="Betting opens in Phase 2"
-          >
-            Confirm Bet
-          </button>
-          <button
-            className="btn btn-tertiary"
-            disabled={fetchingTeams || !home_team?.id || !away_team?.id}
-            onClick={() => onSimulate(home_team.id, away_team.id)}
-            style={{ flex: 1, fontSize: '11px', padding: '6px 10px', opacity: fetchingTeams ? 0.5 : 1 }}
-          >
-            {fetchingTeams ? 'Loading…' : 'Simulate ►'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── CompletedCard ─────────────────────────────────────────────────────────────
-/**
- * Fixture card for a completed match showing the final scoreline.
- *
- * @param {{ match: object }} props
- */
-function CompletedCard({ match }) {
-  const { home_team, away_team, home_score, away_score, played_at, scheduled_at } = match;
-  const dateStr = formatMatchDate(played_at ?? scheduled_at);
-
-  return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Status + date */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: 'var(--color-abyss)',
-          background: 'var(--color-dust)', padding: '2px 8px',
-        }}>
-          Result
-        </span>
-        <span style={{ fontSize: '11px', opacity: 0.5 }}>{dateStr}</span>
-      </div>
-
-      {/* Venue metadata */}
-      {home_team?.location   && <MetaRow label="Location" value={home_team.location}   fontSize="11px" />}
-      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
-
-      {/* Scoreboard */}
-      <div style={{ margin: '14px 0', flex: 1 }}>
-        <ScoreRow team={home_team} score={home_score} />
-        <ScoreRow team={away_team} score={away_score} style={{ marginTop: '8px' }} />
-      </div>
-    </div>
-  );
-}
-
-// ── LiveCard ──────────────────────────────────────────────────────────────────
-/**
- * Fixture card for a match currently in progress.
- * Pulses with the architectPulse animation to signal live activity.
- *
- * @param {{ match: object }} props
- */
-function LiveCard({ match }) {
-  const { home_team, away_team, home_score, away_score } = match;
-
-  return (
-    <div
-      className="card"
-      style={{
-        display: 'flex', flexDirection: 'column',
-        border: '1px solid rgba(124,58,237,0.4)',
-        animation: 'architectPulse 3s ease-in-out infinite',
-      }}
-    >
-      {/* Live badge */}
-      <div style={{ marginBottom: '12px' }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: 'var(--color-dust)',
-          background: 'var(--color-purple)', padding: '2px 8px',
-        }}>
-          ⚡ Live
-        </span>
-      </div>
-
-      {/* Venue metadata */}
-      {home_team?.location   && <MetaRow label="Location" value={home_team.location}   fontSize="11px" />}
-      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
-
-      {/* Live scoreboard */}
-      <div style={{ margin: '14px 0', flex: 1 }}>
-        <ScoreRow team={home_team} score={home_score ?? 0} large />
-        <ScoreRow team={away_team} score={away_score ?? 0} large style={{ marginTop: '8px' }} />
-      </div>
-
-      {/* Cosmic interference footer */}
-      <div style={{ borderTop: '1px solid rgba(124,58,237,0.25)', paddingTop: '8px', textAlign: 'center' }}>
-        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '0.1em' }}>⚡ COSMIC INTERFERENCE ⚡</span>
-      </div>
-    </div>
-  );
-}
-
-// ── TeamRow ───────────────────────────────────────────────────────────────────
-/** Coloured-dot + team name row used in UpcomingCard. */
-function TeamRow({ team }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <span style={{
-        width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-        background: team?.color ?? 'rgba(227,224,213,0.3)',
-        display: 'inline-block',
-      }} />
-      <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {team?.name ?? '—'}
-      </span>
-    </div>
-  );
-}
-
-// ── ScoreRow ──────────────────────────────────────────────────────────────────
-/** Team name + score on one line, used in CompletedCard and LiveCard. */
-function ScoreRow({ team, score, large, style: extraStyle }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...extraStyle }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{
-          width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-          background: team?.color ?? 'rgba(227,224,213,0.3)',
-          display: 'inline-block',
-        }} />
-        <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          {team?.name ?? '—'}
-        </span>
-      </div>
-      <span style={{ fontSize: large ? '22px' : '16px', fontWeight: 700, color: large ? 'var(--color-purple)' : 'inherit' }}>
-        {score ?? '—'}
-      </span>
-    </div>
-  );
-}
-
 // ── Matches (main page) ───────────────────────────────────────────────────────
+// UpcomingCard / CompletedCard / LiveCard / TeamRow / ScoreRow were all removed
+// here — every variant is now rendered by src/components/ui/MatchCard.jsx.
 /**
  * ISL Matches page — fixture listing + custom match simulator.
  *
@@ -444,27 +234,19 @@ export default function Matches() {
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
 
       {/* ── Page hero ────────────────────────────────────────────────────────── */}
+      {/* page-hero class provides consistent 48px top padding and centred layout */}
       <div className="page-hero">
         <h1>Our Electrifying Matches</h1>
-        <hr className="divider" style={{ maxWidth: '600px', margin: '16px auto' }} />
+        <hr className="divider" />
         <p className="subtitle">Season 1 — 2600 · Fixtures, results, and live scores</p>
       </div>
 
       {/* ── League navigation ─────────────────────────────────────────────────── */}
-      {/* ◄ and ► cycle through the four league competitions.  Arrows are plain
-          buttons so they're keyboard-accessible without adding extra styling. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', justifyContent: 'center', marginBottom: '40px' }}>
-        <button
-          onClick={prevLeague}
-          aria-label="Previous league"
-          style={{ background: 'none', border: 'none', color: 'var(--color-dust)', cursor: 'pointer', fontSize: '18px', opacity: 0.55, padding: '4px 10px' }}
-        >◄</button>
-        <h2 className="section-title" style={{ margin: 0 }}>{activeName}</h2>
-        <button
-          onClick={nextLeague}
-          aria-label="Next league"
-          style={{ background: 'none', border: 'none', color: 'var(--color-dust)', cursor: 'pointer', fontSize: '18px', opacity: 0.55, padding: '4px 10px' }}
-        >►</button>
+      {/* section-nav class gives the canonical ◄ HEADING ► design-system pattern */}
+      <div className="section-nav" style={{ justifyContent: 'center', marginBottom: '40px' }}>
+        <button className="section-nav-btn" onClick={prevLeague} aria-label="Previous league">◄</button>
+        <h2 className="section-nav-title">{activeName}</h2>
+        <button className="section-nav-btn" onClick={nextLeague} aria-label="Next league">►</button>
       </div>
 
       {/* ── Loading / error states ─────────────────────────────────────────────── */}
@@ -508,20 +290,18 @@ export default function Matches() {
             <span aria-hidden="true" style={{ opacity: 0.4, fontSize: '13px' }}>►</span>
           </div>
 
-          {/* 2-column grid */}
+          {/* 2-column grid — MatchCard handles all three status variants.
+              showBet=true enables the bet slider on this page (not on Home). */}
           <div className="matches-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            {matches.map(match => {
-              if (match.status === 'completed')   return <CompletedCard key={match.id} match={match} />;
-              if (match.status === 'in_progress') return <LiveCard      key={match.id} match={match} />;
-              return (
-                <UpcomingCard
-                  key={match.id}
-                  match={match}
-                  onSimulate={launchSim}
-                  fetchingTeams={fetchingTeams}
-                />
-              );
-            })}
+            {matches.map(match => (
+              <MatchCard
+                key={match.id}
+                match={match}
+                onSimulate={match.status === 'scheduled' ? launchSim : undefined}
+                showBet={match.status === 'scheduled'}
+                fetchingTeams={fetchingTeams}
+              />
+            ))}
           </div>
 
         </section>

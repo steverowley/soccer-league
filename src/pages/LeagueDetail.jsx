@@ -39,10 +39,37 @@ import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
 import {
-  STANDINGS_COLS,
   SCORER_COLS, ASSISTS_COLS, CARDS_COLS, CLEAN_SHEETS_COLS,
   buildStandingsRows, placeholderPlayerRows,
 } from '../data/leagueData';
+
+// ── STANDINGS_WITH_POS_COLS ───────────────────────────────────────────────────
+// League detail page adds a POSITION column (numbered rank) before TEAM.
+// Kept local rather than modifying the shared STANDINGS_COLS so the Home
+// carousel (which has less horizontal space) isn't forced to show the column.
+// The `position` field is populated by augmentWithPosition() below.
+const STANDINGS_WITH_POS_COLS = [
+  { key: 'position', label: 'Pos',    align: 'right' },
+  { key: 'team',     label: 'Team',   linkField: 'teamLink' },
+  { key: 'played',   label: 'Played', align: 'right' },
+  { key: 'wins',     label: 'Wins',   align: 'right' },
+  { key: 'draws',    label: 'Draws',  align: 'right' },
+  { key: 'loses',    label: 'Loses',  align: 'right' },
+  { key: 'gd',       label: 'GD',     align: 'right' },
+  { key: 'points',   label: 'Points', align: 'right' },
+];
+
+/**
+ * Inject a 1-based `position` field into each standings row.
+ * computeStandings() already sorts by Pts → GD → GF, so the array order
+ * is the league table order — we just need to number the rows.
+ *
+ * @param {Array} rows  Sorted standings rows from computeStandings().
+ * @returns {Array}     Same rows with a numeric `position` field added.
+ */
+function augmentWithPosition(rows) {
+  return rows.map((row, i) => ({ ...row, position: i + 1 }));
+}
 import {
   computeStandings,
   getTopScorers,
@@ -190,51 +217,37 @@ export default function LeagueDetail() {
     );
   }
 
+  // Inject 1-based position numbers after computeStandings() has sorted by Pts.
+  const rankedRows = augmentWithPosition(standingsRows);
+
   return (
     <div>
-      {/* ── Page title ────────────────────────────────────────────────────────── */}
-      {/* Centred H1 + divider matches the Figma page-title pattern used on every
-          detail page.  The league info (description, badge) sits below in a card
-          rather than in this hero area — keeping the hero minimal so the card
-          becomes the visual anchor. */}
+      {/* ── Page hero ─────────────────────────────────────────────────────────── */}
+      {/* page-hero class: 48px top padding, centred uppercase H1, divider, subtitle */}
       <div className="page-hero">
         <div className="container">
-          <h1 style={{ marginBottom: '16px' }}>{league.name}</h1>
-          <hr className="divider" style={{ maxWidth: '700px', margin: '0 auto' }} />
+          <h1>{league.name}</h1>
+          <hr className="divider" />
+          <p className="subtitle">Lorem ipsum dolor sit amet.</p>
         </div>
       </div>
 
       <div className="container" style={{ paddingBottom: '64px' }}>
 
         {/* ── LEAGUE INFO CARD ──────────────────────────────────────────────── */}
-        {/* Figma spec: full-width card containing a 64px badge circle (top-left)
-            followed by the league name as a card-title and the description prose.
-            This replaces the old centred page-hero prose block — moving the copy
-            into a card gives it visual weight and matches the team/player detail
-            pattern used elsewhere in the design system. */}
+        {/* Full-width card with 80px badge circle, league name, and description.
+            Sits below the page hero so it becomes the visual anchor for the page. */}
         <section className="section">
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* ── Badge circle ──────────────────────────────────────────────
-                64×64px placeholder — leagues have no brand colour so we use
-                the neutral Lunar Dust tint.  Replace with a real crest <img>
-                once league logo assets are added to the DB. */}
+            {/* 80×80px circular badge — neutral tint until real crest assets land */}
             <div style={{
-              width: 64,
-              height: 64,
+              width: 80, height: 80,
               borderRadius: '50%',
-              backgroundColor: 'rgba(227,224,213,0.1)',
+              backgroundColor: 'rgba(227,224,213,0.08)',
               border: '1px solid rgba(227,224,213,0.2)',
               flexShrink: 0,
             }} />
-
-            {/* League name repeated inside the card so it reads as a self-
-                contained information block — the H1 above is the page title,
-                this is the card's entity label. */}
             <h3 className="card-title" style={{ margin: 0 }}>{league.name}</h3>
-
-            {/* Description prose — unrestricted width inside the card so long
-                text fills the card naturally rather than centering in a narrow
-                max-width column as it did in the old page-hero layout. */}
             <p style={{ fontSize: '14px', lineHeight: 1.8, opacity: 0.85, margin: 0 }}>
               {league.description}
             </p>
@@ -242,60 +255,29 @@ export default function LeagueDetail() {
         </section>
 
         {/* ── LEAGUE STANDINGS ──────────────────────────────────────────────── */}
-        {/* computeStandings() sorts rows by Pts desc so the leader is always
-            first once matches have been played.  Pre-season all rows are zero
-            and the original leagueData order is preserved.
-            The ◄ ► chevrons are the ISL design-system decorative section
-            header motif — purely visual, not interactive on this page. */}
+        {/* Ranked columns (POSITION + standard cols) replace the shared
+            STANDINGS_COLS so the full table is shown on the detail page only. */}
         <section className="section">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>◄</span>
-            <h2 className="section-title" style={{ margin: 0 }}>
-              League Standings — {league.name}
-            </h2>
-            <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>►</span>
-          </div>
-          {/* Light variant: cream/dust bg contrasts the Galactic Abyss page bg,
-              matching the Figma data-table spec for all detail pages. */}
-          <IslTable variant="light" columns={STANDINGS_COLS} rows={standingsRows} />
+          <h2 className="section-title">League Standings — {league.name}</h2>
+          <IslTable variant="light" columns={STANDINGS_WITH_POS_COLS} rows={rankedRows} />
         </section>
 
-        {/* ── TOP SCORERS | TOP ASSISTS — 2-column ─────────────────────────── */}
-        {/* SCORER_COLS key:'goals'   → getTopScorers() output shape.
-            ASSISTS_COLS key:'assists' → getTopAssists() output shape.
-            StatTable includes a SEE MORE button by default (showSeeMore=true). */}
-        <div
-          className="stats-two-col"
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
-        >
-          <StatTable title="Top Scorers" columns={SCORER_COLS}  rows={scorerRows} />
-          <StatTable title="Top Assists" columns={ASSISTS_COLS} rows={assistRows} />
+        {/* ── TOP SCORERS | TOP ASSISTERS — side by side ───────────────────── */}
+        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '64px' }}>
+          <StatTable title="Top Scorers"   columns={SCORER_COLS}  rows={scorerRows} />
+          <StatTable title="Top Assisters" columns={ASSISTS_COLS} rows={assistRows} />
         </div>
 
-        {/* ── TOP CLEAN SHEETS — half-width ─────────────────────────────────── */}
-        {/* Figma places this section at full left half-width with the right
-            column empty.  The 1fr 1fr grid + empty <div> achieves this without
-            custom width hacks, and the responsive .stats-two-col rule in
-            index.css collapses both to full-width on mobile. */}
-        <div
-          className="stats-two-col"
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
-        >
-          {/* CLEAN_SHEETS_COLS key:'clean_sheets' — placeholder until
-              matchResultsService.getTopCleanSheets() is implemented. */}
+        {/* ── TOP CLEAN SHEETS — half width (right col intentionally empty) ─── */}
+        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '64px' }}>
           <StatTable title="Top Clean Sheets" columns={CLEAN_SHEETS_COLS} rows={cleanSheetRows} />
-          <div aria-hidden="true" /> {/* intentional empty right column per Figma */}
+          <div aria-hidden="true" />
         </div>
 
-        {/* ── MOST YELLOW CARDS | MOST RED CARDS — 2-column ────────────────── */}
-        {/* CARDS_COLS key:'cards' — shared by both yellow and red aggregators;
-            the section title provides the visual distinction. */}
-        <div
-          className="stats-two-col"
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}
-        >
-          <StatTable title="Most Yellow Cards" columns={CARDS_COLS} rows={yellowRows} />
-          <StatTable title="Most Red Cards"    columns={CARDS_COLS} rows={redRows}    />
+        {/* ── TOP YELLOW CARDS | TOP RED CARDS — side by side ──────────────── */}
+        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          <StatTable title="Top Yellow Cards" columns={CARDS_COLS} rows={yellowRows} />
+          <StatTable title="Top Red Cards"    columns={CARDS_COLS} rows={redRows}    />
         </div>
 
       </div>
