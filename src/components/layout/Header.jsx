@@ -28,6 +28,9 @@ const NAV_LINKS = [
   { label: 'Teams',    to: '/teams' },
   { label: 'Players',  to: '/players' },
   { label: 'Matches',  to: '/matches' },
+  // Galaxy Dispatch — the Architect's narrative feed. Sits between Matches
+  // and Voting because news bridges in-match events with the off-season story.
+  { label: 'News',     to: '/news' },
   { label: 'Voting',   to: '/voting' },
   { label: 'Training', to: '/training' },
 ];
