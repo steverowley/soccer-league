@@ -36,4 +36,21 @@
 // STATUS: scaffold only — Phase -1 moves existing code here; subsequent phases
 //   extend the feature.
 
-export {};
+// ── AgentSystem (AI commentary dispatcher) ────────────────────────────────
+export { AgentSystem, COMMENTATOR_PROFILES } from './logic/AgentSystem';
+
+// ── Shared match types ────────────────────────────────────────────────────
+export type {
+  MatchPlayer,
+  MatchTeam,
+  MatchReferee,
+  MatchManager,
+  PlayerAgent,
+  MatchEvent,
+  GameState,
+  FeedItem,
+  CommentatorProfile,
+  IArchitect,
+  AgentMatchContext,
+  ArchitectMatchContext,
+} from './types';
