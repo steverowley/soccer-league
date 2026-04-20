@@ -92,6 +92,11 @@ export {
 // production users.
 export { ArchitectLogPage } from './ui/ArchitectLogPage';
 
+// Public-facing Galaxy Dispatch news feed. Surfaces narratives from the
+// `narratives` table — both architect-tick (source='scheduled') and
+// in-match (source='match') fragments — in a paginated, kind-filterable view.
+export { NewsFeedPage } from './ui/NewsFeedPage';
+
 // ── In-match Architect (CosmicArchitect class) ─────────────────────────────
 // The class that drives in-match proclamations, interference, and persistent
 // lore. Satisfies IArchitect (match/types.ts) by structural typing.
