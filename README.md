@@ -18,7 +18,7 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
   - **Live Games** — displays all active matches (status='active') with pulsing cards when matches are in progress; section hidden when no live matches
   - **Upcoming Games** — shows next 6 scheduled fixtures (status='upcoming') sorted by scheduled time; empty-state CTA when no fixtures available
   - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
-- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives and interventions; kind filter strip (designer.whisper, architect_intervention, etc.) with purple glow highlighting on `architect_whisper` cards; public route (no auth required)
+- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor) with purple glow highlighting on `architect_whisper` cards; public route (no auth required)
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
@@ -176,6 +176,7 @@ soccer-league/
 │   │   │   │   ├── interventions.ts       # API layer for architect interventions
 │   │   │   │   └── lore.ts                # API layer for narrative queries
 │   │   │   ├── ui/
+│   │   │   │   ├── ArchitectLogPage.tsx   # Dev-only intervention audit log (mounted at /architect-log)
 │   │   │   │   └── NewsFeedPage.tsx       # Paginated Galaxy Dispatch feed with kind filter strip and purple glow
 │   │   │   ├── types.ts                   # Architect domain types
 │   │   │   └── index.ts                   # Feature exports
@@ -186,9 +187,8 @@ soccer-league/
 │   │   ├── finance/             # Fan boost and ticket revenue
 │   │   ├── match/               # Match simulator types and logic
 │   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract, agent system)
-│   │   │   ├── logic/
-│   │   │   │   └── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
-│   │   │   └── simulation/      # Match engine (pending TypeScript migration from gameEngine.js)
+│   │   │   └── logic/
+│   │   │       └── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
