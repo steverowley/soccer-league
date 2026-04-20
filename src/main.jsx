@@ -79,6 +79,7 @@ import Profile      from './pages/Profile';
 import Voting       from './pages/Voting';
 import Training     from './pages/Training';
 import ArchitectLog from './pages/ArchitectLog';
+import NewsFeed     from './pages/NewsFeed';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -147,6 +148,12 @@ createRoot(document.getElementById('root')).render(
 
               {/* /training → training facility clicker (favourite team's roster) */}
               <Route path="training" element={<Training />} />
+
+              {/* /news → public Galaxy Dispatch narrative feed */}
+              {/* Surfaces Architect-generated narratives (galaxy-tick Edge
+                  Function + in-match fragments) in a paginated, kind-filtered
+                  view. No auth gate — lore is for everyone. */}
+              <Route path="news" element={<NewsFeed />} />
 
               {/* /architect-log → dev-only intervention audit table */}
               {/* ArchitectLog.jsx gates itself behind import.meta.env.DEV so

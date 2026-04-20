@@ -18,6 +18,7 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
   - **Live Games** — displays all active matches (status='active') with pulsing cards when matches are in progress; section hidden when no live matches
   - **Upcoming Games** — shows next 6 scheduled fixtures (status='upcoming') sorted by scheduled time; empty-state CTA when no fixtures available
   - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
+- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives and interventions; kind filter strip (designer.whisper, architect_intervention, etc.) with purple glow highlighting on `architect_whisper` cards; public route (no auth required)
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
@@ -160,22 +161,34 @@ Run the SQL files in order in the Supabase SQL Editor:
 soccer-league/
 ├── src/
 │   ├── App.jsx                  # Match simulator loop and root component
-│   ├── gameEngine.js            # Core simulation: events, contests, player logic
-│   ├── agents.js                # Claude AI commentary and Architect system
+│   ├── gameEngine.js            # Core simulation: events, contests, player logic (legacy JS, pending migration)
 │   ├── simulateHelpers.js       # Chaos, sequences, late-game logic
 │   ├── constants.js             # Enums, personalities, weather, formations
 │   ├── lib/
 │   │   └── supabase.ts          # Typed TypeScript helpers for Supabase (15 query/mutation functions with injected client DI)
 │   ├── features/                # Feature modules
 │   │   ├── architect/           # Cosmic narrator and match interference
+│   │   │   ├── logic/
+│   │   │   │   ├── CosmicArchitect.ts     # Fully typed AI entity managing match edicts, intentions, and fate (migrated from agents.js)
+│   │   │   │   ├── edicts.ts              # Edict system for match probability modifiers
+│   │   │   │   └── loreStore.ts           # Persistent narrative context across matches
+│   │   │   ├── api/
+│   │   │   │   ├── interventions.ts       # API layer for architect interventions
+│   │   │   │   └── lore.ts                # API layer for narrative queries
+│   │   │   ├── ui/
+│   │   │   │   └── NewsFeedPage.tsx       # Paginated Galaxy Dispatch feed with kind filter strip and purple glow
+│   │   │   ├── types.ts                   # Architect domain types
+│   │   │   └── index.ts                   # Feature exports
 │   │   ├── auth/                # Authentication and user profiles
 │   │   ├── betting/             # Wager system and odds engine
-│   │   ├── design-system/       # Component library and theme tokens
+│   │   ├── design-system/       # Component library and theme tokens (ISL shield logo, Space Mono fonts, color tokens)
 │   │   ├── entities/            # Player, team, season data models
 │   │   ├── finance/             # Fan boost and ticket revenue
 │   │   ├── match/               # Match simulator types and logic
-│   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract)
-│   │   │   └── logic/           # Match simulation helpers
+│   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract, agent system)
+│   │   │   ├── logic/
+│   │   │   │   └── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
+│   │   │   └── simulation/      # Match engine (pending TypeScript migration from gameEngine.js)
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
@@ -184,6 +197,7 @@ soccer-league/
 │   │   └── utils/               # Shared utilities
 │   ├── pages/
 │   │   ├── Home.jsx             # Landing page with standings and Galaxy Dispatch
+│   │   ├── NewsFeed.jsx         # Public route wrapper for Galaxy Dispatch news feed
 │   │   ├── Leagues.jsx / LeagueDetail.jsx
 │   │   ├── Teams.jsx / TeamDetail.jsx
 │   │   ├── Players.jsx / PlayerDetail.jsx
@@ -230,6 +244,14 @@ Centralized TypeScript interfaces for match simulator and AI commentary:
 - **Context types**: `AgentMatchContext`, `ArchitectMatchContext` — initialization parameters injected into systems at match start
 
 This eliminates type drift between game engine (`App.jsx`, `gameEngine.js`) and AI commentary (`AgentSystem`) by defining each shared shape once.
+
+### AI Commentary & Architect System (`features/architect/` & `features/match/logic/AgentSystem.ts`)
+Migrated from legacy `agents.js` to strict TypeScript with clean feature separation:
+- **CosmicArchitect.ts** (374 lines) — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `narratives` table.
+- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Latency ~500ms at TURBO speed via staggered voice dispatch.
+- **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. Lore is database-backed, hydrated before match start, and persisted post-match for session coherence.
+- **API layer** (`architect/api/`) — Thin modules for reading narratives and interventions from Supabase, enabling future front-end feeds (Galaxy Dispatch narrative UI, intervention audit).
+- **Type safety**: Both systems depend on `IArchitect` interface (duck typing) rather than concrete CosmicArchitect, enabling loose coupling and testability.
 
 ### Design System (`features/design-system/` & `src/styles/tokens.css`)
 Unified visual language and component library aligned to the Figma design specification:
