@@ -183,40 +183,82 @@ export default function Profile() {
   }, {});
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '80px' }}>
+    <div>
+      {/* ── Page hero ──────────────────────────────────────────────────────────── */}
+      {/* .page-hero provides consistent 48px top padding + centred uppercase H1
+          matching every other detail page in the app (LeagueDetail, TeamDetail, etc.).
+          The subtitle shows the username so the fan's identity is front and centre. */}
+      <div className="page-hero">
+        <div className="container">
+          <h1>My Profile</h1>
+          <hr className="divider" />
+          <p className="subtitle">{profile.username}</p>
+        </div>
+      </div>
+
+      <div className="container" style={{ paddingBottom: '80px' }}>
 
       {/* ── Section 1: Account summary ─────────────────────────────────────── */}
+      {/* Displays the four key numbers from the design: FAN NUMBER (truncated
+          UUID used as the public fan identifier), FAN SINCE (join date),
+          GALACTIC CREDITS (current balance), and TOTAL WINNINGS (lifetime
+          credits earned from successful bets — null pre-betting phase shows 0). */}
       <section className="section">
-        <h2 className="section-title">Account</h2>
-        <div className="card" style={{ maxWidth: '480px' }}>
+        <div className="card" style={{ maxWidth: '560px' }}>
 
-          {/* Username + member-since row */}
-          <div style={{ marginBottom: '16px' }}>
-            <p style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>
-              {profile.username}
-            </p>
-            <p style={{ fontSize: '12px', opacity: 0.5 }}>
-              Member since {new Date(profile.created_at).toLocaleDateString(undefined, {
-                year: 'numeric', month: 'long', day: 'numeric',
-              })}
-            </p>
-          </div>
+          {/* ── Fan identity row ──────────────────────────────────────────── */}
+          {/* Username dominates; fan number below it at reduced opacity so it
+              reads as secondary identification rather than the primary label. */}
+          <h3 className="card-title" style={{ marginBottom: '4px' }}>{profile.username}</h3>
+          <p style={{ fontSize: '11px', opacity: 0.45, letterSpacing: '0.06em', marginBottom: '20px' }}>
+            FAN #{profile.id?.slice(0, 8).toUpperCase()}
+          </p>
 
-          <hr className="divider" style={{ marginBottom: '16px' }} />
+          <hr className="divider" style={{ marginBottom: '20px' }} />
 
-          {/* Credit balance — the most important number in the game */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{
-              fontSize: '32px',
-              fontWeight: 700,
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--color-purple)',
-            }}>
-              {profile.credits}
-            </span>
-            <span style={{ fontSize: '14px', opacity: 0.7 }}>
-              Intergalactic Credits
-            </span>
+          {/* ── Key stats grid — FAN SINCE | GALACTIC CREDITS | TOTAL WINNINGS ── */}
+          {/* Three equal columns so all headline numbers sit at the same baseline.
+              Responsive: collapses to a single column via the .stats-two-col breakpoint
+              when the viewport is narrow.  GALACTIC CREDITS uses the purple accent
+              to signal its status as the game's primary currency. */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
+
+            {/* FAN SINCE */}
+            <div>
+              <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                Fan Since
+              </p>
+              <p style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                {new Date(profile.created_at).toLocaleDateString(undefined, {
+                  year: 'numeric', month: 'short',
+                })}
+              </p>
+            </div>
+
+            {/* GALACTIC CREDITS — purple accent, largest text, most important number */}
+            <div>
+              <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                Galactic Credits
+              </p>
+              <p style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--color-purple)',
+              }}>
+                {profile.credits}
+              </p>
+            </div>
+
+            {/* TOTAL WINNINGS — lifetime sum; null until the betting feature is live */}
+            <div>
+              <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                Total Winnings
+              </p>
+              <p style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                {profile.total_winnings ?? 0}
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -333,6 +375,7 @@ export default function Profile() {
         <BetHistory userId={user.id} limit={50} refreshKey={refreshKey} />
       </section>
 
+      </div>
     </div>
   );
 }

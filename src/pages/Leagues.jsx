@@ -67,12 +67,13 @@ export default function Leagues() {
   }, [db]); // db is a stable context ref — adding it satisfies exhaustive-deps without causing re-fetches
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>
+    <div className="container" style={{ paddingBottom: '60px' }}>
 
       {/* ── Page hero ───────────────────────────────────────────────────────── */}
-      <div className="page-hero" style={{ textAlign: 'center', marginBottom: '40px' }}>
+      {/* page-hero class provides 48px top padding + centred uppercase h1 */}
+      <div className="page-hero" style={{ marginBottom: '40px' }}>
         <h1>Intergalactic Leagues</h1>
-        <hr className="divider" style={{ maxWidth: '600px', margin: '16px auto 16px' }} />
+        <hr className="divider" />
         <p className="subtitle">The most exciting soccer simulation game in the solar system!</p>
       </div>
 
@@ -113,17 +114,17 @@ export default function Leagues() {
               style={{ display: 'flex', flexDirection: 'column' }}
             >
               {/* ── League badge circle ──────────────────────────────────────
-                  64×64px circular placeholder matching the Figma listing card
-                  spec.  Neutral dust tint — leagues have no brand colour field
-                  in the DB.  Will be replaced by a real league crest image
-                  once assets are added to the schema. */}
+                  112×112px circular placeholder per the Figma design spec.
+                  Larger than the team card badge (which is 80px) to signal
+                  that leagues sit above teams in the hierarchy.  Will be
+                  replaced by a real league crest image when assets land. */}
               <div style={{
-                width: 64,
-                height: 64,
+                width: 112,
+                height: 112,
                 borderRadius: '50%',
-                backgroundColor: 'rgba(227,224,213,0.1)',
+                backgroundColor: 'rgba(227,224,213,0.08)',
                 border: '1px solid rgba(227,224,213,0.2)',
-                marginBottom: '16px',
+                marginBottom: '20px',
                 flexShrink: 0,
               }} />
 
