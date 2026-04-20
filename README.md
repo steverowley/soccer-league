@@ -13,18 +13,19 @@ Matches run as full 90-minute simulations with live AI commentary from three dis
 ## Features
 
 ### Website
-- Multi-page app with client-side routing and live Supabase data fetching
+Multi-page app with client-side routing and live Supabase data fetching. All pages share a unified design system with consistent page heroes, section navigation arrows, and reusable card components.
+
 - **Home** (`/`) — Hero section with:
-  - **Live Games** — displays all active matches (status='active') with pulsing cards when matches are in progress; section hidden when no live matches
-  - **Upcoming Games** — shows next 6 scheduled fixtures (status='upcoming') sorted by scheduled time; empty-state CTA when no fixtures available
+  - **Live Games** — MatchCard components displaying all active matches (status='active') with momentum bars and pulsing when matches are in progress; section hidden when no live matches
+  - **Upcoming Games** — next 6 scheduled fixtures (status='upcoming') as MatchCard components with bet sliders
   - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
 - **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor) with purple glow highlighting on `architect_whisper` cards; public route (no auth required)
-- **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables
-- **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats
+- **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables; per-league carousel navigation with arrow controls
+- **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
-- **Matches** (`/matches`, `/matches/:matchId`) — Match schedule, live simulator, and per-fixture WagerWidget
+- **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
 - **Authenticated routes**:
-  - **Profile** (`/profile`) — IC credit balance, team/player preference, personal BetHistory
+  - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
   - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options
   - **Training** (`/training`) — Clicker minigame to collectively boost player stats
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
@@ -265,6 +266,8 @@ Unified visual language and component library aligned to the Figma design specif
   - Headings (h1–h3) — Title Case (not ALL CAPS) with cosmic sizing
   - Footer — logo-left + secondary-nav-right layout matching design spec
 - **Component library** — Reusable React components in `features/design-system/components/` (Button, Card, Input, Badge, etc.) with prop-driven theming.
+- **Unified page layouts** — All pages share consistent `.page-hero` (48px top padding + centered H1) and `.section-nav` (◄ SECTION NAME ► arrow headings) styling.
+- **MatchCard component** (`src/components/ui/MatchCard.jsx`) — Shared card component replacing duplicated variants across Home and Matches pages; supports in_progress / scheduled / completed statuses with momentum bars, tag badges, bet sliders, and live commentary feeds.
 
 ## Tech Stack
 
