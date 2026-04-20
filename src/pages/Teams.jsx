@@ -57,19 +57,22 @@ export default function Teams() {
   const db = useSupabase();
 
   // ── Data fetch ────────────────────────────────────────────────────────────
-  // Fetch leagues (for ordered section headings) and all teams in one go.
-  // Teams are then grouped by league_id client-side — no second query needed.
+  // Fetch leagues (for carousel order) and all teams in one round-trip.
+  // Teams are grouped client-side by league_id — no second query needed.
   const [leagues,       setLeagues]       = useState([]);
   const [teamsByLeague, setTeamsByLeague] = useState({});
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState(false);
 
+  // ── Carousel state ────────────────────────────────────────────────────────
+  // leagueIdx indexes into the `leagues` array. Wraps at both ends so the
+  // user can cycle through all four leagues without hitting a dead end.
+  const [leagueIdx, setLeagueIdx] = useState(0);
+
   useEffect(() => {
     Promise.all([getLeagues(db), getTeams(db)])
       .then(([leagueRows, teamRows]) => {
-        // ── Group teams by league ──────────────────────────────────────────
-        // Build a map of leagueId → normalised team array so the render loop
-        // can look up each league's clubs in O(1) rather than filtering each time.
+        // Build leagueId → normalised team array for O(1) lookup per league.
         const grouped = {};
         teamRows.forEach(t => {
           const lid = t.league_id;
@@ -85,77 +88,51 @@ export default function Teams() {
         setError(true);
         setLoading(false);
       });
-  }, [db]); // db is a stable context ref — adding it satisfies exhaustive-deps without causing re-fetches
+  }, [db]);
+
+  /** Advance the carousel by `delta` (-1 = prev, +1 = next), wrapping around. */
+  function shiftLeague(delta) {
+    setLeagueIdx(i => (i + delta + leagues.length) % leagues.length);
+  }
+
+  const currentLeague = leagues[leagueIdx];
+  const currentTeams  = currentLeague ? (teamsByLeague[currentLeague.id] ?? []) : [];
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>
+    <div className="container" style={{ paddingBottom: '60px' }}>
 
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      {/* .page-hero provides the standard centred layout and vertical padding
-          shared across all listing pages (Teams, Players, Leagues, etc.).
-          .subtitle inside .page-hero gets 14px / 0.7 opacity from index.css. */}
-      <div className="page-hero">
+      {/* page-hero provides the 48px top padding + centred uppercase h1 */}
+      <div className="page-hero" style={{ marginBottom: '40px' }}>
         <h1>Our Heroic Teams</h1>
-        <hr className="divider" style={{ maxWidth: '600px', margin: '16px auto 16px' }} />
+        <hr className="divider" />
         <p className="subtitle">Lorem ipsum dolor sit amet.</p>
       </div>
 
-      {/* ── Loading / error states ──────────────────────────────────────────── */}
-      {loading && (
-        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>
-          Loading teams…
-        </p>
+      {/* ── Loading / error states ────────────────────────────────────────────── */}
+      {loading && <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>Loading teams…</p>}
+      {error   && <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>Could not load teams. Please try again later.</p>}
+
+      {/* ── League carousel ───────────────────────────────────────────────────── */}
+      {/* Shows one league at a time — prev/next arrows navigate between the four
+          leagues.  Matches the design which uses ◄ ROCKY INNER LEAGUE ► as a
+          functional carousel rather than a static heading. */}
+      {!loading && !error && currentLeague && (
+        <section className="section">
+          <div className="section-nav">
+            <button className="section-nav-btn" onClick={() => shiftLeague(-1)} aria-label="Previous league">◄</button>
+            <h2 className="section-nav-title">{currentLeague.name}</h2>
+            <button className="section-nav-btn" onClick={() => shiftLeague(1)} aria-label="Next league">►</button>
+          </div>
+
+          {/* 2-column grid — collapses to 1-col below 640px via .team-grid rule */}
+          <div className="team-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            {currentTeams.map(team => (
+              <TeamCard key={team.id} team={team} />
+            ))}
+          </div>
+        </section>
       )}
-      {error && (
-        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>
-          Could not load teams. Please try again later.
-        </p>
-      )}
-
-      {/* ── League sections ───────────────────────────────────────────────────── */}
-      {/* Render one section per league, in the order returned by getLeagues().
-          Leagues with no teams in teamsByLeague are silently skipped so a
-          partially-seeded DB doesn't crash the page. */}
-      {!loading && !error && leagues.map(league => {
-        const teams = teamsByLeague[league.id];
-        if (!teams || teams.length === 0) return null;
-
-        return (
-          <section key={league.id} className="section">
-
-            {/* ── League group heading ────────────────────────────────────────── */}
-            {/* The ◄ ► chevrons are a purely decorative ISL design-system
-                motif — every section header on a listing page uses this
-                pattern to frame the league name.  They are not interactive
-                here because all leagues are shown simultaneously on one page;
-                carousels that need real prev/next navigation (e.g. the Home
-                standings) attach onClick handlers to their own arrow buttons. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>◄</span>
-              <h2 className="section-title" style={{ margin: 0 }}>
-                {league.name}
-              </h2>
-              <span aria-hidden="true" style={{ opacity: 0.5, fontSize: '14px' }}>►</span>
-            </div>
-
-            {/* ── 2-column team card grid ─────────────────────────────────────── */}
-            {/* align-items: stretch ensures paired cards share the same height
-                so the VIEW TEAM buttons stay vertically aligned across each row. */}
-            <div
-              className="team-grid"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '16px',
-              }}
-            >
-              {teams.map(team => (
-                <TeamCard key={team.id} team={team} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
 
     </div>
   );
@@ -193,19 +170,17 @@ function TeamCard({ team }) {
       style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
     >
       {/* ── Brand badge circle ────────────────────────────────────────────── */}
-      {/* 64×64px circle — matches the Figma listing card spec.  Until real
-          team crests are available, the circle is filled with the team's
-          primary brand colour at 20% opacity so each card has a distinct
-          identity without a full logo asset.  The 1px border at 40% opacity
-          gives the circle a visible edge even on teams whose brand colour is
-          very close to the card background. */}
+      {/* 80×80px circle per the Figma team listing card spec.  Tinted with the
+          team's primary brand colour at 20% opacity so each card has a distinct
+          visual identity before real crests are uploaded.  Border at 40% opacity
+          stays visible even when brand colour is close to the card background. */}
       <div style={{
-        width: 64,
-        height: 64,
+        width: 80,
+        height: 80,
         borderRadius: '50%',
         backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
         border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,
-        marginBottom: '12px',
+        marginBottom: '16px',
         flexShrink: 0,
       }} />
 
