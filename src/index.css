@@ -271,12 +271,15 @@ table {
 }
 
 /* ── Page hero ─────────────────────────────────────────────────────────── */
-/* Consistent across every page: 48px top padding, centred uppercase H1,   */
-/* full-width divider, muted subtitle. Never override per-page top padding. */
+/* Top padding accounts for the ISL logo overhang below the header divider: */
+/*   Desktop: logo extends 60px below divider + 40px gap = 100px            */
+/*   Mobile:  logo extends 30px below divider + 40px gap = 70px             */
+/* Never override per-page top padding — this rule is the single source of  */
+/* truth for the vertical start position of every page header.              */
 
 .page-hero {
   text-align: center;
-  padding: 48px 0 0;
+  padding: 100px 0 0;
 }
 
 .page-hero h1 {
@@ -371,6 +374,13 @@ table {
   .matches-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* Mobile header logo is 60px wide with -30px overhang, so page hero needs
+   only 70px top padding (30px overhang + 40px gap) instead of the 100px
+   desktop value. */
+@media (max-width: 767px) {
+  .page-hero { padding-top: 70px; }
 }
 
 /* ── Footer ────────────────────────────────────────────────────────────── */
