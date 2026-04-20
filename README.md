@@ -173,7 +173,9 @@ soccer-league/
 │   │   ├── design-system/       # Component library and theme tokens
 │   │   ├── entities/            # Player, team, season data models
 │   │   ├── finance/             # Fan boost and ticket revenue
-│   │   ├── match/               # Match scheduling
+│   │   ├── match/               # Match simulator types and logic
+│   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract)
+│   │   │   └── logic/           # Match simulation helpers
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
@@ -217,6 +219,17 @@ All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injec
 - `getLeagueStandings()`, `getTeamDetail()`, `getMatchSchedule()`, etc.
 - Each function accepts `db` from context, enabling easy mocking in tests
 - **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
+
+### Match Type System (`features/match/types.ts`)
+Centralized TypeScript interfaces for match simulator and AI commentary:
+- **Entity types**: `MatchPlayer`, `MatchTeam`, `MatchReferee`, `MatchManager` — structural contracts for game objects
+- **Agent types**: `PlayerAgent` (with confidence, fatigue, emotion, personality, form) — tracks psychological state during matches
+- **Event system**: `MatchEvent` with Architect interference flags (`architectForced`, `architectConjured`, `architectStolen`, etc.) — all event types share consistent shape
+- **Feed items**: `FeedItem` discriminated union — `PlayByPlayItem`, `CommentatorItem`, `PlayerThoughtItem`, `ManagerItem`, `RefereeItem`, `ArchitectProclamationItem` with streaming support
+- **Architect contract**: `IArchitect` interface — allows AgentSystem to depend on an abstraction rather than concrete CosmicArchitect, enabling structural (duck) typing and loose coupling between features
+- **Context types**: `AgentMatchContext`, `ArchitectMatchContext` — initialization parameters injected into systems at match start
+
+This eliminates type drift between game engine (`App.jsx`, `gameEngine.js`) and AI commentary (`AgentSystem`) by defining each shared shape once.
 
 ### Design System (`features/design-system/` & `src/styles/tokens.css`)
 Unified visual language and component library aligned to the Figma design specification:
