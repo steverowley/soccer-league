@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { C, bdr, PERS, PERS_ICON, CLAUDE_MODEL } from "../constants.js";
-import { COMMENTATOR_PROFILES } from "../agents.js";
+import { COMMENTATOR_PROFILES } from "../features/match/index.ts";
 
 // ── Stat ──────────────────────────────────────────────────────────────────────
 
