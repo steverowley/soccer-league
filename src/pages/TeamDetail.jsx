@@ -417,8 +417,8 @@ export default function TeamDetail() {
           opacity from the .page-hero .subtitle rule in index.css. */}
       <div className="page-hero">
         <div className="container">
-          <h1 style={{ marginBottom: '16px' }}>{team.name}</h1>
-          <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
+          <h1>{team.name}</h1>
+          <hr className="divider" />
           <p className="subtitle">{team.tagline}</p>
         </div>
       </div>
@@ -434,11 +434,11 @@ export default function TeamDetail() {
         <section className="section">
           <div className="card">
             {/* ── Brand badge circle ──────────────────────────────────────────
-                64×64px — matches Figma listing and detail card spec.
+                80×80px — matches Teams listing card size (Figma detail spec).
                 team.color is the primary brand hex from the DB seed. */}
             <div style={{
-              width: 64,
-              height: 64,
+              width: 80,
+              height: 80,
               borderRadius: '50%',
               backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
               border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,

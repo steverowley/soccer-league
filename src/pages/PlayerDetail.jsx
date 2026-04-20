@@ -293,8 +293,8 @@ export default function PlayerDetail() {
           The subtitle row shows a position badge and a link to the player's club. */}
       <div className="page-hero">
         <div className="container">
-          <h1 style={{ marginBottom: '16px' }}>{player.name}</h1>
-          <hr className="divider" style={{ maxWidth: '500px', margin: '0 auto 16px' }} />
+          <h1>{player.name}</h1>
+          <hr className="divider" />
 
           <p className="subtitle">
             {/* ── Jersey number badge ─────────────────────────────────────────

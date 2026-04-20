@@ -31,8 +31,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import IslTable from '../components/ui/IslTable';
-import MetaRow from '../components/ui/MetaRow';
+import MatchCard from '../components/ui/MatchCard';
 import { LEAGUES, STANDINGS_COLS, buildStandingsRows } from '../data/leagueData';
+// MetaRow removed — match cards now rendered by the shared MatchCard component
 import { computeStandings, generateNewsItems } from '../lib/matchResultsService';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -142,13 +143,14 @@ export default function Home() {
   return (
     <div>
       {/* ── HERO ──────────────────────────────────────────────────────────────── */}
-      <section style={{ textAlign: 'center', padding: '32px 0 40px' }}>
+      {/* Consistent page-hero class handles top padding + centering.            */}
+      <section className="page-hero" style={{ paddingBottom: '40px' }}>
         <div className="container">
-          <h1 style={{ marginBottom: '16px', lineHeight: 1.2 }}>
+          <h1 style={{ lineHeight: 1.2 }}>
             Welcome to the<br />Intergalactic Soccer League
           </h1>
-          <hr className="divider" style={{ maxWidth: '600px', margin: '0 auto 16px' }} />
-          <p className="subtitle" style={{ marginBottom: '24px', opacity: 0.7, fontSize: '14px' }}>
+          <hr className="divider" />
+          <p className="subtitle">
             The most exciting soccer simulation game in the solar system!
           </p>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -164,85 +166,19 @@ export default function Home() {
 
       <div className="container">
 
-        {/* ── LIVE GAMES ────────────────────────────────────────────────────────── */}
-        {/* Only rendered when at least one match is active — avoids a heading
-            with no content during the typical between-match window.  The pulsing
-            border and ⚡ badge signal urgency without exposing any hidden stats. */}
-        {liveMatches.length > 0 && (
-          <section className="section">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <h2 className="section-title" style={{ margin: 0 }}>Live Games</h2>
-              <span style={{
-                fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.1em', color: 'var(--color-dust)',
-                background: 'var(--color-purple)', padding: '2px 8px',
-                fontFamily: 'var(--font-mono)',
-              }}>
-                ⚡ Live
-              </span>
-            </div>
-            {/* Cap at 4 cards so the grid stays balanced on a 2-col desktop layout. */}
-            <div className="matches-grid">
-              {liveMatches.slice(0, 4).map(m => (
-                <HomeLiveCard key={m.id} match={m} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── UPCOMING GAMES ─────────────────────────────────────────────────────── */}
-        {/* Always visible once the initial fetch resolves so users can see the
-            fixture calendar even before any match has been played.  Shows the
-            next 6 scheduled fixtures across all leagues ordered by kick-off time.
-            Empty state prompts simulation so new users immediately have something
-            to do rather than staring at a blank calendar. */}
-        {!matchesLoading && (
-          <section className="section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 className="section-title" style={{ margin: 0 }}>Upcoming Games</h2>
-              <Link to="/matches">
-                <Button variant="secondary">View All →</Button>
-              </Link>
-            </div>
-
-            {upcomingMatches.length === 0 ? (
-              // ── Pre-season / empty-fixture fallback ─────────────────────────────
-              // Shown when migration 0009 has not yet been applied (no fixture rows)
-              // or when all fixtures are already completed.
-              <div className="card" style={{ maxWidth: '480px' }}>
-                <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '16px' }}>
-                  No fixtures scheduled yet. Simulate a match to get the season started.
-                </p>
-                <Link to="/matches">
-                  <Button variant="primary">Simulate a Match</Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="matches-grid">
-                {upcomingMatches.map(m => (
-                  <HomeUpcomingCard key={m.id} match={m} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* ── CREATE ACCOUNT card ─────────────────────────────────────────────── */}
-        {/* Only shown to anonymous visitors. Authenticated users already have
-            an account, so showing this card would be noise. The `user` check
-            also prevents a flash: during the brief loading window the card is
-            hidden, which is preferable to showing it and then hiding it mid-
-            render once the session resolves. */}
+        {/* ── CREATE ACCOUNT ────────────────────────────────────────────────────── */}
+        {/* Only shown to anonymous visitors — authenticated users have no use for it.
+            Positioned first (above standings) so it's the primary CTA for new fans
+            before they get distracted by live scores. Hidden during auth loading to
+            prevent a flash-of-unauthenticated-content. */}
         {!user && (
           <section className="section">
-            <div className="card" style={{ maxWidth: '480px' }}>
-              <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Create Account</h3>
+            <div className="card" style={{ maxWidth: '400px' }}>
+              <h3 className="card-title">Create Account</h3>
               <p style={{ marginBottom: '12px', fontSize: '14px' }}>
                 The universe's most elite league is calling for fans—and it's your time to shine!
               </p>
-              <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.85 }}>
-                Register now to:
-              </p>
+              <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.85 }}>Register now to:</p>
               <ul style={{ paddingLeft: '16px', marginBottom: '16px', fontSize: '13px', lineHeight: 1.8 }}>
                 <li>Place bets on wormhole goals, time-loop own goals, and referee implosions</li>
                 <li>Receive cryptic prophecies about your team's league standing</li>
@@ -254,9 +190,7 @@ export default function Home() {
               <p style={{ marginBottom: '20px', fontSize: '13px', opacity: 0.7 }}>
                 Click below to pledge allegiance. Or don't. You already have.
               </p>
-              {/* Link to /login?mode=signup so the signup tab is pre-selected
-                  rather than dropping the user on the login tab and making them
-                  hunt for the Create Account toggle. */}
+              {/* /login?mode=signup pre-selects the sign-up tab */}
               <Link to="/login?mode=signup">
                 <Button variant="primary">Create Account</Button>
               </Link>
@@ -265,51 +199,19 @@ export default function Home() {
         )}
 
         {/* ── LEAGUE STANDINGS carousel ─────────────────────────────────────────── */}
-        {/* Live data from computeStandings() — updates automatically after
-            each simulated match.  Prev/next arrows cycle all four leagues. */}
+        {/* Live data from computeStandings() — updates after each simulated match.
+            Prev/next arrows use the section-nav pattern from the design system. */}
         <section className="section">
-
-          {/* Carousel header with prev/next arrows flanking the league title */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-            <button
-              onClick={() => shiftLeague(-1)}
-              aria-label="Previous league"
-              style={{
-                background: 'none', border: 'none', color: 'var(--color-dust)',
-                cursor: 'pointer', fontSize: '20px', padding: '0 4px',
-              }}
-            >
-              ◄
-            </button>
-
-            {/* League title doubles as a link to the full standings page */}
-            <h2 className="section-title" style={{ margin: 0 }}>
-              <Link
-                to={`/leagues/${currentLeague.id}`}
-                style={{ color: 'inherit', textDecoration: 'none' }}
-              >
+          <div className="section-nav">
+            <button className="section-nav-btn" onClick={() => shiftLeague(-1)} aria-label="Previous league">◄</button>
+            <h2 className="section-nav-title">
+              <Link to={`/leagues/${currentLeague.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                 League Standings — {currentLeague.name}
               </Link>
             </h2>
-
-            <button
-              onClick={() => shiftLeague(1)}
-              aria-label="Next league"
-              style={{
-                background: 'none', border: 'none', color: 'var(--color-dust)',
-                cursor: 'pointer', fontSize: '20px', padding: '0 4px',
-              }}
-            >
-              ►
-            </button>
+            <button className="section-nav-btn" onClick={() => shiftLeague(1)} aria-label="Next league">►</button>
           </div>
-
-          <IslTable
-            variant="light"
-            columns={STANDINGS_COLS}
-            rows={standingsRows}
-          />
-
+          <IslTable variant="light" columns={STANDINGS_COLS} rows={standingsRows} />
           <div style={{ marginTop: '12px', textAlign: 'right' }}>
             <Link to={`/leagues/${currentLeague.id}`}>
               <Button variant="secondary">View Full Standings →</Button>
@@ -317,70 +219,83 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ── LIVE GAMES ────────────────────────────────────────────────────────── */}
+        {/* Hidden entirely when no match is in progress — no empty heading shown.
+            Caps at 4 cards to keep the 2-col grid balanced on desktop. */}
+        {liveMatches.length > 0 && (
+          <section className="section">
+            <div className="section-nav">
+              <button className="section-nav-btn" aria-hidden="true">◄</button>
+              <h2 className="section-nav-title">Live Games</h2>
+              <button className="section-nav-btn" aria-hidden="true">►</button>
+            </div>
+            <div className="matches-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {liveMatches.slice(0, 4).map(m => (
+                <MatchCard key={m.id} match={m} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── UPCOMING GAMES ────────────────────────────────────────────────────── */}
+        {/* Always visible post-fetch. Home page cards omit the bet slider (that
+            lives only on the Matches page). Empty state prompts simulation. */}
+        {!matchesLoading && (
+          <section className="section">
+            <div className="section-nav">
+              <button className="section-nav-btn" aria-hidden="true">◄</button>
+              <h2 className="section-nav-title">Upcoming Games</h2>
+              <button className="section-nav-btn" aria-hidden="true">►</button>
+            </div>
+            {upcomingMatches.length === 0 ? (
+              <div className="card" style={{ maxWidth: '480px' }}>
+                <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '16px' }}>
+                  No fixtures scheduled yet. Simulate a match to get the season started.
+                </p>
+                <Link to="/matches"><Button variant="primary">Simulate a Match</Button></Link>
+              </div>
+            ) : (
+              <div className="matches-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {upcomingMatches.map(m => (
+                  <MatchCard key={m.id} match={m} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ── GALAXY DISPATCH ───────────────────────────────────────────────────── */}
-        {/* Architect-generated narrative rows from the `narratives` table.
-            Only rendered when at least one row is available — the section
-            stays completely hidden before the first galaxy-tick runs so the
-            page never shows an empty "Galaxy Dispatch" heading. Each card
-            uses a kind-derived accent colour to give cosmic events a visually
-            distinct identity from the match-report news below. */}
+        {/* Architect-generated narratives from the `narratives` table. Hidden until
+            the first galaxy-tick runs so the page never has an empty section.
+            Left-border accent colour maps to narrative kind (political/cosmic/etc). */}
         {narratives.length > 0 && (
           <section className="section">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <h2 className="section-title" style={{ margin: 0 }}>Galaxy Dispatch</h2>
-              {/* Small "Architect" label so players know these are cosmic events,
-                  not match results, and understand their mysterious provenance. */}
+            <div className="section-nav">
+              <button className="section-nav-btn" aria-hidden="true">◄</button>
+              <h2 className="section-nav-title">Galaxy Dispatch</h2>
+              <button className="section-nav-btn" aria-hidden="true">►</button>
               <span style={{
-                fontSize: '10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                color: 'var(--color-purple)',
-                border: '1px solid var(--color-purple)',
-                padding: '1px 6px',
-                fontFamily: 'var(--font-mono)',
+                fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em',
+                color: 'var(--color-purple)', border: '1px solid var(--color-purple)',
+                padding: '1px 6px', fontFamily: 'var(--font-mono)',
               }}>
                 Architect
               </span>
             </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '16px',
-              maxWidth: '960px',
-            }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
               {narratives.map((item) => (
                 <div
                   key={item.id}
                   className="card"
-                  style={{
-                    // Left border accent differentiates narrative kinds so the
-                    // reader can visually parse "political" vs "cosmic" vs "news"
-                    // at a glance — same pattern as the match-report cards below.
-                    borderLeft: `3px solid ${kindColor(item.kind)}`,
-                  }}
+                  style={{ borderLeft: `3px solid ${kindColor(item.kind)}` }}
                 >
-                  {/* Kind badge + timestamp */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{
-                      fontSize: '10px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                      color: kindColor(item.kind),
-                      fontFamily: 'var(--font-mono)',
-                    }}>
+                    <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: kindColor(item.kind) }}>
                       {kindLabel(item.kind)}
                     </span>
-                    <span style={{ fontSize: '10px', opacity: 0.35 }}>
-                      {formatNarrativeDate(item.created_at)}
-                    </span>
+                    <span style={{ fontSize: '10px', opacity: 0.35 }}>{formatNarrativeDate(item.created_at)}</span>
                   </div>
-
-                  {/* Summary — the Architect's actual words. Never edited or
-                      summarised — shown verbatim to preserve the Lovecraftian
-                      voice and keep mechanics hidden. */}
-                  <p style={{ fontSize: '13px', lineHeight: 1.6, opacity: 0.9 }}>
-                    {item.summary}
-                  </p>
+                  <p style={{ fontSize: '13px', lineHeight: 1.6, opacity: 0.9 }}>{item.summary}</p>
                 </div>
               ))}
             </div>
@@ -388,266 +303,62 @@ export default function Home() {
         )}
 
         {/* ── LATEST NEWS ───────────────────────────────────────────────────────── */}
-        {/* Dynamic news cards generated from match results.  Falls back to the
-            static welcome card before any matches have been simulated so the
-            page is never empty.
-            Each card uses team colours as accent borders so the visual identity
-            of the involved teams is immediately apparent. */}
+        {/* Dynamic news cards from match results, capped at 3 per the design.
+            Each card has a LEARN MORE button linking to the news feed.
+            Falls back to the static Season One welcome card before any results exist. */}
         <section className="section">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <h2 className="section-title" style={{ margin: 0 }}>Latest News</h2>
-            <button
-              aria-label="See all news"
-              style={{
-                background: 'none', border: 'none', color: 'var(--color-dust)',
-                cursor: 'pointer', fontSize: '16px',
-              }}
-            >
-              ►
-            </button>
+          <div className="section-nav">
+            <button className="section-nav-btn" aria-hidden="true">◄</button>
+            <h2 className="section-nav-title">Latest News</h2>
+            <button className="section-nav-btn" aria-hidden="true">►</button>
           </div>
 
           {newsItems.length === 0 ? (
-            // ── Pre-season fallback ─────────────────────────────────────────
-            // Shown before any match results are saved.  Gives new users
-            // context about the league without showing an empty section.
-            <div className="card" style={{ maxWidth: '480px' }}>
-              <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>Welcome to Season One</h3>
-              <p style={{ fontSize: '13px', opacity: 0.8, marginBottom: '20px' }}>
-                The new season is about to begin. Get ready for some exciting matches across the galaxy!
-              </p>
-              <Link to="/matches">
-                <Button variant="primary">Simulate a Match</Button>
-              </Link>
+            // ── Pre-season fallback — 3-card row matching the design ────────────
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              {[
+                { title: 'Welcome to Season One', body: 'The new season is about to begin. Get ready for some exciting matches across the galaxy!' },
+                { title: 'The Architect Stirs',   body: 'Cosmic forces are aligning. Something wicked this way comes.' },
+                { title: 'Galactic Odds Open',    body: 'Betting markets are live. Place your credits wisely — or not.' },
+              ].map((item, i) => (
+                <div key={i} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                  <h3 className="card-title" style={{ fontSize: '14px' }}>{item.title}</h3>
+                  <p style={{ fontSize: '12px', opacity: 0.75, lineHeight: 1.6, flex: 1, marginBottom: '16px' }}>{item.body}</p>
+                  <Link to="/news"><Button variant="primary">Learn More</Button></Link>
+                </div>
+              ))}
             </div>
           ) : (
-            // ── Live news cards ─────────────────────────────────────────────
-            // One card per news item, max 6 (generateNewsItems limit).
-            // Cards are laid out in a responsive 2-col grid so the section
-            // fills horizontal space on desktop without each card becoming
-            // uncomfortably wide.
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '16px',
-              maxWidth: '960px',
-            }}>
-              {newsItems.map(item => (
+            // ── Live news cards — capped at 3 to match the 3-column design ──────
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+              {newsItems.slice(0, 3).map(item => (
                 <div
                   key={item.id}
                   className="card"
-                  style={{
-                    // Left border accent in the home team's colour gives an
-                    // instant visual cue about which club the story concerns.
-                    borderLeft: `3px solid ${item.homeColor || 'rgba(227,224,213,0.3)'}`,
-                  }}
+                  style={{ borderLeft: `3px solid ${item.homeColor || 'rgba(227,224,213,0.3)'}`, display: 'flex', flexDirection: 'column' }}
                 >
-                  {/* Date stamp — small, muted, above the headline */}
                   {item.date && (
-                    <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '6px', letterSpacing: '0.06em' }}>
-                      {item.date}
-                    </div>
+                    <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '6px', letterSpacing: '0.06em' }}>{item.date}</div>
                   )}
-
-                  <h3 style={{ fontSize: '14px', marginBottom: '8px', lineHeight: 1.4 }}>
-                    {item.headline}
-                  </h3>
-
-                  <p style={{ fontSize: '12px', opacity: 0.75, lineHeight: 1.6, marginBottom: '12px' }}>
-                    {item.body}
-                  </p>
-
-                  {/* Score pill — shown only for match-report items that
-                      carry homeGoals / awayGoals fields */}
+                  <h3 className="card-title" style={{ fontSize: '14px' }}>{item.headline}</h3>
+                  <p style={{ fontSize: '12px', opacity: 0.75, lineHeight: 1.6, flex: 1, marginBottom: '16px' }}>{item.body}</p>
+                  {/* Score pill for match-report items */}
                   {item.homeGoals != null && (
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', color: item.homeColor, fontWeight: 700 }}>
-                        {item.homeTeam}
-                      </span>
-                      <span style={{
-                        fontSize: '12px', fontWeight: 700,
-                        padding: '1px 8px',
-                        border: '1px solid rgba(227,224,213,0.2)',
-                        letterSpacing: '0.05em',
-                      }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '11px', color: item.homeColor, fontWeight: 700 }}>{item.homeTeam}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, padding: '1px 8px', border: '1px solid rgba(227,224,213,0.2)' }}>
                         {item.homeGoals}–{item.awayGoals}
                       </span>
-                      <span style={{ fontSize: '11px', color: item.awayColor, fontWeight: 700 }}>
-                        {item.awayTeam}
-                      </span>
+                      <span style={{ fontSize: '11px', color: item.awayColor, fontWeight: 700 }}>{item.awayTeam}</span>
                     </div>
                   )}
+                  <Link to="/news"><Button variant="primary">Learn More</Button></Link>
                 </div>
               ))}
             </div>
           )}
         </section>
 
-      </div>
-    </div>
-  );
-}
-
-// ── Match card helpers ────────────────────────────────────────────────────────
-// Compact card variants for the Home page Live / Upcoming sections.  Intentionally
-// simpler than the full Matches page cards: no simulator button, no bet widget.
-// If these components grow a second consumer they should move to a shared module.
-
-/**
- * Format a UTC ISO timestamp as "8 Jan 2600 · 20:00" for fixture card display.
- * Returns "TBD" when the value is null (fixture scheduled_at not yet set).
- *
- * @param {string|null} iso - ISO timestamptz string from Supabase, or null
- * @returns {string}  Human-readable date/time string, or "TBD"
- */
-function formatMatchDate(iso) {
-  if (!iso) return 'TBD';
-  const d = new Date(iso);
-  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return `${date} · ${time}`;
-}
-
-/**
- * Coloured dot + team name row used in HomeUpcomingCard.
- *
- * @param {{ team: object }} props
- */
-function HomeTeamRow({ team }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <span style={{
-        width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-        background: team?.color ?? 'rgba(227,224,213,0.3)',
-        display: 'inline-block',
-      }} />
-      <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {team?.name ?? '—'}
-      </span>
-    </div>
-  );
-}
-
-/**
- * Team name + score on one line, used in HomeLiveCard.
- * The `large` prop bumps the score font and applies the purple accent colour
- * so live scoreboards feel more dramatic than completed-match readouts.
- *
- * @param {{ team: object, score: number, large?: boolean, style?: object }} props
- */
-function HomeScoreRow({ team, score, large, style: extraStyle }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...extraStyle }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{
-          width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-          background: team?.color ?? 'rgba(227,224,213,0.3)',
-          display: 'inline-block',
-        }} />
-        <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          {team?.name ?? '—'}
-        </span>
-      </div>
-      <span style={{
-        fontSize: large ? '22px' : '16px',
-        fontWeight: 700,
-        color: large ? 'var(--color-purple)' : 'inherit',
-      }}>
-        {score ?? '—'}
-      </span>
-    </div>
-  );
-}
-
-/**
- * Home page card for a match currently in progress (status='in_progress').
- * Pulses with the architectPulse animation to signal live activity.
- * Shows real-time score; scores default to 0 when not yet written to DB.
- *
- * @param {{ match: object }} props  - match row with home_team / away_team joined
- */
-function HomeLiveCard({ match }) {
-  const { home_team, away_team, home_score, away_score } = match;
-
-  return (
-    <div
-      className="card"
-      style={{
-        display: 'flex', flexDirection: 'column',
-        // Purple border + pulse animation make live cards visually distinct from
-        // all other card types so users notice them at a glance.
-        border: '1px solid rgba(124,58,237,0.4)',
-        animation: 'architectPulse 3s ease-in-out infinite',
-      }}
-    >
-      {/* Live badge — no date shown because "now" is implied */}
-      <div style={{ marginBottom: '12px' }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: 'var(--color-dust)',
-          background: 'var(--color-purple)', padding: '2px 8px',
-        }}>
-          ⚡ Live
-        </span>
-      </div>
-
-      {/* Venue metadata */}
-      {home_team?.location    && <MetaRow label="Location" value={home_team.location}    fontSize="11px" />}
-      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
-
-      {/* Live scoreboard — large scores with purple accent */}
-      <div style={{ margin: '14px 0', flex: 1 }}>
-        <HomeScoreRow team={home_team} score={home_score ?? 0} large />
-        <HomeScoreRow team={away_team} score={away_score ?? 0} large style={{ marginTop: '8px' }} />
-      </div>
-
-      {/* Cosmic interference footer — Architect flavour text */}
-      <div style={{ borderTop: '1px solid rgba(124,58,237,0.25)', paddingTop: '8px', textAlign: 'center' }}>
-        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '0.1em' }}>⚡ COSMIC INTERFERENCE ⚡</span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Home page card for a scheduled fixture not yet played (status='scheduled').
- * Shows the kick-off date, venue metadata, and both team names with colour dots.
- * No simulator button or bet widget — those live on the full Matches page.
- *
- * @param {{ match: object }} props  - match row with home_team / away_team joined
- */
-function HomeUpcomingCard({ match }) {
-  const { home_team, away_team, scheduled_at } = match;
-
-  return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Status badge + kick-off date */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.1em', color: 'var(--color-purple)',
-          background: 'rgba(124,58,237,0.15)', padding: '2px 8px',
-        }}>
-          Upcoming
-        </span>
-        <span style={{ fontSize: '11px', opacity: 0.5 }}>{formatMatchDate(scheduled_at)}</span>
-      </div>
-
-      {/* Venue metadata */}
-      {home_team?.location    && <MetaRow label="Location" value={home_team.location}    fontSize="11px" />}
-      {home_team?.home_ground && <MetaRow label="Ground"   value={home_team.home_ground} fontSize="11px" />}
-
-      {/* Team matchup */}
-      <div style={{ margin: '14px 0', flex: 1 }}>
-        <HomeTeamRow team={home_team} />
-        <div style={{
-          fontSize: '10px', opacity: 0.35,
-          textTransform: 'uppercase', letterSpacing: '0.1em',
-          margin: '6px 0 6px 18px',
-        }}>
-          vs
-        </div>
-        <HomeTeamRow team={away_team} />
       </div>
     </div>
   );
