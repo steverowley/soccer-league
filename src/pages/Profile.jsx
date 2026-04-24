@@ -26,7 +26,13 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '../features/auth';
 import { BetHistory } from '../features/betting';
 import { getTeams, getPlayersForTeam } from '../lib/supabase';
+import IslTable from '../components/ui/IslTable';
 import Button from '../components/ui/Button';
+import {
+  buildStandingsRows,
+  STANDINGS_COLS,
+} from '../data/leagueData';
+import { computeStandings } from '../lib/matchResultsService';
 
 // ── Save-state labels ──────────────────────────────────────────────────────
 // Keeps the button label consistent and avoids ad-hoc string literals in JSX.
@@ -181,6 +187,21 @@ export default function Profile() {
     acc[leagueName].push(team);
     return acc;
   }, {});
+
+  // ── Favourite team / player derived values ───────────────────────────────
+  // These are derived synchronously from already-fetched data so no extra
+  // network round-trips are needed.  `favTeam` comes from the teams picker
+  // list; `leagueId` is the DB slug (e.g. 'rocky-inner') shared with
+  // leagueData.js; `standingsRows` merges any localStorage match results via
+  // computeStandings — all zeroed pre-season which is fine for display.
+  const favTeam   = teams.find(t => t.id === teamId);
+  const leagueId  = favTeam?.league_id ?? null;
+  const standingsRows = leagueId
+    ? computeStandings(leagueId, buildStandingsRows(leagueId))
+    : [];
+
+  // Favourite player from the already-fetched players roster for that team.
+  const favPlayer = players.find(p => p.id === playerId) ?? null;
 
   return (
     <div>
@@ -367,6 +388,89 @@ export default function Profile() {
           </form>
         </div>
       </section>
+
+      {/* ── Favourite player card ────────────────────────────────────────────── */}
+      {/* Only rendered when the user has saved a favourite player AND that
+          team's player roster has loaded (players list is populated once
+          teamId is set).  Shows basic player identity + a VIEW PLAYER link
+          — season stats are available on the full player detail page. */}
+      {favPlayer && (
+        <section className="section">
+          <h2 className="section-title">Favourite Player</h2>
+          <div className="card" style={{ maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+            {/* Player identity row: jersey number badge + name */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              {favPlayer.jersey_number != null && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 40, height: 40,
+                  borderRadius: '50%',
+                  border: '1px solid rgba(227,224,213,0.3)',
+                  fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)',
+                  flexShrink: 0,
+                }}>
+                  {favPlayer.jersey_number}
+                </span>
+              )}
+              <h3 className="card-title" style={{ margin: 0 }}>{favPlayer.name}</h3>
+            </div>
+
+            {/* Position + overall rating as meta rows */}
+            <div style={{ display: 'flex', gap: '24px', marginBottom: '12px' }}>
+              <div>
+                <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '2px' }}>
+                  Position
+                </p>
+                <p style={{ fontSize: '14px', fontWeight: 700 }}>{favPlayer.position}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '2px' }}>
+                  Rating
+                </p>
+                <p style={{ fontSize: '14px', fontWeight: 700 }}>{favPlayer.overall_rating}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '2px' }}>
+                  Nationality
+                </p>
+                <p style={{ fontSize: '14px', fontWeight: 700 }}>{favPlayer.nationality}</p>
+              </div>
+            </div>
+
+            <div>
+              <Link to={`/players/${favPlayer.id}`}>
+                <Button variant="primary">View Player</Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── League standings ─────────────────────────────────────────────────── */}
+      {/* Shows the standings for the fan's favourite team's league so they can
+          track their club's position without navigating away.  Uses the same
+          computeStandings + buildStandingsRows pattern as LeagueDetail.jsx —
+          localStorage results merged over zeroed base rows, always showing all
+          teams in the league even pre-season. */}
+      {standingsRows.length > 0 && (
+        <section className="section">
+          <h2 className="section-title">
+            League Standings
+            {favTeam && <span style={{ opacity: 0.5, fontWeight: 400, fontSize: '14px', marginLeft: '8px', textTransform: 'none', letterSpacing: 0 }}>
+              — {favTeam.leagues?.name ?? favTeam.name}
+            </span>}
+          </h2>
+          <IslTable variant="light" columns={STANDINGS_COLS} rows={standingsRows} />
+          {leagueId && (
+            <div style={{ marginTop: '12px' }}>
+              <Link to={`/leagues/${leagueId}`}>
+                <Button variant="primary">View Full League</Button>
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── Section 3: Bet history ───────────────────────────────────────────── */}
       {/* The full wager ledger. refreshKey increments after preference saves
