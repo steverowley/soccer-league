@@ -23,9 +23,12 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables; per-league carousel navigation with arrow controls
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
+  - **PlayerDetail** — Player info card, 3-column stats panel (PLAYER STATS with 5-block segmented bars for each composite rating, FITNESS with injury status & form, SEASON card showing goals/assists), and split Season Stats tables (attacking output left, disciplinary+minutes right)
 - **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
 - **Authenticated routes**:
   - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
+    - **Favourite Player card** — Shows selected player's jersey number, name, position, overall rating, and nationality with a VIEW PLAYER link; conditionally rendered when a favourite player has been saved
+    - **League Standings section** — Displays the standings for the fan's favourite team's league with a VIEW FULL LEAGUE button, allowing fans to track their club's position without navigation
   - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options
   - **Training** (`/training`) — Clicker minigame to collectively boost player stats
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
