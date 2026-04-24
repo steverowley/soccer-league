@@ -93,16 +93,19 @@ const PERS_DESC = {
 };
 
 // ── Season stats column definitions ──────────────────────────────────────────
-// Mirrors the column order used in league player-stat tables for visual
-// consistency.  avg_rating is last because it is nullable (shows "—" pre-season).
-const SEASON_STAT_COLS = [
+// Split into two side-by-side tables per the design: attacking output on the
+// left (goals/assists/rating), disciplinary + minutes on the right.
+const SEASON_STAT_COLS_A = [
   { key: 'matches_played', label: 'MP',      align: 'right' },
   { key: 'goals',          label: 'Goals',   align: 'right' },
   { key: 'assists',        label: 'Assists', align: 'right' },
-  { key: 'yellow_cards',   label: 'Yel',     align: 'right' },
+  { key: 'avg_rating',     label: 'Avg Rtg', align: 'right' },
+];
+
+const SEASON_STAT_COLS_B = [
+  { key: 'yellow_cards',   label: 'Yellow',  align: 'right' },
   { key: 'red_cards',      label: 'Red',     align: 'right' },
   { key: 'minutes_played', label: 'Mins',    align: 'right' },
-  { key: 'avg_rating',     label: 'Avg Rtg', align: 'right' },
 ];
 
 /**
@@ -418,15 +421,125 @@ export default function PlayerDetail() {
           </div>
         </section>
 
+        {/* ── 3-column attribute panel ───────────────────────────────────────
+            PLAYER STATS (wide) | FITNESS | ACHIEVEMENTS
+            Player STATS shows the five composite ratings (attacking, defending,
+            mental, athletic, technical) as 5-block segmented bars.  Each block
+            represents ~20 points on the 1–99 scale; filled blocks are solid
+            dust-coloured, empty blocks are translucent outlines.
+            FITNESS and ACHIEVEMENTS are intentionally sparse — ISL hides
+            underlying numbers so fans speculate rather than optimise. */}
+        <section className="section">
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px' }}
+               className="stats-two-col player-attr-grid">
+
+            {/* ── PLAYER STATS card ──────────────────────────────────────── */}
+            <div className="card">
+              <h3 className="card-title" style={{ marginBottom: '16px' }}>Player Stats</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {[
+                  { label: 'Attacking',  value: player.attacking  },
+                  { label: 'Defending',  value: player.defending  },
+                  { label: 'Mental',     value: player.mental     },
+                  { label: 'Athletic',   value: player.athletic   },
+                  { label: 'Technical',  value: player.technical  },
+                ].map(({ label, value }) => {
+                  // Each bar = 5 blocks on a 1–99 scale.
+                  // filled = round((val / 99) * 5), capped 0–5.
+                  const filled = Math.min(5, Math.round(((value ?? 0) / 99) * 5));
+                  return (
+                    <div key={label}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6 }}>
+                          {label}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <div key={i} style={{
+                            flex: 1,
+                            height: '8px',
+                            borderRadius: '2px',
+                            backgroundColor: i < filled
+                              ? 'var(--color-dust)'
+                              : 'rgba(227,224,213,0.12)',
+                            border: '1px solid rgba(227,224,213,0.2)',
+                          }} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── FITNESS card ───────────────────────────────────────────── */}
+            {/* Injury status and form indicator — kept deliberately vague per
+                the hidden-mechanics design principle.  No raw numbers shown;
+                fans infer fitness from the status label alone. */}
+            <div className="card">
+              <h3 className="card-title" style={{ marginBottom: '16px' }}>Fitness</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div>
+                  <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Status
+                  </p>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: '#4caf50' }}>
+                    {player.injury_status ?? 'Available'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Form
+                  </p>
+                  <p style={{ fontSize: '13px', fontWeight: 700 }}>
+                    {player.seasonStats.avg_rating != null
+                      ? `${player.seasonStats.avg_rating} / 10`
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── ACHIEVEMENTS card ──────────────────────────────────────── */}
+            {/* Season highlights as simple counts — goals/assists are the two
+                universally legible achievement metrics before deeper stats
+                are exposed.  Intentionally left sparse; lore fills the gap. */}
+            <div className="card">
+              <h3 className="card-title" style={{ marginBottom: '16px' }}>Season</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div>
+                  <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Goals
+                  </p>
+                  <p style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-purple)' }}>
+                    {player.seasonStats.goals}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Assists
+                  </p>
+                  <p style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    {player.seasonStats.assists}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
         {/* ── Season Stats ──────────────────────────────────────────────────── */}
-        {/* Dark table variant (matching Season Stats on TeamDetail) rather than
-            Light variant — cream/dust background contrasts against the
-            Galactic Abyss page background, matching the Figma design spec
-            for all data tables on detail pages.
-            All-zero rows are expected pre-season. */}
+        {/* Split into two side-by-side tables per the design: attacking output
+            (MP, Goals, Assists, Avg Rating) left; disciplinary + minutes right.
+            Light variant matches all other data tables on detail pages. */}
         <section className="section">
           <h2 className="section-title">Season Stats</h2>
-          <IslTable variant="light" columns={SEASON_STAT_COLS} rows={statsRow} />
+          <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <IslTable variant="light" columns={SEASON_STAT_COLS_A} rows={statsRow} />
+            <IslTable variant="light" columns={SEASON_STAT_COLS_B} rows={statsRow} />
+          </div>
         </section>
 
         {/* ── The Convergence ───────────────────────────────────────────────
