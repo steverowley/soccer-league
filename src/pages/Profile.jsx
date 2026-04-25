@@ -293,43 +293,33 @@ export default function Profile() {
         <div className="card" style={{ maxWidth: '480px' }}>
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            {/* Username */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
-              <span style={{ textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.7 }}>
-                Username
-              </span>
+            {/* ── Username ──────────────────────────────────────────────────── */}
+            {/* Free-text display name shown on the leaderboard and in the
+                AccountMenu header. 30-char max enforced by both the DB column
+                and this input's maxLength attribute. */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="pref-username" className="isl-label">Username</label>
               <input
+                id="pref-username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 maxLength={30}
-                style={{
-                  background: 'rgba(227,224,213,0.05)',
-                  border: '1px solid rgba(227,224,213,0.2)',
-                  color: 'var(--color-dust)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                  padding: '8px 12px',
-                }}
+                className="isl-input"
               />
-            </label>
+            </div>
 
-            {/* Favourite team picker */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
-              <span style={{ textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.7 }}>
-                Favourite Team
-              </span>
+            {/* ── Favourite team picker ─────────────────────────────────────── */}
+            {/* Team choice gates fan-support boost (Phase 3), training scope
+                (Phase 6), and voting eligibility (Phase 4). Grouped by league
+                via <optgroup> so the 32-team list stays navigable. */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="pref-team" className="isl-label">Favourite Team</label>
               <select
+                id="pref-team"
                 value={teamId}
                 onChange={(e) => setTeamId(e.target.value)}
-                style={{
-                  background: 'var(--color-ash)',
-                  border: '1px solid rgba(227,224,213,0.2)',
-                  color: 'var(--color-dust)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                  padding: '8px 12px',
-                }}
+                className="isl-select"
               >
                 <option value="">— None —</option>
                 {Object.entries(teamsByLeague).map(([leagueName, leagueTeams]) => (
@@ -340,25 +330,20 @@ export default function Profile() {
                   </optgroup>
                 ))}
               </select>
-            </label>
+            </div>
 
-            {/* Favourite player picker — only shown when a team is selected */}
+            {/* ── Favourite player picker ───────────────────────────────────── */}
+            {/* Only rendered once a team is selected — the player roster is
+                team-scoped, so showing a cross-team dropdown would be
+                meaningless and confusing. Re-fetched whenever teamId changes. */}
             {teamId && (
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
-                <span style={{ textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.7 }}>
-                  Favourite Player
-                </span>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label htmlFor="pref-player" className="isl-label">Favourite Player</label>
                 <select
+                  id="pref-player"
                   value={playerId}
                   onChange={(e) => setPlayerId(e.target.value)}
-                  style={{
-                    background: 'var(--color-ash)',
-                    border: '1px solid rgba(227,224,213,0.2)',
-                    color: 'var(--color-dust)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
-                    padding: '8px 12px',
-                  }}
+                  className="isl-select"
                 >
                   <option value="">— None —</option>
                   {players.map((p) => (
@@ -367,14 +352,12 @@ export default function Profile() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
             )}
 
-            {/* Save error message */}
+            {/* ── Save error ────────────────────────────────────────────────── */}
             {saveState === 'error' && saveError && (
-              <p role="alert" style={{ color: 'var(--color-red)', fontSize: '13px', margin: 0 }}>
-                {saveError}
-              </p>
+              <p role="alert" className="form-error" style={{ margin: 0 }}>{saveError}</p>
             )}
 
             <Button

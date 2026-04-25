@@ -140,10 +140,14 @@ export function VotingPage({ seasonId }: VotingPageProps) {
 
   // ── Render branches ──────────────────────────────────────────────────────
 
+  // ── Render branches ──────────────────────────────────────────────────────
+  // WHY no <h2> in any branch: the parent Voting.jsx route wrapper renders the
+  // page hero with an <h1> so the heading hierarchy is already established.
+  // Repeating "Season Vote" here would create two headings for screen readers.
+
   if (!user) {
     return (
       <section className="voting-page voting-page--anon">
-        <h2>Season Vote</h2>
         <p>
           <a href="/soccer-league/login">Log in</a> to spend your credits on
           your club&rsquo;s next move.
@@ -155,10 +159,9 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (!teamId) {
     return (
       <section className="voting-page voting-page--no-team">
-        <h2>Season Vote</h2>
         <p>
-          You haven&rsquo;t picked a favourite team yet. Choose one from your
-          profile to start voting.
+          You haven&rsquo;t picked a favourite team yet. Choose one from your{' '}
+          <a href="/soccer-league/profile">profile</a> to start voting.
         </p>
       </section>
     );
@@ -167,8 +170,9 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (error) {
     return (
       <section className="voting-page voting-page--error" role="alert">
-        <h2>Season Vote</h2>
-        <p>Could not load voting data — {error}</p>
+        <p style={{ color: 'var(--color-red)', fontSize: '13px' }}>
+          Could not load voting data — {error}
+        </p>
       </section>
     );
   }
@@ -176,8 +180,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (!options || !tally) {
     return (
       <section className="voting-page voting-page--loading">
-        <h2>Season Vote</h2>
-        <p>Loading focus options…</p>
+        <p style={{ opacity: 0.6, fontSize: '13px' }}>Loading focus options…</p>
       </section>
     );
   }
@@ -185,8 +188,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (options.length === 0) {
     return (
       <section className="voting-page voting-page--empty">
-        <h2>Season Vote</h2>
-        <p>
+        <p style={{ opacity: 0.7, fontSize: '13px' }}>
           Voting hasn&rsquo;t opened for this season yet. Check back at the
           end of the campaign.
         </p>
@@ -207,8 +209,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   const canVote = credits > 0;
 
   return (
-    <section className="voting-page" aria-labelledby="voting-page-title">
-      <h2 id="voting-page-title">Season Vote</h2>
+    <section className="voting-page" aria-label="Season vote">
       <p className="voting-page__intro">
         Pool your credits with your fellow fans. The focus that pulls the
         most pledged credits will shape your club next season.

@@ -59,58 +59,25 @@ export default function Login() {
   }
 
   return (
-    <div
-      className="container"
-      style={{
-        paddingTop: '64px',
-        paddingBottom: '80px',
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    >
+    <div className="container" style={{ paddingTop: '64px', paddingBottom: '80px', display: 'flex', justifyContent: 'center' }}>
       <div className="card" style={{ width: '100%', maxWidth: '440px' }}>
 
         {/* ── Mode tabs ─────────────────────────────────────────────────────── */}
-        {/* Two mono-caps labels that toggle the active form.  Active tab has
-            full opacity + a bottom accent line; inactive tab is muted. */}
-        <div style={{ display: 'flex', gap: '24px', marginBottom: '24px' }}>
+        {/* Two mono-caps labels toggle between login and signup. The active
+            tab gets a Quantum Purple underline accent; inactive tabs are
+            muted to 40% so the active selection is unambiguous at a glance.
+            CSS class `.auth-tab.is-active` owns all visual state — no inline
+            conditional styles needed here. */}
+        <div className="auth-tabs">
           <button
+            className={`auth-tab${mode === 'login' ? ' is-active' : ''}`}
             onClick={() => setMode('login')}
-            style={{
-              background: 'none',
-              border: 'none',
-              borderBottom: mode === 'login'
-                ? '2px solid var(--color-purple)'
-                : '2px solid transparent',
-              padding: '0 0 6px',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: mode === 'login' ? 'var(--color-dust)' : 'rgba(227,224,213,0.4)',
-            }}
           >
             Log In
           </button>
           <button
+            className={`auth-tab${mode === 'signup' ? ' is-active' : ''}`}
             onClick={() => setMode('signup')}
-            style={{
-              background: 'none',
-              border: 'none',
-              borderBottom: mode === 'signup'
-                ? '2px solid var(--color-purple)'
-                : '2px solid transparent',
-              padding: '0 0 6px',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: mode === 'signup' ? 'var(--color-dust)' : 'rgba(227,224,213,0.4)',
-            }}
           >
             Create Account
           </button>
@@ -126,54 +93,18 @@ export default function Login() {
         )}
 
         {/* ── Mode switch hint ──────────────────────────────────────────────── */}
-        <p style={{ marginTop: '20px', fontSize: '12px', opacity: 0.45, textAlign: 'center' }}>
+        {/* Inline prompt to switch modes — lower visual weight than the tabs
+            above so it reads as a secondary affordance, not a second CTA. */}
+        <p className="auth-hint">
           {mode === 'login' ? (
-            <>
-              No account yet?{' '}
-              <button
-                onClick={() => setMode('signup')}
-                style={{
-                  background: 'none', border: 'none',
-                  color: 'var(--color-purple)', cursor: 'pointer',
-                  fontSize: '12px', textDecoration: 'underline', padding: 0,
-                }}
-              >
-                Create one
-              </button>
-            </>
+            <>No account yet? <button onClick={() => setMode('signup')}>Create one</button></>
           ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                onClick={() => setMode('login')}
-                style={{
-                  background: 'none', border: 'none',
-                  color: 'var(--color-purple)', cursor: 'pointer',
-                  fontSize: '12px', textDecoration: 'underline', padding: 0,
-                }}
-              >
-                Log in
-              </button>
-            </>
+            <>Already have an account? <button onClick={() => setMode('login')}>Log in</button></>
           )}
         </p>
 
         {/* ── Back to home ──────────────────────────────────────────────────── */}
-        <div style={{ marginTop: '16px', textAlign: 'center' }}>
-          <Link
-            to="/"
-            style={{
-              fontSize: '11px',
-              opacity: 0.35,
-              fontFamily: 'var(--font-mono)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              color: 'var(--color-dust)',
-            }}
-          >
-            ← Back to home
-          </Link>
-        </div>
+        <Link to="/" className="auth-back-link">← Back to home</Link>
 
       </div>
     </div>
