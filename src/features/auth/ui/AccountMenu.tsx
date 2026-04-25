@@ -43,110 +43,54 @@ export function AccountMenu() {
   if (!profile) return null;
 
   return (
-    <div ref={menuRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={menuRef} className="account-menu">
       {/* ── Trigger button ─────────────────────────────────────────────────── */}
+      {/* Shows username + IC balance at a glance — the two numbers fans care
+          about most between matches. Toggles the dropdown on click. */}
       <button
         onClick={() => setOpen((prev) => !prev)}
-        style={{
-          background: 'none',
-          border: '1px solid rgba(227,224,213,0.2)',
-          color: 'var(--color-dust)',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--font-size-small)',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: 'var(--letter-spacing-wide)',
-          padding: 'var(--space-2) var(--space-4)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-        }}
+        className="account-menu__trigger"
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         <span>{profile.username}</span>
-        <span
-          style={{
-            color: 'var(--color-purple)',
-            fontWeight: 700,
-          }}
-        >
-          {profile.credits} IC
-        </span>
+        <span className="account-menu__credits">{profile.credits} IC</span>
       </button>
 
       {/* ── Dropdown panel ─────────────────────────────────────────────────── */}
+      {/* Only mounted when open — keeps focus-trap scope narrow and avoids
+          rendering hidden interactive elements that confuse screen readers. */}
       {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '100%',
-            right: 0,
-            marginTop: 'var(--space-2)',
-            backgroundColor: 'var(--color-ash)',
-            border: '1px solid rgba(227,224,213,0.2)',
-            minWidth: 180,
-            zIndex: 100,
-          }}
-        >
-          {/* Credit balance detail row */}
-          <div
-            style={{
-              padding: 'var(--space-3) var(--space-4)',
-              borderBottom: '1px solid rgba(227,224,213,0.1)',
-              fontSize: 'var(--font-size-micro)',
-              fontFamily: 'var(--font-mono)',
-              color: 'rgba(227,224,213,0.6)',
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--letter-spacing-wider)',
-            }}
-          >
+        <div className="account-menu__dropdown" role="menu">
+          {/* Full credit label — trigger shows "200 IC" shorthand; header
+              row spells it out so there's no ambiguity about units. */}
+          <div className="account-menu__header">
             Intergalactic Credits: {profile.credits}
           </div>
 
           {/* ── Profile link ───────────────────────────────────────────────── */}
-          {/* Primary navigation destination for the logged-in user — account
-              summary, preferences editor, and full bet history all live there.
-              Placed before Sign Out so the destructive action is at the bottom,
-              matching standard UX conventions. */}
+          {/* Primary destination — account summary, preferences, bet history.
+              Placed above Sign Out so the destructive action is always last. */}
           <Link
             to="/profile"
             onClick={() => setOpen(false)}
-            style={{
-              display: 'block',
-              padding: 'var(--space-3) var(--space-4)',
-              borderBottom: '1px solid rgba(227,224,213,0.1)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--font-size-small)',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--letter-spacing-wider)',
-              color: 'var(--color-dust)',
-              textDecoration: 'none',
-            }}
+            className="account-menu__link"
+            role="menuitem"
           >
             Profile
           </Link>
 
-          {/* Sign out */}
+          {/* ── Sign out ───────────────────────────────────────────────────── */}
+          {/* Destructive action — red label signals intent without a modal.
+              setOpen first so the dropdown unmounts before the session clears,
+              preventing a brief flash of the logged-in state. */}
           <button
             onClick={async () => {
               setOpen(false);
               await signOut();
             }}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              background: 'none',
-              border: 'none',
-              padding: 'var(--space-3) var(--space-4)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--font-size-small)',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--letter-spacing-wider)',
-              color: 'var(--color-red)',
-              cursor: 'pointer',
-            }}
+            className="account-menu__signout"
+            role="menuitem"
           >
             Sign Out
           </button>

@@ -36,25 +36,49 @@ export default function Voting() {
       .catch((e)     => setError(e?.message ?? 'Could not load active season'));
   }, [db]); // db is a stable context ref — safe to add without causing re-fetches
 
+  // ── Loading / error shells ────────────────────────────────────────────────
+  // Both states include the page hero so the layout doesn't jump when the
+  // season resolves. Using a shared hero + inline message keeps the page
+  // structurally identical across all three branches (loading / error / ready).
+
+  const hero = (
+    <div className="page-hero">
+      <div className="container">
+        <h1>Season Vote</h1>
+        <hr className="divider" />
+        <p className="subtitle">Pool your credits. Shape your club's future.</p>
+      </div>
+    </div>
+  );
+
   if (error) {
     return (
-      <div className="container" style={{ paddingTop: '40px' }}>
-        <p style={{ color: 'var(--color-red)' }}>Error: {error}</p>
+      <div>
+        {hero}
+        <div className="container" style={{ paddingBottom: '80px' }}>
+          <p style={{ color: 'var(--color-red)', fontSize: '13px' }}>Error: {error}</p>
+        </div>
       </div>
     );
   }
 
   if (!seasonId) {
     return (
-      <div className="container" style={{ paddingTop: '40px' }}>
-        <p style={{ opacity: 0.6 }}>Loading season…</p>
+      <div>
+        {hero}
+        <div className="container" style={{ paddingBottom: '80px' }}>
+          <p style={{ opacity: 0.6, fontSize: '13px' }}>Loading season…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '80px' }}>
-      <VotingPage seasonId={seasonId} />
+    <div>
+      {hero}
+      <div className="container" style={{ paddingBottom: '80px' }}>
+        <VotingPage seasonId={seasonId} />
+      </div>
     </div>
   );
 }
