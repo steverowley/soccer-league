@@ -31,16 +31,18 @@ export default function ArchitectLog() {
   // import.meta.env.DEV is replaced by Vite at build time with a boolean
   // literal, so the `if` branch (and this entire module) is dead-code-
   // eliminated from production bundles.
+  // WHY page-top: both branches (prod-gate and dev content) use the same
+  // 100px/70px top gap as every other page so the header chrome is consistent.
   if (!import.meta.env.DEV) {
     return (
-      <div className="container" style={{ paddingTop: '40px' }}>
+      <div className="container page-top">
         <p style={{ opacity: 0.6 }}>This page is not available in production.</p>
       </div>
     );
   }
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '80px' }}>
+    <div className="container page-top" style={{ paddingBottom: '80px' }}>
       <ArchitectLogPage />
     </div>
   );

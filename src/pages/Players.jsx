@@ -117,9 +117,11 @@ export default function Players() {
     : leagues.filter(l => l.id === activeLeague);
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
+    <div className="container" style={{ paddingBottom: '60px' }}>
 
       {/* ── Page hero ─────────────────────────────────────────────────────────── */}
+      {/* No paddingTop on the container — page-hero provides 100px (desktop) /
+          70px (mobile) to account for the logo overhang below the header. */}
       <div className="page-hero">
         <h1>Players</h1>
         <hr className="divider" style={{ maxWidth: '500px', margin: '16px auto 16px' }} />
