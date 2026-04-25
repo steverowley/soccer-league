@@ -33,6 +33,7 @@
     font-size: 16px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    scrollbar-gutter: stable;
   }
 
   /* ── Typography ──────────────────────────────────────────────────────── */
@@ -382,6 +383,14 @@ table {
    desktop value. */
 @media (max-width: 767px) {
   .page-hero { padding-top: 70px; }
+  .page-top  { padding-top: 70px; }
+}
+
+/* Top padding for detail pages that don't use the centred page-hero heading.
+   Provides the same vertical start position as .page-hero (100px desktop /
+   70px mobile) without the text-align: center override. */
+.page-top {
+  padding-top: 100px;
 }
 
 /* ── Footer ────────────────────────────────────────────────────────────── */

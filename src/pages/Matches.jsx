@@ -205,10 +205,13 @@ export default function Matches() {
   }
 
   // ── Full-page simulator view ───────────────────────────────────────────────
+  // WHY page-top: the back button must clear the 60px logo overhang below the
+  // header divider; page-top provides 100px (desktop) / 70px (mobile) just like
+  // every other page so the chrome feels consistent even in the sim overlay.
   if (simTeams) {
     return (
-      <div style={{ paddingTop: '24px', paddingBottom: '60px' }}>
-        <div className="container">
+      <div style={{ paddingBottom: '60px' }}>
+        <div className="container page-top">
           <button
             className="btn btn-primary"
             onClick={() => setSimTeams(null)}
@@ -231,10 +234,9 @@ export default function Matches() {
   const pickerTeams = TEAMS_BY_LEAGUE[pickerLeague] ?? [];
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
+    <div className="container" style={{ paddingBottom: '60px' }}>
 
       {/* ── Page hero ────────────────────────────────────────────────────────── */}
-      {/* page-hero class provides consistent 48px top padding and centred layout */}
       <div className="page-hero">
         <h1>Our Electrifying Matches</h1>
         <hr className="divider" />

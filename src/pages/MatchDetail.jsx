@@ -177,10 +177,13 @@ export default function MatchDetail() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ── Render branches ────────────────────────────────────────────────────
+  // WHY page-top class: all states (loading, error, ready) share the same
+  // 100px desktop / 70px mobile top gap so the page chrome never shifts.
+  // page-top mirrors page-hero spacing without forcing text-align: center.
 
   if (loading) {
     return (
-      <div className="container" style={{ paddingTop: '40px' }}>
+      <div className="container page-top">
         <p style={{ opacity: 0.6 }}>Loading match…</p>
       </div>
     );
@@ -188,7 +191,7 @@ export default function MatchDetail() {
 
   if (error || !match) {
     return (
-      <div className="container" style={{ paddingTop: '40px' }}>
+      <div className="container page-top">
         <p style={{ color: 'var(--color-red)' }}>{error ?? 'Match not found.'}</p>
         <Link to="/matches">
           <Button variant="secondary" style={{ marginTop: '16px' }}>← Back to Matches</Button>
@@ -212,7 +215,7 @@ export default function MatchDetail() {
   };
 
   return (
-    <div className="container" style={{ paddingTop: '40px', paddingBottom: '80px' }}>
+    <div className="container page-top" style={{ paddingBottom: '80px' }}>
 
       {/* ── Breadcrumb ─────────────────────────────────────────────────────── */}
       <nav style={{ marginBottom: '24px', fontSize: '12px', opacity: 0.5 }}>
