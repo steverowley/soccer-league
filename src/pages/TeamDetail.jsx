@@ -356,41 +356,47 @@ export default function TeamDetail() {
 
   const cleanSheetRows = useMemo(() => placeholderPlayerRows(), []);
 
-  // ── Loading state ─────────────────────────────────────────────────────────
+  // ── Loading / 404 / error states ─────────────────────────────────────────
+  // WHY page-hero wrapper: keeps the top spacing (100px desktop / 70px mobile)
+  // identical to the ready state so the page chrome never jumps on load.
   if (loading) {
     return (
-      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
-        <p style={{ opacity: 0.5, fontSize: '14px' }}>Loading team…</p>
+      <div className="page-hero">
+        <div className="container">
+          <p style={{ opacity: 0.5, fontSize: '14px' }}>Loading team…</p>
+        </div>
       </div>
     );
   }
 
-  // ── 404 fallback ──────────────────────────────────────────────────────────
   if (notFound) {
     return (
-      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
-        <h2>Team not found</h2>
-        <p style={{ marginTop: '16px', opacity: 0.6 }}>
-          No team exists with the id "{teamId}".
-        </p>
-        <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
-          <Button variant="primary">View All Teams</Button>
-        </Link>
+      <div className="page-hero">
+        <div className="container">
+          <h2>Team not found</h2>
+          <p style={{ marginTop: '16px', opacity: 0.6 }}>
+            No team exists with the id "{teamId}".
+          </p>
+          <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
+            <Button variant="primary">View All Teams</Button>
+          </Link>
+        </div>
       </div>
     );
   }
 
-  // ── Generic error fallback ────────────────────────────────────────────────
   if (error || !team) {
     return (
-      <div className="container" style={{ paddingTop: '80px', textAlign: 'center' }}>
-        <h2>Something went wrong</h2>
-        <p style={{ marginTop: '16px', opacity: 0.6 }}>
-          Could not load team data. Please try again later.
-        </p>
-        <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
-          <Button variant="primary">View All Teams</Button>
-        </Link>
+      <div className="page-hero">
+        <div className="container">
+          <h2>Something went wrong</h2>
+          <p style={{ marginTop: '16px', opacity: 0.6 }}>
+            Could not load team data. Please try again later.
+          </p>
+          <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
+            <Button variant="primary">View All Teams</Button>
+          </Link>
+        </div>
       </div>
     );
   }
