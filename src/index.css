@@ -435,3 +435,686 @@ table {
   100% { opacity: 0; }
 }
 
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Form elements ─────────────────────────────────────────────────────────
+ * Shared classes for labels, inputs, and selects used across auth forms,
+ * profile page, wager widget, and training page. Single source of truth —
+ * never duplicate these styles inline in components.                        */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.isl-label {
+  display: block;
+  font-size: var(--font-size-small);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-dust);
+}
+
+.isl-input,
+.isl-select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  background-color: var(--color-ash);
+  border: 1px solid rgba(227,224,213,0.2);
+  color: var(--color-dust);
+  outline: none;
+  border-radius: 0;
+}
+
+.isl-input:focus,
+.isl-select:focus {
+  border-color: rgba(227,224,213,0.6);
+  outline: 2px dashed var(--color-purple);
+  outline-offset: 2px;
+}
+
+.isl-input:disabled,
+.isl-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.isl-select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.form-error {
+  color: var(--color-red);
+  font-size: var(--font-size-small);
+  font-family: var(--font-mono);
+}
+
+/* ── Auth tabs ─────────────────────────────────────────────────────────────
+ * Tab switcher on the /login page (Log In / Create Account).               */
+
+.auth-tabs {
+  display: flex;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.auth-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 var(--space-2);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(227,224,213,0.4);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.auth-tab.is-active {
+  color: var(--color-dust);
+  border-bottom-color: var(--color-purple);
+}
+
+.auth-hint {
+  margin-top: var(--space-5);
+  font-size: 12px;
+  opacity: 0.45;
+  text-align: center;
+}
+
+.auth-hint button {
+  background: none;
+  border: none;
+  color: var(--color-purple);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+  padding: 0;
+  font-family: var(--font-mono);
+}
+
+.auth-back-link {
+  display: block;
+  margin-top: var(--space-4);
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.35;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-dust);
+  transition: opacity var(--transition-fast);
+}
+
+.auth-back-link:hover { opacity: 0.6; }
+
+/* ── Account menu ──────────────────────────────────────────────────────────
+ * Header widget showing username + IC balance with sign-out dropdown.      */
+
+.account-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.account-menu__trigger {
+  background: none;
+  border: 1px solid rgba(227,224,213,0.2);
+  color: var(--color-dust);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  transition: border-color var(--transition-fast);
+}
+
+.account-menu__trigger:hover { border-color: rgba(227,224,213,0.4); }
+
+.account-menu__credits {
+  color: var(--color-purple);
+  font-weight: 700;
+}
+
+.account-menu__dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--space-2);
+  background-color: var(--color-ash);
+  border: 1px solid rgba(227,224,213,0.2);
+  min-width: 180px;
+  z-index: 100;
+}
+
+.account-menu__header {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid rgba(227,224,213,0.1);
+  font-size: var(--font-size-micro);
+  font-family: var(--font-mono);
+  color: rgba(227,224,213,0.6);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+}
+
+.account-menu__link {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid rgba(227,224,213,0.1);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-dust);
+  text-decoration: none;
+  transition: background-color var(--transition-fast);
+}
+
+.account-menu__link:hover { background-color: rgba(227,224,213,0.05); }
+
+.account-menu__signout {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-red);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.account-menu__signout:hover { background-color: rgba(224,82,82,0.06); }
+
+/* ── Wager widget ──────────────────────────────────────────────────────────
+ * Pre-kickoff three-way betting card on match detail pages.                */
+
+.wager-widget h3 {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-4);
+}
+
+.wager-widget__placeholder {
+  font-size: var(--font-size-small);
+  opacity: 0.7;
+}
+
+.wager-widget__choices {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  border: none;
+  padding: 0;
+}
+
+.wager-widget__choice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  background-color: var(--color-abyss);
+  border: 1px solid rgba(227,224,213,0.2);
+  color: var(--color-dust);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border-radius: 0;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.wager-widget__choice:hover { border-color: rgba(227,224,213,0.5); }
+
+.wager-widget__choice.is-selected {
+  border-color: var(--color-purple);
+  background-color: rgba(154,92,244,0.1);
+}
+
+.wager-widget__choice-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
+
+.wager-widget__choice-odds {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.wager-widget__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.wager-widget__stake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+}
+
+.wager-widget__stake input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  background-color: var(--color-abyss);
+  border: 1px solid rgba(227,224,213,0.2);
+  color: var(--color-dust);
+  outline: none;
+  border-radius: 0;
+}
+
+.wager-widget__stake input:focus {
+  border-color: rgba(227,224,213,0.6);
+  outline: 2px dashed var(--color-purple);
+  outline-offset: 2px;
+}
+
+.wager-widget__payout,
+.wager-widget__balance {
+  font-size: var(--font-size-small);
+  opacity: 0.75;
+}
+
+.wager-widget__error { color: var(--color-red); font-size: var(--font-size-small); }
+.wager-widget__cta   { font-size: var(--font-size-small); opacity: 0.8; }
+.wager-widget__closed { font-size: var(--font-size-small); color: var(--color-red); }
+
+/* ── Bet history ───────────────────────────────────────────────────────────
+ * Wager ledger table on the profile page.                                   */
+
+.bet-history h3 {
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-4);
+}
+
+.bet-history__empty {
+  font-size: var(--font-size-small);
+  opacity: 0.7;
+  padding: var(--space-4) 0;
+}
+
+.bet-history__list {
+  list-style: none;
+  border: 1px solid rgba(227,224,213,0.1);
+  background-color: var(--color-ash);
+}
+
+.bet-history__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid rgba(227,224,213,0.06);
+  font-size: var(--font-size-small);
+}
+
+.bet-history__row:last-child { border-bottom: none; }
+
+.bet-history__row.is-loading {
+  height: 44px;
+  background: linear-gradient(
+    90deg,
+    var(--color-ash) 25%,
+    rgba(227,224,213,0.05) 50%,
+    var(--color-ash) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.bet-history__status {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border: 1px solid;
+}
+
+.bet-history__status--open { color: var(--color-dust); border-color: rgba(227,224,213,0.3); }
+.bet-history__status--won  { color: var(--color-green); border-color: var(--color-green); }
+.bet-history__status--lost { color: var(--color-red);   border-color: var(--color-red); }
+.bet-history__status--void { color: rgba(227,224,213,0.4); border-color: rgba(227,224,213,0.2); }
+
+.bet-history__choice { opacity: 0.8; }
+.bet-history__stake  { opacity: 0.7; font-size: 12px; }
+.bet-history__payout { font-weight: 700; }
+.bet-history__date   { opacity: 0.4; font-size: 11px; }
+
+.bet-history__net--positive { color: var(--color-green); font-weight: 700; }
+.bet-history__net--negative { color: var(--color-red);   font-weight: 700; }
+
+@media (max-width: 640px) {
+  .bet-history__row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+  }
+}
+
+/* ── Voting page ───────────────────────────────────────────────────────────
+ * End-of-season focus voting UI.                                            */
+
+.voting-page > h2,
+.voting-page h2 {
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-4);
+}
+
+.voting-page__intro {
+  font-size: var(--font-size-body);
+  opacity: 0.8;
+  margin-bottom: var(--space-8);
+  max-width: 560px;
+  line-height: 1.7;
+}
+
+.voting-page__tier {
+  margin-bottom: var(--space-10);
+}
+
+.voting-page__tier > h3 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.5;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid rgba(227,224,213,0.1);
+}
+
+.voting-page__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+/* ── Focus card ────────────────────────────────────────────────────────────
+ * Individual focus option card in the voting UI.                            */
+
+.focus-card {
+  background-color: var(--color-ash);
+  border: 1px solid rgba(227,224,213,0.15);
+  padding: var(--card-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.focus-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.focus-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.focus-card__tier {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 2px 8px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.focus-card__tier--major { color: var(--color-purple); border-color: var(--color-purple); }
+.focus-card__tier--minor { color: rgba(227,224,213,0.5); border-color: rgba(227,224,213,0.25); }
+
+.focus-card__description {
+  font-size: var(--font-size-small);
+  opacity: 0.8;
+  line-height: 1.7;
+}
+
+.focus-card__tally {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  font-size: 13px;
+}
+
+.focus-card__tally-credits strong { font-weight: 700; }
+.focus-card__tally-voters { opacity: 0.55; font-size: 12px; }
+.focus-card__tally-share  { font-weight: 700; color: var(--color-purple); margin-left: auto; }
+
+.focus-card__share-bar {
+  height: 2px;
+  background-color: rgba(227,224,213,0.1);
+  width: 100%;
+}
+
+.focus-card__share-bar-fill {
+  height: 100%;
+  background-color: var(--color-purple);
+  transition: width var(--transition-medium);
+}
+
+.focus-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.focus-card__spend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+}
+
+.focus-card__spend input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  background-color: var(--color-abyss);
+  border: 1px solid rgba(227,224,213,0.2);
+  color: var(--color-dust);
+  outline: none;
+  border-radius: 0;
+}
+
+.focus-card__spend input:focus {
+  border-color: rgba(227,224,213,0.6);
+  outline: 2px dashed var(--color-purple);
+  outline-offset: 2px;
+}
+
+.focus-card__balance { font-size: 12px; opacity: 0.55; }
+.focus-card__error   { color: var(--color-red); font-size: var(--font-size-small); }
+.focus-card__locked  { font-size: var(--font-size-small); opacity: 0.45; font-style: italic; }
+
+/* ── Training page ─────────────────────────────────────────────────────────
+ * Route wrapper content for the /training facility page.                    */
+
+.training-page > h2 {
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-4);
+}
+
+.training-page__intro {
+  font-size: var(--font-size-body);
+  opacity: 0.8;
+  margin-bottom: var(--space-6);
+  line-height: 1.7;
+  max-width: 480px;
+}
+
+.training-page__picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  margin-bottom: var(--space-6);
+}
+
+.training-page__picker select {
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  background-color: var(--color-ash);
+  border: 1px solid rgba(227,224,213,0.2);
+  color: var(--color-dust);
+  outline: none;
+  border-radius: 0;
+  cursor: pointer;
+  appearance: none;
+}
+
+.training-page__picker select:focus {
+  outline: 2px dashed var(--color-purple);
+  outline-offset: 2px;
+}
+
+/* ── Clicker widget ────────────────────────────────────────────────────────
+ * Training clicker card for a single player.                                */
+
+.clicker-widget {
+  background-color: var(--color-ash);
+  border: 1px solid rgba(227,224,213,0.15);
+  padding: var(--card-padding);
+  max-width: 480px;
+}
+
+.clicker-widget h3 {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-4);
+}
+
+.clicker-widget__xp {
+  font-size: var(--font-size-small);
+  opacity: 0.7;
+  margin-bottom: var(--space-4);
+}
+
+.clicker-widget__progress {
+  margin-bottom: var(--space-4);
+}
+
+.clicker-widget__progress-bar {
+  height: 3px;
+  background-color: rgba(227,224,213,0.1);
+  margin-bottom: var(--space-2);
+}
+
+.clicker-widget__progress-fill {
+  height: 100%;
+  background-color: var(--color-purple);
+  transition: width var(--transition-medium);
+}
+
+.clicker-widget__progress-label {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.clicker-widget__bump-toast {
+  font-size: var(--font-size-small);
+  color: var(--color-green);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+  animation: fadeInOut 2.5s forwards;
+}
+
+.clicker-widget__error {
+  color: var(--color-red);
+  font-size: var(--font-size-small);
+  margin-bottom: var(--space-3);
+}
+
+.clicker-widget__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  padding: var(--space-5) 0;
+  border-radius: 0;
+  cursor: pointer;
+  background-color: var(--color-purple);
+  border: 1px solid var(--color-purple);
+  color: var(--color-abyss);
+  transition: background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.clicker-widget__button:hover:not(:disabled) { background-color: var(--color-purple-mid); }
+
+.clicker-widget__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.clicker-widget__session-full {
+  font-size: 12px;
+  opacity: 0.5;
+  margin-top: var(--space-2);
+  line-height: 1.6;
+}
+

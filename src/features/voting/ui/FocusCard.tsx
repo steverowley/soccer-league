@@ -187,6 +187,10 @@ export function FocusCard({
           Disabled-form is a hostile pattern; static text is clearer. */}
       {canVote ? (
         <form className="focus-card__form" onSubmit={handleSubmit}>
+          {/* ── Spend input ────────────────────────────────────────────────── */}
+          {/* Label wraps the input so the entire label text is clickable.
+              min=1 enforces a positive spend; max=maxSpend lets the browser
+              surface a native validation hint before our JS layer fires. */}
           <label className="focus-card__spend">
             Spend credits
             <input
@@ -205,12 +209,18 @@ export function FocusCard({
             You have <strong>{maxSpend}</strong> credits to spend.
           </p>
           {error && (
-            <p role="alert" className="focus-card__error">
-              {error}
-            </p>
+            <p role="alert" className="focus-card__error">{error}</p>
           )}
-          <button type="submit" disabled={submitting || spendInput === ''}>
-            {submitting ? 'Casting…' : 'Cast Vote'}
+          {/* ── Cast Vote button ───────────────────────────────────────────── */}
+          {/* Tertiary (purple) variant signals a commitment action — spending
+              credits is irreversible, so the purple weight communicates
+              intent without the aggression of a red/danger button. */}
+          <button
+            type="submit"
+            className="btn btn-tertiary"
+            disabled={submitting || spendInput === ''}
+          >
+            {submitting ? 'CASTING…' : 'CAST VOTE'}
           </button>
         </form>
       ) : (

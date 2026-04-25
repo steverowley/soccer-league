@@ -70,34 +70,10 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
     }
   }
 
-  // Shared input styling — DRY helper to keep the JSX readable.
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: 'var(--space-3) var(--space-4)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 'var(--font-size-body)',
-    backgroundColor: 'var(--color-ash)',
-    border: '1px solid rgba(227,224,213,0.2)',
-    color: 'var(--color-dust)',
-    outline: 'none',
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: 'var(--font-size-small)',
-    fontFamily: 'var(--font-mono)',
-    textTransform: 'uppercase',
-    letterSpacing: 'var(--letter-spacing-wider)',
-    marginBottom: 'var(--space-2)',
-    color: 'var(--color-dust)',
-  };
-
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <label htmlFor="signup-email" style={labelStyle}>
-          Email
-        </label>
+    <form onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label htmlFor="signup-email" className="isl-label">Email</label>
         <input
           id="signup-email"
           type="email"
@@ -105,14 +81,12 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
           disabled={submitting}
-          style={inputStyle}
+          className="isl-input"
         />
       </div>
 
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <label htmlFor="signup-username" style={labelStyle}>
-          Username
-        </label>
+      <div className="form-group">
+        <label htmlFor="signup-username" className="isl-label">Username</label>
         <input
           id="signup-username"
           type="text"
@@ -121,14 +95,12 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           autoComplete="username"
           disabled={submitting}
           placeholder="3-30 chars, letters/numbers/_"
-          style={inputStyle}
+          className="isl-input"
         />
       </div>
 
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <label htmlFor="signup-password" style={labelStyle}>
-          Password
-        </label>
+      <div className="form-group">
+        <label htmlFor="signup-password" className="isl-label">Password</label>
         <input
           id="signup-password"
           type="password"
@@ -136,25 +108,14 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
           disabled={submitting}
-          style={inputStyle}
+          className="isl-input"
         />
       </div>
 
-      {error && (
-        <p
-          style={{
-            color: 'var(--color-red)',
-            fontSize: 'var(--font-size-small)',
-            fontFamily: 'var(--font-mono)',
-            marginBottom: 'var(--space-4)',
-          }}
-        >
-          {error}
-        </p>
-      )}
+      {error && <p className="form-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</p>}
 
       <button type="submit" className="btn btn-secondary" disabled={submitting} style={{ width: '100%' }}>
-        {submitting ? 'Creating account…' : 'Sign Up'}
+        {submitting ? 'CREATING ACCOUNT…' : 'SIGN UP'}
       </button>
     </form>
   );
