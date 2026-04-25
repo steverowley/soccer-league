@@ -102,30 +102,39 @@ export function NewsFeedPage() {
   }, []);
 
   // ── Render ───────────────────────────────────────────────────────────────
+  // WHY page-hero outside container: matches the structure used by every other
+  // top-level page so the 100px desktop / 70px mobile top gap is identical
+  // regardless of which page the user navigates from.
 
   return (
-    <div className="container" style={{ paddingTop: '32px', paddingBottom: '80px' }}>
-
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-          <h1 style={{ margin: 0 }}>Galaxy Dispatch</h1>
-          <span style={{
-            fontSize: '10px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            color: 'var(--color-purple)',
-            border: '1px solid var(--color-purple)',
-            padding: '2px 8px',
-            fontFamily: 'var(--font-mono)',
-          }}>
-            Architect
-          </span>
+    <div>
+      {/* ── Page hero ───────────────────────────────────────────────────── */}
+      <div className="page-hero">
+        <div className="container">
+          {/* Inline flex so the "Architect" badge sits right of the h1.
+              justify-content: center inherits from .page-hero text-align. */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
+            <h1>Galaxy Dispatch</h1>
+            <span style={{
+              fontSize: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              color: 'var(--color-purple)',
+              border: '1px solid var(--color-purple)',
+              padding: '2px 8px',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              Architect
+            </span>
+          </div>
+          <hr className="divider" />
+          <p className="subtitle">
+            Transmissions, disturbances, and dispatches from across the solar system.
+          </p>
         </div>
-        <p style={{ opacity: 0.55, fontSize: '13px', margin: 0 }}>
-          Transmissions, disturbances, and dispatches from across the solar system.
-        </p>
       </div>
+
+    <div className="container" style={{ paddingBottom: '80px' }}>
 
       {/* ── Kind filter strip ────────────────────────────────────────────── */}
       <div style={{
@@ -247,6 +256,7 @@ export function NewsFeedPage() {
           Receiving…
         </p>
       )}
+    </div>
     </div>
   );
 }
