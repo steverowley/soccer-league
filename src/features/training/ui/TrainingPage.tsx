@@ -103,11 +103,16 @@ export function TrainingPage() {
 
   // ── Render branches ──────────────────────────────────────────────────────
 
+  // ── Render branches ──────────────────────────────────────────────────────
+  // WHY no <h2> in any branch: Training.jsx (the route wrapper) renders the
+  // page hero with an <h1> "Training Facility", so the heading hierarchy is
+  // already established. Adding another heading here would duplicate it for
+  // both visual users and screen readers.
+
   if (!user) {
     return (
       <section className="training-page training-page--anon">
-        <h2>Training Facility</h2>
-        <p>
+        <p style={{ fontSize: '13px', opacity: 0.8 }}>
           <a href="/soccer-league/login">Log in</a> to start training your
           team&rsquo;s players.
         </p>
@@ -118,10 +123,10 @@ export function TrainingPage() {
   if (!teamId) {
     return (
       <section className="training-page training-page--no-team">
-        <h2>Training Facility</h2>
-        <p>
-          You haven&rsquo;t picked a favourite team yet. Choose one from your
-          profile to access the training facility.
+        <p style={{ fontSize: '13px', opacity: 0.8 }}>
+          You haven&rsquo;t picked a favourite team yet. Choose one from your{' '}
+          <a href="/soccer-league/profile">profile</a> to access the training
+          facility.
         </p>
       </section>
     );
@@ -130,8 +135,9 @@ export function TrainingPage() {
   if (error) {
     return (
       <section className="training-page training-page--error" role="alert">
-        <h2>Training Facility</h2>
-        <p>Could not load roster — {error}</p>
+        <p style={{ color: 'var(--color-red)', fontSize: '13px' }}>
+          Could not load roster — {error}
+        </p>
       </section>
     );
   }
@@ -139,8 +145,7 @@ export function TrainingPage() {
   if (!players) {
     return (
       <section className="training-page training-page--loading">
-        <h2>Training Facility</h2>
-        <p>Loading roster…</p>
+        <p style={{ opacity: 0.6, fontSize: '13px' }}>Loading roster…</p>
       </section>
     );
   }
@@ -148,8 +153,9 @@ export function TrainingPage() {
   if (players.length === 0) {
     return (
       <section className="training-page training-page--empty">
-        <h2>Training Facility</h2>
-        <p>No players found for your favourite team.</p>
+        <p style={{ opacity: 0.6, fontSize: '13px' }}>
+          No players found for your favourite team.
+        </p>
       </section>
     );
   }
@@ -163,8 +169,7 @@ export function TrainingPage() {
     players.find((p) => p.id === selectedId) ?? players[0] ?? null;
 
   return (
-    <section className="training-page" aria-labelledby="training-page-title">
-      <h2 id="training-page-title">Training Facility</h2>
+    <section className="training-page" aria-label="Training facility">
       <p className="training-page__intro">
         Drop in between matches and put in the work. Each click is a vote
         for your player&rsquo;s development.

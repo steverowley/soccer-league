@@ -58,22 +58,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <label
-          htmlFor="login-email"
-          style={{
-            display: 'block',
-            fontSize: 'var(--font-size-small)',
-            fontFamily: 'var(--font-mono)',
-            textTransform: 'uppercase',
-            letterSpacing: 'var(--letter-spacing-wider)',
-            marginBottom: 'var(--space-2)',
-            color: 'var(--color-dust)',
-          }}
-        >
-          Email
-        </label>
+    <form onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label htmlFor="login-email" className="isl-label">Email</label>
         <input
           id="login-email"
           type="email"
@@ -81,34 +68,12 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
           disabled={submitting}
-          style={{
-            width: '100%',
-            padding: 'var(--space-3) var(--space-4)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--font-size-body)',
-            backgroundColor: 'var(--color-ash)',
-            border: '1px solid rgba(227,224,213,0.2)',
-            color: 'var(--color-dust)',
-            outline: 'none',
-          }}
+          className="isl-input"
         />
       </div>
 
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <label
-          htmlFor="login-password"
-          style={{
-            display: 'block',
-            fontSize: 'var(--font-size-small)',
-            fontFamily: 'var(--font-mono)',
-            textTransform: 'uppercase',
-            letterSpacing: 'var(--letter-spacing-wider)',
-            marginBottom: 'var(--space-2)',
-            color: 'var(--color-dust)',
-          }}
-        >
-          Password
-        </label>
+      <div className="form-group">
+        <label htmlFor="login-password" className="isl-label">Password</label>
         <input
           id="login-password"
           type="password"
@@ -116,34 +81,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           disabled={submitting}
-          style={{
-            width: '100%',
-            padding: 'var(--space-3) var(--space-4)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--font-size-body)',
-            backgroundColor: 'var(--color-ash)',
-            border: '1px solid rgba(227,224,213,0.2)',
-            color: 'var(--color-dust)',
-            outline: 'none',
-          }}
+          className="isl-input"
         />
       </div>
 
-      {error && (
-        <p
-          style={{
-            color: 'var(--color-red)',
-            fontSize: 'var(--font-size-small)',
-            fontFamily: 'var(--font-mono)',
-            marginBottom: 'var(--space-4)',
-          }}
-        >
-          {error}
-        </p>
-      )}
+      {error && <p className="form-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</p>}
 
       <button type="submit" className="btn btn-primary" disabled={submitting} style={{ width: '100%' }}>
-        {submitting ? 'Logging in…' : 'Log In'}
+        {submitting ? 'LOGGING IN…' : 'LOG IN'}
       </button>
     </form>
   );

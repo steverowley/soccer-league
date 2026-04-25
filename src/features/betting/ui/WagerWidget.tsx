@@ -240,6 +240,10 @@ export function WagerWidget({ match, odds, onWagerPlaced }: WagerWidgetProps) {
         <p className="wager-widget__closed">Bets are closed — match in progress.</p>
       ) : (
         <form onSubmit={handleSubmit} className="wager-widget__form">
+          {/* ── Stake input ────────────────────────────────────────────────── */}
+          {/* Label wraps the input so it's clickable without a separate
+              htmlFor/id pair — works because the input is the only focusable
+              descendant of the label. */}
           <label className="wager-widget__stake">
             Stake (credits)
             <input
@@ -264,16 +268,19 @@ export function WagerWidget({ match, odds, onWagerPlaced }: WagerWidgetProps) {
           )}
 
           {error && (
-            <p role="alert" className="wager-widget__error">
-              {error}
-            </p>
+            <p role="alert" className="wager-widget__error">{error}</p>
           )}
 
+          {/* ── Submit ─────────────────────────────────────────────────────── */}
+          {/* Primary variant: dark bg with dust border matches the "confirm
+              action" weight in the ISL button hierarchy. Disabled until a
+              valid stake is entered and the balance check passes. */}
           <button
             type="submit"
+            className="btn btn-primary"
             disabled={submitting || !stakeIsValid || !balanceCheck}
           >
-            {submitting ? 'Placing…' : 'Place Wager'}
+            {submitting ? 'PLACING…' : 'PLACE WAGER'}
           </button>
         </form>
       )}
