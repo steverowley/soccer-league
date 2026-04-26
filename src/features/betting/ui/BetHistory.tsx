@@ -28,6 +28,7 @@ import { useEffect, useState } from 'react';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { getUserWagers } from '../api/wagers';
 import type { Wager, WagerStatus } from '../types';
+import { formatDateTime } from '@shared/utils/formatDate';
 
 // ── Component props ────────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ function BetRow({ wager }: BetRowProps) {
         {netProfit == null ? '—' : `${netProfit >= 0 ? '+' : ''}${netProfit}`}
       </span>
       <time className="bet-history__date" dateTime={wager.created_at}>
-        {formatDate(wager.created_at)}
+        {formatDateTime(wager.created_at)}
       </time>
     </li>
   );
@@ -290,19 +291,3 @@ function labelForChoice(choice: Wager['team_choice']): string {
   }
 }
 
-/**
- * Format a Postgres ISO timestamp for compact display. Uses the user's
- * locale via `toLocaleString` so dates feel native. Returns the raw
- * string unchanged if Date.parse fails — better to show a weird-looking
- * timestamp than blow up the row.
- */
-function formatDate(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return iso;
-  return new Date(ms).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}

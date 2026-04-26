@@ -112,9 +112,9 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         />
       </div>
 
-      {error && <p className="form-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</p>}
+      {error && <p className="form-error">{error}</p>}
 
-      <button type="submit" className="btn btn-secondary" disabled={submitting} style={{ width: '100%' }}>
+      <button type="submit" className="btn btn-secondary btn--full" disabled={submitting}>
         {submitting ? 'CREATING ACCOUNT…' : 'SIGN UP'}
       </button>
     </form>

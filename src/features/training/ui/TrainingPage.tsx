@@ -1,50 +1,8 @@
-// ── TrainingPage.tsx ────────────────────────────────────────────────────────
-// WHY: The route-level container for the training facility. Lets a logged-in
-// user pick which player on their favourite team to train, then renders a
-// ClickerWidget for that player. The page is intentionally narrow in scope —
-// it does NOT show stats, history graphs, or other meta — so the focus
-// stays on "I am training my player right now". Detailed views live on
-// PlayerDetail.
-//
-// DESIGN PRINCIPLES:
-//   - Always-on context: the user's favourite team is the natural anchor
-//     so we don't make them search a 22-player roster across 32 clubs.
-//   - One player at a time: clicker widgets are stateful and the cooldown
-//     is global to the user, so showing 22 widgets at once would be both
-//     visually noisy and mechanically misleading.
-//   - Self-contained: the page handles its own roster fetch and selection
-//     state — the route wrapper just renders <TrainingPage /> with no
-//     props. This means the page can be embedded in tests or storybook
-//     without a router.
-//
-// CONSUMERS:
-//   - src/app/training.tsx — the route wrapper at /training.
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '@features/auth';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { ClickerWidget, type ClickerPlayer } from './ClickerWidget';
 
-// ── Component ──────────────────────────────────────────────────────────────
-
-/**
- * Top-level training facility page. Renders a roster picker for the
- * user's favourite team and a single ClickerWidget for the selected
- * player. No props — the page reads everything it needs from the auth
- * context.
- *
- * Lifecycle:
- *   1. Read the user + their favourite team from auth context.
- *   2. Fetch the team's roster from `players` (read-only — no migrations
- *      needed because the table already exists in the legacy schema).
- *   3. Default the selection to the first player; user can re-pick.
- *
- * Edge cases handled:
- *   - Anonymous user: shows a CTA to log in.
- *   - User with no favourite team: shows a hint to set one on the profile.
- *   - Empty roster: shows a "no players to train" placeholder.
- *   - Network error: surfaces an inline error message.
- */
 export function TrainingPage() {
   const { user, profile } = useAuth();
   const db = useSupabase();
@@ -55,14 +13,6 @@ export function TrainingPage() {
 
   const teamId = profile?.favourite_team_id ?? null;
 
-  // ── Roster fetch ─────────────────────────────────────────────────────────
-  // WHY: Fetch the favourite team's roster on mount and whenever the team
-  // selection changes (e.g. after the user updates their profile). The
-  // strict-mode-safe `cancelled` flag discards stale results.
-  //
-  // We hand-cast the rows because the legacy `players` table has a hand-
-  // written shape that doesn't match a generated database.ts entry. Once
-  // database.ts is regenerated this cast can come out.
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
@@ -101,18 +51,10 @@ export function TrainingPage() {
     };
   }, [db, teamId]);
 
-  // ── Render branches ──────────────────────────────────────────────────────
-
-  // ── Render branches ──────────────────────────────────────────────────────
-  // WHY no <h2> in any branch: Training.jsx (the route wrapper) renders the
-  // page hero with an <h1> "Training Facility", so the heading hierarchy is
-  // already established. Adding another heading here would duplicate it for
-  // both visual users and screen readers.
-
   if (!user) {
     return (
       <section className="training-page training-page--anon">
-        <p style={{ fontSize: '13px', opacity: 0.8 }}>
+        <p className="status-text">
           <a href="/soccer-league/login">Log in</a> to start training your
           team&rsquo;s players.
         </p>
@@ -123,7 +65,7 @@ export function TrainingPage() {
   if (!teamId) {
     return (
       <section className="training-page training-page--no-team">
-        <p style={{ fontSize: '13px', opacity: 0.8 }}>
+        <p className="status-text">
           You haven&rsquo;t picked a favourite team yet. Choose one from your{' '}
           <a href="/soccer-league/profile">profile</a> to access the training
           facility.
@@ -135,7 +77,7 @@ export function TrainingPage() {
   if (error) {
     return (
       <section className="training-page training-page--error" role="alert">
-        <p style={{ color: 'var(--color-red)', fontSize: '13px' }}>
+        <p className="form-error">
           Could not load roster — {error}
         </p>
       </section>
@@ -145,7 +87,7 @@ export function TrainingPage() {
   if (!players) {
     return (
       <section className="training-page training-page--loading">
-        <p style={{ opacity: 0.6, fontSize: '13px' }}>Loading roster…</p>
+        <p className="status-text">Loading roster…</p>
       </section>
     );
   }
@@ -153,7 +95,7 @@ export function TrainingPage() {
   if (players.length === 0) {
     return (
       <section className="training-page training-page--empty">
-        <p style={{ opacity: 0.6, fontSize: '13px' }}>
+        <p className="status-text">
           No players found for your favourite team.
         </p>
       </section>

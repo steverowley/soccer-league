@@ -98,9 +98,11 @@ export default function Home() {
   // matches the existing match-news cap for visual parity.
   const [narratives, setNarratives] = useState([]);
   useEffect(() => {
+    let cancelled = false;
     getRecentNarratives(db, 6, 'scheduled')
-      .then(setNarratives)
+      .then((rows) => { if (!cancelled) setNarratives(rows); })
       .catch((e) => console.warn('[Home] narratives fetch failed:', e));
+    return () => { cancelled = true; };
   }, [db]);
 
   // ── League standings carousel state ───────────────────────────────────────
@@ -385,10 +387,10 @@ export default function Home() {
 function kindColor(kind) {
   switch (kind) {
     case 'news':              return 'rgba(227,224,213,0.6)';
-    case 'political_shift':   return '#c8a84b';   // amber — power events
-    case 'geological_event':  return '#c85a2a';   // orange-red — physical disruption
-    case 'architect_whisper': return 'var(--color-purple)'; // direct Architect voice
-    case 'economic_tremor':   return '#4bc8b8';   // teal — market events
+    case 'political_shift':   return 'var(--color-gold)';
+    case 'geological_event':  return 'var(--color-orange)';
+    case 'architect_whisper': return 'var(--color-purple)';
+    case 'economic_tremor':   return 'var(--color-teal)';
     default:                  return 'rgba(227,224,213,0.3)';
   }
 }

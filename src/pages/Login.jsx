@@ -59,8 +59,8 @@ export default function Login() {
   }
 
   return (
-    <div className="container" style={{ paddingTop: '64px', paddingBottom: '80px', display: 'flex', justifyContent: 'center' }}>
-      <div className="card" style={{ width: '100%', maxWidth: '440px' }}>
+    <div className="container auth-page">
+      <div className="card auth-card">
 
         {/* ── Mode tabs ─────────────────────────────────────────────────────── */}
         {/* Two mono-caps labels toggle between login and signup. The active
@@ -83,7 +83,7 @@ export default function Login() {
           </button>
         </div>
 
-        <hr className="divider" style={{ marginBottom: '24px' }} />
+        <hr className="divider divider--compact" />
 
         {/* ── Active form ───────────────────────────────────────────────────── */}
         {mode === 'login' ? (

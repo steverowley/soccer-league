@@ -59,17 +59,6 @@ const STANDINGS_WITH_POS_COLS = [
   { key: 'points',   label: 'Points', align: 'right' },
 ];
 
-/**
- * Inject a 1-based `position` field into each standings row.
- * computeStandings() already sorts by Pts → GD → GF, so the array order
- * is the league table order — we just need to number the rows.
- *
- * @param {Array} rows  Sorted standings rows from computeStandings().
- * @returns {Array}     Same rows with a numeric `position` field added.
- */
-function augmentWithPosition(rows) {
-  return rows.map((row, i) => ({ ...row, position: i + 1 }));
-}
 import {
   computeStandings,
   getTopScorers,
@@ -78,6 +67,10 @@ import {
 } from '../lib/matchResultsService';
 import { getLeagues } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+
+function augmentWithPosition(rows) {
+  return rows.map((row, i) => ({ ...row, position: i + 1 }));
+}
 
 /**
  * League Detail page.
@@ -110,6 +103,7 @@ export default function LeagueDetail() {
   const [error,    setError]    = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     setLeague(null);
     setLoading(true);
     setNotFound(false);
@@ -117,6 +111,7 @@ export default function LeagueDetail() {
 
     getLeagues(db)
       .then(all => {
+        if (cancelled) return;
         const match = all.find(l => l.id === leagueId);
         if (!match) {
           setNotFound(true);
@@ -126,10 +121,12 @@ export default function LeagueDetail() {
         setLoading(false);
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error('[ISL] LeagueDetail fetch failed:', err);
         setError(true);
         setLoading(false);
       });
+    return () => { cancelled = true; };
   }, [leagueId, db]);
 
   // ── Live standings ─────────────────────────────────────────────────────────
