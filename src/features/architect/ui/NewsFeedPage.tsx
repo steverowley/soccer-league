@@ -1,24 +1,8 @@
-// ── architect/ui/NewsFeedPage.tsx ────────────────────────────────────────────
-// Public-facing Galaxy Dispatch news feed. Surfaces Architect-generated
-// narratives from the `narratives` table — the output of the
-// `architect-galaxy-tick` Edge Function (source='scheduled') plus any
-// in-match narrative fragments the Architect emits (source='match').
-//
-// Design decisions:
-//   - Source filter defaults to all rows so the page is never empty even
-//     before the first cron tick fires; match-generated fragments fill it
-//     until the Edge Function has run.
-//   - "Load more" pattern (not infinite scroll) — one deliberate tap, not
-//     auto-loading, so players feel the narrative drips rather than floods.
-//   - Kind filter: a single active-kind toggle so players can zero in on
-//     "Transmissions" (architect_whisper) vs "Geological" events, etc.
-//   - architect_whisper rows get a special Architect-purple glow card style
-//     to signal they are direct cosmic pronouncements, not press releases.
-
 import { useCallback, useEffect, useState } from 'react';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { getRecentNarratives } from '../../entities/api/entities';
 import type { Narrative } from '../../entities/types';
+import { formatDateShort } from '@shared/utils/formatDate';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -34,20 +18,14 @@ const KIND_LABELS: Record<string, string> = {
 
 const KIND_COLORS: Record<string, string> = {
   news:              'rgba(227,224,213,0.6)',
-  political_shift:   '#c8a84b',
-  geological_event:  '#c85a2a',
+  political_shift:   'var(--color-gold)',
+  geological_event:  'var(--color-orange)',
   architect_whisper: 'var(--color-purple)',
-  economic_tremor:   '#4bc8b8',
+  economic_tremor:   'var(--color-teal)',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
 
-// ── Component ────────────────────────────────────────────────────────────────
-
-/**
- * Full-page Galaxy Dispatch feed. Fetches narratives from the DB, supports
- * kind filtering and load-more pagination. No props — self-contained.
- */
 export function NewsFeedPage() {
   const db = useSupabase();
 
@@ -111,21 +89,9 @@ export function NewsFeedPage() {
       {/* ── Page hero ───────────────────────────────────────────────────── */}
       <div className="page-hero">
         <div className="container">
-          {/* Inline flex so the "Architect" badge sits right of the h1.
-              justify-content: center inherits from .page-hero text-align. */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
+          <div className="page-hero__title-row">
             <h1>Galaxy Dispatch</h1>
-            <span style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              color: 'var(--color-purple)',
-              border: '1px solid var(--color-purple)',
-              padding: '2px 8px',
-              fontFamily: 'var(--font-mono)',
-            }}>
-              Architect
-            </span>
+            <span className="badge--architect">Architect</span>
           </div>
           <hr className="divider" />
           <p className="subtitle">
@@ -134,15 +100,9 @@ export function NewsFeedPage() {
         </div>
       </div>
 
-    <div className="container" style={{ paddingBottom: '80px' }}>
+    <div className="container page-content">
 
-      {/* ── Kind filter strip ────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        flexWrap: 'wrap',
-        marginBottom: '28px',
-      }}>
+      <div className="filter-strip">
         {ALL_KINDS.map((kind) => {
           const active = activeKind === kind;
           const color = KIND_COLORS[kind] ?? 'rgba(227,224,213,0.6)';
@@ -150,18 +110,12 @@ export function NewsFeedPage() {
             <button
               key={kind}
               type="button"
+              className="kind-filter-btn"
               onClick={() => handleKindToggle(kind)}
               style={{
+                borderColor: color,
                 background: active ? color : 'transparent',
-                border: `1px solid ${color}`,
                 color: active ? 'var(--color-abyss)' : color,
-                fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                padding: '4px 12px',
-                cursor: 'pointer',
-                transition: 'background 0.15s, color 0.15s',
               }}
             >
               {KIND_LABELS[kind]}
@@ -171,17 +125,11 @@ export function NewsFeedPage() {
         {activeKind && (
           <button
             type="button"
+            className="kind-filter-btn"
             onClick={() => handleKindToggle(activeKind)}
             style={{
-              background: 'transparent',
-              border: '1px solid rgba(227,224,213,0.25)',
+              borderColor: 'rgba(227,224,213,0.25)',
               color: 'rgba(227,224,213,0.5)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              padding: '4px 12px',
-              cursor: 'pointer',
             }}
           >
             Clear
@@ -189,24 +137,19 @@ export function NewsFeedPage() {
         )}
       </div>
 
-      {/* ── Error ────────────────────────────────────────────────────────── */}
       {error && (
-        <p role="alert" style={{ color: '#c85a2a', fontSize: '13px' }}>
+        <p role="alert" className="form-error">
           Could not load transmissions — {error}
         </p>
       )}
 
-      {/* ── Loading (first load only — don't flash on pagination) ────────── */}
       {loading && rows.length === 0 && !error && (
-        <p style={{ opacity: 0.45, fontSize: '13px' }}>
-          Receiving transmissions…
-        </p>
+        <p className="status-text">Receiving transmissions…</p>
       )}
 
-      {/* ── Empty ────────────────────────────────────────────────────────── */}
       {!loading && !error && rows.length === 0 && (
         <div className="card" style={{ maxWidth: '480px' }}>
-          <p style={{ opacity: 0.55, fontSize: '13px', margin: 0 }}>
+          <p className="status-text" style={{ margin: 0 }}>
             {activeKind
               ? `No ${KIND_LABELS[activeKind] ?? activeKind} transmissions on record yet.`
               : 'The Architect has been unusually quiet. Check back after the next match.'}
@@ -214,45 +157,24 @@ export function NewsFeedPage() {
         </div>
       )}
 
-      {/* ── Narrative grid ───────────────────────────────────────────────── */}
       {rows.length > 0 && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '16px',
-        }}>
+        <div className="narrative-grid">
           {rows.map((item) => (
             <NarrativeCard key={item.id} narrative={item} />
           ))}
         </div>
       )}
 
-      {/* ── Load more ────────────────────────────────────────────────────── */}
       {hasMore && !loading && (
-        <div style={{ textAlign: 'center', marginTop: '32px' }}>
-          <button
-            type="button"
-            onClick={handleLoadMore}
-            style={{
-              background: 'transparent',
-              border: '1px solid rgba(227,224,213,0.3)',
-              color: 'var(--color-dust)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              padding: '10px 28px',
-              cursor: 'pointer',
-            }}
-          >
+        <div className="load-more-wrapper">
+          <button type="button" className="load-more-btn" onClick={handleLoadMore}>
             Load More
           </button>
         </div>
       )}
 
-      {/* ── Loading spinner during pagination ────────────────────────────── */}
       {loading && rows.length > 0 && (
-        <p style={{ textAlign: 'center', marginTop: '24px', opacity: 0.4, fontSize: '12px' }}>
+        <p className="status-text" style={{ textAlign: 'center', marginTop: '24px' }}>
           Receiving…
         </p>
       )}
@@ -261,17 +183,11 @@ export function NewsFeedPage() {
   );
 }
 
-// ── NarrativeCard ─────────────────────────────────────────────────────────────
-
 interface NarrativeCardProps {
   narrative: Narrative;
 }
 
-/**
- * Single narrative card. architect_whisper rows get a subtle purple glow
- * (box-shadow) to signal they are direct Architect pronouncements rather
- * than in-world journalism. All other kinds use a left-border accent only.
- */
+// architect_whisper gets a purple glow to distinguish cosmic pronouncements from journalism.
 function NarrativeCard({ narrative }: NarrativeCardProps) {
   const color = KIND_COLORS[narrative.kind] ?? 'rgba(227,224,213,0.3)';
   const isWhisper = narrative.kind === 'architect_whisper';
@@ -282,48 +198,26 @@ function NarrativeCard({ narrative }: NarrativeCardProps) {
       style={{
         borderLeft: `3px solid ${color}`,
         boxShadow: isWhisper
-          ? '0 0 12px rgba(139,92,246,0.18)'
+          ? '0 0 12px var(--color-purple-glow)'
           : undefined,
       }}
     >
-      {/* Kind badge + timestamp */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-        <span style={{
-          fontSize: '10px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          color,
-          fontFamily: 'var(--font-mono)',
-        }}>
+      <div className="narrative-card__header">
+        <span className="kind-label" style={{ color }}>
           {KIND_LABELS[narrative.kind] ?? narrative.kind}
         </span>
-        <span style={{ fontSize: '10px', opacity: 0.35, whiteSpace: 'nowrap', marginLeft: '8px' }}>
-          {formatDate(narrative.created_at)}
+        <span className="narrative-card__timestamp">
+          {formatDateShort(narrative.created_at)}
         </span>
       </div>
 
       {/* Summary — shown verbatim. Never edited or paraphrased. */}
-      <p style={{ fontSize: '13px', lineHeight: 1.65, opacity: 0.9, margin: 0 }}>
-        {narrative.summary}
-      </p>
+      <p className="narrative-body">{narrative.summary}</p>
 
-      {/* Entities tag strip — only rendered when entities are present so
-          the card doesn't have an empty gap for match-sourced narratives. */}
       {narrative.entities_involved.length > 0 && (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' }}>
+        <div className="entity-strip">
           {narrative.entities_involved.map((e) => (
-            <span
-              key={e}
-              style={{
-                fontSize: '9px',
-                fontFamily: 'var(--font-mono)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                color: 'rgba(227,224,213,0.45)',
-                border: '1px solid rgba(227,224,213,0.15)',
-                padding: '1px 5px',
-              }}
-            >
+            <span key={e} className="entity-tag">
               {e}
             </span>
           ))}
@@ -333,13 +227,3 @@ function NarrativeCard({ narrative }: NarrativeCardProps) {
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return iso;
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}

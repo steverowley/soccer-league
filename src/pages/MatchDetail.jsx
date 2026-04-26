@@ -35,8 +35,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { WagerWidget, BetHistory, getMatchOdds, saveMatchOdds } from '../features/betting';
-import { computeAvgRating, computeMatchOdds } from '../features/betting';
+import { WagerWidget, BetHistory, getMatchOdds, saveMatchOdds, computeAvgRating, computeMatchOdds } from '../features/betting';
 import { getMatch } from '../lib/supabase';
 import Button from '../components/ui/Button';
 

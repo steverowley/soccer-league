@@ -279,7 +279,7 @@ Unified visual language and component library aligned to the Figma design specif
   - `.account-menu*` — user dropdown menu styling (~40 lines)
 - **Account menu** — replaced 100+ lines of inline styles with `.account-menu-*` CSS classes; maintains dropdown animation and IC balance display
 - **Component library** — Reusable React components in `features/design-system/components/` (Button, Card, Input, Badge, etc.) with prop-driven theming.
-- **Unified page layouts** — All pages share consistent `.page-hero` (48px top padding + centered H1) and `.section-nav` (◄ SECTION NAME ► arrow headings) styling; Voting and Training pages now have page-hero sections matching all other routes.
+- **Unified page layouts** — All pages share consistent `.page-hero` (100px desktop / 70px mobile, centered H1) and `.section-nav` (◄ SECTION NAME ► arrow headings) styling. Detail pages use `.page-top` utility (same vertical start as `.page-hero` without text-align: center) for left-aligned headers. Voting and Training pages now have page-hero sections matching all other routes.
 - **MatchCard component** (`src/components/ui/MatchCard.jsx`) — Shared card component replacing duplicated variants across Home and Matches pages; supports in_progress / scheduled / completed statuses with momentum bars, tag badges, bet sliders, and live commentary feeds.
 
 ## Tech Stack

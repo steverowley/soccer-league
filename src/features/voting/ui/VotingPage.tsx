@@ -1,23 +1,3 @@
-// ── VotingPage.tsx ──────────────────────────────────────────────────────────
-// WHY: The end-of-season payoff. Fans pour their accumulated betting
-// winnings into focus options for their favourite club, and the option
-// that pulls the most pooled credits gets enacted next season. This page
-// is the entire mechanic — there is no admin override, no jury, no devs
-// picking winners. It's a community election with skin in the game.
-//
-// DESIGN PRINCIPLES:
-//   - Team-scoped: each user only votes on options for their `favourite_
-//     team_id`. Voting on multiple clubs would dilute the social-experiment
-//     identity ("which club do *you* belong to?") so we gate it.
-//   - Major + Minor split visible up front: two clear sections so users
-//     understand they have two distinct levers, not one big pool.
-//   - Live tally: the FocusCards re-fetch after every vote so the user
-//     sees their contribution land in the pooled total immediately.
-//   - Hidden mechanics: descriptions are flavour text, never numbers.
-//
-// CONSUMERS:
-//   - src/app/voting.tsx — the route wrapper at /voting.
-
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@features/auth';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
@@ -29,40 +9,10 @@ import {
 import type { FocusOption, FocusTallyEntry, FocusTier } from '../types';
 import { FocusCard } from './FocusCard';
 
-// ── Component props ────────────────────────────────────────────────────────
-
-/** Props accepted by {@link VotingPage}. */
 export interface VotingPageProps {
-  /**
-   * Season UUID for the voting window. Pages typically pull this from a
-   * route param or a global "current season" hook. The page itself does
-   * NOT decide which season to show — that's the parent's job — so the
-   * component stays reusable for an "archive" view of past seasons.
-   */
   seasonId: string;
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
-
-/**
- * Top-level voting page. Renders the user's favourite team's focus options
- * grouped by tier, with each option as a {@link FocusCard}.
- *
- * Lifecycle:
- *   1. On mount (and whenever `seasonId` or the user's team changes), fetch
- *      both `focus_options` and the running `focus_tally` in parallel.
- *   2. Render the cards, passing each one its tally row and the tier total.
- *   3. After every successful vote, re-fetch the tally so the share bars
- *      update in real time and `profile.refreshProfile()` updates the
- *      user's credit balance.
- *
- * Edge cases handled:
- *   - Anonymous user: shows a "log in to vote" CTA.
- *   - User with no favourite team: shows a "pick a favourite team first"
- *     hint linking to the profile page.
- *   - Empty options list: shows a "voting hasn't opened yet" placeholder.
- *   - Network error during fetch: surfaces an inline error.
- */
 export function VotingPage({ seasonId }: VotingPageProps) {
   const { user, profile, refreshProfile } = useAuth();
   const db = useSupabase();
@@ -138,13 +88,6 @@ export function VotingPage({ seasonId }: VotingPageProps) {
     [user, db, fetchAll, refreshProfile],
   );
 
-  // ── Render branches ──────────────────────────────────────────────────────
-
-  // ── Render branches ──────────────────────────────────────────────────────
-  // WHY no <h2> in any branch: the parent Voting.jsx route wrapper renders the
-  // page hero with an <h1> so the heading hierarchy is already established.
-  // Repeating "Season Vote" here would create two headings for screen readers.
-
   if (!user) {
     return (
       <section className="voting-page voting-page--anon">
@@ -170,7 +113,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (error) {
     return (
       <section className="voting-page voting-page--error" role="alert">
-        <p style={{ color: 'var(--color-red)', fontSize: '13px' }}>
+        <p className="form-error">
           Could not load voting data — {error}
         </p>
       </section>
@@ -180,7 +123,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (!options || !tally) {
     return (
       <section className="voting-page voting-page--loading">
-        <p style={{ opacity: 0.6, fontSize: '13px' }}>Loading focus options…</p>
+        <p className="status-text">Loading focus options…</p>
       </section>
     );
   }
@@ -188,7 +131,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   if (options.length === 0) {
     return (
       <section className="voting-page voting-page--empty">
-        <p style={{ opacity: 0.7, fontSize: '13px' }}>
+        <p className="status-text">
           Voting hasn&rsquo;t opened for this season yet. Check back at the
           end of the campaign.
         </p>

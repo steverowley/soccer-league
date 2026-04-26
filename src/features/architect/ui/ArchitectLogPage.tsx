@@ -28,6 +28,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { getRecentInterventions } from '../api/interventions';
 import type { ArchitectInterventionRow } from '../types';
+import { formatDateTimeFull } from '@shared/utils/formatDate';
 
 // ── Tuning constants ───────────────────────────────────────────────────────
 
@@ -180,7 +181,7 @@ function InterventionRow({ row }: InterventionRowProps) {
       data-table={row.target_table}
     >
       <td className="architect-log__cell architect-log__cell--time">
-        <time dateTime={row.created_at}>{formatDate(row.created_at)}</time>
+        <time dateTime={row.created_at}>{formatDateTimeFull(row.created_at)}</time>
       </td>
       <td className="architect-log__cell">{row.target_table}</td>
       <td className="architect-log__cell architect-log__cell--id">
@@ -219,20 +220,3 @@ function formatJson(value: unknown): string {
   }
 }
 
-/**
- * Format an ISO timestamp for the audit log. Uses the user's locale via
- * `toLocaleString` so the cell feels native. Falls back to the raw ISO
- * string if Date.parse fails — better than throwing inside a render.
- */
-function formatDate(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return iso;
-  return new Date(ms).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
