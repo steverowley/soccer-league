@@ -362,11 +362,17 @@ table {
 
 /* ── Responsive grid helpers ───────────────────────────────────────────── */
 /* All two-column grids on listing/detail pages collapse to a single column
-   below 640px.  The three classes are set inline by their components and
-   targeted here so no per-page <style> blocks are needed:
+   below 640px. Base layout rules live here so components don't carry inline
+   style={{ display:'grid', ... }} props:
      .stats-two-col  – stat table pairs (LeagueDetail, TeamDetail)
      .team-grid      – team card grid (Teams)
      .leagues-grid   – league card grid (Leagues) */
+
+.team-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
 
 @media (max-width: 640px) {
   .stats-two-col,
@@ -506,6 +512,7 @@ table {
   color: var(--color-red);
   font-size: var(--font-size-small);
   font-family: var(--font-mono);
+  margin-bottom: var(--space-4);
 }
 
 /* ── Auth tabs ─────────────────────────────────────────────────────────────
@@ -1127,3 +1134,173 @@ table {
   line-height: 1.6;
 }
 
+
+/* ── Utility classes ──────────────────────────────────────────────────────── */
+
+/* Standard page-bottom padding used by every route wrapper */
+.page-content {
+  padding-bottom: var(--space-20);
+}
+
+/* Muted status / loading / empty-state text (13px, 60% opacity) */
+.status-text {
+  font-size: var(--font-size-small);
+  opacity: 0.6;
+}
+
+/* Full-width button modifier — applied alongside .btn variants */
+.btn--full {
+  width: 100%;
+}
+
+/* ── Galaxy Dispatch / NewsFeed ──────────────────────────────────────────── */
+
+/* Title row: h1 + architect badge inline */
+.page-hero__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* "ARCHITECT" pill badge beside the Galaxy Dispatch h1 */
+.badge--architect {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-widest);
+  color: var(--color-purple);
+  border: 1px solid var(--color-purple);
+  padding: 2px var(--space-2);
+  font-family: var(--font-mono);
+}
+
+/* Kind filter strip — flex row of toggle buttons */
+.filter-strip {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+/* Individual kind filter toggle button */
+.kind-filter-btn {
+  background: transparent;
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+/* Narrative grid — auto-fill, min 300px columns */
+.narrative-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+/* Uppercased 10px kind label inside narrative cards and filter buttons */
+.kind-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  font-family: var(--font-mono);
+}
+
+/* Entity mention tag inside narrative cards */
+.entity-tag {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(227, 224, 213, 0.45);   /* --color-dust @ 45% */
+  border: 1px solid rgba(227, 224, 213, 0.15);
+  padding: 1px 5px;
+}
+
+/* "Load more" ghost button — matches the retro minimal aesthetic */
+.load-more-btn {
+  background: transparent;
+  border: 1px solid rgba(227, 224, 213, 0.3);
+  color: var(--color-dust);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-widest);
+  padding: 10px 28px;
+  cursor: pointer;
+}
+
+/* Center wrapper for load-more and pagination controls */
+.load-more-wrapper {
+  text-align: center;
+  margin-top: var(--space-8);
+}
+
+/* Auth page centering wrapper */
+.auth-page {
+  padding-top: var(--space-16);
+  padding-bottom: var(--space-20);
+  display: flex;
+  justify-content: center;
+}
+
+/* Auth card max-width constraint */
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+}
+
+/* Compact divider — tighter bottom margin than the default 32px */
+.divider--compact {
+  margin-bottom: var(--space-6);
+}
+
+/* Team badge circle — brand-coloured logo placeholder */
+.team-badge {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+
+/* TeamCard body text (tagline) */
+.team-card__tagline {
+  font-size: var(--font-size-micro);
+  opacity: 0.7;
+  margin-top: var(--space-2);
+  flex: 1;
+  margin-bottom: var(--space-4);
+}
+
+/* Narrative card internal layout */
+.narrative-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-2);
+}
+
+.narrative-card__timestamp {
+  font-size: 10px;
+  opacity: 0.35;
+  white-space: nowrap;
+  margin-left: var(--space-2);
+}
+
+.narrative-body {
+  font-size: var(--font-size-small);
+  line-height: 1.65;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.entity-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
