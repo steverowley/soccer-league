@@ -1,15 +1,18 @@
 // ── features/architect/logic/CosmicArchitect.ts ───────────────────────────────
-// TypeScript port of CosmicArchitect from src/agents.js (lines 1407–2625).
-// All logic is preserved exactly — this is a type-only migration.
+// The Cosmic Architect — persistent narrative intelligence for the ISL.
 //
-// See src/agents.js for full inline documentation on each method.
-// The class satisfies IArchitect (match/types.ts) by structural typing.
+// Lore is held in `architect_lore` (DB). The constructor starts empty;
+// callers MUST hydrate via `prepareArchitectForMatch()` (or assign
+// `arch.lore` directly from a `LoreStore.hydrate()` result) before any
+// proclamation runs. `getContext()` stays synchronous so it can fire 5–10
+// times in <500ms during a goal burst without stalling commentary.
 
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   ArchitectLore,
   RivalryThread,
 } from '../types';
+import { emptyLore } from './loreStore';
 import { CLAUDE_MODEL } from '../../../constants.js';
 import { rnd, rndI } from '../../../utils.js';
 
@@ -106,20 +109,24 @@ type MsgHistory = Array<{ role: string; content: string }>;
 /**
  * CosmicArchitect — persistent narrative intelligence for the ISL.
  *
- * Constructor loads the existing cosmic lore from localStorage (if any) and
- * initialises in-match narrative state. One instance is created per match in
- * App.jsx alongside AgentSystem.
+ * The class is created with an EMPTY lore object. Callers must hydrate it
+ * from the `architect_lore` table before any proclamation runs — use
+ * {@link prepareArchitectForMatch} for the standard match-start lifecycle.
+ * One instance is created per match in App.jsx alongside AgentSystem.
+ *
+ * `getContext()` is synchronous on purpose: it can fire 5–10 times in
+ * <500ms during a goal burst as multiple commentators and player thoughts
+ * compose their prompts in parallel. Blocking on Supabase here would stall
+ * the entire commentary engine, so all DB I/O happens at match boundaries.
  */
 export class CosmicArchitect {
 
   // ── Static constants ─────────────────────────────────────────────────────
 
-  /** localStorage key under which the persistent cosmic lore JSON is stored. */
-  static readonly LORE_KEY = 'isi_cosmic_lore';
-
   /**
    * Maximum number of past matches retained in the lore ledger.
-   * Oldest entries are dropped when this limit is exceeded.
+   * Oldest entries are dropped when this limit is exceeded — keeping the
+   * ledger bounded so prompt context doesn't grow unbounded across seasons.
    */
   static readonly MAX_LEDGER = 50;
 
@@ -197,7 +204,12 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     this.awayManager = awayManager;
     this.stadium     = stadium;
     this.weather     = weather;
-    this.lore        = this._loadLore();
+    // Lore starts empty; callers MUST hydrate via prepareArchitectForMatch()
+    // (or assign arch.lore from a LoreStore.hydrate() result) before any
+    // proclamation runs.  The DB-backed `architect_lore` table is the single
+    // source of truth — there is intentionally no client-side fallback, so
+    // every browser session reads the same shared narrative.
+    this.lore        = emptyLore();
   }
 
   // ── Private API wrapper ──────────────────────────────────────────────────
@@ -216,44 +228,12 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     return (response.content[0] as { type: string; text?: string })?.text?.trim() || null;
   }
 
-  // ── Lore helpers ─────────────────────────────────────────────────────────
-
-  private _emptyLore(): ArchitectLore {
-    return {
-      version:             2,
-      playerArcs:          {},
-      managerFates:        {},
-      rivalryThreads:      {},
-      seasonArcs:          {},
-      matchLedger:         [],
-      currentSeason:       null,
-      playerRelationships: {},
-    };
-  }
-
-  private _loadLore(): ArchitectLore {
-    try {
-      const raw = localStorage.getItem(CosmicArchitect.LORE_KEY);
-      if (!raw) return this._emptyLore();
-      const parsed = JSON.parse(raw) as ArchitectLore & { version?: number };
-      if (parsed.version === 1) {
-        parsed.playerRelationships = {};
-        parsed.version = 2;
-        return parsed;
-      }
-      return parsed.version === 2 ? parsed : this._emptyLore();
-    } catch {
-      return this._emptyLore();
-    }
-  }
-
-  private _saveLore(): void {
-    try {
-      localStorage.setItem(CosmicArchitect.LORE_KEY, JSON.stringify(this.lore));
-    } catch { /* QuotaExceededError: silently ignore */ }
-  }
-
   // ── Canonical rivalry key ────────────────────────────────────────────────
+  //
+  // Builds a deterministic, side-agnostic rivalry key by sorting the two
+  // shortNames alphabetically and joining with `_vs_`. This means
+  // `mars_vs_saturn` resolves to the same lore row regardless of which side
+  // is home — rivalries are bidirectional in the DB.
 
   private _rivalryKey(): string {
     return [this.homeTeam.shortName, this.awayTeam.shortName]
@@ -1021,7 +1001,10 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       if (this.lore.matchLedger.length > CosmicArchitect.MAX_LEDGER)
         this.lore.matchLedger.shift();
 
-      this._saveLore();
+      // Persistence: lore mutations live in `this.lore` only. The caller is
+      // responsible for fire-and-forget persistence via
+      // `LoreStore.persistAll(arch.lore)` after this method resolves —
+      // see prepareArchitectForMatch.ts and App.jsx's post-match handler.
     } catch { /* post-match lore save is best-effort; never surface to caller */ }
   }
 }
