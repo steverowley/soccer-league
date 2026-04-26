@@ -181,7 +181,7 @@ Each club has:
 
 ### Already Built
 - Match simulator: minute-by-minute, 13+ event types, personality-driven contests, weather, momentum, tension curves, multi-step sequences (penalties, freekicks, sieges, counters) — `src/gameEngine.js` (1100+ LOC)
-- Cosmic Architect director: `src/agents.js` lines ~1363+. Persistent lore lives in **localStorage only** (must move to DB as part of Phase 5)
+- Cosmic Architect director: `src/features/architect/logic/CosmicArchitect.ts` (TypeScript). Persistent lore lives in the `architect_lore` DB table; `prepareArchitectForMatch()` is the canonical kickoff lifecycle (hydrate → primed Architect + LoreStore for post-match `persistAll`). `getContext()` stays synchronous so it never blocks commentary during goal bursts.
 - AI commentary via Claude: 3 commentator personas (Captain Vox, Nexus-7, Zara Bloom) + Architect voice + player thoughts + manager shouts
 - **32 teams across 4 leagues, 512 players (16/team), 32 managers** fully seeded in `supabase/seed.sql` (Phase 0.5 expands to 22/team = 704)
 - Season 1 competitions: 4 round-robin leagues (224 fixtures) + ISL Champions Cup (13 fixtures)
@@ -205,5 +205,5 @@ Each club has:
 
 ### Critical engineering invariants
 - `src/gameEngine.js` consumes player data in camelCase via `normalizeTeamForEngine()` (`src/lib/supabase.js:381–437`). **Never drop** `attacking`/`defending`/`mental`/`athletic`/`technical`/`jersey_number`/`starter` columns from `players`.
-- `CosmicArchitect.getContext()` (`src/agents.js:161`) is called synchronously on every LLM prompt and can fire 5–10 times in <500ms during a goal burst. **Never block it on Supabase round-trips** — hydrate lore before kickoff, write fire-and-forget.
+- `CosmicArchitect.getContext()` (`src/features/architect/logic/CosmicArchitect.ts`) is called synchronously on every LLM prompt and can fire 5–10 times in <500ms during a goal burst. **Never block it on Supabase round-trips** — hydrate lore before kickoff via `prepareArchitectForMatch()`, write fire-and-forget via `LoreStore.persistAll()`.
 - The Architect is the game's identity. Every new feature should give it new levers.

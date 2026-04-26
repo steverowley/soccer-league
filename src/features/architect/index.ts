@@ -6,11 +6,12 @@
 // "does this give the Architect a new lever to pull?"
 //
 // Current state:
-//   The in-match Architect lives in `src/agents.js` (~lines 1363–1753) and
-//   stores its cross-match lore in localStorage. Phase 5.1 moved lore to the
-//   `architect_lore` DB table with a pre-hydration lifecycle that keeps
-//   `getContext()` synchronous (it can fire 5–10 times in <500ms during a
-//   goal burst — blocking on Supabase here would stall commentary).
+//   The in-match Architect is the TS class CosmicArchitect (logic/). Lore is
+//   persisted in the `architect_lore` DB table; `prepareArchitectForMatch()`
+//   hydrates it once at kickoff, and `LoreStore.persistAll()` writes it back
+//   fire-and-forget after the match. `getContext()` stays synchronous so it
+//   never blocks commentary (it can fire 5–10 times in <500ms during a goal
+//   burst — blocking on Supabase here would stall the entire feed).
 //
 // Phase 8 extends the Architect beyond individual matches:
 //   - Supabase Edge Function `architect-galaxy-tick` runs on a cron schedule.
@@ -29,9 +30,9 @@
 //   specific journalists/pundits/owners in its pronouncements.
 //
 // STATUS: Phase 8 complete — edicts logic, interventions API, galaxy-tick
-// Edge Function. Legacy CosmicArchitect class in `src/agents.js` still
-// drives in-match behaviour; wire it to LoreStore + interventions when
-// migrating to TypeScript.
+// Edge Function. The TS CosmicArchitect class drives in-match behaviour;
+// `prepareArchitectForMatch()` is the canonical kickoff lifecycle helper
+// (hydrate → primed Architect + LoreStore for post-match persistAll).
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type {
@@ -102,3 +103,13 @@ export { NewsFeedPage } from './ui/NewsFeedPage';
 // lore. Satisfies IArchitect (match/types.ts) by structural typing.
 export { CosmicArchitect } from './logic/CosmicArchitect';
 export type { CosmicEdict } from './logic/CosmicArchitect';
+
+// ── Pre-match lifecycle helper ─────────────────────────────────────────────
+// `prepareArchitectForMatch` is the canonical entry point for kickoff: it
+// constructs the Architect, hydrates lore from architect_lore, and returns
+// both the Architect and the LoreStore so the caller can persist after.
+export { prepareArchitectForMatch } from './logic/prepareArchitect';
+export type {
+  PrepareArchitectOptions,
+  PreparedArchitect,
+} from './logic/prepareArchitect';
