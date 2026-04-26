@@ -85,9 +85,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         />
       </div>
 
-      {error && <p className="form-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</p>}
+      {error && <p className="form-error">{error}</p>}
 
-      <button type="submit" className="btn btn-primary" disabled={submitting} style={{ width: '100%' }}>
+      <button type="submit" className="btn btn-primary btn--full" disabled={submitting}>
         {submitting ? 'LOGGING IN…' : 'LOG IN'}
       </button>
     </form>

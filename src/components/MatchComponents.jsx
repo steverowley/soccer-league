@@ -8,14 +8,8 @@
 // CSS-cascade conflict where the ISL global reset (* { padding: 0; margin: 0 })
 // sits in the unlayered cascade and overrides Tailwind @layer utilities.
 //
-// Constant shorthands imported from constants.js:
-//   C      — ISL colour palette  (C.abyss, C.ash, C.dust, C.purple, C.red, C.green)
-//   bdr    — helper that builds { backgroundColor, border, color } style objects
-//   PERS   — personality key constants
-//   PERS_ICON — maps personality key → emoji
-
 import { useState } from "react";
-import { C, bdr, PERS, PERS_ICON, CLAUDE_MODEL } from "../constants.js";
+import { C, PERS, PERS_ICON, CLAUDE_MODEL } from "../constants.js";
 import { COMMENTATOR_PROFILES } from "../features/match/index.ts";
 
 // ── Stat ──────────────────────────────────────────────────────────────────────

@@ -36,13 +36,13 @@ export default function ArchitectLog() {
   if (!import.meta.env.DEV) {
     return (
       <div className="container page-top">
-        <p style={{ opacity: 0.6 }}>This page is not available in production.</p>
+        <p className="status-text">This page is not available in production.</p>
       </div>
     );
   }
 
   return (
-    <div className="container page-top" style={{ paddingBottom: '80px' }}>
+    <div className="container page-top page-content">
       <ArchitectLogPage />
     </div>
   );

@@ -99,24 +99,17 @@ export default function Teams() {
   const currentTeams  = currentLeague ? (teamsByLeague[currentLeague.id] ?? []) : [];
 
   return (
-    <div className="container" style={{ paddingBottom: '60px' }}>
+    <div className="container page-content">
 
-      {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      {/* page-hero provides the 48px top padding + centred uppercase h1 */}
-      <div className="page-hero" style={{ marginBottom: '40px' }}>
+      <div className="page-hero">
         <h1>Our Heroic Teams</h1>
         <hr className="divider" />
         <p className="subtitle">Lorem ipsum dolor sit amet.</p>
       </div>
 
-      {/* ── Loading / error states ────────────────────────────────────────────── */}
-      {loading && <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>Loading teams…</p>}
-      {error   && <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>Could not load teams. Please try again later.</p>}
+      {loading && <p className="status-text">Loading teams…</p>}
+      {error   && <p className="status-text">Could not load teams. Please try again later.</p>}
 
-      {/* ── League carousel ───────────────────────────────────────────────────── */}
-      {/* Shows one league at a time — prev/next arrows navigate between the four
-          leagues.  Matches the design which uses ◄ ROCKY INNER LEAGUE ► as a
-          functional carousel rather than a static heading. */}
       {!loading && !error && currentLeague && (
         <section className="section">
           <div className="section-nav">
@@ -125,8 +118,7 @@ export default function Teams() {
             <button className="section-nav-btn" onClick={() => shiftLeague(1)} aria-label="Next league">►</button>
           </div>
 
-          {/* 2-column grid — collapses to 1-col below 640px via .team-grid rule */}
-          <div className="team-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="team-grid">
             {currentTeams.map(team => (
               <TeamCard key={team.id} team={team} />
             ))}
@@ -165,43 +157,24 @@ export default function Teams() {
  */
 function TeamCard({ team }) {
   return (
-    <div
-      className="card"
-      style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
-    >
-      {/* ── Brand badge circle ────────────────────────────────────────────── */}
-      {/* 80×80px circle per the Figma team listing card spec.  Tinted with the
-          team's primary brand colour at 20% opacity so each card has a distinct
-          visual identity before real crests are uploaded.  Border at 40% opacity
-          stays visible even when brand colour is close to the card background. */}
-      <div style={{
-        width: 80,
-        height: 80,
-        borderRadius: '50%',
-        backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
-        border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,
-        marginBottom: '16px',
-        flexShrink: 0,
-      }} />
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      {/* Brand badge — necessarily dynamic: tinted by team.color hex */}
+      <div
+        className="team-badge"
+        style={{
+          backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
+          border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,
+        }}
+      />
 
-      {/* ── Team name heading ─────────────────────────────────────────────── */}
-      {/* .card-title (18px uppercase) — standardised in-card heading class. */}
-      <h3 className="card-title" style={{ marginBottom: '8px' }}>{team.name}</h3>
+      <h3 className="card-title">{team.name}</h3>
 
-      {/* ── Structured metadata rows ──────────────────────────────────────── */}
-      {/* Each row uses the "LABEL: value" format shown in the mockup.
-          Labels are bold-uppercase; values are normal-weight. */}
       <MetaRow label="Location"    value={team.location}   fontSize="11px" />
       <MetaRow label="Home Ground" value={team.homeGround} fontSize="11px" />
       <MetaRow label="Capacity"    value={team.capacity}   fontSize="11px" />
 
-      {/* ── Tagline ──────────────────────────────────────────────────────── */}
-      {/* flex: 1 pushes the button below to the card's bottom edge. */}
-      <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '8px', flex: 1, marginBottom: '16px' }}>
-        {team.tagline}
-      </p>
+      <p className="team-card__tagline">{team.tagline}</p>
 
-      {/* ── VIEW TEAM button ──────────────────────────────────────────────── */}
       <div>
         <Link to={`/teams/${team.id}`}>
           <Button variant="primary">View Team</Button>

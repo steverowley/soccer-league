@@ -44,7 +44,7 @@ import MetaRow from '../components/ui/MetaRow';
 import { getTeam, normalizeTeam } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
-  PLAYER_STAT_COLS, SCORER_COLS, ASSISTS_COLS, CARDS_COLS, CLEAN_SHEETS_COLS,
+  SCORER_COLS, ASSISTS_COLS, CARDS_COLS, CLEAN_SHEETS_COLS,
   STANDINGS_COLS, placeholderPlayerRows, buildStandingsRows,
 } from '../data/leagueData';
 import { computeStandings, getResults } from '../lib/matchResultsService';
@@ -267,6 +267,7 @@ export default function TeamDetail() {
   const [nextMatch, setNextMatch] = useState(null);
   useEffect(() => {
     if (!teamId) return;
+    let cancelled = false;
     // Two parallel queries (home and away) because Supabase .or() on FK
     // columns requires explicit casting that varies by Postgres version —
     // querying separately and merging is more portable and easier to read.
@@ -286,6 +287,7 @@ export default function TeamDetail() {
         .order('created_at', { ascending: true })
         .limit(1),
     ]).then(([homeRes, awayRes]) => {
+      if (cancelled) return;
       // Merge the two single-row results, attach a venue flag so the card
       // can label the fixture "(H)" or "(A)", then pick the earliest one.
       const candidates = [
@@ -301,7 +303,8 @@ export default function TeamDetail() {
         return new Date(a.played_at) - new Date(b.played_at);
       });
       setNextMatch(candidates[0]);
-    }).catch(() => setNextMatch(null)); // non-fatal — card shows "TBD"
+    }).catch(() => { if (!cancelled) setNextMatch(null); }); // non-fatal — card shows "TBD"
+    return () => { cancelled = true; };
   }, [teamId, db]);
 
   useEffect(() => {
@@ -596,7 +599,7 @@ export default function TeamDetail() {
 
             {/* ── TEAM FORM card ───────────────────────────────────────────────
                 Shows the last 5 match outcomes as coloured dot indicators:
-                  Green (#4caf50) = Win, Grey (dust @ 30%) = Draw,
+                  Green (--color-green) = Win, Grey (dust @ 30%) = Draw,
                   Red (#e05252)   = Loss
                 Pre-season (no results in localStorage) renders 5 grey dots
                 as placeholder so the card height is stable. */}
@@ -608,7 +611,7 @@ export default function TeamDetail() {
                   // These values mirror the pill colours used in the match
                   // feed so the visual language is consistent across pages.
                   const color =
-                    entry?.result === 'W' ? '#4caf50' :
+                    entry?.result === 'W' ? 'var(--color-green)' :
                     entry?.result === 'L' ? 'var(--color-red)' :
                     'rgba(227,224,213,0.3)';
                   const label = entry?.result ?? '—';

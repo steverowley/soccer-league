@@ -153,6 +153,7 @@ export default function PlayerDetail() {
   const [relationships,  setRelationships]  = useState([]);
 
   useEffect(() => {
+    let cancelled = false;
     // Reset all state before each fetch so stale data from a previous player
     // doesn't flash while the new request is in flight.
     setPlayer(null);
@@ -162,10 +163,12 @@ export default function PlayerDetail() {
 
     getPlayer(db, playerId)
       .then(data => {
+        if (cancelled) return;
         setPlayer(data);
         setLoading(false);
       })
       .catch(err => {
+        if (cancelled) return;
         // PGRST116 = "no rows returned" from .single() → treat as 404.
         // Any other error is a genuine DB/network failure.
         if (err?.code === 'PGRST116') {
@@ -175,6 +178,7 @@ export default function PlayerDetail() {
         }
         setLoading(false);
       });
+    return () => { cancelled = true; };
   }, [playerId, db]);
 
   // ── Cosmic lore read ──────────────────────────────────────────────────────
@@ -490,7 +494,7 @@ export default function PlayerDetail() {
                   <p style={{ fontSize: '10px', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
                     Status
                   </p>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: '#4caf50' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-green)' }}>
                     {player.injury_status ?? 'Available'}
                   </p>
                 </div>
@@ -630,7 +634,7 @@ export default function PlayerDetail() {
                           }}>
                             {RELATIONSHIP_LABELS[rel.type] || rel.type}
                           </span>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#E3E0D5' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-dust)' }}>
                             {rel.otherName}
                           </span>
                         </div>
