@@ -235,6 +235,10 @@ All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injec
 - Each function accepts `db` from context, enabling easy mocking in tests
 - **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
 
+### Shared Utilities (`src/shared/utils/`)
+Centralized utility modules to prevent duplication:
+- **formatDate.ts** — Shared date formatting functions (`formatDateShort`, `formatDateTime`, `formatDateTimeFull`) used across all pages and features (replaces four duplicate implementations)
+
 ### Match Type System (`features/match/types.ts`)
 Centralized TypeScript interfaces for match simulator and AI commentary:
 - **Entity types**: `MatchPlayer`, `MatchTeam`, `MatchReferee`, `MatchManager` — structural contracts for game objects
@@ -254,16 +258,29 @@ Migrated from legacy `agents.js` to strict TypeScript with clean feature separat
 - **API layer** (`architect/api/`) — Thin modules for reading narratives and interventions from Supabase, enabling future front-end feeds (Galaxy Dispatch narrative UI, intervention audit).
 - **Type safety**: Both systems depend on `IArchitect` interface (duck typing) rather than concrete CosmicArchitect, enabling loose coupling and testability.
 
-### Design System (`features/design-system/` & `src/index.css`)
+### Design System (`features/design-system/` & `src/index.css` & `src/styles/tokens.css`)
 Unified visual language and component library aligned to the Figma design specification:
-- **Color tokens** (`src/index.css` CSS variables) — ISL brand palette with thematic names: Void (#050308), Abyss (#1a1625), Quantum Purple (#8B5AFF), Architect Purple variants, Nexus-7 Blue (#4FC3F7), Lunar Dust (#d4cfbe), Sage Green. All colors are CSS custom properties for easy theming.
+- **Color tokens** — ISL brand palette with thematic names stored as CSS custom properties:
+  - Core palette: Void (#050308), Abyss (#1a1625), Quantum Purple (#8B5AFF), Architect Purple variants, Nexus-7 Blue (#4FC3F7), Lunar Dust (#d4cfbe), Sage Green
+  - Extended tokens: Gold, Orange, Teal, Purple Glow (for dynamic accents)
+  - All colors referenced as token variables (`var(--color-*)`) throughout — no hardcoded hex values in source files
+  - Tokens defined in both `src/index.css` (component styling) and `src/styles/tokens.css` (design system constants)
+- **CSS class consolidation** — ~180+ utility and component classes in `index.css`:
+  - `.page-content`, `.status-text`, `.btn--full` — layout and spacing utilities
+  - `.page-hero` (100px desktop / 70px mobile) and `.page-top` (detail page headers) — unified page header styling
+  - `.filter-strip`, `.kind-filter-btn` — news feed category filters with per-kind colors
+  - `.card`, `.narrative-card*`, `.team-card*` — reusable card components
+  - `.wager-widget*`, `.betting-widget*`, `.bet-history*` — betting UI (~250 lines)
+  - `.voting-page*`, `.focus-card*` — voting interface (~100 lines)
+  - `.training-page*`, `.clicker-widget*` — training minigame (~80 lines)
+  - All inline `style={{}}` props replaced with CSS classes; only truly dynamic per-item colors (e.g., theme-specific filter button borders) remain inline
 - **Self-hosted fonts** — Space Mono (Regular/Bold/Italic/BoldItalic) served from `public/fonts/`, eliminating Google Fonts dependency for improved performance and privacy.
 - **Logo & branding** — ISL shield crest (ISL letterform + soccer ball planet) as `public/isl-logo.svg`, replacing generic placeholder.
 - **Form system** (`index.css`) — Centralized classes for all input forms across the app:
   - `.form-group` — vertical flex wrapper with consistent spacing
   - `.isl-label`, `.isl-input`, `.isl-select` — design-system-aligned form elements used in Login, Signup, Profile, Wager, and Training pages
   - `.form-error` — red error message styling with monospace font
-  - All form components now use design tokens exclusively (no inline styles)
+  - All form components use design tokens exclusively (no inline styles)
 - **Styled components**:
   - `.btn` (primary/secondary/tertiary variants) — 56px height with inline-flex alignment and Lunar Dust glow on hover/active
   - `.nav-link.active` — Lunar Dust text-shadow glow effect instead of color change
@@ -271,13 +288,7 @@ Unified visual language and component library aligned to the Figma design specif
   - Headings (h1–h3) — Title Case (not ALL CAPS) with cosmic sizing
   - Footer — logo-left + secondary-nav-right layout matching design spec
 - **Auth tabs** (`.auth-tab*` in `index.css`) — Tab switcher for Login/Signup forms with bottom-border indicators and uppercase labels
-- **Feature component styling** (`index.css`):
-  - `.wager-widget*` — bet form, odds display, and status indicators (~100 lines)
-  - `.betting-widget*, .bet-history*` — bet placement and wager ledger with shimmer skeleton loading (~150 lines)
-  - `.voting-page*, .focus-card*` — focus voting interface with spend controls (~100 lines)
-  - `.training-page*, .clicker-widget*` — XP clicker and progress stats (~80 lines)
-  - `.account-menu*` — user dropdown menu styling (~40 lines)
-- **Account menu** — replaced 100+ lines of inline styles with `.account-menu-*` CSS classes; maintains dropdown animation and IC balance display
+- **Account menu** — `.account-menu-*` CSS classes replace 100+ lines of inline styles; maintains dropdown animation and IC balance display
 - **Component library** — Reusable React components in `features/design-system/components/` (Button, Card, Input, Badge, etc.) with prop-driven theming.
 - **Unified page layouts** — All pages share consistent `.page-hero` (100px desktop / 70px mobile, centered H1) and `.section-nav` (◄ SECTION NAME ► arrow headings) styling. Detail pages use `.page-top` utility (same vertical start as `.page-hero` without text-align: center) for left-aligned headers. Voting and Training pages now have page-hero sections matching all other routes.
 - **MatchCard component** (`src/components/ui/MatchCard.jsx`) — Shared card component replacing duplicated variants across Home and Matches pages; supports in_progress / scheduled / completed statuses with momentum bars, tag badges, bet sliders, and live commentary feeds.
