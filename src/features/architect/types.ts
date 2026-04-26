@@ -1,7 +1,7 @@
 // ── architect/types.ts ───────────────────────────────────────────────────────
 // WHY: Typed shapes for the Architect's DB-persisted lore. These mirror the
 // `architect_lore` table created by migration 0003_architect_lore.sql and the
-// in-memory lore object shape used by `CosmicArchitect` in `src/agents.js`.
+// in-memory lore object shape used by `CosmicArchitect` (logic/).
 //
 // The types are manually defined because the migration hasn't been applied to
 // the Supabase project yet (database.ts doesn't include architect_lore). When
@@ -89,8 +89,8 @@ export interface SeasonArc {
  *   - cross-team:  `[nameA, nameB].sort().join('_vs_')`
  *   - same-team:   `[nameA, nameB].sort().join('_and_')`
  *
- * Intensity is capped at ±0.15 evolution per match (see agents.js:2588) to
- * prevent explosive growth.
+ * Intensity is capped at ±0.15 evolution per match (see
+ * CosmicArchitect.saveMatchToLore) to prevent explosive growth.
  */
 export interface PlayerRelationship {
   type:
@@ -183,14 +183,13 @@ export interface ScheduledNarrativeDraft {
 }
 
 /**
- * The complete in-memory lore object shape used by CosmicArchitect in
- * agents.js. This is the canonical type for the `this.lore` property.
+ * The complete in-memory lore object shape used by CosmicArchitect.  This
+ * is the canonical type for the `this.lore` property and the value
+ * returned by `loreStore.hydrate()`.
  *
- * Schema version 2 added `playerRelationships`. The _loadLore() method in
- * agents.js handles v1→v2 migration at load time.
- *
- * NOTE: When agents.js is migrated to TypeScript, it should import this type
- * directly rather than using the untyped `_emptyLore()` scaffold.
+ * Schema version 2 added `playerRelationships`.  Forward-compatible
+ * migrations (v1→v2 etc.) live in `loreStore.rowsToLore()` so any DB row
+ * shape drift is normalised into this type at hydration time.
  */
 export interface ArchitectLore {
   /** Schema version for forward-compatible migrations. Current: 2. */

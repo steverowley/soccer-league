@@ -1,23 +1,19 @@
 // ── architect/logic/loreStore.ts ─────────────────────────────────────────────
-// WHY: The Cosmic Architect's lore was stored in localStorage, giving each
-// browser its own private universe. LoreStore centralises lore in the
-// `architect_lore` DB table while keeping the in-match read path synchronous.
+// WHY: The Cosmic Architect's lore lives in the DB (`architect_lore` table)
+// so every browser session shares the same cross-match narrative.  LoreStore
+// is the bridge between that table and the in-memory ArchitectLore object
+// used by CosmicArchitect — it keeps the in-match read path synchronous
+// while moving all DB I/O to match boundaries.
 //
-// LIFECYCLE (Phase 5.1):
+// LIFECYCLE:
 //   1. Pre-match:  `await loreStore.hydrate()` loads all DB rows into an
-//      in-memory ArchitectLore object identical to the old localStorage shape.
+//      in-memory ArchitectLore object.  See prepareArchitect.ts for the
+//      canonical wiring of this step into the match-start flow.
 //   2. During match: `getContext()` reads `this.lore` synchronously — no DB.
 //   3. Post-match:  `loreStore.persistAll(lore)` converts the lore object to
-//      DB rows and batch-upserts them. Fire-and-forget individual writes are
+//      DB rows and batch-upserts them.  Fire-and-forget individual writes are
 //      available via `enqueueWrite()` for future in-match narrative events.
 //   4. Match end:   `await loreStore.flush()` awaits all pending promises.
-//
-// INTEGRATION WITH agents.js:
-//   When the CosmicArchitect is wired up (or migrated to TS), replace:
-//     _loadLore()  → await loreStore.hydrate()
-//     _saveLore()  → loreStore.persistAll(this.lore)  // fire-and-forget
-//   The constructor should call hydrate() before the sim loop starts.
-//   getContext() remains unchanged — it reads this.lore synchronously.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type {
@@ -34,12 +30,18 @@ import { loadAllLore, batchUpsertLore, upsertLoreRow } from '../api/lore';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-/** Current lore schema version. Matches CosmicArchitect._emptyLore().version. */
+/**
+ * Current lore schema version. Mirrors the version field on every emptyLore()
+ * scaffold returned by this module.  Bump only when the in-memory shape
+ * changes in a backwards-incompatible way; callers may then need a migration
+ * pass at hydrate() time.
+ */
 const LORE_VERSION = 2;
 
 /**
- * Maximum match ledger entries. Oldest are dropped when exceeded.
- * Matches CosmicArchitect.MAX_LEDGER in agents.js.
+ * Maximum match ledger entries.  Oldest are dropped when exceeded.
+ * Matches CosmicArchitect.MAX_LEDGER so prompt context stays bounded as the
+ * ledger grows over a season.
  */
 export const MAX_LEDGER = 50;
 
@@ -297,9 +299,10 @@ export class LoreStore {
    * session ends.
    *
    * Errors in individual writes are logged by the API layer (warn-level)
-   * but do not throw here — lore persistence is best-effort, matching the
-   * existing localStorage behavior where QuotaExceededError is silently
-   * absorbed.
+   * but do not throw here — lore persistence is best-effort.  A failed
+   * write means the next match will re-derive most state from existing
+   * rivalryThreads + playerArcs rows, so a transient outage degrades
+   * gracefully rather than corrupting the shared narrative.
    */
   async flush(): Promise<void> {
     await Promise.allSettled(this.pendingWrites);
