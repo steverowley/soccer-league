@@ -1,25 +1,47 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "jq -r '.tool_input.file_path // empty' | grep -qE '\\.(js|jsx|ts|tsx)$' \u0026\u0026 echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"DOCUMENTATION REMINDER: This project maintains a high standard of inline documentation. For any new or modified code, ensure: (1) every exported function has a JSDoc-style block comment explaining what it does, its parameters, return value, and any important edge cases; (2) every major code section/branch has a header comment explaining the logic and the WHY behind it (not just the what); (3) any new constants or enums include a comment describing each value and its mechanical effect on the game; (4) numeric thresholds, probability values, and magic numbers are annotated with what they represent. Match the style established in gameEngine.js, agents.js, simulateHelpers.js, constants.js, teams.js, and utils.js.\"}}' || true",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write"
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
-            "type": "agent",
-            "prompt": "Check if any relevant changes were made to this project during this session by running: git diff HEAD --name-only 2>/dev/null || git status --short. If there are meaningful changes to source files (not just config or lock files), review README.md and update it if needed to reflect those changes — new features, changed behavior, updated structure, or anything a developer would want to know. Only update the README if the changes are substantial enough to warrant it. If no update is needed, do nothing.",
+            "prompt": "Check if any relevant changes were made to this project during this session by running: git diff HEAD --name-only 2\u003e/dev/null || git status --short. If there are meaningful changes to source files (not just config or lock files), review README.md and update it if needed to reflect those changes — new features, changed behavior, updated structure, or anything a developer would want to know. Only update the README if the changes are substantial enough to warrant it. If no update is needed, do nothing.",
+            "statusMessage": "Checking if README needs updating...",
             "timeout": 60,
-            "statusMessage": "Checking if README needs updating..."
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | grep -qE '\\.(js|jsx|ts|tsx)$' && echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"DOCUMENTATION REMINDER: This project maintains a high standard of inline documentation. For any new or modified code, ensure: (1) every exported function has a JSDoc-style block comment explaining what it does, its parameters, return value, and any important edge cases; (2) every major code section/branch has a header comment explaining the logic and the WHY behind it (not just the what); (3) any new constants or enums include a comment describing each value and its mechanical effect on the game; (4) numeric thresholds, probability values, and magic numbers are annotated with what they represent. Match the style established in gameEngine.js, agents.js, simulateHelpers.js, constants.js, teams.js, and utils.js.\"}}' || true",
-            "timeout": 5
+            "type": "agent"
           }
         ]
       }

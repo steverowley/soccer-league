@@ -5,3 +5,8 @@ dist/
 .claude/settings.local.json
 .mcp.json
 supabase/.temp/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
