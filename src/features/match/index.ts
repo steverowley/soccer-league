@@ -54,3 +54,33 @@ export type {
   AgentMatchContext,
   ArchitectMatchContext,
 } from './types';
+
+// ── Cup bracket draw (pure logic) ─────────────────────────────────────────
+export { drawSingleElim } from './logic/cupDraw';
+export type {
+  BracketTeam,
+  StoredBracket,
+  StoredBracketRound,
+  StoredBracketMatch,
+} from './logic/cupDraw';
+
+// ── Cup seeder + round advancer (DB layer) ────────────────────────────────
+export {
+  seedCupCompetitions,
+  seedOneCup,
+  advanceCupRound,
+  computeStandings,
+  buildQualifierSeeding,
+  CELESTIAL_CUP_COMPETITION_ID,
+  SOLAR_SHIELD_COMPETITION_ID,
+} from './api/cupSeeder';
+export type {
+  SeedCupResult,
+  SeedSeasonCupsResult,
+  AdvanceCupRoundResult,
+} from './api/cupSeeder';
+
+// ── Cup bracket UI ────────────────────────────────────────────────────────
+export { CupBracket } from './ui/CupBracket';
+export type { CupBracketProps, CupTeamLookup, CupMatchScore } from './ui/CupBracket';
+export { CupRoundAdvancerListener } from './ui/CupRoundAdvancerListener';
