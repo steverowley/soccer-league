@@ -96,14 +96,23 @@
   --color-sky:           #4FC3F7;
 
   /* [INVARIANT] Narrative kind accent colours — used in NewsFeedPage and Home
-     kind-colour maps. Not in Figma; chosen to be visually distinct on dark bg. */
-  --color-gold:          #c8a84b;  /* political_shift narrative kind */
-  --color-orange:        #c85a2a;  /* geological_event narrative kind */
-  --color-teal:          #4bc8b8;  /* economic_tremor narrative kind */
+     kind-colour maps. Not in Figma; chosen to be visually distinct on dark bg.
+     Each token is named after the kind it primarily serves to keep the mapping
+     intentional; secondary uses of the same hue must reference this token. */
+  --color-gold:          #c8a84b;  /* political_shift — authority, political weight */
+  --color-orange:        #c85a2a;  /* geological_event — planetary drama           */
+  --color-teal:          #4bc8b8;  /* economic_tremor — fiscal undercurrents        */
+  --color-blue:          #5B9BD5;  /* pundit_takes — cool analytical opinion        */
+  /* journalist_report uses rgba(227,224,213,0.85) inline — neutral, no tint,
+     signals objectivity without introducing a new named colour. */
 
-  /* [INVARIANT] Purple glow — used for architect_whisper card box-shadow.
-     Decomposed from --color-purple (#9A5CF4 = rgb(154,92,244)). */
-  --color-purple-glow:   rgba(154, 92, 244, 0.18);
+  /* [INVARIANT] Cosmic glow shadow colours — ambient box-shadow on narrative
+     cards whose kind signals direct Architect involvement. Decomposed from the
+     corresponding solid colour at 18% opacity so the glow is present but subtle.
+       purple-glow: from --color-purple  #9A5CF4 = rgb(154,92,244)
+       red-glow:    from --color-red     #E05252 = rgb(224,82,82) */
+  --color-purple-glow:   rgba(154,  92, 244, 0.18);  /* architect_whisper cards   */
+  --color-red-glow:      rgba(224,  82,  82, 0.18);  /* cosmic_disturbance cards  */
 
   /* [INVARIANT] Darker Lunar Dust for hover/pressed states on dust-filled surfaces.
      Used by .btn-secondary:hover. Manually mixed at ~12% darker than Lunar Dust. */

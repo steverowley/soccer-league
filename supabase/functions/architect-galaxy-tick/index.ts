@@ -1,49 +1,45 @@
 // ── architect-galaxy-tick / index.ts ─────────────────────────────────────────
-// WHY: The out-of-match Architect. This Edge Function runs on a cron
-// schedule (daily, or whenever the game's internal clock thinks "a day
-// has passed") and is the ONLY place the Architect is allowed to affect
-// the wider galaxy *between* matches.
+// WHY: The out-of-match Architect heartbeat (Package 5 — Galaxy Dispatch).
+// This Edge Function runs on a cron schedule (every 1–2 hours) and is the
+// ONLY place the Architect is allowed to affect the wider galaxy *between*
+// matches. Each tick:
 //
-// What it does, in order:
-//   1. Pulls recent match results, notable entities, and existing
-//      narratives to give Claude enough context to write something
-//      grounded in the simulation's actual state.
-//   2. Calls Claude with a constrained prompt: produce 1–3 narrative
-//      drafts, each a piece of in-world "news" that an entity might
-//      react to. Explicitly FORBIDS revealing any underlying numbers
-//      (the "emergent storytelling over exposed mechanics" pillar).
-//   3. Inserts the drafts as `narratives` rows (source='scheduled').
-//   4. (Future) Calls the Architect interventions path to rewrite a
-//      past match if the cosmic mood demands it. For now this Edge
-//      Function only WRITES narratives; historic rewrites remain
-//      triggered from within matches until the architecture settles.
+//   1. Selects 1–3 entities (pundits, journalists, the bookie) that haven't
+//      yet hit their per-day posting cap, so no single voice dominates the
+//      feed.
+//   2. Builds a redacted context bundle for each selected entity — recent
+//      match results (qualitative, no raw scores), recent `focus_enacted`
+//      rows (what clubs decided), and prior narratives (for dedup).
+//   3. Calls Claude per entity, emitting in-character narrative drafts in the
+//      `pundit_takes`, `journalist_report`, or `bookie_update` kind.
+//   4. Also generates 0–1 Architect whispers (`architect_whisper`) and
+//      0–1 "Cosmic disturbance" items that surface redacted
+//      `architect_interventions` rows for public visibility.
+//   5. Writes all drafts to `narratives` with `source='scheduled'`.
+//
+// CRON SETUP (Supabase Dashboard → Cron):
+//   Schedule: `0 */2 * * *`  (every 2 hours)
+//   Function: architect-galaxy-tick
+//   HTTP method: POST
+//   No body required.
+//
+// IDEMPOTENCY: Re-triggers within the same 2-hour window produce duplicate
+// narratives but are harmless — the feed has no dedup constraint. The daily
+// cap (MAX_POSTS_PER_ENTITY_PER_DAY) limits entity spam across back-to-back
+// triggers.
 //
 // INVARIANTS (non-negotiable):
-//   - Runs with service_role so it can write to tables that users can't.
-//   - MUST be idempotent in the face of double-triggers — Supabase's
-//     cron can fire twice on a single slot in edge cases. We avoid
-//     duplicate writes by keying drafts to the current UTC day.
-//   - MUST degrade gracefully if the LLM call fails: log and exit cleanly
-//     rather than crashing the cron so the next tick still runs.
-//   - MUST NOT read user-sensitive data (wagers, focus_votes, credits,
-//     profiles). The cosmic tick works purely off match + entity state.
-//
-// DEPLOYMENT: `deploy_edge_function` via the Supabase MCP. Schedule is
-// set separately in the Supabase Dashboard → Cron (daily 04:00 UTC is a
-// good default — quiet time for the user base and away from match peak).
-//
+//   - NEVER reads wagers, credits, or profiles (user-sensitive data).
+//   - NEVER writes raw numbers, stats, or probabilities to narratives.
+//   - Degrades gracefully: one failed entity call doesn't block the rest.
+//   - Runs with service_role for write access; never exposes that key.
 // ──────────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore-file no-explicit-any
-// ^ Edge Functions run on Deno; `any` here is for the optional global
-// Deno namespace which TypeScript in the Vite build doesn't know about.
-// The bang-comment keeps Deno-lint quiet without affecting Vite.
+// ^ Edge Functions run on Deno; `any` is for the Supabase client + Anthropic
+// SDK which don't ship Deno-native types in this ESM form.
 
 // ── External dependencies (Deno-style ESM URLs) ─────────────────────────────
-// NOTE: These imports use Deno ESM URLs that Vite's build ignores — this
-// file is NOT bundled with the frontend. It's deployed directly as an
-// Edge Function.
-
 // @ts-ignore — Deno-only import, resolved at deploy time.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 // @ts-ignore — Deno-only import, resolved at deploy time.
@@ -52,79 +48,99 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
 // ── Tuning constants ────────────────────────────────────────────────────────
 
 /**
- * Max narratives the Architect can emit in a single tick. Low by design —
- * the goal is a trickle of news the player base can digest, not a flood.
- * Raising this should be accompanied by a prompt update.
+ * Max entity-authored narratives per tick. Caps total call volume to Claude
+ * so one runaway trigger doesn't exhaust the API budget.
  */
-const MAX_NARRATIVES_PER_TICK = 3;
+const MAX_ENTITY_NARRATIVES_PER_TICK = 3;
 
 /**
- * How many recent matches to surface in the Architect's prompt context.
- * Enough for the model to spot multi-match storylines (e.g. "Mars have
- * won 4 in a row") without blowing the prompt budget.
+ * Max posts any single entity may emit per UTC calendar day. Prevents a
+ * single pundit from monopolising the feed across multiple cron triggers.
  */
-const RECENT_MATCHES_FOR_CONTEXT = 10;
+const MAX_ENTITY_POSTS_PER_DAY = 1;
 
 /**
- * How many existing narratives to load before writing new ones. Used so
- * the prompt can say "don't repeat the following themes" and keep the
- * news feed varied.
+ * How many recent matches to include in each entity's context. Enough to
+ * surface multi-match storylines without blowing the prompt token budget.
  */
-const EXISTING_NARRATIVES_FOR_CONTEXT = 15;
+const RECENT_MATCHES_FOR_CONTEXT = 8;
 
 /**
- * Claude model to call. Using Sonnet 4.6 for this: out-of-match
- * generation is lower-latency-sensitive and benefits from a stronger
- * model than in-match commentary.
+ * How many prior narratives to include for deduplication. The LLM uses
+ * this to avoid repeating recent themes verbatim.
+ */
+const PRIOR_NARRATIVES_FOR_DEDUP = 12;
+
+/**
+ * How many recent `focus_enacted` rows to surface per tick. Club decisions
+ * are interesting pundit/journalist fodder.
+ */
+const RECENT_FOCUS_ENACTED_LIMIT = 6;
+
+/**
+ * How many `architect_interventions` rows to surface for the "Cosmic
+ * disturbances" kind. We only pull the most recent so the public summary
+ * feels timely.
+ */
+const COSMIC_DISTURBANCES_LIMIT = 3;
+
+/**
+ * Claude model. Sonnet 4.6 for out-of-match narration — lower
+ * latency-sensitivity than in-match commentary; benefit from a stronger model.
  */
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-/**
- * Max output tokens. Narratives are short — 2 to 4 sentences each —
- * so a tight ceiling protects against runaway generation.
- */
-const MAX_OUTPUT_TOKENS = 1_024;
+/** Max output tokens per entity call. Narratives are 2–4 sentences each. */
+const MAX_OUTPUT_TOKENS = 512;
 
-// ── Shapes returned by internal helpers ─────────────────────────────────────
+// ── Type declarations ────────────────────────────────────────────────────────
 
-interface TickContext {
-  recentMatches: Array<{
-    id: string;
-    home: string;
-    away: string;
-    home_score: number | null;
-    away_score: number | null;
-    status: string;
-    played_at: string | null;
-  }>;
-  recentNarratives: Array<{
-    kind: string;
-    summary: string;
-    created_at: string;
-  }>;
+interface EntityRow {
+  id: string;
+  kind: string;
+  name: string;
+  display_name: string | null;
 }
 
-interface ArchitectDraft {
+interface MatchRow {
+  id: string;
+  home_team_id: string;
+  away_team_id: string;
+  home_score: number | null;
+  away_score: number | null;
+  played_at: string | null;
+}
+
+interface FocusEnactedRow {
+  team_id: string;
+  focus_label: string;
+  tier: string;
+  enacted_at: string;
+}
+
+interface NarrativeRow {
   kind: string;
   summary: string;
-  entities_involved: string[];
+  created_at: string;
+}
+
+interface InterventionRow {
+  field: string;
+  reason: string;
+  created_at: string;
 }
 
 // ── Deno runtime handler ────────────────────────────────────────────────────
 
 // @ts-ignore — `Deno` is only present at deploy time.
 Deno.serve(async (req: Request): Promise<Response> => {
-  // Only POST (cron hook) and GET (manual debug via MCP) are allowed.
   if (req.method !== 'POST' && req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   try {
-    // ── Step 1: boot Supabase with the service role key ──────────────────
-    // SERVICE_ROLE bypasses RLS, which is required because we need to
-    // write narratives that the general public can't. Never expose this
-    // key to the browser.
-    // @ts-ignore — `Deno.env` is Deno-only.
+    // ── Boot Supabase + Anthropic clients ────────────────────────────────
+    // @ts-ignore
     const supabaseUrl: string = Deno.env.get('SUPABASE_URL') ?? '';
     // @ts-ignore
     const serviceKey: string = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -132,14 +148,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const anthropicKey: string = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 
     if (!supabaseUrl || !serviceKey || !anthropicKey) {
-      return json(
-        {
-          ok: false,
-          error:
-            'Missing required env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY',
-        },
-        500,
-      );
+      return json({ ok: false, error: 'Missing required env vars' }, 500);
     }
 
     const db = createClient(supabaseUrl, serviceKey, {
@@ -147,224 +156,333 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
     const anthropic = new Anthropic({ apiKey: anthropicKey });
 
-    // ── Step 2: build the context bundle for the LLM ─────────────────────
-    const context = await buildTickContext(db);
+    // ── Gather context in parallel ───────────────────────────────────────
+    // All reads are independent — fire them simultaneously for latency.
+    const todayKey = new Date().toISOString().slice(0, 10); // e.g. "2600-04-27"
+    const todayStart = `${todayKey}T00:00:00Z`;
 
-    // ── Step 3: ask Claude for narrative drafts ──────────────────────────
-    const drafts = await generateNarratives(anthropic, context);
+    const [
+      entityRows,
+      matchRows,
+      focusEnactedRows,
+      priorNarratives,
+      todayNarrativeRows,
+      interventionRows,
+    ] = await Promise.all([
+      // Entities that can post: pundits, journalists, the bookie.
+      db.from('entities')
+        .select('id, kind, name, display_name')
+        .in('kind', ['pundit', 'journalist', 'bookie'])
+        .order('name'),
 
-    // ── Step 4: write the drafts to the narratives table ─────────────────
-    const inserted = await writeNarratives(db, drafts);
+      // Recent completed matches for context.
+      db.from('matches')
+        .select('id, home_team_id, away_team_id, home_score, away_score, played_at')
+        .eq('status', 'completed')
+        .order('played_at', { ascending: false })
+        .limit(RECENT_MATCHES_FOR_CONTEXT),
+
+      // Recent focus enactments — what clubs decided to do this season.
+      db.from('focus_enacted')
+        .select('team_id, focus_label, tier, enacted_at')
+        .order('enacted_at', { ascending: false })
+        .limit(RECENT_FOCUS_ENACTED_LIMIT),
+
+      // Prior narratives for deduplication.
+      db.from('narratives')
+        .select('kind, summary, created_at')
+        .order('created_at', { ascending: false })
+        .limit(PRIOR_NARRATIVES_FOR_DEDUP),
+
+      // Narratives already posted today (for per-entity cap calculation).
+      db.from('narratives')
+        .select('kind, entities_involved, created_at')
+        .gte('created_at', todayStart)
+        .eq('source', 'scheduled'),
+
+      // Recent Architect interventions for the "cosmic disturbance" kind.
+      db.from('architect_interventions')
+        .select('field, reason, created_at')
+        .order('created_at', { ascending: false })
+        .limit(COSMIC_DISTURBANCES_LIMIT),
+    ]);
+
+    const entities   = (entityRows.data ?? []) as EntityRow[];
+    const matches    = (matchRows.data ?? []) as MatchRow[];
+    const focuses    = (focusEnactedRows.data ?? []) as FocusEnactedRow[];
+    const priorNarr  = (priorNarratives.data ?? []) as NarrativeRow[];
+    const todayNarr  = (todayNarrativeRows.data ?? []) as Array<{ entities_involved: string[] }>;
+    const interventions = (interventionRows.data ?? []) as InterventionRow[];
+
+    // ── Build per-entity daily post count ────────────────────────────────
+    // Count how many times each entity_id appears in today's narratives
+    // (via the entities_involved array). This is the daily-cap check.
+    const postsToday = new Map<string, number>();
+    for (const n of todayNarr) {
+      for (const entityId of (n.entities_involved ?? [])) {
+        postsToday.set(entityId, (postsToday.get(entityId) ?? 0) + 1);
+      }
+    }
+
+    // ── Select entities for this tick ────────────────────────────────────
+    // Filter out capped entities, then deterministically sort and slice.
+    const eligible = entities.filter(
+      (e) => (postsToday.get(e.id) ?? 0) < MAX_ENTITY_POSTS_PER_DAY,
+    );
+    eligible.sort((a, b) => {
+      const keyA = `${todayKey}:${a.id}`;
+      const keyB = `${todayKey}:${b.id}`;
+      return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+    });
+    const selected = eligible.slice(0, MAX_ENTITY_NARRATIVES_PER_TICK);
+
+    // ── Redact match results ─────────────────────────────────────────────
+    // Convert raw scores to qualitative descriptions so the LLM can't
+    // accidentally transcribe numbers into the narrative text.
+    const redactedMatches = matches.map((m) => ({
+      home: m.home_team_id,
+      away: m.away_team_id,
+      result: redactResult(m.home_score ?? 0, m.away_score ?? 0, m.home_team_id, m.away_team_id),
+      played_at: m.played_at ?? '',
+    }));
+
+    // ── Generate entity narratives ───────────────────────────────────────
+    const allInserted: Array<Record<string, unknown>> = [];
+
+    for (const entity of selected) {
+      const kind = narrativeKindForEntityKind(entity.kind);
+      const draft = await generateEntityNarrative(
+        anthropic,
+        entity,
+        kind,
+        redactedMatches,
+        focuses,
+        priorNarr,
+      );
+      if (!draft) continue;
+
+      const { error, data } = await db.from('narratives').insert({
+        kind:               draft.kind,
+        summary:            draft.summary,
+        entities_involved:  [entity.id, ...draft.extra_entities],
+        source:             'scheduled',
+      }).select();
+
+      if (error) {
+        console.warn(`[galaxy-tick] narrative insert failed for ${entity.name}:`, error.message);
+      } else {
+        allInserted.push(...(data ?? []));
+      }
+    }
+
+    // ── Architect whisper (0–1 per tick) ─────────────────────────────────
+    // Always try one Architect whisper — the cosmic voice should speak
+    // every tick regardless of entity selection. Failures are tolerated.
+    const whisper = await generateArchitectWhisper(anthropic, redactedMatches, priorNarr);
+    if (whisper) {
+      const { error, data } = await db.from('narratives').insert({
+        kind:               'architect_whisper',
+        summary:            whisper,
+        entities_involved:  [],
+        source:             'scheduled',
+      }).select();
+      if (error) {
+        console.warn('[galaxy-tick] architect whisper insert failed:', error.message);
+      } else {
+        allInserted.push(...(data ?? []));
+      }
+    }
+
+    // ── Cosmic disturbance (0–1 per tick) ────────────────────────────────
+    // Surface a redacted summary of the most recent intervention so fans
+    // can sense the Architect's hand without seeing raw mutation data.
+    if (interventions.length > 0) {
+      const latestIntervention = interventions[0]!;
+      const disturbanceSummary = buildCosmicDisturbance(latestIntervention);
+      if (disturbanceSummary) {
+        const { error, data } = await db.from('narratives').insert({
+          kind:               'cosmic_disturbance',
+          summary:            disturbanceSummary,
+          entities_involved:  [],
+          source:             'scheduled',
+        }).select();
+        if (error) {
+          console.warn('[galaxy-tick] cosmic disturbance insert failed:', error.message);
+        } else {
+          allInserted.push(...(data ?? []));
+        }
+      }
+    }
 
     return json({
       ok: true,
-      draftsRequested: drafts.length,
-      draftsInserted: inserted,
-      contextSize: {
-        recentMatches: context.recentMatches.length,
-        recentNarratives: context.recentNarratives.length,
-      },
+      todayKey,
+      entitiesSelected: selected.map((e) => e.name),
+      narrativesInserted: allInserted.length,
     });
   } catch (err) {
-    // Catch-all so a malformed request or LLM outage never crashes the
-    // cron. The Supabase logs have the full stack trace.
     console.error('[architect-galaxy-tick] crashed:', err);
-    return json(
-      {
-        ok: false,
-        error: 'Internal server error',
-      },
-      500,
-    );
+    return json({ ok: false, error: 'Internal server error' }, 500);
   }
 });
 
-// ── Step helpers ────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Gather recent-match + existing-narrative context the Architect will
- * reason over. Reads only public-safe tables.
- *
- * @param db  A service-role Supabase client.
- * @returns   The context bundle.
+ * Map an entity kind to the narrative kind it produces. Mirrors the pure
+ * logic in `src/features/architect/logic/buildNewsContext.ts` — kept in sync
+ * manually since the Edge Function runs in Deno and can't import from src/.
  */
-async function buildTickContext(db: any): Promise<TickContext> {
-  // Recent matches: just the final-score rows, no per-player detail.
-  // We want the Architect to see "who beat whom" without leaking stats.
-  const { data: matchRows } = await db
-    .from('matches')
-    .select('id, home_team_id, away_team_id, home_score, away_score, status, played_at')
-    .eq('status', 'completed')
-    .order('played_at', { ascending: false })
-    .limit(RECENT_MATCHES_FOR_CONTEXT);
-
-  const recentMatches = (matchRows ?? []).map((m: any) => ({
-    id: m.id,
-    home: m.home_team_id,
-    away: m.away_team_id,
-    home_score: m.home_score,
-    away_score: m.away_score,
-    status: m.status,
-    played_at: m.played_at,
-  }));
-
-  // Recent narratives: so the LLM can see what's already been "said"
-  // and avoid duplicates / contradictions.
-  const { data: narrativeRows } = await db
-    .from('narratives')
-    .select('kind, summary, created_at')
-    .order('created_at', { ascending: false })
-    .limit(EXISTING_NARRATIVES_FOR_CONTEXT);
-
-  return {
-    recentMatches,
-    recentNarratives: (narrativeRows ?? []) as TickContext['recentNarratives'],
-  };
+function narrativeKindForEntityKind(entityKind: string): string {
+  switch (entityKind) {
+    case 'pundit':     return 'pundit_takes';
+    case 'journalist': return 'journalist_report';
+    case 'bookie':     return 'bookie_update';
+    default:           return 'news';
+  }
 }
 
 /**
- * Call Claude with the tick context and parse out narrative drafts.
- * Returns an empty array on any failure — the caller treats "no drafts"
- * as a non-event rather than an error.
- *
- * The prompt is deliberately vague about *what* to write — the Architect
- * is supposed to be unpredictable. But it's STRICT about the shape of
- * the response (JSON only) and about the "never reveal numbers" rule.
- *
- * @param anthropic  An Anthropic SDK client.
- * @param context    The tick context bundle.
- * @returns          Zero or more ArchitectDraft objects, ready to insert.
+ * Convert a raw scoreline to a qualitative descriptor (no numbers).
+ * Mirrors `redactMatchResult` from `buildNewsContext.ts`.
  */
-async function generateNarratives(
+function redactResult(
+  homeScore: number,
+  awayScore: number,
+  home: string,
+  away: string,
+): string {
+  if (homeScore === awayScore) return `${home} vs ${away} — a draw`;
+  const diff   = Math.abs(homeScore - awayScore);
+  const winner = homeScore > awayScore ? home : away;
+  const loser  = homeScore > awayScore ? away : home;
+  const margin = diff >= 3 ? 'dominant victory' : diff === 2 ? 'comfortable win' : 'narrow win';
+  return `${winner} beat ${loser} — a ${margin}`;
+}
+
+interface NarrativeDraft {
+  kind: string;
+  summary: string;
+  extra_entities: string[];
+}
+
+/**
+ * Ask Claude to write one in-character narrative for a given entity.
+ * Returns null on any parse or network failure — the caller skips gracefully.
+ *
+ * The system prompt enforces the "no numbers" rule and constrains output to
+ * a single JSON object (not an array) to keep parsing simple.
+ */
+async function generateEntityNarrative(
   anthropic: any,
-  context: TickContext,
-): Promise<ArchitectDraft[]> {
-  const systemPrompt = `You are the Cosmic Architect of the Intergalactic Soccer League (ISL) — a Lovecraftian, unreliable narrator who bends the fabric of an AI-run football league between matches. You emit short, in-world NEWS fragments that other entities (journalists, pundits, fans) will react to.
+  entity: EntityRow,
+  targetKind: string,
+  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
+  focuses: FocusEnactedRow[],
+  priorNarr: NarrativeRow[],
+): Promise<NarrativeDraft | null> {
+  const system = `You are ${entity.display_name ?? entity.name}, an in-world ISL personality writing for the Galaxy Dispatch.
 
 RULES (absolute):
-1. NEVER reveal underlying numbers, stats, probabilities, or mechanics. Treat the league like real life — players have moods, not attributes.
-2. Keep each narrative to 2–4 sentences. Evocative, specific, a little strange. No filler.
-3. Reference actual teams/players from the recent match context when it fits. Do not invent teams outside the supplied list.
-4. AVOID repeating themes already covered in "recent narratives". Vary tone and kind.
-5. Output ONLY a JSON array. No prose, no code fences, no explanation.
+1. NEVER reveal underlying stats, numbers, probabilities, or mechanics. Treat the league like real life.
+2. 2–4 sentences only. Evocative and in-character.
+3. Output ONLY a single JSON object — no prose, no fences.
 
-OUTPUT SCHEMA (strict):
-[
-  {
-    "kind": "news" | "political_shift" | "geological_event" | "architect_whisper" | "economic_tremor",
-    "summary": "2–4 sentence in-world text",
-    "entities_involved": ["team-id-or-name", ...]
-  }
-]
+OUTPUT SCHEMA:
+{"kind":"${targetKind}","summary":"your text here","entities_involved":["team-id-or-entity-name"]}`;
 
-Emit between 1 and ${MAX_NARRATIVES_PER_TICK} narratives. Fewer is fine if inspiration is quiet.`;
+  const user = `Recent ISL results (redacted):
+${matches.map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
 
-  const userPrompt = `Recent matches (newest first):
-${JSON.stringify(context.recentMatches, null, 2)}
+Recent club decisions:
+${focuses.length > 0
+  ? focuses.map((f) => `• ${f.team_id} — ${f.focus_label} (${f.tier})`).join('\n')
+  : '• (none yet this season)'}
 
-Existing narratives you should NOT repeat (newest first):
-${JSON.stringify(context.recentNarratives, null, 2)}
+Recent narratives (do NOT repeat these themes):
+${priorNarr.map((n) => `• [${n.kind}] ${n.summary.slice(0, 150)}`).join('\n')}
 
-Write the next narrative drops. JSON only.`;
+Write ONE ${targetKind} as ${entity.display_name ?? entity.name}. JSON only.`;
 
-  let text = '';
   try {
     const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+      model:      CLAUDE_MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      system,
+      messages: [{ role: 'user', content: user }],
     });
 
-    // The SDK returns content blocks; we only care about text.
-    const firstTextBlock = response.content?.find((c: any) => c.type === 'text');
-    text = firstTextBlock?.text ?? '';
-  } catch (err) {
-    console.warn('[generateNarratives] LLM call failed:', err);
-    return [];
-  }
+    const firstText = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
+    const cleaned   = firstText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsed    = JSON.parse(cleaned) as Record<string, unknown>;
 
-  if (!text.trim()) return [];
+    const summary = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
+    if (!summary) return null;
 
-  // Strip any stray code fences a misbehaving model might add, even
-  // though the prompt forbids them. Cheap insurance.
-  const cleaned = text
-    .replace(/```(?:json)?/gi, '')
-    .replace(/```/g, '')
-    .trim();
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    console.warn('[generateNarratives] model did not return valid JSON:', cleaned.slice(0, 200));
-    return [];
-  }
-
-  if (!Array.isArray(parsed)) return [];
-
-  // Filter + shape-check. We reject anything missing required fields
-  // rather than trusting the model to follow the schema perfectly.
-  const drafts: ArchitectDraft[] = [];
-  for (const row of parsed.slice(0, MAX_NARRATIVES_PER_TICK)) {
-    if (!row || typeof row !== 'object') continue;
-    const r = row as Record<string, unknown>;
-    const kind = typeof r.kind === 'string' ? r.kind : null;
-    const summary = typeof r.summary === 'string' ? r.summary.trim() : '';
-    if (!kind || !summary) continue;
-
-    const entities = Array.isArray(r.entities_involved)
-      ? (r.entities_involved.filter((e) => typeof e === 'string') as string[])
+    const extraEntities = Array.isArray(parsed.entities_involved)
+      ? (parsed.entities_involved.filter((e: unknown) => typeof e === 'string') as string[])
       : [];
 
-    drafts.push({ kind, summary, entities_involved: entities });
+    return { kind: targetKind, summary, extra_entities: extraEntities };
+  } catch (err) {
+    console.warn(`[generateEntityNarrative] failed for ${entity.name}:`, err);
+    return null;
   }
-
-  return drafts;
 }
 
 /**
- * Insert narrative drafts into the `narratives` table. Uses source
- * 'scheduled' so the UI can distinguish Architect-tick news from
- * in-match narratives. Returns the count actually written (drafts that
- * failed individual inserts are logged and skipped).
- *
- * @param db      A service-role Supabase client.
- * @param drafts  Parsed, validated drafts from `generateNarratives`.
- * @returns       Count of successfully inserted rows.
+ * Generate one Architect whisper — an enigmatic in-world cosmic pronouncement.
+ * Returns null on failure so the caller can skip without crashing the tick.
  */
-async function writeNarratives(
-  db: any,
-  drafts: ArchitectDraft[],
-): Promise<number> {
-  if (drafts.length === 0) return 0;
+async function generateArchitectWhisper(
+  anthropic: any,
+  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
+  priorNarr: NarrativeRow[],
+): Promise<string | null> {
+  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who speaks in cryptic, unsettling fragments between matches.
 
-  const rows = drafts.map((d) => ({
-    kind: d.kind,
-    summary: d.summary,
-    entities_involved: d.entities_involved,
-    source: 'scheduled',
-  }));
+RULES:
+1. NEVER reveal stats, numbers, or game mechanics.
+2. 1–3 sentences. Cryptic. A little wrong. References actual teams if possible.
+3. Output ONLY the narrative text. No JSON, no labels.`;
 
-  const { error, data } = await db.from('narratives').insert(rows).select();
-  if (error) {
-    console.warn('[writeNarratives] insert failed:', error.message);
-    return 0;
+  const user = `Recent results: ${matches.slice(0, 4).map((m) => m.result).join('; ')}
+
+Recent narratives (avoid repeating): ${priorNarr.filter((n) => n.kind === 'architect_whisper').slice(0, 4).map((n) => n.summary.slice(0, 100)).join(' | ')}
+
+Write one Architect whisper. Plain text only.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model:      CLAUDE_MODEL,
+      max_tokens: 200,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
+    return text.trim() || null;
+  } catch (err) {
+    console.warn('[generateArchitectWhisper] failed:', err);
+    return null;
   }
-  return (data ?? []).length;
 }
 
-// ── Misc ────────────────────────────────────────────────────────────────────
-
 /**
- * Small helper for consistent JSON responses with the right headers.
- * Keeps the Deno handler readable and avoids copy-pasting the headers
- * block into every branch.
+ * Build a "cosmic disturbance" narrative from a recent Architect intervention.
+ * Surfaces the intent (`reason`) but not the raw mutation data, so fans can
+ * feel the Architect's hand without seeing the underlying stats change.
  *
- * @param body    Any JSON-serialisable object.
- * @param status  HTTP status code. Defaults to 200.
- * @returns       A Response with the body stringified and headers set.
+ * Returns null if the intervention lacks a readable reason.
  */
+function buildCosmicDisturbance(intervention: InterventionRow): string | null {
+  if (!intervention.reason?.trim()) return null;
+  // The `reason` field is a human-readable explanation of why the Architect
+  // acted. We surface it as-is — it's already written to be in-world safe.
+  const date = intervention.created_at.slice(0, 10);
+  return `The Architect stirred on ${date}. ${intervention.reason}`;
+}
+
+/** Small helper: consistent JSON responses. */
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

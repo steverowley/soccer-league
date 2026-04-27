@@ -6,22 +6,58 @@ import { formatDateShort } from '@shared/utils/formatDate';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+/** Number of narrative cards shown per page. Kept small so the feed feels live. */
 const PAGE_SIZE = 12;
 
+/**
+ * Human-readable filter strip labels for every narrative kind the Galaxy
+ * Dispatch can surface. Add a new entry here (+ KIND_COLORS below) whenever
+ * a new `narratives.kind` value is introduced in the DB or the edge function.
+ *
+ * Origin of each kind:
+ *   news / political_shift / geological_event / economic_tremor — legacy Architect outputs
+ *   architect_whisper   — Architect persona post-match whispers
+ *   cosmic_disturbance  — Architect-flagged interventions (Package 5)
+ *   pundit_takes        — Galaxy Dispatch pundit entity posts (Package 5)
+ *   journalist_report   — Galaxy Dispatch journalist entity posts (Package 5)
+ *   bookie_update       — Galaxy Dispatch bookie entity posts (Package 5)
+ */
 const KIND_LABELS: Record<string, string> = {
-  news:              'News',
-  political_shift:   'Political',
-  geological_event:  'Geological',
-  architect_whisper: 'Transmission',
-  economic_tremor:   'Economic',
+  news:                'News',
+  political_shift:     'Political',
+  geological_event:    'Geological',
+  architect_whisper:   'Transmission',
+  economic_tremor:     'Economic',
+  pundit_takes:        'Pundit',       // opinionated hot-takes from ISL pundits
+  journalist_report:   'Report',       // neutral factual dispatches
+  bookie_update:       'Bookie',       // odds commentary from The Bookie
+  cosmic_disturbance:  'Disturbance',  // Architect-surfaced cosmic events
 };
 
+/**
+ * Border / accent colour for each narrative kind. Drives both the filter
+ * button highlight and the left-border glow on each card.
+ *
+ * Colour intent:
+ *   purple  → Architect voice (whispers + disturbances share cosmic identity)
+ *   gold    → political weight
+ *   orange  → geological drama
+ *   teal    → economic undercurrents
+ *   blue    → pundit opinion (cool, detached analysis)
+ *   neutral → journalist report (no tint — objective by design)
+ *   green   → bookie odds (money, speculation)
+ *   red     → cosmic disturbance (alarming, urgent)
+ */
 const KIND_COLORS: Record<string, string> = {
-  news:              'rgba(227,224,213,0.6)',
-  political_shift:   'var(--color-gold)',
-  geological_event:  'var(--color-orange)',
-  architect_whisper: 'var(--color-purple)',
-  economic_tremor:   'var(--color-teal)',
+  news:                'rgba(227,224,213,0.6)',
+  political_shift:     'var(--color-gold)',
+  geological_event:    'var(--color-orange)',
+  architect_whisper:   'var(--color-purple)',
+  economic_tremor:     'var(--color-teal)',
+  pundit_takes:        'var(--color-blue)',
+  journalist_report:   'rgba(227,224,213,0.85)',
+  bookie_update:       'var(--color-green)',
+  cosmic_disturbance:  'var(--color-red)',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
@@ -192,19 +228,25 @@ interface NarrativeCardProps {
   narrative: Narrative;
 }
 
-// architect_whisper gets a purple glow to distinguish cosmic pronouncements from journalism.
+/**
+ * Renders a single narrative entry. Architect-origin kinds (whisper,
+ * disturbance) receive a coloured glow to signal cosmic provenance; entity
+ * kinds (pundit, journalist, bookie) use a plain left-border accent only.
+ */
 function NarrativeCard({ narrative }: NarrativeCardProps) {
   const color = KIND_COLORS[narrative.kind] ?? 'rgba(227,224,213,0.3)';
-  const isWhisper = narrative.kind === 'architect_whisper';
+  // Cosmic kinds get an ambient glow — purple for whispers, red for disturbances.
+  const glowShadow =
+    narrative.kind === 'architect_whisper'  ? '0 0 12px var(--color-purple-glow)' :
+    narrative.kind === 'cosmic_disturbance' ? '0 0 12px var(--color-red-glow)'    :
+    undefined;
 
   return (
     <div
       className="card"
       style={{
         borderLeft: `3px solid ${color}`,
-        boxShadow: isWhisper
-          ? '0 0 12px var(--color-purple-glow)'
-          : undefined,
+        boxShadow: glowShadow,
       }}
     >
       <div className="narrative-card__header">
