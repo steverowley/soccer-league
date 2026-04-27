@@ -682,7 +682,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
   async maybeInterfereWith(
     minute: number,
     matchState: MatchStateShape,
-    allAgents: AgentShape[],
+    _allAgents: AgentShape[],
   ): Promise<Record<string, unknown> | null> {
     if (this.lastInterferenceMinute !== -1 && minute - this.lastInterferenceMinute < 12) return null;
 

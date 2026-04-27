@@ -57,12 +57,39 @@ export {
   getTeamTally,
 } from './api/focuses';
 
+// ── Enactment API ──────────────────────────────────────────────────────────
+// `enactSeasonFocuses` is the public entry point called by SeasonEnactmentListener.
+// `getEnactedFocuses` is called by VotingPage to populate the post-season panel.
+export {
+  enactSeasonFocuses,
+  getEnactedFocuses,
+} from './api/enactment';
+export type {
+  SeasonEnactmentResult,
+  EnactedFocusRow,
+} from './api/enactment';
+
+// ── Enactment logic (pure TS) ──────────────────────────────────────────────
+// `enactFocus` and `seededRng` are exported so callers can reproduce
+// mutations deterministically (e.g. debug tooling, season-replay scripts).
+export { enactFocus, seededRng } from './logic/enactFocus';
+export type {
+  PlayerRow,
+  NewPlayerData,
+  EnactmentMutation,
+  FocusEnactmentSpec,
+} from './logic/enactFocus';
+
 // ── UI (React components) ──────────────────────────────────────────────────
 // VotingPage is the route-level component (mounted at /voting). FocusCard
 // is the per-option subcomponent — exported separately so other surfaces
 // (e.g. a season-recap dashboard) can render individual cards in isolation.
+// SeasonEnactmentListener is a side-effect-only component; mount it once
+// near the application root to wire the season.ended → enactment pipeline.
 export { VotingPage } from './ui/VotingPage';
 export type { VotingPageProps } from './ui/VotingPage';
 
 export { FocusCard } from './ui/FocusCard';
 export type { FocusCardProps } from './ui/FocusCard';
+
+export { SeasonEnactmentListener } from './ui/SeasonEnactmentListener';
