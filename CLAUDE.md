@@ -189,6 +189,7 @@ Each club has:
 - Supabase backend: 9 tables with RLS (public read, authenticated write); schema currently hand-maintained in `schema.sql` (migrations adoption in Phase -1)
 - Manager tactics AI, player psychology system, 8 personality archetypes
 - Planetary weather system (Mars dust storms, Europa magnetic storms, zero-G quirks, etc.)
+- **Focus voting consequence (Package 2)**: `focus_enacted` table (migration 0011); pure enactment engine `enactFocus.ts` (9 focus types, seeded-RNG determinism, discriminated `EnactmentMutation` union); DB layer `enactment.ts` (`enactSeasonFocuses`, `getEnactedFocuses`); `SeasonEnactmentListener` wires `season.ended` bus event to the pipeline; VotingPage shows "What the Cosmos Decided" post-season panel. 49 unit tests in `enactFocus.test.ts`.
 
 ### Planned / Not Yet Built (see plan file for phased roadmap)
 - **Phase -1**: TypeScript migration, feature-based folder reshape, Vitest/ESLint/Prettier tooling, Supabase migrations directory, typed Supabase client, dependency injection, event bus

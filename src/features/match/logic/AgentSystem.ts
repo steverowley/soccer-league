@@ -604,7 +604,7 @@ export class AgentSystem {
       affectedIsHome = targetTeam === 'home';
     }
 
-    const syntheticEvent: MatchEvent = { commentary: mortalContext, architectForced: true, minute };
+    const _syntheticEvent: MatchEvent = { commentary: mortalContext, architectForced: true, minute };
 
     // 50 tokens — quick raw shocks, not considered reflections
     const BEWILDERMENT_BUDGET = 50;

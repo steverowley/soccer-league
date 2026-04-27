@@ -6,6 +6,7 @@ import {
   getTeamFocusOptions,
   getTeamTally,
 } from '../api/focuses';
+import { getEnactedFocuses, type EnactedFocusRow } from '../api/enactment';
 import type { FocusOption, FocusTallyEntry, FocusTier } from '../types';
 import { FocusCard } from './FocusCard';
 
@@ -20,24 +21,34 @@ export function VotingPage({ seasonId }: VotingPageProps) {
   // Local fetch state. `null` means loading; `[]` means loaded-and-empty.
   const [options, setOptions] = useState<FocusOption[] | null>(null);
   const [tally, setTally] = useState<FocusTallyEntry[] | null>(null);
+  // Enacted focuses: `null` while loading, `[]` when season is still in progress.
+  // A non-empty array means the season ended and focuses were applied — the
+  // "What the cosmos decided" panel is shown when this has at least one entry.
+  const [enacted, setEnacted] = useState<EnactedFocusRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const teamId = profile?.favourite_team_id ?? null;
 
   // ── Fetch lifecycle ──────────────────────────────────────────────────────
-  // WHY: We re-fetch on every (teamId, seasonId) change AND when an
-  // explicit `tick` increments after a vote. Wrapping the fetch in
-  // useCallback gives us a stable identity to share between the initial
-  // effect and the post-vote handler.
+  // WHY: We re-fetch on every (teamId, seasonId) change AND after a vote.
+  // Wrapping in useCallback gives a stable identity shared between the
+  // initial effect and the post-vote handler.
+  //
+  // We fetch enacted focuses alongside options and tally so all three
+  // arrive in a single render cycle. `getEnactedFocuses` returns [] while
+  // the season is still running (no rows exist yet) — the "cosmos decided"
+  // panel stays hidden until enactment actually runs.
   const fetchAll = useCallback(async () => {
     if (!teamId) return;
     try {
-      const [opts, tallyRows] = await Promise.all([
+      const [opts, tallyRows, enactedRows] = await Promise.all([
         getTeamFocusOptions(db, teamId, seasonId),
         getTeamTally(db, teamId, seasonId),
+        getEnactedFocuses(db, seasonId, teamId),
       ]);
       setOptions(opts);
       setTally(tallyRows);
+      setEnacted(enactedRows);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load voting data');
     }
@@ -51,15 +62,18 @@ export function VotingPage({ seasonId }: VotingPageProps) {
       // in-effect rule (synchronous resets in effect bodies are forbidden).
       setOptions(null);
       setTally(null);
+      setEnacted(null);
       setError(null);
       try {
-        const [opts, tallyRows] = await Promise.all([
+        const [opts, tallyRows, enactedRows] = await Promise.all([
           getTeamFocusOptions(db, teamId, seasonId),
           getTeamTally(db, teamId, seasonId),
+          getEnactedFocuses(db, seasonId, teamId),
         ]);
         if (cancelled) return;
         setOptions(opts);
         setTally(tallyRows);
+        setEnacted(enactedRows);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : 'Failed to load voting data');
@@ -120,7 +134,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
     );
   }
 
-  if (!options || !tally) {
+  if (!options || !tally || enacted === null) {
     return (
       <section className="voting-page voting-page--loading">
         <p className="status-text">Loading focus options…</p>
@@ -141,8 +155,8 @@ export function VotingPage({ seasonId }: VotingPageProps) {
 
   // ── Tier grouping ────────────────────────────────────────────────────────
   // Group options by tier so we can render two clearly separated sections.
-  // We also pre-aggregate per-tier tally totals so each FocusCard can size
-  // its share bar without re-summing the whole tally array.
+  // Pre-aggregate per-tier tally totals so each FocusCard can size its share
+  // bar without re-summing the whole tally array on every render.
   const byTier = (tier: FocusTier) => options.filter((o) => o.tier === tier);
   const tallyById = new Map(tally.map((t) => [t.option_id, t]));
   const tierTotal = (tier: FocusTier) =>
@@ -150,6 +164,13 @@ export function VotingPage({ seasonId }: VotingPageProps) {
 
   const credits = profile?.credits ?? 0;
   const canVote = credits > 0;
+
+  // ── Enacted focus helpers ─────────────────────────────────────────────────
+  // `enacted` is [] during an active season and non-empty after enactment runs.
+  // We split by tier so the "cosmos decided" panel mirrors the voting layout.
+  const enactedMajor = enacted.find((e) => e.tier === 'major') ?? null;
+  const enactedMinor = enacted.find((e) => e.tier === 'minor') ?? null;
+  const seasonEnacted = enacted.length > 0;
 
   return (
     <section className="voting-page" aria-label="Season vote">
@@ -168,7 +189,7 @@ export function VotingPage({ seasonId }: VotingPageProps) {
               option={option}
               tally={tallyById.get(option.id) ?? null}
               tierTotalCredits={tierTotal('major')}
-              canVote={canVote}
+              canVote={canVote && !seasonEnacted}
               maxSpend={credits}
               onVote={(amount) => handleVote(option.id, amount)}
             />
@@ -186,13 +207,51 @@ export function VotingPage({ seasonId }: VotingPageProps) {
               option={option}
               tally={tallyById.get(option.id) ?? null}
               tierTotalCredits={tierTotal('minor')}
-              canVote={canVote}
+              canVote={canVote && !seasonEnacted}
               maxSpend={credits}
               onVote={(amount) => handleVote(option.id, amount)}
             />
           ))}
         </div>
       </section>
+
+      {/* ── "What the cosmos decided" post-season panel ────────────────── */}
+      {/* WHY: Shown only after enactment has run for this season+team.     */}
+      {/* Gives fans closure — they can see exactly what their pooled       */}
+      {/* credits achieved and how the Architect sealed it.                 */}
+      {seasonEnacted && (
+        <section
+          className="voting-page__enacted"
+          aria-label="What the cosmos decided"
+        >
+          <h3 className="voting-page__enacted-title">What the Cosmos Decided</h3>
+          <p className="voting-page__enacted-intro">
+            The season has closed. The votes were counted. The cosmos has spoken.
+          </p>
+
+          <div className="voting-page__enacted-results">
+            {/* Major enacted focus */}
+            {enactedMajor && (
+              <div className="voting-page__enacted-item voting-page__enacted-item--major">
+                <span className="voting-page__enacted-tier">Major</span>
+                <span className="voting-page__enacted-label">
+                  {enactedMajor.focus_label}
+                </span>
+              </div>
+            )}
+
+            {/* Minor enacted focus */}
+            {enactedMinor && (
+              <div className="voting-page__enacted-item voting-page__enacted-item--minor">
+                <span className="voting-page__enacted-tier">Minor</span>
+                <span className="voting-page__enacted-label">
+                  {enactedMinor.focus_label}
+                </span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </section>
   );
 }
