@@ -41,15 +41,21 @@ export function NewsFeedPage() {
   const [activeKind, setActiveKind] = useState<string | null>(null);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
+  // WHY: setState calls are deferred inside an async IIFE rather than called
+  // synchronously in the effect body. Synchronous setState inside an effect
+  // triggers cascading renders before the browser has painted, causing the
+  // react-hooks/set-state-in-effect lint rule to fire. The async wrapper
+  // ensures React batches the state updates from the resolved promise.
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    (async () => {
+      setLoading(true);
+      setError(null);
 
-    // Fetch one extra row beyond the display limit so we know whether "load
-    // more" should appear, without loading a full extra page prematurely.
-    getRecentNarratives(db, limit + 1)
-      .then((fetched) => {
+      try {
+        // Fetch one extra row beyond the display limit so we know whether
+        // "load more" should appear without loading a full extra page early.
+        const fetched = await getRecentNarratives(db, limit + 1);
         if (cancelled) return;
         // Filter client-side so kind-switching is instant without a round-trip.
         const filtered = activeKind
@@ -57,14 +63,13 @@ export function NewsFeedPage() {
           : fetched;
         setHasMore(filtered.length > limit);
         setRows(filtered.slice(0, limit));
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : 'Failed to load transmissions');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
 
     return () => { cancelled = true; };
   }, [db, limit, activeKind]);

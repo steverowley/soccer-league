@@ -48,8 +48,9 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
   - **Sealed Fate** — prophecy-driven forced outcomes (goals, red cards, wonder saves)
   - **Interference Flags** — 10 reality-rewrite flags (gravityFlipped, voidCreature, eldritchPortal, etc.)
 - Persistent lore accumulates across matches — rivalries, player arcs, season storylines
-  - **Database-backed**: Pre-match `LoreStore.hydrate()` loads all `architect_lore` DB rows into memory; lore is immediately injected before match start so Architect sees cross-session state from first Proclamation
-  - **Post-match persistence**: `LoreStore.persistAll()` chains onto match completion to batch-upsert fully-updated lore to DB; localStorage writes preserved for offline resilience
+  - **Database-backed**: The `architect_lore` DB table is the single source of truth. Pre-match `prepareArchitectForMatch()` is the canonical lifecycle: it constructs the Architect and hydrates all lore via `LoreStore.hydrate()` in one DB round-trip (~100ms) before match kickoff. Every in-match `getContext()` call then reads from memory synchronously (never blocks commentary during goal bursts).
+  - **Post-match persistence**: `LoreStore.persistAll()` is called fire-and-forget after match completion to batch-upsert fully-updated lore to the DB; all browser sessions see the same shared narrative.
+  - **Synchronous guarantee**: `getContext()` can fire 5–10 times in <500ms during goal bursts (parallel commentator prompts), so lore hydration is exclusively a kickoff boundary concern, never on the hot path.
 - All AI voices speak with narrative coherence via injected Architect context
 - Affected characters react with confusion and disbelief; they have zero knowledge of any cosmic cause
 
@@ -170,17 +171,19 @@ soccer-league/
 │   ├── features/                # Feature modules
 │   │   ├── architect/           # Cosmic narrator and match interference
 │   │   │   ├── logic/
-│   │   │   │   ├── CosmicArchitect.ts     # Fully typed AI entity managing match edicts, intentions, and fate (migrated from agents.js)
-│   │   │   │   ├── edicts.ts              # Edict system for match probability modifiers
-│   │   │   │   └── loreStore.ts           # Persistent narrative context across matches
+│   │   │   │   ├── CosmicArchitect.ts       # Fully typed AI entity managing match edicts, intentions, and fate (migrated from agents.js)
+│   │   │   │   ├── CosmicArchitect.match.test.ts # Integration test: synchronous getContext() and lore hydration
+│   │   │   │   ├── prepareArchitect.ts      # Canonical pre-match lifecycle: construct → hydrate lore → return primed Architect
+│   │   │   │   ├── edicts.ts                # Edict system for match probability modifiers
+│   │   │   │   └── loreStore.ts             # Persistent narrative context across matches (DB-backed, synchronous reads)
 │   │   │   ├── api/
-│   │   │   │   ├── interventions.ts       # API layer for architect interventions
-│   │   │   │   └── lore.ts                # API layer for narrative queries
+│   │   │   │   ├── interventions.ts         # API layer for architect interventions
+│   │   │   │   └── lore.ts                  # API layer for narrative queries
 │   │   │   ├── ui/
-│   │   │   │   ├── ArchitectLogPage.tsx   # Dev-only intervention audit log (mounted at /architect-log)
-│   │   │   │   └── NewsFeedPage.tsx       # Paginated Galaxy Dispatch feed with kind filter strip and purple glow
-│   │   │   ├── types.ts                   # Architect domain types
-│   │   │   └── index.ts                   # Feature exports
+│   │   │   │   ├── ArchitectLogPage.tsx     # Dev-only intervention audit log (mounted at /architect-log)
+│   │   │   │   └── NewsFeedPage.tsx         # Paginated Galaxy Dispatch feed with kind filter strip and purple glow
+│   │   │   ├── types.ts                     # Architect domain types
+│   │   │   └── index.ts                     # Feature exports
 │   │   ├── auth/                # Authentication and user profiles
 │   │   ├── betting/             # Wager system and odds engine
 │   │   ├── design-system/       # Component library and theme tokens (ISL shield logo, Space Mono fonts, color tokens)
@@ -248,9 +251,11 @@ This eliminates type drift between game engine (`App.jsx`, `gameEngine.js`) and 
 
 ### AI Commentary & Architect System (`features/architect/` & `features/match/logic/AgentSystem.ts`)
 Migrated from legacy `agents.js` to strict TypeScript with clean feature separation:
-- **CosmicArchitect.ts** (374 lines) — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `narratives` table.
-- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Latency ~500ms at TURBO speed via staggered voice dispatch.
-- **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. Lore is database-backed, hydrated before match start, and persisted post-match for session coherence.
+- **CosmicArchitect.ts** — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `architect_lore` table. `getContext()` is guaranteed synchronous (never blocks on Supabase) — lore is always resident in memory from match start.
+- **prepareArchitect.ts** — Pre-match lifecycle helper that constructs the Architect and hydrates lore in a single DB round-trip (~100ms) before match kickoff. Returns both the primed Architect and LoreStore, so App.jsx can call `persistAll()` fire-and-forget after the match completes. This is the canonical entry point for Architect initialization — hydration only happens at match boundaries, never on the hot path.
+- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Latency ~500ms at TURBO speed via staggered voice dispatch. Calls `arch.getContext()` 5–10 times per goal burst (parallel prompts).
+- **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. LoreStore handles DB hydration at kickoff via `prepareArchitectForMatch()`, and persists post-match via `persistAll()`. All in-match reads are pure object-property accesses (no Supabase calls).
+- **Integration test** (`CosmicArchitect.match.test.ts`) — Validates that `getContext()` runs synchronously through a 10× tight loop (returning strings, never Promises) and exercises the lore hydration path against a fake Supabase client.
 - **API layer** (`architect/api/`) — Thin modules for reading narratives and interventions from Supabase, enabling future front-end feeds (Galaxy Dispatch narrative UI, intervention audit).
 - **Type safety**: Both systems depend on `IArchitect` interface (duck typing) rather than concrete CosmicArchitect, enabling loose coupling and testability.
 
