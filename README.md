@@ -74,8 +74,10 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 ### Focus Voting
 - End-of-season: fans spend credits to vote on club focus (signings, youth, training, upgrades)
 - 2 focuses per season: 1 major (10 credits), 1 minor (5 credits)
-- The focus with the most credits across all fans of a team is enacted
-- Running tally visible to all fans of the club
+- The focus with the most credits across all fans of a team is enacted — winner's mutations applied deterministically to the roster:
+  - **Major focuses**: Sign Star Player (roster boost + morale bump), Youth Academy (young player promotions), Tactical Overhaul (team-wide attacking/defending shifts), Stadium Upgrade (team finances bump)
+  - **Minor focuses**: Preseason Camp (starter stat bumps), Scout Network (bench player development), Fan Engagement (revenue boost), Sports Science (mental/athletic bumps), Mental Coaching (morale/confidence recovery)
+- Running tally visible to all fans of the club during voting window
 
 ### Training Minigame
 - Clicker-style facility: fans collectively boost players between matches
