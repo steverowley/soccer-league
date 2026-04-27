@@ -26,7 +26,7 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
 - **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
 - **Authenticated routes**:
   - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
-  - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options
+  - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options; post-season shows enacted focuses and their roster/stat effects
   - **Training** (`/training`) — Clicker minigame to collectively boost player stats
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
 - Shared header/footer with authenticated account menu (login state, IC balance, dropdown nav)
@@ -74,8 +74,14 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 ### Focus Voting
 - End-of-season: fans spend credits to vote on club focus (signings, youth, training, upgrades)
 - 2 focuses per season: 1 major (10 credits), 1 minor (5 credits)
-- The focus with the most credits across all fans of a team is enacted
-- Running tally visible to all fans of the club
+- **Enacted at season end**: The winning focus is automatically applied, mutating the team's roster, stats, and facilities
+- **9 focus types** (4 major + 5 minor):
+  - **Major**: `sign_star_player` (new bench player), `youth_academy` (promote young player), `tactical_overhaul` (boost midfielder stats), `stadium_upgrade` (ticket revenue boost)
+  - **Minor**: `preseason_camp` (universal stat lift), `scout_network` (sign new player), `fan_engagement` (revenue boost), `sports_science` (athletic/technical boost), `mental_coaching` (mental stat boost)
+- **Deterministic mutations**: Seeded RNG from `${seasonId}:${teamId}:${focusKey}` ensures reproducible outcomes; all stats clamped 1–99
+- **Post-enactment UI**: VotingPage shows "What the Cosmos Decided" panel listing all enacted focuses and their effects; voting is disabled after enactment
+- Running tally visible to all fans during voting period
+- Enacted focuses logged to `focus_enacted` table (with `architect_interventions` audit trail)
 
 ### Training Minigame
 - Clicker-style facility: fans collectively boost players between matches
