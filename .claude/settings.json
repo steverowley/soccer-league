@@ -27,7 +27,7 @@
       {
         "hooks": [
           {
-            "command": "bd prime",
+            "command": "bd prime && echo '' && echo '## Available Work (bd ready)' && bd ready 2>&1 || true",
             "type": "command"
           }
         ],
