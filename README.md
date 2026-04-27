@@ -24,6 +24,7 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
 - **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
+- **Cups** (`/cup/celestial`, `/cup/solar-shield`) — Single-elimination tournament brackets for the Celestial Cup (top 3 per league) and Solar Shield (4th–6th per league); displays full bracket with winner paths, TBD slots, and auto-advances matches when both teams advance from previous rounds
 - **Authenticated routes**:
   - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
   - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options; post-season shows enacted focuses and their roster/stat effects
@@ -210,10 +211,15 @@ soccer-league/
 │   │   ├── finance/             # Fan boost and ticket revenue
 │   │   ├── match/               # Match simulator types and logic
 │   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract, agent system)
-│   │   │   └── logic/
-│   │   │       ├── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
-│   │   │       ├── cupDraw.ts           # Single-elimination bracket draw engine with standard interleaving seeding
-│   │   │       └── cupDraw.test.ts      # 75 tests for bracket logic covering 8/12/16-team draws and odd counts
+│   │   │   ├── api/
+│   │   │   │   └── cupSeeder.ts         # Cup tournament seeding & advancement logic (standings read, qualifier splits, bracket draw, R1 match insertion, round advancement)
+│   │   │   ├── logic/
+│   │   │   │   ├── AgentSystem.ts       # AI commentary orchestrator with three distinct voices (migrated from agents.js)
+│   │   │   │   ├── cupDraw.ts          # Single-elimination bracket draw engine with standard interleaving seeding
+│   │   │   │   └── cupDraw.test.ts     # 75 tests for bracket logic covering 8/12/16-team draws and odd counts
+│   │   │   └── ui/
+│   │   │       ├── CupBracket.tsx       # Bracket renderer with column-per-round layout, winner paths, and TBD slots
+│   │   │       └── CupRoundAdvancerListener.tsx # Event listener that drives bracket progression on match completion
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
@@ -227,6 +233,7 @@ soccer-league/
 │   │   ├── Teams.jsx / TeamDetail.jsx
 │   │   ├── Players.jsx / PlayerDetail.jsx
 │   │   ├── Matches.jsx / MatchDetail.jsx
+│   │   ├── Cup.jsx              # Cup tournament bracket display (mounted at /cup/celestial and /cup/solar-shield)
 │   │   ├── Profile.jsx          # Account summary, preferences, BetHistory
 │   │   ├── Voting.jsx           # Focus voting interface
 │   │   ├── Training.jsx         # Training clicker minigame
