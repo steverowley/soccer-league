@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
+import { Badge, PageHero } from '@shared/ui';
 import { getRecentNarratives } from '../../entities/api/entities';
 import type { Narrative } from '../../entities/types';
 import { formatDateShort } from '@shared/utils/formatDate';
@@ -128,18 +129,11 @@ export function NewsFeedPage() {
   return (
     <div>
       {/* ── Page hero ───────────────────────────────────────────────────── */}
-      <div className="page-hero">
-        <div className="container">
-          <div className="page-hero__title-row">
-            <h1>Galaxy Dispatch</h1>
-            <span className="badge--architect">Architect</span>
-          </div>
-          <hr className="divider" />
-          <p className="subtitle">
-            Transmissions, disturbances, and dispatches from across the solar system.
-          </p>
-        </div>
-      </div>
+      <PageHero
+        title="Galaxy Dispatch"
+        badge={<Badge variant="architect">Architect</Badge>}
+        subtitle="Transmissions, disturbances, and dispatches from across the solar system."
+      />
 
     <div className="container page-content">
 

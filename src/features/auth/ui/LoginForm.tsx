@@ -9,10 +9,11 @@
 //   - On success, the form doesn't navigate — the calling page handles
 //     redirection based on its own routing context (e.g. Login page
 //     redirects to /, match page stays in place).
-//   - The form uses the ISL design system tokens (--color-*, --font-mono)
-//     so it blends with the retro-minimalist aesthetic.
+//   - Uses shared/ui primitives (Input, Button) so the form layout tracks
+//     any design-system changes automatically without per-form edits.
 
 import { useState, type FormEvent } from 'react';
+import { Button, Input } from '@shared/ui';
 import { useAuth } from './AuthProvider';
 
 /**
@@ -26,9 +27,14 @@ interface LoginFormProps {
 }
 
 /**
- * Email + password login form. Renders a card-styled box with two inputs
- * and a submit button. Error messages from Supabase Auth are shown inline
- * below the form.
+ * Email + password login form. Renders two labelled inputs and a primary
+ * submit button. Supabase Auth error messages are surfaced inline below the
+ * password field via the `error` prop on the second `<Input>`.
+ *
+ * Validation is intentionally minimal: we only check for non-empty fields
+ * before submitting. Supabase returns descriptive errors for bad credentials,
+ * rate limiting, unverified emails, etc. — duplicating that logic here would
+ * create a maintenance burden with no UX benefit.
  */
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const { signIn } = useAuth();
@@ -59,37 +65,32 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="form-group">
-        <label htmlFor="login-email" className="isl-label">Email</label>
-        <input
-          id="login-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          disabled={submitting}
-          className="isl-input"
-        />
-      </div>
+      <Input
+        id="login-email"
+        type="email"
+        label="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        autoComplete="email"
+        disabled={submitting}
+      />
 
-      <div className="form-group">
-        <label htmlFor="login-password" className="isl-label">Password</label>
-        <input
-          id="login-password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-          disabled={submitting}
-          className="isl-input"
-        />
-      </div>
+      {/* Password field carries the shared error so it appears immediately
+          below the last field the user interacted with, not at the top. */}
+      <Input
+        id="login-password"
+        type="password"
+        label="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="current-password"
+        disabled={submitting}
+        error={error}
+      />
 
-      {error && <p className="form-error">{error}</p>}
-
-      <button type="submit" className="btn btn-primary btn--full" disabled={submitting}>
+      <Button type="submit" className="btn--full" disabled={submitting}>
         {submitting ? 'LOGGING IN…' : 'LOG IN'}
-      </button>
+      </Button>
     </form>
   );
 }
