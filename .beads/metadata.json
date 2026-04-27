@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "soccer_league",
+  "project_id": "8efcd003-e101-49b8-ae57-be055b94cf98"
+}

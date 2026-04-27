@@ -126,6 +126,30 @@ Top 3 per league qualify for the **Celestial Cup** (Champions League equivalent)
 - Byes are auto-advanced at the leaf level; later round slots carry `from_round`/`from_slot` references for advancing matches
 - Bracket state stored as JSON in `competitions.bracket` JSONB column for efficient retrieval and manipulation
 
+## Documentation
+
+This project maintains two primary documentation sources:
+
+- **[CLAUDE.md](./CLAUDE.md)** — Project context, vision, engineering principles, game design document, and implementation roadmap. **Start here** when joining the project or planning new work.
+- **[AGENTS.md](./AGENTS.md)** — Agent workflow instructions, including beads issue tracker (`bd`) commands, shell command best practices, and session completion protocol.
+
+## Developer Setup & Workflows
+
+### Issue Tracking with Beads
+This project uses **Beads** (`bd`), a git-native issue tracking system designed for AI-assisted development. Issues live in your repo at `.beads/` and integrate seamlessly with git branches and commits.
+
+**Quick commands:**
+```bash
+bd ready              # Find available work
+bd create "Issue title"   # Create new issue
+bd show <id>          # View issue details
+bd update <id> --claim    # Claim and start work
+bd close <id>         # Complete work
+bd dolt push          # Sync issues to remote
+```
+
+See `.beads/README.md` for full documentation, or run `bd quickstart` to see guided workflow.
+
 ## Getting Started
 
 ### Prerequisites
