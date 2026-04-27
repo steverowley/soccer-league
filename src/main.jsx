@@ -63,6 +63,20 @@ import { AuthProvider }     from './features/auth';
 //   never be imported by the match feature — the bus keeps them decoupled.
 import { WagerSettlementListener } from './features/betting';
 
+// CupRoundAdvancerListener: subscribes to `match.completed` and calls
+//   advanceCupRound() to fill in winners + insert the next-round fixture
+//   for Celestial Cup and Solar Shield bracket competitions. Mounted here
+//   alongside the wager listener so any match completion (regardless of
+//   route) triggers the bracket advance. Non-cup matches are filtered out
+//   by the listener itself.
+import { CupRoundAdvancerListener } from './features/match';
+
+// SeasonEnactmentListener: subscribes to `season.ended` and applies the
+//   winning focuses for every team (player stat bumps, signings, finance
+//   deltas). Mounted here so end-of-season events are caught regardless of
+//   which route the user is on when they fire.
+import { SeasonEnactmentListener } from './features/voting';
+
 // ── Page components ───────────────────────────────────────────────────────────
 // Each import corresponds to one route in the table above.
 import Home         from './pages/Home';
@@ -80,6 +94,7 @@ import Voting       from './pages/Voting';
 import Training     from './pages/Training';
 import ArchitectLog from './pages/ArchitectLog';
 import NewsFeed     from './pages/NewsFeed';
+import Cup          from './pages/Cup';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -98,6 +113,8 @@ createRoot(document.getElementById('root')).render(
           Router (must survive full route transitions so no in-flight settlement
           is cancelled mid-navigation).  Renders null — pure side-effects only. */}
       <WagerSettlementListener />
+      <CupRoundAdvancerListener />
+      <SeasonEnactmentListener />
       <AuthProvider>
         {/* ── Router ──────────────────────────────────────────────────────── */}
         {/* BrowserRouter enables HTML5 history API navigation with clean URLs.
@@ -154,6 +171,17 @@ createRoot(document.getElementById('root')).render(
                   Function + in-match fragments) in a paginated, kind-filtered
                   view. No auth gate — lore is for everyone. */}
               <Route path="news" element={<NewsFeed />} />
+
+              {/* /cup/celestial → Celestial Cup bracket (top 3 per league) */}
+              {/* Renders the stored bracket JSON for competition
+                  20000000-…-002. Empty state appears until seedCupCompetitions
+                  runs at season-end. */}
+              <Route path="cup/celestial" element={<Cup cupKey="celestial" />} />
+
+              {/* /cup/solar-shield → Solar Shield bracket (4th–6th per league) */}
+              {/* Same layout as Celestial Cup, different competition UUID
+                  (20000000-…-003) and qualifier criteria. */}
+              <Route path="cup/solar-shield" element={<Cup cupKey="solar-shield" />} />
 
               {/* /architect-log → dev-only intervention audit table */}
               {/* ArchitectLog.jsx gates itself behind import.meta.env.DEV so

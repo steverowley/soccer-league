@@ -24,9 +24,10 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
 - **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
+- **Cups** (`/cup/celestial`, `/cup/solar-shield`) — Single-elimination tournament brackets for the Celestial Cup (top 3 per league) and Solar Shield (4th–6th per league); displays full bracket with winner paths, TBD slots, and auto-advances matches when both teams advance from previous rounds
 - **Authenticated routes**:
   - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
-  - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options
+  - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options; post-season shows enacted focuses and their roster/stat effects
   - **Training** (`/training`) — Clicker minigame to collectively boost player stats
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
 - Shared header/footer with authenticated account menu (login state, IC balance, dropdown nav)
@@ -74,10 +75,21 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 ### Focus Voting
 - End-of-season: fans spend credits to vote on club focus (signings, youth, training, upgrades)
 - 2 focuses per season: 1 major (10 credits), 1 minor (5 credits)
-- The focus with the most credits across all fans of a team is enacted — winner's mutations applied deterministically to the roster:
-  - **Major focuses**: Sign Star Player (roster boost + morale bump), Youth Academy (young player promotions), Tactical Overhaul (team-wide attacking/defending shifts), Stadium Upgrade (team finances bump)
-  - **Minor focuses**: Preseason Camp (starter stat bumps), Scout Network (bench player development), Fan Engagement (revenue boost), Sports Science (mental/athletic bumps), Mental Coaching (morale/confidence recovery)
-- Running tally visible to all fans of the club during voting window
+- **Enacted at season end**: The winning focus is automatically applied, mutating the team's roster, stats, and facilities
+- **9 focus types** (4 major + 5 minor):
+  - **Major**: `sign_star_player` (new bench player), `youth_academy` (promote young player), `tactical_overhaul` (boost midfielder stats), `stadium_upgrade` (ticket revenue boost)
+  - **Minor**: `preseason_camp` (universal stat lift), `scout_network` (sign new player), `fan_engagement` (revenue boost), `sports_science` (athletic/technical boost), `mental_coaching` (mental stat boost)
+- **Deterministic mutations**: Seeded RNG from `${seasonId}:${teamId}:${focusKey}` ensures reproducible outcomes; all stats clamped 1–99
+- **Post-enactment UI**: VotingPage shows "What the Cosmos Decided" panel listing all enacted focuses and their effects; voting is disabled after enactment
+- Running tally visible to all fans during voting period
+- Enacted focuses logged to `focus_enacted` table (with `architect_interventions` audit trail)
+
+### Cup Tournament Logic
+- **Single-elimination brackets** for Celestial Cup (top 3 from each league) and Solar Shield (4th–6th from each league)
+- **Bracket draw engine** (`cupDraw.ts`) generates tournament seeds using standard interleaving: 1v8, 4v5, 2v7, 3v6 for size-8 brackets, ensuring top seeds can only meet in the final
+- **Flexible bracket sizes** handle odd team counts (3, 5, 7, 9, 11, etc.) with automatic bye placement at leaf level
+- **Round advancement** with `from_round`/`from_slot` references allowing matches to be resolved in any order
+- **Bracket storage** persisted as JSON in `competitions.bracket` JSONB column for efficient querying and mutation
 
 ### Training Minigame
 - Clicker-style facility: fans collectively boost players between matches
@@ -107,6 +119,12 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 | Kuiper Belt League | Pluto, Eris, Haumea, Makemake, Sedna and outer reaches (8 clubs) |
 
 Top 3 per league qualify for the **Celestial Cup** (Champions League equivalent); 4th–6th qualify for the **Solar Shield** (Europa League equivalent).
+
+### Cup Competitions
+- **Single-elimination brackets** with standard interleaving seeding (1v8, 4v5, 2v7, 3v6 structure so top seeds can only meet in the Final)
+- Bracket draws auto-seed based on final league standings
+- Byes are auto-advanced at the leaf level; later round slots carry `from_round`/`from_slot` references for advancing matches
+- Bracket state stored as JSON in `competitions.bracket` JSONB column for efficient retrieval and manipulation
 
 ## Documentation
 
@@ -217,8 +235,15 @@ soccer-league/
 │   │   ├── finance/             # Fan boost and ticket revenue
 │   │   ├── match/               # Match simulator types and logic
 │   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract, agent system)
-│   │   │   └── logic/
-│   │   │       └── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
+│   │   │   ├── api/
+│   │   │   │   └── cupSeeder.ts         # Cup tournament seeding & advancement logic (standings read, qualifier splits, bracket draw, R1 match insertion, round advancement)
+│   │   │   ├── logic/
+│   │   │   │   ├── AgentSystem.ts       # AI commentary orchestrator with three distinct voices (migrated from agents.js)
+│   │   │   │   ├── cupDraw.ts          # Single-elimination bracket draw engine with standard interleaving seeding
+│   │   │   │   └── cupDraw.test.ts     # 75 tests for bracket logic covering 8/12/16-team draws and odd counts
+│   │   │   └── ui/
+│   │   │       ├── CupBracket.tsx       # Bracket renderer with column-per-round layout, winner paths, and TBD slots
+│   │   │       └── CupRoundAdvancerListener.tsx # Event listener that drives bracket progression on match completion
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
@@ -232,6 +257,7 @@ soccer-league/
 │   │   ├── Teams.jsx / TeamDetail.jsx
 │   │   ├── Players.jsx / PlayerDetail.jsx
 │   │   ├── Matches.jsx / MatchDetail.jsx
+│   │   ├── Cup.jsx              # Cup tournament bracket display (mounted at /cup/celestial and /cup/solar-shield)
 │   │   ├── Profile.jsx          # Account summary, preferences, BetHistory
 │   │   ├── Voting.jsx           # Focus voting interface
 │   │   ├── Training.jsx         # Training clicker minigame
