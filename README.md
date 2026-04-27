@@ -83,6 +83,13 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 - Running tally visible to all fans during voting period
 - Enacted focuses logged to `focus_enacted` table (with `architect_interventions` audit trail)
 
+### Cup Tournament Logic
+- **Single-elimination brackets** for Celestial Cup (top 3 from each league) and Solar Shield (4th–6th from each league)
+- **Bracket draw engine** (`cupDraw.ts`) generates tournament seeds using standard interleaving: 1v8, 4v5, 2v7, 3v6 for size-8 brackets, ensuring top seeds can only meet in the final
+- **Flexible bracket sizes** handle odd team counts (3, 5, 7, 9, 11, etc.) with automatic bye placement at leaf level
+- **Round advancement** with `from_round`/`from_slot` references allowing matches to be resolved in any order
+- **Bracket storage** persisted as JSON in `competitions.bracket` JSONB column for efficient querying and mutation
+
 ### Training Minigame
 - Clicker-style facility: fans collectively boost players between matches
 - Geometric XP curve (BASE_XP_COST=100, CURVE_MULTIPLIER=1.5) with round-robin stat distribution
@@ -111,6 +118,12 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 | Kuiper Belt League | Pluto, Eris, Haumea, Makemake, Sedna and outer reaches (8 clubs) |
 
 Top 3 per league qualify for the **Celestial Cup** (Champions League equivalent); 4th–6th qualify for the **Solar Shield** (Europa League equivalent).
+
+### Cup Competitions
+- **Single-elimination brackets** with standard interleaving seeding (1v8, 4v5, 2v7, 3v6 structure so top seeds can only meet in the Final)
+- Bracket draws auto-seed based on final league standings
+- Byes are auto-advanced at the leaf level; later round slots carry `from_round`/`from_slot` references for advancing matches
+- Bracket state stored as JSON in `competitions.bracket` JSONB column for efficient retrieval and manipulation
 
 ## Getting Started
 
@@ -198,7 +211,9 @@ soccer-league/
 │   │   ├── match/               # Match simulator types and logic
 │   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract, agent system)
 │   │   │   └── logic/
-│   │   │       └── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
+│   │   │       ├── AgentSystem.ts        # AI commentary orchestrator with three distinct voices (migrated from agents.js)
+│   │   │       ├── cupDraw.ts           # Single-elimination bracket draw engine with standard interleaving seeding
+│   │   │       └── cupDraw.test.ts      # 75 tests for bracket logic covering 8/12/16-team draws and odd counts
 │   │   ├── training/            # Player development clicker
 │   │   └── voting/              # End-of-season focus voting
 │   ├── shared/                  # Cross-feature infrastructure
