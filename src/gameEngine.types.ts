@@ -103,26 +103,29 @@ export interface MatchEvent {
   momentumChange: [number, number];
 
   // ── Outcome / scoring ────────────────────────────────────────────────────
-  player?:     string;           // primary actor
-  defender?:   string;           // defending actor (for contests)
-  assister?:   string;
-  isGoal?:     boolean;
-  isVAROverturned?: boolean;
-  isInjury?:   boolean;
-  outcome?:    string;           // 'saved' | 'post' | 'miss' | 'clean_tackle' | …
-  cardType?:   'yellow' | 'red';
+  // NOTE: `T | undefined` (rather than just `T?`) is required because the
+  // tsconfig has exactOptionalPropertyTypes: true — without the explicit
+  // | undefined, callers cannot pass `field: maybeUndefinedValue`.
+  player?:     string | undefined; // primary actor
+  defender?:   string | undefined; // defending actor (for contests)
+  assister?:   string | undefined;
+  isGoal?:     boolean | undefined;
+  isVAROverturned?: boolean | undefined;
+  isInjury?:   boolean | undefined;
+  outcome?:    string | undefined; // 'saved' | 'post' | 'miss' | 'clean_tackle' | …
+  cardType?:   'yellow' | 'red' | undefined;
 
   // ── Substitution ──────────────────────────────────────────────────────────
-  substituteInfo?: { in: string; out: string };
+  substituteInfo?: { in: string; out: string } | undefined;
 
   // ── Embedded sub-event sequences ─────────────────────────────────────────
   // Sequences are flattened by flattenSequences() in simulateHelpers.ts before
   // being inserted into the running event log.
-  penaltySequence?:       MatchEvent[];
-  freekickSequence?:      MatchEvent[];
-  counterSequence?:       MatchEvent[];
-  confrontationSequence?: MatchEvent[];
-  nearMissSequence?:      MatchEvent[];
+  penaltySequence?:       MatchEvent[] | undefined;
+  freekickSequence?:      MatchEvent[] | undefined;
+  counterSequence?:       MatchEvent[] | undefined;
+  confrontationSequence?: MatchEvent[] | undefined;
+  nearMissSequence?:      MatchEvent[] | undefined;
 }
 
 // ── Agent (player AI) ─────────────────────────────────────────────────────────
