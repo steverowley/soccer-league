@@ -244,7 +244,7 @@ export function buildPostGoalExtras(
   if (Math.random() < 0.08) {
     const overturned = Math.random() < 0.30;
     const vSeq = genVARSeq(newMin, event.player, event.team, aim.referee, overturned);
-    allEvents = [...allEvents, ...vSeq.sequence as MatchEvent[]];
+    allEvents = [...allEvents, ...vSeq.sequence];
     if (overturned) {
       if (isHome) sc[0]--; else sc[1]--;
       varOverturned = true;
@@ -257,7 +257,7 @@ export function buildPostGoalExtras(
     const celebSeq = genCelebrationSeq(
       newMin, event.player, event.team, mgr?.name, mgr?.emotion, scorerAgent,
     );
-    allEvents = [...allEvents, ...celebSeq.sequence as MatchEvent[]];
+    allEvents = [...allEvents, ...celebSeq.sequence];
 
     // ── Comeback (equaliser after 2+ down) ───────────────────────────────────
     const newDiff = isHome ? (sc[0] - sc[1]) : (sc[1] - sc[0]);
@@ -265,7 +265,7 @@ export function buildPostGoalExtras(
       const cptAgent = (isHome ? aim.activeHomeAgents : aim.activeAwayAgents)
         .find((a) => a.isCaptain);
       const cbSeq = genComebackSeq(newMin, event.player, cptAgent?.player?.name, event.team);
-      allEvents = [...allEvents, ...cbSeq.sequence as MatchEvent[]];
+      allEvents = [...allEvents, ...cbSeq.sequence];
       (isHome ? aim.activeHomeAgents : aim.activeAwayAgents).forEach((a) => a.updateConfidence(8));
     }
 
@@ -443,7 +443,7 @@ export function applyLateGameLogic(
         aim.activeHomeAgents[0]?.player.name ??
         'The captain';
       interventions.push(
-        ...genSiegeSeq(newMin, prev.homeTeam.shortName, prev.awayTeam.shortName, clutchH).sequence as MatchEvent[],
+        ...genSiegeSeq(newMin, prev.homeTeam.shortName, prev.awayTeam.shortName, clutchH).sequence,
       );
       aim.activeHomeAgents.forEach((a) => a.updateConfidence(5));
     }
@@ -453,7 +453,7 @@ export function applyLateGameLogic(
         aim.activeAwayAgents[0]?.player.name ??
         'The captain';
       interventions.push(
-        ...genSiegeSeq(newMin, prev.awayTeam.shortName, prev.homeTeam.shortName, clutchA).sequence as MatchEvent[],
+        ...genSiegeSeq(newMin, prev.awayTeam.shortName, prev.homeTeam.shortName, clutchA).sequence,
       );
       aim.activeAwayAgents.forEach((a) => a.updateConfidence(5));
     }
@@ -462,14 +462,14 @@ export function applyLateGameLogic(
   // ── Manager sent off (only once per manager per match) ──────────────────────
   if (!prev.managerSentOff?.home && aim.homeManager.emotion === MGER_EMO.ANG && Math.random() < 0.05) {
     interventions.push(
-      ...genManagerSentOffSeq(newMin, aim.homeManager.name, aim.referee.name, prev.homeTeam.shortName).sequence as MatchEvent[],
+      ...genManagerSentOffSeq(newMin, aim.homeManager.name, aim.referee.name, prev.homeTeam.shortName).sequence,
     );
     newManagerSentOff.home = true;
     aim.activeHomeAgents.forEach((a) => a.updateConfidence(-4));
   }
   if (!prev.managerSentOff?.away && aim.awayManager.emotion === MGER_EMO.ANG && Math.random() < 0.05) {
     interventions.push(
-      ...genManagerSentOffSeq(newMin, aim.awayManager.name, aim.referee.name, prev.awayTeam.shortName).sequence as MatchEvent[],
+      ...genManagerSentOffSeq(newMin, aim.awayManager.name, aim.referee.name, prev.awayTeam.shortName).sequence,
     );
     newManagerSentOff.away = true;
     aim.activeAwayAgents.forEach((a) => a.updateConfidence(-4));
