@@ -108,6 +108,13 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 
 Top 3 per league qualify for the **Celestial Cup** (Champions League equivalent); 4th–6th qualify for the **Solar Shield** (Europa League equivalent).
 
+## Documentation
+
+This project maintains two primary documentation sources:
+
+- **[CLAUDE.md](./CLAUDE.md)** — Project context, vision, engineering principles, game design document, and implementation roadmap. **Start here** when joining the project or planning new work.
+- **[AGENTS.md](./AGENTS.md)** — Agent workflow instructions, including beads issue tracker (`bd`) commands, shell command best practices, and session completion protocol.
+
 ## Getting Started
 
 ### Prerequisites
