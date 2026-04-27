@@ -1,34 +1,49 @@
-// ── constants.js ──────────────────────────────────────────────────────────────
+// ── constants.ts ──────────────────────────────────────────────────────────────
 // All static game data: colours, enums, personality keys, weather types,
 // manager emotions, stadiums, and planet weather tables.
 //
 // Nothing here is calculated at runtime — it is purely look-up data.
+// Every object is frozen (`as const`) so TypeScript infers narrow literal
+// types, enabling exhaustive switch checking on personality/weather/emotion
+// values elsewhere in the codebase.
 
 // ── AI model identifier ───────────────────────────────────────────────────────
 // Single source of truth for the Claude model used by all AI commentary and
 // Architect systems.  Update here to roll the entire app to a new model version
-// without hunting for individual call sites in agents.js and MatchComponents.jsx.
+// without hunting for individual call sites in gameEngine and MatchComponents.
 export const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
 // ── UI Colour palette ─────────────────────────────────────────────────────────
 // Used by components to keep the dark sci-fi aesthetic consistent.
+// Prefer the CSS design tokens in tokens.css for stylesheets; use these
+// constants only in inline styles or canvas/SVG rendering where CSS variables
+// cannot be used.
 export const C = {
   abyss:  '#111111', // deepest background
   ash:    '#1F1F1F', // card / panel background
   dust:   '#E3E0D5', // primary text
   purple: '#9A5CF4', // accent / Saturn Rings FC brand colour
   red:    '#FF6B6B', // danger, red cards
-};
+} as const;
 
-/** Helper that returns an inline-style object with a coloured border and ash background. */
-export const bdr = (bc, bg = '#1F1F1F') => ({
+/**
+ * Returns an inline-style object with a coloured border and ash background.
+ * Shorthand used when dynamically colouring team or narrative cards.
+ *
+ * @param bc  Border colour hex string.
+ * @param bg  Background colour hex string (defaults to ash #1F1F1F).
+ */
+export const bdr = (
+  bc: string,
+  bg: string = '#1F1F1F',
+): { border: string; backgroundColor: string } => ({
   border: `1px solid ${bc}`,
   backgroundColor: bg,
 });
 
 // ── Player personality keys ───────────────────────────────────────────────────
 // Each player is assigned exactly one personality at agent-creation time
-// (see createAgent in gameEngine.js).  Personality gates which special events
+// (see createAgent in gameEngine.ts).  Personality gates which special events
 // can fire for that player each minute.
 //
 //  BAL  (balanced)    – no special triggers; reliable all-rounder
@@ -48,10 +63,13 @@ export const PERS = {
   CRE:  'creative',
   LAZ:  'lazy',
   WRK:  'workhorse',
-};
+} as const;
+
+/** Union of all valid personality string values. */
+export type Personality = (typeof PERS)[keyof typeof PERS];
 
 /** Emoji shown next to a player's name in the UI for quick personality identification. */
-export const PERS_ICON = {
+export const PERS_ICON: Record<Personality, string> = {
   [PERS.SEL]:  '🎯',
   [PERS.TEAM]: '🤝',
   [PERS.AGG]:  '⚔️',
@@ -94,10 +112,13 @@ export const WX = {
   METH:    'methane_rain',
   PLASMA:  'plasma_winds',
   RING:    'ring_shadow',
-};
+} as const;
+
+/** Union of all valid weather string values. */
+export type WeatherCondition = (typeof WX)[keyof typeof WX];
 
 /** Emoji shown in the match scoreboard header next to the weather condition. */
-export const WX_ICON = {
+export const WX_ICON: Record<WeatherCondition, string> = {
   [WX.CLEAR]:   '☀️',
   [WX.RAIN]:    '🌧️',
   [WX.HEAT]:    '🔥',
@@ -130,7 +151,7 @@ export const WX_ICON = {
 //  Io (Jupiter)    – volcanic acid rain, intense solar flares
 //  Ganymede        – strong magnetic field, snow
 //  Triton (Neptune)– nitrogen plasma winds, methane rains, extreme cold
-export const PLANET_WX = {
+export const PLANET_WX: Record<string, WeatherCondition[]> = {
   'Mars':              [WX.CLEAR, WX.DUST, WX.DUST, WX.METEOR, WX.WIND, WX.HEAT],
   'Phobos (Mars)':     [WX.CLEAR, WX.METEOR, WX.ZERO, WX.DUST],
   'Saturn Rings':      [WX.RING, WX.RING, WX.ZERO, WX.CRYSTAL, WX.CLEAR],
@@ -161,10 +182,13 @@ export const MGER_EMO = {
   CONF: 'confident',
   DESP: 'desperate',
   JUB:  'jubilant',
-};
+} as const;
+
+/** Union of all valid manager emotion string values. */
+export type ManagerEmotion = (typeof MGER_EMO)[keyof typeof MGER_EMO];
 
 /** Emoji shown next to manager name in the UI to give a quick emotional read. */
-export const EMO_ICON = {
+export const EMO_ICON: Record<ManagerEmotion, string> = {
   [MGER_EMO.CALM]: '😌',
   [MGER_EMO.FRUS]: '😤',
   [MGER_EMO.EXC]:  '😃',
@@ -177,24 +201,40 @@ export const EMO_ICON = {
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
 
+/** Player position abbreviations used throughout the engine and UI. */
+export type Position = 'GK' | 'DF' | 'MF' | 'FW';
+
 /**
  * Sort order for positions when displaying squad lists.
  * GK always first, then defenders, midfielders, forwards.
  */
-export const POS_ORDER = { GK: 0, DF: 1, MF: 2, FW: 3 };
+export const POS_ORDER: Record<Position, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
 
 /** Pool of referee names selected randomly each match. */
-export const REFS = [
+export const REFS: string[] = [
   'Commander Voss', 'Justice Krell', 'Arbiter Sol',
   'Ref-9000', 'Magistrate Zuri', 'Judge Orion',
 ];
 
+/** A match venue entry. */
+export interface Stadium {
+  /** Display name of the ground. */
+  name: string;
+  /**
+   * Planet or moon where the stadium sits. Must match a key in PLANET_WX
+   * so weather conditions are correctly sampled for home fixtures.
+   */
+  planet: string;
+  /** Formatted capacity string shown in the UI (e.g. "89,000"). */
+  capacity: string;
+}
+
 /**
- * All possible match venues.  Each team has a home stadium defined in teams.js,
+ * All possible match venues.  Each team has a home stadium defined in teams.ts,
  * but neutral venues can be selected if needed.  The planet field maps to
  * PLANET_WX to determine available weather conditions.
  */
-export const STADIUMS = [
+export const STADIUMS: Stadium[] = [
   { name: 'Olympus Mons Arena',       planet: 'Mars',              capacity: '89,000' },
   { name: 'Titan Dome',               planet: 'Titan (Saturn)',    capacity: '76,000' },
   { name: 'Cassini Division Field',   planet: 'Saturn Rings',      capacity: '65,000' },
