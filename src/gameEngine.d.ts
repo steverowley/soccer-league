@@ -297,6 +297,22 @@ export function genPenaltySeq(
 
 // ── Top-level event generator ─────────────────────────────────────────────────
 
+/**
+ * Per-team AI influence bag returned by `aim.getDecisionInfluence()`.
+ * Each side's record carries decision-bias counts (e.g. SHOOT, ATTACK)
+ * derived from the personality mix of the active XI.  genEvent reads
+ * these to bias its event-branch roll — high SHOOT pushes toward shots,
+ * high ATTACK pushes toward attacking transitions.
+ *
+ * The shape is open-ended (`Record<string, number>`) because the engine
+ * adds bias keys over time as new personalities are introduced; pinning
+ * the keys would force a `.d.ts` update for every new agent type.
+ */
+export interface AIInfluence {
+  home: Record<string, number>;
+  away: Record<string, number>;
+}
+
 /** Generic context bag passed through to genEvent for flashpoint application. */
 export type GenEventContext = Record<string, unknown>;
 
@@ -307,6 +323,14 @@ export type GenEventContext = Record<string, unknown>;
  * to flatten via simulateHelpers.flattenSequences().
  *
  * Returns `null` for quiet minutes (no event fires).
+ *
+ * NOTE on positional argument order vs. naming:
+ *   - `aiInfluence` (10th) is the per-team SHOOT/ATTACK bias bag (or null
+ *     when no AI is driving the match — e.g. in tests).  genEvent guards
+ *     against null with `if (aiInfluence) …`.
+ *   - `aim` (11th) is the AIManager itself, used for agent lookup, late-game
+ *     interventions, and getAgentByName() calls inside contest resolution.
+ *     Required (the engine doesn't tolerate a null AIManager).
  */
 export function genEvent(
   min:                number,
@@ -318,8 +342,8 @@ export function genEvent(
   score:              [number, number],
   activePlayers:      { home: string[]; away: string[] },
   substitutionsUsed:  { home: number; away: number },
-  aiInfluence:        AIManager,
-  aim?:               string,
+  aiInfluence:        AIInfluence | null,
+  aim:                AIManager,
   chaosLevel?:        number,
   lastEventType?:     string | null,
   genCtx?:            GenEventContext,
