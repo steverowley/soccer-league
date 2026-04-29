@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "generate-seed": "tsx scripts/generate-seed.ts"
+    "generate-seed": "tsx scripts/generate-seed.ts",
+    "match-worker": "tsx scripts/match-worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.81.0",
