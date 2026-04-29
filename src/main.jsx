@@ -69,7 +69,7 @@ import { WagerSettlementListener } from './features/betting';
 //   alongside the wager listener so any match completion (regardless of
 //   route) triggers the bracket advance. Non-cup matches are filtered out
 //   by the listener itself.
-import { CupRoundAdvancerListener } from './features/match';
+import { CupRoundAdvancerListener, MatchLivePage } from './features/match';
 
 // SeasonEnactmentListener: subscribes to `season.ended` and applies the
 //   winning focuses for every team (player stat bumps, signings, finance
@@ -153,6 +153,12 @@ createRoot(document.getElementById('root')).render(
 
               {/* /matches/:matchId → single fixture detail — WagerWidget + BetHistory */}
               <Route path="matches/:matchId" element={<MatchDetail />} />
+
+              {/* /matches/:matchId/live → live event-by-event match viewer
+                  Subscribes to match_events via Realtime; reveals events by
+                  wall-clock elapsed time since scheduled_at.  See
+                  features/match/ui/MatchLivePage.tsx. */}
+              <Route path="matches/:matchId/live" element={<MatchLivePage />} />
 
               {/* /login → authentication form */}
               <Route path="login" element={<Login />} />

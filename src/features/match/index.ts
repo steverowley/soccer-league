@@ -87,6 +87,24 @@ export type {
   SimulatedEvent,
 } from './logic/simulateFullMatch';
 
+// ── Live match viewer (Package 11) ─────────────────────────────────────────
+export { MatchLivePage } from './ui/MatchLivePage';
+export {
+  computeElapsedGameMinute,
+  filterEventsByElapsedMinute,
+} from './logic/elapsedMinute';
+export {
+  getLiveMatch,
+  getMatchEvents,
+  getMatchDurationSeconds,
+  subscribeToMatchEvents,
+  DEFAULT_MATCH_DURATION_SECONDS,
+} from './api/matchEvents';
+export type {
+  LiveMatchRow,
+  MatchEventRow,
+} from './api/matchEvents';
+
 // ── Cup bracket UI ────────────────────────────────────────────────────────
 export { CupBracket } from './ui/CupBracket';
 export type { CupBracketProps, CupTeamLookup, CupMatchScore } from './ui/CupBracket';
