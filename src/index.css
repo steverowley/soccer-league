@@ -1304,3 +1304,83 @@ table {
   flex-wrap: wrap;
   margin-top: 10px;
 }
+
+/* ── Live match viewer (Package 11) ─────────────────────────────────────── */
+.match-live {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.match-live__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid rgba(227, 224, 213, 0.12);
+}
+
+.match-live__team {
+  font-size: var(--font-size-large);
+  font-weight: 600;
+  flex: 1 1 0;
+}
+
+.match-live__team--away {
+  text-align: right;
+}
+
+.match-live__score {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.match-live__status {
+  text-align: center;
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+  margin: var(--space-3) 0;
+}
+
+.match-live__feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.match-live__event {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(17, 17, 17, 0.4);
+  border-left: 2px solid rgba(154, 92, 244, 0.4);
+}
+
+.match-live__event--fade-in {
+  animation: match-live-fade 0.4s ease-out;
+}
+
+@keyframes match-live-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.match-live__event-minute {
+  font-family: var(--font-family-mono, monospace);
+  font-size: var(--font-size-small);
+  opacity: 0.6;
+  min-width: 36px;
+}
+
+.match-live__event-text {
+  flex: 1 1 0;
+  line-height: 1.5;
+}
