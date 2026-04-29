@@ -80,6 +80,13 @@ export type {
   AdvanceCupRoundResult,
 } from './api/cupSeeder';
 
+// ── Full-match simulation (pure orchestrator, Package 10) ─────────────────
+export { simulateFullMatch } from './logic/simulateFullMatch';
+export type {
+  SimulatedMatchResult,
+  SimulatedEvent,
+} from './logic/simulateFullMatch';
+
 // ── Cup bracket UI ────────────────────────────────────────────────────────
 export { CupBracket } from './ui/CupBracket';
 export type { CupBracketProps, CupTeamLookup, CupMatchScore } from './ui/CupBracket';

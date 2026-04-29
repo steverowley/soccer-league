@@ -106,11 +106,27 @@ export function makeSub(
   stats:    PlayerStatsMap,
 ): SubResult;
 
+/** Shape returned by calcMVP — the best-performing player enriched with match stats. */
+export interface MVPResult extends EnginePlayer {
+  /** Full club name (e.g. "Mars Athletic"). */
+  team:      string;
+  /** Hex colour of the player's club (used for highlight colouring in the UI). */
+  teamColor: string;
+  /** Per-match accumulated stats that drove the MVP score. */
+  stats:     Record<string, number | boolean>;
+}
+
 /**
  * Compute Most Valuable Player from the final stats map and the two teams.
- * Returns the player's name string, or '—' if no clear MVP can be identified.
+ * Returns an enriched player object (EnginePlayer + team/teamColor/stats),
+ * or `null` when no player accumulated enough score to qualify
+ * (e.g. a 0–0 draw with no notable contests).
+ *
+ * NOTE: the `.d.ts` previously declared the return as `string`.  The real
+ * implementation (`gameEngine.js:366–379`) returns the full player object so
+ * callers that want just the name must read `.name ?? '—'`.
  */
-export function calcMVP(stats: PlayerStatsMap, home: EngineTeam, away: EngineTeam): string;
+export function calcMVP(stats: PlayerStatsMap, home: EngineTeam, away: EngineTeam): MVPResult | null;
 
 // ── Contest resolution ────────────────────────────────────────────────────────
 
