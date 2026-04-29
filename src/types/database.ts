@@ -459,6 +459,44 @@ export type Database = {
           },
         ]
       }
+      match_events: {
+        Row: {
+          created_at: string
+          id: string
+          match_id: string
+          minute: number
+          payload: Json
+          subminute: number
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_id: string
+          minute: number
+          payload?: Json
+          subminute?: number
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_id?: string
+          minute?: number
+          payload?: Json
+          subminute?: number
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_events_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_odds: {
         Row: {
           away_odds: number
@@ -564,6 +602,7 @@ export type Database = {
           leg: number | null
           played_at: string | null
           round: string | null
+          simulated_at: string | null
           stadium: string | null
           scheduled_at: string | null
           status: string
@@ -580,6 +619,7 @@ export type Database = {
           leg?: number | null
           played_at?: string | null
           round?: string | null
+          simulated_at?: string | null
           scheduled_at?: string | null
           stadium?: string | null
           status?: string
@@ -596,6 +636,7 @@ export type Database = {
           leg?: number | null
           played_at?: string | null
           round?: string | null
+          simulated_at?: string | null
           scheduled_at?: string | null
           stadium?: string | null
           status?: string
@@ -837,6 +878,33 @@ export type Database = {
           name?: string
           start_date?: string | null
           year?: number
+        }
+        Relationships: []
+      }
+      season_config: {
+        Row: {
+          created_at: string
+          match_cadence_minutes: number
+          match_duration_seconds: number
+          min_bet: number
+          season_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          match_cadence_minutes?: number
+          match_duration_seconds?: number
+          min_bet?: number
+          season_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          match_cadence_minutes?: number
+          match_duration_seconds?: number
+          min_bet?: number
+          season_id?: string
+          updated_at?: string
         }
         Relationships: []
       }

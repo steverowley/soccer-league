@@ -106,11 +106,27 @@ export function makeSub(
   stats:    PlayerStatsMap,
 ): SubResult;
 
+/** Shape returned by calcMVP — the best-performing player enriched with match stats. */
+export interface MVPResult extends EnginePlayer {
+  /** Full club name (e.g. "Mars Athletic"). */
+  team:      string;
+  /** Hex colour of the player's club (used for highlight colouring in the UI). */
+  teamColor: string;
+  /** Per-match accumulated stats that drove the MVP score. */
+  stats:     Record<string, number | boolean>;
+}
+
 /**
  * Compute Most Valuable Player from the final stats map and the two teams.
- * Returns the player's name string, or '—' if no clear MVP can be identified.
+ * Returns an enriched player object (EnginePlayer + team/teamColor/stats),
+ * or `null` when no player accumulated enough score to qualify
+ * (e.g. a 0–0 draw with no notable contests).
+ *
+ * NOTE: the `.d.ts` previously declared the return as `string`.  The real
+ * implementation (`gameEngine.js:366–379`) returns the full player object so
+ * callers that want just the name must read `.name ?? '—'`.
  */
-export function calcMVP(stats: PlayerStatsMap, home: EngineTeam, away: EngineTeam): string;
+export function calcMVP(stats: PlayerStatsMap, home: EngineTeam, away: EngineTeam): MVPResult | null;
 
 // ── Contest resolution ────────────────────────────────────────────────────────
 
@@ -297,6 +313,22 @@ export function genPenaltySeq(
 
 // ── Top-level event generator ─────────────────────────────────────────────────
 
+/**
+ * Per-team AI influence bag returned by `aim.getDecisionInfluence()`.
+ * Each side's record carries decision-bias counts (e.g. SHOOT, ATTACK)
+ * derived from the personality mix of the active XI.  genEvent reads
+ * these to bias its event-branch roll — high SHOOT pushes toward shots,
+ * high ATTACK pushes toward attacking transitions.
+ *
+ * The shape is open-ended (`Record<string, number>`) because the engine
+ * adds bias keys over time as new personalities are introduced; pinning
+ * the keys would force a `.d.ts` update for every new agent type.
+ */
+export interface AIInfluence {
+  home: Record<string, number>;
+  away: Record<string, number>;
+}
+
 /** Generic context bag passed through to genEvent for flashpoint application. */
 export type GenEventContext = Record<string, unknown>;
 
@@ -307,6 +339,14 @@ export type GenEventContext = Record<string, unknown>;
  * to flatten via simulateHelpers.flattenSequences().
  *
  * Returns `null` for quiet minutes (no event fires).
+ *
+ * NOTE on positional argument order vs. naming:
+ *   - `aiInfluence` (10th) is the per-team SHOOT/ATTACK bias bag (or null
+ *     when no AI is driving the match — e.g. in tests).  genEvent guards
+ *     against null with `if (aiInfluence) …`.
+ *   - `aim` (11th) is the AIManager itself, used for agent lookup, late-game
+ *     interventions, and getAgentByName() calls inside contest resolution.
+ *     Required (the engine doesn't tolerate a null AIManager).
  */
 export function genEvent(
   min:                number,
@@ -318,8 +358,8 @@ export function genEvent(
   score:              [number, number],
   activePlayers:      { home: string[]; away: string[] },
   substitutionsUsed:  { home: number; away: number },
-  aiInfluence:        AIManager,
-  aim?:               string,
+  aiInfluence:        AIInfluence | null,
+  aim:                AIManager,
   chaosLevel?:        number,
   lastEventType?:     string | null,
   genCtx?:            GenEventContext,
