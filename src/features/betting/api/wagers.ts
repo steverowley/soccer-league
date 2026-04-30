@@ -125,6 +125,46 @@ export async function getUserWagers(
 }
 
 /**
+ * Fetch the most recent wager a single user has placed on a single match.
+ *
+ * Used by the live match viewer to render a "your wager" panel: stake +
+ * choice while the match is in progress, then payout / lost / void after
+ * settlement. We return only the latest wager because users normally place
+ * one bet per fixture; if they place multiple, the freshest is the most
+ * useful surface.
+ *
+ * @param db       Injected Supabase client.
+ * @param userId   The viewing user's UUID.
+ * @param matchId  The match UUID.
+ * @returns        Latest Wager row for that (user, match) pair, or null
+ *                 when no wager exists / on query error.
+ */
+export async function getUserWagerForMatch(
+  db:       IslSupabaseClient,
+  userId:   string,
+  matchId:  string,
+): Promise<Wager | null> {
+  const { data, error } = await (db as AnyDb) // CAST:wagers
+    .from('wagers')
+    .select('*')
+    .eq('user_id',  userId)
+    .eq('match_id', matchId)
+    // Latest first so .limit(1) returns the freshest wager. PostgREST's
+    // ordering is stable on (created_at DESC, id DESC) given the table PK.
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // maybeSingle returns null with no error when there are zero rows — that's
+  // the common path for users who haven't bet on this match.
+  if (error) {
+    console.warn('[getUserWagerForMatch] failed:', error.message);
+    return null;
+  }
+  return (data ?? null) as Wager | null;
+}
+
+/**
  * Fetch all open wagers for a specific match. Used by the settlement
  * process to find wagers that need resolving.
  *
