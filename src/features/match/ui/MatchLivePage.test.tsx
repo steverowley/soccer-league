@@ -22,12 +22,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MatchLivePage } from './MatchLivePage';
 import type { LiveMatchRow, MatchEventRow } from '../api/matchEvents';
 import type * as MatchEventsApi from '../api/matchEvents';
+import type { Wager } from '@features/betting';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
 const fakeDb = {};
 vi.mock('@shared/supabase/SupabaseProvider', () => ({
   useSupabase: () => fakeDb,
+}));
+
+// useAuth is mocked module-level — `currentAuth` is mutated per-test to swap
+// between anonymous (no user) and logged-in fixtures. Returning a plain
+// object (not a hook) is fine because the page only reads `user`.
+let currentAuth: { user: { id: string } | null } = { user: null };
+vi.mock('@features/auth', () => ({
+  useAuth: () => currentAuth,
+}));
+
+// The betting barrel re-exports `getUserWagerForMatch` — we mock at the
+// barrel level so the call inside MatchLivePage routes through here.
+const mockGetUserWagerForMatch = vi.fn();
+vi.mock('@features/betting', () => ({
+  getUserWagerForMatch: (...a: unknown[]) => mockGetUserWagerForMatch(...a),
 }));
 
 const mockGetLiveMatch             = vi.fn();
@@ -106,7 +122,30 @@ beforeEach(() => {
   mockGetMatchEvents.mockResolvedValue(EVENTS);
   mockGetMatchDurationSeconds.mockResolvedValue(600);
   mockSubscribe.mockReturnValue(() => {});
+  // Default to anonymous viewer; individual tests override `currentAuth`
+  // before rendering when they want to exercise the wager panel paths.
+  currentAuth = { user: null };
+  // Default: no wager exists. Wager-specific tests override per-call.
+  mockGetUserWagerForMatch.mockResolvedValue(null);
 });
+
+// ── Wager fixture ───────────────────────────────────────────────────────────
+// Helper for wager rows used by the new Package 12 tests. Defaults to an
+// open Mars-win bet on m1 — overrides cover the won/lost/void variants.
+function makeWager(overrides: Partial<Wager> = {}): Wager {
+  return {
+    id:            'w1',
+    user_id:       'u1',
+    match_id:      'm1',
+    team_choice:   'home',
+    stake:         50,
+    odds_snapshot: 2.5,
+    status:        'open',
+    payout:        null,
+    created_at:    '2026-04-01T11:55:00Z',
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -219,5 +258,79 @@ describe('MatchLivePage', () => {
       );
       expect(minutes).toContain(89);
     });
+  });
+
+  // ── Package 12: user wager panel ──────────────────────────────────────────
+  // The wager panel is rendered only for logged-in viewers who have a row
+  // in `wagers` for the current match. These tests pin the four
+  // status-dependent renderings (open / won / lost / void) and the
+  // anonymous "no panel at all" path.
+
+  it('does not render the wager panel for anonymous viewers', async () => {
+    currentAuth = { user: null };
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-04-01T12:01:00Z') });
+    renderAt('m1');
+    await waitFor(() => expect(screen.getByTestId('match-live')).toBeInTheDocument());
+    expect(screen.queryByTestId('match-live-wager')).not.toBeInTheDocument();
+  });
+
+  it('does not render the wager panel when the user has no bet on this match', async () => {
+    currentAuth = { user: { id: 'u1' } };
+    mockGetUserWagerForMatch.mockResolvedValue(null);
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-04-01T12:01:00Z') });
+    renderAt('m1');
+    await waitFor(() => expect(screen.getByTestId('match-live')).toBeInTheDocument());
+    expect(screen.queryByTestId('match-live-wager')).not.toBeInTheDocument();
+  });
+
+  it('renders an open wager with stake, choice, and odds snapshot', async () => {
+    currentAuth = { user: { id: 'u1' } };
+    mockGetUserWagerForMatch.mockResolvedValue(
+      makeWager({ status: 'open', team_choice: 'home', stake: 50, odds_snapshot: 2.5 }),
+    );
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-04-01T12:01:00Z') });
+    renderAt('m1');
+    const panel = await screen.findByTestId('match-live-wager');
+    // 'home' should resolve to the home team name from the match fixture.
+    expect(panel).toHaveTextContent(/You bet/);
+    expect(panel).toHaveTextContent(/50/);
+    expect(panel).toHaveTextContent(/Mars Athletic/);
+    expect(panel).toHaveTextContent(/2\.50/);
+  });
+
+  it('renders a won wager with the payout amount', async () => {
+    currentAuth = { user: { id: 'u1' } };
+    mockGetUserWagerForMatch.mockResolvedValue(
+      makeWager({ status: 'won', payout: 125 }),
+    );
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-04-01T12:11:00Z') });
+    renderAt('m1');
+    const panel = await screen.findByTestId('match-live-wager');
+    expect(panel).toHaveTextContent(/You won/);
+    expect(panel).toHaveTextContent(/125/);
+  });
+
+  it('renders a lost wager showing the forfeited stake', async () => {
+    currentAuth = { user: { id: 'u1' } };
+    mockGetUserWagerForMatch.mockResolvedValue(
+      makeWager({ status: 'lost', stake: 75 }),
+    );
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-04-01T12:11:00Z') });
+    renderAt('m1');
+    const panel = await screen.findByTestId('match-live-wager');
+    expect(panel).toHaveTextContent(/You lost/);
+    expect(panel).toHaveTextContent(/75/);
+  });
+
+  it('renders a voided wager with refund messaging', async () => {
+    currentAuth = { user: { id: 'u1' } };
+    mockGetUserWagerForMatch.mockResolvedValue(
+      makeWager({ status: 'void' }),
+    );
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-04-01T12:11:00Z') });
+    renderAt('m1');
+    const panel = await screen.findByTestId('match-live-wager');
+    expect(panel).toHaveTextContent(/voided/);
+    expect(panel).toHaveTextContent(/refund/);
   });
 });
