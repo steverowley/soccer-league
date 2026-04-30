@@ -50,6 +50,14 @@ import type { Database } from '../src/types/database';
 import { normalizeTeamForEngine } from '../src/lib/supabase';
 import { simulateFullMatch }       from '../src/features/match/logic/simulateFullMatch';
 import { settleMatchWagers }        from '../src/features/betting/api/wagers';
+import { isSeasonComplete }         from '../src/features/match/logic/seasonLifecycle';
+import {
+  getSeasonIdForMatch,
+  getSeasonStatus,
+  getLeagueFixtureCountsForSeason,
+  transitionSeasonStatus,
+} from '../src/features/match/api/seasons';
+import { enactSeasonFocuses }       from '../src/features/voting/api/enactment';
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
@@ -116,6 +124,91 @@ const BATCH_SIZE = 500;
 // modules resolves to the same SupabaseClient<Database> shape.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = any;
+
+// ── Season-end transition helper ─────────────────────────────────────────────
+
+/**
+ * Decide whether the just-completed match closed out its season's league
+ * phase, and if so drive the lifecycle forward (active → voting → enacted)
+ * with the optimistic-lock pattern that keeps concurrent workers safe.
+ *
+ * The function is split out of `processMatch` so the per-match try/catch
+ * can isolate season-side failures without affecting the wager-settlement
+ * branch above it.
+ *
+ * Flow:
+ *   1. Resolve the match → season UUID (no FK so it's a two-hop query).
+ *   2. Fetch the season's current status; bail unless it's still 'active'.
+ *   3. Tally league fixtures; bail unless `isSeasonComplete` says yes.
+ *   4. Optimistic UPDATE active → voting.  Only the worker that wins the
+ *      race proceeds to enactment.
+ *   5. Run `enactSeasonFocuses` server-side (mirrors the client-side
+ *      SeasonEnactmentListener path so the React mount remains usable for
+ *      manual / dev-mode triggering).
+ *   6. Optimistic UPDATE voting → enacted on success.
+ *
+ * @param db        Service-role Supabase client.
+ * @param matchId   UUID of the match that just completed.
+ * @param tag       Log prefix (`[match-worker:<short-id>]`) for parity
+ *                  with the rest of processMatch's logging.
+ */
+async function maybeTransitionSeason(
+  db:       WorkerDb,
+  matchId:  string,
+  tag:      string,
+): Promise<void> {
+  // ── Step 1: resolve season ─────────────────────────────────────────────
+  const seasonId = await getSeasonIdForMatch(db, matchId);
+  if (!seasonId) return;
+
+  // ── Step 2: short-circuit on already-advanced seasons ──────────────────
+  // Each match completion calls this — for the 223 matches that are not
+  // the season's last fixture, the status check returns 'active' but the
+  // tally below leaves it unchanged.  For matches in already-closed
+  // seasons (cup matches that ran past season end), we exit immediately.
+  const status = await getSeasonStatus(db, seasonId);
+  if (status !== 'active') return;
+
+  // ── Step 3: fixture-count tally ────────────────────────────────────────
+  const counts = await getLeagueFixtureCountsForSeason(db, seasonId);
+  if (!isSeasonComplete(counts)) return;
+
+  console.log(
+    `${tag} season ${seasonId.slice(0, 8)} league phase complete ` +
+      `(${counts.completed} completed, ${counts.cancelled} cancelled) — transitioning`,
+  );
+
+  // ── Step 4: active → voting (optimistic) ───────────────────────────────
+  // The optimistic predicate ensures only one worker proceeds to step 5
+  // even if several workers complete their last match at the same instant.
+  const wonVoting = await transitionSeasonStatus(db, seasonId, 'active', 'voting');
+  if (!wonVoting) {
+    console.log(`${tag} season ${seasonId.slice(0, 8)} already past 'active' — skipping enactment`);
+    return;
+  }
+
+  // ── Step 5: run enactment ──────────────────────────────────────────────
+  // enactSeasonFocuses iterates all 32 teams, applies winning focuses,
+  // writes focus_enacted rows, and is idempotent on the (team_id,
+  // season_id, tier) UNIQUE constraint — re-running is safe if step 6
+  // fails partway.
+  const enactResult = await enactSeasonFocuses(db as AnyDb, seasonId);
+  console.log(
+    `${tag} enactment for season ${seasonId.slice(0, 8)}: ` +
+      `enacted=${enactResult.enacted}, skipped=${enactResult.skipped}`,
+  );
+
+  // ── Step 6: voting → enacted ───────────────────────────────────────────
+  // Closes the loop.  If this UPDATE fails (network blip), the season
+  // sits in 'voting' until an admin nudge or the next match completion
+  // re-runs steps 4-6 (step 4 is a no-op since status is already 'voting').
+  const wonEnacted = await transitionSeasonStatus(db, seasonId, 'voting', 'enacted');
+  if (wonEnacted) {
+    console.log(`${tag} season ${seasonId.slice(0, 8)} → enacted`);
+  } else {
+    console.warn(`${tag} season ${seasonId.slice(0, 8)} enacted-transition lost race — manual check`);
+  }
+}
 
 // ── Core: simulate one match ─────────────────────────────────────────────────
 
@@ -245,6 +338,33 @@ async function processMatch(
       if (settled > 0) console.log(`${tag} settled ${settled} wager(s)`);
     } catch (settleErr) {
       console.warn(`${tag} wager settlement error (match result preserved):`, settleErr);
+    }
+
+    // ── Step 7: Season-end check + enactment (Package 13) ──────────────────
+    // After every match completes we check whether *this* completion was
+    // the last one in the season's league phase.  When it is, we transition
+    // seasons.status from 'active' → 'voting' and immediately run focus
+    // enactment ('voting' → 'enacted').
+    //
+    // Why both transitions on the same tick: there's no human-driven gate
+    // between "voting opens" and "enactment runs" in the current product;
+    // the 48-hour voting window is enforced by the *vote-cast UI* not by
+    // the worker, and any votes already cast are in `focus_votes` ready
+    // for enactSeasonFocuses() to tally.  Splitting the transitions would
+    // just add a second worker wakeup with no behavioural difference.
+    //
+    // The race-safety story: transitionSeasonStatus uses an optimistic
+    // UPDATE WHERE status = expectedFromStatus, so even if multiple workers
+    // close their last match at the same instant, only one wins each
+    // transition and runs the side-effect.
+    //
+    // Failures here are logged but never roll back the match result —
+    // a stuck 'voting' status can be retried from the next match
+    // completion or by an admin manual transition.
+    try {
+      await maybeTransitionSeason(db as AnyDb, matchId, tag);
+    } catch (seasonErr) {
+      console.warn(`${tag} season-end check failed (match result preserved):`, seasonErr);
     }
 
   } catch (err) {
