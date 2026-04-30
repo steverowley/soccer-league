@@ -36,9 +36,11 @@ export {
   computeMatchOdds,
   computeAvgRating,
   computeForm,
+  resultsForTeam,
   HOUSE_MARGIN,
   FORM_WINDOW,
 } from './logic/odds';
+export type { CompletedMatchRow } from './logic/odds';
 
 export {
   determineOutcome,
@@ -52,6 +54,7 @@ export {
 export {
   placeWager,
   getUserWagers,
+  getUserWagerForMatch,
   getOpenWagersForMatch,
   settleMatchWagers,
 } from './api/wagers';
