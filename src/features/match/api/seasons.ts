@@ -13,6 +13,11 @@
 //   • No business rules — `isSeasonComplete()` lives in logic/.
 //   • No enactment side-effects — that's `enactSeasonFocuses()` from the
 //     voting feature.  This module returns a flag the caller acts on.
+//
+// TYPE STORY
+//   Migration 0014 added `status` / `started_at` / `ended_at` to seasons.
+//   These tests-and-types now flow through the regenerated `database.ts`,
+//   so the queries below are fully typed end-to-end — no AnyDb casts.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type {
@@ -20,18 +25,17 @@ import type {
   SeasonStatus,
 } from '../logic/seasonLifecycle';
 
-// TYPE ESCAPE HATCH — the seasons row gains `status` / `started_at` /
-// `ended_at` columns in migration 0014.  Until database.ts is regenerated
-// after that migration is applied, we cast at the boundary.  Same pattern
-// as betting/api/oddsRepo.ts (CAST:match_odds).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Status read ──────────────────────────────────────────────────────────────
 
 /**
  * Fetch the lifecycle status of one season.  Returns null when the season
  * row does not exist (caller treats as "no season to roll over").
+ *
+ * The DB column type is plain `text` so we narrow it to `SeasonStatus` at
+ * the boundary.  The matching CHECK constraint in migration 0014 means
+ * the only values that can land here are the four declared states; we
+ * still cast rather than runtime-validate because adding a Zod parse on
+ * a 1-row read isn't worth the latency.
  *
  * @param db        Injected Supabase client (service-role for the worker;
  *                  anon clients won't see the new columns until RLS
@@ -43,23 +47,22 @@ export async function getSeasonStatus(
   db:       IslSupabaseClient,
   seasonId: string,
 ): Promise<SeasonStatus | null> {
-  const { data, error } = await (db as AnyDb) // CAST:seasons.status
+  const { data, error } = await db
     .from('seasons')
     .select('status')
     .eq('id', seasonId)
     .maybeSingle();
 
   if (error || !data) return null;
-  return (data as { status: SeasonStatus }).status;
+  return data.status as SeasonStatus;
 }
 
 // ── Fixture-count tally ──────────────────────────────────────────────────────
 
 /**
  * Count league fixtures by status for a single season.  Cup matches are
- * filtered out via a join on `competitions.type = 'league'` — only the
- * round-robin phase gates the season transition (cups can run past
- * season-end).
+ * filtered out via `competitions.type = 'league'` — only the round-robin
+ * phase gates the season transition (cups can run past season-end).
  *
  * The tally is small (4 numbers) so we always return all four counts even
  * when some buckets are zero — keeps the consumer's branching simple.
@@ -79,7 +82,7 @@ export async function getLeagueFixtureCountsForSeason(
   // generated PostgREST query stays index-friendly (the matches table has
   // a composite index on (competition_id, status) but no path through
   // seasons).
-  const { data: comps, error: compErr } = await (db as AnyDb)
+  const { data: comps, error: compErr } = await db
     .from('competitions')
     .select('id')
     .eq('season_id', seasonId)
@@ -89,13 +92,13 @@ export async function getLeagueFixtureCountsForSeason(
     return { scheduled: 0, inProgress: 0, completed: 0, cancelled: 0 };
   }
 
-  const competitionIds = (comps as Array<{ id: string }>).map((c) => c.id);
+  const competitionIds = comps.map((c) => c.id);
 
   // ── Step 2: pull all match status values across those competitions ─────
   // The .in() clause is the cheapest server-side way to filter by an array
   // of UUIDs.  We project only the `status` column so the response payload
   // stays compact even at season end (224 rows × ~12 bytes ≈ 2.7 KB).
-  const { data: matches, error: matchErr } = await (db as AnyDb)
+  const { data: matches, error: matchErr } = await db
     .from('matches')
     .select('status')
     .in('competition_id', competitionIds);
@@ -111,7 +114,7 @@ export async function getLeagueFixtureCountsForSeason(
   const tally: LeagueFixtureCounts = {
     scheduled: 0, inProgress: 0, completed: 0, cancelled: 0,
   };
-  for (const m of matches as Array<{ status: string }>) {
+  for (const m of matches) {
     if      (m.status === 'scheduled')   tally.scheduled++;
     else if (m.status === 'in_progress') tally.inProgress++;
     else if (m.status === 'completed')   tally.completed++;
@@ -150,13 +153,16 @@ export async function transitionSeasonStatus(
 ): Promise<boolean> {
   // active → voting is the only transition that stamps ended_at; for the
   // others we leave the column alone so the original close-of-league
-  // timestamp stays the source of truth.
-  const patch: Record<string, unknown> = { status: toStatus };
+  // timestamp stays the source of truth.  We build the patch with the
+  // narrowest possible TablesUpdate shape so TS catches any future
+  // typo at the seasons table (e.g. renaming a column in 0015).
+  type SeasonsUpdate = { status: string; ended_at?: string };
+  const patch: SeasonsUpdate = { status: toStatus };
   if (expectedFromStatus === 'active' && toStatus === 'voting') {
-    patch['ended_at'] = new Date().toISOString();
+    patch.ended_at = new Date().toISOString();
   }
 
-  const { data, error } = await (db as AnyDb) // CAST:seasons.status
+  const { data, error } = await db
     .from('seasons')
     .update(patch)
     .eq('id',     seasonId)
@@ -186,7 +192,7 @@ export async function getSeasonIdForMatch(
   matchId:  string,
 ): Promise<string | null> {
   // Step 1: match → competition_id.
-  const { data: matchRow, error: matchErr } = await (db as AnyDb)
+  const { data: matchRow, error: matchErr } = await db
     .from('matches')
     .select('competition_id')
     .eq('id', matchId)
@@ -195,12 +201,12 @@ export async function getSeasonIdForMatch(
   if (matchErr || !matchRow) return null;
 
   // Step 2: competition → season_id.
-  const { data: compRow, error: compErr } = await (db as AnyDb)
+  const { data: compRow, error: compErr } = await db
     .from('competitions')
     .select('season_id')
-    .eq('id', (matchRow as { competition_id: string }).competition_id)
+    .eq('id', matchRow.competition_id)
     .maybeSingle();
 
   if (compErr || !compRow) return null;
-  return (compRow as { season_id: string }).season_id;
+  return compRow.season_id;
 }
