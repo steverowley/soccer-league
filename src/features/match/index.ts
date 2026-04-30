@@ -109,3 +109,22 @@ export type {
 export { CupBracket } from './ui/CupBracket';
 export type { CupBracketProps, CupTeamLookup, CupMatchScore } from './ui/CupBracket';
 export { CupRoundAdvancerListener } from './ui/CupRoundAdvancerListener';
+
+// ── Season lifecycle (Package 13) ──────────────────────────────────────────
+// Pure helpers + DB layer for the seasons.status state machine.  The match
+// worker drives the active → voting → enacted transitions; admin tooling
+// will surface the same helpers from the UI layer in Package 14.
+export {
+  isSeasonComplete,
+  nextStatus,
+} from './logic/seasonLifecycle';
+export type {
+  LeagueFixtureCounts,
+  SeasonStatus,
+} from './logic/seasonLifecycle';
+export {
+  getSeasonStatus,
+  getLeagueFixtureCountsForSeason,
+  transitionSeasonStatus,
+  getSeasonIdForMatch,
+} from './api/seasons';
