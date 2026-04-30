@@ -11,6 +11,7 @@ import {
   computeMatchOdds,
   computeAvgRating,
   computeForm,
+  resultsForTeam,
   HOUSE_MARGIN,
   FORM_WINDOW,
 } from './odds';
@@ -206,6 +207,70 @@ describe('computeForm', () => {
 
   it('handles fewer results than FORM_WINDOW', () => {
     expect(computeForm(['W', 'L'])).toEqual({ wins: 1, draws: 0, losses: 1 });
+  });
+});
+
+// ── resultsForTeam ──────────────────────────────────────────────────────────
+// WHY: The compute-odds cron consumes a flat list of league matches and needs
+// to project them down to one team's W/D/L stream. These tests pin the home /
+// away symmetry, the score-comparison branches, and the no-op behaviour for
+// matches the team didn't play in.
+
+describe('resultsForTeam', () => {
+  // Each match is a minimal CompletedMatchRow — the helper looks at four
+  // columns only so we keep fixtures small and focused.
+  it('returns wins/draws/losses from the home perspective', () => {
+    const matches = [
+      // Team T1 plays at home: 2-0 win, 1-1 draw, 0-2 loss.
+      { home_team_id: 't1', away_team_id: 't2', home_score: 2, away_score: 0 },
+      { home_team_id: 't1', away_team_id: 't3', home_score: 1, away_score: 1 },
+      { home_team_id: 't1', away_team_id: 't4', home_score: 0, away_score: 2 },
+    ];
+    expect(resultsForTeam('t1', matches)).toEqual(['W', 'D', 'L']);
+  });
+
+  it('returns wins/draws/losses from the away perspective', () => {
+    const matches = [
+      // Team T1 plays away: 0-2 (loss for home → win for T1), 2-2 draw, 3-0 loss.
+      { home_team_id: 't2', away_team_id: 't1', home_score: 0, away_score: 2 },
+      { home_team_id: 't3', away_team_id: 't1', home_score: 2, away_score: 2 },
+      { home_team_id: 't4', away_team_id: 't1', home_score: 3, away_score: 0 },
+    ];
+    expect(resultsForTeam('t1', matches)).toEqual(['W', 'D', 'L']);
+  });
+
+  it('skips matches that do not involve the team', () => {
+    const matches = [
+      { home_team_id: 't2', away_team_id: 't3', home_score: 2, away_score: 0 },
+      { home_team_id: 't1', away_team_id: 't4', home_score: 1, away_score: 0 },
+    ];
+    // Only the second match involves T1 — first one is silently ignored.
+    expect(resultsForTeam('t1', matches)).toEqual(['W']);
+  });
+
+  it('skips matches with null scores (not actually settled)', () => {
+    const matches = [
+      // home_score still null even though the row exists — treat as unplayed.
+      { home_team_id: 't1', away_team_id: 't2', home_score: null,  away_score: 1 },
+      { home_team_id: 't1', away_team_id: 't3', home_score: 2,     away_score: 1 },
+    ];
+    expect(resultsForTeam('t1', matches)).toEqual(['W']);
+  });
+
+  it('preserves caller-supplied ordering (newest-first stays newest-first)', () => {
+    // The helper does not sort — the caller is the source of truth on order.
+    // This guarantees the cron's "ORDER BY played_at DESC LIMIT 5" survives.
+    const matches = [
+      { home_team_id: 't1', away_team_id: 't2', home_score: 3, away_score: 0 },
+      { home_team_id: 't1', away_team_id: 't2', home_score: 0, away_score: 3 },
+    ];
+    expect(resultsForTeam('t1', matches)).toEqual(['W', 'L']);
+  });
+
+  it('returns an empty array when no matches involve the team', () => {
+    expect(resultsForTeam('ghost', [
+      { home_team_id: 't1', away_team_id: 't2', home_score: 1, away_score: 0 },
+    ])).toEqual([]);
   });
 });
 

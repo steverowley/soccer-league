@@ -257,3 +257,48 @@ export function computeForm(
   }
   return { wins, draws, losses };
 }
+
+/**
+ * Minimal completed-match shape needed to derive a single team's W/D/L. The
+ * compute-odds cron script reads only these columns so the projection stays
+ * small (a season of 224 fixtures × six columns is well under any payload cap).
+ */
+export interface CompletedMatchRow {
+  home_team_id: string;
+  away_team_id: string;
+  home_score:   number | null;
+  away_score:   number | null;
+}
+
+/**
+ * Convert an ordered list of completed matches into W/D/L results from one
+ * team's perspective. Matches not involving the team are skipped silently so
+ * callers can pass a wider league-wide query without pre-filtering.
+ *
+ * Matches with null scores are also skipped — they're not actually settled.
+ *
+ * @param teamId   The team whose perspective we're computing form for.
+ * @param matches  Completed match rows. Caller controls ordering — the array
+ *                 is consumed in the order received so pass newest-first if
+ *                 you want recent-form semantics.
+ * @returns        Array of 'W' | 'D' | 'L' strings, one per applicable match.
+ */
+export function resultsForTeam(
+  teamId:  string,
+  matches: CompletedMatchRow[],
+): Array<'W' | 'D' | 'L'> {
+  const out: Array<'W' | 'D' | 'L'> = [];
+  for (const m of matches) {
+    if (m.home_score == null || m.away_score == null) continue;
+    if (m.home_team_id === teamId) {
+      if      (m.home_score > m.away_score) out.push('W');
+      else if (m.home_score < m.away_score) out.push('L');
+      else                                  out.push('D');
+    } else if (m.away_team_id === teamId) {
+      if      (m.away_score > m.home_score) out.push('W');
+      else if (m.away_score < m.home_score) out.push('L');
+      else                                  out.push('D');
+    }
+  }
+  return out;
+}

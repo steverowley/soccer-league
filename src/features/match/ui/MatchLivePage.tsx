@@ -28,6 +28,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
+import { useAuth } from '@features/auth';
+import { getUserWagerForMatch } from '@features/betting';
+import type { Wager } from '@features/betting';
 import {
   computeElapsedGameMinute,
   filterEventsByElapsedMinute,
@@ -82,6 +85,28 @@ function tallyScore(
 }
 
 /**
+ * Render-friendly label for a TeamChoice in the context of this match. We
+ * resolve `'home'` / `'away'` to the actual team name so a reader doesn't
+ * have to mentally cross-reference; `'draw'` is a fixed string. Falls back
+ * to the raw choice when names aren't available (defensive, should not fire
+ * because the live page only renders after the match row has loaded).
+ *
+ * @param choice    The TeamChoice the user bet on.
+ * @param homeName  Friendly name of the home team.
+ * @param awayName  Friendly name of the away team.
+ * @returns         Display string suitable for a status sentence.
+ */
+function wagerChoiceLabel(
+  choice:   'home' | 'draw' | 'away',
+  homeName: string | undefined,
+  awayName: string | undefined,
+): string {
+  if (choice === 'home') return homeName ?? 'home win';
+  if (choice === 'away') return awayName ?? 'away win';
+  return 'a draw';
+}
+
+/**
  * Pick a human-readable line from an event's payload.  The engine writes
  * `commentary` (free-form sentence) for most events and a `text` field for
  * lower-fidelity ones.  Falling back to the event type ensures we never
@@ -109,13 +134,18 @@ function eventLine(ev: MatchEventRow): string {
  */
 export function MatchLivePage(): JSX.Element {
   const { matchId } = useParams<{ matchId: string }>();
-  const db = useSupabase();
+  const db          = useSupabase();
+  const { user }    = useAuth();
 
   const [match,            setMatch]            = useState<LiveMatchRow | null>(null);
   const [events,           setEvents]           = useState<MatchEventRow[]>([]);
   const [durationSeconds,  setDurationSeconds]  = useState(DEFAULT_MATCH_DURATION_SECONDS);
   const [loading,          setLoading]          = useState(true);
   const [now,              setNow]              = useState<Date>(() => new Date());
+  // User's own wager on this match. null = not loaded / no bet placed; the
+  // shape carries everything we need (status, payout, choice, stake) so the
+  // status line can derive its content without a second query.
+  const [wager,            setWager]            = useState<Wager | null>(null);
 
   // ── Initial data fetch ─────────────────────────────────────────────────────
   // Fires once on mount (and again if the route's :matchId changes).  All
@@ -169,6 +199,32 @@ export function MatchLivePage(): JSX.Element {
     const id = setInterval(() => setNow(new Date()), TICK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
+
+  // ── User's wager (Package 12) ─────────────────────────────────────────────
+  // Fetches the viewer's wager on mount, then re-fetches when the match
+  // completes so the panel transitions from "your bet is open" to "you won
+  // / lost / void" without requiring a manual page refresh.
+  //
+  // The dependency on `match?.status` is what triggers the post-settlement
+  // refetch: the worker flips status='completed' → settleMatchWagers updates
+  // the wager row → the next page interaction (or the match becoming
+  // 'completed' via Realtime in a future iteration) will pick up the new
+  // payout. Today the status flip arrives only on a fresh getLiveMatch
+  // call, but wiring the dep keeps us forward-compatible with a future
+  // status subscription.
+  useEffect(() => {
+    // Anonymous viewers and missing route params skip the fetch entirely.
+    // We don't reset `wager` synchronously here because the render path
+    // already gates on `user` — keeping setState out of the effect body
+    // satisfies the React Compiler / react-hooks lint rule.
+    if (!matchId || !user) return;
+    let cancelled = false;
+    (async () => {
+      const w = await getUserWagerForMatch(db, user.id, matchId);
+      if (!cancelled) setWager(w);
+    })();
+    return () => { cancelled = true; };
+  }, [db, matchId, user, match?.status]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
   // Plain expressions — re-evaluating these once per second is cheap and the
@@ -232,6 +288,43 @@ export function MatchLivePage(): JSX.Element {
             ? 'Full time'
             : `Minute ${displayMinute}`}
       </p>
+
+      {/* ── Your wager panel (Package 12) ──────────────────────────────── */}
+      {/* Only renders when the viewer has a wager on this match. Three
+          visible states:
+            • status='open'  → "You bet X on Y" (still pending settlement).
+            • status='won'   → "You won — payout Z credits".
+            • status='lost'  → "You lost X credits."
+            • status='void'  → "Wager voided — stake refunded."
+          The settlement-listener / worker pipeline keeps the row in sync;
+          the useEffect above re-fetches when match.status flips to picks
+          up the resolved row. */}
+      {user && wager && (
+        <p className="match-live__wager" data-testid="match-live-wager">
+          {wager.status === 'open' && (
+            <>
+              You bet <strong>{wager.stake}</strong> credits on{' '}
+              <strong>{wagerChoiceLabel(wager.team_choice, match.home_team?.name, match.away_team?.name)}</strong>
+              {' '}@ {wager.odds_snapshot.toFixed(2)}.
+            </>
+          )}
+          {wager.status === 'won' && (
+            <>
+              You won — payout <strong>{wager.payout ?? 0}</strong> credits.
+            </>
+          )}
+          {wager.status === 'lost' && (
+            <>
+              You lost <strong>{wager.stake}</strong> credits.
+            </>
+          )}
+          {wager.status === 'void' && (
+            <>
+              Wager voided — stake refunded.
+            </>
+          )}
+        </p>
+      )}
 
       {/* ── Event feed ─────────────────────────────────────────────────── */}
       <ol className="match-live__feed" data-testid="match-live-feed">
