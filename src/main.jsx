@@ -77,6 +77,12 @@ import { CupRoundAdvancerListener, MatchLivePage } from './features/match';
 //   which route the user is on when they fire.
 import { SeasonEnactmentListener } from './features/voting';
 
+// AdminPage: dev/maintainer-only testing controls (Package 14). Auth-gated
+//   client-side via VITE_ADMIN_USER_IDS; server-side RLS is the actual
+//   security boundary. The route is always registered so the URL doesn't
+//   404 in production — non-allowlisted viewers see a "restricted" stub.
+import { AdminPage } from './features/admin';
+
 // ── Page components ───────────────────────────────────────────────────────────
 // Each import corresponds to one route in the table above.
 import Home         from './pages/Home';
@@ -195,6 +201,14 @@ createRoot(document.getElementById('root')).render(
                   The route is always registered so the URL doesn't 404 in prod,
                   but the page content is safe. */}
               <Route path="architect-log" element={<ArchitectLog />} />
+
+              {/* /admin → maintainer-only testing controls (Package 14) */}
+              {/* AdminPage gates the panel client-side via the
+                  VITE_ADMIN_USER_IDS allowlist and renders a "restricted"
+                  stub for everyone else. The route is always registered so
+                  the URL doesn't 404 — server-side RLS is the actual
+                  security boundary. */}
+              <Route path="admin" element={<AdminPage />} />
 
             </Route>
           </Routes>
