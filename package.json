@@ -20,7 +20,7 @@
     "match-worker": "tsx scripts/match-worker.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.81.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@supabase/supabase-js": "^2.99.3",
     "lucide-react": "^0.263.1",
     "react": "^18.3.1",
