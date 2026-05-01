@@ -51,3 +51,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Fallow - Codebase Intelligence
+        uses: fallow-rs/fallow@v2.60.0
