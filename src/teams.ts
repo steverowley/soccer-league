@@ -53,71 +53,10 @@
 // enough cover to make all 3 allowed subs and still leave 2 unused
 // options — matching standard football bench conventions.
 
-import type { Position, Stadium } from './constants';
-
-// ── Domain types ──────────────────────────────────────────────────────────────
-// These interfaces describe the shape the game engine expects.  They also serve
-// as the canonical reference for the camelCase normalisation applied by
-// normalizeTeamForEngine() in supabase.js — any column rename in the DB must
-// be mirrored here.
-
-/**
- * A single squad member as consumed by the game engine.
- *
- * INVARIANT: The `attacking`, `defending`, `mental`, `athletic`, `technical`,
- * `jersey_number`, and `starter` fields MUST NOT be removed — gameEngine.ts
- * reads every one of them for simulation logic. See CLAUDE.md critical invariants.
- */
-export interface EnginePlayer {
-  name: string;
-  /** Positional role: GK, DF, MF, or FW. Gates personality assignment. */
-  position: Position;
-  /** True for the starting XI; false for bench players. */
-  starter: boolean;
-  /** Squad number displayed in the UI. 1–11 starters, 12–16 bench. */
-  jersey_number: number;
-  /** Shooting, running, and finishing capability. Range ~38–90. */
-  attacking: number;
-  /** Tackling, blocking, and goalkeeping ability. Range ~38–90. */
-  defending: number;
-  /** Composure, decision-making, set-piece quality. Range ~38–90. */
-  mental: number;
-  /** Speed, stamina, and heading. Drives fatigue accumulation. Range ~38–90. */
-  athletic: number;
-  /** Passing, dribbling, free-kick accuracy. Range ~38–90. */
-  technical: number;
-}
-
-/** Manager shape consumed by the commentary AI and halftime report. */
-export interface EngineManager {
-  /** Display name used in commentary strings. */
-  name: string;
-  /**
-   * Tactical style string — matches the `managers.style` column in the DB.
-   * Used in halftime report prompts and manager-sent-off sequences.
-   */
-  personality: string;
-}
-
-/** A complete team object as consumed by the game engine. */
-export interface EngineTeam {
-  /** Full club name shown in match headers. */
-  name: string;
-  /** Three-letter abbreviation for compact displays. */
-  shortName: string;
-  /** Brand hex colour for team theming in the UI. */
-  color: string;
-  /** Home ground — used to sample planet-specific weather from PLANET_WX. */
-  stadium: Stadium;
-  manager: EngineManager;
-  /**
-   * Tactical setup string (e.g. 'possession', 'counter_attack').
-   * Affects manager AI decision points in the late-game logic.
-   */
-  tactics: string;
-  /** Full 16-player squad (11 starters + up to 5 bench). */
-  players: EnginePlayer[];
-}
+// Domain types come from the canonical gameEngine.types module — kept in one
+// place so refactors (e.g. column renames after a Supabase migration) only
+// touch a single file.  See CLAUDE.md for the protected stat column invariants.
+import type { EngineTeam } from './gameEngine.types';
 
 // ── Static fallback data ──────────────────────────────────────────────────────
 

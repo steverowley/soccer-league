@@ -40,33 +40,6 @@ export async function getMatchOdds(
 }
 
 /**
- * Fetch odds for multiple matches in a single query. Used on the match
- * listing page to display odds alongside each fixture.
- *
- * @param db        Injected Supabase client.
- * @param matchIds  Array of match UUIDs.
- * @returns         Array of MatchOdds rows (may be shorter than matchIds
- *                  if some matches don't have computed odds yet).
- */
-export async function getOddsForMatches(
-  db: IslSupabaseClient,
-  matchIds: string[],
-): Promise<MatchOdds[]> {
-  if (matchIds.length === 0) return [];
-
-  const { data, error } = await (db as AnyDb) // CAST:match_odds
-    .from('match_odds')
-    .select('*')
-    .in('match_id', matchIds);
-
-  if (error) {
-    console.warn('[getOddsForMatches] failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as MatchOdds[];
-}
-
-/**
  * Save or update computed odds for a match. Uses upsert with the match_id
  * PK for conflict resolution — re-computing odds before kickoff simply
  * overwrites the previous values.

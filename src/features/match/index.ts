@@ -67,10 +67,7 @@ export type {
 // ── Cup seeder + round advancer (DB layer) ────────────────────────────────
 export {
   seedCupCompetitions,
-  seedOneCup,
   advanceCupRound,
-  computeStandings,
-  buildQualifierSeeding,
   CELESTIAL_CUP_COMPETITION_ID,
   SOLAR_SHIELD_COMPETITION_ID,
 } from './api/cupSeeder';

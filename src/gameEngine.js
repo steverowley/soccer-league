@@ -23,7 +23,7 @@
 //   6. agentSystem.queueEvent(...) – trigger Claude AI commentary
 
 import { PERS, WX, MGER_EMO, REFS, STADIUMS, PLANET_WX } from './constants.js';
-import { rnd, rndI, pick } from './utils.js';
+import { rnd, rndI, pick } from './shared/utils/random';
 
 // ── createAgent ───────────────────────────────────────────────────────────────
 // Wraps a raw player object (from teams.js) with a live psychological state

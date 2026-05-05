@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+
+  "entry": [
+    "scripts/*.ts",
+    "supabase/functions/**/*.ts",
+    "src/App.jsx"
+  ],
+
+  "ignorePatterns": [
+    "src/lib/supabase.js",
+    "src/features/design-system/**",
+    "supabase/migrations/**",
+    "supabase/seed.sql",
+    "src/types/database.ts"
+  ],
+
+  "rules": {
+    "unused-types": "off",
+    "unused-class-members": "off"
+  },
+
+  "ignoreExports": [
+    { "file": "src/features/*/index.ts", "exports": ["*"] },
+    { "file": "src/gameEngine.js",       "exports": ["*"] }
+  ],
+
+  "health": {
+    "maxCyclomatic": 200,
+    "maxCognitive": 400,
+    "maxLines": 3000,
+    "maxParams": 25,
+    "maxCrap": 30000
+  },
+
+  "duplicates": {
+    "minLines": 30,
+    "ignore": [
+      "**/*.test.ts",
+      "**/*.test.tsx"
+    ]
+  }
+}

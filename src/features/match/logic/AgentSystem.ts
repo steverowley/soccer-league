@@ -6,7 +6,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { PERS_ICON, CLAUDE_MODEL } from '../../../constants.js';
-import { rnd as _rnd } from '../../../utils.js';
+import { rnd as _rnd } from '../../../shared/utils/random';
 import type {
   AgentMatchContext,
   CommentatorProfile,

@@ -42,18 +42,13 @@ export {
   computeVotePercentages,
 } from './logic/tally';
 
-export {
-  MAJOR_FOCUS_TEMPLATES,
-  MINOR_FOCUS_TEMPLATES,
-  ALL_FOCUS_TEMPLATES,
-} from './logic/focusTemplates';
+export { ALL_FOCUS_TEMPLATES } from './logic/focusTemplates';
 
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   generateFocusOptions,
   getTeamFocusOptions,
   castVote,
-  getUserVotesForSeason,
   getTeamTally,
 } from './api/focuses';
 

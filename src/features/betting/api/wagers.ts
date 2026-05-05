@@ -172,7 +172,7 @@ export async function getUserWagerForMatch(
  * @param matchId  The match UUID.
  * @returns        Array of open Wager rows.
  */
-export async function getOpenWagersForMatch(
+async function getOpenWagersForMatch(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<Wager[]> {

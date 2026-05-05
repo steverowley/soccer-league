@@ -91,15 +91,6 @@ export function normalizeTeamForEngine(team: RawTeamForEngine) {
 
 // ── Seasons ───────────────────────────────────────────────────────────────────
 
-export async function getSeasons(db: IslSupabaseClient) {
-  const { data, error } = await db
-    .from('seasons')
-    .select('*')
-    .order('year', { ascending: false });
-  if (error) throw error;
-  return data;
-}
-
 export async function getActiveSeason(db: IslSupabaseClient) {
   const { data, error } = await db
     .from('seasons')
@@ -141,40 +132,7 @@ export async function getCompetitionsForSeason(db: IslSupabaseClient, seasonId: 
   return data;
 }
 
-export async function getCompetition(db: IslSupabaseClient, competitionId: string) {
-  const { data, error } = await db
-    .from('competitions')
-    .select(`
-      *,
-      seasons (id, name, year),
-      leagues (id, name, short_name),
-      competition_teams (
-        group_name,
-        seeding,
-        teams (*)
-      )
-    `)
-    .eq('id', competitionId)
-    .single();
-  if (error) throw error;
-  return data;
-}
-
 // ── Matches ───────────────────────────────────────────────────────────────────
-
-export async function getMatchesForCompetition(db: IslSupabaseClient, competitionId: string) {
-  const { data, error } = await db
-    .from('matches')
-    .select(`
-      *,
-      home_team:teams!matches_home_team_id_fkey (id, name, color),
-      away_team:teams!matches_away_team_id_fkey (id, name, color)
-    `)
-    .eq('competition_id', competitionId)
-    .order('played_at', { nullsFirst: true });
-  if (error) throw error;
-  return data;
-}
 
 export async function getMatchesWithTeamDetail(db: IslSupabaseClient, competitionId: string) {
   const { data, error } = await db
@@ -297,7 +255,14 @@ export async function getTeamForEngine(db: IslSupabaseClient, teamId: string) {
 
 // ── Players ───────────────────────────────────────────────────────────────────
 
-export async function getPlayer(db: IslSupabaseClient, playerId: string) {
+/**
+ * Fetch a single player row plus their aggregated season stats.
+ * Distinct from `getPlayer` in `gameEngine.js`, which is an in-engine
+ * roster lookup used by the simulator — kept under separate names so
+ * fallow's duplicate-export check stays clean and so callers aren't
+ * surprised by which signature they get.
+ */
+export async function getPlayerWithStats(db: IslSupabaseClient, playerId: string) {
   const [playerResult, statsResult] = await Promise.all([
     db.from('players').select('*, teams(id, name)').eq('id', playerId).single(),
     db.from('match_player_stats')
@@ -342,93 +307,3 @@ export async function getPlayer(db: IslSupabaseClient, playerId: string) {
   };
 }
 
-// ── Standings ─────────────────────────────────────────────────────────────────
-
-export async function getStandings(db: IslSupabaseClient, competitionId: string) {
-  const { data: matches, error } = await db
-    .from('matches')
-    .select(`
-      home_team_id, away_team_id,
-      home_score, away_score,
-      home_team:teams!matches_home_team_id_fkey (id, name, color),
-      away_team:teams!matches_away_team_id_fkey (id, name, color)
-    `)
-    .eq('competition_id', competitionId)
-    .eq('status', 'completed');
-  if (error) throw error;
-
-  type TeamRef = { id: string; name: string; color: string | null };
-  const table: Record<string, {
-    team: TeamRef; played: number; won: number; drawn: number; lost: number;
-    gf: number; ga: number; gd: number; points: number;
-  }> = {};
-
-  const ensure = (team: TeamRef) => {
-    if (!table[team.id]) {
-      table[team.id] = { team, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 };
-    }
-  };
-
-  for (const m of matches) {
-    const homeTeam = m['home_team'] as unknown as TeamRef;
-    const awayTeam = m['away_team'] as unknown as TeamRef;
-    if (!homeTeam || !awayTeam) continue;
-    ensure(homeTeam);
-    ensure(awayTeam);
-
-    const h = table[m.home_team_id!]!;
-    const a = table[m.away_team_id!]!;
-    h.played++; a.played++;
-    h.gf += m.home_score ?? 0; h.ga += m.away_score ?? 0;
-    a.gf += m.away_score ?? 0; a.ga += m.home_score ?? 0;
-
-    if ((m.home_score ?? 0) > (m.away_score ?? 0)) {
-      h.won++; h.points += 3; a.lost++;
-    } else if ((m.home_score ?? 0) < (m.away_score ?? 0)) {
-      a.won++; a.points += 3; h.lost++;
-    } else {
-      h.drawn++; h.points++; a.drawn++; a.points++;
-    }
-  }
-
-  return Object.values(table)
-    .map(r => ({ ...r, gd: r.gf - r.ga }))
-    .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
-}
-
-// ── Write operations ──────────────────────────────────────────────────────────
-
-export async function saveMatchResult(
-  db: IslSupabaseClient,
-  matchId: string,
-  { homeScore, awayScore, weather, stadium }: {
-    homeScore: number; awayScore: number; weather?: string; stadium?: string;
-  },
-) {
-  const { error } = await db
-    .from('matches')
-    .update({
-      home_score: homeScore,
-      away_score: awayScore,
-      weather: weather ?? null,
-      stadium: stadium ?? null,
-      status:    'completed',
-      played_at: new Date().toISOString(),
-    })
-    .eq('id', matchId);
-  if (error) throw error;
-}
-
-export async function saveMatchPlayerStats(
-  db: IslSupabaseClient,
-  stats: Array<{
-    match_id: string; player_id: string; team_id: string;
-    goals: number; assists: number; yellow_cards: number;
-    red_cards: number; minutes_played: number; rating?: number;
-  }>,
-) {
-  const { error } = await db
-    .from('match_player_stats')
-    .upsert(stats, { onConflict: 'match_id,player_id' });
-  if (error) throw error;
-}

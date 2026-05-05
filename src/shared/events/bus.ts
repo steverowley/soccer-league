@@ -219,14 +219,3 @@ class EventBus implements IslEventBus {
 
 /** The application-wide singleton event bus. Import this in features. */
 export const bus: IslEventBus = new EventBus();
-
-/**
- * Exposed for testing only: create a fresh isolated bus instance.
- * Do NOT use this in production feature code — use the `bus` singleton.
- *
- * @example
- * const testBus = createBus();
- * testBus.on('match.completed', handler);
- * testBus.emit('match.completed', payload);
- */
-export const createBus = (): IslEventBus => new EventBus();

@@ -23,7 +23,7 @@
 //
 // DATA SOURCE
 // ───────────
-// getPlayer(playerId) fetches the player row joined with its parent team
+// getPlayerWithStats(playerId) fetches the player row joined with its parent team
 // (for the hero breadcrumb) plus aggregated season stats computed from
 // match_player_stats.  avg_rating is null for players with no rated
 // appearances; the table cell renders "—" in that case.
@@ -42,7 +42,7 @@ import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
-import { getPlayer } from '../lib/supabase';
+import { getPlayerWithStats } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { PERS_ICON } from '../constants';
 
@@ -112,7 +112,7 @@ const SEASON_STAT_COLS_B = [
  * Player detail page.
  *
  * Reads :playerId (UUID) from the URL, fetches the player from Supabase
- * via getPlayer() (which includes team name join and aggregated season stats),
+ * via getPlayerWithStats() (which includes team name join and aggregated season stats),
  * and renders the full player profile: hero, info card with personality, and
  * a season stats table.
  *
@@ -161,7 +161,7 @@ export default function PlayerDetail() {
     setNotFound(false);
     setError(false);
 
-    getPlayer(db, playerId)
+    getPlayerWithStats(db, playerId)
       .then(data => {
         if (cancelled) return;
         setPlayer(data);
@@ -279,7 +279,7 @@ export default function PlayerDetail() {
   }
 
   // ── Derived display values ────────────────────────────────────────────────
-  // teams is the nested join object returned by getPlayer(); it contains id
+  // teams is the nested join object returned by getPlayerWithStats(); it contains id
   // and name.  team_id is the raw FK slug used for the Link href.
   const teamName = player.teams?.name;
   const teamId   = player.team_id;

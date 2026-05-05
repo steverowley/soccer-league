@@ -57,9 +57,7 @@ export {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   getPlayerLifetimeXp,
-  getRecentClickTimestamps,
   recordClick,
-  getPlayerTrainingLog,
 } from './api/trainingLog';
 
 export type { RecordClickResult } from './api/trainingLog';

@@ -42,39 +42,6 @@ export async function loadAllLore(
 }
 
 /**
- * Load lore rows matching specific scope prefixes. Useful when you only need
- * a subset of lore (e.g. global + the two teams in a match).
- *
- * Uses Supabase `or` filter with LIKE patterns for each scope prefix.
- *
- * @param db      Injected Supabase client.
- * @param scopes  Array of scope strings or prefixes (e.g. ['global', 'player:Kael Vorn']).
- * @returns       Matching ArchitectLoreRow array, or empty array on error.
- */
-export async function loadLoreByScopes(
-  db: IslSupabaseClient,
-  scopes: string[],
-): Promise<ArchitectLoreRow[]> {
-  if (scopes.length === 0) return [];
-
-  // Build an OR filter: exact match for simple scopes, LIKE for prefixes.
-  const filters = scopes
-    .map((s) => `scope.eq.${s}`)
-    .join(',');
-
-  const { data, error } = await (db as AnyDb) // CAST:architect_lore
-    .from('architect_lore')
-    .select('*')
-    .or(filters);
-
-  if (error) {
-    console.warn('[loadLoreByScopes] failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as ArchitectLoreRow[];
-}
-
-/**
  * Upsert a single lore row. Uses the (scope, key) UNIQUE constraint for
  * conflict resolution — existing rows are updated, new rows are inserted.
  *

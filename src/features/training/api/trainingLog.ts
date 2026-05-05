@@ -11,7 +11,7 @@
 // All casts marked CAST:training for grep-and-remove after database.ts regen.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
-import type { TrainingLogEntry, TrainingStat } from '../types';
+import type { TrainingStat } from '../types';
 import { applyClick, XP_PER_CLICK } from '../logic/xpCurve';
 import { evaluateClick } from '../logic/cooldown';
 
@@ -70,7 +70,7 @@ export async function getPlayerLifetimeXp(
  * @param limit   Max rows to fetch. Defaults to 500 (SESSION_MAX_CLICKS).
  * @returns       Array of timestamps in ms-since-epoch, newest first.
  */
-export async function getRecentClickTimestamps(
+async function getRecentClickTimestamps(
   db: IslSupabaseClient,
   userId: string,
   limit: number = 500,
@@ -196,33 +196,3 @@ export async function recordClick(
   };
 }
 
-// ── Read: full training log entries for a player (for detail views) ─────────
-
-/**
- * Fetch the most recent training log entries for a specific player.
- * Used on the PlayerDetail page to render a "recent training activity"
- * feed and to count total bumps received per stat.
- *
- * @param db        Injected Supabase client.
- * @param playerId  The player's UUID.
- * @param limit     Max rows to return. Defaults to 100.
- * @returns         Array of TrainingLogEntry rows, newest first.
- */
-export async function getPlayerTrainingLog(
-  db: IslSupabaseClient,
-  playerId: string,
-  limit: number = 100,
-): Promise<TrainingLogEntry[]> {
-  const { data, error } = await (db as AnyDb) // CAST:training
-    .from('player_training_log')
-    .select('*')
-    .eq('player_id', playerId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.warn('[getPlayerTrainingLog] failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as TrainingLogEntry[];
-}

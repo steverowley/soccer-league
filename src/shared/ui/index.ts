@@ -12,12 +12,10 @@
 
 export { Button }    from './Button';
 export { Input }     from './Input';
-export { Select }    from './Select';
 export { Badge }     from './Badge';
 export { PageHero }  from './PageHero';
 
 export type { ButtonProps, ButtonVariant }  from './Button';
 export type { InputProps }                  from './Input';
-export type { SelectProps }                 from './Select';
 export type { BadgeProps, BadgeVariant }    from './Badge';
 export type { PageHeroProps }               from './PageHero';

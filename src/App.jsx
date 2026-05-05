@@ -14,11 +14,11 @@ import {
 } from "./gameEngine.js";
 
 import {
-  C, bdr, PERS, PERS_ICON, WX, WX_ICON, PLANET_WX,
+  C, PERS, PERS_ICON, WX, WX_ICON, PLANET_WX,
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
-import { rnd, rndI, pick } from "./utils.js";
-import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
+import { rnd, rndI, pick } from "./shared/utils/random";
+import { PlayerRow, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
 import { supabase } from "./lib/supabase.js";

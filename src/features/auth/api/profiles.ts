@@ -24,7 +24,7 @@
 
 import { z } from 'zod';
 import type { IslSupabaseClient } from '@shared/supabase/client';
-import type { Profile, PublicProfile, UpdateProfileInput } from '../types';
+import type { Profile, UpdateProfileInput } from '../types';
 
 // TYPE ESCAPE HATCH: The `profiles` and `public_profiles` tables/views are
 // created by migration 0001_profiles.sql, which hasn't been applied to the
@@ -53,18 +53,6 @@ const ProfileSchema = z.object({
   favourite_player_id: z.string().uuid().nullable(),
   credits: z.number().int().min(0),
   last_seen_at: z.string().nullable(),
-  created_at: z.string(),
-});
-
-/**
- * Public profile view schema — the subset exposed to all users via the
- * `public_profiles` SQL view. No credits, no last_seen_at.
- */
-const PublicProfileSchema = z.object({
-  id: z.string().uuid(),
-  username: z.string(),
-  favourite_team_id: z.string().nullable(),
-  favourite_player_id: z.string().uuid().nullable(),
   created_at: z.string(),
 });
 
@@ -104,42 +92,6 @@ export async function getOwnProfile(
     return {
       data: null,
       error: `Profile schema validation failed: ${parsed.error.message}`,
-    };
-  }
-
-  return { data: parsed.data, error: null };
-}
-
-/**
- * Fetch a public profile by user ID. Used on leaderboards and voting pages
- * where we need the username and team affiliation but NOT credits.
- *
- * Queries the `public_profiles` SQL view, which is readable by all roles
- * (anon + authenticated) and only exposes safe columns.
- *
- * @param db      Injected Supabase client.
- * @param userId  The target user's UUID.
- * @returns       The validated PublicProfile, or `null` + error.
- */
-export async function getPublicProfile(
-  db: IslSupabaseClient,
-  userId: string,
-): Promise<{ data: PublicProfile | null; error: string | null }> {
-  const { data, error } = await (db as AnyDb) // CAST:profiles
-    .from('public_profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (error) {
-    return { data: null, error: error.message };
-  }
-
-  const parsed = PublicProfileSchema.safeParse(data);
-  if (!parsed.success) {
-    return {
-      data: null,
-      error: `PublicProfile schema validation failed: ${parsed.error.message}`,
     };
   }
 

@@ -54,17 +54,11 @@ export type {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   loadAllLore,
-  loadLoreByScopes,
   upsertLoreRow,
   batchUpsertLore,
 } from './api/lore';
 
-export {
-  logIntervention,
-  logInterventionAndRewrite,
-  getRecentInterventions,
-  getInterventionsForTarget,
-} from './api/interventions';
+export { getRecentInterventions } from './api/interventions';
 
 export type { LogInterventionResult } from './api/interventions';
 

@@ -21,7 +21,7 @@ import { COMMENTATOR_PROFILES } from "../features/match/index.ts";
  * @param {{ label: string, a: number, b: number, homeColor: string, awayColor: string }} props
  * @returns {JSX.Element}
  */
-export const Stat = ({ label, a, b, homeColor, awayColor }) => (
+const Stat = ({ label, a, b, homeColor, awayColor }) => (
   <div style={{ border: `1px solid rgba(227,224,213,0.2)` }}>
     <div style={{ fontSize: '11px', textAlign: 'center', padding: '4px', opacity: 0.6 }}>{label}</div>
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px 8px' }}>
@@ -150,7 +150,7 @@ export const PlayerRow = ({ player, stats, isActive, teamColor, agents, isHome, 
  *   item.retweets — retweet count (social entries)
  * @returns {JSX.Element}
  */
-export const FeedCard = ({ item, isThought }) => (
+const FeedCard = ({ item, isThought }) => (
   <div style={{
     padding: '8px',
     borderLeft: `2px solid ${isThought ? C.red : C.purple}`,
@@ -1248,7 +1248,7 @@ export const PlayerCard = ({ sp, events, onClose }) => {
  * }} props
  * @returns {JSX.Element}
  */
-export const FeedRow = ({ item, homeTeam, awayTeam }) => {
+const FeedRow = ({ item, homeTeam, awayTeam }) => {
   // ── Captain Vox commentary card ──────────────────────────────────────────
   // play_by_play items are Captain Vox's LLM-generated narration, one per
   // significant event.  They are rendered as small highlighted cards in the

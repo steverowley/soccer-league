@@ -41,7 +41,6 @@ export {
 // ── API (Supabase queries — injected client, Zod-validated) ─────────────────
 export {
   getOwnProfile,
-  getPublicProfile,
   updateProfile,
   touchLastSeen,
 } from './api/profiles';
