@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "jq -r '.tool_input.file_path // empty' | grep -qE '\\.(js|jsx|ts|tsx)$' \u0026\u0026 echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"DOCUMENTATION REMINDER: This project maintains a high standard of inline documentation. For any new or modified code, ensure: (1) every exported function has a JSDoc-style block comment explaining what it does, its parameters, return value, and any important edge cases; (2) every major code section/branch has a header comment explaining the logic and the WHY behind it (not just the what); (3) any new constants or enums include a comment describing each value and its mechanical effect on the game; (4) numeric thresholds, probability values, and magic numbers are annotated with what they represent. Match the style established in gameEngine.js, agents.js, simulateHelpers.js, constants.js, teams.js, and utils.js.\"}}' || true",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -qE '\\.(js|jsx|ts|tsx)$' && echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"DOCUMENTATION REMINDER: This project maintains a high standard of inline documentation. For any new or modified code, ensure: (1) every exported function has a JSDoc-style block comment explaining what it does, its parameters, return value, and any important edge cases; (2) every major code section/branch has a header comment explaining the logic and the WHY behind it (not just the what); (3) any new constants or enums include a comment describing each value and its mechanical effect on the game; (4) numeric thresholds, probability values, and magic numbers are annotated with what they represent. Match the style established in gameEngine.js, agents.js, simulateHelpers.js, constants.js, teams.js, and utils.js.\"}}' || true",
             "timeout": 5,
             "type": "command"
           }
@@ -27,7 +27,7 @@
       {
         "hooks": [
           {
-            "command": "bd prime \u0026\u0026 echo '' \u0026\u0026 echo '## Available Work (bd ready)' \u0026\u0026 bd ready 2\u003e\u00261 || true",
+            "command": "bd prime && echo '' && echo '## Available Work (bd ready)' && bd ready 2>&1 || true",
             "type": "command"
           }
         ],
@@ -47,8 +47,14 @@
       {
         "hooks": [
           {
-            "prompt": "STRICT GATE — default to doing nothing. Run: git diff HEAD --name-only 2\u003e/dev/null || git status --short. From the resulting paths, IGNORE everything matching any of: README.md, CLAUDE.md, AGENTS.md, .beads/**, .claude/**, .github/**, *.json, *.lock, *.yaml, *.yml, *.md (any markdown), package.json, pnpm-lock.yaml. If zero paths remain after that filter, OR all remaining paths are outside src/ and supabase/, EXIT WITHOUT EDITING. Only proceed when actual changes under src/** or supabase/** materially alter user-visible behavior, public APIs, or the repository structure. When in doubt, do nothing — a no-op session is better than an off-topic README PR. Never edit README to document tooling, hooks, settings, agents, or issue-tracker setup. If a real source change does warrant an update, make it minimal and surgical.",
+            "prompt": "STRICT GATE — default to doing nothing. Run: git diff HEAD --name-only 2>/dev/null || git status --short. From the resulting paths, IGNORE everything matching any of: README.md, CLAUDE.md, AGENTS.md, .beads/**, .claude/**, .github/**, *.json, *.lock, *.yaml, *.yml, *.md (any markdown), package.json, pnpm-lock.yaml. If zero paths remain after that filter, OR all remaining paths are outside src/ and supabase/, EXIT WITHOUT EDITING. Only proceed when actual changes under src/** or supabase/** materially alter user-visible behavior, public APIs, or the repository structure. When in doubt, do nothing — a no-op session is better than an off-topic README PR. Never edit README to document tooling, hooks, settings, agents, or issue-tracker setup. If a real source change does warrant an update, make it minimal and surgical.",
             "statusMessage": "Checking if README needs updating...",
+            "timeout": 60,
+            "type": "agent"
+          },
+          {
+            "prompt": "Auto-commit agent using Conventional Commits (https://www.conventionalcommits.org/en/v1.0.0/). Steps: 1) Run 'git status --short' — if output is empty, exit silently with no commit. 2) Run 'git diff HEAD --stat' and 'git diff HEAD --name-only' to understand what changed. 3) Choose the commit type: feat (new user-visible feature or behaviour), fix (bug fix), docs (documentation files only), style (formatting/whitespace, no logic change), refactor (code restructure with no behaviour change), perf (performance improvement), test (adding or updating tests), build (build scripts, deps, package.json, lockfiles), ci (CI/CD config), chore (tooling, config, migrations, seed data, non-src maintenance). 4) Optionally derive a short scope in parentheses from the primary area touched (e.g. auth, betting, match, architect, training, voting, design-system, db). 5) Write a description under 72 chars, imperative mood, lowercase, no trailing period. Final format: type(scope): description. 6) Run 'git add -A' then 'git commit -m \"type(scope): description\"'. If git commit exits non-zero (nothing to commit), exit silently. Do NOT push.",
+            "statusMessage": "Auto-committing with conventional commit...",
             "timeout": 60,
             "type": "agent"
           }
