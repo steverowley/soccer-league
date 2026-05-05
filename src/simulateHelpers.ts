@@ -14,7 +14,7 @@
 // These are separated from gameEngine.ts to keep that file focused on event
 // generation rather than minute-by-minute state management.
 
-import { pick, rnd, rndI } from './utils';
+import { pick, rnd, rndI } from './shared/utils/random';
 import { MGER_EMO } from './constants';
 import {
   makeSub, genSiegeSeq, genManagerSentOffSeq,

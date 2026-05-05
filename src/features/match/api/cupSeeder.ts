@@ -93,7 +93,7 @@ interface StandingRow {
  *
  * Extracted from the DB call so it can be unit-tested without Supabase.
  */
-export function computeStandings(
+function computeStandings(
   matches: MatchRow[],
   teamNames: Map<string, string>,
 ): StandingRow[] {
@@ -194,7 +194,7 @@ async function getLeagueStandings(
  *                        ensures league strength is balanced across the
  *                        bracket halves.
  */
-export function buildQualifierSeeding(
+function buildQualifierSeeding(
   leagueStandings: StandingRow[][],
   positions: number[],
 ): BracketTeam[] {
@@ -346,7 +346,7 @@ export interface SeedCupResult {
  * @param drawSeedSalt   Salt string for `drawSingleElim()` determinism.
  *                       Recommended: `${seasonId}:celestial` etc.
  */
-export async function seedOneCup(
+async function seedOneCup(
   db: IslSupabaseClient,
   competitionId: string,
   qualifiers: BracketTeam[],

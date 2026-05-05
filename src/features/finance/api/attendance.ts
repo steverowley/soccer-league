@@ -141,30 +141,6 @@ export async function recordMatchAttendance(
   return { homeFans, awayFans, homeRevenue, awayRevenue };
 }
 
-/**
- * Fetch attendance data for a specific match. Returns one row per team
- * (home and away). Used on the match detail page to display fan counts.
- *
- * @param db       Injected Supabase client.
- * @param matchId  The match UUID.
- * @returns        Array of 0–2 MatchAttendanceRow entries.
- */
-export async function getMatchAttendance(
-  db: IslSupabaseClient,
-  matchId: string,
-): Promise<MatchAttendanceRow[]> {
-  const { data, error } = await (db as AnyDb) // CAST:match_attendance
-    .from('match_attendance')
-    .select('*')
-    .eq('match_id', matchId);
-
-  if (error) {
-    console.warn('[getMatchAttendance] failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as MatchAttendanceRow[];
-}
-
 // ── Team finances helper ────────────────────────────────────────────────────
 
 /**

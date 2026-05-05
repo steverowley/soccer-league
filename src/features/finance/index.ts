@@ -45,6 +45,5 @@ export {
 export {
   countPresentFans,
   recordMatchAttendance,
-  getMatchAttendance,
   type MatchAttendanceRow,
 } from './api/attendance';

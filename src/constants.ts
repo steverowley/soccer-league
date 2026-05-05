@@ -26,21 +26,6 @@ export const C = {
   red:    '#FF6B6B', // danger, red cards
 } as const;
 
-/**
- * Returns an inline-style object with a coloured border and ash background.
- * Shorthand used when dynamically colouring team or narrative cards.
- *
- * @param bc  Border colour hex string.
- * @param bg  Background colour hex string (defaults to ash #1F1F1F).
- */
-export const bdr = (
-  bc: string,
-  bg: string = '#1F1F1F',
-): { border: string; backgroundColor: string } => ({
-  border: `1px solid ${bc}`,
-  backgroundColor: bg,
-});
-
 // ── Player personality keys ───────────────────────────────────────────────────
 // Each player is assigned exactly one personality at agent-creation time
 // (see createAgent in gameEngine.ts).  Personality gates which special events

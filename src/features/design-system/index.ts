@@ -11,11 +11,10 @@
 // barrel exists so design-system tests and Storybook-style catalogues have a
 // single import path.
 
-export { Button, Input, Select, Badge, PageHero } from '@shared/ui';
+export { Button, Input, Badge, PageHero } from '@shared/ui';
 export type {
   ButtonProps, ButtonVariant,
   InputProps,
-  SelectProps,
   BadgeProps, BadgeVariant,
   PageHeroProps,
 } from '@shared/ui';

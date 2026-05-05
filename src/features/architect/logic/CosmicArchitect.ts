@@ -14,7 +14,7 @@ import type {
 } from '../types';
 import { emptyLore } from './loreStore';
 import { CLAUDE_MODEL } from '../../../constants.js';
-import { rnd, rndI } from '../../../utils.js';
+import { rnd, rndI } from '../../../shared/utils/random';
 
 // ── Local shape interfaces ────────────────────────────────────────────────────
 // Defined locally so CosmicArchitect has no cross-feature dependency on match.

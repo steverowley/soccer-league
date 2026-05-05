@@ -13,7 +13,7 @@ import type { FocusOptionTemplate } from '../types';
  * Major focus options — high-impact changes that reshape the team.
  * One of these is enacted per team per season based on the vote.
  */
-export const MAJOR_FOCUS_TEMPLATES: FocusOptionTemplate[] = [
+const MAJOR_FOCUS_TEMPLATES: FocusOptionTemplate[] = [
   {
     option_key: 'sign_star_player',
     label: 'Sign a Star Player',
@@ -52,7 +52,7 @@ export const MAJOR_FOCUS_TEMPLATES: FocusOptionTemplate[] = [
  * Minor focus options — smaller tweaks that provide incremental advantages.
  * One of these is enacted per team per season alongside the major focus.
  */
-export const MINOR_FOCUS_TEMPLATES: FocusOptionTemplate[] = [
+const MINOR_FOCUS_TEMPLATES: FocusOptionTemplate[] = [
   {
     option_key: 'preseason_camp',
     label: 'Intensive Preseason Camp',

@@ -135,7 +135,7 @@ export function saveResult(matchData) {
  *
  * @returns {void}
  */
-export function clearResults() {
+function clearResults() {
   localStorage.removeItem(ISL_RESULTS_KEY);
 }
 

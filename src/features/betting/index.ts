@@ -55,13 +55,11 @@ export {
   placeWager,
   getUserWagers,
   getUserWagerForMatch,
-  getOpenWagersForMatch,
   settleMatchWagers,
 } from './api/wagers';
 
 export {
   getMatchOdds,
-  getOddsForMatches,
   saveMatchOdds,
 } from './api/oddsRepo';
 

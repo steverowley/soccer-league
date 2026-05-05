@@ -558,7 +558,7 @@ export const CLEAN_SHEETS_COLS = [
  * @type {Array<{key: string, label: string, align?: string}>}
  * @deprecated Use SCORER_COLS, ASSISTS_COLS, or CARDS_COLS instead.
  */
-export const PLAYER_STAT_COLS = [
+const PLAYER_STAT_COLS = [
   { key: 'player', label: 'Player' },
   { key: 'team',   label: 'Team'   },
   { key: 'goals',  label: 'Goals', align: 'right' },
@@ -629,7 +629,7 @@ export function placeholderPlayerRows() {
  *
  * @type {Array<{leagueId: string, id: string, name: string, [key: string]: any}>}
  */
-export const ALL_TEAMS = Object.entries(TEAMS_BY_LEAGUE).flatMap(
+const ALL_TEAMS = Object.entries(TEAMS_BY_LEAGUE).flatMap(
   ([leagueId, teams]) => teams.map(team => ({ ...team, leagueId }))
 );
 
@@ -639,7 +639,7 @@ export const ALL_TEAMS = Object.entries(TEAMS_BY_LEAGUE).flatMap(
  * @param {string} leagueId - The league slug (e.g. 'rocky-inner')
  * @returns {string} League display name, or empty string if not found
  */
-export const getLeagueName = (leagueId) => {
+const getLeagueName = (leagueId) => {
   const league = LEAGUES.find(l => l.id === leagueId);
   return league ? league.name : '';
 };
@@ -651,4 +651,4 @@ export const getLeagueName = (leagueId) => {
  * @returns {{leagueId: string, [key: string]: any} | undefined} Team object with
  *   leagueId injected, or undefined if no match found
  */
-export const findTeam = (teamId) => ALL_TEAMS.find(t => t.id === teamId);
+const findTeam = (teamId) => ALL_TEAMS.find(t => t.id === teamId);

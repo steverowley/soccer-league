@@ -148,34 +148,6 @@ export async function castVote(
   return vote as FocusVote;
 }
 
-/**
- * Fetch all votes cast by a specific user for a given season. Used on the
- * voting page to show the user their current allocations.
- *
- * @param db        Injected Supabase client.
- * @param userId    The user's UUID.
- * @param seasonId  Season UUID (used to filter via a join on focus_options).
- * @returns         Array of FocusVote rows.
- */
-export async function getUserVotesForSeason(
-  db: IslSupabaseClient,
-  userId: string,
-  seasonId: string,
-): Promise<FocusVote[]> {
-  // Join through focus_options to filter by season.
-  const { data, error } = await (db as AnyDb) // CAST:voting
-    .from('focus_votes')
-    .select('*, focus_options!inner(season_id)')
-    .eq('user_id', userId)
-    .eq('focus_options.season_id', seasonId);
-
-  if (error) {
-    console.warn('[getUserVotesForSeason] failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as FocusVote[];
-}
-
 // ── Tally queries ───────────────────────────────────────────────────────────
 
 /**

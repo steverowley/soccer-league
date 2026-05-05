@@ -38,13 +38,7 @@ export type {
 } from './types';
 
 // ── API (Supabase queries) ─────────────────────────────────────────────────
-export {
-  getEntitiesByKind,
-  getEntityById,
-  getEntityTraits,
-  getRecentNarratives,
-  insertNarrative,
-} from './api/entities';
+export { getRecentNarratives } from './api/entities';
 
 // ── Logic (pure — no React, no Supabase) ───────────────────────────────────
 // Factory functions for building well-shaped `entities`/`entity_traits`/
