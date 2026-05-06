@@ -340,7 +340,10 @@ const CHAOS_GENERIC: string[] = [
  * self-contained — it is called in the hot match-simulation path.
  */
 function pick(pool: string[]): string {
-  return pool[Math.floor(Math.random() * pool.length)];
+  const idx = Math.floor(Math.random() * pool.length);
+  const result = pool[idx];
+  if (!result) throw new Error(`pick: empty pool or invalid index ${idx}`);
+  return result;
 }
 
 // ── Internal state shapes ─────────────────────────────────────────────────────

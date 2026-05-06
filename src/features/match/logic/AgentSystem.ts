@@ -772,6 +772,8 @@ export class AgentSystem {
   private _classifyEvent(event: MatchEvent): 'full' | 'medium' | 'manager' | 'skip' | 'minor' {
     if (event.isGoal || event.cardType === 'red') return 'full';
     if (event.cardType === 'yellow' || event.type === 'injury' || event.isControversial) return 'medium';
+    // VAR decisions with overturns trigger cosmic voice reactions (e.g. CHAOS_VAR templates)
+    if (event.type === 'var_decision' && (event as any).isVAROverturned) return 'medium';
     if (['team_talk','manager_shout','captain_rally','desperate_sub',
          'manager_sentoff','siege_start','substitution'].includes(event.type || '')) return 'manager';
     if (event.type && (
