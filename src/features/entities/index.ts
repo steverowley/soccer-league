@@ -40,6 +40,25 @@ export type {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export { getRecentNarratives } from './api/entities';
 
+// ── API — referees (Phase 5a) ──────────────────────────────────────────────
+// Wraps the IEOB referee corps and the per-match assignment surface.
+// `match_referee_v` view + assign_match_referee RPC are introduced in
+// migration 0015_match_referee.sql.
+export {
+  getRefereesWithStrictness,
+  getMatchReferee,
+  assignMatchReferee,
+} from './api/referees';
+export type {
+  RefereeWithStrictness,
+  MatchReferee,
+} from './api/referees';
+
+// ── API — referee narrative writer (Phase 5a) ──────────────────────────────
+// Listens for match.completed via RefereeNarrativeListener and writes one
+// named-referee narrative line to `narratives` per fixture.
+export { writeRefereeNarrativeForMatch } from './api/refereeNarrativeWriter';
+
 // ── Logic (pure — no React, no Supabase) ───────────────────────────────────
 // Factory functions for building well-shaped `entities`/`entity_traits`/
 // `entity_relationships` insert rows. The shapes mirror the seed migration
@@ -91,3 +110,32 @@ export type {
   RelationshipFilter,
   RelationshipGraph,
 } from './logic/relationshipGraph';
+
+// ── Logic — referee selection + narratives (Phase 5a) ──────────────────────
+// Pure deterministic referee picker (mirrors the SQL backfill in 0015) and
+// post-match narrative pattern detection / template assembly.  Zero I/O,
+// fully unit-testable.
+export {
+  hashUuidPrefix,
+  pickRefereeForMatch,
+  sortRefereesById,
+} from './logic/refereeSelection';
+
+export {
+  STRICT_THRESHOLD,
+  LENIENT_THRESHOLD,
+  HEAVY_CARD_THRESHOLD,
+  detectRefereePattern,
+  pickRefereeNarrativeVoice,
+  buildRefereeNarrative,
+} from './logic/refereeNarratives';
+export type {
+  RefereeMatchSnapshot,
+  RefereePattern,
+  RefereeNarrativeVoice,
+} from './logic/refereeNarratives';
+
+// ── UI — referee narrative listener (Phase 5a) ─────────────────────────────
+// Mount once at the app root inside <SupabaseProvider>.  Subscribes to
+// match.completed and writes one referee-narrative row per fixture.
+export { RefereeNarrativeListener } from './ui/RefereeNarrativeListener';

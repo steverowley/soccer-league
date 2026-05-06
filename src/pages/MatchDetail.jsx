@@ -36,6 +36,10 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { WagerWidget, BetHistory, getMatchOdds, saveMatchOdds, computeAvgRating, computeMatchOdds } from '../features/betting';
+// Phase 5a: officiating context (referee name + strictness) for the assigned
+// IEOB official.  Returns null when no referee is assigned yet — the badge
+// just renders nothing in that case.
+import { getMatchReferee } from '../features/entities';
 import { getMatch } from '../lib/supabase';
 import Button from '../components/ui/Button';
 
@@ -137,6 +141,10 @@ export default function MatchDetail() {
   const [error,      setError]      = useState(null);
   // Bumped after a successful wager so BetHistory re-fetches.
   const [wageredKey, setWageredKey] = useState(0);
+  // Phase 5a: assigned IEOB referee context.  null means either still
+  // loading or no assignment exists yet (matches without a referee_id FK
+  // skip the badge entirely rather than rendering an empty placeholder).
+  const [referee,    setReferee]    = useState(null);
 
   // ── Data fetch ─────────────────────────────────────────────────────────
   // WHY: We parallelise the two reads (match row + odds row) to minimise
@@ -147,12 +155,17 @@ export default function MatchDetail() {
     setLoading(true);
     setError(null);
     try {
-      const [matchRow, oddsRow] = await Promise.all([
+      // Parallelised: match row + odds row + referee context.  Adding the
+      // referee fetch to this Promise.all costs nothing (it's the same
+      // round-trip budget) and avoids a second render pass after data lands.
+      const [matchRow, oddsRow, refereeRow] = await Promise.all([
         getMatch(db, matchId),
         getMatchOdds(db, matchId),
+        getMatchReferee(db, matchId),
       ]);
 
       setMatch(matchRow);
+      setReferee(refereeRow);
 
       if (oddsRow) {
         setOdds(oddsRow);
@@ -295,6 +308,33 @@ export default function MatchDetail() {
           {(match.stadium || match.weather) && (
             <p style={{ fontSize: '11px', opacity: 0.4, textAlign: 'center' }}>
               {[match.stadium, match.weather].filter(Boolean).join(' · ')}
+            </p>
+          )}
+
+          {/* ── Officiating badge (Phase 5a) ──────────────────────────────── */}
+          {/* Surfaces the assigned IEOB referee by name so the entity graph
+              becomes visible to fans.  Strictness is shown as a discreet 1-10
+              meter — fans will start to recognise specific officials and
+              their tendencies over many matches without the mechanic ever
+              being explained explicitly.  Hidden when no referee is
+              assigned (e.g. fixtures from before the 0015 backfill ran). */}
+          {referee && (
+            <p
+              style={{
+                fontSize: '11px',
+                fontFamily: 'var(--font-mono)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                opacity: 0.5,
+                textAlign: 'center',
+                marginTop: '6px',
+              }}
+            >
+              <span style={{ opacity: 0.55 }}>Officiating:</span>{' '}
+              {referee.referee_display_name ?? referee.referee_name}
+              <span style={{ opacity: 0.4, marginLeft: '8px' }}>
+                · strictness {referee.referee_strictness}/10
+              </span>
             </p>
           )}
         </div>

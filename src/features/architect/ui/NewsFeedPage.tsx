@@ -36,6 +36,10 @@ const KIND_LABELS: Record<string, string> = {
   bookie_update:       'Bookie',       // odds commentary from The Bookie
   cosmic_disturbance:  'Disturbance',  // Architect-surfaced cosmic events
   wager_narrative:     'Wagers',       // bettor-pattern narratives from Phase 4 settlement
+  // Phase 5a: post-match officiating commentary written by the
+  // RefereeNarrativeListener.  Surfaces named IEOB officials in the feed
+  // so fans recognise the referee corps as recurring named entities.
+  referee_narrative:   'Officiating',
 };
 
 /**
@@ -67,6 +71,10 @@ const KIND_COLORS: Record<string, string> = {
   // cosmicVoices.ts and the Galaxy Dispatch design system.  Visually distinct
   // from the orange geological_event so the two never blur together.
   wager_narrative:     '#d97a2c',
+  // Officiating slate — neutral cool tone reads as press-room reporting.
+  // Distinct from the pundit blue and Architect purple so the post-match
+  // referee narrative card is recognisable at a glance in the feed.
+  referee_narrative:   'var(--color-slate)',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);

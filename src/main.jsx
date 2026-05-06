@@ -61,7 +61,13 @@ import { AuthProvider }     from './features/auth';
 //   settleMatchWagers() to resolve open bets when a fixture finishes.
 //   Mounted here (not in the Match feature) because the betting feature must
 //   never be imported by the match feature — the bus keeps them decoupled.
+//
+// RefereeNarrativeListener (Phase 5a): subscribes to `match.completed` and
+//   writes a single named-referee officiating narrative line to `narratives`
+//   for the Galaxy Dispatch news feed.  Decoupled from settlement so each
+//   cross-feature concern lives in its own listener.
 import { WagerSettlementListener } from './features/betting';
+import { RefereeNarrativeListener } from './features/entities';
 
 // CupRoundAdvancerListener: subscribes to `match.completed` and calls
 //   advanceCupRound() to fill in winners + insert the next-round fixture
@@ -123,10 +129,14 @@ createRoot(document.getElementById('root')).render(
       {/* ── Side-effect listeners ──────────────────────────────────────────── */}
       {/* Mounted inside SupabaseProvider (needs useSupabase()) but outside the
           Router (must survive full route transitions so no in-flight settlement
-          is cancelled mid-navigation).  Renders null — pure side-effects only. */}
+          or narrative write is cancelled mid-navigation).  Renders null —
+          pure side-effects only.
+          Order is intentional: settlement first so wager_narrative writes see
+          settled rows, then referee narrative which is independent. */}
       <WagerSettlementListener />
       <CupRoundAdvancerListener />
       <SeasonEnactmentListener />
+      <RefereeNarrativeListener />
       <AuthProvider>
         {/* ── Router ──────────────────────────────────────────────────────── */}
         {/* BrowserRouter enables HTML5 history API navigation with clean URLs.

@@ -103,6 +103,7 @@
   --color-orange:        #c85a2a;  /* geological_event — planetary drama           */
   --color-teal:          #4bc8b8;  /* economic_tremor — fiscal undercurrents        */
   --color-blue:          #5B9BD5;  /* pundit_takes — cool analytical opinion        */
+  --color-slate:         #7D8BA1;  /* referee_narrative — neutral press-room tone   */
   /* journalist_report uses rgba(227,224,213,0.85) inline — neutral, no tint,
      signals objectivity without introducing a new named colour. */
 
