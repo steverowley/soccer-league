@@ -1,0 +1,43 @@
+name: Setup Branch Protection Rules
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup branch protection for dev
+        run: |
+          gh api repos/steverowley/soccer-league/branches/dev/protection -X PUT \
+            -f required_status_checks='{"strict":true,"contexts":["Analyze (actions)","Analyze (javascript-typescript)"]}' \
+            -f required_pull_request_reviews='{"dismiss_stale_reviews":true,"required_approving_review_count":0}' \
+            -f enforce_admins=false \
+            -f allow_force_pushes=false \
+            -f allow_deletions=false \
+            -f require_conversation_resolution=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup branch protection for main
+        run: |
+          gh api repos/steverowley/soccer-league/branches/main/protection -X PUT \
+            -f required_status_checks='{"strict":true,"contexts":["Analyze (actions)","Analyze (javascript-typescript)"]}' \
+            -f required_pull_request_reviews='{"dismiss_stale_reviews":true,"required_approving_review_count":1}' \
+            -f enforce_admins=false \
+            -f allow_force_pushes=false \
+            -f allow_deletions=false \
+            -f require_conversation_resolution=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify protection
+        run: |
+          echo "✅ Branch protection configured:"
+          gh api repos/steverowley/soccer-league/branches/dev/protection --jq '.enforce_admins, .required_pull_request_reviews.required_approving_review_count'
+          gh api repos/steverowley/soccer-league/branches/main/protection --jq '.enforce_admins, .required_pull_request_reviews.required_approving_review_count'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
