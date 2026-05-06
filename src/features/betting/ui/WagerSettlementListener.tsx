@@ -30,7 +30,8 @@
 import { useEffect } from 'react';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { bus } from '@shared/events/bus';
-import { settleMatchWagers } from '../api/wagers';
+import { settleMatchWagers }            from '../api/wagers';
+import { writeWagerNarrativeForMatch }  from '../api/narrativeWriter';
 
 /**
  * Mounts once at the app root.  Registers a `match.completed` listener on the
@@ -59,6 +60,29 @@ export function WagerSettlementListener() {
         .then((count) => {
           if (count > 0) {
             console.info(`[ISL] Settled ${count} wager(s) for match ${matchId}`);
+          }
+
+          // ── Phase 4: bettor narrative writeback ──────────────────────────
+          // After settlement resolves we generate a single anonymized cosmic-
+          // voice narrative line summarising the batch's pattern (mass loss,
+          // upset win, equilibrium, etc.) and write it to the `narratives`
+          // table for the Galaxy Dispatch news feed.  This is gated on
+          // count > 0 because a match with zero wagers settled has nothing
+          // worth narrating — the cosmos doesn't comment on empty ledgers.
+          //
+          // FIRE-AND-FORGET: errors are absorbed inside the writer.  A failed
+          // narrative write is a minor lore gap, not a user-visible bug, and
+          // must never crash settlement or surface as an uncaught rejection.
+          //
+          // Team names are intentionally omitted: the `match.completed`
+          // payload only carries team SLUGS, and the narrative templates
+          // gracefully fall back to 'home side' / 'away side' when names are
+          // absent.  Avoids an extra DB roundtrip for a flavour string.
+          if (count > 0) {
+            writeWagerNarrativeForMatch(db, matchId, homeScore, awayScore)
+              .catch((e) => {
+                console.warn('[ISL] writeWagerNarrativeForMatch failed:', e);
+              });
           }
         })
         .catch((e) => {

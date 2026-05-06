@@ -48,6 +48,22 @@ export {
   houseProfitFromWager,
 } from './logic/settlement';
 
+// ── Logic — bettor narratives (Phase 4) ────────────────────────────────────
+// Pure pattern detection + voice assignment + template selection for the
+// anonymized cosmic-voice narrative line that surfaces in Galaxy Dispatch
+// after every settlement batch.  No I/O — fully unit-testable.
+export {
+  detectPattern,
+  pickNarrativeVoice,
+  buildSettlementNarrative,
+  buildSettlementBatch,
+} from './logic/bettorNarratives';
+export type {
+  NarrativeVoice,
+  SettlementBatch,
+  SettledWager,
+} from './logic/bettorNarratives';
+
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   placeWager,
@@ -61,6 +77,13 @@ export {
   getOddsForMatches,
   saveMatchOdds,
 } from './api/oddsRepo';
+
+// ── API — bettor narratives (Phase 4) ──────────────────────────────────────
+// I/O boundary that takes a settled-match summary and writes one anonymized
+// cosmic-voice narrative row to the `narratives` table.  Used by the
+// WagerSettlementListener — exported here so any future surface (e.g. a
+// season-recap dashboard or admin replay tool) can call it directly.
+export { writeWagerNarrativeForMatch } from './api/narrativeWriter';
 
 // ── UI (React components) ──────────────────────────────────────────────────
 // The widget is the user's primary on-ramp; the history list is the personal

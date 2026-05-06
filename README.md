@@ -19,7 +19,7 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
   - **Live Games** — MatchCard components displaying all active matches (status='active') with momentum bars and pulsing when matches are in progress; section hidden when no live matches
   - **Upcoming Games** — next 6 scheduled fixtures (status='upcoming') as MatchCard components with bet sliders
   - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
-- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor) with purple glow highlighting on `architect_whisper` cards; public route (no auth required)
+- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives and wager narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor, wager_narrative) with accent colors per kind; public route (no auth required)
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables; per-league carousel navigation with arrow controls
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
@@ -61,6 +61,11 @@ Three distinct voices powered by Claude Haiku, running in parallel for minimal l
 
 Plus player inner thoughts, manager reactions, and referee justifications generated live. Commentary latency ~500ms at TURBO speed via parallel streaming dispatch.
 
+**Cosmic Voices** — Two unnamed stochastic interrupters (Balance and Chaos) that inject unsettling commentary into match feeds independently:
+- **Balance** (slate-blue accent) — obsessed with symmetry, equilibrium, and cosmic debt
+- **Chaos** (amber accent) — seeks novelty, revels in disruption, hungers for wonder
+- **Design**: Fully synchronous `CosmicVoiceEngine` with independent internal state (`equilibriumDebt`, `noveltyHunger`) and template banks per voice × category. Voices interrupt after each event's mortal commentary via `maybeInterrupt()`, appearing unlabelled and unnamed in the feed. Players intuit identity from cadence over many matches.
+
 **Simulation speeds**: SLOW / NORMAL / FAST / TURBO / DRAMATIC (real-time pacing with staggered voice waves)
 
 ### Betting System
@@ -69,12 +74,14 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 - Wager settlement auto-fires after match completion
 - Kickoff-timer gate prevents bets after the match starts
 - Wager ledger with status pills (WON/LOST/OPEN/VOID) and net-profit column
+- **Phase 4 Bettor Narratives** — Settlement listener generates anonymized cosmic-voice narratives from wager patterns (mass loss, upset victories, clean sweeps) and writes them to the Galaxy Dispatch feed as `wager_narrative` kind entries. Voices are assigned stochastically based on pattern type, creating an additional layer of narrative texture in the public news feed.
 
 ### Focus Voting
 - End-of-season: fans spend credits to vote on club focus (signings, youth, training, upgrades)
 - 2 focuses per season: 1 major (10 credits), 1 minor (5 credits)
 - The focus with the most credits across all fans of a team is enacted
 - Running tally visible to all fans of the club
+- **Permadeath election system** — Top-10 idol-ranked players (by pure idol_score, no tie-breaking) face a 2× vote-weight surge during election phases, creating high-risk "love-is-dangerous" mechanics. Rank computation uses standard SQL RANK() semantics (no alphabetical tie-breaking) to ensure consistent cosmic favoritism across voting rounds.
 
 ### Training Minigame
 - Clicker-style facility: fans collectively boost players between matches
@@ -229,9 +236,10 @@ All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injec
 - **Type safety**: All helpers in `lib/supabase.ts` are strictly typed with `db: IslSupabaseClient` as the first parameter
 
 ### Supabase Helpers (`src/lib/supabase.ts`)
-15 TypeScript helper functions for common queries/mutations:
+20+ TypeScript helper functions for common queries/mutations:
 - `getPlayersForTeam(db, teamId)` — efficient team roster fetches (prevents 512-player over-fetch)
 - `getLeagueStandings()`, `getTeamDetail()`, `getMatchSchedule()`, etc.
+- `saveNarrative()` — writes narrative rows (architect, wager_narrative, etc.) to the `narratives` table
 - Each function accepts `db` from context, enabling easy mocking in tests
 - **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
 
@@ -248,11 +256,13 @@ This eliminates type drift between game engine (`App.jsx`, `gameEngine.js`) and 
 
 ### AI Commentary & Architect System (`features/architect/` & `features/match/logic/AgentSystem.ts`)
 Migrated from legacy `agents.js` to strict TypeScript with clean feature separation:
-- **CosmicArchitect.ts** (374 lines) — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `narratives` table.
-- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Latency ~500ms at TURBO speed via staggered voice dispatch.
+- **CosmicArchitect.ts** (374+ lines) — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `narratives` table. Exports `FIRST_VOICE_ENTITY_ID` (Fate) for Phase 5.1 lore hydration.
+- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Integrates `CosmicVoiceEngine.maybeInterrupt()` after each event's mortal commentary. Latency ~500ms at TURBO speed via staggered voice dispatch.
+- **CosmicVoiceEngine** (`features/match/logic/cosmicVoices.ts`) — Stochastic unnamed voice interrupter with two entities (Balance & Chaos). Independent internal state (`equilibriumDebt`, `noveltyHunger`, `interestLevel`) per voice, template banks (8+ entries × 5 categories per voice), and pure synchronous design (no I/O). Exports `BALANCE_ENTITY_ID` / `CHAOS_ENTITY_ID` for Phase 5.1 DB lore hydration. Also used by the Phase 4 WagerSettlementListener for bettor-narrative voice assignment.
 - **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. Lore is database-backed, hydrated before match start, and persisted post-match for session coherence.
 - **API layer** (`architect/api/`) — Thin modules for reading narratives and interventions from Supabase, enabling future front-end feeds (Galaxy Dispatch narrative UI, intervention audit).
-- **Type safety**: Both systems depend on `IArchitect` interface (duck typing) rather than concrete CosmicArchitect, enabling loose coupling and testability.
+- **Bettor Narratives (Phase 4)** — WagerSettlementListener (in `betting/ui/`) runs after wager settlement completes, detects patterns (mass loss, upset victory, clean sweep), assigns narrative voices stochastically, and writes anonymized cosmic-voice entries to the `narratives` table as `wager_narrative` kind. Pattern detection is pure logic in `betting/logic/bettorNarratives.ts`; I/O is isolated in `betting/api/narrativeWriter.ts`.
+- **Type safety**: All systems depend on `IArchitect` interface (duck typing) rather than concrete implementations, enabling loose coupling and testability. `CosmicVoiceItem` interface in `match/types.ts` extends `FeedItem` union.
 
 ### Design System (`features/design-system/` & `src/index.css`)
 Unified visual language and component library aligned to the Figma design specification:

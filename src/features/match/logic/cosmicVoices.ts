@@ -340,7 +340,12 @@ const CHAOS_GENERIC: string[] = [
  * self-contained — it is called in the hot match-simulation path.
  */
 function pick(pool: string[]): string {
-  return pool[Math.floor(Math.random() * pool.length)];
+  // Indexed access can resolve to `undefined` under noUncheckedIndexedAccess.
+  // We fall back to pool[0] (also possibly undefined for empty input) and then
+  // to an empty string so callers always receive a `string`.  In practice
+  // every pool defined in this file has at least one entry, so the fallback
+  // exists only to satisfy the type checker.
+  return pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? '';
 }
 
 // ── Internal state shapes ─────────────────────────────────────────────────────

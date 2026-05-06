@@ -487,18 +487,28 @@ export function normalizeTeamForEngine(team) {
 
     // Strip DB-specific fields (id, team_id, created_at, nationality, age)
     // and keep only the fields genEvent() and createAgent() actually read.
-    players: (team.players || []).map(p => ({
-      name:          p.name,
-      position:      p.position,
-      starter:       p.starter ?? true,
-      // Individual stats: fall back to 70 (functional average) if not seeded.
-      attacking:     p.attacking  ?? 70,
-      defending:     p.defending  ?? 70,
-      mental:        p.mental     ?? 70,
-      athletic:      p.athletic   ?? 70,
-      technical:     p.technical  ?? 70,
-      jersey_number: p.jersey_number,
-    })),
+    //
+    // PERMADEATH FILTER (Phase 3):
+    // Incinerated players have is_active=false on the players row.  They must
+    // never appear in the engine roster — the manager AI would otherwise rotate
+    // them into matches, undermining the love-is-dangerous mechanic and the
+    // /lost memorial's narrative weight.  We default missing is_active to true
+    // (legacy rows without the column / pre-Phase 3 schemas) so we never
+    // silently drop a live player.
+    players: (team.players || [])
+      .filter(p => p.is_active !== false)
+      .map(p => ({
+        name:          p.name,
+        position:      p.position,
+        starter:       p.starter ?? true,
+        // Individual stats: fall back to 70 (functional average) if not seeded.
+        attacking:     p.attacking  ?? 70,
+        defending:     p.defending  ?? 70,
+        mental:        p.mental     ?? 70,
+        athletic:      p.athletic   ?? 70,
+        technical:     p.technical  ?? 70,
+        jersey_number: p.jersey_number,
+      })),
   };
 }
 

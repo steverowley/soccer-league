@@ -166,14 +166,19 @@ export function selectIncinerationTargets(
 
     let chosenIdx = pool.length - 1; // fallback: last entry (rng never produces totalWeight exactly)
     for (let j = 0; j < pool.length; j++) {
-      roll -= pool[j].weight;
+      // Indexed access is safe here: j < pool.length, but TypeScript's
+      // noUncheckedIndexedAccess still types pool[j] as `T | undefined`.
+      // The non-null assertion documents the loop-bound invariant.
+      roll -= pool[j]!.weight;
       if (roll <= 0) {
         chosenIdx = j;
         break;
       }
     }
 
-    const chosen = pool[chosenIdx];
+    // chosenIdx is always within pool's bounds (pool.length > 0 enforced by
+    // the outer for-loop guard), so pool[chosenIdx] is guaranteed defined.
+    const chosen = pool[chosenIdx]!;
     selected.push({ candidate: chosen.candidate, selectionWeight: chosen.weight });
     // Remove the selected candidate so they cannot be drawn again.
     pool.splice(chosenIdx, 1);
@@ -240,11 +245,14 @@ function pickWinner(options: FocusTallyEntry[]): FocusTallyEntry | null {
   if (voted.length === 0) return null;
 
   // Sort by tie-breaking criteria: credits desc, then vote count desc, then key asc.
+  // `voted` is guaranteed non-empty (early-returned above when length===0), so
+  // [0] is defined; the `?? null` keeps TypeScript happy under
+  // noUncheckedIndexedAccess without changing runtime behaviour.
   return voted.slice().sort((a, b) => {
     if (b.total_credits !== a.total_credits) return b.total_credits - a.total_credits;
     if (b.vote_count    !== a.vote_count)    return b.vote_count    - a.vote_count;
     return a.option_key.localeCompare(b.option_key);
-  })[0];
+  })[0] ?? null;
 }
 
 // ── 3. buildFocusMutations() ─────────────────────────────────────────────────

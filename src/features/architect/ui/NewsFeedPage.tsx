@@ -24,12 +24,25 @@ import type { Narrative } from '../../entities/types';
 
 const PAGE_SIZE = 12;
 
+// ── Kind catalog ──────────────────────────────────────────────────────────────
+//
+// Every narrative `kind` value the news feed knows how to render gets two
+// entries: a human-readable label (filter chip text) and an accent color
+// (left-border + chip outline + chip-active fill).  Unknown kinds fall back
+// to a neutral dust color and use the raw string as their label.
+//
+// Phase 4 added 'wager_narrative' for bettor-narrative rows written by the
+// settlement listener.  Its accent color matches the Chaos voice amber, since
+// the majority of bettor patterns (mass loss, upset, clean sweep) speak in
+// the Chaos register; Balance-tagged rows still render with the same chip
+// because the filter strip groups by KIND, not by source/voice.
 const KIND_LABELS: Record<string, string> = {
   news:              'News',
   political_shift:   'Political',
   geological_event:  'Geological',
   architect_whisper: 'Transmission',
   economic_tremor:   'Economic',
+  wager_narrative:   'Wagers',
 };
 
 const KIND_COLORS: Record<string, string> = {
@@ -38,6 +51,10 @@ const KIND_COLORS: Record<string, string> = {
   geological_event:  '#c85a2a',
   architect_whisper: 'var(--color-purple)',
   economic_tremor:   '#4bc8b8',
+  // Bettor-narrative amber — close to the Chaos voice tint defined in
+  // cosmicVoices.ts and the Galaxy Dispatch design system.  Visually distinct
+  // from the orange geological_event so the two never blur together.
+  wager_narrative:   '#d97a2c',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
@@ -63,6 +80,14 @@ export function NewsFeedPage() {
   const [activeKind, setActiveKind] = useState<string | null>(null);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
+  // Why setLoading(true)/setError(null) run inside the effect body: these are
+  // immediate UI reset signals tied to the same dependency change that triggers
+  // the fetch.  The user's click on a filter chip must be acknowledged before
+  // the network response arrives, otherwise the previously-rendered list looks
+  // stuck.  The cancelled flag below guards against stale responses
+  // overwriting current state, so the cascading-renders concern the eslint
+  // rule warns about doesn't apply here.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -90,6 +115,7 @@ export function NewsFeedPage() {
 
     return () => { cancelled = true; };
   }, [db, limit, activeKind]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleLoadMore = useCallback(() => {
     setLimit((prev) => prev + PAGE_SIZE);
