@@ -131,8 +131,11 @@ export async function getAllIncinerations(db: IslSupabaseClient): Promise<Incine
   if (error) throw error;
 
   // Flatten the nested join objects into flat fields.
+  // Cast through `unknown` first because the raw row carries the nested
+  // `players` / `teams` objects which aren't part of IncinerationRecord —
+  // TypeScript otherwise rejects the direct cast as non-overlapping.
   return ((data ?? []) as Array<Record<string, unknown>>).map(row => ({
-    ...(row as IncinerationRecord),
+    ...(row as unknown as IncinerationRecord),
     player_name: (row['players'] as { name?: string } | null)?.name ?? null,
     team_name:   (row['teams']   as { name?: string } | null)?.name ?? null,
   }));
@@ -212,16 +215,31 @@ export async function insertSeasonDecrees(
 }
 
 /**
- * Mark a player as incinerated.  Sets is_active = false and records
- * incineration_date on the players row, then inserts an incinerations audit
- * row.  Both writes must succeed; if either fails the error propagates.
+ * Mark a player as incinerated atomically — soft-deletes the player AND writes
+ * the audit row in a single Postgres transaction via the `incinerate_player`
+ * RPC (migration 0014).
+ *
+ * WHY AN RPC AND NOT TWO CLIENT-SIDE WRITES:
+ * Running the UPDATE and INSERT as separate PostgREST calls leaves a window
+ * where the player can be flipped to `is_active=false` while the audit-row
+ * INSERT silently fails (network hiccup, RLS rejection, FK violation).  That
+ * would leave the player out of all rosters, vanished from the /lost memorial,
+ * and the Architect's decree text lost forever.  The RPC wraps both writes in
+ * one transaction: either both commit, or neither does.
+ *
+ * The RPC returns the new incinerations.id so callers can attach Decree rows
+ * back to a known audit record.
  *
  * @param db         Injected Supabase client.
  * @param playerId   UUID of the player being incinerated.
  * @param seasonId   UUID of the current season.
  * @param teamId     Team slug of the player's club.
- * @param idolRank   Global idol rank at time of selection (nullable).
- * @param decreeText The Architect's spoken line for this incineration.
+ * @param idolRank   Global idol rank at time of selection (nullable; recorded
+ *                   for the Phase 2 audit trail proving the love-is-dangerous
+ *                   weighting actually fired).
+ * @param decreeText The Architect's spoken line for this incineration — the
+ *                   permanent record displayed on /lost.
+ * @returns          The UUID of the freshly inserted incinerations row.
  */
 export async function incinerate(
   db: IslSupabaseClient,
@@ -230,24 +248,15 @@ export async function incinerate(
   teamId: string,
   idolRank: number | null,
   decreeText: string,
-): Promise<void> {
-  // Mark the player inactive first so no concurrent query can assign them to
-  // a new match while the incinerations row is being written.
-  const { error: playerErr } = await (db as AnyDb) // CAST:election
-    .from('players')
-    .update({ is_active: false, incineration_date: new Date().toISOString() })
-    .eq('id', playerId);
-  if (playerErr) throw playerErr;
-
-  // Write the audit row.
-  const { error: auditErr } = await (db as AnyDb) // CAST:election
-    .from('incinerations')
-    .insert({
-      player_id: playerId,
-      season_id: seasonId,
-      team_id: teamId,
-      idol_rank_at_time: idolRank,
-      decree_text: decreeText,
-    });
-  if (auditErr) throw auditErr;
+): Promise<string> {
+  const { data, error } = await (db as AnyDb).rpc('incinerate_player', { // CAST:election
+    p_player_id:   playerId,
+    p_season_id:   seasonId,
+    p_team_id:     teamId,
+    p_idol_rank:   idolRank,
+    p_decree_text: decreeText,
+  });
+  if (error) throw error;
+  // RPC returns the new incinerations.id directly (RETURNS UUID).
+  return data as string;
 }

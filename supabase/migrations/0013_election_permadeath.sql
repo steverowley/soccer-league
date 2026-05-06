@@ -210,6 +210,18 @@ scored AS (
   WHERE p.is_active = true
 )
 
+-- ── Rank computation rules ─────────────────────────────────────────────────
+-- WHY rank by idol_score ALONE (not idol_score + name):
+--   The idol_rank gates the "love-is-dangerous" 2× targeting threshold (top-10
+--   global rank).  If we tie-broke by name inside RANK(), two equally-idolised
+--   players would receive different ranks based on alphabetical order — putting
+--   one inside the curse threshold and the other outside.  That would be
+--   arbitrary cosmic favouritism and undermines the design.  Standard SQL RANK()
+--   intentionally assigns the SAME rank to ties (and skips the next number),
+--   which is exactly the semantics the targeting algorithm expects.
+--
+-- The trailing `ORDER BY` on the SELECT only affects display ordering when no
+-- caller specifies their own — it never influences rank values.
 SELECT
   player_id,
   name,
@@ -221,9 +233,10 @@ SELECT
   favourite_count,
   training_count,
   idol_score,
-  RANK() OVER (ORDER BY idol_score DESC, name)                       AS global_rank,
-  RANK() OVER (PARTITION BY team_id ORDER BY idol_score DESC, name)  AS team_rank
-FROM scored;
+  RANK() OVER (ORDER BY idol_score DESC)                       AS global_rank,
+  RANK() OVER (PARTITION BY team_id ORDER BY idol_score DESC)  AS team_rank
+FROM scored
+ORDER BY idol_score DESC, name ASC;
 
 -- Re-grant PostgREST access after the view is recreated.
 -- CREATE OR REPLACE VIEW does NOT preserve grants from the prior definition.
