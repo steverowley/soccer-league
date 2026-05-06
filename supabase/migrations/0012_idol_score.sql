@@ -104,8 +104,19 @@ FROM scored;
 -- ── RLS ───────────────────────────────────────────────────────────────────────
 -- Views inherit RLS from their underlying tables.  profiles and player_training_log
 -- are both public-read (see their respective migrations), so player_idol_score is
--- readable by everyone — no explicit policy needed.
+-- readable by everyone — no explicit RLS policy is needed.
 -- No writes go to this view; it is SELECT-only.
+
+-- ── PostgREST grants ──────────────────────────────────────────────────────────
+-- PostgREST runs as the `anon` or `authenticated` Postgres role depending on
+-- whether the caller supplies a JWT.  Unlike base tables (which get privileges
+-- automatically when added to the public schema's default permissions), newly
+-- created views require an explicit GRANT before PostgREST can expose them via
+-- the REST API.  Without this grant the browser receives a permission error and
+-- the idol board falls into the empty/error fallback path.
+-- Pattern matches focus_tally, wager_leaderboard, and other public views in
+-- this codebase.
+GRANT SELECT ON player_idol_score TO anon, authenticated;
 
 -- ── Index note ────────────────────────────────────────────────────────────────
 -- The view's CTE scans:
