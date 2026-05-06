@@ -8,7 +8,7 @@ A Blaseball-inspired social experiment browser game. AI-simulated soccer matches
 
 32 planetary teams compete across 4 regional leagues — from the Rocky Inner League to the Kuiper Belt. Fans sign up, pick a favourite club, and earn Intergalactic Credits by betting on match outcomes. At season's end, fans pool their credits to vote on their club's direction for next season.
 
-Matches run as full 90-minute simulations with live AI commentary from three distinct voices (Captain Vox, Nexus-7, Zara Bloom), plus a Lovecraftian Cosmic Architect who warps reality mid-match. The underlying mechanics are never explained — the world is treated like real life.
+Matches run as full 90-minute simulations with live AI commentary from five distinct voices (three named analysts plus two unnamed Cosmic interrupters), plus a Lovecraftian Cosmic Architect who warps reality mid-match. The underlying mechanics are never explained — the world is treated like real life.
 
 ## Features
 
@@ -54,10 +54,18 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
 - Affected characters react with confusion and disbelief; they have zero knowledge of any cosmic cause
 
 ### AI Commentary
-Three distinct voices powered by Claude Haiku, running in parallel for minimal latency:
+Five distinct voices powered by Claude Haiku, running in parallel for minimal latency:
+
+**Named Commentary Voices** (primary analysts):
 - **Captain Vox** — bombastic veteran narrator with cosmic metaphors
 - **Nexus-7** — clinical AI analyst, data-driven and precise
 - **Zara Bloom** — ex-striker colour analyst, tactically sharp
+
+**Cosmic Voices** (stochastic interrupters):
+- **The Second Voice (Balance)** — unnamed in-fiction; interrupts with equilibrium-seeking observations (slate-blue accent)
+- **The Third Voice (Chaos)** — unnamed in-fiction; interrupts with novelty-hungry provocations (amber accent)
+
+The unnamed Cosmic Voices operate independently via internal state tracking (equilibriumDebt, noveltyHunger) and appear at the end of feed clusters as unpredictable commentary interjections. Players intuit their identity over time through cadence and vocabulary rather than labels.
 
 Plus player inner thoughts, manager reactions, and referee justifications generated live. Commentary latency ~500ms at TURBO speed via parallel streaming dispatch.
 
