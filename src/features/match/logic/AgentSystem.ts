@@ -16,6 +16,7 @@ import type {
   PlayerAgent,
   FeedItem,
 } from '../types';
+import { CosmicVoiceEngine } from './cosmicVoices';
 
 // suppress unused warning — rnd is imported for side-effect free module loading
 void _rnd;
@@ -129,6 +130,14 @@ export class AgentSystem {
   // in their call signature.
   _allAgents: PlayerAgent[] = [];
 
+  /**
+   * Manages the Second Voice (Balance) and Third Voice (Chaos) for this match.
+   * Created fresh per-match so each game has independently randomised voice
+   * moods and speech caps.  The First Voice (Fate) remains the CosmicArchitect.
+   * See cosmicVoices.ts for the full design rationale.
+   */
+  private readonly _cosmicVoiceEngine: CosmicVoiceEngine;
+
   constructor(
     apiKey: string,
     { homeTeam, awayTeam, referee, homeManager, awayManager,
@@ -145,6 +154,12 @@ export class AgentSystem {
     this.stadium      = stadium;
     this.weather      = weather;
     this.architect    = architect;
+
+    // ── Cosmic voice engine ───────────────────────────────────────────────
+    // Created here (not lazily) so both voices have a full match's worth of
+    // state from minute 0.  Each match gets independently randomised initial
+    // interest levels and per-match speech caps — see CosmicVoiceEngine docs.
+    this._cosmicVoiceEngine = new CosmicVoiceEngine();
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
@@ -871,6 +886,29 @@ export class AgentSystem {
       if (event.cardType || event.isControversial)
         promises.push(this.generateRefDecision(event, gameState).then(push));
       await Promise.allSettled(promises);
+    }
+
+    // ── Cosmic voice intrusions ───────────────────────────────────────────
+    // Called AFTER all mortal commentary has resolved so the unnamed voices
+    // appear at the end of the event's feed cluster — an afterthought from
+    // beyond the broadcast, not part of it.
+    //
+    // maybeInterrupt() is synchronous and zero-I/O; it never delays delivery.
+    // Returns 0–2 CosmicVoiceItem objects; empty array is the common case.
+    //
+    // Score is read from gameState.score which reflects the state AFTER this
+    // event has been applied (goals are already credited), so Balance and
+    // Chaos react to the current reality, not the state before the event.
+    const [homeScore, awayScore] = gameState.score;
+    const cosmicItems = this._cosmicVoiceEngine.maybeInterrupt(
+      event,
+      gameState.minute,
+      homeScore,
+      awayScore,
+    );
+    for (const item of cosmicItems) {
+      results.push(item as FeedItem);
+      onResult?.(item as FeedItem);
     }
 
     return results;

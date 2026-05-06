@@ -380,6 +380,84 @@ export const ArchitectCard = ({ item }) => {
   );
 };
 
+// ── CosmicVoiceCard ───────────────────────────────────────────────────────────
+
+/**
+ * CosmicVoiceCard — feed entry for an intrusion from the Second Voice (Balance)
+ * or Third Voice (Chaos).
+ *
+ * DESIGN INTENT
+ * ─────────────
+ * These cards carry NO label, NO name, NO emoji header.  The cosmic voices are
+ * unnamed in fiction — players are meant to notice the patterns over many matches
+ * and gradually intuit which voice is which.  Naming them in the UI collapses the
+ * mystery.  The only distinguishing mark is the 2px left-border accent colour:
+ *
+ *   voiceIndex=2 (Balance) → slate-blue  (#64748b)  — measured, accounting
+ *   voiceIndex=3 (Chaos)   → amber       (#f59e0b)  — jagged, gleeful
+ *
+ * The background is a shade lighter than ArchitectCard's pure void black so the
+ * cosmic voices feel like a different kind of presence — quieter, less authoritative
+ * than the Architect's full proclamations, but still clearly not mortal commentary.
+ *
+ * WHY NO ANIMATION
+ * ─────────────────
+ * ArchitectCard uses `architectPulse` to signal cosmic authority.  CosmicVoiceCard
+ * is static — the voices don't demand attention, they simply appear.  The absence
+ * of animation is itself a distinguishing cue.
+ *
+ * @param {{ item: {
+ *   type:       'cosmic_voice',
+ *   voiceIndex: 2 | 3,           // 2 = Balance (slate-blue), 3 = Chaos (amber)
+ *   text:       string,          // The voice's line from the template bank
+ *   minute:     number,          // Match minute of the intrusion
+ *   color:      string,          // Per-voice accent colour (set by CosmicVoiceEngine)
+ * }}} props
+ * @returns {JSX.Element}
+ */
+export const CosmicVoiceCard = ({ item }) => (
+  <div style={{
+    padding:         '10px 12px',
+    marginBottom:    '8px',
+    // Slightly lighter than ArchitectCard's pure void (#0a0a0a) — the unnamed
+    // voices occupy a different plane, not the same deep dark as the Architect.
+    backgroundColor: 'rgba(15, 15, 20, 0.95)',
+    // The 2px left border is the ONLY identity marker for these cards.
+    // Its colour (item.color) was set by CosmicVoiceEngine to the per-voice accent.
+    borderLeft:      `2px solid ${item.color}`,
+    border:          `1px solid rgba(255,255,255,0.04)`,
+    borderLeftWidth: '2px',
+    borderLeftColor: item.color,
+  }}>
+
+    {/* ── Minute stamp — right-aligned, very faint ───────────────────────── */}
+    {/* Intentionally muted — the time of an intrusion is less important than
+        its content.  Right-aligned to visually separate it from the text. */}
+    <div style={{
+      display:        'flex',
+      justifyContent: 'flex-end',
+      marginBottom:   '4px',
+    }}>
+      <span style={{ fontSize: '9px', opacity: 0.25 }}>
+        {item.minute}'
+      </span>
+    </div>
+
+    {/* ── Voice text ─────────────────────────────────────────────────────── */}
+    {/* Italic to distinguish from mortal commentary.  Opacity 0.7 (vs 0.95
+        for ArchitectCard text) — the unnamed voices are quieter, background
+        presences rather than authoritative proclamations. */}
+    <div style={{
+      fontSize:   '11px',
+      fontStyle:  'italic',
+      lineHeight: '1.55',
+      color:      'rgba(227,224,213,0.70)',
+    }}>
+      {item.text}
+    </div>
+  </div>
+);
+
 // ── ArchitectInterferenceCard ─────────────────────────────────────────────────
 
 /**

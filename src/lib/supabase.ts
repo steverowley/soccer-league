@@ -53,6 +53,9 @@ type RawTeamForEngine = {
     athletic?: number | null;
     technical?: number | null;
     jersey_number?: number | null;
+    // Phase 3: incinerated players have is_active=false and must never appear
+    // in match rosters.  Filtered out in normalizeTeamForEngine.
+    is_active?: boolean | null;
   }>;
   managers?: Array<{ name: string; style?: string | null }>;
 };
@@ -75,17 +78,26 @@ export function normalizeTeamForEngine(team: RawTeamForEngine) {
     manager: manager
       ? { name: manager.name, personality: manager.style || 'Balanced' }
       : undefined,
-    players: (team.players || []).map(p => ({
-      name:          p.name,
-      position:      p.position,
-      starter:       p.starter ?? true,
-      attacking:     p.attacking  ?? 70,
-      defending:     p.defending  ?? 70,
-      mental:        p.mental     ?? 70,
-      athletic:      p.athletic   ?? 70,
-      technical:     p.technical  ?? 70,
-      jersey_number: p.jersey_number,
-    })),
+    // Filter out incinerated players (is_active=false) before mapping into the
+    // engine shape.  The engine has no concept of permadeath — it expects every
+    // row in `players` to be eligible to start or sub on.  An incinerated player
+    // left in the array would still be rotated into matches by the manager AI,
+    // breaking the soul of the love-is-dangerous mechanic.  Default `is_active`
+    // to true when the field is missing (legacy rows / non-Phase 3 schemas)
+    // so this filter never silently drops live players.
+    players: (team.players || [])
+      .filter(p => p.is_active !== false)
+      .map(p => ({
+        name:          p.name,
+        position:      p.position,
+        starter:       p.starter ?? true,
+        attacking:     p.attacking  ?? 70,
+        defending:     p.defending  ?? 70,
+        mental:        p.mental     ?? 70,
+        athletic:      p.athletic   ?? 70,
+        technical:     p.technical  ?? 70,
+        jersey_number: p.jersey_number,
+      })),
   };
 }
 

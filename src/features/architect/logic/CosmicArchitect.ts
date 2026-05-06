@@ -124,6 +124,17 @@ export class CosmicArchitect {
   // ── Static constants ─────────────────────────────────────────────────────
 
   /**
+   * Stable entity UUID for the First Voice (Fate / the Architect) in the
+   * `entities` table.  Seeded by migration 0011_voices.sql.
+   *
+   * WHY HERE: CosmicArchitect is the runtime manifestation of the First Voice.
+   * Storing the ID as a static constant keeps the two representations linked
+   * without a cross-feature import — future Phase 5.1 DB hydration can read
+   * this to write lore arcs directly to the correct entity row.
+   */
+  static readonly FIRST_VOICE_ENTITY_ID = '50000000-0000-0000-0000-000000000001';
+
+  /**
    * Maximum number of past matches retained in the lore ledger.
    * Oldest entries are dropped when this limit is exceeded — keeping the
    * ledger bounded so prompt context doesn't grow unbounded across seasons.
@@ -185,6 +196,24 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
   activeBlesses: ActiveEffect[] = [];
   activePossessions: ActivePossession[] = [];
 
+  /**
+   * Idol context injected into the interference prompt so the LLM can
+   * preferentially target highly-idolised players for curses/incinerations.
+   *
+   * WHY HERE: The love-is-dangerous mechanic (Phase 2) requires the Architect
+   * to know which mortals the fans are most devoted to so it can express cosmic
+   * awareness of their devotion.  Rather than adding idol data to every prompt
+   * (expensive + dilutes focus), we inject it only in `maybeInterfereWith()`
+   * where target selection actually happens.
+   *
+   * Populated by `setIdolContext()` at match kickoff.  Empty array = no idol
+   * data available; interference targeting falls back to match-state signals.
+   *
+   * IMPORTANT: never block kickoff on fetching this data.  If the Supabase
+   * query fails, App.jsx supplies [] and the match runs without idol weighting.
+   */
+  idolRanks: Array<{ name: string; globalRank: number }> = [];
+
   constructor(
     apiKey: string,
     { homeTeam, awayTeam, homeManager, awayManager, stadium, weather }: {
@@ -210,6 +239,22 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     // source of truth — there is intentionally no client-side fallback, so
     // every browser session reads the same shared narrative.
     this.lore        = emptyLore();
+  }
+
+  // ── Idol context ─────────────────────────────────────────────────────────
+
+  /**
+   * Inject the global idol board context before kickoff so interference
+   * target selection can favour highly-idolised mortals.
+   *
+   * Called once from App.jsx immediately after the Architect is constructed.
+   * If the Supabase query failed, App.jsx passes [] and this is a no-op —
+   * interference targeting degrades gracefully to match-state signals only.
+   *
+   * @param ranks Top-N idol rows from getTopIdolsForArchitect().
+   */
+  setIdolContext(ranks: Array<{ name: string; globalRank: number }>): void {
+    this.idolRanks = ranks;
   }
 
   // ── Private API wrapper ──────────────────────────────────────────────────
@@ -754,12 +799,41 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
                     : isAmused  ? 'The Architect is entertained — but perhaps wishes to escalate further.'
                     : 'The Architect watches, impassive, calculating whether to intervene.';
 
+    // ── Idol context block ────────────────────────────────────────────────────
+    // When idol ranks are available, inject the top-5 most-idolised players
+    // (scoped to those active in this match) so the LLM is biased toward
+    // targeting them for curses and incinerations.
+    //
+    // WHY TOP-5 NOT TOP-10: more than 5 names dilutes the signal.  The LLM
+    // needs a clear short list to act on, not a roster dump.
+    //
+    // WHY "OFFERED TO THE COSMOS": this phrasing is intentionally ambiguous —
+    // it reinforces the love-is-dangerous theme in the Architect's own voice
+    // without breaking the fictional frame (the Architect would not say
+    // "these players have high idol scores").
+    const activePlayerSet  = new Set(activePlayers.map(n => n.toLowerCase()));
+    const idolContextBlock = this.idolRanks.length > 0
+      ? (() => {
+          // Filter to players actually on the pitch so the LLM doesn't waste
+          // a curse on a benched player it cannot reach this match.
+          const matchIdols = this.idolRanks
+            .filter(r => activePlayerSet.has(r.name.toLowerCase()))
+            .slice(0, 5);
+          if (matchIdols.length === 0) return '';
+          const list = matchIdols
+            .map(r => `${r.name} (rank #${r.globalRank})`)
+            .join(', ');
+          return `\nThose most offered to the cosmos by mortal devotion (most loved = most targeted): ${list}.`;
+        })()
+      : '';
+
     const userMsg = `THE ARCHITECT CONSIDERS INTERVENTION.\n\n` +
       `Match: ${scoreSummary} | Minute ${minute}'. ` +
       `Tension: ${matchState.tensionVariant || 'standard'}. Edict: ${edict?.polarity || 'none set'} (magnitude ${(edict as CosmicEdict & { magnitude?: number })?.magnitude || 0}).\n` +
       `${fateSummary}\nCosmic thread: ${this.cosmicThread || 'none yet'}.\n` +
       `Recent events: ${recentCommentary || 'none'}.\nLive goals: ${goalList}.\n` +
-      `Active players: ${activePlayers.slice(0, 8).join(', ')}${activePlayers.length > 8 ? '...' : ''}.\n` +
+      `Active players: ${activePlayers.slice(0, 8).join(', ')}${activePlayers.length > 8 ? '...' : ''}.` +
+      `${idolContextBlock}\n` +
       `Mood: ${moodHint}\n\n` +
       `You may intervene — or choose not to. Available types:\n${availableTypes.join(', ')}.\n\n` +
       `Return JSON: {"interfere":true,"interferenceType":"<type>","targetPlayer":"<name or null>","targetTeam":"home|away|null",` +

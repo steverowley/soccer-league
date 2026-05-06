@@ -10,19 +10,21 @@ import { formatDateShort } from '@shared/utils/formatDate';
 /** Number of narrative cards shown per page. Kept small so the feed feels live. */
 const PAGE_SIZE = 12;
 
-/**
- * Human-readable filter strip labels for every narrative kind the Galaxy
- * Dispatch can surface. Add a new entry here (+ KIND_COLORS below) whenever
- * a new `narratives.kind` value is introduced in the DB or the edge function.
- *
- * Origin of each kind:
- *   news / political_shift / geological_event / economic_tremor — legacy Architect outputs
- *   architect_whisper   — Architect persona post-match whispers
- *   cosmic_disturbance  — Architect-flagged interventions (Package 5)
- *   pundit_takes        — Galaxy Dispatch pundit entity posts (Package 5)
- *   journalist_report   — Galaxy Dispatch journalist entity posts (Package 5)
- *   bookie_update       — Galaxy Dispatch bookie entity posts (Package 5)
- */
+// ── Kind catalog ──────────────────────────────────────────────────────────────
+//
+// Every narrative `kind` value the news feed knows how to render gets two
+// entries: a human-readable label (filter chip text) and an accent color
+// (left-border + chip outline + chip-active fill).  Unknown kinds fall back
+// to a neutral dust color and use the raw string as their label.
+//
+// Origin of each kind:
+//   news / political_shift / geological_event / economic_tremor — legacy Architect outputs
+//   architect_whisper   — Architect persona post-match whispers
+//   cosmic_disturbance  — Architect-flagged interventions (Package 5)
+//   pundit_takes        — Galaxy Dispatch pundit entity posts (Package 5)
+//   journalist_report   — Galaxy Dispatch journalist entity posts (Package 5)
+//   bookie_update       — Galaxy Dispatch bookie entity posts (Package 5)
+//   wager_narrative     — Phase 4 bettor-narrative rows written by the settlement listener
 const KIND_LABELS: Record<string, string> = {
   news:                'News',
   political_shift:     'Political',
@@ -33,6 +35,7 @@ const KIND_LABELS: Record<string, string> = {
   journalist_report:   'Report',       // neutral factual dispatches
   bookie_update:       'Bookie',       // odds commentary from The Bookie
   cosmic_disturbance:  'Disturbance',  // Architect-surfaced cosmic events
+  wager_narrative:     'Wagers',       // bettor-pattern narratives from Phase 4 settlement
 };
 
 /**
@@ -48,17 +51,22 @@ const KIND_LABELS: Record<string, string> = {
  *   neutral → journalist report (no tint — objective by design)
  *   green   → bookie odds (money, speculation)
  *   red     → cosmic disturbance (alarming, urgent)
+ *   amber   → bettor narratives (Chaos voice tint from Phase 4)
  */
 const KIND_COLORS: Record<string, string> = {
   news:                'rgba(227,224,213,0.6)',
-  political_shift:     'var(--color-gold)',
-  geological_event:    'var(--color-orange)',
+  political_shift:     '#c8a84b',
+  geological_event:    '#c85a2a',
   architect_whisper:   'var(--color-purple)',
-  economic_tremor:     'var(--color-teal)',
+  economic_tremor:     '#4bc8b8',
   pundit_takes:        'var(--color-blue)',
   journalist_report:   'rgba(227,224,213,0.85)',
   bookie_update:       'var(--color-green)',
   cosmic_disturbance:  'var(--color-red)',
+  // Bettor-narrative amber — close to the Chaos voice tint defined in
+  // cosmicVoices.ts and the Galaxy Dispatch design system.  Visually distinct
+  // from the orange geological_event so the two never blur together.
+  wager_narrative:     '#d97a2c',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
@@ -78,11 +86,15 @@ export function NewsFeedPage() {
   const [activeKind, setActiveKind] = useState<string | null>(null);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
-  // WHY: setState calls are deferred inside an async IIFE rather than called
-  // synchronously in the effect body. Synchronous setState inside an effect
-  // triggers cascading renders before the browser has painted, causing the
-  // react-hooks/set-state-in-effect lint rule to fire. The async wrapper
-  // ensures React batches the state updates from the resolved promise.
+  // Why setLoading(true)/setError(null) run inside the effect body: these are
+  // immediate UI reset signals tied to the same dependency change that triggers
+  // the fetch.  The user's click on a filter chip must be acknowledged before
+  // the network response arrives, otherwise the previously-rendered list looks
+  // stuck. setState calls are deferred inside an async IIFE so React batches
+  // state updates from the resolved promise. The cancelled flag guards against
+  // stale responses overwriting current state, so cascading-renders concern
+  // the eslint rule warns about doesn't apply here.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -110,6 +122,7 @@ export function NewsFeedPage() {
 
     return () => { cancelled = true; };
   }, [db, limit, activeKind]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleLoadMore = useCallback(() => {
     setLimit((prev) => prev + PAGE_SIZE);

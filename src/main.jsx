@@ -101,6 +101,12 @@ import Training     from './pages/Training';
 import ArchitectLog from './pages/ArchitectLog';
 import NewsFeed     from './pages/NewsFeed';
 import Cup          from './pages/Cup';
+// /idols → leaguewide top-20 idol board + per-club top-5 (Phase 2)
+import Idols          from './pages/Idols';
+// /election → Election Night ticker: phase status, vote tallies, Decrees (Phase 3)
+import ElectionNight  from './pages/ElectionNight';
+// /lost → memorial for every incinerated player across all seasons (Phase 3)
+import Lost           from './pages/Lost';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -194,6 +200,21 @@ createRoot(document.getElementById('root')).render(
               {/* Same layout as Celestial Cup, different competition UUID
                   (20000000-…-003) and qualifier criteria. */}
               <Route path="cup/solar-shield" element={<Cup cupKey="solar-shield" />} />
+
+              {/* /idols → leaguewide top-20 idol board + per-club top-5 */}
+              {/* Public — no auth gate.  Idol rankings are community-visible;
+                  surfacing them feeds the social experiment and the love-is-
+                  dangerous narrative without revealing the mechanic. */}
+              <Route path="idols" element={<Idols />} />
+
+              {/* /election → Election Night: phase banner, vote tallies, Decree ticker */}
+              {/* Public — the ceremony is for everyone, auth or not.
+                  DEV-gated phase-advance button visible only in development. */}
+              <Route path="election" element={<ElectionNight />} />
+
+              {/* /lost → memorial for every incinerated player across all seasons */}
+              {/* Public and permanent — the cosmos remembers. */}
+              <Route path="lost" element={<Lost />} />
 
               {/* /architect-log → dev-only intervention audit table */}
               {/* ArchitectLog.jsx gates itself behind import.meta.env.DEV so

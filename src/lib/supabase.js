@@ -487,18 +487,28 @@ export function normalizeTeamForEngine(team) {
 
     // Strip DB-specific fields (id, team_id, created_at, nationality, age)
     // and keep only the fields genEvent() and createAgent() actually read.
-    players: (team.players || []).map(p => ({
-      name:          p.name,
-      position:      p.position,
-      starter:       p.starter ?? true,
-      // Individual stats: fall back to 70 (functional average) if not seeded.
-      attacking:     p.attacking  ?? 70,
-      defending:     p.defending  ?? 70,
-      mental:        p.mental     ?? 70,
-      athletic:      p.athletic   ?? 70,
-      technical:     p.technical  ?? 70,
-      jersey_number: p.jersey_number,
-    })),
+    //
+    // PERMADEATH FILTER (Phase 3):
+    // Incinerated players have is_active=false on the players row.  They must
+    // never appear in the engine roster — the manager AI would otherwise rotate
+    // them into matches, undermining the love-is-dangerous mechanic and the
+    // /lost memorial's narrative weight.  We default missing is_active to true
+    // (legacy rows without the column / pre-Phase 3 schemas) so we never
+    // silently drop a live player.
+    players: (team.players || [])
+      .filter(p => p.is_active !== false)
+      .map(p => ({
+        name:          p.name,
+        position:      p.position,
+        starter:       p.starter ?? true,
+        // Individual stats: fall back to 70 (functional average) if not seeded.
+        attacking:     p.attacking  ?? 70,
+        defending:     p.defending  ?? 70,
+        mental:        p.mental     ?? 70,
+        athletic:      p.athletic   ?? 70,
+        technical:     p.technical  ?? 70,
+        jersey_number: p.jersey_number,
+      })),
   };
 }
 
@@ -776,4 +786,111 @@ export async function saveMatchPlayerStats(stats) {
     .from('match_player_stats')
     .upsert(stats, { onConflict: 'match_id,player_id' });
   if (error) throw error;
+}
+
+// ── Idol board ────────────────────────────────────────────────────────────────
+// Reads from the player_idol_score VIEW created in migration 0012.
+// The view computes idol_score = (favourite_count × 3) + training_count_14d
+// and produces global_rank + team_rank window columns.
+//
+// WHY TWO FUNCTIONS
+// ──────────────────
+// getIdolBoard()     — page-level bulk fetch for the /idols route.
+// getPlayerIdolRank() — single-player lookup used on /players/:id.
+// Splitting them avoids fetching 704 rows when only one is needed.
+
+/**
+ * Fetch the global idol board.  Returns the top `limit` players by idol score
+ * plus (optionally) the full per-team top-5 set for the club breakdown section.
+ *
+ * Rows are sorted by global_rank ASC (i.e. rank 1 = most idolised first).
+ * Players with idol_score = 0 are included — they appear at the bottom as
+ * "unknown" players the cosmos has not yet noticed.  This is intentional: the
+ * absence of idolisation is itself a cosmic statement.
+ *
+ * @param {object} db - Supabase client (from useSupabase hook).
+ * @param {{ globalLimit?: number, teamLimit?: number }} opts
+ *   globalLimit  Max rows for the global board section.  Default 20.
+ *   teamLimit    Max team-rank for the per-club section.  Default 5.
+ * @returns {Promise<{
+ *   global: Array<IdolRow>,
+ *   byTeam: Record<string, Array<IdolRow>>
+ * }>}
+ */
+export async function getIdolBoard(db, { globalLimit = 20, teamLimit = 5 } = {}) {
+  // Fetch top-globalLimit by global rank (leaderboard section).
+  const { data: topRows, error: topErr } = await db
+    .from('player_idol_score')
+    .select('*')
+    .order('global_rank', { ascending: true })
+    .limit(globalLimit);
+  if (topErr) throw topErr;
+
+  // Fetch team-rank ≤ teamLimit for the per-club breakdown section.
+  // We can't filter a window function result in a simple .lte() call, but
+  // team_rank is a plain column on the view so it works fine.
+  const { data: teamRows, error: teamErr } = await db
+    .from('player_idol_score')
+    .select('*')
+    .lte('team_rank', teamLimit)
+    .order('team_id', { ascending: true })
+    .order('team_rank', { ascending: true });
+  if (teamErr) throw teamErr;
+
+  // Group by-team rows into a map keyed by team_id.
+  const byTeam = (teamRows ?? []).reduce((acc, row) => {
+    if (!acc[row.team_id]) acc[row.team_id] = [];
+    acc[row.team_id].push(row);
+    return acc;
+  }, {});
+
+  return { global: topRows ?? [], byTeam };
+}
+
+/**
+ * Fetch the idol rank for a single player.
+ *
+ * Returns the full player_idol_score row — including global_rank, team_rank,
+ * favourite_count, and training_count — or null if the player is not found.
+ *
+ * Used by PlayerDetail.jsx to show "Idol rank: #N leaguewide."
+ *
+ * @param {object} db - Supabase client.
+ * @param {string} playerId - UUID of the player.
+ * @returns {Promise<IdolRow|null>}
+ */
+export async function getPlayerIdolRank(db, playerId) {
+  const { data, error } = await db
+    .from('player_idol_score')
+    .select('*')
+    .eq('player_id', playerId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Fetch the top N idol scores as a minimal {name, globalRank} array.
+ * Used by CosmicArchitect at match kickoff so the LLM can preferentially
+ * target highly-idolised players for curses/incinerations.
+ *
+ * Returns an empty array on error rather than throwing — idol context is
+ * enriching, not load-bearing.  A failed fetch must never block kickoff.
+ *
+ * @param {object} db - Supabase client.
+ * @param {number} [limit=10]
+ * @returns {Promise<Array<{name: string, globalRank: number}>>}
+ */
+export async function getTopIdolsForArchitect(db, limit = 10) {
+  try {
+    const { data, error } = await db
+      .from('player_idol_score')
+      .select('name, global_rank')
+      .order('global_rank', { ascending: true })
+      .limit(limit);
+    if (error) return [];
+    return (data ?? []).map(r => ({ name: r.name, globalRank: r.global_rank }));
+  } catch {
+    return [];
+  }
 }

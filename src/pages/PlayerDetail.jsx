@@ -42,7 +42,7 @@ import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
-import { getPlayerWithStats } from '../lib/supabase';
+import { getPlayer, getPlayerIdolRank } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { PERS_ICON } from '../constants';
 
@@ -152,6 +152,12 @@ export default function PlayerDetail() {
   const [playerArc,      setPlayerArc]      = useState(null);
   const [relationships,  setRelationships]  = useState([]);
 
+  // ── Idol rank ─────────────────────────────────────────────────────────────
+  // The idol rank for this player from the player_idol_score view.
+  // null = not yet loaded or player has zero idol score.
+  // Silently omitted on failure — idol rank is atmospheric, not load-bearing.
+  const [idolRank, setIdolRank] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     // Reset all state before each fetch so stale data from a previous player
@@ -161,10 +167,17 @@ export default function PlayerDetail() {
     setNotFound(false);
     setError(false);
 
-    getPlayerWithStats(db, playerId)
-      .then(data => {
+    // Fetch player data and idol rank in parallel — neither depends on the other.
+    // Idol rank is fetched concurrently rather than after the player resolves so
+    // both are ready by the time the component renders.
+    Promise.all([
+      getPlayer(db, playerId),
+      getPlayerIdolRank(db, playerId).catch(() => null), // silent failure — idol is atmospheric
+    ])
+      .then(([data, idol]) => {
         if (cancelled) return;
         setPlayer(data);
+        setIdolRank(idol);
         setLoading(false);
       })
       .catch(err => {
@@ -428,6 +441,53 @@ export default function PlayerDetail() {
                 </p>
               )}
             </div>
+
+            {/* ── Idol rank block ───────────────────────────────────────────
+                Only rendered when idol data is available (i.e. the player has
+                at least one fan devotion signal: a favourite pick or a training
+                click in the last 14 days).
+                Players with zero idol score are not shown here — the absence of
+                the block itself communicates "the cosmos has not noticed them"
+                without making it feel like a bug or missing feature.
+                The flavour text escalates with rank:
+                  rank 1    → ominous: fate is ready
+                  rank 2-3  → foreboding: the Architect has noted them
+                  rank 4-10 → observing: under cosmic scrutiny
+                  rank 11+  → quiet: known but not significant yet
+                The mechanic (2× curse weighting) is NEVER stated — the flavour
+                text is ambiguous enough to feel like cosmic lore, not a tooltip. */}
+            {idolRank && idolRank.idol_score > 0 && (
+              <div style={{
+                borderTop: '1px solid rgba(227,224,213,0.12)',
+                paddingTop: '12px',
+                marginTop: '12px',
+              }}>
+                <p style={{ fontSize: '13px', marginBottom: '4px' }}>
+                  <strong style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Idol Rank:
+                  </strong>
+                  {' '}
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    #{idolRank.global_rank} leaguewide
+                  </span>
+                </p>
+                <p style={{
+                  fontSize: '12px',
+                  opacity: 0.55,
+                  fontStyle: 'italic',
+                  lineHeight: 1.6,
+                  paddingLeft: '4px',
+                }}>
+                  {idolRank.global_rank === 1
+                    ? 'The cosmos has a name ready. Fate watches this mortal above all others.'
+                    : idolRank.global_rank <= 3
+                    ? 'The Architect has noted them. Such devotion rarely goes unacknowledged.'
+                    : idolRank.global_rank <= 10
+                    ? 'The cosmos pays close attention to this mortal.'
+                    : 'Known to the cosmos. The void has taken note.'}
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
