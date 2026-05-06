@@ -31,6 +31,7 @@ const NAV_LINKS = [
   // Galaxy Dispatch — the Architect's narrative feed. Sits between Matches
   // and Voting because news bridges in-match events with the off-season story.
   { label: 'News',     to: '/news' },
+  { label: 'Idols',    to: '/idols' },
   { label: 'Voting',   to: '/voting' },
   { label: 'Training', to: '/training' },
 ];

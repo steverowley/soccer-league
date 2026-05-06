@@ -21,7 +21,7 @@ import { rnd, rndI, pick } from "./utils.js";
 import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, CosmicVoiceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
-import { supabase } from "./lib/supabase.js";
+import { supabase, getTopIdolsForArchitect } from "./lib/supabase.js";
 import {
   calculateFanBoost,
   countPresentFans,
@@ -2060,6 +2060,14 @@ const MatchSimulator = ({
       // any browser session has ever contributed — not just this browser's
       // localStorage — so the Architect has the richest possible context.
       if(dbLore) arch.lore=dbLore;
+
+      // ── Inject idol context (Phase 2: love-is-dangerous) ─────────────────
+      // Fetches the top 10 most-idolised players leaguewide and passes them
+      // to the Architect so the LLM can preferentially target them for curses
+      // and incinerations.  Fire-and-forget with a silent fallback: a failed
+      // fetch degrades gracefully — the Architect still runs, just without
+      // idol weighting.  Must not block kickoff.
+      getTopIdolsForArchitect(supabase,10).then(ranks=>arch.setIdolContext(ranks));
 
       architectRef.current=arch;
 
