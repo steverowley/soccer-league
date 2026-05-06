@@ -18,10 +18,10 @@ import {
   MGER_EMO, EMO_ICON, REFS, STADIUMS, POS_ORDER,
 } from "./constants.js";
 import { rnd, rndI, pick } from "./shared/utils/random";
-import { PlayerRow, AgentCard, ArchitectCard, ArchitectInterferenceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
+import { Stat, PlayerRow, FeedCard, AgentCard, ArchitectCard, ArchitectInterferenceCard, CosmicVoiceCard, ApiKeyModal, PlayerCard, UnifiedFeed, PostMatchSummary, PreMatchArchitectZone, SealedFateCard, EdictBadge, ArchitectFlashCard } from "./components/MatchComponents.jsx";
 import { calcChaosLevel, flattenSequences, buildPostGoalExtras, applyLateGameLogic, getEventProbability, pickTensionVariant, updateNarrativeResidue } from "./simulateHelpers.js";
 import { buildResultRecord, saveResult, TEAM_LEAGUE_MAP } from "./lib/matchResultsService.js";
-import { supabase } from "./lib/supabase.js";
+import { supabase, getTopIdolsForArchitect } from "./lib/supabase.js";
 import {
   calculateFanBoost,
   countPresentFans,
@@ -1149,7 +1149,7 @@ const MatchSimulator = ({
         :item));
       return;
     }
-    if(r.type==='commentator'||r.type==='referee'||r.type==='play_by_play'||r.type==='architect_proclamation'){
+    if(r.type==='commentator'||r.type==='referee'||r.type==='play_by_play'||r.type==='architect_proclamation'||r.type==='cosmic_voice'){
       setCommentaryFeed(p=>[...p,r].slice(-120));
     }else if(r.type==='player_thought'){
       if(r.isHome)setHomeThoughtsFeed(p=>[...p,r].slice(-60));
@@ -2042,6 +2042,21 @@ const MatchSimulator = ({
         weather:mgr.weather,
       });
       loreStoreRef.current=loreStore;
+
+      // ── Inject DB lore over the localStorage copy ────────────────────────
+      // If hydration succeeded, the DB copy wins.  It contains all lore that
+      // any browser session has ever contributed — not just this browser's
+      // localStorage — so the Architect has the richest possible context.
+      if(dbLore) arch.lore=dbLore;
+
+      // ── Inject idol context (Phase 2: love-is-dangerous) ─────────────────
+      // Fetches the top 10 most-idolised players leaguewide and passes them
+      // to the Architect so the LLM can preferentially target them for curses
+      // and incinerations.  Fire-and-forget with a silent fallback: a failed
+      // fetch degrades gracefully — the Architect still runs, just without
+      // idol weighting.  Must not block kickoff.
+      getTopIdolsForArchitect(supabase,10).then(ranks=>arch.setIdolContext(ranks));
+
       architectRef.current=arch;
 
       // Pass the Architect instance into AgentSystem so _ctx() can inject its
@@ -2512,7 +2527,12 @@ const MatchSimulator = ({
   // architectItems feeds the Architect zone inside the Chaos Meter card.
   // Architect types are excluded from voxItems so they appear only there —
   // the in-universe characters react to outcomes, not to cosmic decrees.
-  const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference'), [commentaryReversed]);
+  // cosmic_voice items (Balance + Chaos) render in the Architect panel alongside
+  // proclamations — they are unnamed and unlabelled, distinguished only by their
+  // left-border accent.  The First Voice (Fate/Architect) continues to use
+  // architect_proclamation; we intentionally group all three here so the panel
+  // feels like a single "beyond-mortal" stream rather than siloed feeds.
+  const architectItems = useMemo(() => commentaryReversed.filter(i => i.type === 'architect_proclamation' || i.type === 'architect_interference' || i.type === 'cosmic_voice'), [commentaryReversed]);
 
   // refItems feeds the Referee Decisions feed in the centre column (bottom).
   // Referee commentary (type:'referee') is pushed to commentaryFeed by the
@@ -2865,6 +2885,10 @@ const MatchSimulator = ({
                   ?<div style={{textAlign:'center',opacity:0.2,fontSize:'10px',padding:'8px 12px 12px',fontStyle:'italic'}}>The void stirs...</div>
                   :architectItems.map((item,i)=>{
                     if(item.type==='architect_interference') return <ArchitectInterferenceCard key={i} item={item}/>;
+                    // Unnamed voices: no label/emoji/name — only text and a 2px left-border accent.
+                    // Players are meant to notice patterns over many matches and intuit which
+                    // voice is which (Balance = slate-blue, Chaos = amber) without being told.
+                    if(item.type==='cosmic_voice') return <CosmicVoiceCard key={i} item={item}/>;
                     return <ArchitectCard key={i} item={item}/>;
                   })
                 }
