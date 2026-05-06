@@ -51,6 +51,7 @@ import { normalizeTeamForEngine } from '../src/lib/supabase';
 import { simulateFullMatch }       from '../src/features/match/logic/simulateFullMatch';
 import { settleMatchWagers }        from '../src/features/betting/api/wagers';
 import { isSeasonComplete }         from '../src/features/match/logic/seasonLifecycle';
+import { advanceCupRound }          from '../src/features/match/api/cupSeeder';
 import {
   getSeasonIdForMatch,
   getSeasonStatus,
@@ -327,6 +328,26 @@ async function processMatch(
 
     console.log(`${tag} completed: ${homeScore}–${awayScore}, mvp=${result.mvp}`);
 
+    // ── Step 5.5: Advance cup brackets (if applicable) ─────────────────────
+    // If this match is part of a cup competition (Celestial Cup or Solar Shield),
+    // determine the winner and call advanceCupRound to write winner_team_id and
+    // insert the next-round fixture. This server-side advancement ensures the
+    // bracket progresses even if the browser listener never fires.
+    const winnerTeamId = homeScore > awayScore ? match.home_team_id : match.away_team_id;
+    const { data: cupMatches } = await db
+      .from('matches')
+      .select('competition_id')
+      .eq('id', matchId)
+      .single();
+    if (cupMatches?.competition_id) {
+      try {
+        await advanceCupRound(db as AnyDb, cupMatches.competition_id, matchId, winnerTeamId);
+        console.log(`${tag} cup bracket advanced`);
+      } catch (cupErr) {
+        console.warn(`${tag} cup advancement error (match result preserved):`, cupErr);
+      }
+    }
+
     // ── Step 6: Settle open wagers ──────────────────────────────────────────
     // settleMatchWagers reads all open wagers for this match, resolves each
     // against the final score, updates wager rows, and credits winners.
@@ -368,13 +389,15 @@ async function processMatch(
     }
 
   } catch (err) {
-    // ── Error recovery: flip match back to 'scheduled' ──────────────────────
-    // The simplest retry strategy: un-claim the match so the next poll tick
-    // picks it up and tries again.  In a production system you'd track
-    // retry_count and dead-letter after N failures; that complexity is
-    // deferred until the worker is battle-tested.
-    console.error(`${tag} simulation error — rolling back to 'scheduled':`, err);
+    // ── Error recovery: cleanup + flip match back to 'scheduled' ────────────
+    // If any error occurs after match_events inserts have begun, those partial
+    // events remain in the DB. On retry, a new simulation will insert duplicate
+    // events for the same match. To prevent duplicate event logs and scores in
+    // the live feed, we delete all match_events for this match before resetting
+    // the match status, ensuring the retry produces a clean event log.
+    console.error(`${tag} simulation error — cleaning up and rolling back to 'scheduled':`, err);
 
+    await db.from('match_events').delete().eq('match_id', matchId);
     await db
       .from('matches')
       .update({ status: 'scheduled', simulated_at: null })

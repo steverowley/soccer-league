@@ -163,7 +163,15 @@ export function MatchLivePage(): JSX.Element {
       ]);
       if (cancelled) return;
       setMatch(matchRow);
-      setEvents(evs);
+      // Merge initial fetch with any realtime-inserted events to avoid losing
+      // events that arrived after subscription but before the initial query completed.
+      // Dedupe by match_event_id to prevent duplicates if the realtime insert
+      // also appears in the initial fetch response.
+      setEvents((prev) => {
+        const seenIds = new Set(evs.map(e => e.id));
+        const realtimeOnly = prev.filter(e => !seenIds.has(e.id));
+        return [...evs, ...realtimeOnly].sort((a, b) => a.minute - b.minute || a.second - b.second);
+      });
       setDurationSeconds(dur);
       setLoading(false);
     })();
