@@ -24,10 +24,10 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
 - **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
+- **Idols** (`/idols`) — Community idol rankings powered by fan voting; displays top-ranked players with vote counts and idol status; top 10 idol-ranked players receive 2× vote-weight surge during election phases; public route (no auth required)
+- **Election Night** (`/election`) — End-of-season permadeath election where top-10 idols face elimination; fans can vote to spare or incinerate their favourite (or most-hated) players; public route (ceremony visible to all)
 - **Authenticated routes**:
   - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
-  - **Idols** (`/idols`) — Community idol rankings powered by fan voting; displays top-ranked players with vote counts and idol status; top 10 idol-ranked players receive 2× vote-weight surge during election phases
-  - **Election Night** (`/election-night`) — End-of-season permadeath election where top-10 idols face elimination; fans can vote to spare or incinerate their favourite (or most-hated) players
   - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options for club development
   - **Training** (`/training`) — Clicker minigame to collectively boost player stats
   - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
