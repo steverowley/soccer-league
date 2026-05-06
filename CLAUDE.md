@@ -29,6 +29,49 @@ A Blaseball-inspired **social experiment browser game**. Users watch AI-simulate
 - Player-vs-player direct messaging / chat.
 - Exposing raw player stats to users.
 
+---
+
+## Git Workflow & Branch Strategy
+
+**Branch Hierarchy:**
+- `main` — production-ready, merged from dev via fast-forward. Protected: requires 1 approval + passing CI.
+- `dev` — integration branch for features. Protected: auto-merge enabled (squash) for feature PRs, requires passing CI.
+- `feat/*`, `fix/*`, `chore/*`, `docs/*`, `refactor/*` — feature branches, deleted after merge.
+
+**Branch Naming (Conventional Commits):**
+```
+feat/user-authentication          ← New features
+fix/match-event-dedup             ← Bug fixes
+chore/update-dependencies         ← Maintenance, config, tooling
+docs/api-reference                ← Documentation
+refactor/architect-logic-cleanup  ← Code restructuring
+test/simulation-coverage          ← Test improvements
+```
+
+**Commit Messages (Conventional Commits):**
+```
+feat: add user authentication flow
+fix: resolve match event duplication on retry
+chore: upgrade dependencies to latest
+docs: document betting API endpoint
+```
+
+**Workflow:**
+1. Create feature branch: `git checkout -b feat/description`
+2. Make commits with conventional format
+3. Push and create PR to `dev` (auto-merge enabled for squash)
+4. Once merged, branch is automatically deleted
+5. Sync `main` from `dev` weekly or per release cycle
+6. **IMPORTANT**: After every merge, delete the source branch immediately (no orphaned branches)
+
+**Branch Protection Rules:**
+- `main`: 1 approval required, status checks required (ESLint, TypeScript, Tests)
+- `dev`: auto-merge enabled (squash merge), status checks required
+- No force pushes allowed on either branch
+- Require conversation resolution before merge
+
+---
+
 ## Engineering principles (non-negotiable, apply to every PR)
 
 1. **TypeScript everywhere** with `strict: true`. Typed Supabase client regenerated on every migration via the Supabase MCP's `generate_typescript_types` into `src/types/database.ts`.
