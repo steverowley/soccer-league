@@ -118,6 +118,17 @@ export class CosmicArchitect {
   static readonly LORE_KEY = 'isi_cosmic_lore';
 
   /**
+   * Stable entity UUID for the First Voice (Fate / the Architect) in the
+   * `entities` table.  Seeded by migration 0011_voices.sql.
+   *
+   * WHY HERE: CosmicArchitect is the runtime manifestation of the First Voice.
+   * Storing the ID as a static constant keeps the two representations linked
+   * without a cross-feature import — future Phase 5.1 DB hydration can read
+   * this to write lore arcs directly to the correct entity row.
+   */
+  static readonly FIRST_VOICE_ENTITY_ID = '50000000-0000-0000-0000-000000000001';
+
+  /**
    * Maximum number of past matches retained in the lore ledger.
    * Oldest entries are dropped when this limit is exceeded.
    */
