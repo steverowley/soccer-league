@@ -81,7 +81,11 @@ import Training     from './pages/Training';
 import ArchitectLog from './pages/ArchitectLog';
 import NewsFeed     from './pages/NewsFeed';
 // /idols → leaguewide top-20 idol board + per-club top-5 (Phase 2)
-import Idols        from './pages/Idols';
+import Idols          from './pages/Idols';
+// /election → Election Night ticker: phase status, vote tallies, Decrees (Phase 3)
+import ElectionNight  from './pages/ElectionNight';
+// /lost → memorial for every incinerated player across all seasons (Phase 3)
+import Lost           from './pages/Lost';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -162,6 +166,15 @@ createRoot(document.getElementById('root')).render(
                   surfacing them feeds the social experiment and the love-is-
                   dangerous narrative without revealing the mechanic. */}
               <Route path="idols" element={<Idols />} />
+
+              {/* /election → Election Night: phase banner, vote tallies, Decree ticker */}
+              {/* Public — the ceremony is for everyone, auth or not.
+                  DEV-gated phase-advance button visible only in development. */}
+              <Route path="election" element={<ElectionNight />} />
+
+              {/* /lost → memorial for every incinerated player across all seasons */}
+              {/* Public and permanent — the cosmos remembers. */}
+              <Route path="lost" element={<Lost />} />
 
               {/* /architect-log → dev-only intervention audit table */}
               {/* ArchitectLog.jsx gates itself behind import.meta.env.DEV so

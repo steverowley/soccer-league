@@ -32,6 +32,9 @@ const NAV_LINKS = [
   // and Voting because news bridges in-match events with the off-season story.
   { label: 'News',     to: '/news' },
   { label: 'Idols',    to: '/idols' },
+  // Election Night: the marquee season-end event. Always accessible so fans
+  // can check the current phase and vote tallies throughout the season cycle.
+  { label: 'Election', to: '/election' },
   { label: 'Voting',   to: '/voting' },
   { label: 'Training', to: '/training' },
 ];

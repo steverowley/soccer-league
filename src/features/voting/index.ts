@@ -48,6 +48,19 @@ export {
   ALL_FOCUS_TEMPLATES,
 } from './logic/focusTemplates';
 
+// ── Logic — election night (pure TS, Phase 3) ─────────────────────────────
+export {
+  selectIncinerationTargets,
+  resolveFocusWinners,
+  buildFocusMutations,
+  sortDecreesForElectionNight,
+} from './logic/electionLogic';
+export type {
+  IncinerationCandidate,
+  IncinerationTarget,
+  FocusMutation,
+} from './logic/electionLogic';
+
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   generateFocusOptions,
@@ -56,6 +69,22 @@ export {
   getUserVotesForSeason,
   getTeamTally,
 } from './api/focuses';
+
+// ── API — election night (Phase 3) ────────────────────────────────────────
+export {
+  getActiveSeasonWithPhase,
+  getSeasonDecrees,
+  getAllIncinerations,
+  getSeasonFocusTally,
+  advanceSeasonPhase,
+  insertSeasonDecrees,
+  incinerate,
+} from './api/election';
+export type {
+  SeasonWithPhase,
+  SeasonDecree,
+  IncinerationRecord,
+} from './api/election';
 
 // ── UI (React components) ──────────────────────────────────────────────────
 // VotingPage is the route-level component (mounted at /voting). FocusCard
