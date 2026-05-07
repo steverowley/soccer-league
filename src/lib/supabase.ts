@@ -319,3 +319,97 @@ export async function getPlayerWithStats(db: IslSupabaseClient, playerId: string
   };
 }
 
+/**
+ * Named alias for `getPlayerWithStats` that preserves the import contract
+ * expected by `PlayerDetail.jsx` and any other JS callers. The two names
+ * are intentionally distinct in `supabase.js` (singleton) vs here (DI) to
+ * avoid confusion with the in-engine `getPlayer` inside `gameEngine.js`,
+ * which does a lightweight roster lookup rather than a stats aggregate.
+ *
+ * Prefer importing `getPlayerWithStats` directly in new TypeScript code —
+ * this alias exists only to avoid a breaking rename across legacy JSX files.
+ */
+export const getPlayer = getPlayerWithStats;
+
+/**
+ * Fetch the `player_idol_score` view row for a single player.
+ *
+ * The idol score view is computed from wager activity: fans who bet on a
+ * player's team accumulate idolisation points for that player. Global rank
+ * and team rank are both stored so the PlayerDetail page can surface
+ * "Idol rank: #N leaguewide" without a second query.
+ *
+ * Returns `null` (via `.maybeSingle()`) rather than throwing when the player
+ * has no idol score row yet — new or unwagered-on players are unranked rather
+ * than errored.
+ *
+ * @param db       - Injected Supabase client.
+ * @param playerId - UUID of the player whose idol rank to fetch.
+ * @returns The full `player_idol_score` row, or `null` if unranked.
+ */
+export async function getPlayerIdolRank(db: IslSupabaseClient, playerId: string) {
+  const { data, error } = await db
+    .from('player_idol_score')
+    .select('*')
+    .eq('player_id', playerId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Fetch the global idol board and per-team breakdowns for the /idols page.
+ *
+ * WHY TWO QUERIES
+ * ────────────────
+ * The global top-N leaderboard and the per-club top-5 serve different UI
+ * sections and have different size requirements. Fetching them separately
+ * avoids pulling 700+ rows for the global board when we only need a bounded
+ * set, and avoids filtering by a window function result (unsupported in
+ * PostgREST) by using `team_rank` as a plain materialised column instead.
+ *
+ * WHY idol_score = 0 ROWS ARE INCLUDED
+ * ──────────────────────────────────────
+ * Players with zero idolisation appear at the bottom of the board. Their
+ * presence is intentional narrative design — the absence of fan attention
+ * is itself a cosmic signal that fans can interpret and discuss.
+ *
+ * @param db          - Injected Supabase client.
+ * @param opts.globalLimit  - Max rows for the leaderboard section. Default 20.
+ * @param opts.teamLimit    - Max `team_rank` value for the club section. Default 5.
+ * @returns `{ global: IdolRow[], byTeam: Record<teamId, IdolRow[]> }`
+ */
+export async function getIdolBoard(
+  db: IslSupabaseClient,
+  { globalLimit = 20, teamLimit = 5 }: { globalLimit?: number; teamLimit?: number } = {},
+) {
+  // ── Global leaderboard ────────────────────────────────────────────────────
+  const { data: topRows, error: topErr } = await db
+    .from('player_idol_score')
+    .select('*')
+    .order('global_rank', { ascending: true })
+    .limit(globalLimit);
+  if (topErr) throw topErr;
+
+  // ── Per-team top-N ────────────────────────────────────────────────────────
+  // team_rank is a materialised window-function column on the view, so
+  // PostgREST can filter it with a simple .lte() call.
+  const { data: teamRows, error: teamErr } = await db
+    .from('player_idol_score')
+    .select('*')
+    .lte('team_rank', teamLimit)
+    .order('team_id', { ascending: true })
+    .order('team_rank', { ascending: true });
+  if (teamErr) throw teamErr;
+
+  // Group by-team rows into a plain object keyed by team_id for O(1) lookup
+  // in the club-breakdown section of the Idols page.
+  const byTeam = (teamRows ?? []).reduce<Record<string, typeof teamRows>>((acc, row) => {
+    if (!acc[row.team_id]) acc[row.team_id] = [];
+    acc[row.team_id]!.push(row);
+    return acc;
+  }, {});
+
+  return { global: topRows ?? [], byTeam };
+}
+
