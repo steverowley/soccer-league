@@ -46,7 +46,26 @@ export function createAgent(player: EnginePlayer, isHome: boolean): PlayerAgent;
  * planet weather, and exposes the methods used by simulateHelpers (tactical
  * shouts, substitutions, agent lookup).
  */
-export function createAIManager(homeTeam: EngineTeam, awayTeam: EngineTeam): AIManager;
+/**
+ * Optional entity-graph referee assignment passed to `createAIManager`.
+ *
+ * `strictness` is the gameEngine's 0–100 internal scale (entity_traits
+ * stores 1–10, so callers multiply by 10 before passing).  When omitted,
+ * the engine fabricates a random referee — preserving smoke-test
+ * determinism for callers that don't yet plumb entity refs through.
+ */
+export interface RefereeOverride {
+  /** Referee's display name shown in commentary lines. */
+  name: string;
+  /** Card-threshold strictness on the engine's 0–100 scale. */
+  strictness: number;
+}
+
+export function createAIManager(
+  homeTeam: EngineTeam,
+  awayTeam: EngineTeam,
+  refOverride?: RefereeOverride | null,
+): AIManager;
 
 // ── Squad / stats utilities ───────────────────────────────────────────────────
 
