@@ -256,11 +256,17 @@ async function processMatch(
   console.log(`${tag} claimed — fetching teams`);
 
   try {
-    // ── Step 2: Fetch teams from the DB ─────────────────────────────────────
-    // We fetch both teams in parallel to minimise wall-clock time before the
-    // simulation starts.  Players and managers are joined in the same query
-    // (same pattern as getTeamForEngine in src/lib/supabase.js).
-    const [homeResult, awayResult] = await Promise.all([
+    // ── Step 2: Fetch teams + referee from the DB ───────────────────────────
+    // Three queries in parallel to minimise wall-clock time before the
+    // simulation starts.  Players and managers are joined in the team queries
+    // (same pattern as getTeamForEngine in src/lib/supabase.js); the referee
+    // join lives in `match_referee_v` so we get name + strictness in one row.
+    //
+    // The referee row may be NULL (transitional state for matches inserted
+    // before 0015's backfill ran or where the FK was never assigned).  In
+    // that case we pass null to simulateFullMatch and the engine falls back
+    // to a randomly-generated referee — same behaviour as before the wire-in.
+    const [homeResult, awayResult, refResult] = await Promise.all([
       (db as AnyDb)
         .from('teams')
         .select('*, players(*), managers(*)')
@@ -271,6 +277,11 @@ async function processMatch(
         .select('*, players(*), managers(*)')
         .eq('id', awayTeamId)
         .single(),
+      (db as AnyDb)
+        .from('match_referee_v')
+        .select('referee_name, referee_display_name, referee_strictness')
+        .eq('match_id', matchId)
+        .maybeSingle(),
     ]);
 
     if (homeResult.error) throw new Error(`home team fetch failed: ${homeResult.error.message}`);
@@ -279,13 +290,32 @@ async function processMatch(
     const homeTeam = normalizeTeamForEngine(homeResult.data);
     const awayTeam = normalizeTeamForEngine(awayResult.data);
 
-    console.log(`${tag} simulating: ${homeTeam.name} vs ${awayTeam.name}`);
+    // Build the engine-shaped referee override iff the view returned a row.
+    // entity_traits.strictness is the 1–10 designer-facing scale (see
+    // 0002_entities.sql); the engine card-thresholds use 0–100 (see
+    // gameEngine.js ref.strictness usage), so we multiply by 10.  A null
+    // strictness defaults to 5 in the view → 50 in the engine (neutral).
+    //
+    // We do NOT propagate the refResult.error case — referee lookup is
+    // non-critical (the engine gracefully falls back to random), so a
+    // transient view-fetch failure must never block match simulation.
+    const refOverride = refResult?.data?.referee_name
+      ? {
+          name: refResult.data.referee_display_name ?? refResult.data.referee_name,
+          strictness: (refResult.data.referee_strictness ?? 5) * 10,
+        }
+      : null;
+
+    console.log(
+      `${tag} simulating: ${homeTeam.name} vs ${awayTeam.name}` +
+      (refOverride ? ` (ref: ${refOverride.name}, strictness ${refOverride.strictness})` : ''),
+    );
 
     // ── Step 3: Simulate all 90 minutes ────────────────────────────────────
     // simulateFullMatch is fully synchronous — it drives gameEngine.genEvent()
     // across minutes 1–90 and returns all events + final score in one call.
     // No I/O happens inside; the entire match is in memory within milliseconds.
-    const result = simulateFullMatch(homeTeam, awayTeam);
+    const result = simulateFullMatch(homeTeam, awayTeam, refOverride);
     const [homeScore, awayScore] = result.finalScore;
 
     console.log(

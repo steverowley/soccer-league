@@ -29,6 +29,7 @@
 import {
   createAIManager, calcMVP, genEvent,
 } from '../../../gameEngine.js';
+import type { RefereeOverride } from '../../../gameEngine';
 import type {
   EnginePlayer, EngineTeam, MatchEvent, PlayerStatsMap,
 } from '../../../gameEngine.types';
@@ -146,18 +147,27 @@ function toSimulatedEvent(ev: MatchEvent, subminute: number): SimulatedEvent {
  * Those features add narrative colour but are not required for a basic
  * end-to-end runnable season.  Adding them in a follow-up will be additive.
  *
- * @param home   Home team object as produced by getTeamForEngine().
- * @param away   Away team object as produced by getTeamForEngine().
- * @returns      Events + final score + MVP — ready for DB persistence.
+ * @param home        Home team object as produced by getTeamForEngine().
+ * @param away        Away team object as produced by getTeamForEngine().
+ * @param refOverride Optional entity-graph referee — `{ name, strictness }`
+ *                    on the engine's 0–100 strictness scale.  Pass through
+ *                    from `match_referee_v` after multiplying the 1–10
+ *                    entity_traits value by 10.  When omitted, the engine
+ *                    fabricates a random referee — preserving determinism
+ *                    for callers (smoke tests, tests, App.jsx) that don't
+ *                    yet plumb entity refs through.
+ * @returns           Events + final score + MVP — ready for DB persistence.
  */
 export function simulateFullMatch(
   home: EngineTeam,
   away: EngineTeam,
+  refOverride: RefereeOverride | null = null,
 ): SimulatedMatchResult {
   // ── Per-match state ────────────────────────────────────────────────────────
   // createAIManager seeds initial agent fatigue/morale and picks weather,
-  // referee, and flashpoint caps.  Same RNG sequence → same AIManager.
-  const aim = createAIManager(home, away);
+  // referee, and flashpoint caps.  Same RNG sequence + same refOverride
+  // → same AIManager.
+  const aim = createAIManager(home, away, refOverride);
 
   const score:    [number, number] = [0, 0];
   let   momentum: [number, number] = [...INITIAL_MOMENTUM];
