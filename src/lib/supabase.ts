@@ -403,8 +403,11 @@ export async function getIdolBoard(
   if (teamErr) throw teamErr;
 
   // Group by-team rows into a plain object keyed by team_id for O(1) lookup
-  // in the club-breakdown section of the Idols page.
+  // in the club-breakdown section of the Idols page. Rows whose team_id is
+  // null (orphaned players with no club) are skipped — the view column is
+  // nullable because PostgreSQL marks every view column nullable by default.
   const byTeam = (teamRows ?? []).reduce<Record<string, typeof teamRows>>((acc, row) => {
+    if (!row.team_id) return acc;
     if (!acc[row.team_id]) acc[row.team_id] = [];
     acc[row.team_id]!.push(row);
     return acc;

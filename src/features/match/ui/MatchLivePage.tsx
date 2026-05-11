@@ -170,7 +170,7 @@ export function MatchLivePage(): JSX.Element {
       setEvents((prev) => {
         const seenIds = new Set(evs.map(e => e.id));
         const realtimeOnly = prev.filter(e => !seenIds.has(e.id));
-        return [...evs, ...realtimeOnly].sort((a, b) => a.minute - b.minute || a.second - b.second);
+        return [...evs, ...realtimeOnly].sort((a, b) => a.minute - b.minute || a.subminute - b.subminute);
       });
       setDurationSeconds(dur);
       setLoading(false);
