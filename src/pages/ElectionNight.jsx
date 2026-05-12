@@ -45,6 +45,7 @@ import {
   getSeasonFocusTally,
   advanceSeasonPhase,
 } from '../features/voting/api/election';
+import { runElectionNight } from '../features/voting/api/orchestrator';
 import { resolveFocusWinners, sortDecreesForElectionNight } from '../features/voting/logic/electionLogic';
 
 // ── Decree type display config ────────────────────────────────────────────────
@@ -133,12 +134,26 @@ export default function ElectionNight() {
     completed:       null,
   };
 
+  // The election_closed → completed transition is the ceremonial moment:
+  // we run the orchestrator (resolve focus winners, pick incinerations,
+  // write decrees, fire `season.ended` so focus enactment runs) BEFORE
+  // flipping `seasons.status`.  Doing the orchestration first means a
+  // status row only flips to `completed` when the decrees + incinerations
+  // actually landed — any failure leaves the season in `election_closed`
+  // and the dev button can be retried.
   const advancePhase = useCallback(async () => {
     if (!season) return;
     const next = NEXT_PHASE[season.status];
     if (!next) return;
     setAdvancing(true);
     try {
+      if (season.status === 'election_closed' && next === 'completed') {
+        const result = await runElectionNight(db, season.id, season.name);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[ElectionNight] ceremony complete — ${result.decreesWritten} decrees, ${result.incinerationsCount} incinerations, ${result.teamFocusesResolved} team focuses`,
+        );
+      }
       await advanceSeasonPhase(db, season.id, next);
       await load(); // re-fetch to reflect the new status
     } catch (e) {
