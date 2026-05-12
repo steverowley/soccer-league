@@ -93,6 +93,109 @@ const CLAUDE_MODEL = 'claude-sonnet-4-6';
 /** Max output tokens per entity call. Narratives are 2–4 sentences each. */
 const MAX_OUTPUT_TOKENS = 512;
 
+// ── Voices in the Void (Phase 6a) ────────────────────────────────────────────
+//
+// Between matches the cosmic voices (Balance, Chaos) should still speak —
+// otherwise the Galaxy Dispatch feed goes silent for hours and the social
+// experiment loses its 24/7 heartbeat.  This block defines the per-day caps,
+// per-tick probabilities, and template banks the proclamation rolls draw on.
+//
+// IMPORTANT: This is a Deno runtime; we cannot import from `src/`.  The same
+// templates and constants are mirrored in
+// `src/features/architect/logic/voicesInVoid.ts` for unit testing, and the
+// duplication is intentional at the Deno↔Vitest boundary (matches the
+// existing pattern with `buildEntityPrompt`/`buildNewsContext`).
+// If you edit a value here, update voicesInVoid.ts too — otherwise prod
+// behaviour will drift from what the tests assert.
+
+/**
+ * Stable UUID for the Second Voice (Balance), seeded by migration 0011.
+ * Used as the entities_involved reference on every Balance void whisper.
+ */
+const BALANCE_ENTITY_ID = '50000000-0000-0000-0000-000000000002';
+
+/**
+ * Stable UUID for the Third Voice (Chaos), seeded by migration 0011.
+ * Used as the entities_involved reference on every Chaos void whisper.
+ */
+const CHAOS_ENTITY_ID = '50000000-0000-0000-0000-000000000003';
+
+/**
+ * Maximum Balance whispers permitted per UTC calendar day.  Low cap so
+ * each one carries weight — at 1/day, fans know that when Balance speaks
+ * outside a match the cosmos has actually noticed something.
+ */
+const MAX_BALANCE_PER_DAY = 1;
+
+/** Same as MAX_BALANCE_PER_DAY but for Chaos. */
+const MAX_CHAOS_PER_DAY = 1;
+
+/**
+ * Per-tick probability that Balance speaks in the void.  At a 2-hour cron
+ * cadence, ~12 ticks/day × 0.18 ≈ 2.2 attempts/day, clamped by the 1/day
+ * cap.  Keeps Balance feeling measured rather than chatty.
+ */
+const BALANCE_VOID_PROB = 0.18;
+
+/**
+ * Per-tick probability that Chaos speaks in the void.  Slightly higher
+ * than Balance because Chaos is restless by design (see cosmicVoices.ts
+ * noveltyHunger), but still capped at 1/day.
+ */
+const CHAOS_VOID_PROB = 0.22;
+
+/**
+ * Balance void proclamations.  Mirrors BALANCE_VOID_TEMPLATES in
+ * voicesInVoid.ts byte-for-byte — see header note above for why.
+ */
+const BALANCE_VOID_TEMPLATES: readonly string[] = [
+  'A day has passed. The ledger remains open.',
+  'Something was owed. Something arrived. The scales rebalance.',
+  'Quiet now. The accounting continues.',
+  'No goals to weigh today. The cosmos notes the absence.',
+  'The week thus far: balanced. For now.',
+  'Equal weights on equal sides. The cosmos approves, briefly.',
+  'A correction is due. The cosmos waits to see what form it takes.',
+  'Yesterday\'s imbalance is today\'s debt. Today\'s debt is tomorrow\'s payment.',
+  'The standings have shifted. The scales notice.',
+  'One league trends. Another stagnates. This too will correct.',
+  'The cosmos counts. Nothing is missed.',
+  'A name rises. Another falls. The ledger keeps balance.',
+  'No match runs. The accounting continues without one.',
+  'Order, briefly. Order is always brief.',
+];
+
+/**
+ * Chaos void proclamations.  Mirrors CHAOS_VOID_TEMPLATES in
+ * voicesInVoid.ts byte-for-byte.
+ */
+const CHAOS_VOID_TEMPLATES: readonly string[] = [
+  'Nothing happened today. Disappointing.',
+  'The expected. Again. The expected.',
+  'Wrong. Somewhere. Wrong.',
+  'The favorite is winning. The cosmos is bored.',
+  'A team I cannot name did something nobody noticed. Good.',
+  'No upsets today. Tedious. Tedious.',
+  'Something is about to turn. I can taste it.',
+  'The schedule predicts. The cosmos rolls its eyes.',
+  'A blowout. Then another. Then another. This is not interesting.',
+  'Quiet. Too quiet. Something is winding up.',
+  'The pundits agree. The pundits are wrong. Good.',
+  'Two days without surprise. The cosmos hungers.',
+  'A name. A name. Always names. The cosmos notes none of them.',
+  'Predictable. Predictable. Predictable. Soon.',
+];
+
+/**
+ * Uniform-random pick from a non-empty pool.  Inline to avoid a shared
+ * util module — keeps this Deno file self-contained.
+ */
+function pickRandom<T>(pool: readonly T[]): T {
+  // Callers always pass non-empty arrays.  The non-null assertion documents
+  // that for Deno's strict checking.
+  return pool[Math.floor(Math.random() * pool.length)]!;
+}
+
 // ── Type declarations ────────────────────────────────────────────────────────
 
 interface EntityRow {
@@ -311,6 +414,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
         } else {
           allInserted.push(...(data ?? []));
         }
+      }
+    }
+
+    // ── Voices in the Void (Phase 6a) ────────────────────────────────────
+    // Balance and Chaos speak between matches.  Each voice rolls
+    // independently per tick, gated by:
+    //   1. A per-tick probability (BALANCE_VOID_PROB / CHAOS_VOID_PROB)
+    //   2. A UTC-day cap counted from `todayNarratives` so multiple cron
+    //      triggers in the same day cannot flood the feed.
+    //
+    // The templates are inlined here (Deno can't import from `src/`) and
+    // mirrored in src/features/architect/logic/voicesInVoid.ts where
+    // they're unit-tested.  When either pool is edited, update both
+    // files — the duplication is intentional at the runtime/test boundary.
+    const todayWithKind = (todayNarrativeRows.data ?? []) as Array<{ kind: string }>;
+    const balanceTodayCount = todayWithKind.filter((n) => n.kind === 'balance_whisper').length;
+    const chaosTodayCount   = todayWithKind.filter((n) => n.kind === 'chaos_whisper').length;
+
+    if (balanceTodayCount < MAX_BALANCE_PER_DAY && Math.random() < BALANCE_VOID_PROB) {
+      const line = pickRandom(BALANCE_VOID_TEMPLATES);
+      const { error, data } = await db.from('narratives').insert({
+        kind:              'balance_whisper',
+        summary:           line,
+        entities_involved: [BALANCE_ENTITY_ID],
+        source:            'scheduled',
+      }).select();
+      if (error) {
+        console.warn('[galaxy-tick] balance whisper insert failed:', error.message);
+      } else {
+        allInserted.push(...(data ?? []));
+      }
+    }
+
+    if (chaosTodayCount < MAX_CHAOS_PER_DAY && Math.random() < CHAOS_VOID_PROB) {
+      const line = pickRandom(CHAOS_VOID_TEMPLATES);
+      const { error, data } = await db.from('narratives').insert({
+        kind:              'chaos_whisper',
+        summary:           line,
+        entities_involved: [CHAOS_ENTITY_ID],
+        source:            'scheduled',
+      }).select();
+      if (error) {
+        console.warn('[galaxy-tick] chaos whisper insert failed:', error.message);
+      } else {
+        allInserted.push(...(data ?? []));
       }
     }
 
