@@ -151,7 +151,7 @@ export default function ElectionNight() {
         const result = await runElectionNight(db, season.id, season.name);
         // eslint-disable-next-line no-console
         console.log(
-          `[ElectionNight] ceremony complete — ${result.decreesWritten} decrees, ${result.incinerationsCount} incinerations, ${result.teamFocusesResolved} team focuses`,
+          `[ElectionNight] ceremony complete — ${result.decreesWritten} decrees, ${result.incinerationsCount} incinerations, ${result.replacementsGenerated} replacements, ${result.teamFocusesResolved} team focuses`,
         );
       }
       await advanceSeasonPhase(db, season.id, next);

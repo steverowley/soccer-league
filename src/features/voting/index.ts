@@ -118,6 +118,20 @@ export {
   buildIncinerationDecree,
 } from './logic/decreeTemplates';
 
+// ── Logic — replacement player generation (Phase 3.1) ─────────────────────
+// Pure name + stat generator used by runElectionNight to fill rosters after
+// each incineration.  Exported so future LLM-bio generation can A/B against
+// the template baseline (same pattern as decreeTemplates).
+export {
+  buildReplacementPlayer,
+  generateReplacementName,
+} from './logic/replacementPlayer';
+export type {
+  GeneratedReplacementPlayer,
+  ReplacementContext,
+  TeammateNameSeed,
+} from './logic/replacementPlayer';
+
 // ── UI (React components) ──────────────────────────────────────────────────
 // VotingPage is the route-level component (mounted at /voting). FocusCard
 // is the per-option subcomponent — exported separately so other surfaces
