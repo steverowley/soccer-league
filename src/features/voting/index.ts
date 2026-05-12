@@ -104,6 +104,20 @@ export type {
   IncinerationRecord,
 } from './api/election';
 
+// ── API — election night orchestrator (Phase 3) ───────────────────────────
+// `runElectionNight` is the single entry point that closes a season: it
+// resolves focus winners, runs incinerations via the atomic RPC, writes the
+// full decree set, and emits `season.ended` so SeasonEnactmentListener
+// applies focus mutations.  Pure-logic decree builders are also exported
+// so future LLM enrichment can A/B against the template baseline.
+export { runElectionNight } from './api/orchestrator';
+export type { ElectionNightResult } from './api/orchestrator';
+export {
+  buildProclamationDecree,
+  buildFocusEnactmentDecree,
+  buildIncinerationDecree,
+} from './logic/decreeTemplates';
+
 // ── UI (React components) ──────────────────────────────────────────────────
 // VotingPage is the route-level component (mounted at /voting). FocusCard
 // is the per-option subcomponent — exported separately so other surfaces
