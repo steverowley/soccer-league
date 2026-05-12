@@ -53,6 +53,10 @@ import {
   buildFocusEnactmentDecree,
   buildIncinerationDecree,
 } from '../logic/decreeTemplates';
+import {
+  buildReplacementPlayer,
+  type TeammateNameSeed,
+} from '../logic/replacementPlayer';
 
 // ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -97,11 +101,19 @@ const INCINERATION_SEQUENCE_BASE = 1000;
 
 // ── Minimal row shapes the orchestrator needs ────────────────────────────────
 
-/** Subset of the players row required to build an incineration candidate. */
+/**
+ * Subset of the players row required to:
+ *  • Build incineration candidates (id, name, team_id)
+ *  • Drive replacement-player name themes via the surviving teammate roster
+ *    (nationality, position).  position is also the slot the replacement
+ *    fills — we copy it verbatim from the incinerated player.
+ */
 interface ActivePlayerRow {
   id: string;
   name: string;
   team_id: string | null;
+  nationality: string | null;
+  position: string | null;
 }
 
 /** Subset of the `player_idol_score` view row used to look up idol rank. */
@@ -127,6 +139,13 @@ export interface ElectionNightResult {
   decreesWritten: number;
   /** Number of players actually incinerated this Election Night. */
   incinerationsCount: number;
+  /**
+   * Number of replacement players generated and linked to their incineration
+   * audit rows.  Equals incinerationsCount when replacement generation
+   * succeeds for every incineration; smaller if a per-row failure (FK
+   * violation, etc.) was caught and skipped.
+   */
+  replacementsGenerated: number;
   /** Number of teams whose focus winners were resolved. */
   teamFocusesResolved: number;
 }
@@ -162,6 +181,8 @@ function teamDisplay(teamId: string | null, teamNames: Map<string, string>): str
  *  - resolve focus winners
  *  - pick 1-2 incineration targets via idol-weighted draw
  *  - call the atomic `incinerate_player` RPC for each
+ *  - generate a replacement player for every successful incineration and
+ *    link it back via incinerations.replacement_player_id
  *  - write the full decree row set
  *  - emit `season.ended` so downstream focus enactment fires
  *
@@ -194,7 +215,7 @@ export async function runElectionNight(
   const [playersResult, idolResult, teamsResult] = await Promise.all([
     (db as unknown as { from: (t: string) => { select: (s: string) => { eq: (c: string, v: boolean) => Promise<{ data: ActivePlayerRow[] | null; error: { message: string } | null }> } } })
       .from('players')
-      .select('id, name, team_id')
+      .select('id, name, team_id, nationality, position')
       .eq('is_active', true),
     (db as unknown as { from: (t: string) => { select: (s: string) => Promise<{ data: IdolRankRow[] | null; error: { message: string } | null }> } })
       .from('player_idol_score')
@@ -245,13 +266,30 @@ export async function runElectionNight(
   );
   const targets = selectIncinerationTargets(candidates, incinerationCount, rng);
 
+  // Pre-index players by team for the replacement-player roster seed.
+  // Built once before the incineration loop so each successful incinerate
+  // can reach into the surviving roster of the same team in O(1).
+  const playersByTeam = new Map<string, ActivePlayerRow[]>();
+  for (const p of players) {
+    if (!p.team_id) continue;
+    if (!playersByTeam.has(p.team_id)) playersByTeam.set(p.team_id, []);
+    playersByTeam.get(p.team_id)!.push(p);
+  }
+
   // ── Step 4: execute incinerations via the atomic RPC ──────────────────────
   // We collect the generated decree text up-front so that even if a later
   // RPC throws, the partial set of completed incinerations still appears
   // in the season_decrees ticker.  The RPC is wrapped in try/catch to log
   // and skip a single failure rather than abort the whole ceremony — one
   // FK glitch must not kill the season.
+  //
+  // After each successful incinerate, the same loop generates a replacement
+  // player to fill the empty roster slot.  See Step 4.5 below for the
+  // rationale and failure-handling.  We track replacementsGenerated
+  // separately from incinerationsCount so callers can tell when a
+  // replacement insert failed without the incineration itself failing.
   const incinerationDecrees: Array<{ playerId: string | null; teamId: string | null; text: string }> = [];
+  let replacementsGenerated = 0;
   for (const target of targets) {
     const teamName  = teamDisplay(target.candidate.team_id, teamNameById);
     const decreeText = buildIncinerationDecree(
@@ -260,8 +298,9 @@ export async function runElectionNight(
       target.candidate.idolRank,
       rng,
     );
+    let auditId: string | null = null;
     try {
-      await incinerate(
+      auditId = await incinerate(
         db,
         target.candidate.id,
         seasonId,
@@ -281,6 +320,104 @@ export async function runElectionNight(
       // row exists.
       console.error(
         `[runElectionNight] incinerate failed for ${target.candidate.name} (${target.candidate.id}):`,
+        err,
+      );
+      continue; // No audit row exists, so skip replacement-generation too.
+    }
+
+    // ── Step 4.5: generate the replacement player ──────────────────────────
+    // Each successful incineration immediately seeds a replacement so the
+    // roster doesn't shrink over seasons.  Failure here is logged but does
+    // NOT roll back the incineration — the dead player stays dead even if
+    // their successor can't be inserted.  An orphan empty slot is recoverable
+    // (admin tooling can backfill later); a half-completed incineration is
+    // not.
+    //
+    // The original incinerated player is still present in `players` (just
+    // marked is_active=false), but for naming-pool purposes we want only
+    // the SURVIVING teammates — so we filter out the freshly-incinerated id.
+    try {
+      // Find the player row for the incinerated target to copy position +
+      // nationality.  The orchestrator's earlier filter dropped null team_ids
+      // so this lookup is guaranteed to find a row for any target that made
+      // it into the incineration loop.
+      const incineratedRow = players.find(p => p.id === target.candidate.id);
+      const teamRoster = (playersByTeam.get(target.candidate.team_id) ?? [])
+        .filter(p => p.id !== target.candidate.id);
+
+      const teammateSeeds: TeammateNameSeed[] = teamRoster.map(p => ({
+        name:        p.name,
+        nationality: p.nationality,
+      }));
+
+      const replacement = buildReplacementPlayer(
+        {
+          teamId:              target.candidate.team_id,
+          position:            incineratedRow?.position ?? 'MF',
+          teammates:           teammateSeeds,
+          fallbackNationality: incineratedRow?.nationality ?? 'Unknown',
+        },
+        rng,
+      );
+
+      // Insert the new player and capture the generated UUID so we can
+      // write it back into incinerations.replacement_player_id.
+      type ReplacementInsertResult = {
+        data:  { id: string } | null;
+        error: { message: string } | null;
+      };
+      const insertResult = await (
+        db as unknown as {
+          from: (t: string) => {
+            insert: (row: typeof replacement) => {
+              select: (s: string) => {
+                single: () => Promise<ReplacementInsertResult>;
+              };
+            };
+          };
+        }
+      )
+        .from('players')
+        .insert(replacement)
+        .select('id')
+        .single();
+
+      if (insertResult.error) throw new Error(insertResult.error.message);
+      const newPlayerId = insertResult.data?.id;
+      if (!newPlayerId) throw new Error('replacement insert returned no id');
+
+      // Link the new player back to the audit row.  RLS allows
+      // authenticated users to UPDATE incinerations columns they own; if
+      // production tightens that, the orchestrator would need a SECURITY
+      // DEFINER RPC for this update (analogous to incinerate_player).
+      if (auditId) {
+        const updateResult = await (
+          db as unknown as {
+            from: (t: string) => {
+              update: (patch: Record<string, unknown>) => {
+                eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+              };
+            };
+          }
+        )
+          .from('incinerations')
+          .update({ replacement_player_id: newPlayerId })
+          .eq('id', auditId);
+        if (updateResult.error) {
+          // FK link failure is non-critical — the replacement still lives,
+          // the incineration audit row still lives, they're just unlinked.
+          // /lost can fall back to the season_id + team_id pairing.
+          console.error(
+            `[runElectionNight] replacement link failed for audit ${auditId}:`,
+            updateResult.error.message,
+          );
+        }
+      }
+
+      replacementsGenerated += 1;
+    } catch (err) {
+      console.error(
+        `[runElectionNight] replacement generation failed for ${target.candidate.name}:`,
         err,
       );
     }
@@ -359,8 +496,9 @@ export async function runElectionNight(
   bus.emit('season.ended', { seasonId, seasonName });
 
   return {
-    decreesWritten:      decrees.length,
-    incinerationsCount:  incinerationDecrees.length,
-    teamFocusesResolved: sortedTeamIds.length,
+    decreesWritten:        decrees.length,
+    incinerationsCount:    incinerationDecrees.length,
+    replacementsGenerated,
+    teamFocusesResolved:   sortedTeamIds.length,
   };
 }
