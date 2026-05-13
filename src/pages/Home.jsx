@@ -39,6 +39,7 @@ import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { getRecentNarratives } from '../features/entities';
+import { HotIdolMoversStrip } from '../components/widgets/HotIdolMoversStrip';
 
 /**
  * ISL Home page component.
@@ -286,6 +287,13 @@ export default function Home() {
             </Link>
           </div>
         </section>
+
+        {/* ── HOT IDOL MOVERS (Phase 6+) ────────────────────────────────────── */}
+        {/* Trending players this week.  Self-hides when nobody is being
+            clicked — the cosmos quiet is its own narrative beat.  Sits
+            between standings and live games so the eye reaches it on the way
+            to scores. */}
+        <HotIdolMoversStrip />
 
         {/* ── LIVE GAMES ────────────────────────────────────────────────────────── */}
         {/* Hidden entirely when no match is in progress — no empty heading shown.

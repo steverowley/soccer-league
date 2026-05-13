@@ -33,6 +33,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard } from '../lib/supabase';
+import { HotIdolMoversStrip } from '../components/widgets/HotIdolMoversStrip';
 
 // ── Rank tier flavour strings ─────────────────────────────────────────────────
 // The top-ranked players receive increasingly ominous cosmic annotations.
@@ -149,6 +150,15 @@ export default function Idols() {
       </div>
 
       <div className="container" style={{ paddingBottom: '60px' }}>
+
+        {/* ── Hot Movers (Phase 6+) ───────────────────────────────────────── */}
+        {/* WHY ABOVE the absolute board: a quiet long-term first-place name on
+            the global board reads the same as a player who only just arrived
+            into the cosmos's attention.  The movers strip lets fans compare
+            "who's settling in" vs "who's been settled for years" at a glance.
+            Render 10 here (vs default 5 on Home) — this is the dedicated page,
+            no other content competing for vertical space. */}
+        <HotIdolMoversStrip limit={10} />
 
         {/* ── Global top 20 ───────────────────────────────────────────────── */}
         <section className="section">

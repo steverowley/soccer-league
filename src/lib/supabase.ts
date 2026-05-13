@@ -416,3 +416,47 @@ export async function getIdolBoard(
   return { global: topRows ?? [], byTeam };
 }
 
+/**
+ * Fetch the top N "hot idol movers" — players whose training-click activity
+ * has spiked in the trailing 7-day window.  Reads from the
+ * `player_idol_movers` view created by migration 0016.
+ *
+ * WHY A SEPARATE QUERY FROM getIdolBoard
+ *   The absolute idol board (rank 1..20) and the movers strip serve different
+ *   UI purposes — the board is "who the cosmos has watched longest", the
+ *   strip is "who the cosmos is paying attention to RIGHT NOW".  They have
+ *   different ordering, different inputs (the movers view excludes
+ *   favourite_player picks entirely; absolute board includes both halves of
+ *   the idol_score formula).  Fetching the same view twice in parallel was
+ *   tempting but would obscure that the two surfaces answer different
+ *   questions.
+ *
+ * GRACEFUL DEGRADATION
+ *   Returns an empty array on error rather than throwing — the movers strip
+ *   is enriching UI, not load-bearing.  A failed fetch must never block the
+ *   Home or /idols page render.
+ *
+ * @param db     Injected Supabase client.
+ * @param limit  Max rows to return.  Default 5 matches the Home strip width
+ *               at desktop; pages can request more for a dedicated section.
+ * @returns      Array of mover rows, ordered by recent_clicks DESC.
+ */
+export async function getHotIdolMovers(db: IslSupabaseClient, limit = 5) {
+  try {
+    const { data, error } = await db
+      .from('player_idol_movers')
+      .select('*')
+      .order('recent_clicks', { ascending: false })
+      .order('name', { ascending: true })
+      .limit(limit);
+    if (error) {
+      console.warn('[getHotIdolMovers] failed:', error.message);
+      return [];
+    }
+    return data ?? [];
+  } catch (e) {
+    console.warn('[getHotIdolMovers] threw:', e);
+    return [];
+  }
+}
+
