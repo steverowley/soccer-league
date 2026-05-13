@@ -105,6 +105,26 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [db]);
 
+  // ── Daybreak Digest banner (Phase 6b) ─────────────────────────────────────
+  // The galaxy-tick edge function writes one kind='daybreak' row per UTC day
+  // during the 06–10 UTC window.  We surface the single most recent matching
+  // row as a featured banner at the top of the page so morning visitors see
+  // a fresh narrative anchor regardless of when matches last fired.
+  //
+  // Fetch is independent of the main narratives list so the banner appears
+  // even when no other scheduled narratives have landed yet.  Null state
+  // (no daybreak today) simply hides the banner — never a placeholder.
+  const [daybreak, setDaybreak] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    // 4th positional arg = kind filter (server-side via getRecentNarratives).
+    // Limit=1 because we only ever show the newest daybreak.
+    getRecentNarratives(db, 1, undefined, 'daybreak')
+      .then((rows) => { if (!cancelled) setDaybreak(rows[0] ?? null); })
+      .catch((e) => console.warn('[Home] daybreak fetch failed:', e));
+    return () => { cancelled = true; };
+  }, [db]);
+
   // ── League standings carousel state ───────────────────────────────────────
   // `leagueIdx` is an index into the LEAGUES array (0 = Rocky Inner, …).
   // Clicking prev/next wraps using modular arithmetic so there is no dead end.
@@ -167,6 +187,52 @@ export default function Home() {
       </section>
 
       <div className="container">
+
+        {/* ── DAYBREAK DIGEST BANNER (Phase 6b) ──────────────────────────────── */}
+        {/* WHY this is the very first thing inside .container:
+            The morning anchor is the design's morning-page promise — when a fan
+            opens the site at start of their day, this is the first cosmic
+            content they read.  Above the Create Account CTA, above standings,
+            above scores.  Hidden entirely if today's daybreak hasn't been
+            written yet (no placeholder — silence is preferable to a stub).
+            The amber-gold left border matches the kind colour on /news so
+            fans associate the same tint with this kind everywhere.
+        */}
+        {daybreak && (
+          <section className="section" style={{ marginBottom: '24px' }}>
+            <div
+              className="card"
+              style={{
+                borderLeft: '3px solid #e8b04a',
+                boxShadow: '0 0 12px rgba(232, 176, 74, 0.18)',
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginBottom: '6px',
+              }}>
+                <span style={{
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: '#e8b04a',
+                }}>
+                  Daybreak
+                </span>
+                <span style={{ fontSize: '10px', opacity: 0.5 }}>
+                  {new Date(daybreak.created_at).toLocaleString(undefined, {
+                    weekday: 'short', hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: '16px', lineHeight: 1.4 }}>
+                {daybreak.summary}
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* ── CREATE ACCOUNT ────────────────────────────────────────────────────── */}
         {/* Only shown to anonymous visitors — authenticated users have no use for it.

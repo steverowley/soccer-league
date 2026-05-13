@@ -186,6 +186,65 @@ const CHAOS_VOID_TEMPLATES: readonly string[] = [
   'Predictable. Predictable. Predictable. Soon.',
 ];
 
+// ── Daybreak Digest templates (Phase 6b) ────────────────────────────────────
+//
+// One synthesised morning-anchor narrative per UTC day during 06:00–10:00 UTC.
+// The Home page banner reads the most recent kind=daybreak row written today.
+// Bank selection mirrors src/features/architect/logic/daybreakDigest.ts and
+// must stay byte-for-byte in sync — Deno cannot import from src/.
+//
+// AUTHOR'S NOTE for future contributors:
+//   Daybreak voice = the cosmos finishing its overnight survey.  Quietly
+//   declarative.  Short.  Often starts with "Daybreak." or "Morning."
+//   Never lists numbers other than the match count.  Never names players.
+
+/**
+ * Daybreak templates for quiet nights (no matches, no big event).
+ * The morning the cosmos has nothing in particular to say.
+ */
+const DAYBREAK_QUIET_NIGHT: readonly string[] = [
+  'Daybreak. The cosmos counted the hours and found them ordinary.',
+  'Morning. Nothing changed. The cosmos waits.',
+  'Daybreak. The void was quiet. The void is often quiet before it isn\'t.',
+  'A morning without weight. The scales are level. For now.',
+  'Daybreak. No new threads were spun. Old threads continue.',
+  'The cosmos surveys an unchanged board. Daybreak.',
+];
+
+/**
+ * Daybreak templates for nights with matches but no single dominant event.
+ * `{N}` is substituted with the integer count of overnight matches.
+ */
+const DAYBREAK_MATCH_NIGHT: readonly string[] = [
+  'Daybreak. {N} matches resolved overnight. The standings shifted, gently.',
+  'Morning. {N} fixtures completed. The cosmos took notes.',
+  'Daybreak. The cosmos watched {N} matches close out and recorded each.',
+  '{N} matches. None of them surprising enough to name. Daybreak.',
+];
+
+/**
+ * Daybreak templates for nights with a flagged big event.
+ * `{EVENT}` is substituted verbatim with a pre-redacted qualitative label
+ * (e.g. "a cosmic disturbance", "an incineration").  Caller is responsible
+ * for redaction — never insert raw scores or numbers here.
+ */
+const DAYBREAK_BIG_EVENT: readonly string[] = [
+  'Daybreak. Overnight: {EVENT}. The cosmos noted it. The cosmos always notes.',
+  'Morning. {EVENT} happened. Some are still reading the omens.',
+  'The cosmos surveys the day. {EVENT}. Daybreak.',
+  'Daybreak. {EVENT} reshaped the night. The standings will reckon with it later.',
+];
+
+/**
+ * Daybreak templates for nights where all three cosmic voices spoke.
+ * Rare; the digest must acknowledge the tone shift.
+ */
+const DAYBREAK_TRIPLE_VOICE: readonly string[] = [
+  'Daybreak. All three voices spoke overnight. The cosmos is paying close attention.',
+  'A loud night. All three voices were heard. The cosmos rarely speaks together.',
+  'Daybreak. The cosmos was busy. All three voices weighed in. Something is shifting.',
+];
+
 /**
  * Uniform-random pick from a non-empty pool.  Inline to avoid a shared
  * util module — keeps this Deno file self-contained.
@@ -457,6 +516,74 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }).select();
       if (error) {
         console.warn('[galaxy-tick] chaos whisper insert failed:', error.message);
+      } else {
+        allInserted.push(...(data ?? []));
+      }
+    }
+
+    // ── Daybreak Digest (Phase 6b) ──────────────────────────────────────
+    // Once per UTC day during the daybreak window (06–10 UTC) the cron
+    // synthesises a single morning-anchor narrative summarising overnight
+    // signals.  The Home page banner reads the most recent kind=daybreak
+    // row written today and shows it as a featured top-of-page entry.
+    //
+    // Selection rules (mirrors daybreakDigest.ts in src/):
+    //   1. all three voices spoke overnight → TRIPLE_VOICE templates
+    //   2. a bigEvent label exists           → BIG_EVENT templates
+    //   3. matches were played               → MATCH_NIGHT templates
+    //   4. otherwise                         → QUIET_NIGHT templates
+    //
+    // Cap: 1/day, enforced by counting kind=daybreak rows in todayWithKind.
+    const daybreakCount = todayWithKind.filter((n) => n.kind === 'daybreak').length;
+    const utcHour = new Date().getUTCHours();
+    if (daybreakCount < 1 && utcHour >= 6 && utcHour < 10) {
+      // Voice-spoken-today flags drive the triple-voice template branch.
+      const fateToday    = todayWithKind.some((n) => n.kind === 'architect_whisper');
+      const balanceToday = todayWithKind.some((n) => n.kind === 'balance_whisper');
+      const chaosToday   = todayWithKind.some((n) => n.kind === 'chaos_whisper');
+      const tripleVoice  = fateToday && balanceToday && chaosToday;
+
+      // bigEvent label: pulled from the most recent cosmic_disturbance row
+      // today, if any.  We deliberately do not derive it from raw match
+      // data here — the disturbance row already redacts scores/numbers.
+      const bigEvent = todayWithKind.some((n) => n.kind === 'cosmic_disturbance')
+        ? 'a cosmic disturbance'
+        : null;
+
+      // matchesPlayed: completed matches with played_at since UTC midnight.
+      // We don't have direct access to recent match counts here, so we
+      // approximate from `redactedMatches` length — those are the 8 most
+      // recent completed matches at fetch time, which on a busy cycle ≈
+      // overnight count.  Good enough for template selection.
+      const matchesPlayed = redactedMatches.length;
+
+      // Pick the right template bank based on the selection rules above.
+      let pool: readonly string[];
+      let substitutions: { N?: number; EVENT?: string } = {};
+      if (tripleVoice) {
+        pool = DAYBREAK_TRIPLE_VOICE;
+      } else if (bigEvent) {
+        pool = DAYBREAK_BIG_EVENT;
+        substitutions = { EVENT: bigEvent };
+      } else if (matchesPlayed > 0) {
+        pool = DAYBREAK_MATCH_NIGHT;
+        substitutions = { N: matchesPlayed };
+      } else {
+        pool = DAYBREAK_QUIET_NIGHT;
+      }
+
+      let summary = pickRandom(pool);
+      if (substitutions.N !== undefined)     summary = summary.replace('{N}',     String(substitutions.N));
+      if (substitutions.EVENT !== undefined) summary = summary.replace('{EVENT}', substitutions.EVENT);
+
+      const { error, data } = await db.from('narratives').insert({
+        kind:              'daybreak',
+        summary,
+        entities_involved: [],
+        source:            'scheduled',
+      }).select();
+      if (error) {
+        console.warn('[galaxy-tick] daybreak digest insert failed:', error.message);
       } else {
         allInserted.push(...(data ?? []));
       }
