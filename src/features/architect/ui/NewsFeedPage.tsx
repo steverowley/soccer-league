@@ -45,6 +45,9 @@ const KIND_LABELS: Record<string, string> = {
   // void on a 1/day cap so the feed has a 24/7 heartbeat without flooding.
   balance_whisper:     'Balance',      // Second Voice — measured, accounting
   chaos_whisper:       'Chaos',        // Third Voice — jagged, contemptuous
+  // Phase 6b: morning-anchor daybreak digest, one per UTC day during the
+  // 06–10 UTC window.  Surfaced as a featured banner on the Home page.
+  daybreak:            'Daybreak',
 };
 
 /**
@@ -87,6 +90,10 @@ const KIND_COLORS: Record<string, string> = {
   //   #f59e0b — amber tied to Chaos's "restless predator" tone
   balance_whisper:     '#64748b',
   chaos_whisper:       '#f59e0b',
+  // Daybreak amber-gold — warm morning tone distinct from cosmic_disturbance's
+  // red and pundit_takes' blue.  Phase 6b banner uses the same colour on the
+  // Home page so fans associate it with "the morning anchor" at a glance.
+  daybreak:            '#e8b04a',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
