@@ -5,12 +5,12 @@ import { getRecentNarratives } from '../../entities/api/entities';
 import type { Narrative } from '../../entities/types';
 import { formatDateShort } from '@shared/utils/formatDate';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Number of narrative cards shown per page. Kept small so the feed feels live. */
 const PAGE_SIZE = 12;
 
-// ── Kind catalog ──────────────────────────────────────────────────────────────
+// ── Kind catalog ────────────────────────────────────────────────────────────────
 //
 // Every narrative `kind` value the news feed knows how to render gets two
 // entries: a human-readable label (filter chip text) and an accent color
@@ -40,6 +40,11 @@ const KIND_LABELS: Record<string, string> = {
   // RefereeNarrativeListener.  Surfaces named IEOB officials in the feed
   // so fans recognise the referee corps as recurring named entities.
   referee_narrative:   'Officiating',
+  // Phase 6a: between-match cosmic voice proclamations written by the
+  // architect-galaxy-tick edge function.  Balance and Chaos speak from the
+  // void on a 1/day cap so the feed has a 24/7 heartbeat without flooding.
+  balance_whisper:     'Balance',      // Second Voice — measured, accounting
+  chaos_whisper:       'Chaos',        // Third Voice — jagged, contemptuous
 };
 
 /**
@@ -75,6 +80,13 @@ const KIND_COLORS: Record<string, string> = {
   // Distinct from the pundit blue and Architect purple so the post-match
   // referee narrative card is recognisable at a glance in the feed.
   referee_narrative:   'var(--color-slate)',
+  // Phase 6a void voices.  Match the accent colours used by the live-match
+  // CosmicVoiceCard so fans associate the same tint with the same voice
+  // whether it speaks during a match or between matches.
+  //   #64748b — slate-blue tied to Balance's "accounting" tone
+  //   #f59e0b — amber tied to Chaos's "restless predator" tone
+  balance_whisper:     '#64748b',
+  chaos_whisper:       '#f59e0b',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
@@ -93,7 +105,7 @@ export function NewsFeedPage() {
   // Active kind filter — null means show all.
   const [activeKind, setActiveKind] = useState<string | null>(null);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
+  // ── Fetch ────────────────────────────────────────────────────────────────────────────────
   // Why setLoading(true)/setError(null) run inside the effect body: these are
   // immediate UI reset signals tied to the same dependency change that triggers
   // the fetch.  The user's click on a filter chip must be acknowledged before
@@ -112,14 +124,24 @@ export function NewsFeedPage() {
       try {
         // Fetch one extra row beyond the display limit so we know whether
         // "load more" should appear without loading a full extra page early.
-        const fetched = await getRecentNarratives(db, limit + 1);
+        //
+        // WHY server-side kind filter (vs client-side .filter):
+        // Low-frequency kinds — Balance/Chaos cap at 1/day, referee narratives
+        // come one per match — can easily fall outside the newest PAGE_SIZE
+        // rows after a busy day.  A client-side filter on the limited slice
+        // would silently show "No transmissions" while older rows exist.
+        // The `kind` parameter pushes the predicate down to PostgREST so the
+        // database picks the N newest matching rows, then we slice for paging.
+        // The `source` (3rd) param stays undefined so all sources match.
+        const fetched = await getRecentNarratives(
+          db,
+          limit + 1,
+          undefined,
+          activeKind ?? undefined,
+        );
         if (cancelled) return;
-        // Filter client-side so kind-switching is instant without a round-trip.
-        const filtered = activeKind
-          ? fetched.filter((r) => r.kind === activeKind)
-          : fetched;
-        setHasMore(filtered.length > limit);
-        setRows(filtered.slice(0, limit));
+        setHasMore(fetched.length > limit);
+        setRows(fetched.slice(0, limit));
       } catch (e: unknown) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : 'Failed to load transmissions');
@@ -142,14 +164,14 @@ export function NewsFeedPage() {
     setLimit(PAGE_SIZE);
   }, []);
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────────────
   // WHY page-hero outside container: matches the structure used by every other
   // top-level page so the 100px desktop / 70px mobile top gap is identical
   // regardless of which page the user navigates from.
 
   return (
     <div>
-      {/* ── Page hero ───────────────────────────────────────────────────── */}
+      {/* ── Page hero ─────────────────────────────────────────────────────── */}
       <PageHero
         title="Galaxy Dispatch"
         badge={<Badge variant="architect">Architect</Badge>}
@@ -250,10 +272,20 @@ interface NarrativeCardProps {
  */
 function NarrativeCard({ narrative }: NarrativeCardProps) {
   const color = KIND_COLORS[narrative.kind] ?? 'rgba(227,224,213,0.3)';
-  // Cosmic kinds get an ambient glow — purple for whispers, red for disturbances.
+  // Cosmic kinds get an ambient glow.  Each cosmic voice has its own tint so
+  // the three (Fate/Balance/Chaos) read as distinct even from the corner of
+  // the eye.  Disturbances share the alarming red glow because they signal
+  // direct Architect intervention.
+  //   purple — architect_whisper  (Fate, First Voice)
+  //   red    — cosmic_disturbance (Architect interventions)
+  //   slate  — balance_whisper    (Second Voice; matches the accent colour)
+  //   amber  — chaos_whisper      (Third Voice; matches the accent colour)
+  // The RGBA opacity (0.18) matches --color-purple-glow / --color-red-glow.
   const glowShadow =
     narrative.kind === 'architect_whisper'  ? '0 0 12px var(--color-purple-glow)' :
     narrative.kind === 'cosmic_disturbance' ? '0 0 12px var(--color-red-glow)'    :
+    narrative.kind === 'balance_whisper'    ? '0 0 12px rgba(100, 116, 139, 0.18)' :
+    narrative.kind === 'chaos_whisper'      ? '0 0 12px rgba(245, 158,  11, 0.18)' :
     undefined;
 
   return (
@@ -288,4 +320,3 @@ function NarrativeCard({ narrative }: NarrativeCardProps) {
     </div>
   );
 }
-

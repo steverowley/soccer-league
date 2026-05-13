@@ -1,4 +1,4 @@
-// ── architect/ui/NewsFeedPage.test.tsx ───────────────────────────────────────
+// ── architect/ui/NewsFeedPage.test.tsx ─────────────────────────────────────────────
 // WHY: Smoke tests for the Galaxy Dispatch news feed UI.  We verify the core
 // rendering, kind-filter toggle, "load more" pagination, and empty/error
 // states without spinning up a real Supabase instance.  The DB layer is
@@ -24,7 +24,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { NewsFeedPage } from './NewsFeedPage';
 import type { Narrative } from '../../entities/types';
 
-// ── Module mocks ─────────────────────────────────────────────────────────────
+// ── Module mocks ─────────────────────────────────────────────────────────────────────
 
 const fakeDb = {};
 vi.mock('@shared/supabase/SupabaseProvider', () => ({
@@ -39,7 +39,7 @@ vi.mock('../../entities/api/entities', () => ({
   getRecentNarratives: (...args: unknown[]) => mockGetRecentNarratives(...args),
 }));
 
-// ── Fixtures ─────────────────────────────────────────────────────────────────
+// ── Fixtures ───────────────────────────────────────────────────────────────────────────
 
 /** Helper to build a Narrative row with sensible defaults. */
 function makeNarrative(overrides: Partial<Narrative> = {}): Narrative {
@@ -59,15 +59,33 @@ const NEWS_ROW    = makeNarrative({ id: 'n-news',    kind: 'news',              
 const PUNDIT_ROW  = makeNarrative({ id: 'n-pundit',  kind: 'pundit_takes',      summary: 'A spicy take.' });
 const WHISPER_ROW = makeNarrative({ id: 'n-wh',      kind: 'architect_whisper', summary: 'The cosmos stirs.' });
 
-// ── Setup ────────────────────────────────────────────────────────────────────
+// ── Setup ─────────────────────────────────────────────────────────────────────────────
+
+// Helper: a mock implementation that mirrors the real `getRecentNarratives`
+// server-side filtering.  When the page calls it with a `kind` argument (the
+// 4th positional), it returns only matching rows from the supplied dataset.
+// This keeps tests aligned with the real Postgres behaviour: low-frequency
+// kinds (Balance/Chaos/etc.) are pulled by predicate rather than client slice.
+function makeKindAwareMock(allRows: Array<{ kind: string }>) {
+  return (
+    _db: unknown,
+    _limit?: number,
+    _source?: string,
+    kind?: string,
+  ) => Promise.resolve(kind ? allRows.filter((r) => r.kind === kind) : allRows);
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
-  // Default: returns the three fixture rows.  Individual tests may override.
-  mockGetRecentNarratives.mockResolvedValue([NEWS_ROW, PUNDIT_ROW, WHISPER_ROW]);
+  // Default: a kind-aware mock backed by the three fixture rows.  Individual
+  // tests may override with mockResolvedValueOnce / mockResolvedValue for the
+  // simpler (no-kind) call shapes.
+  mockGetRecentNarratives.mockImplementation(
+    makeKindAwareMock([NEWS_ROW, PUNDIT_ROW, WHISPER_ROW]),
+  );
 });
 
-// ── Tests ────────────────────────────────────────────────────────────────────
+// ── Tests ─────────────────────────────────────────────────────────────────────────────
 
 describe('NewsFeedPage', () => {
   it('renders the page hero with title, badge, and subtitle', async () => {
@@ -130,7 +148,10 @@ describe('NewsFeedPage', () => {
 
   it('shows the kind-specific empty state when no rows match the filter', async () => {
     // Only news rows in the fixture; filtering by Pundit leaves nothing.
-    mockGetRecentNarratives.mockResolvedValue([NEWS_ROW]);
+    // Use the kind-aware mock so the server-side filter contract is respected:
+    // the initial unfiltered fetch returns [NEWS_ROW] and the post-click
+    // fetch (kind='pundit_takes') returns [], driving the empty state.
+    mockGetRecentNarratives.mockImplementation(makeKindAwareMock([NEWS_ROW]));
 
     render(<NewsFeedPage />);
 
