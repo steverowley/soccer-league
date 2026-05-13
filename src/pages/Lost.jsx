@@ -78,6 +78,39 @@ export default function Lost() {
   // Season IDs in the order they first appear (most recent first, per DESC sort).
   const seasonIds = Object.keys(bySeason);
 
+  // ── Cross-season aggregates (Hall of the Lost, Tier-2 #4) ─────────────────
+  // Three numbers tell the long-running story of the memorial:
+  //   • totalTaken        — count of all incinerations ever
+  //   • seasonsAffected   — number of distinct seasons that had at least
+  //                         one incineration; "the cosmos has spoken N times"
+  //   • teamsAffected     — number of distinct teams that lost at least
+  //                         one player; the broader the spread, the more
+  //                         pervasive the loss feels in the league lore
+  //
+  // All three derive from the records array — no extra DB queries, no
+  // staleness risk.  Empty array → zeros, suppressed below the empty state.
+  const totalTaken = records.length;
+  const seasonsAffected = new Set(records.map(r => r.season_id)).size;
+  const teamsAffected   = new Set(records.map(r => r.team_id).filter(Boolean)).size;
+
+  // ── Most Beloved Lost (top 5 by lowest idol_rank_at_time) ─────────────────
+  // Lower global_rank = MORE idolised, so the highest-rank-1 incinerations
+  // sit at the top.  Records with null rank (in-match disappearances that
+  // happened mid-engine, where idol context wasn't queried) are skipped —
+  // they belong on the timeline but not in the "most beloved" panel.
+  //
+  // Stable secondary sort by created_at DESC so two equal-rank players
+  // display the more recent loss first.
+  const beloved = records
+    .filter(r => typeof r.idol_rank_at_time === 'number' && r.idol_rank_at_time > 0)
+    .slice()  // copy before sort — never mutate the records prop
+    .sort((a, b) => {
+      const rankDelta = a.idol_rank_at_time - b.idol_rank_at_time;
+      if (rankDelta !== 0) return rankDelta;
+      return (new Date(b.created_at).getTime()) - (new Date(a.created_at).getTime());
+    })
+    .slice(0, 5);
+
   // ── Loading / error states ────────────────────────────────────────────────
   if (loading) {
     return (
@@ -137,6 +170,72 @@ export default function Lost() {
                 The cosmos is patient. The first Election Night will come.
               </p>
             </div>
+          </section>
+        )}
+
+        {/* ── Hall stats strip (Tier-2 #4) ──────────────────────────────────── */}
+        {/* Three aggregates that frame the memorial across seasons.  Visible
+            only when at least one incineration has occurred — there's nothing
+            to count otherwise.  Numbers are deliberately understated, not
+            celebrated; the cosmos's tally is solemn, not a leaderboard. */}
+        {records.length > 0 && (
+          <section className="section" style={{ marginBottom: '32px' }}>
+            <div style={{
+              display:             'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap:                 '16px',
+            }}>
+              <HallStat label="Taken in total"     value={totalTaken} />
+              <HallStat label="Seasons of loss"    value={seasonsAffected} />
+              <HallStat label="Clubs affected"     value={teamsAffected} />
+            </div>
+          </section>
+        )}
+
+        {/* ── Most Beloved Lost ─────────────────────────────────────────────── */}
+        {/* Top 5 incinerations by idol_rank_at_time ASC — the most loved
+            players the cosmos has taken.  This is the clearest expression of
+            the Phase 2 love-is-dangerous loop: every name here was a fan
+            favourite at the moment of incineration.  The page never states
+            that explicitly; the data tells the story by ordering. */}
+        {beloved.length > 0 && (
+          <section className="section" style={{ marginBottom: '40px' }}>
+            <h2 style={{ fontSize: '13px', letterSpacing: '0.12em', opacity: 0.5, marginBottom: '16px', textTransform: 'uppercase' }}>
+              Most Beloved Lost
+            </h2>
+            <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {beloved.map(r => (
+                <li
+                  key={r.id}
+                  className="card"
+                  style={{
+                    display:        'flex',
+                    justifyContent: 'space-between',
+                    alignItems:     'baseline',
+                    padding:        '12px 14px',
+                    marginBottom:   '8px',
+                    borderLeft:     '3px solid #7C3AED', // Quantum Purple — under cosmic observation
+                  }}
+                >
+                  <span>
+                    <span style={{ fontSize: '14px', fontWeight: 700 }}>
+                      {r.players?.name ?? 'Unknown'}
+                    </span>
+                    <span style={{ fontSize: '11px', opacity: 0.5, marginLeft: '8px' }}>
+                      · {r.teams?.name ?? r.team_id ?? '—'}
+                    </span>
+                  </span>
+                  <span style={{
+                    fontSize:      '10px',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    opacity:       0.6,
+                  }}>
+                    Idol rank #{r.idol_rank_at_time}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </section>
         )}
 
@@ -268,6 +367,37 @@ export default function Lost() {
           </Link>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+// ── HallStat ──────────────────────────────────────────────────────────────────
+// Single tile in the cross-season aggregate strip.  Three of these sit side
+// by side at the top of the memorial.  Intentionally minimal: a large number,
+// a small atmospheric label, no chart, no comparison.  The cosmos counts,
+// silently — the UI mirrors that.
+//
+// @param {object}   props
+// @param {string}   props.label  Atmospheric label ("Taken in total" etc.).
+//                                Rendered in small caps to read as cosmic
+//                                metadata, not a stat-line title.
+// @param {number}   props.value  The aggregate count.  Always non-negative.
+// @returns {JSX.Element}
+function HallStat({ label, value }) {
+  return (
+    <div className="card" style={{ padding: '16px', textAlign: 'center' }}>
+      <div style={{ fontSize: '32px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+        {value}
+      </div>
+      <div style={{
+        fontSize:       '10px',
+        textTransform:  'uppercase',
+        letterSpacing:  '0.12em',
+        opacity:        0.5,
+        marginTop:      '4px',
+      }}>
+        {label}
       </div>
     </div>
   );
