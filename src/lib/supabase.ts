@@ -460,3 +460,56 @@ export async function getHotIdolMovers(db: IslSupabaseClient, limit = 5) {
   }
 }
 
+/**
+ * Fetch the top idol-ranked players for a pair of team_ids.  Used by the
+ * pre-match build-up surface on MatchDetail to show "Who fans are watching"
+ * on each side of the fixture without forcing two sequential round-trips.
+ *
+ * WHY one query for both teams
+ *   Two parallel queries would be marginally faster on a fast network but
+ *   double the PostgREST overhead.  An `.in('team_id', [...])` + post-fetch
+ *   group-by collapses to a single round-trip and is well within the view's
+ *   index plan (team_id is a regular column on `player_idol_score`).
+ *
+ * GRACEFUL DEGRADATION
+ *   Returns an empty map on error rather than throwing.  The build-up section
+ *   is enriching UI — a failed fetch must never block the match page.
+ *
+ * @param db      Injected Supabase client.
+ * @param teamIds The pair of team_ids (home + away).  Order doesn't matter;
+ *                callers group by team_id in the returned map.
+ * @param perTeamLimit  Max rows kept per team after the group-by.  Default 3.
+ * @returns       Record keyed by team_id → ordered IdolRow[] (top-rank first).
+ */
+export async function getTopIdolsByTeams(
+  db: IslSupabaseClient,
+  teamIds: string[],
+  perTeamLimit = 3,
+) {
+  if (teamIds.length === 0) return {} as Record<string, unknown[]>;
+  try {
+    const { data, error } = await db
+      .from('player_idol_score')
+      .select('*')
+      .in('team_id', teamIds)
+      .lte('team_rank', perTeamLimit)
+      .order('team_id', { ascending: true })
+      .order('team_rank', { ascending: true });
+    if (error) {
+      console.warn('[getTopIdolsByTeams] failed:', error.message);
+      return {} as Record<string, unknown[]>;
+    }
+    const grouped: Record<string, unknown[]> = {};
+    for (const row of data ?? []) {
+      const tid = (row as { team_id: string | null }).team_id;
+      if (!tid) continue;
+      if (!grouped[tid]) grouped[tid] = [];
+      grouped[tid]!.push(row);
+    }
+    return grouped;
+  } catch (e) {
+    console.warn('[getTopIdolsByTeams] threw:', e);
+    return {} as Record<string, unknown[]>;
+  }
+}
+

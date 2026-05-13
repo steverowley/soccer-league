@@ -38,7 +38,7 @@ export type {
 } from './types';
 
 // ── API (Supabase queries) ─────────────────────────────────────────────────
-export { getRecentNarratives } from './api/entities';
+export { getRecentNarratives, getRecentNarrativesByKinds } from './api/entities';
 
 // ── API — referees (Phase 5a) ──────────────────────────────────────────────
 // Wraps the IEOB referee corps and the per-match assignment surface.

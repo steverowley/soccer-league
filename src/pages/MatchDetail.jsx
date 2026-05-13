@@ -40,6 +40,7 @@ import { WagerWidget, BetHistory, getMatchOdds, saveMatchOdds, computeAvgRating,
 // IEOB official.  Returns null when no referee is assigned yet — the badge
 // just renders nothing in that case.
 import { getMatchReferee } from '../features/entities';
+import { MatchBuildUp } from '../features/match/ui/MatchBuildUp';
 import { getMatch } from '../lib/supabase';
 import Button from '../components/ui/Button';
 
@@ -352,6 +353,21 @@ export default function MatchDetail() {
             onWagerPlaced={() => setWageredKey((k) => k + 1)}
           />
         </section>
+      )}
+
+      {/* ── Pre-match build-up (Tier-2 #3) ─────────────────────────────────── */}
+      {/* Only rendered for scheduled matches — once a match is in progress or
+          completed the build-up surface is irrelevant.  Self-hides when the
+          galaxy-tick edge function hasn't generated any pundit/journalist/
+          bookie narratives yet (early in a season) AND there are no idolised
+          players on either squad. */}
+      {match.status === 'scheduled' && (
+        <MatchBuildUp
+          homeTeamId={homeTeam?.id ?? ''}
+          homeTeamName={homeTeam?.name ?? 'Home'}
+          awayTeamId={awayTeam?.id ?? ''}
+          awayTeamName={awayTeam?.name ?? 'Away'}
+        />
       )}
 
       {/* ── Bet history filtered to this match ───────────────────────────────── */}
