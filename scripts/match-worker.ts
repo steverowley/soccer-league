@@ -59,6 +59,8 @@ import {
   transitionSeasonStatus,
 } from '../src/features/match/api/seasons';
 import { enactSeasonFocuses }       from '../src/features/voting/api/enactment';
+import { countPresentFans }         from '../src/features/finance/api/attendance';
+import { calculateFanBoost }        from '../src/features/finance/logic/fanBoost';
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
@@ -306,16 +308,37 @@ async function processMatch(
         }
       : null;
 
+    // ── Step 2.5: Compute fan-support boost ────────────────────────────────
+    // Phase 6+ engagement layer: the team with more logged-in fans
+    // (profiles.last_seen_at within FAN_PRESENCE_WINDOW_MS) gets a +2 stat
+    // bump applied to every player BEFORE simulation begins.  This is the
+    // sole gameplay-affecting consequence of fans being present during a
+    // live match — subtle in isolation, meaningful in close contests, and
+    // never explained in-fiction.
+    //
+    // Failure policy: a count fetch error treats that side as zero fans
+    // present (countPresentFans logs internally and returns 0).  Worse to
+    // skew a match when both sides actually had support than to log warning
+    // and proceed with a 0–0 contest that produces no boost.
+    const [homeFanCount, awayFanCount] = await Promise.all([
+      countPresentFans(db, homeTeamId),
+      countPresentFans(db, awayTeamId),
+    ]);
+    const fanBoost = calculateFanBoost(homeFanCount, awayFanCount);
+
     console.log(
       `${tag} simulating: ${homeTeam.name} vs ${awayTeam.name}` +
-      (refOverride ? ` (ref: ${refOverride.name}, strictness ${refOverride.strictness})` : ''),
+      (refOverride ? ` (ref: ${refOverride.name}, strictness ${refOverride.strictness})` : '') +
+      (fanBoost.boostedSide !== 'none'
+        ? ` (boost: ${fanBoost.boostedSide} +${fanBoost.boostAmount}, fans ${fanBoost.homeFanCount}/${fanBoost.awayFanCount})`
+        : ''),
     );
 
     // ── Step 3: Simulate all 90 minutes ────────────────────────────────────
     // simulateFullMatch is fully synchronous — it drives gameEngine.genEvent()
     // across minutes 1–90 and returns all events + final score in one call.
     // No I/O happens inside; the entire match is in memory within milliseconds.
-    const result = simulateFullMatch(homeTeam, awayTeam, refOverride);
+    const result = simulateFullMatch(homeTeam, awayTeam, refOverride, fanBoost);
     const [homeScore, awayScore] = result.finalScore;
 
     console.log(
