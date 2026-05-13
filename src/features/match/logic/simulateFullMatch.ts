@@ -33,6 +33,23 @@ import type { RefereeOverride } from '../../../gameEngine';
 import type {
   EnginePlayer, EngineTeam, MatchEvent, PlayerStatsMap,
 } from '../../../gameEngine.types';
+import { applyFanBoostToTeam } from '../../finance/logic/applyFanBoost';
+
+// ── Public input types ───────────────────────────────────────────────────────
+
+/**
+ * Minimum shape this module needs from a `calculateFanBoost` result.
+ * Re-declared (rather than imported from `finance/logic/fanBoost`) so the
+ * match feature does not take a hard runtime dependency on the finance
+ * feature — callers wire the boost in from outside.  Structurally
+ * compatible with `FanBoostResult` so a result object passes directly.
+ */
+export interface FanBoostInput {
+  /** Which side gets the boost: 'home', 'away', or 'none'. */
+  boostedSide: 'home' | 'away' | 'none';
+  /** Stat points added to each of the 5 categories. 0 if no boost. */
+  boostAmount: number;
+}
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -156,18 +173,39 @@ function toSimulatedEvent(ev: MatchEvent, subminute: number): SimulatedEvent {
  *                    fabricates a random referee — preserving determinism
  *                    for callers (smoke tests, tests, App.jsx) that don't
  *                    yet plumb entity refs through.
+ * @param fanBoost    Optional fan-support boost result — `{ boostedSide,
+ *                    boostAmount }` from `calculateFanBoost`.  When the
+ *                    boosted side is 'home' or 'away', that team's player
+ *                    stats are bumped by `boostAmount` BEFORE
+ *                    createAIManager runs (the only window where the bump
+ *                    propagates through createAgent and every downstream
+ *                    contest).  Defaults to no boost — keeps smoke tests
+ *                    and callers that don't yet plumb attendance through
+ *                    fully deterministic.
  * @returns           Events + final score + MVP — ready for DB persistence.
  */
 export function simulateFullMatch(
   home: EngineTeam,
   away: EngineTeam,
   refOverride: RefereeOverride | null = null,
+  fanBoost: FanBoostInput | null = null,
 ): SimulatedMatchResult {
+  // ── Apply fan-support boost (Phase 6+) ─────────────────────────────────
+  // The team with more logged-in fans gets a small stat bump across every
+  // player.  Boost is applied BEFORE createAIManager runs — agents cache
+  // their stats at construction so a post-construction bump would have no
+  // effect.  Zero-boost / no-boost callers get the original teams back by
+  // reference (no allocation).
+  const homeBoost = fanBoost?.boostedSide === 'home' ? fanBoost.boostAmount : 0;
+  const awayBoost = fanBoost?.boostedSide === 'away' ? fanBoost.boostAmount : 0;
+  const boostedHome = applyFanBoostToTeam(home, homeBoost);
+  const boostedAway = applyFanBoostToTeam(away, awayBoost);
+
   // ── Per-match state ────────────────────────────────────────────────────────
   // createAIManager seeds initial agent fatigue/morale and picks weather,
   // referee, and flashpoint caps.  Same RNG sequence + same refOverride
-  // → same AIManager.
-  const aim = createAIManager(home, away, refOverride);
+  // + same fanBoost → same AIManager.
+  const aim = createAIManager(boostedHome, boostedAway, refOverride);
 
   const score:    [number, number] = [0, 0];
   let   momentum: [number, number] = [...INITIAL_MOMENTUM];

@@ -26,6 +26,7 @@ import {
   calculateFanBoost,
   countPresentFans,
   recordMatchAttendance,
+  applyFanBoostToTeam,
 } from "./features/finance";
 import { bus } from "./shared/events/bus";
 
@@ -660,57 +661,10 @@ function applyManagerTactics(manager, stance, minute, rationale = '') {
   };
 }
 
-// ── applyFanBoostToTeam ─────────────────────────────────────────────────────
-// Returns a SHALLOW CLONE of an engine-format team object with every player's
-// five stat categories (attacking, defending, mental, athletic, technical)
-// increased by `points`.  Used at kickoff to implement the Phase 3 fan-support
-// boost: the team with more logged-in fans (profiles.last_seen_at within the
-// last 5 minutes) gets a small stat bump that flows through createAgent() and
-// every downstream contest resolution.
-//
-// WHY a clone rather than in-place mutation:
-//   - The input team object may be shared with other state (matchState, team
-//     detail pages, react-query caches).  Mutating its player array would
-//     leak the boost into unrelated views for the rest of the session.
-//   - createAgent() reads the stats ONCE at construction to pick personalities
-//     and penalty ability.  Boosting before the clone-and-map call is the
-//     only moment the bonus can take effect; after construction, agents cache
-//     their own numbers.
-//
-// WHY +points on every stat (not just attacking):
-//   - Base 1–99 scale: +2 is roughly the delta between "well-rested" and
-//     "tired" in the engine's stat consumption.  Subtle but meaningful in
-//     close matches — exactly the design goal of fan support (see
-//     FAN_BOOST_POINTS in features/finance/logic/fanBoost.ts).
-//   - Applying uniformly (rather than biasing attacking or defending)
-//     preserves the team's tactical shape; it simply sharpens every player.
-//
-// Non-player fields (stadium, manager, tactics, etc.) are reused by
-// reference — they're immutable within a match so sharing them is safe.
-//
-// @param {object} team   Engine-format team (from normalizeTeamForEngine or TEAMS).
-// @param {number} points Stat points to add to each category (0 = pass-through).
-// @returns {object}      New team object with a new players[] array.
-function applyFanBoostToTeam(team, points) {
-  // Zero-point boost is the common case (no fans online, or fan counts tied).
-  // Fast-path to avoid the array clone so repeated kickoffs with no fans
-  // don't allocate a pointless new players[] every match.
-  if (!points || !team || !Array.isArray(team.players)) return team;
-  return {
-    ...team,
-    players: team.players.map(p => ({
-      ...p,
-      // Defaults match normalizeTeamForEngine()'s 70-point fallback so an
-      // unseeded player still gets a sensible boosted total (72 instead of
-      // silently dropping to `NaN + 2`).
-      attacking: (p.attacking ?? 70) + points,
-      defending: (p.defending ?? 70) + points,
-      mental:    (p.mental    ?? 70) + points,
-      athletic:  (p.athletic  ?? 70) + points,
-      technical: (p.technical ?? 70) + points,
-    })),
-  };
-}
+// `applyFanBoostToTeam` was historically defined inline in this file; it now
+// lives in src/features/finance/logic/applyFanBoost.ts so the server-side
+// match-worker pipeline can apply the same boost contract.  Imported at the
+// top of this file from "./features/finance".
 
 const MatchSimulator = ({
   homeTeamKey = 'mars',
