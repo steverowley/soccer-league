@@ -5,12 +5,12 @@ import { getRecentNarratives } from '../../entities/api/entities';
 import type { Narrative } from '../../entities/types';
 import { formatDateShort } from '@shared/utils/formatDate';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Number of narrative cards shown per page. Kept small so the feed feels live. */
 const PAGE_SIZE = 12;
 
-// ── Kind catalog ──────────────────────────────────────────────────────────────
+// ── Kind catalog ────────────────────────────────────────────────────────────────
 //
 // Every narrative `kind` value the news feed knows how to render gets two
 // entries: a human-readable label (filter chip text) and an accent color
@@ -105,7 +105,7 @@ export function NewsFeedPage() {
   // Active kind filter — null means show all.
   const [activeKind, setActiveKind] = useState<string | null>(null);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
+  // ── Fetch ────────────────────────────────────────────────────────────────────────────────
   // Why setLoading(true)/setError(null) run inside the effect body: these are
   // immediate UI reset signals tied to the same dependency change that triggers
   // the fetch.  The user's click on a filter chip must be acknowledged before
@@ -124,14 +124,24 @@ export function NewsFeedPage() {
       try {
         // Fetch one extra row beyond the display limit so we know whether
         // "load more" should appear without loading a full extra page early.
-        const fetched = await getRecentNarratives(db, limit + 1);
+        //
+        // WHY server-side kind filter (vs client-side .filter):
+        // Low-frequency kinds — Balance/Chaos cap at 1/day, referee narratives
+        // come one per match — can easily fall outside the newest PAGE_SIZE
+        // rows after a busy day.  A client-side filter on the limited slice
+        // would silently show "No transmissions" while older rows exist.
+        // The `kind` parameter pushes the predicate down to PostgREST so the
+        // database picks the N newest matching rows, then we slice for paging.
+        // The `source` (3rd) param stays undefined so all sources match.
+        const fetched = await getRecentNarratives(
+          db,
+          limit + 1,
+          undefined,
+          activeKind ?? undefined,
+        );
         if (cancelled) return;
-        // Filter client-side so kind-switching is instant without a round-trip.
-        const filtered = activeKind
-          ? fetched.filter((r) => r.kind === activeKind)
-          : fetched;
-        setHasMore(filtered.length > limit);
-        setRows(filtered.slice(0, limit));
+        setHasMore(fetched.length > limit);
+        setRows(fetched.slice(0, limit));
       } catch (e: unknown) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : 'Failed to load transmissions');
@@ -154,14 +164,14 @@ export function NewsFeedPage() {
     setLimit(PAGE_SIZE);
   }, []);
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────────────
   // WHY page-hero outside container: matches the structure used by every other
   // top-level page so the 100px desktop / 70px mobile top gap is identical
   // regardless of which page the user navigates from.
 
   return (
     <div>
-      {/* ── Page hero ───────────────────────────────────────────────────── */}
+      {/* ── Page hero ─────────────────────────────────────────────────────── */}
       <PageHero
         title="Galaxy Dispatch"
         badge={<Badge variant="architect">Architect</Badge>}
@@ -310,4 +320,3 @@ function NarrativeCard({ narrative }: NarrativeCardProps) {
     </div>
   );
 }
-
