@@ -259,8 +259,16 @@ export function computeStandings(leagueId, baseRows, results) {
   // a single O(n) pass over results, then a O(m) merge into baseRows.
   const acc = {};
 
-  /** Returns a fresh zero-filled stats object. */
-  const init = () => ({ played: 0, wins: 0, draws: 0, loses: 0, gf: 0, ga: 0 });
+  /** Returns a fresh zero-filled stats object.  `form` is the last-5
+   *  results per team in MOST-RECENT-FIRST order (each entry one of
+   *  'W' | 'D' | 'L').  Capped at FORM_WINDOW so the array is
+   *  bounded and predictable for the UI. */
+  const init = () => ({ played: 0, wins: 0, draws: 0, loses: 0, gf: 0, ga: 0, form: [] });
+
+  // How many of a team's most-recent results the form column surfaces.
+  // 5 is the standard "last 5" indicator used by every major football
+  // league site and fits cleanly as 5 pips across the standings row.
+  const FORM_WINDOW = 5;
 
   all.forEach(r => {
     // Skip results that don't involve this league at all.
@@ -284,19 +292,31 @@ export function computeStandings(leagueId, baseRows, results) {
     if (r.homeGoals > r.awayGoals) {
       acc[hId].wins++;   // home win
       acc[aId].loses++;
+      // Push form pips (most-recent-first because results arrive newest-first).
+      // Cap at FORM_WINDOW so the array is bounded — we never need more than
+      // the last 5 entries for any team's standings row.
+      if (acc[hId].form.length < FORM_WINDOW) acc[hId].form.push('W');
+      if (acc[aId].form.length < FORM_WINDOW) acc[aId].form.push('L');
     } else if (r.homeGoals < r.awayGoals) {
       acc[hId].loses++;  // away win
       acc[aId].wins++;
+      if (acc[hId].form.length < FORM_WINDOW) acc[hId].form.push('L');
+      if (acc[aId].form.length < FORM_WINDOW) acc[aId].form.push('W');
     } else {
       acc[hId].draws++;  // draw
       acc[aId].draws++;
+      if (acc[hId].form.length < FORM_WINDOW) acc[hId].form.push('D');
+      if (acc[aId].form.length < FORM_WINDOW) acc[aId].form.push('D');
     }
   });
 
   // ── Merge real data into base rows, then sort ─────────────────────────────
   const merged = baseRows.map(row => {
     const data = acc[row.id];
-    if (!data) return row;  // team has no recorded matches yet — keep zeroed row
+    // No matches recorded → return the base row with an empty form array
+    // so the UI can render the form column without null-checking every
+    // row.  Other zero fields (W/D/L/Pts) are already on the base row.
+    if (!data) return { ...row, form: [] };
 
     const gd = data.gf - data.ga;
     return {
@@ -308,6 +328,10 @@ export function computeStandings(leagueId, baseRows, results) {
       gd,
       // Points: 3 per win, 1 per draw — standard football points system
       points: data.wins * 3 + data.draws,
+      // Last-N results in most-recent-first order ('W' | 'D' | 'L').
+      // Empty array for teams with no matches yet.  Cap enforced inside
+      // the loop above so this slice is purely defensive.
+      form: data.form.slice(0, FORM_WINDOW),
     };
   });
 

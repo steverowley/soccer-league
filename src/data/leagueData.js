@@ -3,6 +3,12 @@
 //
 // This file is the single source of truth for the website's league/team
 // structure.  It is purely presentational data — no game mechanics live here.
+//
+// React is imported because STANDINGS_COLS has a `render` callback for the
+// last-5 form column that returns React elements.  All other exports remain
+// pure data.
+
+import React from 'react';
 // The match simulator still uses the separate teams.js / constants.js files.
 //
 // LEAGUE HIERARCHY
@@ -488,7 +494,75 @@ export const STANDINGS_COLS = [
   // that could be confused with a genuine 0-goal-difference record.
   { key: 'gd',     label: 'GD',  align: 'right' },
   { key: 'points', label: 'Pts', align: 'right' },
+  // Last-5 form column.  Custom render: 5 coloured pips (green W / dust D /
+  // red L) in most-recent-first order, left-to-right.  Pre-season rows have
+  // form: [] which the renderer turns into 5 empty placeholders so the
+  // column width stays consistent across the table.  See computeStandings
+  // for the underlying data shape.
+  { key: 'form',   label: 'Form', align: 'right', render: renderFormCell },
 ];
+
+// ── Form-pip render helper ──────────────────────────────────────────────────
+// Keeping the helper local to this file means STANDINGS_COLS stays the single
+// source of truth for what the standings table looks like.  React is imported
+// at the top of this file for this one callback.
+//
+// Pip colours:
+//   W → quantum green     (var(--color-green))  — recent victory
+//   D → muted lunar dust  (rgba(227,224,213,0.5)) — neutral
+//   L → solar-flare red   (var(--color-red))    — recent defeat
+//   empty placeholder     transparent border    — pre-season / no-match-yet
+//
+// Width 5 placeholders even when form.length < 5 so a freshly-promoted team
+// (1 match played) doesn't render a half-empty cell that collapses the
+// column width on long-running browsers.
+
+const FORM_PIP_COLOURS = {
+  W: 'var(--color-green)',
+  D: 'rgba(227,224,213,0.5)',
+  L: 'var(--color-red)',
+};
+
+/**
+ * Standard pip count drawn per cell.  5 mirrors the array cap inside
+ * computeStandings.  Bumping both together is the only safe way to widen
+ * the visualisation.
+ */
+const FORM_PIP_COUNT = 5;
+
+/**
+ * Render a single standings row's form array as a horizontal pip strip.
+ * Defined at module scope so STANDINGS_COLS can reference it without
+ * paying a re-creation cost per render.
+ */
+function renderFormCell(row) {
+  const form = Array.isArray(row.form) ? row.form : [];
+  const pips = [];
+  for (let i = 0; i < FORM_PIP_COUNT; i++) {
+    const result = form[i]; // most-recent-first; undefined when sparse
+    const colour = FORM_PIP_COLOURS[result];
+    pips.push(
+      React.createElement('span', {
+        key: i,
+        title: result ?? 'No match yet',
+        style: {
+          display:      'inline-block',
+          width:        '8px',
+          height:       '8px',
+          marginLeft:   i === 0 ? 0 : '3px',
+          background:   colour ?? 'transparent',
+          border:       colour ? 'none' : '1px solid rgba(227,224,213,0.2)',
+          borderRadius: '2px',
+        },
+      }),
+    );
+  }
+  return React.createElement(
+    'span',
+    { style: { display: 'inline-flex', alignItems: 'center' } },
+    ...pips,
+  );
+}
 
 /**
  * Column definitions for the Top Scorers player-stat table.
