@@ -102,3 +102,15 @@ export type { BetHistoryProps } from './ui/BetHistory';
 // renders null.  Mount it once inside <SupabaseProvider> at the app root so
 // it has DB client access for every settlement write.
 export { WagerSettlementListener } from './ui/WagerSettlementListener';
+
+// ── Wager volume widget ─────────────────────────────────────────────────────
+// Live three-way market-pulse bar shown on MatchDetail.  Aggregates every
+// wager on a match into home/draw/away percentages so fans see how the
+// room is leaning.  Surfaces "the market itself is content" from the plan.
+export { WagerVolumeStrip } from './ui/WagerVolumeStrip';
+export {
+  summariseMatchWagers,
+  MIN_WAGERS_FOR_SIGNAL,
+} from './logic/wagerVolume';
+export type { WagerVolumeSummary, SideBreakdown } from './logic/wagerVolume';
+export { getWagerVolumeForMatch } from './api/wagerVolume';

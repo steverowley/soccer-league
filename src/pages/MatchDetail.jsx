@@ -35,7 +35,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { WagerWidget, BetHistory, getMatchOdds, saveMatchOdds, computeAvgRating, computeMatchOdds } from '../features/betting';
+import { WagerWidget, WagerVolumeStrip, BetHistory, getMatchOdds, saveMatchOdds, computeAvgRating, computeMatchOdds } from '../features/betting';
 // Phase 5a: officiating context (referee name + strictness) for the assigned
 // IEOB official.  Returns null when no referee is assigned yet — the badge
 // just renders nothing in that case.
@@ -354,6 +354,20 @@ export default function MatchDetail() {
           />
         </section>
       )}
+
+      {/* ── Live wager-volume strip ───────────────────────────────────────── */}
+      {/* Surfaces market sentiment (home/draw/away percent split) under the
+          WagerWidget so fans see how the room is leaning before placing
+          their own bet.  Self-hides while loading and shows a "Too few
+          wagers" silence-copy state below MIN_WAGERS_FOR_SIGNAL.  Bumping
+          wageredKey on a successful WagerWidget submit forces a re-fetch
+          so the bar updates immediately after the user's own bet lands. */}
+      <WagerVolumeStrip
+        matchId={match.id}
+        homeTeamName={homeTeam?.name ?? 'Home'}
+        awayTeamName={awayTeam?.name ?? 'Away'}
+        refreshKey={wageredKey}
+      />
 
       {/* ── Pre-match build-up (Tier-2 #3) ─────────────────────────────────── */}
       {/* Only rendered for scheduled matches — once a match is in progress or
