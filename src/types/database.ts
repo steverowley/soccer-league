@@ -1532,6 +1532,30 @@ export type Database = {
           },
         ]
       }
+      wager_volume_v: {
+        Row: {
+          bet_count: number | null
+          match_id: string | null
+          team_choice: string | null
+          total_stake: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wagers_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "match_referee_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "wagers_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       assign_match_referee: {
