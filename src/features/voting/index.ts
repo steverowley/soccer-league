@@ -132,6 +132,16 @@ export type {
   TeammateNameSeed,
 } from './logic/replacementPlayer';
 
+// ── Logic — arrival narratives (Phase 3.2) ────────────────────────────────
+// Pure template builder for the "New Arrival" news post emitted whenever
+// runElectionNight generates a replacement player.  Closes the lore loop
+// on incinerations.
+export {
+  NEW_ARRIVAL_KIND,
+  buildArrivalNarrative,
+} from './logic/arrivalNarrative';
+export type { ArrivalContext } from './logic/arrivalNarrative';
+
 // ── UI (React components) ──────────────────────────────────────────────────
 // VotingPage is the route-level component (mounted at /voting). FocusCard
 // is the per-option subcomponent — exported separately so other surfaces

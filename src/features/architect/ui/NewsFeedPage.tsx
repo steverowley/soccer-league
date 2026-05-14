@@ -48,6 +48,13 @@ const KIND_LABELS: Record<string, string> = {
   // Phase 6b: morning-anchor daybreak digest, one per UTC day during the
   // 06–10 UTC window.  Surfaced as a featured banner on the Home page.
   daybreak:            'Daybreak',
+  // Phase 3.2: replacement-player announcement emitted by the Election
+  // Night orchestrator after each successful incinerate + replace cycle.
+  // Closes the lore loop on incinerations — every loss has a successor
+  // the cosmos formally introduces.  source='ceremony' marks these as
+  // Election-night-emitted, distinct from the 'scheduled' galaxy-tick
+  // content.
+  new_arrival:         'Arrival',
 };
 
 /**
@@ -94,6 +101,10 @@ const KIND_COLORS: Record<string, string> = {
   // red and pundit_takes' blue.  Phase 6b banner uses the same colour on the
   // Home page so fans associate it with "the morning anchor" at a glance.
   daybreak:            '#e8b04a',
+  // New Arrival sage green — close to bookie_update's mint but cooler.
+  // Reads as "fresh / new growth" without colliding with the Architect
+  // purples or the cosmic_disturbance reds that signal loss.
+  new_arrival:         '#86c8a8',
 };
 
 const ALL_KINDS = Object.keys(KIND_LABELS);
