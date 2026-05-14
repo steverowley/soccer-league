@@ -57,6 +57,7 @@ import {
   buildReplacementPlayer,
   type TeammateNameSeed,
 } from '../logic/replacementPlayer';
+import { buildArrivalNarrative } from '../logic/arrivalNarrative';
 
 // ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -412,6 +413,57 @@ export async function runElectionNight(
             updateResult.error.message,
           );
         }
+      }
+
+      // ── Step 4.6: announce the arrival as a news narrative ─────────────
+      // Closes the lore loop on the incineration: every loss has a
+      // successor the cosmos formally introduces.  Failure here is logged
+      // and skipped — the player and audit row both already exist; a
+      // missing news post is recoverable (admin tooling can backfill) and
+      // never block the ceremony from continuing to the next target.
+      //
+      // The narrative kind is 'new_arrival' (recognised by NewsFeedPage's
+      // filter strip).  entities_involved=[] because the new player isn't
+      // an entity_id (players belong to the players table, not entities).
+      // source='ceremony' marks it as Election-Night-emitted, keeping it
+      // distinct from the 'scheduled' content the galaxy-tick cron emits.
+      try {
+        const arrivalSummary = buildArrivalNarrative(
+          {
+            newPlayerName:         replacement.name,
+            teamName:              teamName,
+            incineratedPlayerName: target.candidate.name,
+            position:              replacement.position,
+            age:                   replacement.age,
+            nationality:           replacement.nationality,
+          },
+          rng,
+        );
+        const narrativeResult = await (
+          db as unknown as {
+            from: (t: string) => {
+              insert: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+            };
+          }
+        )
+          .from('narratives')
+          .insert({
+            kind:              'new_arrival',
+            summary:           arrivalSummary,
+            entities_involved: [],
+            source:            'ceremony',
+          });
+        if (narrativeResult.error) {
+          console.error(
+            `[runElectionNight] arrival narrative insert failed for ${replacement.name}:`,
+            narrativeResult.error.message,
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[runElectionNight] arrival narrative threw for ${replacement.name}:`,
+          err,
+        );
       }
 
       replacementsGenerated += 1;
