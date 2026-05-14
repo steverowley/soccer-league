@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   MIN_WAGERS_FOR_SIGNAL,
   summariseMatchWagers,
+  summariseFromViewRows,
   type AggregatableWager,
+  type WagerVolumeViewRow,
 } from './wagerVolume';
 
 const w = (team_choice: 'home' | 'draw' | 'away', stake: number): AggregatableWager => ({
@@ -111,5 +113,82 @@ describe('summariseMatchWagers — non-negative invariants', () => {
       expect(r[side].percent).toBeGreaterThanOrEqual(0);
       expect(r[side].percent).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+// ── View-row variant tests (RLS bypass path) ──────────────────────────────
+// Exercises summariseFromViewRows which consumes pre-aggregated rows from
+// the `wager_volume_v` SQL view.  The view returns 0–3 rows per match
+// (one per team_choice that has at least one bet) so the test fixtures
+// stay tight.
+
+/** Compact row builder for the view-shape tests. */
+const vRow = (
+  team_choice: 'home' | 'draw' | 'away',
+  total_stake: number,
+  bet_count: number,
+): WagerVolumeViewRow => ({ team_choice, total_stake, bet_count });
+
+describe('summariseFromViewRows', () => {
+  it('returns all-zero summary for empty input', () => {
+    const r = summariseFromViewRows([]);
+    expect(r.totalWagers).toBe(0);
+    expect(r.totalStake).toBe(0);
+    expect(r.hasSignal).toBe(false);
+  });
+
+  it('maps view rows directly to per-side breakdowns', () => {
+    const r = summariseFromViewRows([
+      vRow('home', 150, 2),
+      vRow('draw', 30,  1),
+      vRow('away', 400, 3),
+    ]);
+    expect(r.home).toEqual({ stake: 150, percent: r.home.percent, count: 2 });
+    expect(r.draw).toEqual({ stake: 30,  percent: r.draw.percent, count: 1 });
+    expect(r.away).toEqual({ stake: 400, percent: r.away.percent, count: 3 });
+    expect(r.totalWagers).toBe(6);
+    expect(r.totalStake).toBe(580);
+  });
+
+  it('handles missing sides as zero', () => {
+    // Only home and away — draw row absent, which is the common case.
+    const r = summariseFromViewRows([
+      vRow('home', 200, 4),
+      vRow('away', 300, 6),
+    ]);
+    expect(r.draw).toEqual({ stake: 0, percent: 0, count: 0 });
+    expect(r.totalWagers).toBe(10);
+  });
+
+  it('honours the MIN_WAGERS_FOR_SIGNAL threshold', () => {
+    const below = summariseFromViewRows([vRow('home', 50, MIN_WAGERS_FOR_SIGNAL - 1)]);
+    expect(below.hasSignal).toBe(false);
+
+    const at = summariseFromViewRows([vRow('home', 50, MIN_WAGERS_FOR_SIGNAL)]);
+    expect(at.hasSignal).toBe(true);
+  });
+
+  it('always sums percents to exactly 100 (view-row path)', () => {
+    const r = summariseFromViewRows([
+      vRow('home', 70, 7),
+      vRow('draw', 15, 3),
+      vRow('away', 15, 3),
+    ]);
+    expect(r.home.percent + r.draw.percent + r.away.percent).toBe(100);
+  });
+
+  it('produces identical output to summariseMatchWagers for equivalent input', () => {
+    const wagers: AggregatableWager[] = [
+      w('home', 100), w('home', 50),
+      w('draw', 30),
+      w('away', 200), w('away', 100), w('away', 100),
+    ];
+    const fromIndividual = summariseMatchWagers(wagers);
+    const fromView = summariseFromViewRows([
+      vRow('home', 150, 2),
+      vRow('draw', 30,  1),
+      vRow('away', 400, 3),
+    ]);
+    expect(fromView).toEqual(fromIndividual);
   });
 });

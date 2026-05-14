@@ -158,3 +158,65 @@ export function summariseMatchWagers(wagers: readonly AggregatableWager[]): Wage
     hasSignal: wagers.length >= MIN_WAGERS_FOR_SIGNAL,
   };
 }
+
+// ── Pre-aggregated view-row variant ─────────────────────────────────────────
+
+/**
+ * Shape of a single `wager_volume_v` row.  The view groups wagers by
+ * `(match_id, team_choice)` so a match has 0–3 rows total (one per side
+ * with at least one bet).  team_choice and totals are nullable because
+ * PostgreSQL marks every view column nullable by default — the API
+ * normalises before calling the summariser.
+ */
+export interface WagerVolumeViewRow {
+  team_choice: 'home' | 'draw' | 'away';
+  total_stake: number;
+  bet_count:   number;
+}
+
+/**
+ * Build a WagerVolumeSummary from pre-aggregated view rows.
+ *
+ * WHY A SEPARATE FUNCTION
+ *   The `wager_volume_v` view aggregates by `team_choice` server-side so
+ *   anonymous and signed-in users get the same match-wide totals
+ *   (bypasses the per-user wagers RLS).  Callers receive 0–3 rows
+ *   already summed; iterating them is cheaper and clearer than
+ *   reshaping into fake individual wager rows just to reuse
+ *   `summariseMatchWagers`.
+ *
+ *   Both functions return the same shape so the WagerVolumeStrip UI
+ *   doesn't care which path produced the summary.
+ *
+ * @param rows  Aggregate rows from `wager_volume_v`, filtered to one match.
+ * @returns     WagerVolumeSummary ready for the UI.
+ */
+export function summariseFromViewRows(rows: readonly WagerVolumeViewRow[]): WagerVolumeSummary {
+  // Default each side to zero so missing sides (no bets on draw, for
+  // instance) still serialise cleanly into the summary shape.
+  const sides = {
+    home: { stake: 0, count: 0 },
+    draw: { stake: 0, count: 0 },
+    away: { stake: 0, count: 0 },
+  };
+
+  let totalWagers = 0;
+  let totalStake  = 0;
+  for (const r of rows) {
+    const side = sides[r.team_choice];
+    side.stake = r.total_stake;
+    side.count = r.bet_count;
+    totalStake  += r.total_stake;
+    totalWagers += r.bet_count;
+  }
+
+  const pct = distributeRounding(sides.home.stake, sides.draw.stake, sides.away.stake, totalStake);
+  return {
+    totalWagers,
+    totalStake,
+    home: { stake: sides.home.stake, percent: pct.home, count: sides.home.count },
+    draw: { stake: sides.draw.stake, percent: pct.draw, count: sides.draw.count },
+    away: { stake: sides.away.stake, percent: pct.away, count: sides.away.count },
+    hasSignal: totalWagers >= MIN_WAGERS_FOR_SIGNAL,
+  };
+}

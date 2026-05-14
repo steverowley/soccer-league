@@ -1,25 +1,35 @@
 // ── betting/api/wagerVolume.ts ───────────────────────────────────────────────
 //
-// Thin DB layer for the live wager-volume widget.  Fetches every wager row
-// for a match (any status) and hands them to the pure aggregator in
-// `logic/wagerVolume.ts`, which computes the per-side breakdown.
+// Thin DB layer for the live wager-volume widget.  Fetches pre-aggregated
+// rows from the public `wager_volume_v` view (one row per
+// (match_id, team_choice)) and hands them to the pure summariser in
+// `logic/wagerVolume.ts`.
+//
+// WHY THROUGH A VIEW — not the wagers table directly
+//   `wagers.wagers_select_own` RLS restricts SELECTs to
+//   `auth.uid() = user_id`.  Querying the table from the page would mean:
+//     • Anonymous users → 0 rows back, always "market silent"
+//     • Signed-in users → only their own bets, mislabelled as the market
+//   Aggregating in a view that runs as the view owner (RLS-exempt
+//   postgres role) and exposes only match-level totals — no user_id, no
+//   individual bet rows — leaks no per-user information while making the
+//   match-wide totals public.  Migration 0017 creates the view + grants.
 //
 // WHY ALL STATUSES (not just 'open')
-//   The widget shows market sentiment around the fixture as a whole — past,
-//   present, and projected.  Settled wagers (won/lost) should still count
-//   towards "the room leaned X" because they were placed before settlement
-//   and represent committed sentiment.  Filtering to 'open' would erase the
-//   history of a finished match the moment its wagers settled.
+//   The widget shows market sentiment around the fixture as a whole.
+//   Settled wagers (won/lost) were placed BEFORE settlement and represent
+//   committed sentiment that should still count toward "the room leaned X."
+//   The view aggregates over every status; this API does not filter.
 //
 // FAILURE POLICY
-//   Returns an empty summary on error rather than throwing.  The volume
+//   Returns EMPTY_SUMMARY on error rather than throwing.  The volume
 //   widget is enriching content; a Supabase blip must never block the
 //   match page from rendering.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import {
-  summariseMatchWagers,
-  type AggregatableWager,
+  summariseFromViewRows,
+  type WagerVolumeViewRow,
   type WagerVolumeSummary,
 } from '../logic/wagerVolume';
 
@@ -40,9 +50,13 @@ const EMPTY_SUMMARY: WagerVolumeSummary = {
   hasSignal: false,
 };
 
+/** Valid team_choice strings the view may return. */
+const VALID_TEAM_CHOICES = new Set(['home', 'draw', 'away']);
+
 /**
- * Fetch every wager for a match and return the per-side volume summary.
- * One round-trip; aggregation happens client-side via summariseMatchWagers.
+ * Fetch the wager volume for a match via the public `wager_volume_v` view.
+ * The view returns 0–3 rows (one per team_choice that has at least one
+ * bet); we filter to the requested match and summarise.
  *
  * @param db       Injected Supabase client.
  * @param matchId  The match UUID.
@@ -52,14 +66,31 @@ export async function getWagerVolumeForMatch(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<WagerVolumeSummary> {
-  const { data, error } = await (db as AnyDb) // CAST:wagers
-    .from('wagers')
-    .select('team_choice, stake')
+  const { data, error } = await (db as AnyDb) // CAST:wager_volume_v
+    .from('wager_volume_v')
+    .select('team_choice, total_stake, bet_count')
     .eq('match_id', matchId);
 
   if (error) {
     console.warn(`[getWagerVolumeForMatch] failed for match=${matchId}:`, error.message);
     return EMPTY_SUMMARY;
   }
-  return summariseMatchWagers((data ?? []) as AggregatableWager[]);
+
+  // Normalise the view's nullable columns into the pure-logic shape.
+  // PostgreSQL marks every view column nullable by default; we drop
+  // rows where the discriminant is null or unknown rather than treating
+  // them as 'home'.  Defensive — should never happen given the CHECK
+  // constraint on wagers.team_choice.
+  const rows: WagerVolumeViewRow[] = (data ?? [])
+    .filter((r: { team_choice: string | null }) =>
+      r.team_choice != null && VALID_TEAM_CHOICES.has(r.team_choice),
+    )
+    .map((r: { team_choice: string; total_stake: number | null; bet_count: number | null }) => ({
+      team_choice: r.team_choice as 'home' | 'draw' | 'away',
+      total_stake: r.total_stake ?? 0,
+      bet_count:   r.bet_count   ?? 0,
+    }));
+
+  return summariseFromViewRows(rows);
 }
+
