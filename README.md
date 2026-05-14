@@ -76,6 +76,7 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 - Wager settlement auto-fires after match completion
 - Kickoff-timer gate prevents bets after the match starts
 - Wager ledger with status pills (WON/LOST/OPEN/VOID) and net-profit column
+- **Wager Volume Strip** — Live visualization of market sentiment (home/draw/away bet distribution) displayed on match detail pages, updated in real-time after each wager placement. Self-hides while loading and shows "Too few wagers" state if below signaling threshold.
 - **Phase 4 Bettor Narratives** — Settlement listener generates anonymized cosmic-voice narratives from wager patterns (mass loss, upset victories, clean sweeps) and writes them to the Galaxy Dispatch feed as `wager_narrative` kind entries. Voices are assigned stochastically based on pattern type, creating an additional layer of narrative texture in the public news feed.
 
 ### Focus Voting
