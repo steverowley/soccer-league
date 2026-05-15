@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@features/auth';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { ClickerWidget, type ClickerPlayer } from './ClickerWidget';
+import { TrainingCommunityBoard } from './TrainingCommunityBoard';
 
 export function TrainingPage() {
   const { user, profile } = useAuth();
@@ -134,6 +135,13 @@ export function TrainingPage() {
           ))}
         </select>
       </label>
+
+      {/* ── Community board ──────────────────────────────────────────────── */}
+      {/* Shows the league-wide most-trained players this week.  Sits ABOVE
+          the clicker so a fan who comes back daily sees the community
+          signal first.  Self-hides on empty data — the cosmos quiet is its
+          own narrative beat. */}
+      <TrainingCommunityBoard />
 
       {/* ── The clicker widget ───────────────────────────────────────────── */}
       {selectedPlayer && (

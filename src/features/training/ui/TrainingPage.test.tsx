@@ -79,6 +79,25 @@ vi.mock('../api/trainingLog', () => ({
   getRecentClickTimestamps: vi.fn().mockResolvedValue([]),
 }));
 
+// `TrainingCommunityBoard` (the new community leaderboard panel) imports
+// getHotIdolMovers from `../../../lib/supabase`.  That module resolves to
+// the legacy `src/lib/supabase.js` (where both `.js` and `.ts` exist with
+// the same basename, `.js` wins) which instantiates the Supabase singleton
+// at module load using import.meta.env vars that aren't set in tests.
+// Mocking the resolved module path short-circuits that load so the test
+// never reaches the singleton.
+//
+// The reference is declared outside the factory and the factory delegates
+// to it (rather than calling `vi.fn().mockResolvedValue(...)` inline)
+// because `vi.resetAllMocks()` in beforeEach() would otherwise wipe the
+// inline mockResolvedValue and leave the function returning undefined —
+// which then crashes the board's `.then()` chain.  The beforeEach() block
+// below re-restores the default resolved value for the same reason.
+const mockGetHotIdolMovers = vi.fn().mockResolvedValue([]);
+vi.mock('../../../lib/supabase', () => ({
+  getHotIdolMovers: (...args: unknown[]) => mockGetHotIdolMovers(...args),
+}));
+
 // ── DB mock for the players query ─────────────────────────────────────────────
 // TrainingPage fetches players via `db.from('players').select(...).eq(...).order(...)`.
 // We intercept the chainable builder and return FAKE_PLAYERS.
@@ -88,6 +107,7 @@ beforeEach(() => {
 
   // Restore default return values after resetAllMocks.
   mockGetPlayerLifetimeXp.mockResolvedValue(0);
+  mockGetHotIdolMovers.mockResolvedValue([]);
   mockRecordClick.mockResolvedValue({ success: true, statBumped: null, newTotalXp: 10 });
 
   // Set up the chainable Supabase query mock on fakeDb.
