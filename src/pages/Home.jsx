@@ -40,6 +40,7 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { getRecentNarratives } from '../features/entities';
 import { HotIdolMoversStrip } from '../components/widgets/HotIdolMoversStrip';
+import { LiveWatchersBadge } from '../components/widgets/LiveWatchersBadge';
 
 /**
  * ISL Home page component.
@@ -176,6 +177,16 @@ export default function Home() {
           <p className="subtitle">
             The most exciting soccer simulation game in the solar system!
           </p>
+
+          {/* ── Live watchers badge ─────────────────────────────────────────── */}
+          {/* Compact inline indicator that surfaces how many fans the cosmos
+              has noticed in the last 5 minutes.  Self-hides when count is 0
+              (silence reads as quiet cosmos, not broken UI).  Polls every
+              60 s while mounted. */}
+          <div style={{ marginTop: '12px', marginBottom: '20px' }}>
+            <LiveWatchersBadge />
+          </div>
+
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/leagues">
               <Button variant="primary">View Leagues</Button>
