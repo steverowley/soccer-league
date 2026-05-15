@@ -1,252 +1,196 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * ISL Design Tokens — single source of truth
+ * ISL Design Tokens — single source of truth (Redesign 2026-05)
  * ───────────────────────────────────────────────────────────────────────────
- * WHY THIS FILE EXISTS:
- *   Phase 0 of the plan consolidates the foundation design tokens (colours,
- *   typography, spacing, layout, component sizings) into one file so that a
- *   single edit propagates everywhere. Before this file, tokens were defined
- *   inline in src/index.css alongside component styles, which meant visual
- *   changes required hunting through 400+ lines of mixed concerns.
+ * Replaces the original Phase-0 token set with the editorial / NASA-archive
+ * direction documented in the new Figma file (node 157-288).  The shift:
  *
- * SOURCE OF TRUTH:
- *   The authoritative values come from the ISL Figma file (Soccer-Game,
- *   node 47:20 "Design System"), pulled via the Figma MCP during Phase 0.
- *   Each token below is annotated with its Figma name where one exists.
+ *   - Orange (Solar Flare) is the primary CTA accent; purple is demoted to
+ *     Architect-only surfaces.
+ *   - Heavier reliance on hairline dividers and small-caps section labels
+ *     instead of cards-with-coloured-borders for sectioning.
+ *   - Wider tracking on every uppercase string; tighter line-heights on
+ *     editorial headings.
+ *   - Imagery (NASA-style halftone space photographs) carries the visual
+ *     weight; UI chrome stays austere.
  *
- *   Figma link: https://www.figma.com/design/oGdHNw4ap5TY5R5ey28FDP/Soccer-Game
- *
- * HOW IT IS CONSUMED:
- *   - src/index.css @imports this file at the top, before any component CSS.
- *     Component classes reference tokens via var(--color-abyss), etc.
- *   - Tailwind v4 (`@import "tailwindcss"`) picks up these custom properties
- *     automatically — any utility like bg-[--color-abyss] will work.
- *   - Future components should NEVER hard-code hex values; always use the
- *     corresponding var(--…). If a new value is needed, add it here first.
+ * SOURCE OF TRUTH: the new Figma design system page in
+ *   https://www.figma.com/design/oGdHNw4ap5TY5R5ey28FDP/Soccer-Game
+ * Numeric values without an explicit Figma cite are derived from the
+ * screenshots provided alongside the redesign brief.
  *
  * ADDING A NEW TOKEN:
- *   1. Confirm it exists in the Figma file and copy its display name.
- *   2. Add a line below, grouped by section, with the Figma name in the
- *      inline comment (e.g. "Lunar Dust — primary light").
- *   3. Reference it from component CSS with var(--token-name).
- *   4. Never introduce raw colour hex values in component stylesheets —
- *      that defeats the whole purpose of this file.
- *
- * INVARIANT-LEVEL TOKENS (marked [INVARIANT]):
- *   Values that weren't in the Figma spec but are needed for stateful
- *   variants (hover darker shades, error red tones). They are locally
- *   defined here and marked clearly so a future Figma pass can lock them
- *   down or replace them.
+ *   1. Confirm it appears in the redesign Figma (or the screenshots).
+ *   2. Add it under the relevant section, with a comment explaining intent.
+ *   3. Reference it from component CSS via var(--token-name).
+ *   4. Never introduce raw hex values in component stylesheets.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
   /* ── Colours ──────────────────────────────────────────────────────────────
-   * The ISL palette is intentionally narrow: one dark, one light, one focus
-   * colour, plus a secondary green for "positive" accents and a warning red.
-   * Keeping the palette tight enforces the retro-minimalist aesthetic — any
-   * "just add a new shade" temptation should be resisted. */
+   * Five named values do almost all the work.  Orange is the only chromatic
+   * accent in the normal flow.  Purple is reserved for Architect surfaces.
+   * Green and red retain semantic roles (positive form / warning).         */
 
-  /* Primary dark — Figma: "Galactic Abyss" (#111111)
-     Used for page backgrounds, primary button fills, and all dark-table text. */
-  --color-abyss:         #111111;
+  /* Primary dark — Galactic Abyss
+     Page background, footer background, table-dark cells.  The redesign
+     leans heavily into this — most surfaces sit on Abyss with hairline
+     dust dividers rather than card backgrounds. */
+  --color-abyss:         #0A0A0A;
 
-  /* Secondary dark — Figma: "Phobos Ash" (#1F1F1F)
-     Used for card backgrounds and dark table rows. Sits one step lighter
-     than Galactic Abyss so cards read as raised surfaces. */
-  --color-ash:           #1F1F1F;
+  /* Secondary dark — Phobos Ash
+     Slightly lighter than Abyss for raised surfaces (header strip, card
+     bodies that deliberately lift off the page).  Used sparingly in the
+     redesign — most "cards" are bordered Abyss with no fill. */
+  --color-ash:           #1A1A1A;
 
-  /* Primary light — Figma: "Lunar Dust" (#E3E0D5)
-     Used for body text on dark backgrounds, secondary button fills, borders,
-     and light-table backgrounds. A warm off-white rather than pure #FFFFFF
-     to echo the "retro / analogue" vibe. */
+  /* Primary light — Lunar Dust
+     Body text on dark backgrounds, heading colour, hairline dividers,
+     button-secondary fill.  The slightly warm off-white reads as
+     "archive paper" rather than crisp #FFF — that's the editorial intent. */
   --color-dust:          #E3E0D5;
 
-  /* Focus / brand accent — Figma: "Quantum Purple" (#9A5CF4)
-     The ONLY chromatic accent in the normal flow. Used for active nav links,
-     tertiary buttons, focus outlines, and all Cosmic Architect UI surfaces.
-     Over-using purple dilutes its signal — reserve it for intentional moments. */
+  /* Solar Flare — primary CTA accent (NEW PRIMARY)
+     Replaces Quantum Purple as the orange-led accent the redesign asks
+     for.  Used on: primary buttons, "create account" CTAs, key highlight
+     numbers in stats rows, the active nav-link underline. */
+  --color-flare:         #E85D2C;
+
+  /* Hover/pressed for orange CTAs — manually mixed ~10% darker. */
+  --color-flare-mid:     #C94B22;
+
+  /* Quantum Purple — Architect-ONLY accent now
+     The original primary.  In the redesign it is reserved for surfaces
+     that belong to the Cosmic Architect: ArchitectCard, narrative-feed
+     architect_whisper rows, the SealedFateCard glow, the live-watcher
+     presence dot, the cosmic_disturbance card-glow.  Other UI moments
+     that previously used purple should switch to flare or dust. */
   --color-purple:        #9A5CF4;
-
-  /* [INVARIANT] Darker purple for hover/active states on purple fills.
-     Not in Figma; manually mixed to sit ~15% darker than Quantum Purple. */
   --color-purple-mid:    #7A3ED4;
-
-  /* [INVARIANT] Even darker purple for pressed states or deep accents.
-     Not in Figma; manually mixed to sit ~35% darker than Quantum Purple. */
   --color-purple-dark:   #5B2E9E;
+  --color-purple-glow:   rgba(154,  92, 244, 0.18);
 
-  /* Error / warning — Figma: "Solar Flare"
-     NOTE: the Figma metadata for this swatch displays "#9A5CF4" in its label,
-     which is a copy-paste typo of the Quantum Purple hex. The actual fill
-     rectangle in Figma is a red/orange, and a red is the only semantically
-     correct value for a warning colour — so we keep #E05252 here, which was
-     the pre-Phase-0 value already in index.css. Verify against the Figma
-     source and correct the Figma label if/when pulling a fresh token set. */
+  /* Solar Flare warning red — kept for error states & cosmic_disturbance.
+     The new orange and the warning red are visually distinct (orange is
+     warmer / saturated; red is cooler / deeper).  Confirmed by the new
+     Figma palette swatches. */
   --color-red:           #E05252;
-
-  /* [INVARIANT] Darker red for pressed/hover states on red fills.
-     Not in Figma; manually mixed. */
   --color-red-dark:      #8B1A1A;
+  --color-red-glow:      rgba(224,  82,  82, 0.18);
 
-  /* Secondary accent — Figma: "Terra Nova" (#A5D6A7)
-     A muted pastel green used for positive accents (e.g. upward-trending form
-     indicators). Intentionally desaturated so it doesn't fight with the purple. */
+  /* Terra Nova — positive accent (form W pip, upward trends).
+     Unchanged from the original token set; still reads "alive" against
+     the new orange without competing for attention. */
   --color-green:         #A5D6A7;
 
-  /* Nexus-7 Blue — AI analyst commentary accent (#4FC3F7). */
+  /* Nexus-7 Blue — AI-analyst commentary tint.  Unchanged. */
   --color-sky:           #4FC3F7;
 
-  /* [INVARIANT] Narrative kind accent colours — used in NewsFeedPage and Home
-     kind-colour maps. Not in Figma; chosen to be visually distinct on dark bg.
-     Each token is named after the kind it primarily serves to keep the mapping
-     intentional; secondary uses of the same hue must reference this token. */
-  --color-gold:          #c8a84b;  /* political_shift — authority, political weight */
-  --color-orange:        #c85a2a;  /* geological_event — planetary drama           */
-  --color-teal:          #4bc8b8;  /* economic_tremor — fiscal undercurrents        */
-  --color-blue:          #5B9BD5;  /* pundit_takes — cool analytical opinion        */
-  --color-slate:         #7D8BA1;  /* referee_narrative — neutral press-room tone   */
-  /* journalist_report uses rgba(227,224,213,0.85) inline — neutral, no tint,
-     signals objectivity without introducing a new named colour. */
+  /* ── Narrative kind accent colours ─────────────────────────────────────────
+     Each narrative kind gets a hue.  These survive the redesign mostly
+     unchanged — they're already a coherent "Architect's broadcast" set. */
+  --color-gold:          #c8a84b;  /* political_shift                       */
+  --color-orange:        #c85a2a;  /* geological_event (pre-redesign hue —
+                                      kept distinct from the new --flare
+                                      so the news feed stays legible)      */
+  --color-teal:          #4bc8b8;  /* economic_tremor                       */
+  --color-blue:          #5B9BD5;  /* pundit_takes                          */
+  --color-slate:         #7D8BA1;  /* referee_narrative                     */
 
-  /* [INVARIANT] Cosmic glow shadow colours — ambient box-shadow on narrative
-     cards whose kind signals direct Architect involvement. Decomposed from the
-     corresponding solid colour at 18% opacity so the glow is present but subtle.
-       purple-glow: from --color-purple  #9A5CF4 = rgb(154,92,244)
-       red-glow:    from --color-red     #E05252 = rgb(224,82,82) */
-  --color-purple-glow:   rgba(154,  92, 244, 0.18);  /* architect_whisper cards   */
-  --color-red-glow:      rgba(224,  82,  82, 0.18);  /* cosmic_disturbance cards  */
-
-  /* [INVARIANT] Darker Lunar Dust for hover/pressed states on dust-filled surfaces.
-     Used by .btn-secondary:hover. Manually mixed at ~12% darker than Lunar Dust. */
+  /* Darker dust for hover/pressed states on dust-filled surfaces. */
   --color-dust-dark:     #ccc9be;
+  /* Even darker dust for borderlines, table dividers, table strokes. */
+  --color-dust-faint:    rgba(227, 224, 213, 0.12);
+  /* Hairline divider opacity (used heavily in the redesign editorial
+     layout — every section break, every table row separator). */
+  --color-hairline:      rgba(227, 224, 213, 0.18);
 
-  /* ── Cosmic Architect surface tokens ─────────────────────────────────────────
-   * The Architect UI (match cards, player lore section) uses a distinct palette
-   * that sits outside the main ISL palette — deeper, more cosmic.  These tokens
-   * are intentionally not in the main colour set; they are exclusively for
-   * Architect-branded surfaces.  Each is [INVARIANT] until Figma adds them to
-   * the design spec. */
-
-  /* Near-void background — deeper black than Galactic Abyss to evoke cosmic void.
-     Used in ArchitectCard, ArchitectInterferenceCard, SealedFateCard, and the
-     PlayerDetail "Convergence" lore section. */
+  /* ── Architect surface tokens (unchanged) ──────────────────────────────────
+   * Reserved for surfaces that belong to the Cosmic Architect persona. */
   --color-architect-bg:       #050308;
-
-  /* Quantum Purple accent — used for Architect borders, titles, and glow effects.
-     Aligned to --color-purple per design system review (was #9D6FFB). */
-  --color-architect-accent:   #9A5CF4;
-
-  /* Darker purple — readable body text on the near-void background.
-     Used for Architect commentary text and player arc prose. */
-  --color-architect-text:     #7A3ED4;
-
-  /* Secondary lavender — slightly more muted; used for relationship bond labels
-     and secondary annotation text inside Architect cards. */
+  --color-architect-accent:   var(--color-purple);
+  --color-architect-text:     var(--color-purple-mid);
   --color-architect-muted:    #C4B5D9;
 
   /* ── Typography ───────────────────────────────────────────────────────────
-   * Space Mono is the only font family in the ISL. The monospace feel is
-   * core to the retro aesthetic; a sans or serif would break the look.
-   * The scale below matches the authoritative Figma "typography" frame. */
+   * Space Mono is still the only font family.  The redesign tightens the
+   * scale and adds two new sizes for the editorial pattern (large display
+   * for hero titles, micro for footer metadata).  Letter-spacing values
+   * are wider than the previous set to land the small-caps look. */
 
   --font-mono:           'Space Mono', monospace;
 
-  /* Heading & body sizes — Figma "typography" frame (node 50:27).
-     H1 40 / H2 32 / H3 28 / P 16. These flow through to the base
-     element styles in index.css (h1, h2, h3, p). */
-  --font-size-h1:        40px;  /* Figma: H1 */
-  --font-size-h2:        32px;  /* Figma: H2 */
-  --font-size-h3:        28px;  /* Figma: H3 */
-  --font-size-body:      16px;  /* Figma: P  */
+  /* Display — hero only (the "SOCCER, CHARTED ACROSS THE STARS" line).
+     48 px reads as "publication masthead" without dominating the layout. */
+  --font-size-display:   48px;
 
-  /* [INVARIANT] Small text used for nav links, button labels, and table cells.
-     Not a discrete Figma size; measured from button/nav mockups. */
-  --font-size-small:     13px;
+  /* Headings — H1 32 / H2 24 / H3 18.  Tighter than the previous scale
+     because the new layout has more headings competing for attention. */
+  --font-size-h1:        32px;
+  --font-size-h2:        24px;
+  --font-size-h3:        18px;
 
-  /* [INVARIANT] Micro text used for footer legalese and caption rows. */
-  --font-size-micro:     12px;
+  /* Body sizes */
+  --font-size-body:      14px;     /* Default body — drop from 16 because
+                                      Space Mono runs visually large and
+                                      the editorial layout needs density. */
+  --font-size-small:     12px;     /* Stats rows, section meta             */
+  --font-size-micro:     10px;     /* Small-caps labels, footer metadata   */
 
-  /* Letter-spacing — all headings and button labels are uppercase with a
-     mild tracking boost to improve readability at small sizes. These values
-     come from the Figma button and header mocks. */
-  --letter-spacing-wide:    0.05em;
-  --letter-spacing-wider:   0.08em;
-  --letter-spacing-widest:  0.1em;
+  /* Letter-spacing — wider on every uppercase variant.  The redesign uses
+     these values religiously for any small-caps label. */
+  --letter-spacing-wide:    0.08em;
+  --letter-spacing-wider:   0.12em;
+  --letter-spacing-widest:  0.18em;  /* Used on section labels (I • THE…)  */
+
+  /* Line heights — tight for editorial headings, comfortable for body. */
+  --line-height-tight:   1.1;
+  --line-height-snug:    1.3;
+  --line-height-body:    1.6;
 
   /* ── Spacing scale ────────────────────────────────────────────────────────
-   * Figma "spacings" frame (node 49:32) explicitly calls out: "Use multiples
-   * of 4 or 8. Apply it to typography, buttons, spacings, etc."
-   *
-   * The full Figma-shown column heights are 4, 8, 16, 24, 32, 40, 48, 56,
-   * 64, 80, 100. We also keep 12px and 20px because legacy components rely
-   * on them (close to a 4-multiple and a 4-multiple respectively — these
-   * were pre-Figma values that the Figma spec does not forbid). */
+   * Same 4-multiple base as before.  Adds --space-32 for hero-section
+   * vertical breathing room. */
 
-  --space-1:             4px;    /* Figma: smallest column */
-  --space-2:             8px;    /* Figma */
-  --space-3:             12px;   /* [INVARIANT] legacy, kept for existing components */
-  --space-4:             16px;   /* Figma */
-  --space-5:             20px;   /* [INVARIANT] legacy */
-  --space-6:             24px;   /* Figma */
-  --space-8:             32px;   /* Figma — also the standard card padding */
-  --space-10:            40px;   /* Figma */
-  --space-12:            48px;   /* Figma */
-  --space-14:            56px;   /* Figma — button height */
-  --space-16:            64px;   /* Figma */
-  --space-20:            80px;   /* Figma — desktop grid column width */
-  --space-25:            100px;  /* Figma — largest column in spacing frame */
+  --space-1:             4px;
+  --space-2:             8px;
+  --space-3:             12px;
+  --space-4:             16px;
+  --space-5:             20px;
+  --space-6:             24px;
+  --space-8:             32px;
+  --space-10:            40px;
+  --space-12:            48px;
+  --space-14:            56px;
+  --space-16:            64px;
+  --space-20:            80px;
+  --space-25:            100px;
+  --space-32:            128px;   /* Hero section vertical padding         */
 
   /* ── Layout ───────────────────────────────────────────────────────────────
-   * Figma defines two layout grids (nodes 49:88 desktop, 49:113 mobile):
-   *   Desktop: 12 columns × 80px wide, 32px gutter → 1312px total
-   *   Mobile:  12 columns × 40px wide, 28px gutter → 380px total  */
-
-  /* Desktop max content width — direct from Figma desktop grid spec. */
+   * Same desktop content width as before — the redesign uses the full
+   * 1312px frame.  Narrowed gutter at mobile because the new editorial
+   * layout collapses to single-column.                                    */
   --max-width:                 1312px;
-
-  /* Desktop grid: 12 × 80 + 11 × 32 gutter = 1312. */
-  --grid-column-width-desktop: 80px;
+  --max-width-narrow:          900px;   /* Single-column reading width
+                                           used for prose-heavy sections   */
   --grid-gutter-desktop:       32px;
-
-  /* Mobile grid: 12 × 40 + 11 × 28 gutter = 788 — wider than the 380 the
-     Figma label says, but Figma's 380 is the container width and the mobile
-     grid is intended to fit within that. We store both values here and let
-     individual components decide which dimension to use. */
-  --grid-column-width-mobile:  40px;
-  --grid-gutter-mobile:        28px;
+  --grid-gutter-mobile:        20px;
   --max-width-mobile:          380px;
-
-  /* Mobile breakpoint — below this width, two-column grids collapse to one
-     and mobile grid tokens apply. Matches the media query in index.css. */
   --breakpoint-mobile:         640px;
 
   /* ── Component sizings ───────────────────────────────────────────────────
-   * Reusable dimensions pulled from Figma component frames. Keeping these
-   * as tokens (rather than inline values in component CSS) means a single
-   * edit changes every instance of a button/card at once. */
+   * Buttons reduced from 56 px → 44 px tall to match the redesign's
+   * tighter editorial feel.  Cards dropped from 32 px to 20 px padding. */
 
-  /* Button — Figma primary/secondary/tertiary button frames all use a 170×56
-     bounding box. Padding is derived from the 32 y-offset / 16 x-offset of
-     the label inside the frame. */
-  --button-width:        170px;
-  --button-height:       56px;
-  --button-padding-y:    16px;
-  --button-padding-x:    32px;
+  --button-height:       44px;
+  --button-padding-y:    12px;
+  --button-padding-x:    24px;
 
-  /* Card padding — Figma card frames (Large 640×263, Medium 416×334, Small
-     304×358) all use 32px internal padding on all sides. */
-  --card-padding:        32px;
-
-  /* Card border — Figma cards show a subtle 1px border in Lunar Dust at 20%
-     alpha. This is an alpha-composited value rather than a discrete token
-     because alpha colours don't round-trip cleanly through custom properties
-     in every browser. Kept here as documentation. */
-  /* border: 1px solid rgba(227, 224, 213, 0.2)  →  Lunar Dust @ 20% */
+  --card-padding:        20px;
+  --card-border:         1px solid var(--color-hairline);
 
   /* ── Transitions ─────────────────────────────────────────────────────────
-   * The retro aesthetic calls for snappy, near-instant feedback on state
-   * changes rather than long fade animations. 150 ms is short enough to feel
-   * immediate but long enough to register as a transition rather than a pop. */
-
-  --transition-fast:     0.15s;
-  --transition-medium:   0.3s;
+   * Snap, no fade — same retro principle as the original token set. */
+  --transition-fast:     0.12s;
+  --transition-medium:   0.25s;
 }
