@@ -73,6 +73,19 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  */
 const TOUCH_DEBOUNCE_MS = 60_000;
 
+// ── Presence heartbeat interval ─────────────────────────────────────────────
+/**
+ * How often the AuthProvider re-touches `last_seen_at` while the user keeps
+ * a tab open.  90 000 ms (1.5 min) sits comfortably inside the 5-minute
+ * server-side presence window read by `active_watchers_v` and the
+ * fan-boost calculation, so a single missed tick (briefly backgrounded
+ * tab, transient network blip) still leaves the fan inside the window.
+ *
+ * The TOUCH_DEBOUNCE_MS floor above means even an aggressive interval
+ * never produces more than one UPDATE/minute per tab.
+ */
+const PRESENCE_HEARTBEAT_MS = 90_000;
+
 // ── Provider component ──────────────────────────────────────────────────────
 
 /**
@@ -144,10 +157,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [db, fetchProfile]);
 
   // ── Touch last_seen_at when user is authenticated ───────────────────────
+  // Three triggers, all calling the same debouncedTouch:
+  //   1. User just signed in (or already in on mount).
+  //   2. Heartbeat interval — keeps presence fresh while the tab is open
+  //      so the LiveWatchersBadge / fan-boost window doesn't drop a fan
+  //      after 5 minutes of idle viewing.
+  //   3. visibilitychange → visible — refreshes presence the moment a
+  //      backgrounded tab is brought forward, so the fan re-appears in
+  //      the watcher count without waiting for the next interval tick.
+  //
+  // The heartbeat interval is intentionally shorter than the 5-minute
+  // server-side presence window (PRESENCE_HEARTBEAT_MS = 90 s) so that
+  // even a single missed tick (e.g. tab backgrounded for one cycle)
+  // still leaves the fan inside the window.  When the tab is hidden,
+  // we still let the interval run but the debouncedTouch's own
+  // 60-second floor de-duplicates rapid wake/sleep cycles.
   useEffect(() => {
-    if (user) {
-      debouncedTouch();
-    }
+    if (!user) return;
+
+    // Initial touch on auth so the user appears immediately.
+    debouncedTouch();
+
+    const heartbeat = setInterval(debouncedTouch, PRESENCE_HEARTBEAT_MS);
+
+    // Touch again whenever the tab comes back to foreground so a fan
+    // returning from another tab is counted on the next badge refresh.
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'visible') debouncedTouch();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [user, debouncedTouch]);
 
   // ── Auth actions ────────────────────────────────────────────────────────
