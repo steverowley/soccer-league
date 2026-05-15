@@ -14,10 +14,22 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 /**
- * The three ISL button variants, each mapping to a CSS class:
- *   primary   → .btn-primary   dark background, Lunar Dust border + text
- *   secondary → .btn-secondary Lunar Dust background, dark text
- *   tertiary  → .btn-tertiary  Quantum Purple background, Lunar Dust text
+ * The three ISL button variants, each mapping to a CSS class.  The visual
+ * specifics live in index.css; bumping a colour means editing one CSS rule
+ * rather than every consumer.
+ *
+ *   primary   → .btn-primary   Solar Flare orange fill, Abyss text — THE
+ *                              primary CTA across the app (sign up, place
+ *                              wager, browse, etc.).
+ *   secondary → .btn-secondary Lunar Dust outline + text, transparent fill
+ *                              — lower-weight CTAs (cancel, back, etc.).
+ *   tertiary  → .btn-tertiary  Hairline outline only — inline secondary
+ *                              actions that shouldn't compete with the
+ *                              section's primary CTA.
+ *
+ * NOTE on history: pre-redesign the primary was Quantum Purple and the
+ * tertiary was a purple fill.  Both were dropped in favour of the orange
+ * Solar Flare lead — purple is now Architect-only.
  */
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
 

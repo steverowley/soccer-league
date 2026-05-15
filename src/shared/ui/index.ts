@@ -10,12 +10,14 @@
 //   - have no feature-specific logic (no Supabase, no useAuth, no business rules)
 //   - be documented with JSDoc in their source file
 
-export { Button }    from './Button';
-export { Input }     from './Input';
-export { Badge }     from './Badge';
-export { PageHero }  from './PageHero';
+export { Button }        from './Button';
+export { Input }         from './Input';
+export { Badge }         from './Badge';
+export { PageHero }      from './PageHero';
+export { SectionHeader } from './SectionHeader';
 
 export type { ButtonProps, ButtonVariant }  from './Button';
 export type { InputProps }                  from './Input';
 export type { BadgeProps, BadgeVariant }    from './Badge';
 export type { PageHeroProps }               from './PageHero';
+export type { SectionHeaderProps }          from './SectionHeader';

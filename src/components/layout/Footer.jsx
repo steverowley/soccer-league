@@ -1,96 +1,87 @@
 // ── Footer.jsx ────────────────────────────────────────────────────────────────
-// Site-wide footer matching the ISL design system spec.
+// Site-wide footer — Redesign 2026-05.
 //
-// Layout (two-column flex row):
-//   LEFT  — ISL shield logo + "Intergalactic Soccer League — EST. Solar Cycle 2401"
-//   RIGHT — secondary nav links (Leagues, Teams, Players, Matches)
+// Replaces the previous two-column layout (logo+text left, nav links right)
+// with a single centred metadata strip matching the new Figma footer:
 //
-// Sits below a 1px Lunar Dust @ 15% alpha top-border.  All text is 11px Space
-// Mono uppercase at 40% alpha — intentionally de-emphasised so it never
-// competes with page content above.
+//   ◆  © 2026 INTERGALACTIC SOCCER LEAGUE   •   v 0.7.0   •   EST. SOLAR CYCLE 2401   •   EPOCH MMXXXVII
+//
+// Footer is now metadata only — no nav links.  The redesign trusts the
+// header masthead and in-page links for navigation; the footer's job is
+// to ground the page in the publication's voice (ISL credit, build
+// version, established year, current epoch).
+//
+// All text inherits the .footer class (defined in index.css) which sets
+// the small-caps + low opacity treatment.
 
 import { Link } from 'react-router-dom';
 
-// ── Secondary nav links shown in the footer ────────────────────────────────────
-// Subset of the main nav — profile, voting, and training are omitted because
-// they are auth-gated and less discoverable from the footer.
-const FOOTER_LINKS = [
-  { label: 'Leagues',  to: '/leagues' },
-  { label: 'Teams',    to: '/teams' },
-  { label: 'Players',  to: '/players' },
-  { label: 'Matches',  to: '/matches' },
-];
+// ── Build metadata ────────────────────────────────────────────────────────────
+// Surfaced in the footer alongside the establishment year and epoch.  Bumping
+// any of these is part of the design — the publication shows what cycle the
+// reader is in.  Hard-coded for now; a future task will derive from Vite
+// build env (`__APP_VERSION__`) and the active season row.
+const BUILD_VERSION = 'v 0.7.0';
+const ESTABLISHED   = 'EST. SOLAR CYCLE 2401';
+const EPOCH         = 'EPOCH MMXXXVII';
 
 /**
- * Site-wide footer component.
+ * Site-wide footer.  Centred metadata strip with a hairline top border.
  *
- * Renders a two-column row: the ISL logo and establishment text on the left;
- * secondary navigation links on the right.  Uses the same Lunar Dust 40%-alpha
- * muted text as specified in the ISL design system footer spec.
+ * The four bullet-separated tokens render in small-caps lunar-dust at low
+ * opacity so the footer reads as publication chrome rather than navigation.
+ * The leftmost ISL crest (Link to home) keeps the brand mark accessible
+ * from every page.
  *
  * @returns {JSX.Element}
  */
 export default function Footer() {
   return (
-    <footer
-      style={{
-        borderTop: '1px solid rgba(227,224,213,0.15)',
-        padding: '20px var(--space-8)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontFamily: 'var(--font-mono)',
-      }}
-    >
-      {/* ── Left: logo + establishment text ──────────────────────────────────── */}
-      {/* The logo uses the same SVG file as the header but at 28px — small
-          enough for a footer mark without competing with the header's larger
-          version.  Text is 11px / 0.06em tracking to match the retro ticket-tape
-          aesthetic specified for footer copy. */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <img
-          src={`${import.meta.env.BASE_URL}isl-logo.svg`}
-          alt="ISL"
-          style={{ width: 28, height: 'auto', display: 'block' }}
-        />
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            color: 'rgba(227,224,213,0.4)',
-          }}
+    <footer className="footer">
+      <div
+        className="container"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 'var(--space-3)',
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Crest — also a Link home so the footer always offers a brand-back
+            escape from any page.  20 px keeps it small enough to read as a
+            mark rather than competing with the metadata text. */}
+        <Link
+          to="/"
+          aria-label="ISL home"
+          style={{ display: 'inline-flex', alignItems: 'center', opacity: 0.6 }}
         >
-          Intergalactic Soccer League — Est. Solar Cycle 2401
-        </span>
-      </div>
+          <img
+            src={`${import.meta.env.BASE_URL}isl-logo.svg`}
+            alt=""
+            style={{ width: 20, height: 20, display: 'block' }}
+          />
+        </Link>
 
-      {/* ── Right: secondary nav links ────────────────────────────────────────── */}
-      {/* Plain text links — no active state needed in the footer.  Gap of 20px
-          matches --space-5 on the spacing scale (nearest 4-multiple). */}
-      <nav style={{ display: 'flex', gap: 20 }}>
-        {FOOTER_LINKS.map(({ label, to }) => (
-          <Link
-            key={to}
-            to={to}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: 'rgba(227,224,213,0.4)',
-              textDecoration: 'none',
-              transition: 'color var(--transition-fast)',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(227,224,213,0.7)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(227,224,213,0.4)'; }}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+        {/* Metadata tokens with bullet separators.  Each token renders inline
+            so the strip flows responsively — bullets disappear at the wrap
+            points without leaving orphan separators. */}
+        <span>© 2026 Intergalactic Soccer League</span>
+        <FooterDot />
+        <span>{BUILD_VERSION}</span>
+        <FooterDot />
+        <span>{ESTABLISHED}</span>
+        <FooterDot />
+        <span>{EPOCH}</span>
+      </div>
     </footer>
   );
+}
+
+/**
+ * Tiny middle-aligned bullet used between metadata tokens.  Extracted so
+ * spacing/opacity can be tuned in one place rather than at every join.
+ */
+function FooterDot() {
+  return <span aria-hidden="true" style={{ opacity: 0.4 }}>•</span>;
 }
