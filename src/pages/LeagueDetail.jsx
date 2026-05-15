@@ -40,14 +40,23 @@ import StatTable from '../components/ui/StatTable';
 import Button from '../components/ui/Button';
 import {
   SCORER_COLS, ASSISTS_COLS, CARDS_COLS, CLEAN_SHEETS_COLS,
+  STANDINGS_COLS,
   buildStandingsRows, placeholderPlayerRows,
 } from '../data/leagueData';
 
 // ── STANDINGS_WITH_POS_COLS ───────────────────────────────────────────────────
-// League detail page adds a POSITION column (numbered rank) before TEAM.
-// Kept local rather than modifying the shared STANDINGS_COLS so the Home
-// carousel (which has less horizontal space) isn't forced to show the column.
+// League detail page adds a POSITION column (numbered rank) before TEAM and
+// uses long labels (Played / Wins / Draws…) where the shared STANDINGS_COLS
+// on the Home carousel uses the short single-letter forms (P / W / D…).
+//
+// The last-5 FORM column is the same renderer + data on both surfaces, so we
+// pluck it off the shared STANDINGS_COLS rather than duplicating the render
+// callback.  If STANDINGS_COLS gains additional cross-page columns in the
+// future, append them the same way — keeping a single source of truth for the
+// pip-rendering logic in leagueData.js.
+//
 // The `position` field is populated by augmentWithPosition() below.
+const STANDINGS_FORM_COL = STANDINGS_COLS.find(c => c.key === 'form');
 const STANDINGS_WITH_POS_COLS = [
   { key: 'position', label: 'Pos',    align: 'right' },
   { key: 'team',     label: 'Team',   linkField: 'teamLink' },
@@ -57,6 +66,10 @@ const STANDINGS_WITH_POS_COLS = [
   { key: 'loses',    label: 'Loses',  align: 'right' },
   { key: 'gd',       label: 'GD',     align: 'right' },
   { key: 'points',   label: 'Points', align: 'right' },
+  // STANDINGS_FORM_COL is defined when leagueData.js loaded successfully and
+  // STANDINGS_COLS includes it.  Defensive `if present` guard so a future
+  // refactor that renames the form key doesn't crash this page.
+  ...(STANDINGS_FORM_COL ? [STANDINGS_FORM_COL] : []),
 ];
 
 import {
