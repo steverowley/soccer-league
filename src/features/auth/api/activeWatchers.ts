@@ -15,9 +15,10 @@
 //
 // WHY HERE (features/auth/api) — not shared/api
 //   `last_seen_at` is a profiles-table concern owned by the auth feature
-//   (touched by AuthProvider on sign-in, by usePresenceHeartbeat on
-//   page-visible).  The watcher count is a derived read against the same
-//   underlying column, so it belongs in the same feature.
+//   (touched by AuthProvider on sign-in, on a 90-second heartbeat, and
+//   on visibilitychange→visible — see the useEffect block in
+//   AuthProvider.tsx).  The watcher count is a derived read against the
+//   same underlying column, so it belongs in the same feature.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 
