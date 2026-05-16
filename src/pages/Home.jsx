@@ -1,513 +1,512 @@
-// ── Home.jsx ──────────────────────────────────────────────────────────────────
-// Landing page for the ISL website.
+// ── Home.jsx — Redesign 2026-05 ───────────────────────────────────────────────
+// Full rewrite against the new Figma home (node-id=157-288).  Replaces the
+// previous welcome-banner-and-narratives layout with an editorial publication
+// layout:
 //
-//  1. HERO — ISL logo (large), H1 welcome title, tagline, two CTAs:
-//            "VIEW LEAGUES" (primary) and "UPCOMING MATCHES" (tertiary/purple).
+//   HERO        — full-bleed nebula image + masthead + metadata sidebar
+//                 + stats row + primary/secondary CTAs
+//   I PRESENT   — Live From The Void: featured live match + upcoming sidebar
+//   II GET STARTED — Three Steps To Enter (numbered photo cards)
+//   III STANDINGS  — Rocky Inner League table with form column
 //
-//  2. CREATE ACCOUNT card — left-aligned dark bordered card with benefit list
-//     and "CREATE ACCOUNT" primary button.
+// Each section is introduced by <SectionHeader /> (the editorial roman-
+// numeral kicker pattern shipped in the foundation PR).  The hero is
+// bespoke markup; everything below uses the shared primitives so the
+// rhythm reads as a single publication.
 //
-//  3. LEAGUE STANDINGS carousel — live standings table for each league,
-//     computed from saved match results in localStorage.  Prev/next arrows
-//     cycle through the four leagues.  Falls back to zeroed placeholder rows
-//     before any matches have been simulated.
+// IMAGERY EXPECTATION
+//   The design leans on four NASA-style halftone images.  Place them in
+//   `public/img/` with the following filenames:
+//     hero-pillars.jpg       (Pillars-of-Creation nebula, hero left)
+//     step-01-sign-on.jpg    (Astronaut above Earth, step 01)
+//     step-02-pick-club.jpg  (Astronaut planting flag, step 02)
+//     step-03-watch-bet.jpg  (Astronaut watching a match on the moon, step 03)
+//   Until present, the browser renders the alt text and a broken-image
+//   icon — the page layout remains intact.
 //
-//  4. LATEST NEWS — dynamically generated from saved match results via
-//     matchResultsService.generateNewsItems().  Renders one card per news item
-//     (up to 6).  Falls back to the static "Welcome to Season One" card when
-//     no results exist.
-//
-// LIVE DATA STRATEGY
-// ──────────────────
-// Both the standings and news sections read from localStorage synchronously
-// on each render — no loading state, no async fetch.  This keeps the page
-// simple and ensures that after a match is saved the user sees updated data
-// immediately on returning to the home page.
-//
-// All layout follows the 1312px desktop grid (12 cols, 32px gutter) from
-// the design spec, achieved via the `.container` utility class.
+// DROPPED from the previous Home
+//   - HotIdolMoversStrip (lives on /idols)
+//   - Daybreak banner (moves into the news feed in PR N)
+//   - Architect narratives row (lives on /news)
+//   - Generated localStorage news-items grid (legacy)
+//   - LiveWatchersBadge (moves into the hero stats row as ACTIVE MATCHES
+//     companion in a future polish pass)
 
-import { useState, useMemo, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Button from '../components/ui/Button';
-import IslTable from '../components/ui/IslTable';
-import MatchCard from '../components/ui/MatchCard';
+import { SectionHeader, Button } from '@shared/ui';
 import { LEAGUES, STANDINGS_COLS, buildStandingsRows } from '../data/leagueData';
-// MetaRow removed — match cards now rendered by the shared MatchCard component
-import { computeStandings, generateNewsItems } from '../lib/matchResultsService';
+import { computeStandings } from '../lib/matchResultsService';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
+import IslTable from '../components/ui/IslTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
-import { getRecentNarratives } from '../features/entities';
-import { HotIdolMoversStrip } from '../components/widgets/HotIdolMoversStrip';
-import { LiveWatchersBadge } from '../components/widgets/LiveWatchersBadge';
+
+// ── Image paths ───────────────────────────────────────────────────────────────
+// Single source of truth for which file backs each illustration.  Lives at
+// module scope so renaming a file in /public/img/ is a one-line change
+// rather than a hunt through markup.
+const IMG_HERO         = `${import.meta.env.BASE_URL}img/hero-pillars.jpg`;
+const IMG_STEP_SIGN    = `${import.meta.env.BASE_URL}img/step-01-sign-on.jpg`;
+const IMG_STEP_CLUB    = `${import.meta.env.BASE_URL}img/step-02-pick-club.jpg`;
+const IMG_STEP_WATCH   = `${import.meta.env.BASE_URL}img/step-03-watch-bet.jpg`;
+
+// ── Hero-stats constants ──────────────────────────────────────────────────────
+// Fixed strings rendered in the stats row beneath the hero CTAs.  Real
+// values would come from /seasons + build env; for the first pass we
+// hard-code, matching the Figma exactly.  A polish task will wire these
+// to real season state.
+const HERO_SEASON_LABEL = 'SEASON VII';
+const HERO_MATCHDAY     = 'MATCHDAY XIV';
+const HERO_LIVE_LABEL   = 'LIVE NOW';
+const HERO_COORD_RA     = 'RA 14ʰ 04ᵐ 12ˢ';
+const HERO_COORD_EPOCH  = 'EPOCH MMXXXVII';
+const HERO_COORD_DEC    = 'DEC −27° 19′';
+const HERO_STAT_SEASON  = '014 / 030';
+const HERO_STAT_ARCH    = 'Elevated';
+const HERO_BUILD        = 'v 0.7.0';
 
 /**
- * ISL Home page component.
+ * Home page (redesigned).
  *
- * Renders the landing page with hero, account CTA, league standings carousel,
- * and a dynamically generated latest-news section.
- *
- * The standings carousel tracks which league is currently displayed via local
- * state; the league index wraps around at both ends (circular navigation).
+ * Editorial publication layout: full-bleed hero, three numbered sections
+ * stacked beneath, each introduced by a SectionHeader kicker.  Designed to
+ * be the first impression for anonymous visitors AND the daily landing
+ * page for signed-in fans — same layout in both states, with the right-
+ * edge auth CTA in the header swapping between Create Account and the
+ * AccountMenu.
  *
  * @returns {JSX.Element}
  */
 export default function Home() {
-  const db = useSupabase();
+  const db        = useSupabase();
+  const { user }  = useAuth();
 
-  // ── Auth state ─────────────────────────────────────────────────────────────
-  // The Create Account card is hidden for already-authenticated users so they
-  // aren't prompted to sign up when they're already signed in.  We only need
-  // `user` here — the full `profile` (with credits) is owned by AccountMenu.
-  const { user } = useAuth();
-
-  // ── Live and upcoming fixture data ───────────────────────────────────────
-  // Fetched once on mount.  Live matches are rare (only during active simulations)
-  // so the section is hidden entirely when the array is empty — avoids a
-  // misleading "Live Games" heading with no content.  Upcoming fixtures are
-  // always shown so users can see what's on the calendar; an empty state prompts
-  // them to simulate a match instead.
+  // ── Live + upcoming match data ──────────────────────────────────────────────
+  // Single fetch on mount.  Live matches are rare; when no live match is
+  // playing the "Live From The Void" section shows an empty placeholder.
+  // Upcoming list is capped at 3 to fit the side panel in the design.
   const [liveMatches,     setLiveMatches]     = useState([]);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
-  const [matchesLoading,  setMatchesLoading]  = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getLiveMatches(db), getUpcomingMatches(db, 6)])
+    Promise.all([getLiveMatches(db), getUpcomingMatches(db, 3)])
       .then(([live, upcoming]) => {
-        if (!cancelled) {
-          setLiveMatches(live);
-          setUpcomingMatches(upcoming);
-          setMatchesLoading(false);
-        }
+        if (cancelled) return;
+        setLiveMatches(live);
+        setUpcomingMatches(upcoming);
       })
-      .catch((e) => {
-        console.warn('[Home] fixture fetch failed:', e);
-        if (!cancelled) setMatchesLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [db]); // db is a stable context ref — safe to add without causing re-fetches
-
-  // ── Architect narratives (Galaxy Dispatch) ────────────────────────────────
-  // WHY: The Architect's scheduled galaxy-tick Edge Function writes narrative
-  // rows (news, political shifts, geological events, cosmic whispers) to the
-  // `narratives` table. We surface the six most recent here so the Home page
-  // feels like a living news wire rather than a static matchday report.
-  //
-  // We only fetch `source='scheduled'` rows — match-generated narrative rows
-  // are already covered by the match-results section below. Limiting to 6
-  // matches the existing match-news cap for visual parity.
-  const [narratives, setNarratives] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    getRecentNarratives(db, 6, 'scheduled')
-      .then((rows) => { if (!cancelled) setNarratives(rows); })
-      .catch((e) => console.warn('[Home] narratives fetch failed:', e));
+      .catch((e) => { console.warn('[Home] fixture fetch failed:', e); });
     return () => { cancelled = true; };
   }, [db]);
 
-  // ── Daybreak Digest banner (Phase 6b) ─────────────────────────────────────
-  // The galaxy-tick edge function writes one kind='daybreak' row per UTC day
-  // during the 06–10 UTC window.  We surface the single most recent matching
-  // row as a featured banner at the top of the page so morning visitors see
-  // a fresh narrative anchor regardless of when matches last fired.
-  //
-  // Fetch is independent of the main narratives list so the banner appears
-  // even when no other scheduled narratives have landed yet.  Null state
-  // (no daybreak today) simply hides the banner — never a placeholder.
-  const [daybreak, setDaybreak] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    // 4th positional arg = kind filter (server-side via getRecentNarratives).
-    // Limit=1 because we only ever show the newest daybreak.
-    getRecentNarratives(db, 1, undefined, 'daybreak')
-      .then((rows) => { if (!cancelled) setDaybreak(rows[0] ?? null); })
-      .catch((e) => console.warn('[Home] daybreak fetch failed:', e));
-    return () => { cancelled = true; };
-  }, [db]);
+  // First live match is the one featured in the section panel.  When none
+  // is playing this falls through to the "no live match" placeholder.
+  const featuredLive = liveMatches[0] ?? null;
 
-  // ── League standings carousel state ───────────────────────────────────────
-  // `leagueIdx` is an index into the LEAGUES array (0 = Rocky Inner, …).
-  // Clicking prev/next wraps using modular arithmetic so there is no dead end.
-  const [leagueIdx, setLeagueIdx] = useState(0);
-
-  const currentLeague = LEAGUES[leagueIdx];
-
-  // ── Live standings ─────────────────────────────────────────────────────────
-  // buildStandingsRows() provides the zeroed base list for the current league.
-  // computeStandings() merges real W/D/L/GD/Pts from localStorage on top of
-  // it.  useMemo keys on leagueIdx so we only re-read localStorage when the
-  // user switches leagues, not on every render.
-  const standingsRows = useMemo(
-    () => computeStandings(currentLeague.id, buildStandingsRows(currentLeague.id)),
-    [leagueIdx] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-
-  // ── News items ─────────────────────────────────────────────────────────────
-  // generateNewsItems() scans all saved results and produces up to 6 human-
-  // readable news cards (match reports + season-leader item).  Returns [] when
-  // no results are saved yet — the JSX below falls back to the static welcome
-  // card in that case.
-  // useMemo with empty deps: news is generated once per mount.  The home page
-  // is typically navigated to fresh after a match, so stale data is not a
-  // concern; if it were, a key prop on the component would force a remount.
-  const newsItems = useMemo(() => generateNewsItems(6), []); // 6 = display cap
-
-  /**
-   * Advances the carousel by `delta` positions, wrapping at boundaries.
-   *
-   * @param {number} delta  -1 for previous league, +1 for next.
-   */
-  const shiftLeague = (delta) => {
-    setLeagueIdx(prev => (prev + delta + LEAGUES.length) % LEAGUES.length);
-  };
-
+  // ── Standings ───────────────────────────────────────────────────────────────
+  // The redesign shows ONE league at a time on Home (Rocky Inner by
+  // default).  The previous carousel-with-arrows pattern is gone — fans
+  // who want other leagues click through to /leagues.
+  const featuredLeague = LEAGUES[0];
+  const standingsRows = computeStandings(featuredLeague.id, buildStandingsRows(featuredLeague.id));
 
   return (
     <div>
-      {/* ── HERO ──────────────────────────────────────────────────────────────── */}
-      {/* Consistent page-hero class handles top padding + centering.            */}
-      <section className="page-hero" style={{ paddingBottom: '40px' }}>
-        <div className="container">
-          <h1 style={{ lineHeight: 1.2 }}>
-            Welcome to the<br />Intergalactic Soccer League
-          </h1>
-          <hr className="divider" />
-          <p className="subtitle">
-            The most exciting soccer simulation game in the solar system!
-          </p>
-
-          {/* ── Live watchers badge ─────────────────────────────────────────── */}
-          {/* Compact inline indicator that surfaces how many fans the cosmos
-              has noticed in the last 5 minutes.  Self-hides when count is 0
-              (silence reads as quiet cosmos, not broken UI).  Polls every
-              60 s while mounted. */}
-          <div style={{ marginTop: '12px', marginBottom: '20px' }}>
-            <LiveWatchersBadge />
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/leagues">
-              <Button variant="primary">View Leagues</Button>
-            </Link>
-            <Link to="/matches">
-              <Button variant="tertiary">Upcoming Matches</Button>
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* ── HERO ──────────────────────────────────────────────────────────── */}
+      <HomeHero
+        activeMatches={liveMatches.length}
+      />
 
       <div className="container">
 
-        {/* ── DAYBREAK DIGEST BANNER (Phase 6b) ──────────────────────────────── */}
-        {/* WHY this is the very first thing inside .container:
-            The morning anchor is the design's morning-page promise — when a fan
-            opens the site at start of their day, this is the first cosmic
-            content they read.  Above the Create Account CTA, above standings,
-            above scores.  Hidden entirely if today's daybreak hasn't been
-            written yet (no placeholder — silence is preferable to a stub).
-            The amber-gold left border matches the kind colour on /news so
-            fans associate the same tint with this kind everywhere.
-        */}
-        {daybreak && (
-          <section className="section" style={{ marginBottom: '24px' }}>
-            <div
-              className="card"
-              style={{
-                borderLeft: '3px solid #e8b04a',
-                boxShadow: '0 0 12px rgba(232, 176, 74, 0.18)',
-              }}
-            >
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'baseline',
-                marginBottom: '6px',
-              }}>
-                <span style={{
-                  fontSize: '10px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  color: '#e8b04a',
-                }}>
-                  Daybreak
-                </span>
-                <span style={{ fontSize: '10px', opacity: 0.5 }}>
-                  {new Date(daybreak.created_at).toLocaleString(undefined, {
-                    weekday: 'short', hour: '2-digit', minute: '2-digit',
-                  })}
-                </span>
-              </div>
-              <p style={{ margin: 0, fontSize: '16px', lineHeight: 1.4 }}>
-                {daybreak.summary}
-              </p>
-            </div>
-          </section>
-        )}
+        {/* ── I • THE PRESENT — Live From The Void ────────────────────────── */}
+        <section className="section">
+          <SectionHeader
+            kicker="I"
+            title="Live From The Void"
+            subtitle="Matches in progress. Position updates every ninety seconds. Architect interference reflected in real time."
+            action={
+              <Link to="/matches" className="nav-link">
+                View All Matches →
+              </Link>
+            }
+          />
 
-        {/* ── CREATE ACCOUNT ────────────────────────────────────────────────────── */}
-        {/* Only shown to anonymous visitors — authenticated users have no use for it.
-            Positioned first (above standings) so it's the primary CTA for new fans
-            before they get distracted by live scores. Hidden during auth loading to
-            prevent a flash-of-unauthenticated-content. */}
+          <div className="home-grid-live">
+            <LiveMatchPanel match={featuredLive} />
+            <UpcomingPanel matches={upcomingMatches} />
+          </div>
+        </section>
+
+        {/* ── II • GET STARTED — Three Steps To Enter ─────────────────────── */}
+        {/* Hidden for authenticated users — they've already taken the steps. */}
         {!user && (
           <section className="section">
-            <div className="card" style={{ maxWidth: '400px' }}>
-              <h3 className="card-title">Create Account</h3>
-              <p style={{ marginBottom: '12px', fontSize: '14px' }}>
-                The universe's most elite league is calling for fans—and it's your time to shine!
-              </p>
-              <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.85 }}>Register now to:</p>
-              <ul style={{ paddingLeft: '16px', marginBottom: '16px', fontSize: '13px', lineHeight: 1.8 }}>
-                <li>Place bets on wormhole goals, time-loop own goals, and referee implosions</li>
-                <li>Receive cryptic prophecies about your team's league standing</li>
-                <li>Lose everything to a black hole (emotionally, financially, spiritually)</li>
-              </ul>
-              <p style={{ marginBottom: '8px', fontSize: '13px', opacity: 0.7 }}>
-                Creating an account is easy. Escaping the league? Not so much.
-              </p>
-              <p style={{ marginBottom: '20px', fontSize: '13px', opacity: 0.7 }}>
-                Click below to pledge allegiance. Or don't. You already have.
-              </p>
-              {/* /login?mode=signup pre-selects the sign-up tab */}
-              <Link to="/login?mode=signup">
-                <Button variant="primary">Create Account</Button>
-              </Link>
+            <SectionHeader
+              kicker="II"
+              title="Three Steps To Enter"
+              subtitle="Creating an account is easy. Escaping the league? Not so much."
+              action={
+                <Link to="/login" className="nav-link">
+                  Create Account →
+                </Link>
+              }
+            />
+
+            <div className="home-grid-steps">
+              <StepCard
+                number="01"
+                title="Sign On"
+                body="One credential pair. Your handle persists across every season cycle and survives all but a complete heat-death."
+                image={IMG_STEP_SIGN}
+                imageAlt="Astronaut floating above Earth"
+              />
+              <StepCard
+                number="02"
+                title="Pick A Club"
+                body="Affiliation is permanent. The club may transfer leagues, dissolve, or be erased from the record — but you cannot leave."
+                image={IMG_STEP_CLUB}
+                imageAlt="Astronaut planting a club flag on the moon"
+              />
+              <StepCard
+                number="03"
+                title="Watch & Bet"
+                body="Stake Intergalactic Credits on outcomes, prop lines, or whether the Architect will manifest before the eightieth minute."
+                image={IMG_STEP_WATCH}
+                imageAlt="Astronaut watching a match on a moon-stationed monitor"
+              />
             </div>
           </section>
         )}
 
-        {/* ── LEAGUE STANDINGS carousel ─────────────────────────────────────────── */}
-        {/* Live data from computeStandings() — updates after each simulated match.
-            Prev/next arrows use the section-nav pattern from the design system. */}
+        {/* ── III • STANDINGS ─────────────────────────────────────────────── */}
         <section className="section">
-          <div className="section-nav">
-            <button className="section-nav-btn" onClick={() => shiftLeague(-1)} aria-label="Previous league">◄</button>
-            <h2 className="section-nav-title">
-              <Link to={`/leagues/${currentLeague.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                League Standings — {currentLeague.name}
+          <SectionHeader
+            kicker="III"
+            title="The Standings"
+            subtitle={`Top of the table after fourteen matchdays. Form column shows the last five results.`}
+            action={
+              <Link to={`/leagues/${featuredLeague.id}`} className="nav-link">
+                View All Leagues →
               </Link>
-            </h2>
-            <button className="section-nav-btn" onClick={() => shiftLeague(1)} aria-label="Next league">►</button>
-          </div>
-          <IslTable variant="light" columns={STANDINGS_COLS} rows={standingsRows} />
-          <div style={{ marginTop: '12px', textAlign: 'right' }}>
-            <Link to={`/leagues/${currentLeague.id}`}>
-              <Button variant="secondary">View Full Standings →</Button>
-            </Link>
-          </div>
+            }
+          />
+
+          <IslTable variant="dark" columns={STANDINGS_COLS} rows={standingsRows} />
         </section>
+      </div>
 
-        {/* ── HOT IDOL MOVERS (Phase 6+) ────────────────────────────────────── */}
-        {/* Trending players this week.  Self-hides when nobody is being
-            clicked — the cosmos quiet is its own narrative beat.  Sits
-            between standings and live games so the eye reaches it on the way
-            to scores. */}
-        <HotIdolMoversStrip />
+      {/* ── Local styles ────────────────────────────────────────────────────
+          Two responsive grids local to this page (live-section two-col,
+          steps three-col).  Inline rather than in index.css because they're
+          page-specific and don't pay back the indirection of a global rule. */}
+      <style>{`
+        .home-grid-live {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: var(--space-6);
+        }
+        .home-grid-steps {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: var(--space-6);
+        }
+        @media (max-width: 900px) {
+          .home-grid-live, .home-grid-steps {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
 
-        {/* ── LIVE GAMES ────────────────────────────────────────────────────────── */}
-        {/* Hidden entirely when no match is in progress — no empty heading shown.
-            Caps at 4 cards to keep the 2-col grid balanced on desktop. */}
-        {liveMatches.length > 0 && (
-          <section className="section">
-            <div className="section-nav">
-              <button className="section-nav-btn" aria-hidden="true">◄</button>
-              <h2 className="section-nav-title">Live Games</h2>
-              <button className="section-nav-btn" aria-hidden="true">►</button>
-            </div>
-            <div className="matches-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              {liveMatches.slice(0, 4).map(m => (
-                <MatchCard key={m.id} match={m} />
-              ))}
-            </div>
-          </section>
-        )}
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-        {/* ── UPCOMING GAMES ────────────────────────────────────────────────────── */}
-        {/* Always visible post-fetch. Home page cards omit the bet slider (that
-            lives only on the Matches page). Empty state prompts simulation. */}
-        {!matchesLoading && (
-          <section className="section">
-            <div className="section-nav">
-              <button className="section-nav-btn" aria-hidden="true">◄</button>
-              <h2 className="section-nav-title">Upcoming Games</h2>
-              <button className="section-nav-btn" aria-hidden="true">►</button>
-            </div>
-            {upcomingMatches.length === 0 ? (
-              <div className="card" style={{ maxWidth: '480px' }}>
-                <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '16px' }}>
-                  No fixtures scheduled yet. Simulate a match to get the season started.
-                </p>
-                <Link to="/matches"><Button variant="primary">Simulate a Match</Button></Link>
-              </div>
-            ) : (
-              <div className="matches-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {upcomingMatches.map(m => (
-                  <MatchCard key={m.id} match={m} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+/**
+ * Hero section.  Two-column layout at desktop: full-bleed nebula image on
+ * the left, masthead + metadata + stats + CTAs on the right.  Collapses
+ * to single column at <900 px with the image first.
+ *
+ * @param {object} props
+ * @param {number} props.activeMatches  Count of live matches; surfaced in
+ *                                       the stats row.
+ */
+function HomeHero({ activeMatches }) {
+  return (
+    <section
+      style={{
+        borderBottom: '1px solid var(--color-hairline)',
+        paddingBlock: 'var(--space-10)',
+      }}
+    >
+      <div
+        className="container home-hero-grid"
+      >
+        {/* Hero image — Pillars of Creation halftone.  Wrapped in a
+            bordered box so even a missing image still indicates where the
+            visual should sit. */}
+        <div
+          style={{
+            border: '1px solid var(--color-hairline)',
+            aspectRatio: '4 / 5',
+            overflow: 'hidden',
+            background: 'var(--color-ash)',
+          }}
+        >
+          <img
+            src={IMG_HERO}
+            alt="The cosmos as charted from Earth orbit"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </div>
 
-        {/* ── GALAXY DISPATCH ───────────────────────────────────────────────────── */}
-        {/* Architect-generated narratives from the `narratives` table. Hidden until
-            the first galaxy-tick runs so the page never has an empty section.
-            Left-border accent colour maps to narrative kind (political/cosmic/etc). */}
-        {narratives.length > 0 && (
-          <section className="section">
-            <div className="section-nav">
-              <button className="section-nav-btn" aria-hidden="true">◄</button>
-              <h2 className="section-nav-title">Galaxy Dispatch</h2>
-              <button className="section-nav-btn" aria-hidden="true">►</button>
-              <span style={{
-                fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em',
-                color: 'var(--color-purple)', border: '1px solid var(--color-purple)',
-                padding: '1px 6px', fontFamily: 'var(--font-mono)',
-              }}>
-                Architect
-              </span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-              {narratives.map((item) => (
-                <div
-                  key={item.id}
-                  className="card"
-                  style={{ borderLeft: `3px solid ${kindColor(item.kind)}` }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: kindColor(item.kind) }}>
-                      {kindLabel(item.kind)}
-                    </span>
-                    <span style={{ fontSize: '10px', opacity: 0.35 }}>{formatNarrativeDate(item.created_at)}</span>
-                  </div>
-                  <p style={{ fontSize: '13px', lineHeight: 1.6, opacity: 0.9 }}>{item.summary}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── LATEST NEWS ───────────────────────────────────────────────────────── */}
-        {/* Dynamic news cards from match results, capped at 3 per the design.
-            Each card has a LEARN MORE button linking to the news feed.
-            Falls back to the static Season One welcome card before any results exist. */}
-        <section className="section">
-          <div className="section-nav">
-            <button className="section-nav-btn" aria-hidden="true">◄</button>
-            <h2 className="section-nav-title">Latest News</h2>
-            <button className="section-nav-btn" aria-hidden="true">►</button>
+        {/* Right column — masthead + body + CTAs + stats row. */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 'var(--space-8)' }}>
+          {/* Kicker badges row ────────────────────────────────────────── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--font-size-micro)', letterSpacing: 'var(--letter-spacing-widest)', textTransform: 'uppercase', opacity: 0.7 }}>
+            <span>{HERO_SEASON_LABEL}</span>
+            <span style={{ opacity: 0.4 }}>•</span>
+            <span>{HERO_MATCHDAY}</span>
+            <span style={{ opacity: 0.4 }}>•</span>
+            <span style={{ color: 'var(--color-flare)' }}>{HERO_LIVE_LABEL}</span>
           </div>
 
-          {newsItems.length === 0 ? (
-            // ── Pre-season fallback — 3-card row matching the design ────────────
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-              {[
-                { title: 'Welcome to Season One', body: 'The new season is about to begin. Get ready for some exciting matches across the galaxy!' },
-                { title: 'The Architect Stirs',   body: 'Cosmic forces are aligning. Something wicked this way comes.' },
-                { title: 'Galactic Odds Open',    body: 'Betting markets are live. Place your credits wisely — or not.' },
-              ].map((item, i) => (
-                <div key={i} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-                  <h3 className="card-title" style={{ fontSize: '14px' }}>{item.title}</h3>
-                  <p style={{ fontSize: '12px', opacity: 0.75, lineHeight: 1.6, flex: 1, marginBottom: '16px' }}>{item.body}</p>
-                  <Link to="/news"><Button variant="primary">Learn More</Button></Link>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // ── Live news cards — capped at 3 to match the 3-column design ──────
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-              {newsItems.slice(0, 3).map(item => (
-                <div
-                  key={item.id}
-                  className="card"
-                  style={{ borderLeft: `3px solid ${item.homeColor || 'rgba(227,224,213,0.3)'}`, display: 'flex', flexDirection: 'column' }}
-                >
-                  {item.date && (
-                    <div style={{ fontSize: '10px', opacity: 0.4, marginBottom: '6px', letterSpacing: '0.06em' }}>{item.date}</div>
-                  )}
-                  <h3 className="card-title" style={{ fontSize: '14px' }}>{item.headline}</h3>
-                  <p style={{ fontSize: '12px', opacity: 0.75, lineHeight: 1.6, flex: 1, marginBottom: '16px' }}>{item.body}</p>
-                  {/* Score pill for match-report items */}
-                  {item.homeGoals != null && (
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '11px', color: item.homeColor, fontWeight: 700 }}>{item.homeTeam}</span>
-                      <span style={{ fontSize: '12px', fontWeight: 700, padding: '1px 8px', border: '1px solid rgba(227,224,213,0.2)' }}>
-                        {item.homeGoals}–{item.awayGoals}
-                      </span>
-                      <span style={{ fontSize: '11px', color: item.awayColor, fontWeight: 700 }}>{item.awayTeam}</span>
-                    </div>
-                  )}
-                  <Link to="/news"><Button variant="primary">Learn More</Button></Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+          {/* Hairline above the masthead */}
+          <hr className="divider" style={{ marginBlock: 0 }} />
 
+          {/* Display masthead.  Uses the .display-title class which is
+              48 px uppercase tight-line-height — the publication header. */}
+          <h1 className="display-title" style={{ marginBlock: 'var(--space-3)' }}>
+            Soccer,<br />
+            Charted Across<br />
+            The Stars
+          </h1>
+
+          {/* Coordinate metadata row — RA / EPOCH / DEC.  Reads as
+              "this is a real publication that knows where it is." */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', fontSize: 'var(--font-size-micro)', letterSpacing: 'var(--letter-spacing-wider)', opacity: 0.7 }}>
+            <span>{HERO_COORD_RA}</span>
+            <span style={{ opacity: 0.5 }}>•</span>
+            <span>{HERO_COORD_EPOCH}</span>
+            <span style={{ opacity: 0.5 }}>•</span>
+            <span>{HERO_COORD_DEC}</span>
+          </div>
+
+          {/* Body prose — the publication's editorial voice. */}
+          <p style={{ fontSize: 'var(--font-size-body)', lineHeight: 'var(--line-height-body)', opacity: 0.85, maxWidth: '36ch' }}>
+            Thirty-two clubs across four orbital leagues. Five-hundred-twelve
+            souls. One Cosmic Architect rewriting the rules between heartbeats.
+            Place your stake, vote on your club's future, and watch the void
+            stare back.
+          </p>
+
+          {/* Primary + secondary CTAs */}
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <Link to="/leagues" className="btn btn-secondary">Browse Leagues</Link>
+            <Link to="/login" className="btn btn-primary">Create Account</Link>
+          </div>
+
+          {/* Stats row — four small-caps cells separated by dust hairlines.
+              Reads as "what's happening right now in numbers." */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            borderTop: '1px solid var(--color-hairline)',
+            paddingTop: 'var(--space-4)',
+            gap: 'var(--space-4)',
+          }}>
+            <HeroStat label="Active Matches" value={`${String(activeMatches).padStart(2, '0')} / 16`} />
+            <HeroStat label="Season Cycle"   value={HERO_STAT_SEASON} />
+            <HeroStat label="Architect"      value={HERO_STAT_ARCH} />
+            <HeroStat label="Build"          value={HERO_BUILD} />
+          </div>
+        </div>
+      </div>
+
+      {/* Hero grid responsive rule.  ≤900 px collapses to single column with
+          image first.  Inline so the breakpoint stays local. */}
+      <style>{`
+        .home-hero-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: var(--space-10);
+          align-items: stretch;
+        }
+        @media (max-width: 900px) {
+          .home-hero-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+/**
+ * Two-line stat cell used in the hero stats row.  Value on top in mono,
+ * small-caps label below.  Aligned left so the column-rhythm reads as a
+ * single horizontal data row.
+ */
+function HeroStat({ label, value }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 'var(--font-size-small)',
+        fontWeight: 700,
+        fontFamily: 'var(--font-mono)',
+        marginBottom: 'var(--space-1)',
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontSize: 'var(--font-size-micro)',
+        textTransform: 'uppercase',
+        letterSpacing: 'var(--letter-spacing-wider)',
+        opacity: 0.5,
+      }}>
+        {label}
       </div>
     </div>
   );
 }
 
-// ── Narrative display helpers ─────────────────────────────────────────────────
-// Pure functions used only by the Galaxy Dispatch section. Module-level so
-// they aren't re-created on every render. No game logic lives here — these
-// are presentation-layer only.
-
 /**
- * Map a narrative `kind` string to a CSS colour variable. Each kind gets
- * a distinct accent so readers can visually classify events at a glance:
- *   - news              → dust white  (ordinary reportage)
- *   - political_shift   → amber       (power / governance events)
- *   - geological_event  → orange-red  (planetary / physical events)
- *   - architect_whisper → purple      (direct Architect voice)
- *   - economic_tremor   → teal-ish    (market / financial events)
- *   - unknown           → muted dust  (safe fallback for future kinds)
+ * Featured live-match card.  Shows team crests, score, and the latest two
+ * commentary excerpts.  When no live match is playing, renders an empty
+ * placeholder rather than hiding (the section's purpose is to surface
+ * "is anything happening right now"; a missing card answers that).
  *
- * @param {string} kind  The narrative.kind string from the DB row.
- * @returns {string}     A CSS colour value for the left-border accent.
+ * Wired only to the bare minimum data we already fetch — a follow-up pass
+ * can join commentary excerpts and the live-clock from match_events.
  */
-function kindColor(kind) {
-  switch (kind) {
-    case 'news':              return 'rgba(227,224,213,0.6)';
-    case 'political_shift':   return 'var(--color-gold)';
-    case 'geological_event':  return 'var(--color-orange)';
-    case 'architect_whisper': return 'var(--color-purple)';
-    case 'economic_tremor':   return 'var(--color-teal)';
-    default:                  return 'rgba(227,224,213,0.3)';
+function LiveMatchPanel({ match }) {
+  if (!match) {
+    return (
+      <div className="card" style={{ minHeight: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ opacity: 0.5, fontSize: 'var(--font-size-small)', fontStyle: 'italic' }}>
+          No match in progress. The void is silent.
+        </p>
+      </div>
+    );
   }
+
+  const homeName = match.home_team?.name ?? 'Home';
+  const awayName = match.away_team?.name ?? 'Away';
+  const homeScore = match.home_score ?? 0;
+  const awayScore = match.away_score ?? 0;
+
+  return (
+    <div className="card">
+      {/* Meta header — competition, matchday, status pill. */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--font-size-micro)', letterSpacing: 'var(--letter-spacing-wider)', textTransform: 'uppercase', opacity: 0.6, marginBottom: 'var(--space-4)' }}>
+        <span>{match.competitions?.name ?? 'League Match'}</span>
+        <span style={{ color: 'var(--color-flare)' }}>● Live</span>
+      </div>
+
+      {/* Score row — team / score / team.  Score is the centrepiece. */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        gap: 'var(--space-6)',
+        marginBottom: 'var(--space-4)',
+      }}>
+        <div style={{ textAlign: 'left' }}>
+          <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase' }}>{homeName}</h3>
+          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wide)' }}>Home</div>
+        </div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '48px', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {homeScore} · {awayScore}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase' }}>{awayName}</h3>
+          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wide)' }}>Away</div>
+        </div>
+      </div>
+
+      <Link to={`/matches/${match.id}/live`} className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}>
+        Watch Live Match
+      </Link>
+    </div>
+  );
 }
 
 /**
- * Convert a narrative `kind` to a short human-readable label shown in the
- * card's kind badge. Kept uppercase to match the ISL retro-mono aesthetic.
- *
- * @param {string} kind  The narrative.kind string from the DB row.
- * @returns {string}     Display label, always uppercase.
+ * Upcoming fixtures sidebar.  Vertical list of the next 3 fixtures.
+ * Each row: team-vs-team, league label, kickoff time.  Tap-friendly
+ * — full row links to the match detail.
  */
-function kindLabel(kind) {
-  switch (kind) {
-    case 'news':              return 'News';
-    case 'political_shift':   return 'Political';
-    case 'geological_event':  return 'Geological';
-    case 'architect_whisper': return 'Transmission';
-    case 'economic_tremor':   return 'Economic';
-    default:                  return kind ?? 'Unknown';
-  }
+function UpcomingPanel({ matches }) {
+  return (
+    <div className="card is-raised" style={{ display: 'flex', flexDirection: 'column' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--space-4)' }}>
+        <span style={{ fontSize: 'var(--font-size-micro)', textTransform: 'uppercase', letterSpacing: 'var(--letter-spacing-wider)', opacity: 0.7 }}>
+          Upcoming Fixtures
+        </span>
+        <span style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5 }}>
+          Next 48h
+        </span>
+      </header>
+
+      {matches.length === 0 ? (
+        <p style={{ fontSize: 'var(--font-size-small)', opacity: 0.5, fontStyle: 'italic' }}>
+          No matches scheduled in the next 48 hours.
+        </p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {matches.map((m) => (
+            <li key={m.id}>
+              <Link to={`/matches/${m.id}`} style={{ display: 'block', color: 'inherit', borderBottom: '1px solid var(--color-hairline)', paddingBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
+                  {m.home_team?.name ?? '?'} <span style={{ opacity: 0.4 }}>v</span> {m.away_team?.name ?? '?'}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-micro)', opacity: 0.6, letterSpacing: 'var(--letter-spacing-wide)', textTransform: 'uppercase' }}>
+                  <span>{m.competitions?.name ?? 'League'}</span>
+                  <span>{m.scheduled_at ? new Date(m.scheduled_at).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'TBD'}</span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Link to="/matches" className="btn btn-tertiary" style={{ marginTop: 'var(--space-4)' }}>
+        Browse Matches
+      </Link>
+    </div>
+  );
 }
 
 /**
- * Format an ISO timestamp as a compact relative-or-absolute date for the
- * narrative card's timestamp badge. Returns the raw ISO string unchanged
- * if Date.parse fails — better to show a weird date than crash.
- *
- * @param {string} iso  ISO 8601 timestamp string from the DB row.
- * @returns {string}    Short formatted date, e.g. "Apr 15".
+ * Single numbered photo card used in the "Three Steps To Enter" row.
+ * Vertical layout: image on top (4:3 aspect), number+title row beneath,
+ * one-paragraph body, hairline divider footer.
  */
-function formatNarrativeDate(iso) {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return iso;
-  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+function StepCard({ number, title, body, image, imageAlt }) {
+  return (
+    <article className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ aspectRatio: '4 / 3', overflow: 'hidden', background: 'var(--color-ash)' }}>
+        <img
+          src={image}
+          alt={imageAlt}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      </div>
+      <div style={{ padding: 'var(--card-padding)', flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 'var(--font-size-h3)', opacity: 0.5 }}>
+            {number}
+          </span>
+          <span style={{ flex: 1, borderTop: '1px solid var(--color-hairline)' }} />
+        </div>
+        <h3 style={{ fontSize: 'var(--font-size-h2)', textTransform: 'uppercase' }}>{title}</h3>
+        <p style={{ fontSize: 'var(--font-size-small)', lineHeight: 'var(--line-height-body)', opacity: 0.75 }}>
+          {body}
+        </p>
+      </div>
+    </article>
+  );
 }
