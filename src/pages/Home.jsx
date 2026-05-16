@@ -421,8 +421,12 @@ function HomeHero({ activeMatches }) {
 
           {/* Primary + secondary CTAs */}
           <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            <Link to="/leagues" className="btn btn-secondary">Browse Leagues</Link>
-            <Link to="/login" className="btn btn-primary">Create Account</Link>
+            {/* Hero CTAs — both dark-outline primary per Frame 42.  Equal
+                weight; the design pairs two primaries rather than one
+                primary + secondary because each represents a different
+                entry path into the publication. */}
+            <Link to="/leagues" className="btn btn-primary">Browse Leagues</Link>
+            <Link to="/login"  className="btn btn-primary">Create Account</Link>
           </div>
 
           {/* Stats row — four small-caps cells separated by dust hairlines.
@@ -597,9 +601,12 @@ function LiveMatchPanel({ match }) {
         Awaiting transmissions from the broadcast booth…
       </div>
 
-      {/* ── Row 4: CTA row ───────────────────────────────────────────────── */}
+      {/* ── Row 4: CTA row ─────────────────────────────────────────────────
+          Primary dark-outline button per Frame 44.  Sits in its own row
+          with consistent card-padding inset so the CTA aligns with the
+          card's text columns above. */}
       <div style={{ padding: 'var(--space-4) var(--card-padding)' }}>
-        <Link to={`/matches/${match.id}/live`} className="btn btn-secondary">
+        <Link to={`/matches/${match.id}/live`} className="btn btn-primary">
           Watch Live Match
         </Link>
       </div>

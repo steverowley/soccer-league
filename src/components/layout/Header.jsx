@@ -139,17 +139,18 @@ export default function Header() {
           ))}
         </nav>
 
-        {/* ── Right-edge auth control (desktop) ────────────────────────────── */}
-        {/* Authenticated users get the AccountMenu (username + credits +
-            dropdown to Profile / Voting / Training / sign-out).  Anonymous
-            visitors get a Solar Flare CTA — "Create Account" leads to /login
-            which presents both sign-up and sign-in tabs. */}
+        {/* ── Right-edge auth control (desktop) ──────────────────────────────
+            Authenticated users get the AccountMenu (username + credits +
+            dropdown to Profile / Voting / Training / sign-out).
+            Anonymous visitors get the Quantum Purple "active" CTA
+            ("Sign Up") per Frame 21 — the header auth call-to-action gets
+            the focus colour because it's the page's most demanding ask. */}
         <div className="desktop-auth" style={{ flexShrink: 0 }}>
           {user ? (
             <AccountMenu />
           ) : (
-            <Link to="/login" className="btn btn-primary">
-              Create Account
+            <Link to="/login" className="btn btn-active">
+              Sign Up
             </Link>
           )}
         </div>
@@ -198,16 +199,20 @@ export default function Header() {
             </Link>
           ))}
 
+          {/* Auth CTA in the mobile drawer mirrors the desktop pattern
+              (Quantum Purple "active" variant per Frame 21).  Closes the
+              drawer on tap via the inline onClick so the user isn't
+              stuck looking at the open drawer after navigation. */}
           {user ? (
             <AccountMenu />
           ) : (
             <Link
               to="/login"
-              className="btn btn-primary"
+              className="btn btn-active"
               onClick={() => setMobileOpen(false)}
               style={{ alignSelf: 'flex-start' }}
             >
-              Create Account
+              Sign Up
             </Link>
           )}
         </nav>

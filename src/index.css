@@ -2,25 +2,586 @@
 @import "./styles/tokens.css";
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * ISL CSS — Redesign 2026-05
+ * ISL CSS — Redesign 2026-05 (Foundation, corrected)
  * ───────────────────────────────────────────────────────────────────────────
- * Total rewrite from the original Phase-0 CSS.  The previous file was
- * 1386 lines accumulated over many phases — most of which encoded design
- * decisions that the new editorial / NASA-archive direction explicitly
- * drops (starfield background, glow borders, hover-tilt cards, decorative
- * gradients, particle cursor, the auth-page tabs styling, etc.).
+ * Second pass on the foundation CSS.  The first pass (PR #206) got several
+ * semantic mappings wrong by mistaking Astro Explorer orange for the
+ * primary CTA and dropping Quantum Purple from the active state.  This
+ * pass aligns to the design-language Figma frames:
  *
- * STRATEGY for the foundation PR
- *   1. Restyle the broadly-used class names so existing pages get the new
- *      look automatically without per-page markup churn.
- *   2. Drop every selector that encoded the old visual identity — the
- *      rules below are deliberately the SHORT list of what survives.
- *   3. Page rebuilds (PR 2+) refine each surface against the Figma.
+ *   .btn-primary   dark Abyss fill + Lunar Dust 1 px border + Dust text
+ *                  THE standard CTA — "VIEW LEAGUE", "BROWSE LEAGUES",
+ *                  "WATCH LIVE MATCH" (Frame 19 + Frame 44).
+ *   .btn-secondary Lunar Dust fill + Abyss text.  Used for inverted
+ *                  emphasis (rare; e.g. "BROWSE LEAGUES" on a dark hero
+ *                  when paired with a primary).
+ *   .btn-active    Quantum Purple fill + Dust text.  Used for the auth
+ *                  CTA in the header (SIGN UP / LOG IN) and for any
+ *                  "currently selected" state (Frame 19 + Frame 21).
+ *   .btn-tertiary  Borderless text + ► chevron.  Used for inline
+ *                  "VIEW ALL MATCHES ►" actions (Frame 19).
  *
- * SOURCE OF TRUTH for visual decisions
- *   New Figma file at https://www.figma.com/design/oGdHNw4ap5TY5R5ey28FDP/Soccer-Game
- *   Plus the screenshots provided alongside the redesign brief.
+ * Body background restored to the star-dotted texture (Frame 43) —
+ * "Space background to add texture and interest" per the design spec.
+ * Heading sizes restored to Frame 17 (H1 40 / H2 32 / H3 28 / P 16).
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Base layer — element resets + typography ────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-mono);
+    background-color: var(--color-abyss);
+    color: var(--color-dust);
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+    -webkit-font-smoothing: antialiased;
+    scrollbar-gutter: stable;
+
+    /* Star-dotted background — restored per Frame 43.  Two layered
+       radial-gradient grids of small dust dots over the abyss fill.
+       Cheap (CSS only, no DOM nodes); subtle so it adds texture
+       without competing with content.  See --color-hairline opacity
+       for the dot tint. */
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(227,224,213,0.10) 0.5px, transparent 1.5px),
+      radial-gradient(circle at 70% 80%, rgba(227,224,213,0.07) 0.5px, transparent 1.5px);
+    background-size: 60px 60px, 90px 90px;
+    background-position: 0 0, 30px 45px;
+    background-attachment: fixed;
+  }
+
+  /* Editorial heading scale — Frame 17 spec.  Tight line-heights so
+     numbered display titles read as a single masthead rather than
+     three loose lines. */
+  h1 { font-size: var(--font-size-h1); font-weight: 700; line-height: var(--line-height-tight); letter-spacing: 0; }
+  h2 { font-size: var(--font-size-h2); font-weight: 700; line-height: var(--line-height-tight); letter-spacing: 0; }
+  h3 { font-size: var(--font-size-h3); font-weight: 700; line-height: var(--line-height-snug); }
+  p  { font-size: var(--font-size-body); font-weight: 400; }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: var(--color-dust);
+    color: var(--color-abyss);
+  }
+}
+
+/* ── Display title ─────────────────────────────────────────────────────────
+ * Used for the hero masthead only.  Tracked normal so the mass reads as
+ * one block rather than spaced letters. */
+.display-title {
+  font-size: var(--font-size-display);
+  font-weight: 700;
+  line-height: var(--line-height-tight);
+  text-transform: uppercase;
+}
+
+/* ── Container ────────────────────────────────────────────────────────────── */
+.container {
+  max-width: var(--max-width);
+  margin-inline: auto;
+  padding-inline: var(--grid-gutter-desktop);
+}
+
+.container-narrow {
+  max-width: var(--max-width-narrow);
+  margin-inline: auto;
+  padding-inline: var(--grid-gutter-desktop);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────
+ * Four variants, all sharing the same height + tracking baseline so they
+ * line up in CTA rows.  Frame 19 + Frame 21 + Frame 44 supplied the
+ * authoritative colour and border specs. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--button-height);
+  padding: 0 var(--button-padding-x);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: var(--letter-spacing-wider);
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-dust);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast),
+              border-color var(--transition-fast), box-shadow var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-purple);
+  outline-offset: 2px;
+}
+
+/* Primary — Abyss fill + Dust 1 px border.  THE app-wide standard CTA.
+   Hover lifts the border to dust-bright and adds a subtle Astro warmth
+   glow so the affordance reads at a glance.  Frame 19 + Frame 44. */
+.btn-primary {
+  background: var(--color-abyss);
+  color: var(--color-dust);
+  border-color: var(--color-dust);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px var(--color-dust), 0 0 12px var(--color-astro-glow);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Secondary — Dust fill + Abyss text.  Inverted emphasis. */
+.btn-secondary {
+  background: var(--color-dust);
+  color: var(--color-abyss);
+  border-color: var(--color-dust);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-dust-dark);
+  border-color: var(--color-dust-dark);
+}
+
+/* Active / focus — Quantum Purple fill.  Reserved for "this is the active
+   choice right now" moments: the auth CTA in the header (SIGN UP), the
+   user balance pill, the current toggle in a button group.  Frame 19 +
+   Frame 21. */
+.btn-active {
+  background: var(--color-purple);
+  color: var(--color-dust);
+  border-color: var(--color-purple);
+}
+.btn-active:hover:not(:disabled) {
+  background: var(--color-purple-mid);
+  border-color: var(--color-purple-mid);
+}
+
+/* Tertiary — borderless text link with the ► chevron suffix.  Used for
+   in-section "VIEW ALL MATCHES ►" actions next to SectionHeader titles.
+   The chevron is part of the caller-supplied label (e.g. "View All →")
+   so this class only owns the typography + tracking.  Frame 19. */
+.btn-tertiary {
+  background: transparent;
+  color: var(--color-dust);
+  border-color: transparent;
+  padding-inline: 0;
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-widest);
+  opacity: 0.85;
+}
+.btn-tertiary:hover:not(:disabled) {
+  opacity: 1;
+}
+
+/* ── Card ──────────────────────────────────────────────────────────────────
+ * Bordered Abyss panels with hairline dust borders.  Frame 44 shows
+ * generous interior padding (24 px → see --card-padding). */
+.card {
+  background: var(--color-abyss);
+  border: var(--card-border);
+  padding: var(--card-padding);
+}
+
+.card.is-raised {
+  background: var(--color-ash);
+  border-color: transparent;
+}
+
+.card.is-architect {
+  background: var(--color-architect-bg);
+  border-color: var(--color-architect-accent);
+  color: var(--color-architect-text);
+}
+
+/* ── Tables ────────────────────────────────────────────────────────────────
+ * Hairline row dividers, small-caps column headers, mono numbers.
+ * Frame 39 is the authoritative reference. */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-small);
+}
+
+.table-dark, .table-light {
+  width: 100%;
+}
+
+.table-dark th, .table-light th {
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-dust);
+  opacity: 0.6;
+  text-align: left;
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.table-dark td, .table-light td {
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-dust);
+  font-family: var(--font-mono);
+}
+
+.table-dark tr:last-child td,
+.table-light tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Hairline divider ──────────────────────────────────────────────────────
+ * Single-pixel dust line.  Frame 42 + Frame 44 show this everywhere
+ * between section heads and stat blocks. */
+.divider {
+  height: 1px;
+  border: none;
+  background: var(--color-hairline);
+  margin-block: var(--space-6);
+}
+
+/* ── Navigation links ──────────────────────────────────────────────────────
+ * Header nav text links — small-caps + tracked.  Active state is a
+ * purple background pill matching Frame 21's HOME-active indicator
+ * (a soft purple-tinted block around the current page label). */
+.nav-link {
+  display: inline-block;
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-dust);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid transparent;
+  border-radius: 2px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.nav-link:hover {
+  background: var(--color-hairline);
+}
+.nav-link.active {
+  background: var(--color-purple-glow);
+  color: var(--color-dust);
+}
+
+/* ── Page hero (legacy class) ──────────────────────────────────────────────
+ * Pre-redesign pages used <PageHero> which renders .page-hero.  Kept
+ * for those legacy callers; new pages use bespoke markup. */
+.page-hero {
+  padding-block: var(--space-16);
+}
+
+.page-hero h1 {
+  font-size: var(--font-size-display);
+  text-transform: uppercase;
+}
+
+.page-hero .subtitle {
+  font-size: var(--font-size-small);
+  opacity: 0.6;
+  margin-top: var(--space-3);
+}
+
+.page-hero__title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.page-top {
+  padding-top: var(--space-16);
+}
+
+.page-content {
+  padding-block: var(--space-12);
+}
+
+/* ── Section header (NEW — "I • THE PRESENT" pattern) ─────────────────────
+ * Roman-numeral kicker + bullet + label + display title + optional
+ * subtitle + trailing hairline.  Frame 42 shows this pattern across
+ * every section the design uses for content grouping. */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-widest);
+  color: var(--color-dust);
+  opacity: 0.7;
+  margin-bottom: var(--space-3);
+}
+
+.section-header__bullet {
+  opacity: 0.5;
+}
+
+.section-header__title {
+  font-size: var(--font-size-h1);
+  text-transform: uppercase;
+  margin-bottom: var(--space-3);
+}
+
+.section-header__subtitle {
+  font-size: var(--font-size-small);
+  opacity: 0.6;
+  max-width: var(--max-width-narrow);
+  margin-bottom: var(--space-6);
+}
+
+.section {
+  margin-block: var(--space-12);
+}
+
+.section-title {
+  font-size: var(--font-size-h2);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  margin-bottom: var(--space-3);
+}
+
+.section-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.section-nav-title {
+  font-size: var(--font-size-h2);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.section-nav-btn {
+  background: transparent;
+  border: 1px solid var(--color-hairline);
+  color: var(--color-dust);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity var(--transition-fast), border-color var(--transition-fast);
+}
+.section-nav-btn:hover {
+  opacity: 1;
+  border-color: var(--color-dust);
+}
+
+/* ── Card title ─────────────────────────────────────────────────────────── */
+.card-title {
+  font-size: var(--font-size-h3);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  margin-bottom: var(--space-3);
+}
+
+/* ── Status text ────────────────────────────────────────────────────────── */
+.status-text {
+  font-size: var(--font-size-small);
+  opacity: 0.6;
+}
+
+/* ── Form controls ──────────────────────────────────────────────────────── */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.isl-label {
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-dust);
+  opacity: 0.7;
+}
+
+.isl-input,
+.isl-select {
+  width: 100%;
+  height: var(--button-height);
+  padding: 0 var(--space-3);
+  background: var(--color-abyss);
+  border: 1px solid var(--color-hairline);
+  color: var(--color-dust);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  transition: border-color var(--transition-fast);
+}
+
+.isl-input:focus,
+.isl-select:focus {
+  outline: none;
+  border-color: var(--color-purple);
+}
+
+.isl-input:disabled,
+.isl-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.form-error {
+  font-size: var(--font-size-small);
+  color: var(--color-flare);
+  margin-top: var(--space-2);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.footer {
+  border-top: 1px solid var(--color-hairline);
+  padding-block: var(--space-6);
+  font-size: var(--font-size-micro);
+  opacity: 0.6;
+}
+
+/* ── Filter strip (NewsFeedPage) ───────────────────────────────────────── */
+.filter-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.kind-filter-btn {
+  background: transparent;
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+/* Narrative grid (NewsFeedPage cards). */
+.narrative-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.narrative-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+}
+
+.narrative-card__timestamp {
+  font-size: var(--font-size-micro);
+  opacity: 0.5;
+}
+
+.kind-label {
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.narrative-body {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-body);
+  margin-block: var(--space-3);
+}
+
+.entity-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.entity-tag {
+  font-size: var(--font-size-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-hairline);
+  opacity: 0.7;
+}
+
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-block: var(--space-8);
+}
+
+.load-more-btn {
+  background: transparent;
+  border: 1px solid var(--color-dust);
+  color: var(--color-dust);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  padding: var(--space-3) var(--space-6);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.load-more-btn:hover {
+  background: var(--color-dust);
+  color: var(--color-abyss);
+}
+
+/* ── Mobile breakpoint ───────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .container,
+  .container-narrow {
+    padding-inline: var(--grid-gutter-mobile);
+  }
+
+  :root {
+    --font-size-display: 32px;
+    --font-size-h1:      28px;
+    --font-size-h2:      24px;
+  }
+
+  .page-hero {
+    padding-block: var(--space-10);
+  }
+}
+
 
 /* ── Base layer — element resets + typography ──────────────────────────────
  * Inside @layer base so Tailwind @layer utilities (and inline styles) can

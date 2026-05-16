@@ -14,24 +14,31 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 /**
- * The three ISL button variants, each mapping to a CSS class.  The visual
- * specifics live in index.css; bumping a colour means editing one CSS rule
- * rather than every consumer.
+ * Four ISL button variants, each mapping to a CSS class in index.css.
+ * The semantic mapping comes from Frame 19 of the design language file
+ * — bumping a colour means editing one CSS rule rather than every
+ * consumer.
  *
- *   primary   → .btn-primary   Solar Flare orange fill, Abyss text — THE
- *                              primary CTA across the app (sign up, place
- *                              wager, browse, etc.).
- *   secondary → .btn-secondary Lunar Dust outline + text, transparent fill
- *                              — lower-weight CTAs (cancel, back, etc.).
- *   tertiary  → .btn-tertiary  Hairline outline only — inline secondary
- *                              actions that shouldn't compete with the
- *                              section's primary CTA.
+ *   primary   → .btn-primary   Abyss fill + Dust 1 px border + Dust
+ *                              text.  THE standard CTA (View League,
+ *                              Browse Leagues, Watch Live Match, etc.).
+ *   secondary → .btn-secondary Dust fill + Abyss text.  Inverted
+ *                              emphasis (rare; use when paired with a
+ *                              primary on a dark hero).
+ *   active    → .btn-active    Quantum Purple fill + Dust text.  The
+ *                              header auth CTA (SIGN UP / LOG IN) and
+ *                              any "currently selected" button-group
+ *                              state.
+ *   tertiary  → .btn-tertiary  Borderless text + ► chevron.  Inline
+ *                              "View All Matches →" actions next to
+ *                              SectionHeader titles.
  *
- * NOTE on history: pre-redesign the primary was Quantum Purple and the
- * tertiary was a purple fill.  Both were dropped in favour of the orange
- * Solar Flare lead — purple is now Architect-only.
+ * NOTE on history: pre-second-foundation-pass the primary was the
+ * Astro Explorer orange.  Frame 40 + Frame 19 show that orange is the
+ * SECONDARY focus accent, not the primary CTA — primary is the dark-
+ * outline pattern above.
  */
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
+export type ButtonVariant = 'primary' | 'secondary' | 'active' | 'tertiary';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Visual style. Defaults to 'primary'. */

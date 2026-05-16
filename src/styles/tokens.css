@@ -1,25 +1,29 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * ISL Design Tokens — single source of truth (Redesign 2026-05)
+ * ISL Design Tokens — single source of truth (Redesign 2026-05, corrected)
  * ───────────────────────────────────────────────────────────────────────────
- * Replaces the original Phase-0 token set with the editorial / NASA-archive
- * direction documented in the new Figma file (node 157-288).  The shift:
+ * Authoritative spec lives in the Figma "Design Language" frames pulled
+ * from node 157-288 (Frames 17 / 18 / 19 / 21 / 39 / 40 / 41 / 42 / 43 /
+ * 44 / 45 in the design-language zip).  This is the second pass — the
+ * first pass got several semantic mappings wrong:
  *
- *   - Orange (Solar Flare) is the primary CTA accent; purple is demoted to
- *     Architect-only surfaces.
- *   - Heavier reliance on hairline dividers and small-caps section labels
- *     instead of cards-with-coloured-borders for sectioning.
- *   - Wider tracking on every uppercase string; tighter line-heights on
- *     editorial headings.
- *   - Imagery (NASA-style halftone space photographs) carries the visual
- *     weight; UI chrome stays austere.
+ *   - Solar Flare (#FF4F5E) is the ERROR colour, NOT the primary CTA.
+ *     The previous pass treated orange as the primary; that was wrong.
+ *   - Astro Explorer (#FF6637) is the SECONDARY FOCUS accent — used for
+ *     the live-match momentum-bar leading side and rare warmth moments.
+ *   - Quantum Purple (#9A5CF4) is the FOCUS colour, used on the active
+ *     nav button (Sign Up / Log In) and the current-page underline.
+ *     The previous pass demoted it to "Architect only" — wrong.
+ *   - Galactic Abyss is #111111 (was #0A0A0A — too dark).
+ *   - Phobos Ash is #1F1F1F (was #1A1A1A — too dark).
+ *   - Heading scale is H1 40 / H2 32 / H3 28 / P 16.  The previous pass
+ *     shrank everything assuming Space Mono ran visually large.
  *
- * SOURCE OF TRUTH: the new Figma design system page in
- *   https://www.figma.com/design/oGdHNw4ap5TY5R5ey28FDP/Soccer-Game
- * Numeric values without an explicit Figma cite are derived from the
- * screenshots provided alongside the redesign brief.
+ * SOURCE OF TRUTH for visual decisions: the Figma design-language frames.
+ * Numeric values without an explicit Figma cite are derived directly
+ * from the frame screenshots provided alongside the redesign brief.
  *
  * ADDING A NEW TOKEN:
- *   1. Confirm it appears in the redesign Figma (or the screenshots).
+ *   1. Confirm it appears in the design-language frames.
  *   2. Add it under the relevant section, with a comment explaining intent.
  *   3. Reference it from component CSS via var(--token-name).
  *   4. Never introduce raw hex values in component stylesheets.
@@ -27,120 +31,118 @@
 
 :root {
   /* ── Colours ──────────────────────────────────────────────────────────────
-   * Five named values do almost all the work.  Orange is the only chromatic
-   * accent in the normal flow.  Purple is reserved for Architect surfaces.
-   * Green and red retain semantic roles (positive form / warning).         */
+   * Seven named values from Frame 40.  Each has a semantic role; UI rules
+   * reference roles, not hexes. */
 
-  /* Primary dark — Galactic Abyss
-     Page background, footer background, table-dark cells.  The redesign
-     leans heavily into this — most surfaces sit on Abyss with hairline
-     dust dividers rather than card backgrounds. */
-  --color-abyss:         #0A0A0A;
-
-  /* Secondary dark — Phobos Ash
-     Slightly lighter than Abyss for raised surfaces (header strip, card
-     bodies that deliberately lift off the page).  Used sparingly in the
-     redesign — most "cards" are bordered Abyss with no fill. */
-  --color-ash:           #1A1A1A;
-
-  /* Primary light — Lunar Dust
-     Body text on dark backgrounds, heading colour, hairline dividers,
-     button-secondary fill.  The slightly warm off-white reads as
-     "archive paper" rather than crisp #FFF — that's the editorial intent. */
+  /* LUNAR DUST — Primary light colour.  #E3E0D5.
+     Used for: body text on dark backgrounds, heading colour, hairline
+     dividers, button-secondary fill, button-primary border + text. */
   --color-dust:          #E3E0D5;
 
-  /* Solar Flare — primary CTA accent (NEW PRIMARY)
-     Replaces Quantum Purple as the orange-led accent the redesign asks
-     for.  Used on: primary buttons, "create account" CTAs, key highlight
-     numbers in stats rows, the active nav-link underline. */
-  --color-flare:         #E85D2C;
+  /* GALACTIC ABYSS — Primary dark colour.  #111111.
+     Used for: page background, button-primary fill, button-secondary
+     text, table dark cells. */
+  --color-abyss:         #111111;
 
-  /* Hover/pressed for orange CTAs — manually mixed ~10% darker. */
-  --color-flare-mid:     #C94B22;
+  /* PHOBOS ASH — Secondary dark colour.  #1F1F1F.
+     Used for: card.is-raised fill, modal panels, header strip on lighter
+     accent.  Sits one step lighter than Abyss so panels lift visibly. */
+  --color-ash:           #1F1F1F;
 
-  /* Quantum Purple — Architect-ONLY accent now
-     The original primary.  In the redesign it is reserved for surfaces
-     that belong to the Cosmic Architect: ArchitectCard, narrative-feed
-     architect_whisper rows, the SealedFateCard glow, the live-watcher
-     presence dot, the cosmic_disturbance card-glow.  Other UI moments
-     that previously used purple should switch to flare or dust. */
+  /* QUANTUM PURPLE — Focus colour.  #9A5CF4.
+     Used for: active nav-link state (Sign Up / Log In header CTA, current
+     page indicator), focus rings, the user-balance pill, and Architect
+     surfaces.  Two shades for hover/pressed below. */
   --color-purple:        #9A5CF4;
   --color-purple-mid:    #7A3ED4;
   --color-purple-dark:   #5B2E9E;
   --color-purple-glow:   rgba(154,  92, 244, 0.18);
 
-  /* Solar Flare warning red — kept for error states & cosmic_disturbance.
-     The new orange and the warning red are visually distinct (orange is
-     warmer / saturated; red is cooler / deeper).  Confirmed by the new
-     Figma palette swatches. */
-  --color-red:           #E05252;
-  --color-red-dark:      #8B1A1A;
-  --color-red-glow:      rgba(224,  82,  82, 0.18);
+  /* SOLAR FLARE — Error colour.  #FF4F5E.
+     Used for: error states, the LIVE badge on the live-match card,
+     cosmic_disturbance card glow, in-table negative deltas.  Previously
+     mis-mapped as "primary orange" — that was Astro Explorer. */
+  --color-flare:         #FF4F5E;
+  --color-flare-mid:     #D63E4B;
+  --color-flare-glow:    rgba(255,  79,  94, 0.18);
 
-  /* Terra Nova — positive accent (form W pip, upward trends).
-     Unchanged from the original token set; still reads "alive" against
-     the new orange without competing for attention. */
+  /* TERRA NOVA — Confirmation colour.  #A5D6A7.
+     Used for: positive accents (form W pip, upward trends), success
+     toasts, momentum-bar trailing side. */
   --color-green:         #A5D6A7;
 
-  /* Nexus-7 Blue — AI-analyst commentary tint.  Unchanged. */
+  /* ASTRO EXPLORER — Secondary focus colour.  #FF6637.
+     Used for: live-match momentum-bar leading side, rare warmth moments
+     where the focus colour (purple) and confirmation (green) would feel
+     out of register.  Sparingly. */
+  --color-astro:         #FF6637;
+  --color-astro-mid:     #D8501F;
+  --color-astro-glow:    rgba(255, 102,  55, 0.18);
+
+  /* Nexus-7 Blue — AI-analyst commentary tint.  Same as pre-redesign;
+     used on commentator-card left borders and AI-attributed prose. */
   --color-sky:           #4FC3F7;
 
   /* ── Narrative kind accent colours ─────────────────────────────────────────
-     Each narrative kind gets a hue.  These survive the redesign mostly
-     unchanged — they're already a coherent "Architect's broadcast" set. */
+   * News-feed kind chips and card borders.  Each kind has a hue so the
+   * Galaxy Dispatch reads as a multi-voice broadcast at a glance. */
   --color-gold:          #c8a84b;  /* political_shift                       */
-  --color-orange:        #c85a2a;  /* geological_event (pre-redesign hue —
-                                      kept distinct from the new --flare
-                                      so the news feed stays legible)      */
+  --color-orange:        #c85a2a;  /* geological_event                      */
   --color-teal:          #4bc8b8;  /* economic_tremor                       */
   --color-blue:          #5B9BD5;  /* pundit_takes                          */
   --color-slate:         #7D8BA1;  /* referee_narrative                     */
 
-  /* Darker dust for hover/pressed states on dust-filled surfaces. */
+  /* ── Surface tints + hairlines ───────────────────────────────────────────── */
+
+  /* Darker dust for hover/pressed states on dust-filled buttons. */
   --color-dust-dark:     #ccc9be;
-  /* Even darker dust for borderlines, table dividers, table strokes. */
+  /* Low-opacity dust for borders.  Used as the hairline value below. */
   --color-dust-faint:    rgba(227, 224, 213, 0.12);
-  /* Hairline divider opacity (used heavily in the redesign editorial
-     layout — every section break, every table row separator). */
+  /* Hairline opacity used throughout the editorial layout — every section
+     break, every table row divider, every card border. */
   --color-hairline:      rgba(227, 224, 213, 0.18);
 
   /* ── Architect surface tokens (unchanged) ──────────────────────────────────
-   * Reserved for surfaces that belong to the Cosmic Architect persona. */
+   * Reserved for surfaces that belong to the Cosmic Architect persona.
+   * Uses Quantum Purple as the accent; near-void backdrop reads as
+   * "this is a cosmic surface, not regular UI." */
   --color-architect-bg:       #050308;
   --color-architect-accent:   var(--color-purple);
   --color-architect-text:     var(--color-purple-mid);
   --color-architect-muted:    #C4B5D9;
 
   /* ── Typography ───────────────────────────────────────────────────────────
-   * Space Mono is still the only font family.  The redesign tightens the
-   * scale and adds two new sizes for the editorial pattern (large display
-   * for hero titles, micro for footer metadata).  Letter-spacing values
-   * are wider than the previous set to land the small-caps look. */
+   * Space Mono is the only font family.  Scale matches Frame 17 exactly:
+   * H1 40 / H2 32 / H3 28 / P 16.  These are visible-too-big in places;
+   * page rebuilds tighten letter-spacing where needed but the base sizes
+   * stay on-spec. */
 
   --font-mono:           'Space Mono', monospace;
 
-  /* Display — hero only (the "SOCCER, CHARTED ACROSS THE STARS" line).
-     48 px reads as "publication masthead" without dominating the layout. */
+  /* Display — hero masthead only (the "SOCCER, CHARTED ACROSS THE STARS"
+     line).  Slightly larger than H1 so the publication header dominates
+     the page even with the editorial heading scale. */
   --font-size-display:   48px;
 
-  /* Headings — H1 32 / H2 24 / H3 18.  Tighter than the previous scale
-     because the new layout has more headings competing for attention. */
-  --font-size-h1:        32px;
-  --font-size-h2:        24px;
-  --font-size-h3:        18px;
+  /* Headings — Frame 17 spec.  H1 40 / H2 32 / H3 28. */
+  --font-size-h1:        40px;
+  --font-size-h2:        32px;
+  --font-size-h3:        28px;
 
-  /* Body sizes */
-  --font-size-body:      14px;     /* Default body — drop from 16 because
-                                      Space Mono runs visually large and
-                                      the editorial layout needs density. */
-  --font-size-small:     12px;     /* Stats rows, section meta             */
-  --font-size-micro:     10px;     /* Small-caps labels, footer metadata   */
+  /* Body — Frame 17 spec: P at 16 px. */
+  --font-size-body:      16px;
 
-  /* Letter-spacing — wider on every uppercase variant.  The redesign uses
-     these values religiously for any small-caps label. */
+  /* Small + micro — used for stats rows, kicker labels, footer metadata.
+     Not in Frame 17 but needed for density blocks; values measured from
+     the screenshots. */
+  --font-size-small:     13px;
+  --font-size-micro:     11px;
+
+  /* Letter-spacing — wider on every uppercase string.  Used religiously
+     for any small-caps label in the editorial layout. */
   --letter-spacing-wide:    0.08em;
   --letter-spacing-wider:   0.12em;
-  --letter-spacing-widest:  0.18em;  /* Used on section labels (I • THE…)  */
+  --letter-spacing-widest:  0.18em;
 
   /* Line heights — tight for editorial headings, comfortable for body. */
   --line-height-tight:   1.1;
@@ -148,8 +150,8 @@
   --line-height-body:    1.6;
 
   /* ── Spacing scale ────────────────────────────────────────────────────────
-   * Same 4-multiple base as before.  Adds --space-32 for hero-section
-   * vertical breathing room. */
+   * Same 4-multiple base as pre-redesign; Frame 45 confirms a similar
+   * progression (rows visibly step up in regular increments). */
 
   --space-1:             4px;
   --space-2:             8px;
@@ -164,29 +166,24 @@
   --space-16:            64px;
   --space-20:            80px;
   --space-25:            100px;
-  --space-32:            128px;   /* Hero section vertical padding         */
+  --space-32:            128px;
 
-  /* ── Layout ───────────────────────────────────────────────────────────────
-   * Same desktop content width as before — the redesign uses the full
-   * 1312px frame.  Narrowed gutter at mobile because the new editorial
-   * layout collapses to single-column.                                    */
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
   --max-width:                 1312px;
-  --max-width-narrow:          900px;   /* Single-column reading width
-                                           used for prose-heavy sections   */
+  --max-width-narrow:          900px;
   --grid-gutter-desktop:       32px;
   --grid-gutter-mobile:        20px;
   --max-width-mobile:          380px;
   --breakpoint-mobile:         640px;
 
   /* ── Component sizings ───────────────────────────────────────────────────
-   * Buttons reduced from 56 px → 44 px tall to match the redesign's
-   * tighter editorial feel.  Cards dropped from 32 px to 20 px padding. */
+   * Buttons taller than the previous pass (Frame 19 shows ~50 px tall);
+   * card padding larger (Frame 44 shows generous interior space). */
+  --button-height:       48px;
+  --button-padding-y:    14px;
+  --button-padding-x:    28px;
 
-  --button-height:       44px;
-  --button-padding-y:    12px;
-  --button-padding-x:    24px;
-
-  --card-padding:        20px;
+  --card-padding:        24px;
   --card-border:         1px solid var(--color-hairline);
 
   /* ── Transitions ─────────────────────────────────────────────────────────
