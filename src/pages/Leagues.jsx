@@ -1,46 +1,56 @@
-// ── Leagues.jsx ───────────────────────────────────────────────────────────────
-// The Intergalactic Leagues listing page.  Implements the mockup layout:
+// ── Leagues.jsx — Redesign 2026-05 ────────────────────────────────────────────
+// Listing page for the four ISL leagues.  Editorial publication layout
+// matching the new Figma direction — small-caps numbered hero kicker,
+// display title, divider, and a 2-column grid of bordered cards instead
+// of the previous circle-and-prose pattern.
 //
-//   H1: INTERGALACTIC LEAGUES
-//   ─────────────────────────────
-//   Tagline subtitle
+//   INTERGALACTIC LEAGUES                      ← display masthead
+//   ─────────────────────────────────────
 //
-//   ┌───────────────────┐  ┌───────────────────┐
-//   │ ROCKY INNER LEAGUE│  │ GAS/ICE GIANTS    │
-//   │ Description...    │  │ Description...    │
-//   │ [VIEW LEAGUE]     │  │ [VIEW LEAGUE]     │
-//   └───────────────────┘  └───────────────────┘
-//   ┌───────────────────┐  ┌───────────────────┐
-//   │ OUTER REACHES     │  │ KUIPER BELT       │
-//   │ Description...    │  │ Description...    │
-//   │ [VIEW LEAGUE]     │  │ [VIEW LEAGUE]     │
-//   └───────────────────┘  └───────────────────┘
+//   I  •  ROCKY INNER LEAGUE                   ← editorial card pair
+//   ───────────────────────                      (numbered, bordered,
+//   Earthian-rim clubs orbiting…                 hairline divider, CTA
+//   [ VIEW LEAGUE → ]                            at the bottom).
 //
-// The 2-column desktop grid collapses to 1 column on mobile.
-// Each card links to /leagues/:leagueId for the League Detail page.
+//   II •  GAS / ICE GIANT LEAGUE
+//   …                                          (etc — 4 cards total)
 //
 // DATA SOURCE
-// ───────────
-// League records are fetched from Supabase on mount.  The DB is the single
-// source of truth for league names and descriptions.  A loading state is
-// shown while the fetch is in flight; the grid renders once data arrives.
+//   getLeagues() from src/lib/supabase — single fetch on mount; leagues
+//   are stable reference data, no polling needed.
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import Button from '../components/ui/Button';
 import { getLeagues } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+/**
+ * Roman-numeral kickers used as the leading mono mark on each league
+ * card.  Indexed by the position in the leagues array, so the first
+ * league fetched gets "I", the second "II", etc.  Four entries cover
+ * the four ISL leagues with one spare for future expansion.
+ */
+const ROMAN_KICKERS = ['I', 'II', 'III', 'IV', 'V'];
+
+/**
+ * Subtitle copy under the masthead.  Mirrors the editorial tone in the
+ * redesign — short, atmospheric, no marketing speak.  Lifted from the
+ * Figma design system page; bump if the publication's voice ever shifts.
+ */
+const PAGE_SUBTITLE = 'Four orbital conferences. Thirty-two clubs. One Cosmic Architect.';
 
 /**
  * Intergalactic Leagues listing page.
  *
- * Fetches all four ISL leagues from Supabase and renders them as equal-height
- * cards in a 2-column desktop grid.  Each card displays the league name,
- * description prose, and a "VIEW LEAGUE" primary button that navigates to
- * the league detail page.
+ * Fetches all four ISL leagues from Supabase and renders them as a
+ * 2-column editorial card grid.  Each card opens with a roman-numeral
+ * mono mark, a hairline divider, the league name, the description
+ * prose, and a "View League →" CTA.
  *
- * Shows a brief loading message while the fetch is in flight; on error falls
- * back to an inline message rather than crashing the page.
+ * Loading and error states share the same hero so the page chrome
+ * doesn't shift between states.
  *
  * @returns {JSX.Element}
  */
@@ -48,109 +58,160 @@ export default function Leagues() {
   const db = useSupabase();
 
   // ── Data fetch ────────────────────────────────────────────────────────────
-  // Leagues are stable reference data — fetch once on mount, no polling needed.
-  const [leagues, setLeagues]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error,   setError]     = useState(false);
+  // Leagues are stable reference data — one fetch on mount is enough.
+  const [leagues, setLeagues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(false);
 
   useEffect(() => {
     getLeagues(db)
-      .then(data => {
+      .then((data) => {
         setLeagues(data);
         setLoading(false);
       })
       .catch((err) => {
-        console.error('[ISL] Leagues fetch failed:', err);
+        console.error('[Leagues] fetch failed:', err);
         setError(true);
         setLoading(false);
       });
-  }, [db]); // db is a stable context ref — adding it satisfies exhaustive-deps without causing re-fetches
+  }, [db]);
 
   return (
-    <div className="container" style={{ paddingBottom: '60px' }}>
+    <div className="container" style={{ paddingBlock: 'var(--space-12)' }}>
 
-      {/* ── Page hero ───────────────────────────────────────────────────────── */}
-      {/* page-hero class provides 48px top padding + centred uppercase h1 */}
-      <div className="page-hero" style={{ marginBottom: '40px' }}>
-        <h1>Intergalactic Leagues</h1>
-        <hr className="divider" />
-        <p className="subtitle">The most exciting soccer simulation game in the solar system!</p>
-      </div>
+      {/* ── Editorial hero ──────────────────────────────────────────────────
+          Display masthead + hairline + subtitle.  No bespoke wrapper
+          element because the page itself is the hero — wrapping in
+          another flex layer just adds a redundant box. */}
+      <h1 className="display-title" style={{ marginBottom: 'var(--space-3)' }}>
+        Intergalactic Leagues
+      </h1>
+      <hr className="divider" style={{ marginBlock: 'var(--space-3) var(--space-3)' }} />
+      <p style={{ fontSize: 'var(--font-size-small)', opacity: 0.6, maxWidth: '60ch' }}>
+        {PAGE_SUBTITLE}
+      </p>
 
-      {/* ── Loading / error states ──────────────────────────────────────────── */}
+      {/* ── Loading / error ─────────────────────────────────────────────────
+          Compact one-liners — no full-page spinner.  The page header
+          above has already painted, so the eye knows where it landed. */}
       {loading && (
-        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>
-          Loading leagues…
+        <p style={{ marginTop: 'var(--space-10)', opacity: 0.5, fontSize: 'var(--font-size-small)' }}>
+          Receiving leagues…
         </p>
       )}
-      {error && (
-        <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '14px' }}>
-          Could not load leagues. Please try again later.
+      {error && !loading && (
+        <p style={{ marginTop: 'var(--space-10)', opacity: 0.6, fontSize: 'var(--font-size-small)' }}>
+          Could not load leagues. Try again later.
         </p>
       )}
 
-      {/* ── League cards grid ───────────────────────────────────────────────── */}
-      {/* 2-column desktop grid; each card stretches to the same height via
-          `align-items: stretch` on the grid container so that pairs of cards
-          always share the same bottom edge — matching the mockup. */}
+      {/* ── League cards grid ───────────────────────────────────────────────
+          2-up at desktop, 1-up at mobile.  Cards stretch to equal height
+          via the grid implicit row sizing so a long description on one
+          card never leaves the other looking truncated. */}
       {!loading && !error && (
         <div
           className="leagues-grid"
           style={{
             display: 'grid',
-            // Two equal columns on desktop; single column on narrow viewports
-            // via the .leagues-grid responsive rule in index.css.
             gridTemplateColumns: '1fr 1fr',
-            gap: '24px',
+            gap: 'var(--space-6)',
+            marginTop: 'var(--space-10)',
           }}
         >
-          {leagues.map(league => (
-            // ── Individual league card ───────────────────────────────────────
-            // flex column layout pushes the button to the bottom of the card
-            // regardless of description length, keeping all rows visually aligned.
-            <div
+          {leagues.map((league, idx) => (
+            <LeagueCard
               key={league.id}
-              className="card"
-              style={{ display: 'flex', flexDirection: 'column' }}
-            >
-              {/* ── League badge circle ──────────────────────────────────────
-                  112×112px circular placeholder per the Figma design spec.
-                  Larger than the team card badge (which is 80px) to signal
-                  that leagues sit above teams in the hierarchy.  Will be
-                  replaced by a real league crest image when assets land. */}
-              <div style={{
-                width: 112,
-                height: 112,
-                borderRadius: '50%',
-                backgroundColor: 'rgba(227,224,213,0.08)',
-                border: '1px solid rgba(227,224,213,0.2)',
-                marginBottom: '20px',
-                flexShrink: 0,
-              }} />
-
-              {/* League name — .card-title gives the standardised in-card
-                  heading size (18px uppercase) shared across all listing cards. */}
-              <h3 className="card-title">{league.name}</h3>
-
-              {/* Description prose — grows to fill available card space so the
-                  button stays at the bottom even on cards with short text. */}
-              <p style={{ fontSize: '14px', lineHeight: 1.7, opacity: 0.85, flex: 1, marginBottom: '24px' }}>
-                {league.description}
-              </p>
-
-              {/* VIEW LEAGUE button — primary variant per the design spec.
-                  Wrapped in Link rather than using a button onClick so the
-                  navigation is accessible and crawlable. */}
-              <div>
-                <Link to={`/leagues/${league.id}`}>
-                  <Button variant="primary">View League</Button>
-                </Link>
-              </div>
-            </div>
+              kicker={ROMAN_KICKERS[idx] ?? String(idx + 1)}
+              league={league}
+            />
           ))}
         </div>
       )}
 
+      {/* Single mobile breakpoint — leagues stack into one column at
+          640 px so the cards don't shrink below comfortable reading
+          width.  Matches the global mobile breakpoint in tokens.css. */}
+      <style>{`
+        @media (max-width: 640px) {
+          .leagues-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
+  );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+/**
+ * A single editorial league card.  Numbered roman kicker on top, hairline,
+ * league name in display weight, description prose, CTA at the bottom.
+ *
+ * Layout uses flex-column so the CTA pins to the card's bottom edge no
+ * matter how long the description runs — pairs of cards always share
+ * the same bottom alignment in the grid.
+ */
+function LeagueCard({ kicker, league }) {
+  return (
+    <article
+      className="card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-3)',
+      }}
+    >
+      {/* Kicker row — mono numeral + small-caps "League" label so the
+          card-top reads as "I • LEAGUE". */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 'var(--space-3)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 'var(--font-size-micro)',
+        textTransform: 'uppercase',
+        letterSpacing: 'var(--letter-spacing-widest)',
+        opacity: 0.5,
+      }}>
+        <span style={{ fontWeight: 700 }}>{kicker}</span>
+        <span style={{ opacity: 0.6 }}>•</span>
+        <span>League</span>
+      </div>
+
+      {/* Hairline beneath the kicker.  Margin-block 0 keeps the kicker /
+          divider / title rhythm tight (the kicker row has its own gap
+          via the parent flex). */}
+      <hr className="divider" style={{ marginBlock: 0 }} />
+
+      {/* League name — h2 size, uppercase, tight line-height. */}
+      <h2 style={{
+        fontSize: 'var(--font-size-h2)',
+        textTransform: 'uppercase',
+        lineHeight: 'var(--line-height-tight)',
+        marginBlock: 'var(--space-1)',
+      }}>
+        {league.name}
+      </h2>
+
+      {/* Description.  flex: 1 grows to fill so the CTA pins below. */}
+      <p style={{
+        fontSize: 'var(--font-size-small)',
+        lineHeight: 'var(--line-height-body)',
+        opacity: 0.75,
+        flex: 1,
+      }}>
+        {league.description}
+      </p>
+
+      {/* CTA — primary orange button.  Wrapped in Link rather than a
+          button-with-onClick so navigation is accessible / crawlable. */}
+      <div>
+        <Link to={`/leagues/${league.id}`} className="btn btn-primary">
+          View League →
+        </Link>
+      </div>
+    </article>
   );
 }

@@ -80,7 +80,18 @@ import {
 } from '../lib/matchResultsService';
 import { getLeagues } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { SectionHeader } from '@shared/ui';
 
+/**
+ * Add a 1-based `position` field to every row in the supplied standings
+ * array.  Used before passing rows to IslTable so the position column's
+ * renderer can show the rank without needing IslTable to expose row
+ * indices.  computeStandings already sorts by Pts DESC + GD tie-break,
+ * so position === idx + 1 IS the table rank.
+ *
+ * @param {object[]} rows  Standings rows from computeStandings().
+ * @returns {object[]}     Same rows with `position` field stamped on.
+ */
 function augmentWithPosition(rows) {
   return rows.map((row, i) => ({ ...row, position: i + 1 }));
 }
@@ -237,66 +248,93 @@ export default function LeagueDetail() {
   const rankedRows = augmentWithPosition(standingsRows);
 
   return (
-    <div>
-      {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      {/* page-hero class: 48px top padding, centred uppercase H1, divider, subtitle */}
-      <div className="page-hero">
-        <div className="container">
-          <h1>{league.name}</h1>
-          <hr className="divider" />
-          <p className="subtitle">Lorem ipsum dolor sit amet.</p>
-        </div>
+    <div className="container" style={{ paddingBlock: 'var(--space-12)' }}>
+
+      {/* ── Editorial hero ──────────────────────────────────────────────────
+          Display masthead + small-caps "Conference" kicker.  The previous
+          centred page-hero + 80 px circle is dropped — the league name on
+          its own carries the page in the new editorial layout. */}
+      <div style={{
+        fontSize: 'var(--font-size-micro)',
+        textTransform: 'uppercase',
+        letterSpacing: 'var(--letter-spacing-widest)',
+        opacity: 0.6,
+        marginBottom: 'var(--space-3)',
+      }}>
+        <Link to="/leagues" style={{ color: 'inherit', borderBottom: '1px solid var(--color-hairline)' }}>
+          ← All Leagues
+        </Link>
+        <span style={{ marginInline: 'var(--space-3)', opacity: 0.5 }}>•</span>
+        <span>Conference</span>
       </div>
 
-      <div className="container" style={{ paddingBottom: '64px' }}>
+      <h1 className="display-title" style={{ marginBottom: 'var(--space-3)' }}>
+        {league.name}
+      </h1>
+      <hr className="divider" style={{ marginBlock: 0 }} />
 
-        {/* ── LEAGUE INFO CARD ──────────────────────────────────────────────── */}
-        {/* Full-width card with 80px badge circle, league name, and description.
-            Sits below the page hero so it becomes the visual anchor for the page. */}
-        <section className="section">
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* 80×80px circular badge — neutral tint until real crest assets land */}
-            <div style={{
-              width: 80, height: 80,
-              borderRadius: '50%',
-              backgroundColor: 'rgba(227,224,213,0.08)',
-              border: '1px solid rgba(227,224,213,0.2)',
-              flexShrink: 0,
-            }} />
-            <h3 className="card-title" style={{ margin: 0 }}>{league.name}</h3>
-            <p style={{ fontSize: '14px', lineHeight: 1.8, opacity: 0.85, margin: 0 }}>
-              {league.description}
-            </p>
-          </div>
-        </section>
+      <p style={{
+        fontSize: 'var(--font-size-small)',
+        lineHeight: 'var(--line-height-body)',
+        opacity: 0.75,
+        maxWidth: 'var(--max-width-narrow)',
+        marginTop: 'var(--space-4)',
+      }}>
+        {league.description}
+      </p>
 
-        {/* ── LEAGUE STANDINGS ──────────────────────────────────────────────── */}
-        {/* Ranked columns (POSITION + standard cols) replace the shared
-            STANDINGS_COLS so the full table is shown on the detail page only. */}
-        <section className="section">
-          <h2 className="section-title">League Standings — {league.name}</h2>
-          <IslTable variant="light" columns={STANDINGS_WITH_POS_COLS} rows={rankedRows} />
-        </section>
+      {/* ── I • THE TABLE — Standings ─────────────────────────────────────── */}
+      <section className="section" style={{ marginTop: 'var(--space-12)' }}>
+        <SectionHeader
+          kicker="I"
+          label="The Table"
+          title="Standings"
+          subtitle="Live position table.  Position pipe + numeral on the left; bottom two rows trigger the relegation cue."
+        />
+        <IslTable variant="dark" columns={STANDINGS_WITH_POS_COLS} rows={rankedRows} />
+      </section>
 
-        {/* ── TOP SCORERS | TOP ASSISTERS — side by side ───────────────────── */}
-        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '64px' }}>
-          <StatTable title="Top Scorers"   columns={SCORER_COLS}  rows={scorerRows} />
-          <StatTable title="Top Assisters" columns={ASSISTS_COLS} rows={assistRows} />
+      {/* ── II • TOP OF THE BOARD — Scorers + Assisters ───────────────────── */}
+      <section className="section">
+        <SectionHeader
+          kicker="II"
+          label="Top Of The Board"
+          title="Scorers & Assisters"
+          subtitle="Players the cosmos has noted most often this season."
+        />
+        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+          <StatTable title="Top Scorers"    columns={SCORER_COLS}  rows={scorerRows} />
+          <StatTable title="Top Assisters"  columns={ASSISTS_COLS} rows={assistRows} />
         </div>
+      </section>
 
-        {/* ── TOP CLEAN SHEETS — half width (right col intentionally empty) ─── */}
-        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '64px' }}>
-          <StatTable title="Top Clean Sheets" columns={CLEAN_SHEETS_COLS} rows={cleanSheetRows} />
-          <div aria-hidden="true" />
-        </div>
-
-        {/* ── TOP YELLOW CARDS | TOP RED CARDS — side by side ──────────────── */}
-        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+      {/* ── III • THE BACK PAGE — Clean sheets + Discipline ───────────────── */}
+      <section className="section">
+        <SectionHeader
+          kicker="III"
+          label="The Back Page"
+          title="Discipline & Clean Sheets"
+          subtitle="Cards in colour and goalkeepers who refused to concede."
+        />
+        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
           <StatTable title="Top Yellow Cards" columns={CARDS_COLS} rows={yellowRows} />
           <StatTable title="Top Red Cards"    columns={CARDS_COLS} rows={redRows}    />
         </div>
+        <div className="stats-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+          <StatTable title="Top Clean Sheets" columns={CLEAN_SHEETS_COLS} rows={cleanSheetRows} />
+          <div aria-hidden="true" />
+        </div>
+      </section>
 
-      </div>
+      {/* Mobile breakpoint — collapse the two-column stat grids to single
+          column so each table stays readable on narrow viewports. */}
+      <style>{`
+        @media (max-width: 640px) {
+          .stats-two-col {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
