@@ -46,10 +46,15 @@ import { useAuth } from '../features/auth';
 // Single source of truth for which file backs each illustration.  Lives at
 // module scope so renaming a file in /public/img/ is a one-line change
 // rather than a hunt through markup.
-const IMG_HERO         = `${import.meta.env.BASE_URL}img/hero-pillars.jpg`;
-const IMG_STEP_SIGN    = `${import.meta.env.BASE_URL}img/step-01-sign-on.jpg`;
-const IMG_STEP_CLUB    = `${import.meta.env.BASE_URL}img/step-02-pick-club.jpg`;
-const IMG_STEP_WATCH   = `${import.meta.env.BASE_URL}img/step-03-watch-bet.jpg`;
+//
+// PNG format preserves the halftone detail in the source artwork better
+// than JPG would — total weight is ~20 MB across the four images, which
+// modern browsers cache cheaply after first load.  If page weight becomes
+// a concern, regenerate the four assets as WebP and update these paths.
+const IMG_HERO         = `${import.meta.env.BASE_URL}img/hero-pillars.png`;
+const IMG_STEP_SIGN    = `${import.meta.env.BASE_URL}img/step-01-sign-on.png`;
+const IMG_STEP_CLUB    = `${import.meta.env.BASE_URL}img/step-02-pick-club.png`;
+const IMG_STEP_WATCH   = `${import.meta.env.BASE_URL}img/step-03-watch-bet.png`;
 
 // ── Hero-stats constants ──────────────────────────────────────────────────────
 // Fixed strings rendered in the stats row beneath the hero CTAs.  Real
@@ -65,6 +70,96 @@ const HERO_COORD_DEC    = 'DEC −27° 19′';
 const HERO_STAT_SEASON  = '014 / 030';
 const HERO_STAT_ARCH    = 'Elevated';
 const HERO_BUILD        = 'v 0.7.0';
+
+// ── Standings constants ──────────────────────────────────────────────────────
+
+/**
+ * Number of rows at the BOTTOM of the table that get the relegation-red
+ * treatment on their position column.  Matches the Figma example which
+ * colours rows 7 and 8 (in an 8-team league) red — the bottom two are
+ * the relegation slots in the ISL design.
+ *
+ * Generic so adding a 10-team league later still colours the bottom two
+ * correctly; reds float with totalRows.
+ */
+const STANDINGS_RELEGATION_COUNT = 2;
+
+/**
+ * Render the leading position column for the Home standings table.
+ * Two-glyph visual: a faint dust pipe followed by the zero-padded numeral.
+ * Bottom STANDINGS_RELEGATION_COUNT positions get a Solar Flare red
+ * numeral to signal relegation pressure.  Pipe stays dust regardless so
+ * the column rhythm stays uniform.
+ *
+ * @param {object} row         Row with a `position` field stamped on by
+ *                             the caller (computeStandings + map decorator).
+ * @param {number} totalRows   Total row count in the table; used to pick
+ *                             which positions get relegation colouring.
+ * @returns {JSX.Element}
+ */
+function renderPositionCell(row, totalRows) {
+  const pos        = row.position ?? 0;
+  // Bottom N positions trigger relegation red.  Guard against tables
+  // smaller than the relegation count (a 1-team table shouldn't have any
+  // relegated rows).
+  const isRelegation =
+    totalRows > STANDINGS_RELEGATION_COUNT &&
+    pos > totalRows - STANDINGS_RELEGATION_COUNT;
+  const colour = isRelegation ? 'var(--color-red)' : 'var(--color-dust)';
+  return (
+    <span style={{
+      display:       'inline-flex',
+      alignItems:    'center',
+      gap:           'var(--space-2)',
+      fontFamily:    'var(--font-mono)',
+      fontWeight:    700,
+      color:         colour,
+    }}>
+      <span aria-hidden="true" style={{ opacity: 0.5, color: 'var(--color-dust)' }}>|</span>
+      <span>{String(pos).padStart(2, '0')}</span>
+    </span>
+  );
+}
+
+/**
+ * Build the column set for the Home standings table.  Different from the
+ * shared STANDINGS_COLS in two ways:
+ *   1. Prepends a position column with the "❘ 01" pipe + numeral pattern.
+ *   2. Reorders the trailing columns so FORM sits BEFORE PTS (matches the
+ *      Figma which puts the form pips next to L and GD, with the points
+ *      column as the right-edge anchor).
+ *
+ * Built as a function so each call can capture `totalRows` for the
+ * relegation-red logic — the position column's render() closes over it.
+ *
+ * @param {number} totalRows  Length of the standings rows array.  Used
+ *                            only to pick which positions render red.
+ * @returns {Array}           IslTable column definition array.
+ */
+function buildHomeStandingsCols(totalRows) {
+  // Pull each named column off STANDINGS_COLS by key so a future schema
+  // tweak (e.g. renaming `played` → `matches_played`) propagates here
+  // without an extra edit.  `find` over an 8-element array is trivially
+  // fast and keeps the intent readable.
+  const findCol = (key) => STANDINGS_COLS.find(c => c.key === key);
+
+  return [
+    {
+      key:    'position',
+      label:  '#',
+      align:  'left',
+      render: (row) => renderPositionCell(row, totalRows),
+    },
+    findCol('team'),
+    findCol('played'),
+    findCol('wins'),
+    findCol('draws'),
+    findCol('loses'),
+    findCol('gd'),
+    findCol('form'),
+    findCol('points'),
+  ].filter(Boolean);
+}
 
 /**
  * Home page (redesigned).
@@ -109,8 +204,17 @@ export default function Home() {
   // The redesign shows ONE league at a time on Home (Rocky Inner by
   // default).  The previous carousel-with-arrows pattern is gone — fans
   // who want other leagues click through to /leagues.
+  //
+  // Rows are decorated with a `position` field (1-based rank) here so the
+  // position column's render() can show the "❘ 01" pattern and colour
+  // relegation slots without needing IslTable to expose row indices.
+  // computeStandings already returns rows sorted by points DESC + GD
+  // tie-break, so position === idx + 1 is the table rank.
   const featuredLeague = LEAGUES[0];
-  const standingsRows = computeStandings(featuredLeague.id, buildStandingsRows(featuredLeague.id));
+  const standingsRows = computeStandings(
+    featuredLeague.id,
+    buildStandingsRows(featuredLeague.id),
+  ).map((row, idx) => ({ ...row, position: idx + 1 }));
 
   return (
     <div>
@@ -125,6 +229,7 @@ export default function Home() {
         <section className="section">
           <SectionHeader
             kicker="I"
+            label="The Present"
             title="Live From The Void"
             subtitle="Matches in progress. Position updates every ninety seconds. Architect interference reflected in real time."
             action={
@@ -146,6 +251,7 @@ export default function Home() {
           <section className="section">
             <SectionHeader
               kicker="II"
+              label="Get Started"
               title="Three Steps To Enter"
               subtitle="Creating an account is easy. Escaping the league? Not so much."
               action={
@@ -185,8 +291,9 @@ export default function Home() {
         <section className="section">
           <SectionHeader
             kicker="III"
+            label={featuredLeague.name}
             title="The Standings"
-            subtitle={`Top of the table after fourteen matchdays. Form column shows the last five results.`}
+            subtitle="Top of the table after fourteen matchdays. Form column shows the last five results."
             action={
               <Link to={`/leagues/${featuredLeague.id}`} className="nav-link">
                 View All Leagues →
@@ -194,7 +301,16 @@ export default function Home() {
             }
           />
 
-          <IslTable variant="dark" columns={STANDINGS_COLS} rows={standingsRows} />
+          {/* The standings table on Home shows a position column with the
+              "❘ 01" pipe + numeral pattern, and reds the bottom two slots
+              to signal relegation pressure.  Both behaviours are encoded
+              in HOME_STANDINGS_COLS (see below) so they stay localised
+              to this page — LeagueDetail keeps its own column set. */}
+          <IslTable
+            variant="dark"
+            columns={buildHomeStandingsCols(standingsRows.length)}
+            rows={standingsRows}
+          />
         </section>
       </div>
 
@@ -393,45 +509,125 @@ function LiveMatchPanel({ match }) {
     );
   }
 
-  const homeName = match.home_team?.name ?? 'Home';
-  const awayName = match.away_team?.name ?? 'Away';
-  const homeScore = match.home_score ?? 0;
-  const awayScore = match.away_score ?? 0;
+  // Pull the bits the four-row layout needs.  Defaults are conservative so a
+  // partially-loaded match row still renders without crashes — better a
+  // half-filled card than a broken page on a slow Supabase response.
+  const homeName    = match.home_team?.name      ?? 'Home';
+  const awayName    = match.away_team?.name      ?? 'Away';
+  const homeLocation = match.home_team?.location ?? '';
+  const awayLocation = match.away_team?.location ?? '';
+  const homeScore   = match.home_score ?? 0;
+  const awayScore   = match.away_score ?? 0;
+  const competition = match.competitions?.name ?? 'League Match';
+  const round       = match.round ? `Matchday ${match.round}` : '';
+  // Live-clock minute is computed by the live page proper; we can derive a
+  // rough display from scheduled_at when available, or fall back to a
+  // single "LIVE" badge without minute when the row doesn't carry timing.
+  const matchMinute = computeRoughMatchMinute(match);
 
   return (
-    <div className="card">
-      {/* Meta header — competition, matchday, status pill. */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--font-size-micro)', letterSpacing: 'var(--letter-spacing-wider)', textTransform: 'uppercase', opacity: 0.6, marginBottom: 'var(--space-4)' }}>
-        <span>{match.competitions?.name ?? 'League Match'}</span>
-        <span style={{ color: 'var(--color-flare)' }}>● Live</span>
+    <div className="card" style={{ padding: 0 }}>
+
+      {/* ── Row 1: meta + live badge with minute ──────────────────────────── */}
+      {/* Hairline-separated header strip matching the Figma's "ROCKY INNER •
+          MATCHDAY 14" left + "● LIVE • 73'" right pattern.  Padding inset
+          mirrors --card-padding so the divider runs to the card's edge
+          for the editorial hairline effect. */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: 'var(--space-4) var(--card-padding)',
+        borderBottom: '1px solid var(--color-hairline)',
+        fontSize: 'var(--font-size-micro)', letterSpacing: 'var(--letter-spacing-wider)',
+        textTransform: 'uppercase', opacity: 0.85,
+      }}>
+        <span style={{ opacity: 0.7 }}>
+          {competition}{round && <> <span style={{ opacity: 0.5 }}>•</span> {round}</>}
+        </span>
+        <span style={{ color: 'var(--color-flare)' }}>
+          ● Live{matchMinute !== null && <> <span style={{ opacity: 0.7 }}>•</span> {matchMinute}&apos;</>}
+        </span>
       </div>
 
-      {/* Score row — team / score / team.  Score is the centrepiece. */}
+      {/* ── Row 2: score row ────────────────────────────────────────────────
+          Three-column grid: home block (name + location), score, away block.
+          Score is the centrepiece — 48 px mono.  Location subtext mirrors
+          the Figma's "HOME • EARTH" / "AWAY • MARS" cue. */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         gap: 'var(--space-6)',
-        marginBottom: 'var(--space-4)',
+        padding: 'var(--space-6) var(--card-padding)',
+        borderBottom: '1px solid var(--color-hairline)',
       }}>
         <div style={{ textAlign: 'left' }}>
           <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase' }}>{homeName}</h3>
-          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wide)' }}>Home</div>
+          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wider)', textTransform: 'uppercase', marginTop: 'var(--space-1)' }}>
+            Home{homeLocation && <> <span style={{ opacity: 0.5 }}>•</span> {homeLocation}</>}
+          </div>
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '48px', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: '48px', fontWeight: 700,
+          textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1,
+        }}>
           {homeScore} · {awayScore}
         </div>
         <div style={{ textAlign: 'right' }}>
           <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase' }}>{awayName}</h3>
-          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wide)' }}>Away</div>
+          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wider)', textTransform: 'uppercase', marginTop: 'var(--space-1)' }}>
+            Away{awayLocation && <> <span style={{ opacity: 0.5 }}>•</span> {awayLocation}</>}
+          </div>
         </div>
       </div>
 
-      <Link to={`/matches/${match.id}/live`} className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}>
-        Watch Live Match
-      </Link>
+      {/* ── Row 3: commentary placeholder ────────────────────────────────────
+          The Figma shows two recent commentary lines (speaker name + role
+          + minute, then the line itself).  Wiring real commentary requires
+          a match_events query keyed by match_id — deferred to a follow-up.
+          For now we render a single atmospheric placeholder so the layout
+          mass matches the Figma without misleading fans with fake quotes. */}
+      <div style={{
+        padding: 'var(--space-4) var(--card-padding)',
+        borderBottom: '1px solid var(--color-hairline)',
+        fontSize: 'var(--font-size-small)',
+        fontStyle: 'italic',
+        opacity: 0.6,
+        minHeight: '80px',
+      }}>
+        Awaiting transmissions from the broadcast booth…
+      </div>
+
+      {/* ── Row 4: CTA row ───────────────────────────────────────────────── */}
+      <div style={{ padding: 'var(--space-4) var(--card-padding)' }}>
+        <Link to={`/matches/${match.id}/live`} className="btn btn-secondary">
+          Watch Live Match
+        </Link>
+      </div>
     </div>
   );
+}
+
+/**
+ * Rough "current match minute" derived from scheduled_at + wall-clock.
+ * The proper live-match page computes this from `match_events` with the
+ * season's `match_duration_seconds` knob; for Home's featured panel we
+ * only need a single-digit indicator so a simple linear-interpolation
+ * against scheduled_at is good enough.  Returns null when timing data
+ * isn't available — caller renders just the LIVE badge in that case.
+ *
+ * @param {object} match  Match row with optional `scheduled_at`.
+ * @returns {number | null}  Match minute (0–90) or null when undetermined.
+ */
+function computeRoughMatchMinute(match) {
+  if (!match?.scheduled_at) return null;
+  const startMs = new Date(match.scheduled_at).getTime();
+  if (Number.isNaN(startMs)) return null;
+  // 90 game minutes are revealed across 10 real-world minutes by default
+  // (see season_config.match_duration_seconds).  Linear conversion:
+  // gameMin = realMin × 9 → 0–90 across the 0–10 minute window.
+  const realMin = Math.max(0, (Date.now() - startMs) / 60_000);
+  const gameMin = Math.min(90, Math.round(realMin * 9));
+  return gameMin > 0 ? gameMin : null;
 }
 
 /**

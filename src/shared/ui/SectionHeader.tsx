@@ -21,11 +21,17 @@ import type { ReactNode } from 'react';
 
 export interface SectionHeaderProps {
   /**
-   * Kicker label rendered above the title.  Convention is a roman numeral
-   * ("I", "II", "III") or a thematic short tag ("LIVE", "PRESS ROOM").
-   * Rendered uppercase by CSS — pass mixed-case if you want.
+   * Kicker numeral or short tag rendered LEFT of the bullet ("I", "II",
+   * "III", or short tag like "LIVE").  Rendered uppercase by CSS.
    */
   kicker: string;
+  /**
+   * Optional kicker label rendered AFTER the bullet, completing the
+   * two-part kicker pattern from the Figma ("I • THE PRESENT", "II •
+   * GET STARTED", "III • ROCKY INNER LEAGUE").  Omit for single-part
+   * kickers that need no label.
+   */
+  label?: string;
   /**
    * Section title.  Rendered uppercase by CSS at display weight.
    */
@@ -63,6 +69,7 @@ export interface SectionHeaderProps {
  */
 export function SectionHeader({
   kicker,
+  label,
   title,
   subtitle,
   action,
@@ -70,11 +77,11 @@ export function SectionHeader({
   return (
     <header style={{ marginBottom: 'var(--space-6)' }}>
       {/* ── Kicker row ──────────────────────────────────────────────────────
-          Two-column flex: left is the kicker label (roman numeral + bullet
-          + label), right is the optional action slot.  When `action` is
-          omitted the layout collapses cleanly because the right cell is
-          empty rather than missing — keeps spacing consistent across
-          sections with and without CTAs. */}
+          Two-column flex: left is the kicker (roman numeral + bullet +
+          optional label like "THE PRESENT"), right is the optional action
+          slot.  When `action` is omitted the layout collapses cleanly
+          because the right cell is empty rather than missing — keeps
+          spacing consistent across sections with and without CTAs. */}
       <div
         style={{
           display: 'flex',
@@ -86,6 +93,15 @@ export function SectionHeader({
         <div className="section-header">
           <span className="section-header__index">{kicker}</span>
           <span className="section-header__bullet">•</span>
+          {/* Label appears AFTER the bullet to complete the two-part
+              kicker pattern from the Figma ("I • THE PRESENT").  When
+              omitted, the bullet stands alone — useful for short
+              section-headers that need only a numeral.  Uses the same
+              small-caps class as the index so the two read as one
+              continuous label. */}
+          {label && (
+            <span className="section-header__index">{label}</span>
+          )}
         </div>
         {action && (
           <div style={{ flexShrink: 0 }}>
