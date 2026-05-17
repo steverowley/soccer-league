@@ -16,8 +16,8 @@
 //
 // Mobile (<768 px) collapses the cluster into a hamburger drawer.
 
-import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../features/auth';
 
@@ -53,10 +53,9 @@ const NAV_LINKS = [
  *
  * Auth control on the right edge:
  *   - Anonymous     → Solar Flare "Sign Up" CTA
- *   - Authenticated → a placeholder text node showing the username
- *                     (the styled balance pill will be rebuilt in a
- *                     follow-up PR; the AccountMenu component was
- *                     deleted in the nuke).
+ *   - Authenticated → AccountMenu pill — credit balance + username
+ *                     + dropdown menu (Profile / Wagers / Sign Out).
+ *                     Rebuilt in PR 9 alongside the /wagers route.
  *
  * Active route detection uses prefix-matching so deep routes (e.g.
  * `/leagues/rocky-inner`) still highlight their parent nav entry.
@@ -123,22 +122,10 @@ export default function Header() {
 
           {/* ── Auth control (desktop) ───────────────────────────────────
               Anonymous → flare "Sign Up" button.
-              Authenticated → username placeholder (AccountMenu pill
-              still to be rebuilt). */}
+              Authenticated → AccountMenu pill (credit balance +
+              username + dropdown to Profile / Wagers / Sign Out). */}
           <div style={{ flexShrink: 0 }}>
-            {user ? (
-              <span style={{
-                fontFamily: 'Space Mono, monospace',
-                fontSize: 13,
-                color: DUST,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-              }}>
-                {user.email?.split('@')[0] ?? 'Account'}
-              </span>
-            ) : (
-              <FlareButton to="/login">Sign Up</FlareButton>
-            )}
+            {user ? <AccountMenu /> : <FlareButton to="/login">Sign Up</FlareButton>}
           </div>
         </div>
 
@@ -185,11 +172,22 @@ export default function Header() {
               {label}
             </NavLink>
           ))}
-          {!user && (
+          {!user ? (
             <div style={{ marginTop: 8 }}>
               <FlareButton to="/login" onClick={() => setMobileOpen(false)}>
                 Sign Up
               </FlareButton>
+            </div>
+          ) : (
+            <div style={{
+              marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              {/* In the mobile drawer the AccountMenu's dropdown
+                  positioning would collide with the drawer chrome —
+                  flatten to three plain NavLinks instead. */}
+              <NavLink to="/profile"  active={false} onClick={() => setMobileOpen(false)}>Profile</NavLink>
+              <NavLink to="/wagers"   active={false} onClick={() => setMobileOpen(false)}>Wagers</NavLink>
+              <MobileSignOutButton onAfter={() => setMobileOpen(false)} />
             </div>
           )}
         </nav>
@@ -245,6 +243,214 @@ function NavLink({ to, active, onClick, children }) {
     >
       {children}
     </Link>
+  );
+}
+
+/**
+ * AccountMenu — authenticated-user pill in the desktop header.
+ *
+ * Layout: credit balance + bullet + username, packed into a single
+ * hairline-bordered pill.  Clicking the pill opens a small dropdown
+ * with three items: Profile / Wagers / Sign Out.  Dropdown closes on
+ * any outside click (handled by a document-level mousedown listener
+ * registered while open) or when one of the items is activated.
+ *
+ * @returns {JSX.Element}
+ */
+function AccountMenu() {
+  const { profile, user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Outside-click handler — only registered while the dropdown is
+  // open so we're not paying for a global mousedown listener on every
+  // page.  The cleanup function removes it the moment `open` flips
+  // back to false.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocMouseDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [open]);
+
+  const credits  = profile?.credits ?? 0;
+  // Username falls back to the local-part of the email (split on '@'
+  // and take the prefix) so a freshly-signed-up user who hasn't set
+  // a username still sees a meaningful label.
+  const username = profile?.username ?? user?.email?.split('@')[0] ?? 'Account';
+
+  const onSignOut = async () => {
+    setOpen(false);
+    await signOut();
+    navigate('/', { replace: true });
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          background: open ? DUST_FAINT : 'transparent',
+          border: `1px solid ${HAIRLINE}`,
+          color: DUST,
+          padding: '8px 14px',
+          fontFamily: 'Space Mono, monospace',
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ color: FLARE, fontVariantNumeric: 'tabular-nums' }}>
+          {credits.toLocaleString()}
+        </span>
+        <span style={{ color: 'rgba(227, 224, 213, 0.50)' }}>•</span>
+        <span>{username}</span>
+        <span aria-hidden="true" style={{ color: 'rgba(227, 224, 213, 0.70)' }}>
+          {open ? '▴' : '▾'}
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            minWidth: 180,
+            background: ABYSS,
+            border: `1px solid ${HAIRLINE}`,
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 10,
+          }}
+        >
+          <MenuLink to="/profile" onClick={() => setOpen(false)}>Profile</MenuLink>
+          <MenuLink to="/wagers"  onClick={() => setOpen(false)}>Wagers</MenuLink>
+          <MenuButton onClick={onSignOut}>Sign Out</MenuButton>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Single dropdown item rendered as a router link.  Mirrors NavLink's
+ * typography but stretches edge-to-edge inside the menu shell.
+ *
+ * @param {object} props
+ * @param {string} props.to
+ * @param {() => void} props.onClick
+ * @param {React.ReactNode} props.children
+ */
+function MenuLink({ to, onClick, children }) {
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      role="menuitem"
+      style={{
+        display: 'block',
+        padding: '10px 14px',
+        color: DUST,
+        textDecoration: 'none',
+        fontFamily: 'Space Mono, monospace',
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        borderBottom: `1px solid ${HAIRLINE}`,
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * Single dropdown item rendered as a plain button (for Sign Out,
+ * which has no destination).  Same typography as MenuLink so the
+ * dropdown reads as a uniform list.
+ *
+ * @param {object} props
+ * @param {() => void} props.onClick
+ * @param {React.ReactNode} props.children
+ */
+function MenuButton({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="menuitem"
+      style={{
+        display: 'block',
+        textAlign: 'left',
+        padding: '10px 14px',
+        color: DUST,
+        background: 'transparent',
+        border: 'none',
+        fontFamily: 'Space Mono, monospace',
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        width: '100%',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Mobile-drawer sign-out button.  Stripped-down variant of
+ * MenuButton — flatter styling so it sits cleanly inside the
+ * drawer's stacked NavLink list rather than as a dropdown item.
+ *
+ * @param {{ onAfter: () => void }} props  Called after signOut resolves
+ *   so the drawer can close itself.
+ */
+function MobileSignOutButton({ onAfter }) {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const onClick = async () => {
+    await signOut();
+    onAfter?.();
+    navigate('/', { replace: true });
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline-block',
+        textAlign: 'left',
+        fontFamily: 'Space Mono, monospace',
+        fontSize: 13,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        color: DUST,
+        background: 'transparent',
+        border: 'none',
+        padding: '8px 12px',
+        cursor: 'pointer',
+      }}
+    >
+      Sign Out
+    </button>
   );
 }
 
