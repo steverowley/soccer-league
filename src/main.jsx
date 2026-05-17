@@ -10,8 +10,9 @@
 //     / `season.ended` bus events to their respective settlement / enactment /
 //     bracket-advance pipelines.  They render null — pure side effects.
 //   - Routes mounted as each page is rebuilt against the new design.
-//     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId (PR 3).
-//     Every other route 404s — intentional during the phased rebuild.
+//     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId
+//     (PR 3), /teams + /teams/:teamId (PR 4).  Every other route 404s
+//     — intentional during the phased rebuild.
 //
 // What used to be here:
 //   - A ~250-line route table mapping every page (Home, Leagues, Teams,
@@ -60,6 +61,8 @@ import { RefereeNarrativeListener } from './features/entities';
 import Home          from './pages/Home';
 import Leagues       from './pages/Leagues';
 import LeagueDetail  from './pages/LeagueDetail';
+import Teams         from './pages/Teams';
+import TeamDetail    from './pages/TeamDetail';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -87,6 +90,15 @@ createRoot(document.getElementById('root')).render(
                   clear "Unknown League" message. */}
               <Route path="leagues"             element={<Leagues />} />
               <Route path="leagues/:leagueId"   element={<LeagueDetail />} />
+
+              {/* /teams + /teams/:teamId (PR 4).
+                  Teams index reads static editorial data (no fetch);
+                  TeamDetail hydrates from static team meta first, then
+                  supplements with the live squad + manager rows from
+                  Supabase.  Unknown teamId renders an "Unknown Club"
+                  surface — same fallback pattern as LeagueDetail. */}
+              <Route path="teams"               element={<Teams />} />
+              <Route path="teams/:teamId"       element={<TeamDetail />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
