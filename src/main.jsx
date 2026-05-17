@@ -13,8 +13,8 @@
 //     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId
 //     (PR 3), /teams + /teams/:teamId (PR 4), /matches +
 //     /matches/:matchId (PR 5), /news + /idols (PR 6), /voting +
-//     /training (PR 7).  Every other route 404s — intentional during
-//     the phased rebuild.
+//     /training (PR 7), /login + /profile (PR 8).  Every other route
+//     404s — intentional during the phased rebuild.
 //
 // What used to be here:
 //   - A ~250-line route table mapping every page (Home, Leagues, Teams,
@@ -71,6 +71,8 @@ import News          from './pages/News';
 import Idols         from './pages/Idols';
 import Voting        from './pages/Voting';
 import Training      from './pages/Training';
+import Login         from './pages/Login';
+import Profile       from './pages/Profile';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -145,6 +147,17 @@ createRoot(document.getElementById('root')).render(
                   + a flash-toast on stat bumps. */}
               <Route path="voting"              element={<Voting />} />
               <Route path="training"            element={<Training />} />
+
+              {/* /login + /profile (PR 8).
+                  Login is a combined sign-in / sign-up surface with a
+                  two-tab toggle; already-authenticated visitors redirect
+                  to /profile via <Navigate />.  Profile shows the user's
+                  account summary (username / email / credit balance /
+                  member-since) plus an allegiance form (favourite club
+                  + favourite player) and a sign-out button.  Anonymous
+                  visitors to /profile redirect to /login. */}
+              <Route path="login"               element={<Login />} />
+              <Route path="profile"             element={<Profile />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
