@@ -71,7 +71,7 @@ const DEFAULT_VOTE = MIN_VOTE;
  */
 export default function Voting() {
   const db = useSupabase();
-  const { user, profile, refetchProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
   const [season,         setSeason]         = useState(null);
   const [options,        setOptions]        = useState([]);
@@ -170,7 +170,7 @@ export default function Voting() {
       if (!result) {
         setVoteError('Vote did not register. Try again.');
       } else {
-        await refetchProfile?.();
+        await refreshProfile?.();
         setRefreshKey((k) => k + 1);
       }
     } catch (err) {
