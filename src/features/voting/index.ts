@@ -143,15 +143,9 @@ export {
 export type { ArrivalContext } from './logic/arrivalNarrative';
 
 // ── UI (React components) ──────────────────────────────────────────────────
-// VotingPage is the route-level component (mounted at /voting). FocusCard
-// is the per-option subcomponent — exported separately so other surfaces
-// (e.g. a season-recap dashboard) can render individual cards in isolation.
-// SeasonEnactmentListener is a side-effect-only component; mount it once
-// near the application root to wire the season.ended → enactment pipeline.
-export { VotingPage } from './ui/VotingPage';
-export type { VotingPageProps } from './ui/VotingPage';
-
-export { FocusCard } from './ui/FocusCard';
-export type { FocusCardProps } from './ui/FocusCard';
-
+// VotingPage + FocusCard were removed in the 2026-05 nuke and will be
+// rebuilt against the new design language.
+// SeasonEnactmentListener stays — it's a side-effect-only component;
+// mount it once near the application root to wire the season.ended →
+// enactment pipeline.
 export { SeasonEnactmentListener } from './ui/SeasonEnactmentListener';

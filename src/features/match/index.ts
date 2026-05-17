@@ -84,8 +84,10 @@ export type {
   SimulatedEvent,
 } from './logic/simulateFullMatch';
 
-// ── Live match viewer (Package 11) ─────────────────────────────────────────
-export { MatchLivePage } from './ui/MatchLivePage';
+// ── Live match — data layer only ───────────────────────────────────────────
+// MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
+// pure elapsed-minute helpers and the Supabase + Realtime client stay
+// because they remain useful for the rebuilt match surfaces.
 export {
   computeElapsedGameMinute,
   filterEventsByElapsedMinute,
@@ -102,9 +104,10 @@ export type {
   MatchEventRow,
 } from './api/matchEvents';
 
-// ── Cup bracket UI ────────────────────────────────────────────────────────
-export { CupBracket } from './ui/CupBracket';
-export type { CupBracketProps, CupTeamLookup, CupMatchScore } from './ui/CupBracket';
+// ── Cup bracket — listener stays, visual bracket UI removed ────────────────
+// CupBracket (visual) was removed in the 2026-05 nuke and will be rebuilt.
+// CupRoundAdvancerListener stays — pure side-effect listener that fills
+// bracket winners + inserts next-round fixtures on `match.completed`.
 export { CupRoundAdvancerListener } from './ui/CupRoundAdvancerListener';
 
 // ── Season lifecycle (Package 13) ──────────────────────────────────────────

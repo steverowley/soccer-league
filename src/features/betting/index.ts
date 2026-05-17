@@ -87,15 +87,10 @@ export {
 export { writeWagerNarrativeForMatch } from './api/narrativeWriter';
 
 // ── UI (React components) ──────────────────────────────────────────────────
-// The widget is the user's primary on-ramp; the history list is the personal
-// counterpart to the public `wager_leaderboard` view. Both are exported via
-// the barrel so feature pages can import them with `@features/betting`
-// instead of poking into the ui/ folder directly.
-export { WagerWidget } from './ui/WagerWidget';
-export type { WagerWidgetMatch, WagerWidgetProps } from './ui/WagerWidget';
-
-export { BetHistory } from './ui/BetHistory';
-export type { BetHistoryProps } from './ui/BetHistory';
+// WagerWidget / BetHistory / WagerVolumeStrip were removed in the 2026-05
+// nuke and will be rebuilt against the new design language.  The
+// WagerSettlementListener stays — it's a side-effect-only listener,
+// not a visual surface.
 
 // ── Side-effect listener ────────────────────────────────────────────────────
 // WagerSettlementListener registers a `match.completed` bus subscription and
@@ -103,11 +98,10 @@ export type { BetHistoryProps } from './ui/BetHistory';
 // it has DB client access for every settlement write.
 export { WagerSettlementListener } from './ui/WagerSettlementListener';
 
-// ── Wager volume widget ─────────────────────────────────────────────────────
-// Live three-way market-pulse bar shown on MatchDetail.  Aggregates every
-// wager on a match into home/draw/away percentages so fans see how the
-// room is leaning.  Surfaces "the market itself is content" from the plan.
-export { WagerVolumeStrip } from './ui/WagerVolumeStrip';
+// ── Wager volume — pure data layer only ────────────────────────────────────
+// WagerVolumeStrip (the visual bar) was removed in the 2026-05 nuke; the
+// aggregation logic + API stay because they remain useful for the rebuilt
+// MatchDetail and any future market-pulse surface.
 export {
   summariseMatchWagers,
   MIN_WAGERS_FOR_SIGNAL,
