@@ -74,6 +74,17 @@ const HERO_BUILD        = 'v 0.7.0';
 // ── Standings constants ──────────────────────────────────────────────────────
 
 /**
+ * Number of rows at the TOP of the table that get the qualification-cue
+ * dust pipe on their position column.  Mirrors the ISL competitions
+ * structure: top 3 per league qualify for the Celestial Cup, so the top
+ * three positions earn a positive qualification marker.
+ *
+ * Generic so adding a 10-team league later still highlights the right
+ * number of qualifying clubs without code edits.
+ */
+const STANDINGS_QUALIFICATION_COUNT = 3;
+
+/**
  * Number of rows at the BOTTOM of the table that get the relegation-red
  * treatment on their position column.  Matches the Figma example which
  * colours rows 7 and 8 (in an 8-team league) red — the bottom two are
@@ -86,26 +97,48 @@ const STANDINGS_RELEGATION_COUNT = 2;
 
 /**
  * Render the leading position column for the Home standings table.
- * Two-glyph visual: a faint dust pipe followed by the zero-padded numeral.
- * Bottom STANDINGS_RELEGATION_COUNT positions get a Solar Flare red
- * numeral to signal relegation pressure.  Pipe stays dust regardless so
- * the column rhythm stays uniform.
+ *
+ * Three-tier visual hierarchy keyed to where the row sits in the table
+ * (matches Frame 39 of the design language):
+ *
+ *   Top STANDINGS_QUALIFICATION_COUNT (3) rows  → dust  pipe + dust  numeral
+ *                                                  (Celestial Cup qualification cue)
+ *   Middle rows                                 → no pipe + dust  numeral
+ *                                                  (neutral — mid-table)
+ *   Bottom STANDINGS_RELEGATION_COUNT (2) rows  → flare pipe + flare numeral
+ *                                                  (relegation pressure cue)
+ *
+ * The pipe + numeral are wrapped in an inline-flex span with a fixed
+ * leading gap so rows always align horizontally even when the pipe is
+ * absent from middle rows — the span reserves its slot via a
+ * transparent placeholder.
  *
  * @param {object} row         Row with a `position` field stamped on by
  *                             the caller (computeStandings + map decorator).
  * @param {number} totalRows   Total row count in the table; used to pick
- *                             which positions get relegation colouring.
+ *                             which positions get qualification vs. relegation
+ *                             treatment.
  * @returns {JSX.Element}
  */
 function renderPositionCell(row, totalRows) {
-  const pos        = row.position ?? 0;
-  // Bottom N positions trigger relegation red.  Guard against tables
-  // smaller than the relegation count (a 1-team table shouldn't have any
-  // relegated rows).
-  const isRelegation =
-    totalRows > STANDINGS_RELEGATION_COUNT &&
-    pos > totalRows - STANDINGS_RELEGATION_COUNT;
-  const colour = isRelegation ? 'var(--color-red)' : 'var(--color-dust)';
+  const pos = row.position ?? 0;
+
+  // Tier detection.  Guard against pathological table sizes (a 4-team
+  // table with 3 qualification + 2 relegation slots would overlap) by
+  // requiring the table to be larger than the combined cue rows; if
+  // it isn't, fall back to neutral styling for every row.
+  const tableHasRoom =
+    totalRows > STANDINGS_QUALIFICATION_COUNT + STANDINGS_RELEGATION_COUNT;
+  const isQualification = tableHasRoom && pos <= STANDINGS_QUALIFICATION_COUNT;
+  const isRelegation    = tableHasRoom && pos > totalRows - STANDINGS_RELEGATION_COUNT;
+
+  // Pipe + numeral colour map.  Quaalification gets dust, relegation gets
+  // flare red, middle stays neutral with no pipe at all (the placeholder
+  // preserves alignment).
+  const numeralColour = isRelegation ? 'var(--color-flare)' : 'var(--color-dust)';
+  const pipeColour    = isRelegation ? 'var(--color-flare)' : 'var(--color-dust)';
+  const showPipe      = isQualification || isRelegation;
+
   return (
     <span style={{
       display:       'inline-flex',
@@ -113,9 +146,17 @@ function renderPositionCell(row, totalRows) {
       gap:           'var(--space-2)',
       fontFamily:    'var(--font-mono)',
       fontWeight:    700,
-      color:         colour,
+      color:         numeralColour,
     }}>
-      <span aria-hidden="true" style={{ opacity: 0.5, color: 'var(--color-dust)' }}>|</span>
+      {/* Pipe slot — always rendered so the numeral column stays
+          vertically aligned across all three tiers.  Middle rows get
+          a transparent placeholder rather than no element. */}
+      <span
+        aria-hidden="true"
+        style={{ color: pipeColour, opacity: showPipe ? 1 : 0 }}
+      >
+        |
+      </span>
       <span>{String(pos).padStart(2, '0')}</span>
     </span>
   );
@@ -419,14 +460,18 @@ function HomeHero({ activeMatches }) {
             stare back.
           </p>
 
-          {/* Primary + secondary CTAs */}
+          {/* Primary + active hero CTAs */}
           <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            {/* Hero CTAs — both dark-outline primary per Frame 42.  Equal
-                weight; the design pairs two primaries rather than one
-                primary + secondary because each represents a different
-                entry path into the publication. */}
+            {/* Hero CTAs — pair of unequal weight per Frame 42.
+                "Browse Leagues" sits left as the standard dark-outline
+                primary (the publication-style entry path).  "Watch Live
+                Match" sits right as the orange active CTA — the
+                attention-grabbing accent that points fans at the
+                broadcast feed.  Routes to /matches/live (the live-match
+                index page); a follow-up will deep-link to the single
+                in-progress fixture when one is featured. */}
             <Link to="/leagues" className="btn btn-primary">Browse Leagues</Link>
-            <Link to="/login"  className="btn btn-primary">Create Account</Link>
+            <Link to="/matches" className="btn btn-active">Watch Live Match</Link>
           </div>
 
           {/* Stats row — four small-caps cells separated by dust hairlines.
@@ -516,100 +561,239 @@ function LiveMatchPanel({ match }) {
   // Pull the bits the four-row layout needs.  Defaults are conservative so a
   // partially-loaded match row still renders without crashes — better a
   // half-filled card than a broken page on a slow Supabase response.
-  const homeName    = match.home_team?.name      ?? 'Home';
-  const awayName    = match.away_team?.name      ?? 'Away';
-  const homeLocation = match.home_team?.location ?? '';
-  const awayLocation = match.away_team?.location ?? '';
-  const homeScore   = match.home_score ?? 0;
-  const awayScore   = match.away_score ?? 0;
-  const competition = match.competitions?.name ?? 'League Match';
-  const round       = match.round ? `Matchday ${match.round}` : '';
+  const homeName     = match.home_team?.name      ?? 'Home';
+  const awayName     = match.away_team?.name      ?? 'Away';
+  const homeLocation = match.home_team?.location  ?? '';
+  const awayLocation = match.away_team?.location  ?? '';
+  const homeColor    = match.home_team?.color     ?? null;
+  const awayColor    = match.away_team?.color     ?? null;
+  const homeScore    = match.home_score ?? 0;
+  const awayScore    = match.away_score ?? 0;
+  // Competition kicker: e.g. "ROCKY INNER" + "MATCHDAY 14" per the
+  // Frame-44 spec.  short_name keeps the kicker line tight when the
+  // full league name is verbose; fall back to .name if short isn't set.
+  const competition  = match.competitions?.short_name ?? match.competitions?.name ?? 'League';
+  const round        = match.round ? `Matchday ${match.round}` : '';
   // Live-clock minute is computed by the live page proper; we can derive a
   // rough display from scheduled_at when available, or fall back to a
   // single "LIVE" badge without minute when the row doesn't carry timing.
-  const matchMinute = computeRoughMatchMinute(match);
+  const matchMinute  = computeRoughMatchMinute(match);
 
   return (
     <div className="card" style={{ padding: 0 }}>
 
-      {/* ── Row 1: meta + live badge with minute ──────────────────────────── */}
-      {/* Hairline-separated header strip matching the Figma's "ROCKY INNER •
-          MATCHDAY 14" left + "● LIVE • 73'" right pattern.  Padding inset
-          mirrors --card-padding so the divider runs to the card's edge
-          for the editorial hairline effect. */}
+      {/* ── Row 1: meta kicker + bordered LIVE chip ────────────────────────
+          Hairline-separated header strip.  Left: small-caps competition +
+          matchday string.  Right: bordered LIVE chip (red dot + "LIVE • 73'"
+          inside a 1px dust border) — matches Frame 44 which treats the
+          live badge as a small framed pill rather than naked red text. */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: 'var(--space-4) var(--card-padding)',
         borderBottom: '1px solid var(--color-hairline)',
         fontSize: 'var(--font-size-micro)', letterSpacing: 'var(--letter-spacing-wider)',
-        textTransform: 'uppercase', opacity: 0.85,
+        textTransform: 'uppercase',
       }}>
-        <span style={{ opacity: 0.7 }}>
+        <span style={{ opacity: 0.85 }}>
           {competition}{round && <> <span style={{ opacity: 0.5 }}>•</span> {round}</>}
         </span>
-        <span style={{ color: 'var(--color-flare)' }}>
-          ● Live{matchMinute !== null && <> <span style={{ opacity: 0.7 }}>•</span> {matchMinute}&apos;</>}
+        {/* Bordered LIVE chip — 1px dust border, inline-flex so the dot
+            and label baseline together.  The dot uses Solar Flare red;
+            the label stays dust so the chip reads as a frame around a
+            live indicator rather than a solid red callout. */}
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 'var(--space-2)',
+          border: '1px solid var(--color-hairline)',
+          padding: '4px var(--space-3)',
+          color: 'var(--color-dust)',
+        }}>
+          <span
+            aria-hidden="true"
+            style={{
+              width: '8px', height: '8px', borderRadius: '50%',
+              background: 'var(--color-flare)',
+              boxShadow: '0 0 6px var(--color-flare-glow)',
+              flexShrink: 0,
+            }}
+          />
+          <span>Live{matchMinute !== null && <> <span style={{ opacity: 0.6 }}>•</span> {matchMinute}&apos;</>}</span>
         </span>
       </div>
 
-      {/* ── Row 2: score row ────────────────────────────────────────────────
-          Three-column grid: home block (name + location), score, away block.
-          Score is the centrepiece — 48 px mono.  Location subtext mirrors
-          the Figma's "HOME • EARTH" / "AWAY • MARS" cue. */}
+      {/* ── Row 2: score row with team crests ──────────────────────────────
+          Three-column grid: home block (crest + name + location), score,
+          away block.  Each team block stacks crest → name → location
+          centred.  Score is the centrepiece — 48 px mono.  Until real
+          crest images ship, <TeamCrest /> renders a brand-coloured shield
+          placeholder so the layout reads correctly. */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         gap: 'var(--space-6)',
-        padding: 'var(--space-6) var(--card-padding)',
+        padding: 'var(--space-8) var(--card-padding)',
         borderBottom: '1px solid var(--color-hairline)',
       }}>
-        <div style={{ textAlign: 'left' }}>
-          <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase' }}>{homeName}</h3>
-          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wider)', textTransform: 'uppercase', marginTop: 'var(--space-1)' }}>
-            Home{homeLocation && <> <span style={{ opacity: 0.5 }}>•</span> {homeLocation}</>}
-          </div>
-        </div>
+        <TeamScoreBlock side="Home" name={homeName} location={homeLocation} color={homeColor} />
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: '48px', fontWeight: 700,
           textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1,
         }}>
-          {homeScore} · {awayScore}
+          {homeScore} <span style={{ opacity: 0.5 }}>·</span> {awayScore}
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase' }}>{awayName}</h3>
-          <div style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5, letterSpacing: 'var(--letter-spacing-wider)', textTransform: 'uppercase', marginTop: 'var(--space-1)' }}>
-            Away{awayLocation && <> <span style={{ opacity: 0.5 }}>•</span> {awayLocation}</>}
-          </div>
-        </div>
+        <TeamScoreBlock side="Away" name={awayName} location={awayLocation} color={awayColor} />
       </div>
 
-      {/* ── Row 3: commentary placeholder ────────────────────────────────────
-          The Figma shows two recent commentary lines (speaker name + role
-          + minute, then the line itself).  Wiring real commentary requires
-          a match_events query keyed by match_id — deferred to a follow-up.
-          For now we render a single atmospheric placeholder so the layout
-          mass matches the Figma without misleading fans with fake quotes. */}
+      {/* ── Row 3: commentary stack ─────────────────────────────────────────
+          Two stacked commentary blocks.  Each block: speaker name + bullet
+          + role (left), minute (right), italic quote on the following line.
+          Real commentary data isn't wired yet — these placeholders match
+          the Figma's mass + voice so the layout reads as a broadcast feed.
+          When match_events comes online (issue isl-823), swap the static
+          strings for the latest two pundit_takes events keyed by match.id. */}
       <div style={{
-        padding: 'var(--space-4) var(--card-padding)',
+        padding: 'var(--space-5) var(--card-padding)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-5)',
         borderBottom: '1px solid var(--color-hairline)',
-        fontSize: 'var(--font-size-small)',
-        fontStyle: 'italic',
-        opacity: 0.6,
-        minHeight: '80px',
       }}>
-        Awaiting transmissions from the broadcast booth…
+        <CommentaryBlock
+          speaker="Awaiting Broadcast"
+          role="Booth Feed"
+          minute={matchMinute}
+          quote="Transmissions resume momentarily…"
+        />
       </div>
 
       {/* ── Row 4: CTA row ─────────────────────────────────────────────────
-          Primary dark-outline button per Frame 44.  Sits in its own row
-          with consistent card-padding inset so the CTA aligns with the
-          card's text columns above. */}
+          Dust-filled secondary button per Frame 44 — pairs against the
+          dark-outline header CTA on the right so the live panel feels
+          like the page's invitation back into the action. */}
       <div style={{ padding: 'var(--space-4) var(--card-padding)' }}>
-        <Link to={`/matches/${match.id}/live`} className="btn btn-primary">
+        <Link to={`/matches/${match.id}/live`} className="btn btn-secondary">
           Watch Live Match
         </Link>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Single-team block inside the live match panel's score row.
+ *
+ * Stacks a brand-coloured shield placeholder, the team name in display
+ * weight, and a small "HOME • LOCATION" cue.  Centred so the three-column
+ * score grid reads visually balanced regardless of name length.
+ *
+ * @param {object} props
+ * @param {'Home'|'Away'} props.side    Side label (rendered before the location).
+ * @param {string} props.name           Team name (uppercased by CSS).
+ * @param {string} props.location       Location for the trailing kicker (Earth, Mars, …).
+ * @param {string|null} props.color     Brand-colour hex used to tint the
+ *                                       crest placeholder until real crest
+ *                                       artwork ships in /public/img/clubs/.
+ */
+function TeamScoreBlock({ side, name, location, color }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
+      <TeamCrest color={color} />
+      <h3 style={{ fontSize: 'var(--font-size-h3)', textTransform: 'uppercase', textAlign: 'center', lineHeight: 'var(--line-height-tight)' }}>
+        {name}
+      </h3>
+      <div style={{
+        fontSize: 'var(--font-size-micro)',
+        opacity: 0.6,
+        letterSpacing: 'var(--letter-spacing-wider)',
+        textTransform: 'uppercase',
+      }}>
+        {side}{location && <> <span style={{ opacity: 0.5 }}>•</span> {location}</>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Brand-coloured shield placeholder for a club crest.
+ *
+ * Renders a 56 px shield shape with the team's brand colour as a tinted
+ * fill (33 alpha → ~20% opacity) and a hairline border so the silhouette
+ * reads even on the Abyss card background.  Replaces the previous "no
+ * crest at all" gap until real crest PNGs ship into /public/img/clubs/.
+ *
+ * @param {object} props
+ * @param {string|null} props.color  Team brand-colour hex.  Falls back
+ *                                    to dust when unset so the placeholder
+ *                                    is always visible.
+ */
+function TeamCrest({ color }) {
+  const tint = color ? `${color}33` : 'rgba(227,224,213,0.10)';
+  const edge = color ? `${color}AA` : 'rgba(227,224,213,0.30)';
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: '56px',
+        height: '64px',
+        backgroundColor: tint,
+        border: `1px solid ${edge}`,
+        // Shield silhouette via clip-path.  Picked over an SVG so the
+        // colour is driven entirely by the inline style block (one render
+        // path, no asset swap when team.color changes).
+        clipPath: 'polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%)',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+/**
+ * Single commentary block inside the live match panel.
+ *
+ * Top row: speaker name + bullet + role (left), minute mark (right).
+ * Bottom row: italic quote prose.  Match the Figma's broadcast-feed
+ * pattern where each speaker is identified with a small mono caption
+ * and the line itself reads as quoted dialogue.
+ *
+ * @param {object} props
+ * @param {string} props.speaker             Speaker display name.
+ * @param {string} props.role                Role kicker (e.g. "Colour Analyst").
+ * @param {number|null} props.minute         Match minute the line was spoken; null hides the right cell.
+ * @param {string} props.quote               The line itself.
+ */
+function CommentaryBlock({ speaker, role, minute, quote }) {
+  return (
+    <div>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: 'var(--space-3)',
+        fontSize: 'var(--font-size-micro)',
+        letterSpacing: 'var(--letter-spacing-wider)',
+        textTransform: 'uppercase',
+        marginBottom: 'var(--space-2)',
+      }}>
+        <span>
+          <span style={{ color: 'var(--color-dust)' }}>{speaker}</span>
+          <span style={{ opacity: 0.4, marginInline: 'var(--space-2)' }}>•</span>
+          <span style={{ opacity: 0.55 }}>{role}</span>
+        </span>
+        {minute !== null && minute !== undefined && (
+          <span style={{ opacity: 0.55 }}>{minute}&apos;</span>
+        )}
+      </div>
+      <p style={{
+        fontSize: 'var(--font-size-small)',
+        lineHeight: 'var(--line-height-body)',
+        fontStyle: 'italic',
+        opacity: 0.85,
+        margin: 0,
+      }}>
+        &ldquo;{quote}&rdquo;
+      </p>
     </div>
   );
 }
@@ -644,14 +828,26 @@ function computeRoughMatchMinute(match) {
  */
 function UpcomingPanel({ matches }) {
   return (
-    <div className="card is-raised" style={{ display: 'flex', flexDirection: 'column' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--space-4)' }}>
-        <span style={{ fontSize: 'var(--font-size-micro)', textTransform: 'uppercase', letterSpacing: 'var(--letter-spacing-wider)', opacity: 0.7 }}>
-          Upcoming Fixtures
-        </span>
-        <span style={{ fontSize: 'var(--font-size-micro)', opacity: 0.5 }}>
-          Next 48h
-        </span>
+    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* ── Header row ────────────────────────────────────────────────────
+          "UPCOMING FIXTURES" left + "NEXT 48H" right, both mono small-caps.
+          Hairline divider underneath visually separates the header from
+          the list, matching the Figma sidebar pattern. */}
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          paddingBottom: 'var(--space-3)',
+          borderBottom: '1px solid var(--color-hairline)',
+          marginBottom: 'var(--space-4)',
+          fontSize: 'var(--font-size-micro)',
+          letterSpacing: 'var(--letter-spacing-wider)',
+          textTransform: 'uppercase',
+        }}
+      >
+        <span>Upcoming Fixtures</span>
+        <span style={{ opacity: 0.6 }}>Next 48h</span>
       </header>
 
       {matches.length === 0 ? (
@@ -659,27 +855,106 @@ function UpcomingPanel({ matches }) {
           No matches scheduled in the next 48 hours.
         </p>
       ) : (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {matches.map((m) => (
-            <li key={m.id}>
-              <Link to={`/matches/${m.id}`} style={{ display: 'block', color: 'inherit', borderBottom: '1px solid var(--color-hairline)', paddingBottom: 'var(--space-3)' }}>
-                <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
-                  {m.home_team?.name ?? '?'} <span style={{ opacity: 0.4 }}>v</span> {m.away_team?.name ?? '?'}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-micro)', opacity: 0.6, letterSpacing: 'var(--letter-spacing-wide)', textTransform: 'uppercase' }}>
-                  <span>{m.competitions?.name ?? 'League'}</span>
-                  <span>{m.scheduled_at ? new Date(m.scheduled_at).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'TBD'}</span>
-                </div>
-              </Link>
-            </li>
+            <FixtureRow key={m.id} match={m} />
           ))}
         </ul>
       )}
 
-      <Link to="/matches" className="btn btn-tertiary" style={{ marginTop: 'var(--space-4)' }}>
+      {/* Sidebar CTA — dust-filled secondary per Frame 44.  Pinned to
+          the card bottom via marginTop:auto so the button always aligns
+          with the live panel's bottom CTA in the parent two-column grid,
+          regardless of how many upcoming fixtures the list contains. */}
+      <Link to="/matches" className="btn btn-secondary" style={{ marginTop: 'auto' }}>
         Browse Matches
       </Link>
     </div>
+  );
+}
+
+/**
+ * Single fixture row inside the Upcoming Fixtures sidebar.
+ *
+ * Three-tier vertical layout matching Frame 44:
+ *   1. Bold team names with a mid-opacity "V" separator (e.g.
+ *      "Jovian Storm V Ringed Saturn").
+ *   2. League short-name in small-caps mono.
+ *   3. Day + bullet + HH:MM time in small-caps mono.
+ *
+ * Hairline divider hangs beneath the row so the list reads as a stack
+ * of broadsheet listings rather than a button group.  Whole row links
+ * to /matches/:id for tap-anywhere navigation.
+ *
+ * @param {object} props
+ * @param {object} props.match  Match row with home_team, away_team,
+ *                              competitions, and scheduled_at fields.
+ */
+function FixtureRow({ match }) {
+  // Date / time split.  The Figma puts the weekday and the time on the
+  // SAME line, separated by a bullet, both in small-caps mono.  We
+  // format them in one toLocaleString call rather than two so the
+  // values stay consistent (e.g. matching locale-aware abbreviations).
+  const day  = match.scheduled_at
+    ? new Date(match.scheduled_at).toLocaleString(undefined, { weekday: 'short' })
+    : null;
+  const time = match.scheduled_at
+    ? new Date(match.scheduled_at).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : null;
+  // Prefer the short_name kicker (e.g. "GAS GIANT LEAGUE") so the chip
+  // line stays tight; fall back to the full name when short_name is
+  // missing rather than rendering "League".
+  const leagueLabel = match.competitions?.short_name ?? match.competitions?.name ?? 'League';
+
+  return (
+    <li>
+      <Link
+        to={`/matches/${match.id}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-2)',
+          color: 'inherit',
+          borderBottom: '1px solid var(--color-hairline)',
+          paddingBottom: 'var(--space-4)',
+        }}
+      >
+        {/* Tier 1 — team names with V separator. */}
+        <div style={{ fontSize: 'var(--font-size-small)' }}>
+          <span style={{ fontWeight: 700 }}>{match.home_team?.name ?? '?'}</span>
+          <span style={{ opacity: 0.4, marginInline: 'var(--space-2)' }}>V</span>
+          <span style={{ fontWeight: 700 }}>{match.away_team?.name ?? '?'}</span>
+        </div>
+
+        {/* Tier 2 — league small-caps chip. */}
+        <div style={{
+          fontSize: 'var(--font-size-micro)',
+          letterSpacing: 'var(--letter-spacing-wider)',
+          textTransform: 'uppercase',
+          opacity: 0.65,
+        }}>
+          {leagueLabel}
+        </div>
+
+        {/* Tier 3 — day + bullet + time.  Hidden when neither is known
+            so a TBD fixture doesn't render a bare bullet. */}
+        {(day || time) && (
+          <div style={{
+            fontSize: 'var(--font-size-micro)',
+            letterSpacing: 'var(--letter-spacing-wider)',
+            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 'var(--space-3)',
+            opacity: 0.85,
+          }}>
+            {day && <span>{day}</span>}
+            {day && time && <span style={{ opacity: 0.4 }}>•</span>}
+            {time && <span>{time}</span>}
+          </div>
+        )}
+      </Link>
+    </li>
   );
 }
 
