@@ -22,7 +22,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getMatch } from '../lib/supabase';
 
@@ -572,34 +572,6 @@ const statsTh = (width) => ({
 function formatRating(rating) {
   if (rating === null || rating === undefined) return '—';
   return Number(rating).toFixed(1);
-}
-
-/**
- * Back-to-listing link — mirrors LeagueDetail / TeamDetail.  Will be
- * extracted to Layout.jsx the next time a fourth detail page needs it.
- *
- * @param {{ to: string, children: React.ReactNode }} props
- */
-function BackLink({ to, children }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        color: DUST_70,
-        textDecoration: 'none',
-      }}
-    >
-      <span aria-hidden="true">◄</span>
-      <span>{children}</span>
-    </Link>
-  );
 }
 
 /**

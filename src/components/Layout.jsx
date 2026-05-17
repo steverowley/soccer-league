@@ -251,6 +251,37 @@ export function FlareCTA({ to, children }) {
 }
 
 /**
+ * Tiny back-to-listing link used at the top of every detail page above
+ * its SectionHeader.  Mono small-caps cue with a ◄ glyph so the
+ * direction is obvious at a glance.  Extracted in PR 6 once the third
+ * detail surface (MatchDetail) duplicated it from LeagueDetail and
+ * TeamDetail.
+ *
+ * @param {{ to: string, children: React.ReactNode }} props
+ */
+export function BackLink({ to, children }) {
+  return (
+    <Link
+      to={to}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.14em',
+        color: COLORS.dust70,
+        textDecoration: 'none',
+      }}
+    >
+      <span aria-hidden="true">◄</span>
+      <span>{children}</span>
+    </Link>
+  );
+}
+
+/**
  * Dust-filled CTA — dust fill, abyss text.  Used inside cards where the
  * surrounding panel is already Abyss and a third dark-outline button
  * would lose contrast.

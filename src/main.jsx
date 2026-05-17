@@ -12,8 +12,8 @@
 //   - Routes mounted as each page is rebuilt against the new design.
 //     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId
 //     (PR 3), /teams + /teams/:teamId (PR 4), /matches +
-//     /matches/:matchId (PR 5).  Every other route 404s — intentional
-//     during the phased rebuild.
+//     /matches/:matchId (PR 5), /news + /idols (PR 6).  Every other
+//     route 404s — intentional during the phased rebuild.
 //
 // What used to be here:
 //   - A ~250-line route table mapping every page (Home, Leagues, Teams,
@@ -66,6 +66,8 @@ import Teams         from './pages/Teams';
 import TeamDetail    from './pages/TeamDetail';
 import Matches       from './pages/Matches';
 import MatchDetail   from './pages/MatchDetail';
+import News          from './pages/News';
+import Idols         from './pages/Idols';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -114,6 +116,18 @@ createRoot(document.getElementById('root')).render(
                   0013 lands (tracked under isl-du4). */}
               <Route path="matches"             element={<Matches />} />
               <Route path="matches/:matchId"    element={<MatchDetail />} />
+
+              {/* /news + /idols (PR 6).
+                  News reads the cross-feature narratives feed (kinds:
+                  architect_whisper / cosmic_disturbance / pundit_takes
+                  / journalist_report / bookie_update); filter chips
+                  drive a re-fetch with the kind narrowed.  Idols pulls
+                  the global player_idol_score leaderboard + the
+                  player_idol_movers hot-strip in parallel; score
+                  formula is deliberately hidden (the row only shows
+                  the score number, no formula breakdown). */}
+              <Route path="news"                element={<News />} />
+              <Route path="idols"               element={<Idols />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
