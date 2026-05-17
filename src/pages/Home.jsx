@@ -8,15 +8,18 @@
 //   III. The Standings   — featured league table with 3-tier position pipe
 //                          and bordered W/D/L form tiles
 //
-// PALETTE (strict 3-colour app-wide):
+// PALETTE (strict 3-colour app-wide; tokens live in components/Layout.jsx):
 //   DUST   #E3E0D5  — text on dark, default borders, button-secondary fill
 //   ABYSS  #111111  — page background, button-primary fill
 //   FLARE  #FF4F5E  — auth CTA + every "attention" highlight in the design
 //
-// NO design-token file, NO shared/ui primitives — every style is inline
-// in this file.  When a SECOND page legitimately reuses one of these
-// patterns (Hero shell, SectionHeader, form pip), extract it then.
-// Premature abstraction is what got the previous redesign passes wrong.
+// PR 3 (Leagues + LeagueDetail) became the second consumer of SectionHeader,
+// StandingsTable, Container, Footer, and the CTA buttons.  Those primitives
+// were extracted into components/Layout.jsx + components/StandingsTable.jsx
+// at that point — matches the "extract on 2nd use" rule.  Everything that
+// is still local to Home (Hero, LiveMatchPanel, UpcomingPanel, FixtureRow,
+// CommentaryBlock, TeamScoreBlock, TeamCrest) has exactly one consumer
+// today and stays inline.
 //
 // DATA SOURCES
 //   - getLiveMatches(db)         → first live match featured in the panel
@@ -29,22 +32,32 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
+import {
+  COLORS,
+  Container,
+  SectionHeader,
+  Footer,
+  PrimaryButton,
+  FlareCTA,
+  DustButton,
+} from '../components/Layout';
+import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
 import { LEAGUES, buildStandingsRows } from '../data/leagueData';
 import { computeStandings } from '../lib/matchResultsService';
 
-// ── Palette tokens (hard-coded; matches Header.jsx) ──────────────────────────
-// Tokens are duplicated across page files BY DESIGN — see the file header.
-// Extracting to a shared file requires a third consumer.
-const DUST       = '#E3E0D5';
-const ABYSS      = '#111111';
-const FLARE      = '#FF4F5E';
-const HAIRLINE   = 'rgba(227, 224, 213, 0.18)';
-const DUST_50    = 'rgba(227, 224, 213, 0.50)';
-const DUST_70    = 'rgba(227, 224, 213, 0.70)';
-const DUST_FAINT = 'rgba(227, 224, 213, 0.12)';
+// ── Palette aliases ─────────────────────────────────────────────────────────
+// The hex constants live in components/Layout.jsx as the frozen COLORS
+// object.  We alias them here so the inline styles in this file stay
+// terse — every `DUST` / `ABYSS` / etc. in the JSX continues to read the
+// same way it did before extraction.
+const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+const HAIRLINE   = COLORS.hairline;
+const DUST_50    = COLORS.dust50;
+const DUST_70    = COLORS.dust70;
+const DUST_FAINT = COLORS.dustFaint;
 
 // ── Hero kicker constants ────────────────────────────────────────────────────
 // Hard-coded matchday/season strings until they're sourced from the
@@ -60,23 +73,6 @@ const HERO_BODY     =
   "Thirty-two clubs across four orbital leagues. Five-hundred-twelve souls. " +
   "One Cosmic Architect rewriting the rules between heartbeats. Place your stake, " +
   "vote on your club's future, and watch the void stare back.";
-
-// ── Standings tier counts ────────────────────────────────────────────────────
-// QUALIFICATION_COUNT — top N rows get the dust qualification pipe
-// (Celestial Cup cue).  Matches the ISL competition structure: top 3
-// per league qualify.
-const QUALIFICATION_COUNT = 3;
-// RELEGATION_COUNT — bottom N rows get the flare relegation pipe + flare
-// numeral (and any "loses" count crossing this threshold goes flare too).
-const RELEGATION_COUNT    = 2;
-
-// ── Form pip rendering ───────────────────────────────────────────────────────
-// FORM_PIP_COUNT — number of recent-result tiles drawn per row.
-// 5 mirrors the array cap returned by computeStandings.
-const FORM_PIP_COUNT = 5;
-// FORM_PIP_SIZE — edge length in px.  24 px lines up with the standings
-// row height so the tiles read inset within the row rather than floating.
-const FORM_PIP_SIZE  = 24;
 
 /**
  * Home page — the publication landing surface.
@@ -177,23 +173,7 @@ export default function Home() {
         </Container>
       </section>
 
-      {/* Footer hairline.  Minimal until a second page legitimately
-          needs a shared Footer component. */}
-      <footer style={{
-        borderTop: `1px solid ${HAIRLINE}`,
-        padding: '32px',
-        textAlign: 'center',
-        fontSize: 11,
-        letterSpacing: '0.18em',
-        textTransform: 'uppercase',
-        color: DUST_50,
-      }}>
-        <span>Intergalactic Soccer League</span>
-        <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
-        <span>Charted from Earth Orbit</span>
-        <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
-        <span>v 0.7.0</span>
-      </footer>
+      <Footer />
 
       {/* Responsive grid: live section collapses to 1 column < 900 px. */}
       <style>{`
@@ -202,23 +182,6 @@ export default function Home() {
           .isl-hero-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-    </div>
-  );
-}
-
-// ── Layout primitives ────────────────────────────────────────────────────────
-
-/**
- * Fixed-max-width content container.  Centres children at 1248 px and
- * leaves the parent <section> to own outer padding.  Internal to this
- * file — extract when a second page needs it.
- *
- * @param {{ children: React.ReactNode }} props
- */
-function Container({ children }) {
-  return (
-    <div style={{ maxWidth: 1248, margin: '0 auto', width: '100%' }}>
-      {children}
     </div>
   );
 }
@@ -382,226 +345,6 @@ function HeroStat({ label, value }) {
         {label}
       </div>
     </div>
-  );
-}
-
-// ── Buttons ──────────────────────────────────────────────────────────────────
-
-/**
- * Primary CTA — dark Abyss fill, 1 px dust border, dust text.
- * App-wide standard "secondary entry path" button.
- *
- * @param {object} props
- * @param {string} props.to
- * @param {React.ReactNode} props.children
- */
-function PrimaryButton({ to, children }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
-        color: DUST,
-        background: ABYSS,
-        border: `1px solid ${DUST}`,
-        padding: '14px 28px',
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-/**
- * Solar Flare CTA — flare fill, dust text, flare border.
- * THE attention button across the entire app.
- *
- * @param {object} props
- * @param {string} props.to
- * @param {React.ReactNode} props.children
- */
-function FlareCTA({ to, children }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
-        color: DUST,
-        background: FLARE,
-        border: `1px solid ${FLARE}`,
-        padding: '14px 28px',
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-/**
- * Dust-filled secondary CTA — dust fill, abyss text.  Used inside cards
- * (live panel + upcoming sidebar) where the surrounding panel is already
- * Abyss and a third dark-outline button would lose contrast.
- *
- * @param {object} props
- * @param {string} props.to
- * @param {React.ReactNode} props.children
- */
-function DustButton({ to, children }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
-        color: ABYSS,
-        background: DUST,
-        border: `1px solid ${DUST}`,
-        padding: '14px 28px',
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-        alignSelf: 'flex-start',
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-// ── SectionHeader ────────────────────────────────────────────────────────────
-
-/**
- * Editorial section header.
- *
- * Structure (top to bottom):
- *   1. PAGE_KICKER       — tiny mono tag (e.g. "TABLES")
- *   2. KICKER ROW        — "II • THE PRESENT" small-caps
- *   3. TITLE             — big display heading
- *   4. SUBTITLE + ACTION — subtitle prose + right-aligned ► action
- *   5. HAIRLINE          — divider that anchors the header
- *
- * @param {object} props
- * @param {string} [props.pageKicker]   Optional tiny page-level kicker
- *                                       above the kicker row.
- * @param {string} props.kicker         Roman numeral / index (e.g. "II")
- * @param {string} [props.label]        Two-part kicker label after the bullet
- * @param {string} props.title          Display heading
- * @param {string} [props.subtitle]     Subtitle prose under the title
- * @param {string} [props.actionLabel]  Optional ► action label
- * @param {string} [props.actionTo]     Required when actionLabel is set
- */
-function SectionHeader({
-  pageKicker,
-  kicker,
-  label,
-  title,
-  subtitle,
-  actionLabel,
-  actionTo,
-}) {
-  return (
-    <header>
-      {pageKicker && (
-        <div style={{
-          fontSize: 13,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.18em',
-          color: DUST,
-          marginBottom: 32,
-        }}>
-          {pageKicker}
-        </div>
-      )}
-
-      <div style={{
-        display: 'flex',
-        alignItems: 'baseline',
-        gap: 12,
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.18em',
-        color: DUST_70,
-      }}>
-        <span>{kicker}</span>
-        <span style={{ color: DUST_50 }}>•</span>
-        {label && <span>{label}</span>}
-      </div>
-
-      <h2 style={{
-        fontSize: 40,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        lineHeight: 1.1,
-        margin: '16px 0 0',
-        letterSpacing: '0.02em',
-      }}>
-        {title}
-      </h2>
-
-      {(subtitle || actionLabel) && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 24,
-          marginTop: 16,
-        }}>
-          {subtitle ? (
-            <p style={{
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: DUST_70,
-              margin: 0,
-              maxWidth: '52ch',
-            }}>
-              {subtitle}
-            </p>
-          ) : <span />}
-          {actionLabel && actionTo && (
-            <Link
-              to={actionTo}
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.14em',
-                color: DUST,
-                textDecoration: 'none',
-                flexShrink: 0,
-              }}
-            >
-              {actionLabel} ►
-            </Link>
-          )}
-        </div>
-      )}
-
-      <hr style={{
-        border: 0,
-        height: 1,
-        background: HAIRLINE,
-        margin: '24px 0 0',
-      }} />
-    </header>
   );
 }
 
@@ -986,193 +729,6 @@ function FixtureRow({ match }) {
   );
 }
 
-// ── Standings ────────────────────────────────────────────────────────────────
-
-/**
- * League standings table.
- *
- * Columns: # | CLUB | P | W | D | L | GD | FORM | PTS
- * - Position renders 3-tier pipe (top-3 dust / middle none / bottom-2 flare)
- * - Form renders bordered W/D/L letter tiles
- * - Loses column renders flare numeral when count ≥ RELEGATION_COUNT
- *   threshold (loose proxy for "this club is bleeding")
- *
- * @param {{ rows: Array }} props  computeStandings rows with `position` field
- */
-function StandingsTable({ rows }) {
-  const cols = [
-    { key: 'pos',    label: '#',    align: 'left',  width: 64 },
-    { key: 'club',   label: 'Club', align: 'left' },
-    { key: 'played', label: 'P',    align: 'right', width: 56 },
-    { key: 'wins',   label: 'W',    align: 'right', width: 56 },
-    { key: 'draws',  label: 'D',    align: 'right', width: 56 },
-    { key: 'loses',  label: 'L',    align: 'right', width: 56 },
-    { key: 'gd',     label: 'GD',   align: 'right', width: 64 },
-    { key: 'form',   label: 'Form', align: 'left',  width: 168 },
-    { key: 'pts',    label: 'Pts',  align: 'right', width: 56 },
-  ];
-  const total = rows.length;
-
-  return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, overflowX: 'auto' }}>
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
-        fontSize: 13,
-        color: DUST,
-      }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-            {cols.map((c) => (
-              <th
-                key={c.key}
-                style={{
-                  textAlign: c.align,
-                  padding: '14px 16px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.14em',
-                  color: DUST_70,
-                  width: c.width,
-                }}
-              >
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <StandingsRow key={row.id ?? row.team ?? row.position} row={row} total={total} />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * Single standings row.  Position cell renders the 3-tier pipe; form
- * cell renders 5 bordered letter tiles; loses cell goes flare if the
- * count crosses the relegation threshold.
- *
- * @param {{ row: object, total: number }} props
- */
-function StandingsRow({ row, total }) {
-  const pos = row.position ?? 0;
-  const hasRoom    = total > QUALIFICATION_COUNT + RELEGATION_COUNT;
-  const isQualify  = hasRoom && pos <= QUALIFICATION_COUNT;
-  const isRelegate = hasRoom && pos > total - RELEGATION_COUNT;
-
-  const pipeColor = isRelegate ? FLARE : DUST;
-  const numColor  = isRelegate ? FLARE : DUST;
-  const showPipe  = isQualify || isRelegate;
-
-  // Loses count cell — flare if losses crossed half the matches played
-  // (rough "this club is bleeding" cue without exposing the simulation).
-  const losesCount = row.loses ?? 0;
-  const losesIsHigh = (row.played ?? 0) > 0 && losesCount >= Math.ceil((row.played ?? 0) / 2);
-  const losesColor = losesIsHigh ? FLARE : DUST;
-
-  return (
-    <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-      <td style={cellLeft}>
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          fontWeight: 700,
-          color: numColor,
-        }}>
-          <span aria-hidden="true" style={{ color: pipeColor, opacity: showPipe ? 1 : 0 }}>|</span>
-          <span>{String(pos).padStart(2, '0')}</span>
-        </span>
-      </td>
-      <td style={cellLeft}>
-        {row.team_link ? (
-          <Link to={row.team_link} style={{ color: DUST, textDecoration: 'none' }}>
-            {row.team ?? row.club ?? '—'}
-          </Link>
-        ) : (
-          <span>{row.team ?? row.club ?? '—'}</span>
-        )}
-      </td>
-      <td style={cellRight}>{row.played ?? 0}</td>
-      <td style={cellRight}>{row.wins   ?? 0}</td>
-      <td style={cellRight}>{row.draws  ?? 0}</td>
-      <td style={{ ...cellRight, color: losesColor, fontWeight: losesIsHigh ? 700 : 400 }}>{losesCount}</td>
-      <td style={cellRight}>{formatGd(row.gd)}</td>
-      <td style={cellLeft}>
-        <FormStrip form={row.form} />
-      </td>
-      <td style={{ ...cellRight, fontWeight: 700 }}>{row.points ?? 0}</td>
-    </tr>
-  );
-}
-
-const cellLeft  = { textAlign: 'left',  padding: '14px 16px' };
-const cellRight = { textAlign: 'right', padding: '14px 16px' };
-
-/**
- * Format the goal-difference value with an explicit `+` for positive
- * deltas (matches the Figma's "+18 / -25" treatment).  Returns "0" when
- * neutral; "—" when not yet computed (no matches played).
- *
- * @param {number | null | undefined} gd
- */
-function formatGd(gd) {
-  if (gd === null || gd === undefined) return '—';
-  if (gd === 0) return '0';
-  return gd > 0 ? `+${gd}` : `${gd}`;
-}
-
-/**
- * 5-tile form strip.  Each tile is a 24 × 24 box with the result
- * letter inside.  W/D use dust borders (D at 50 % opacity); L uses
- * flare.  Empty placeholder uses a faint dust border + em-dash.
- *
- * @param {{ form?: Array<'W'|'D'|'L'> }} props
- */
-function FormStrip({ form }) {
-  const items = [];
-  for (let i = 0; i < FORM_PIP_COUNT; i++) {
-    const result = Array.isArray(form) ? form[i] : undefined;
-    items.push(<FormPip key={i} result={result} />);
-  }
-  return (
-    <span style={{ display: 'inline-flex', gap: 4 }}>
-      {items}
-    </span>
-  );
-}
-
-/**
- * Single bordered form pip.  Mechanical effect: re-paints when the
- * result letter changes; pre-season the placeholder ("—") stays inert.
- *
- * @param {{ result?: 'W'|'D'|'L' }} props
- */
-function FormPip({ result }) {
-  const isLoss = result === 'L';
-  const border  = isLoss ? FLARE : (result ? DUST : 'rgba(227,224,213,0.20)');
-  const text    = isLoss ? FLARE : (result ? DUST : 'rgba(227,224,213,0.40)');
-  const opacity = result === 'D' ? 0.5 : 1;
-  return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width:  FORM_PIP_SIZE,
-      height: FORM_PIP_SIZE,
-      border: `1px solid ${border}`,
-      color:  text,
-      opacity,
-      fontSize: 11,
-      fontWeight: 700,
-      lineHeight: 1,
-    }}>
-      {result ?? '—'}
-    </span>
-  );
-}
+// Standings table + form-pip rendering live in components/StandingsTable.jsx
+// (extracted in PR 3 when LeagueDetail became a second consumer).  Home
+// imports the default export at the top of this file.
