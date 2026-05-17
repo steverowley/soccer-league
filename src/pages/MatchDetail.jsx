@@ -6,9 +6,13 @@
 //   I.   Hero          — backlink, kicker (competition + round), two-team
 //                        score row with brand-colour crests, status pip,
 //                        kickoff / FT timestamp, weather + stadium meta
-//   II.  Stats         — match_player_stats table (goals / assists / cards
-//                        / minutes / rating) grouped by side, sorted by
-//                        rating DESC
+//   II.  Bookie        — WagerWidget — five render branches (closed /
+//                        loading / no odds / anonymous CTA / picker)
+//                        keyed off match.status + auth state.  Added
+//                        in PR 10.
+//   III. Stats         — match_player_stats table (goals / assists /
+//                        cards / minutes / rating) grouped by side,
+//                        sorted by rating DESC
 //   Footer (shared)
 //
 // Data sources:
@@ -23,6 +27,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
+import WagerWidget from '../components/WagerWidget';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getMatch } from '../lib/supabase';
 
@@ -116,11 +121,32 @@ export default function MatchDetail() {
         </Container>
       </section>
 
+      {/* Section II — Wager placement.
+          WagerWidget renders all five branches internally (closed
+          status, loading, no odds, anonymous CTA, full picker) so
+          this section always appears on every match — same visual
+          weight whether the user can or cannot bet. */}
+      {match && !loadError && (
+        <section style={{ padding: '0 32px 64px' }}>
+          <Container>
+            <SectionHeader
+              kicker="II"
+              label="The Bookie"
+              title="Place A Wager"
+              subtitle="Stake at least 10 credits on any of the three outcomes. Odds lock in at the moment you place — the bookie's later re-pricing won't claw your potential payout back."
+            />
+            <div style={{ marginTop: 24 }}>
+              <WagerWidget match={match} />
+            </div>
+          </Container>
+        </section>
+      )}
+
       {match && !loadError && (
         <section style={{ padding: '0 32px 120px' }}>
           <Container>
             <SectionHeader
-              kicker="II"
+              kicker="III"
               label="The Stats"
               title="Player Performance"
               subtitle="Aggregated match stats per player.  Ratings reflect engine assessment — interpret them as the booth would."
