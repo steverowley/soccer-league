@@ -18,7 +18,7 @@
 
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { LEAGUES, TEAMS_BY_LEAGUE, buildStandingsRows } from '../data/leagueData';
 import { computeStandings } from '../lib/matchResultsService';
@@ -140,36 +140,6 @@ export default function LeagueDetail() {
 
       <Footer />
     </div>
-  );
-}
-
-/**
- * Tiny back-to-listing link.  Mono small-caps cue + ◄ glyph so the
- * direction is obvious even at a glance.  Used at the top of detail
- * pages above the SectionHeader so the user always has a visible way
- * back to the index.
- *
- * @param {{ to: string, children: React.ReactNode }} props
- */
-function BackLink({ to, children }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        color: DUST_70,
-        textDecoration: 'none',
-      }}
-    >
-      <span aria-hidden="true">◄</span>
-      <span>{children}</span>
-    </Link>
   );
 }
 

@@ -22,7 +22,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getTeam } from '../lib/supabase';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
@@ -451,35 +451,6 @@ function ManagerCard({ manager }) {
         </p>
       )}
     </div>
-  );
-}
-
-/**
- * Back-to-listing link — mono small-caps + ◄ glyph.  Mirrors the one
- * in LeagueDetail; could be extracted into Layout.jsx once a third
- * detail page (PlayerDetail?) needs it.
- *
- * @param {{ to: string, children: React.ReactNode }} props
- */
-function BackLink({ to, children }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        color: DUST_70,
-        textDecoration: 'none',
-      }}
-    >
-      <span aria-hidden="true">◄</span>
-      <span>{children}</span>
-    </Link>
   );
 }
 
