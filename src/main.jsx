@@ -11,8 +11,9 @@
 //     bracket-advance pipelines.  They render null — pure side effects.
 //   - Routes mounted as each page is rebuilt against the new design.
 //     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId
-//     (PR 3), /teams + /teams/:teamId (PR 4).  Every other route 404s
-//     — intentional during the phased rebuild.
+//     (PR 3), /teams + /teams/:teamId (PR 4), /matches +
+//     /matches/:matchId (PR 5).  Every other route 404s — intentional
+//     during the phased rebuild.
 //
 // What used to be here:
 //   - A ~250-line route table mapping every page (Home, Leagues, Teams,
@@ -63,6 +64,8 @@ import Leagues       from './pages/Leagues';
 import LeagueDetail  from './pages/LeagueDetail';
 import Teams         from './pages/Teams';
 import TeamDetail    from './pages/TeamDetail';
+import Matches       from './pages/Matches';
+import MatchDetail   from './pages/MatchDetail';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -99,6 +102,18 @@ createRoot(document.getElementById('root')).render(
                   surface — same fallback pattern as LeagueDetail. */}
               <Route path="teams"               element={<Teams />} />
               <Route path="teams/:teamId"       element={<TeamDetail />} />
+
+              {/* /matches + /matches/:matchId (PR 5).
+                  Matches index fans out three parallel fetches (live,
+                  upcoming, recent completed) and paints the available
+                  groups as soon as each settles.  MatchDetail issues a
+                  single getMatch query — joins home/away teams,
+                  competition, and per-player match stats.  Unknown
+                  matchId renders an "Unknown Match" surface.  Realtime
+                  match_events commentary is deferred until migration
+                  0013 lands (tracked under isl-du4). */}
+              <Route path="matches"             element={<Matches />} />
+              <Route path="matches/:matchId"    element={<MatchDetail />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
