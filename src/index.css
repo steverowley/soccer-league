@@ -15,7 +15,7 @@
  *   .btn-secondary Lunar Dust fill + Abyss text.  Used for inverted
  *                  emphasis (rare; e.g. "BROWSE LEAGUES" on a dark hero
  *                  when paired with a primary).
- *   .btn-active    Astro Explorer orange fill + Dust text.  Used for the auth
+ *   .btn-active    Solar Flare red fill + Dust text.  Used for the auth
  *                  CTA in the header (SIGN UP / LOG IN) and for any
  *                  "currently selected" state (Frame 19 + Frame 21).
  *   .btn-tertiary  Borderless text + ► chevron.  Used for inline
@@ -139,15 +139,15 @@
 }
 
 /* Primary — Abyss fill + Dust 1 px border.  THE app-wide standard CTA.
-   Hover lifts the border to dust-bright and adds a subtle Astro warmth
-   glow so the affordance reads at a glance.  Frame 19 + Frame 44. */
+   Hover lifts the border to dust-bright and adds a subtle Solar Flare
+   warmth glow so the affordance reads at a glance.  Frame 19 + Frame 44. */
 .btn-primary {
   background: var(--color-abyss);
   color: var(--color-dust);
   border-color: var(--color-dust);
 }
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 0 1px var(--color-dust), 0 0 12px var(--color-astro-glow);
+  box-shadow: 0 0 0 1px var(--color-dust), 0 0 12px var(--color-flare-glow);
 }
 .btn-primary:active:not(:disabled) {
   transform: translateY(1px);
@@ -164,22 +164,22 @@
   border-color: var(--color-dust-dark);
 }
 
-/* Active / focus — Astro Explorer ORANGE fill.  Reserved for "this is the
-   active choice right now" moments: the auth CTA in the header (SIGN UP /
-   LOG IN per the Frame 21 navigation variants), the hero secondary CTA
-   ("Watch Live Match" — orange-filled next to the dark-outline "Browse
-   Leagues"), and the current toggle in a button group.  The 2026-05 spec
-   re-asserts Astro Explorer (#FF6637) as THE attention accent; Quantum
-   Purple stays scoped to Architect surfaces only.  Hover deepens to the
-   mid orange so the affordance reads tactile rather than flat. */
+/* Active / focus — Solar Flare red fill.  THE primary attention CTA across
+   the entire app per the 2026-05 corrected spec: the auth CTA in the
+   header (SIGN UP / LOG IN per Frame 21), the hero secondary CTA
+   ("Watch Live Match" — flare-filled next to the dark-outline "Browse
+   Leagues"), and the current toggle in a button group.  Solar Flare
+   (#FF4F5E) is the attention accent, NOT Astro Explorer orange; the
+   previous pass confused the two.  Hover deepens to flare-mid so the
+   affordance reads tactile rather than flat. */
 .btn-active {
-  background: var(--color-astro);
+  background: var(--color-flare);
   color: var(--color-dust);
-  border-color: var(--color-astro);
+  border-color: var(--color-flare);
 }
 .btn-active:hover:not(:disabled) {
-  background: var(--color-astro-mid);
-  border-color: var(--color-astro-mid);
+  background: var(--color-flare-mid);
+  border-color: var(--color-flare-mid);
 }
 
 /* Tertiary — borderless text link with the ► chevron suffix.  Used for
@@ -273,8 +273,10 @@ table {
 
 /* ── Navigation links ──────────────────────────────────────────────────────
  * Header nav text links — small-caps + tracked.  Active state is a
- * purple background pill matching Frame 21's HOME-active indicator
- * (a soft purple-tinted block around the current page label). */
+ * subtle dust-tinted chip matching Frame 21's HOME-active indicator
+ * (a near-flat block at ~12% dust against the Abyss page background —
+ * present enough to identify the current page, quiet enough to never
+ * compete with the auth CTA for attention). */
 .nav-link {
   display: inline-block;
   font-size: var(--font-size-micro);
@@ -284,14 +286,14 @@ table {
   color: var(--color-dust);
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid transparent;
-  border-radius: 2px;
+  border-radius: 0;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .nav-link:hover {
   background: var(--color-hairline);
 }
 .nav-link.active {
-  background: var(--color-purple-glow);
+  background: var(--color-dust-faint);
   color: var(--color-dust);
 }
 
@@ -815,9 +817,12 @@ table {
   margin-block: var(--space-6);
 }
 
-/* ── Navigation links ──────────────────────────────────────────────────────
- * Header nav links — small-caps, tracked.  Active state is a single-px
- * orange underline; hover lifts the underline only.  No background fills. */
+/* ── Navigation links (corrected 2026-05) ─────────────────────────────────
+ * Header nav text links — small-caps + tracked.  Active state is a
+ * dust-tinted chip behind the label per Frame 21 (NOT an orange underline,
+ * NOT purple-tinted).  The previous orange-underline rule lived here and
+ * was overriding the earlier .nav-link block via cascade; merged into a
+ * single canonical block so future edits land in one place. */
 .nav-link {
   display: inline-block;
   font-size: var(--font-size-micro);
@@ -825,16 +830,17 @@ table {
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-wider);
   color: var(--color-dust);
-  padding: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid transparent;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  border-radius: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 .nav-link:hover {
-  border-bottom-color: var(--color-dust);
+  background: var(--color-hairline);
 }
 .nav-link.active {
-  border-bottom-color: var(--color-flare);
-  color: var(--color-flare);
+  background: var(--color-dust-faint);
+  color: var(--color-dust);
 }
 
 /* ── Page hero (legacy class) ──────────────────────────────────────────────
