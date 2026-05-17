@@ -15,7 +15,7 @@
  *   .btn-secondary Lunar Dust fill + Abyss text.  Used for inverted
  *                  emphasis (rare; e.g. "BROWSE LEAGUES" on a dark hero
  *                  when paired with a primary).
- *   .btn-active    Quantum Purple fill + Dust text.  Used for the auth
+ *   .btn-active    Astro Explorer orange fill + Dust text.  Used for the auth
  *                  CTA in the header (SIGN UP / LOG IN) and for any
  *                  "currently selected" state (Frame 19 + Frame 21).
  *   .btn-tertiary  Borderless text + ► chevron.  Used for inline
@@ -164,18 +164,22 @@
   border-color: var(--color-dust-dark);
 }
 
-/* Active / focus — Quantum Purple fill.  Reserved for "this is the active
-   choice right now" moments: the auth CTA in the header (SIGN UP), the
-   user balance pill, the current toggle in a button group.  Frame 19 +
-   Frame 21. */
+/* Active / focus — Astro Explorer ORANGE fill.  Reserved for "this is the
+   active choice right now" moments: the auth CTA in the header (SIGN UP /
+   LOG IN per the Frame 21 navigation variants), the hero secondary CTA
+   ("Watch Live Match" — orange-filled next to the dark-outline "Browse
+   Leagues"), and the current toggle in a button group.  The 2026-05 spec
+   re-asserts Astro Explorer (#FF6637) as THE attention accent; Quantum
+   Purple stays scoped to Architect surfaces only.  Hover deepens to the
+   mid orange so the affordance reads tactile rather than flat. */
 .btn-active {
-  background: var(--color-purple);
+  background: var(--color-astro);
   color: var(--color-dust);
-  border-color: var(--color-purple);
+  border-color: var(--color-astro);
 }
 .btn-active:hover:not(:disabled) {
-  background: var(--color-purple-mid);
-  border-color: var(--color-purple-mid);
+  background: var(--color-astro-mid);
+  border-color: var(--color-astro-mid);
 }
 
 /* Tertiary — borderless text link with the ► chevron suffix.  Used for

@@ -39,8 +39,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import IslTable from '../components/ui/IslTable';
 import StatTable from '../components/ui/StatTable';
-import Button from '../components/ui/Button';
 import MetaRow from '../components/ui/MetaRow';
+import { SectionHeader, Button } from '@shared/ui';
 import { getTeam, normalizeTeam } from '../lib/supabase';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
@@ -360,46 +360,51 @@ export default function TeamDetail() {
   const cleanSheetRows = useMemo(() => placeholderPlayerRows(), []);
 
   // ── Loading / 404 / error states ─────────────────────────────────────────
-  // WHY page-hero wrapper: keeps the top spacing (100px desktop / 70px mobile)
-  // identical to the ready state so the page chrome never jumps on load.
+  // WHY single container wrapper: matches the editorial "container +
+  // paddingBlock: --space-12" frame of the ready state below so the page
+  // chrome never jumps when the fetch resolves.  Centred page-hero panel
+  // is gone — the redesign anchors every page on the left with a display
+  // title rather than a centred badge.
   if (loading) {
     return (
-      <div className="page-hero">
-        <div className="container">
-          <p style={{ opacity: 0.5, fontSize: '14px' }}>Loading team…</p>
-        </div>
+      <div className="container" style={{ paddingBlock: 'var(--space-12)' }}>
+        <p style={{ opacity: 0.5, fontSize: 'var(--font-size-small)' }}>
+          Receiving club data…
+        </p>
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="page-hero">
-        <div className="container">
-          <h2>Team not found</h2>
-          <p style={{ marginTop: '16px', opacity: 0.6 }}>
-            No team exists with the id "{teamId}".
-          </p>
-          <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
-            <Button variant="primary">View All Teams</Button>
-          </Link>
-        </div>
+      <div className="container" style={{ paddingBlock: 'var(--space-12)' }}>
+        <h1 className="display-title" style={{ marginBottom: 'var(--space-3)' }}>
+          Team Not Found
+        </h1>
+        <hr className="divider" style={{ marginBlock: 0 }} />
+        <p style={{ marginTop: 'var(--space-4)', opacity: 0.6, fontSize: 'var(--font-size-small)' }}>
+          No team exists with the id &ldquo;{teamId}&rdquo;.
+        </p>
+        <Link to="/teams" className="btn btn-primary" style={{ display: 'inline-block', marginTop: 'var(--space-6)' }}>
+          View All Teams
+        </Link>
       </div>
     );
   }
 
   if (error || !team) {
     return (
-      <div className="page-hero">
-        <div className="container">
-          <h2>Something went wrong</h2>
-          <p style={{ marginTop: '16px', opacity: 0.6 }}>
-            Could not load team data. Please try again later.
-          </p>
-          <Link to="/teams" style={{ display: 'inline-block', marginTop: '24px' }}>
-            <Button variant="primary">View All Teams</Button>
-          </Link>
-        </div>
+      <div className="container" style={{ paddingBlock: 'var(--space-12)' }}>
+        <h1 className="display-title" style={{ marginBottom: 'var(--space-3)' }}>
+          Transmission Lost
+        </h1>
+        <hr className="divider" style={{ marginBlock: 0 }} />
+        <p style={{ marginTop: 'var(--space-4)', opacity: 0.6, fontSize: 'var(--font-size-small)' }}>
+          Could not load team data. Try again later.
+        </p>
+        <Link to="/teams" className="btn btn-primary" style={{ display: 'inline-block', marginTop: 'var(--space-6)' }}>
+          View All Teams
+        </Link>
       </div>
     );
   }
@@ -419,119 +424,155 @@ export default function TeamDetail() {
   const descParagraphs = (team.description ?? '').split('\n').filter(Boolean);
 
   return (
-    <div>
-      {/* ── Page hero ─────────────────────────────────────────────────────────── */}
-      {/* .page-hero provides the standard centred layout and vertical padding
-          shared across all detail pages.  .subtitle inherits 14px / 0.7
-          opacity from the .page-hero .subtitle rule in index.css. */}
-      <div className="page-hero">
-        <div className="container">
-          <h1>{team.name}</h1>
-          <hr className="divider" />
-          <p className="subtitle">{team.tagline}</p>
+    <div className="container" style={{ paddingBlock: 'var(--space-12)' }}>
+
+      {/* ── Editorial breadcrumb ───────────────────────────────────────────
+          Small-caps mono row above the masthead.  Replaces the previous
+          centred page-hero treatment — anchors the page on the left with
+          a deep-link back to /teams and the parent league name as a
+          secondary chip.  Same pattern as LeagueDetail's "← All Leagues
+          • Conference" breadcrumb so detail pages feel like siblings. */}
+      <div style={{
+        fontSize: 'var(--font-size-micro)',
+        textTransform: 'uppercase',
+        letterSpacing: 'var(--letter-spacing-widest)',
+        opacity: 0.6,
+        marginBottom: 'var(--space-3)',
+      }}>
+        <Link to="/teams" style={{ color: 'inherit', borderBottom: '1px solid var(--color-hairline)' }}>
+          ← All Clubs
+        </Link>
+        {leagueName && (
+          <>
+            <span style={{ marginInline: 'var(--space-3)', opacity: 0.5 }}>•</span>
+            <Link
+              to={`/leagues/${leagueId}`}
+              style={{ color: 'inherit', borderBottom: '1px solid var(--color-hairline)' }}
+            >
+              {leagueName}
+            </Link>
+          </>
+        )}
+      </div>
+
+      {/* ── Display masthead ────────────────────────────────────────────────
+          Team name in display weight, hairline beneath, tagline subtitle.
+          Brand-colour accent strip on the left edge of the title block
+          replaces the 80×80 circle badge — same treatment as Teams listing
+          cards so the visual language carries across the listing → detail
+          transition.  team.color is the primary brand hex from the DB seed;
+          falls back to dust if a freshly-inserted row has no colour set. */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'stretch' }}>
+        <div
+          aria-hidden="true"
+          style={{
+            width: '4px',
+            backgroundColor: team.color || 'var(--color-dust)',
+            alignSelf: 'stretch',
+            flexShrink: 0,
+          }}
+        />
+        <div style={{ flex: 1 }}>
+          <h1 className="display-title" style={{ marginBottom: 'var(--space-3)' }}>
+            {team.name}
+          </h1>
+          <hr className="divider" style={{ marginBlock: 0 }} />
+          {team.tagline && (
+            <p style={{
+              fontSize: 'var(--font-size-small)',
+              lineHeight: 'var(--line-height-body)',
+              opacity: 0.7,
+              fontStyle: 'italic',
+              marginTop: 'var(--space-4)',
+              maxWidth: 'var(--max-width-narrow)',
+            }}>
+              {team.tagline}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="container" style={{ paddingBottom: '40px' }}>
+      {/* ── I • THE CLUB — info card + cross-feature actions ──────────────── */}
+      {/* Combines the previous team-info card with the action row beneath.
+          A single section header is enough — the info card visually carries
+          the "who is this club" block, the action row sits as a CTA strip
+          beneath the description prose. */}
+      <section className="section" style={{ marginTop: 'var(--space-12)' }}>
+        <SectionHeader
+          kicker="I"
+          label="The Club"
+          title="Dossier"
+          subtitle="Location, ground, manager.  Everything the cosmos officially records about the institution."
+        />
 
-        {/* ── Team info card ────────────────────────────────────────────────── */}
-        {/* Full-width card: badge circle (top-left) → team name → meta rows →
-            description prose.  Matches the Figma team detail info block.
-            The badge circle uses the team's primary brand colour at 20% opacity
-            as a fill so each club has a distinct identity before real crests
-            are added — same pattern as the Teams listing cards. */}
-        <section className="section">
-          <div className="card">
-            {/* ── Brand badge circle ──────────────────────────────────────────
-                80×80px — matches Teams listing card size (Figma detail spec).
-                team.color is the primary brand hex from the DB seed. */}
-            <div style={{
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              backgroundColor: team.color ? `${team.color}33` : 'rgba(227,224,213,0.1)',
-              border: `1px solid ${team.color ? `${team.color}66` : 'rgba(227,224,213,0.2)'}`,
-              marginBottom: '16px',
-              flexShrink: 0,
-            }} />
-
-            {/* Card heading — .card-title (18px uppercase) is the standardised
-                in-card heading class; replaces the previous inline fontSize. */}
-            <h3 className="card-title">{team.name}</h3>
-
-            {/* Structured metadata block */}
-            <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <MetaRow label="Location"    value={team.location} />
-              <MetaRow label="Home Ground" value={team.homeGround} />
-              <MetaRow label="Capacity"    value={team.capacity} />
-              {/* ── League membership ──────────────────────────────────────────
-                  Sourced from the nested leagues join object rather than a
-                  separate lookup — avoids an extra Supabase round-trip and
-                  keeps the data consistent with what the DB actually says.
-                  The value is a Link so users can navigate to the league page. */}
-              {leagueName && (
-                <MetaRow
-                  label="League"
-                  value={
-                    <Link
-                      to={`/leagues/${leagueId}`}
-                      style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(227,224,213,0.3)' }}
-                    >
-                      {leagueName}
-                    </Link>
-                  }
-                />
-              )}
-              {/* ── Manager ──────────────────────────────────────────────────
-                  team.managers is an array from the Supabase join (one-to-many
-                  schema).  We take [0] because each club has exactly one active
-                  manager.  The block is conditionally rendered so pages load
-                  cleanly even before manager seed data is applied. */}
-              {team.managers?.[0] && (
-                <>
-                  <MetaRow label="Manager"       value={team.managers[0].name} />
-                  <MetaRow label="Tactical Style" value={team.managers[0].style} />
-                </>
-              )}
-            </div>
-
-            {/* Description paragraphs — split from the \n-delimited string.
-                Key uses the paragraph text (sliced to 60 chars) rather than
-                array index so React can correctly reconcile if the text order
-                ever changes between renders. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {descParagraphs.map((para) => (
-                <p key={para.slice(0, 60)} style={{ fontSize: '13px', lineHeight: 1.8, opacity: 0.85 }}>
-                  {para}
-                </p>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Cross-feature actions ──────────────────────────────────────────── */}
-        {/* Positioned immediately after the team info card so all key actions
-            are visible before the user scrolls into the stats tables.
-            - Simulate a Match → Matches page (fixture selector)
-            - Browse League    → parent league's standings + player-stat tables
-            - View Players     → Players page filtered to this league's clubs   */}
-        <section className="section" style={{ paddingTop: '8px' }}>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Link to="/matches">
-              <Button variant="tertiary">Simulate a Match</Button>
-            </Link>
-            {leagueId && (
-              <Link to={`/leagues/${leagueId}`}>
-                <Button variant="primary">Browse League</Button>
-              </Link>
+        <div className="card">
+          {/* Structured metadata block.  No badge circle in the redesign —
+              the brand-colour accent strip on the masthead above already
+              carries the club's visual identity. */}
+          <div style={{ marginBottom: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+            <MetaRow label="Location"    value={team.location} />
+            <MetaRow label="Home Ground" value={team.homeGround} />
+            <MetaRow label="Capacity"    value={team.capacity} />
+            {/* ── League membership ─────────────────────────────────────────
+                Sourced from the nested leagues join object rather than a
+                separate lookup — avoids an extra Supabase round-trip and
+                keeps the data consistent with what the DB actually says.
+                The value is a Link so users can navigate to the league page. */}
+            {leagueName && (
+              <MetaRow
+                label="League"
+                value={
+                  <Link
+                    to={`/leagues/${leagueId}`}
+                    style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(227,224,213,0.3)' }}
+                  >
+                    {leagueName}
+                  </Link>
+                }
+              />
             )}
-            {leagueId && (
-              <Link to={`/players?league=${leagueId}`}>
-                <Button variant="primary">View Players</Button>
-              </Link>
+            {/* ── Manager ────────────────────────────────────────────────────
+                team.managers is an array from the Supabase join (one-to-many
+                schema).  We take [0] because each club has exactly one active
+                manager.  The block is conditionally rendered so pages load
+                cleanly even before manager seed data is applied. */}
+            {team.managers?.[0] && (
+              <>
+                <MetaRow label="Manager"        value={team.managers[0].name} />
+                <MetaRow label="Tactical Style" value={team.managers[0].style} />
+              </>
             )}
           </div>
-        </section>
+
+          {/* Description paragraphs — split from the \n-delimited string.
+              Key uses the paragraph text (sliced to 60 chars) rather than
+              array index so React can correctly reconcile if the text order
+              ever changes between renders. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {descParagraphs.map((para) => (
+              <p key={para.slice(0, 60)} style={{ fontSize: 'var(--font-size-small)', lineHeight: 'var(--line-height-body)', opacity: 0.85 }}>
+                {para}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Cross-feature action row ─────────────────────────────────────
+            Three CTAs immediately under the dossier card so fans can leap
+            into the related routes without scrolling through the data
+            tables.  Simulate is tertiary (inline-text) because it routes
+            to a tool rather than a destination page; Browse / View
+            Players are primary dark-outline. */}
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 'var(--space-4)' }}>
+          <Link to="/matches" className="btn btn-tertiary">Simulate a Match</Link>
+          {leagueId && (
+            <Link to={`/leagues/${leagueId}`} className="btn btn-primary">Browse League</Link>
+          )}
+          {leagueId && (
+            <Link to={`/players?league=${leagueId}`} className="btn btn-primary">View Players</Link>
+          )}
+        </div>
+      </section>
 
         {/* ── NEXT MATCH | TEAM FORM — 2-column ────────────────────────────────── */}
         {/* Figma spec: two equal-width cards side by side immediately below the
@@ -769,8 +810,6 @@ export default function TeamDetail() {
             <IslTable variant="light" columns={STANDINGS_COLS} rows={standingsRows} />
           </section>
         )}
-
-      </div>
 
     </div>
   );

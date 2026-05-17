@@ -77,36 +77,21 @@ export function SectionHeader({
   return (
     <header style={{ marginBottom: 'var(--space-6)' }}>
       {/* ── Kicker row ──────────────────────────────────────────────────────
-          Two-column flex: left is the kicker (roman numeral + bullet +
-          optional label like "THE PRESENT"), right is the optional action
-          slot.  When `action` is omitted the layout collapses cleanly
-          because the right cell is empty rather than missing — keeps
-          spacing consistent across sections with and without CTAs. */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 'var(--space-3)',
-        }}
-      >
-        <div className="section-header">
-          <span className="section-header__index">{kicker}</span>
-          <span className="section-header__bullet">•</span>
-          {/* Label appears AFTER the bullet to complete the two-part
-              kicker pattern from the Figma ("I • THE PRESENT").  When
-              omitted, the bullet stands alone — useful for short
-              section-headers that need only a numeral.  Uses the same
-              small-caps class as the index so the two read as one
-              continuous label. */}
-          {label && (
-            <span className="section-header__index">{label}</span>
-          )}
-        </div>
-        {action && (
-          <div style={{ flexShrink: 0 }}>
-            {action}
-          </div>
+          Just the two-part kicker ("I • THE PRESENT"). The action slot
+          lives in the subtitle row beneath the title — matches the
+          2026-05 Figma which baselines "VIEW ALL MATCHES ►" against the
+          subtitle prose rather than the kicker chip. */}
+      <div className="section-header">
+        <span className="section-header__index">{kicker}</span>
+        <span className="section-header__bullet">•</span>
+        {/* Label appears AFTER the bullet to complete the two-part
+            kicker pattern from the Figma ("I • THE PRESENT").  When
+            omitted, the bullet stands alone — useful for short
+            section-headers that need only a numeral.  Uses the same
+            small-caps class as the index so the two read as one
+            continuous label. */}
+        {label && (
+          <span className="section-header__index">{label}</span>
         )}
       </div>
 
@@ -116,18 +101,44 @@ export function SectionHeader({
           document outline still reads as a structured page. */}
       <h2 className="section-header__title">{title}</h2>
 
-      {/* ── Optional subtitle ──────────────────────────────────────────────
-          One-line explanation of what the section is about.  Capped at
-          --max-width-narrow so it never spans the full content well at
-          large viewport widths — that would feel like body copy rather
-          than a kicker line. */}
-      {subtitle && <p className="section-header__subtitle">{subtitle}</p>}
+      {/* ── Subtitle + action row ──────────────────────────────────────────
+          Two-column flex baselined on the SUBTITLE's first line.  Left
+          cell is the subtitle prose (capped at --max-width-narrow via
+          the .section-header__subtitle class so wrapping stays editorial).
+          Right cell is the optional action slot — typically a "VIEW ALL
+          MATCHES ►" tertiary link.  Both rows collapse cleanly when
+          either is omitted: a subtitle-only header just shows prose; an
+          action-only header shows the CTA alone right-aligned. */}
+      {(subtitle || action) && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 'var(--space-6)',
+          }}
+        >
+          {subtitle ? (
+            <p className="section-header__subtitle" style={{ margin: 0 }}>{subtitle}</p>
+          ) : (
+            // Empty placeholder so the action stays right-aligned when
+            // the caller passes an action but no subtitle — flex's
+            // `justify-content: space-between` needs two children.
+            <span />
+          )}
+          {action && (
+            <div style={{ flexShrink: 0, alignSelf: 'flex-end' }}>
+              {action}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Trailing divider ──────────────────────────────────────────────
           Hairline that visually anchors the header and separates it from
-          the section content.  Margin-block 0 because the kicker/title
-          stack already provides the vertical rhythm above. */}
-      <hr className="divider" style={{ marginBlock: 0 }} />
+          the section content.  Margin-top reserves a touch of breathing
+          room over the subtitle row before the line lands. */}
+      <hr className="divider" style={{ marginBlock: 'var(--space-3) 0' }} />
     </header>
   );
 }

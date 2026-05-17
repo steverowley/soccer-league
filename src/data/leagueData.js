@@ -507,20 +507,36 @@ export const STANDINGS_COLS = [
 // source of truth for what the standings table looks like.  React is imported
 // at the top of this file for this one callback.
 //
-// Pip colours:
-//   W → quantum green     (var(--color-green))  — recent victory
-//   D → muted lunar dust  (rgba(227,224,213,0.5)) — neutral
-//   L → solar-flare red   (var(--color-red))    — recent defeat
-//   empty placeholder     transparent border    — pre-season / no-match-yet
+// Form pip = bordered square box with the result LETTER (W / D / L)
+// centred inside.  Replaces the previous coloured-dot pattern per the
+// 2026-05 Figma redesign — every box reads as a tiny stat tile rather
+// than an inferred colour, so the column is legible without a legend.
 //
-// Width 5 placeholders even when form.length < 5 so a freshly-promoted team
-// (1 match played) doesn't render a half-empty cell that collapses the
-// column width on long-running browsers.
+// Visual spec (Frame 39):
+//   W → dust 1 px border + dust letter (positive cue without shouting)
+//   D → dust 1 px border + dust letter at 50% opacity (neutral)
+//   L → solar-flare 1 px border + solar-flare letter (recent defeat)
+//   empty placeholder → dust border @ 20% + em-dash, drawn for any
+//                       form slot the team hasn't filled yet so the
+//                       column width stays stable pre-season.
+//
+// Width 5 placeholders even when form.length < 5 so a freshly-promoted
+// team (1 match played) doesn't render a half-empty cell that collapses
+// the column width on long-running browsers.
 
-const FORM_PIP_COLOURS = {
-  W: 'var(--color-green)',
-  D: 'rgba(227,224,213,0.5)',
-  L: 'var(--color-red)',
+/**
+ * Per-result rendering map.  Each entry resolves to the border colour,
+ * the letter colour, and the glyph rendered inside the box.  Keys are
+ * the single-letter result codes computeStandings emits.
+ *
+ * Mechanically: changing the colours here updates every form column on
+ * every page in one place — Home, LeagueDetail, TeamDetail all reuse
+ * this renderer via STANDINGS_COLS.
+ */
+const FORM_PIP_STYLES = {
+  W: { border: 'var(--color-dust)',  text: 'var(--color-dust)',  opacity: 1   },
+  D: { border: 'var(--color-dust)',  text: 'var(--color-dust)',  opacity: 0.5 },
+  L: { border: 'var(--color-flare)', text: 'var(--color-flare)', opacity: 1   },
 };
 
 /**
@@ -531,30 +547,56 @@ const FORM_PIP_COLOURS = {
 const FORM_PIP_COUNT = 5;
 
 /**
- * Render a single standings row's form array as a horizontal pip strip.
- * Defined at module scope so STANDINGS_COLS can reference it without
- * paying a re-creation cost per render.
+ * Edge length of a single form pip in pixels.  Square — matches the
+ * Figma's tight letter-tile grid.  24 px lines up visually with the
+ * standings table's row height (~28 px including the row hairline) so
+ * the tiles read as inset within the row rather than floating.
+ */
+const FORM_PIP_SIZE_PX = 24;
+
+/**
+ * Render a single standings row's form array as a horizontal strip of
+ * bordered letter tiles.  Defined at module scope so STANDINGS_COLS can
+ * reference it without paying a re-creation cost per render.
+ *
+ * @param {{form?: Array<'W'|'D'|'L'>}} row  Standings row.  `form` is
+ *     most-recent-first; undefined entries render as faint em-dash
+ *     placeholders so the column rhythm stays stable pre-season.
+ * @returns {ReactElement}  Inline-flex strip of FORM_PIP_COUNT tiles.
  */
 function renderFormCell(row) {
   const form = Array.isArray(row.form) ? row.form : [];
   const pips = [];
   for (let i = 0; i < FORM_PIP_COUNT; i++) {
     const result = form[i]; // most-recent-first; undefined when sparse
-    const colour = FORM_PIP_COLOURS[result];
+    const spec   = FORM_PIP_STYLES[result];
+    // Placeholder (no match yet): faint dust border + em-dash.  Picked
+    // over a solid transparent square because the column without any
+    // mark looks like a layout bug; the em-dash reads as "no data".
+    const border  = spec ? spec.border : 'rgba(227,224,213,0.2)';
+    const text    = spec ? spec.text   : 'rgba(227,224,213,0.4)';
+    const opacity = spec ? spec.opacity : 1;
     pips.push(
       React.createElement('span', {
         key: i,
         title: result ?? 'No match yet',
         style: {
-          display:      'inline-block',
-          width:        '8px',
-          height:       '8px',
-          marginLeft:   i === 0 ? 0 : '3px',
-          background:   colour ?? 'transparent',
-          border:       colour ? 'none' : '1px solid rgba(227,224,213,0.2)',
-          borderRadius: '2px',
+          display:        'inline-flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          width:          `${FORM_PIP_SIZE_PX}px`,
+          height:         `${FORM_PIP_SIZE_PX}px`,
+          marginLeft:     i === 0 ? 0 : '4px',
+          border:         `1px solid ${border}`,
+          color:          text,
+          opacity:        opacity,
+          fontFamily:     'var(--font-mono)',
+          fontSize:       '11px',
+          fontWeight:     700,
+          lineHeight:     1,
+          letterSpacing:  0,
         },
-      }),
+      }, result ?? '—'),
     );
   }
   return React.createElement(
