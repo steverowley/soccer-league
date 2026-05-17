@@ -40,4 +40,6 @@ export type {
 } from './api/admin';
 
 // ── UI ───────────────────────────────────────────────────────────────────────
-export { AdminPage } from './ui/AdminPage';
+// Page component removed in the 2026-05 nuke — admin route will be rebuilt
+// against the new design language.  Listeners stay in their own files;
+// none belong to this feature.

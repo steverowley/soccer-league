@@ -1,35 +1,25 @@
 // ── main.jsx ──────────────────────────────────────────────────────────────────
-// Application entry point.  Mounts the React tree into the #root DOM node
-// and defines the complete client-side route table using React Router v6.
+// Application entry point — minimal post-nuke scaffold (2026-05).
 //
-// ROUTE STRUCTURE
-// ───────────────
-//  /                       → Home          (landing page + narratives feed)
-//  /leagues                → Leagues       (all four league cards)
-//  /leagues/:leagueId      → LeagueDetail  (standings + player stats for one league)
-//  /teams                  → Teams         (all teams grouped by league)
-//  /teams/:teamId          → TeamDetail    (team info card + stats for one team)
-//  /players                → Players       (player roster browser)
-//  /players/:playerId      → PlayerDetail  (individual player profile + stats)
-//  /matches                → Matches       (wraps the MatchSimulator)
-//  /matches/:matchId       → MatchDetail   (single fixture — odds + WagerWidget)
-//  /login                  → Login         (auth form)
-//  /profile                → Profile       (account summary + preferences + BetHistory)
-//  /voting                 → Voting        (end-of-season focus voting)
-//  /training               → Training      (training facility clicker)
-//  /architect-log          → ArchitectLog  (dev-only intervention audit table)
+// What's here:
+//   - ErrorBoundary at the outermost layer (so render errors don't blank the
+//     page).
+//   - SupabaseProvider + AuthProvider so every (future) route has the typed
+//     Supabase client and auth context.
+//   - The four cross-feature side-effect listeners that wire `match.completed`
+//     / `season.ended` bus events to their respective settlement / enactment /
+//     bracket-advance pipelines.  They render null — pure side effects.
+//   - A single `/` route that renders a placeholder until Home is rebuilt.
 //
-// All routes are wrapped by the Layout component which provides the persistent
-// Header, Footer, and starfield background.  The Layout renders the active
-// route's page component via React Router's <Outlet>.
+// What used to be here:
+//   - A ~250-line route table mapping every page (Home, Leagues, Teams,
+//     Matches, Voting, Training, NewsFeed, Idols, Login, Profile, etc.).
+//     All page components were deleted in the nuke; routes will be re-added
+//     one at a time as each page is rebuilt.
 //
-// BrowserRouter is used (rather than HashRouter) so URLs are clean paths that
-// work with Vite's dev server and a correctly configured production host.
-// Vite's default dev server already handles SPA fallback for all paths.
-//
-// basename="/soccer-league/" is required because the app is deployed to GitHub
-// Pages under the /soccer-league/ sub-path (matching vite.config.js base).
-// Without it, the router sees "/" as unmatched and renders nothing (blank page).
+// Route base path is `/soccer-league/` because the app is deployed to GitHub
+// Pages under that sub-path (matches vite.config.js `base`).  Without it the
+// router treats every URL as unmatched and renders nothing.
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -37,215 +27,71 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import './index.css';
 
-// ── Layout shell ──────────────────────────────────────────────────────────────
-import Layout        from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// ── Auth + Supabase providers ─────────────────────────────────────────────────
-// SupabaseProvider injects the typed Supabase client into React context so
-// every feature consumes it via `useSupabase()` instead of importing the
-// module directly. AuthProvider is a child of SupabaseProvider because it
-// calls `useSupabase()` to fetch profiles, restore sessions, and listen for
-// onAuthStateChange events. Both sit OUTSIDE the Router so every route —
-// including /login itself — has access to the auth context.
+// ── Providers ────────────────────────────────────────────────────────────────
+// SupabaseProvider must be outermost (AuthProvider depends on it via
+// useSupabase()).  Both sit OUTSIDE the Router so every route — including
+// /login once it's rebuilt — has access to the auth context.
 import { SupabaseProvider } from './shared/supabase/SupabaseProvider';
 import { supabaseClient }   from './shared/supabase/client';
 import { AuthProvider }     from './features/auth';
 
 // ── Cross-feature side-effect listeners ───────────────────────────────────────
-// These components render null and exist purely to register event-bus listeners
-// that cross feature boundaries.  They are mounted once here — inside
-// <SupabaseProvider> — so they always have a DB client available.
+// These components render null and exist purely to register event-bus
+// listeners that cross feature boundaries.  They MUST be mounted inside
+// SupabaseProvider (they call useSupabase()) but OUTSIDE the Router (so a
+// route transition mid-settlement / mid-enactment doesn't cancel them).
 //
-// WagerSettlementListener: subscribes to `match.completed` and calls
-//   settleMatchWagers() to resolve open bets when a fixture finishes.
-//   Mounted here (not in the Match feature) because the betting feature must
-//   never be imported by the match feature — the bus keeps them decoupled.
-//
-// RefereeNarrativeListener (Phase 5a): subscribes to `match.completed` and
-//   writes a single named-referee officiating narrative line to `narratives`
-//   for the Galaxy Dispatch news feed.  Decoupled from settlement so each
-//   cross-feature concern lives in its own listener.
-import { WagerSettlementListener } from './features/betting';
+// WagerSettlementListener      — `match.completed` → settle open wagers
+// CupRoundAdvancerListener     — `match.completed` → fill bracket + insert next-round fixture
+// SeasonEnactmentListener      — `season.ended`    → apply winning focuses across every team
+// RefereeNarrativeListener     — `match.completed` → write the named-referee narrative
+import { WagerSettlementListener }  from './features/betting';
+import { CupRoundAdvancerListener } from './features/match';
+import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 
-// CupRoundAdvancerListener: subscribes to `match.completed` and calls
-//   advanceCupRound() to fill in winners + insert the next-round fixture
-//   for Celestial Cup and Solar Shield bracket competitions. Mounted here
-//   alongside the wager listener so any match completion (regardless of
-//   route) triggers the bracket advance. Non-cup matches are filtered out
-//   by the listener itself.
-import { CupRoundAdvancerListener, MatchLivePage } from './features/match';
-
-// SeasonEnactmentListener: subscribes to `season.ended` and applies the
-//   winning focuses for every team (player stat bumps, signings, finance
-//   deltas). Mounted here so end-of-season events are caught regardless of
-//   which route the user is on when they fire.
-import { SeasonEnactmentListener } from './features/voting';
-
-// AdminPage: dev/maintainer-only testing controls (Package 14). Auth-gated
-//   client-side via VITE_ADMIN_USER_IDS; server-side RLS is the actual
-//   security boundary. The route is always registered so the URL doesn't
-//   404 in production — non-allowlisted viewers see a "restricted" stub.
-import { AdminPage } from './features/admin';
-
-// ── Page components ───────────────────────────────────────────────────────────
-// Each import corresponds to one route in the table above.
-import Home         from './pages/Home';
-import Leagues      from './pages/Leagues';
-import LeagueDetail from './pages/LeagueDetail';
-import Teams        from './pages/Teams';
-import TeamDetail   from './pages/TeamDetail';
-import Players      from './pages/Players';
-import PlayerDetail from './pages/PlayerDetail';
-import Matches      from './pages/Matches';
-import MatchDetail  from './pages/MatchDetail';
-import Login        from './pages/Login';
-import Profile      from './pages/Profile';
-import Voting       from './pages/Voting';
-import Training     from './pages/Training';
-import ArchitectLog from './pages/ArchitectLog';
-import NewsFeed     from './pages/NewsFeed';
-import Cup          from './pages/Cup';
-// /idols → leaguewide top-20 idol board + per-club top-5 (Phase 2)
-import Idols          from './pages/Idols';
-// /election → Election Night ticker: phase status, vote tallies, Decrees (Phase 3)
-import ElectionNight  from './pages/ElectionNight';
-// /lost → memorial for every incinerated player across all seasons (Phase 3)
-import Lost           from './pages/Lost';
+/**
+ * Temporary placeholder for `/` until the new Home page is built.
+ *
+ * Intentionally bare — proves the providers wire up and the route table
+ * resolves without depending on the deleted design system.  Replace this
+ * with the real Home page once it lands.
+ *
+ * @returns {JSX.Element}
+ */
+function HomePlaceholder() {
+  return (
+    <main style={{ padding: '32px', fontFamily: 'system-ui, sans-serif' }}>
+      <h1 style={{ margin: 0, fontSize: '24px' }}>ISL</h1>
+      <p style={{ marginTop: '8px', opacity: 0.6 }}>
+        Rebuilding from the ground up.
+      </p>
+    </main>
+  );
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/* ── Error Boundary ──────────────────────────────────────────────────── */}
-    {/* Wraps the entire app so any unhandled render error shows the ISL
-        fallback UI rather than a blank screen.  Must sit outside the Router
-        so routing errors are also caught. */}
+    {/* Error boundary outside everything so render errors anywhere in the
+        tree — including providers and listeners — show the fallback. */}
     <ErrorBoundary>
-    {/* ── Supabase + Auth providers ───────────────────────────────────────── */}
-    {/* SupabaseProvider must be outermost (AuthProvider depends on it via
-        useSupabase()). Both sit OUTSIDE the Router so every route — including
-        /login itself — has access to the auth context. */}
-    <SupabaseProvider client={supabaseClient}>
-      {/* ── Side-effect listeners ──────────────────────────────────────────── */}
-      {/* Mounted inside SupabaseProvider (needs useSupabase()) but outside the
-          Router (must survive full route transitions so no in-flight settlement
-          or narrative write is cancelled mid-navigation).  Renders null —
-          pure side-effects only.
-          Order is intentional: settlement first so wager_narrative writes see
-          settled rows, then referee narrative which is independent. */}
-      <WagerSettlementListener />
-      <CupRoundAdvancerListener />
-      <SeasonEnactmentListener />
-      <RefereeNarrativeListener />
-      <AuthProvider>
-        {/* ── Router ──────────────────────────────────────────────────────── */}
-        {/* BrowserRouter enables HTML5 history API navigation with clean URLs.
-            Vite's dev server serves index.html for all paths automatically, so
-            direct URL access and page refresh work correctly in development. */}
-        <BrowserRouter basename="/soccer-league/">
-          <Routes>
-            {/* ── Shell route — renders Layout (Header + Outlet + Footer) ──── */}
-            {/* path="/" with no exact prop matches all child routes because React
-                Router v6 uses relative matching by default on parent routes. */}
-            <Route element={<Layout />}>
-
-              {/* index route → / → Home */}
-              <Route index element={<Home />} />
-
-              {/* /leagues → four-league card grid */}
-              <Route path="leagues" element={<Leagues />} />
-
-              {/* /leagues/:leagueId → individual league standings + stats */}
-              <Route path="leagues/:leagueId" element={<LeagueDetail />} />
-
-              {/* /teams → all teams grouped by league */}
-              <Route path="teams" element={<Teams />} />
-
-              {/* /teams/:teamId → individual team info + stats */}
-              <Route path="teams/:teamId" element={<TeamDetail />} />
-
-              {/* /players → player roster browser (all teams, filterable by league) */}
-              <Route path="players" element={<Players />} />
-
-              {/* /players/:playerId → individual player profile + season stats */}
-              <Route path="players/:playerId" element={<PlayerDetail />} />
-
-              {/* /matches → MatchSimulator wrapped in the site shell */}
-              <Route path="matches" element={<Matches />} />
-
-              {/* /matches/:matchId → single fixture detail — WagerWidget + BetHistory */}
-              <Route path="matches/:matchId" element={<MatchDetail />} />
-
-              {/* /matches/:matchId/live → live event-by-event match viewer
-                  Subscribes to match_events via Realtime; reveals events by
-                  wall-clock elapsed time since scheduled_at.  See
-                  features/match/ui/MatchLivePage.tsx. */}
-              <Route path="matches/:matchId/live" element={<MatchLivePage />} />
-
-              {/* /login → authentication form */}
-              <Route path="login" element={<Login />} />
-
-              {/* /profile → account summary, preferences editor, full BetHistory */}
-              <Route path="profile" element={<Profile />} />
-
-              {/* /voting → end-of-season focus voting (team-scoped) */}
-              <Route path="voting" element={<Voting />} />
-
-              {/* /training → training facility clicker (favourite team's roster) */}
-              <Route path="training" element={<Training />} />
-
-              {/* /news → public Galaxy Dispatch narrative feed */}
-              {/* Surfaces Architect-generated narratives (galaxy-tick Edge
-                  Function + in-match fragments) in a paginated, kind-filtered
-                  view. No auth gate — lore is for everyone. */}
-              <Route path="news" element={<NewsFeed />} />
-
-              {/* /cup/celestial → Celestial Cup bracket (top 3 per league) */}
-              {/* Renders the stored bracket JSON for competition
-                  20000000-…-002. Empty state appears until seedCupCompetitions
-                  runs at season-end. */}
-              <Route path="cup/celestial" element={<Cup cupKey="celestial" />} />
-
-              {/* /cup/solar-shield → Solar Shield bracket (4th–6th per league) */}
-              {/* Same layout as Celestial Cup, different competition UUID
-                  (20000000-…-003) and qualifier criteria. */}
-              <Route path="cup/solar-shield" element={<Cup cupKey="solar-shield" />} />
-
-              {/* /idols → leaguewide top-20 idol board + per-club top-5 */}
-              {/* Public — no auth gate.  Idol rankings are community-visible;
-                  surfacing them feeds the social experiment and the love-is-
-                  dangerous narrative without revealing the mechanic. */}
-              <Route path="idols" element={<Idols />} />
-
-              {/* /election → Election Night: phase banner, vote tallies, Decree ticker */}
-              {/* Public — the ceremony is for everyone, auth or not.
-                  DEV-gated phase-advance button visible only in development. */}
-              <Route path="election" element={<ElectionNight />} />
-
-              {/* /lost → memorial for every incinerated player across all seasons */}
-              {/* Public and permanent — the cosmos remembers. */}
-              <Route path="lost" element={<Lost />} />
-
-              {/* /architect-log → dev-only intervention audit table */}
-              {/* ArchitectLog.jsx gates itself behind import.meta.env.DEV so
-                  the page body is a "not available" stub in production bundles.
-                  The route is always registered so the URL doesn't 404 in prod,
-                  but the page content is safe. */}
-              <Route path="architect-log" element={<ArchitectLog />} />
-
-              {/* /admin → maintainer-only testing controls (Package 14) */}
-              {/* AdminPage gates the panel client-side via the
-                  VITE_ADMIN_USER_IDS allowlist and renders a "restricted"
-                  stub for everyone else. The route is always registered so
-                  the URL doesn't 404 — server-side RLS is the actual
-                  security boundary. */}
-              <Route path="admin" element={<AdminPage />} />
-
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </SupabaseProvider>
+      <SupabaseProvider client={supabaseClient}>
+        {/* Listeners mounted before AuthProvider so they're alive for the
+            entire session, including the moment auth state changes. */}
+        <WagerSettlementListener />
+        <CupRoundAdvancerListener />
+        <SeasonEnactmentListener />
+        <RefereeNarrativeListener />
+        <AuthProvider>
+          <BrowserRouter basename="/soccer-league/">
+            <Routes>
+              <Route index element={<HomePlaceholder />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </SupabaseProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

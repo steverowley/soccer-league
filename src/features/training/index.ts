@@ -63,10 +63,7 @@ export {
 export type { RecordClickResult } from './api/trainingLog';
 
 // ── UI (React components) ──────────────────────────────────────────────────
-// TrainingPage is the route-level container; ClickerWidget is exported
-// separately so it can be embedded on PlayerDetail later without going
-// through the picker UI.
-export { TrainingPage } from './ui/TrainingPage';
-
-export { ClickerWidget } from './ui/ClickerWidget';
-export type { ClickerPlayer, ClickerWidgetProps } from './ui/ClickerWidget';
+// TrainingPage + ClickerWidget + TrainingCommunityBoard were removed in
+// the 2026-05 nuke and will be rebuilt against the new design language.
+// This feature has no side-effect listeners, so nothing is exported from
+// ui/ for now.
