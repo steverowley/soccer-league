@@ -12,8 +12,9 @@
 //   - Routes mounted as each page is rebuilt against the new design.
 //     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId
 //     (PR 3), /teams + /teams/:teamId (PR 4), /matches +
-//     /matches/:matchId (PR 5), /news + /idols (PR 6).  Every other
-//     route 404s — intentional during the phased rebuild.
+//     /matches/:matchId (PR 5), /news + /idols (PR 6), /voting +
+//     /training (PR 7).  Every other route 404s — intentional during
+//     the phased rebuild.
 //
 // What used to be here:
 //   - A ~250-line route table mapping every page (Home, Leagues, Teams,
@@ -68,6 +69,8 @@ import Matches       from './pages/Matches';
 import MatchDetail   from './pages/MatchDetail';
 import News          from './pages/News';
 import Idols         from './pages/Idols';
+import Voting        from './pages/Voting';
+import Training      from './pages/Training';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -128,6 +131,20 @@ createRoot(document.getElementById('root')).render(
                   the score number, no formula breakdown). */}
               <Route path="news"                element={<News />} />
               <Route path="idols"               element={<Idols />} />
+
+              {/* /voting + /training (PR 7).
+                  Both pages are gated on auth + favourite_team_id —
+                  anonymous and team-less users see a CTA card.  Voting
+                  reads the active season's focus options + tally, posts
+                  via castVote (which debits credits server-side), and
+                  surfaces the previous season's enacted focuses in a
+                  "What the Cosmos Decided" panel.  Training reads the
+                  user's club roster, lets them pick a player, and runs
+                  the clicker widget — optimistic XP increment on each
+                  click with rollback on cooldown / session-cap failure
+                  + a flash-toast on stat bumps. */}
+              <Route path="voting"              element={<Voting />} />
+              <Route path="training"            element={<Training />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
