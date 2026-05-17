@@ -52,25 +52,10 @@ import { CupRoundAdvancerListener } from './features/match';
 import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 
-/**
- * Temporary placeholder for `/` until the new Home page is built.
- *
- * Intentionally bare — proves the providers wire up and the route table
- * resolves without depending on the deleted design system.  Replace this
- * with the real Home page once it lands.
- *
- * @returns {JSX.Element}
- */
-function HomePlaceholder() {
-  return (
-    <main style={{ padding: '32px', fontFamily: 'system-ui, sans-serif' }}>
-      <h1 style={{ margin: 0, fontSize: '24px' }}>ISL</h1>
-      <p style={{ marginTop: '8px', opacity: 0.6 }}>
-        Rebuilding from the ground up.
-      </p>
-    </main>
-  );
-}
+// ── Routes ───────────────────────────────────────────────────────────────────
+// Page imports.  Each route lands in src/pages/.  More routes will be
+// added as each page is rebuilt against the new design.
+import Home from './pages/Home';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -87,7 +72,10 @@ createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <BrowserRouter basename="/soccer-league/">
             <Routes>
-              <Route index element={<HomePlaceholder />} />
+              {/* / → Home.  Other routes will be added as each page is
+                  rebuilt; until then they 404 — intentional during the
+                  phased rebuild. */}
+              <Route index element={<Home />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
