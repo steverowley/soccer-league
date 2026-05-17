@@ -9,7 +9,9 @@
 //   - The four cross-feature side-effect listeners that wire `match.completed`
 //     / `season.ended` bus events to their respective settlement / enactment /
 //     bracket-advance pipelines.  They render null — pure side effects.
-//   - A single `/` route that renders a placeholder until Home is rebuilt.
+//   - Routes mounted as each page is rebuilt against the new design.
+//     Currently live: / (Home, PR 2), /leagues + /leagues/:leagueId (PR 3).
+//     Every other route 404s — intentional during the phased rebuild.
 //
 // What used to be here:
 //   - A ~250-line route table mapping every page (Home, Leagues, Teams,
@@ -55,7 +57,9 @@ import { RefereeNarrativeListener } from './features/entities';
 // ── Routes ───────────────────────────────────────────────────────────────────
 // Page imports.  Each route lands in src/pages/.  More routes will be
 // added as each page is rebuilt against the new design.
-import Home from './pages/Home';
+import Home          from './pages/Home';
+import Leagues       from './pages/Leagues';
+import LeagueDetail  from './pages/LeagueDetail';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -76,6 +80,13 @@ createRoot(document.getElementById('root')).render(
                   rebuilt; until then they 404 — intentional during the
                   phased rebuild. */}
               <Route index element={<Home />} />
+
+              {/* /leagues + /leagues/:leagueId (PR 3).
+                  LeagueDetail handles unknown leagueId itself rather than
+                  redirecting, so a bad URL stays the user's URL with a
+                  clear "Unknown League" message. */}
+              <Route path="leagues"             element={<Leagues />} />
+              <Route path="leagues/:leagueId"   element={<LeagueDetail />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
