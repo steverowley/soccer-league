@@ -1,5 +1,6 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../types/database';
+import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -239,39 +240,49 @@ interface EngineTeam {
   players: EnginePlayer[];
 }
 
-export function normalizeTeamForEngine(team: any): EngineTeam {
-  const manager = team.managers?.[0];
+export function normalizeTeamForEngine(team: Record<string, unknown>): EngineTeam {
+  const name = team.name as string;
+  const id = team.id as string | undefined;
+  const shortName = team.short_name as string | undefined;
+  const color = team.color as string | undefined;
+  const homeGround = team.home_ground as string | undefined;
+  const location = team.location as string | undefined;
+  const capacity = team.capacity as string | undefined;
+  const managers = team.managers as Array<Record<string, unknown>> | undefined;
+  const players = team.players as Array<Record<string, unknown>> | undefined;
+
+  const manager = managers?.[0];
 
   return {
-    name: team.name,
+    name,
     shortName:
-      team.short_name || team.id?.split('-')[0]?.slice(0, 3).toUpperCase() || team.name?.slice(0, 3).toUpperCase() || 'UNK',
-    color: team.color || '#888888',
+      shortName || id?.split('-')[0]?.slice(0, 3).toUpperCase() || name?.slice(0, 3).toUpperCase() || 'UNK',
+    color: color || '#888888',
 
     stadium: {
-      name: team.home_ground || team.name,
-      planet: team.location || 'Unknown',
-      capacity: team.capacity || '50,000',
+      name: homeGround || name,
+      planet: location || 'Unknown',
+      capacity: capacity || '50,000',
     },
 
-    tactics: manager?.style?.toLowerCase().replace(/\s+/g, '_') || null,
+    tactics: (manager?.style as string | undefined)?.toLowerCase().replace(/\s+/g, '_') || null,
 
-    manager: manager ? { name: manager.name, personality: manager.style || 'Balanced' } : undefined,
+    manager: manager ? { name: manager.name as string, personality: (manager.style as string) || 'Balanced' } : undefined,
 
-    players: (team.players || [])
-      .filter((p: any) => p.is_active !== false)
-      .map((p: any) => ({
-        name: p.name,
-        position: p.position,
-        starter: p.starter ?? true,
-        attacking: p.attacking ?? 70,
-        defending: p.defending ?? 70,
-        mental: p.mental ?? 70,
-        athletic: p.athletic ?? 70,
-        technical: p.technical ?? 70,
-        jersey_number: p.jersey_number,
-      })),
-  };
+    players: (players || [])
+      .filter((p) => (p.is_active as boolean) !== false)
+      .map((p) => ({
+        name: p.name as string,
+        position: p.position as string,
+        starter: (p.starter as boolean) ?? true,
+        attacking: (p.attacking as number) ?? 70,
+        defending: (p.defending as number) ?? 70,
+        mental: (p.mental as number) ?? 70,
+        athletic: (p.athletic as number) ?? 70,
+        technical: (p.technical as number) ?? 70,
+        jersey_number: (p.jersey_number as number) ?? 0,
+      })) as EnginePlayer[],
+  } as EngineTeam;
 }
 
 export async function getTeamForEngine(teamId: string): Promise<EngineTeam> {
@@ -281,7 +292,7 @@ export async function getTeamForEngine(teamId: string): Promise<EngineTeam> {
     .eq('id', teamId)
     .single();
   if (error) throw error;
-  return normalizeTeamForEngine(data);
+  return normalizeTeamForEngine(data as Parameters<typeof normalizeTeamForEngine>[0]);
 }
 
 interface SeasonStats {
@@ -294,10 +305,10 @@ interface SeasonStats {
   avg_rating: number | null;
 }
 
-interface PlayerWithStats extends Database['public']['Tables']['players']['Row'] {
-  teams: { id: string; name: string };
+type PlayerWithStats = {
   seasonStats: SeasonStats;
-}
+  [key: string]: unknown;
+};
 
 export async function getPlayer(playerId: string): Promise<PlayerWithStats> {
   const [playerResult, statsResult] = await Promise.all([
@@ -313,7 +324,7 @@ export async function getPlayer(playerId: string): Promise<PlayerWithStats> {
 
   const statRows = statsResult.data ?? [];
   const agg = statRows.reduce(
-    (acc: any, row: any) => ({
+    (acc: { goals: number; assists: number; yellow_cards: number; red_cards: number; minutes_played: number; matches_played: number; _rsum: number; _rcnt: number }, row: { goals?: number | null; assists?: number | null; yellow_cards?: number | null; red_cards?: number | null; minutes_played?: number | null; rating?: number | null }) => ({
       goals: acc.goals + (row.goals ?? 0),
       assists: acc.assists + (row.assists ?? 0),
       yellow_cards: acc.yellow_cards + (row.yellow_cards ?? 0),
@@ -348,11 +359,11 @@ export async function getPlayer(playerId: string): Promise<PlayerWithStats> {
       matches_played: agg.matches_played,
       avg_rating,
     },
-  };
+  } as PlayerWithStats;
 }
 
 interface StandingsRow {
-  team: any;
+  team: { id: string; name: string; color: string | null };
   played: number;
   won: number;
   drawn: number;
@@ -378,12 +389,13 @@ export async function getStandings(competitionId: string): Promise<StandingsRow[
     .eq('status', 'completed');
   if (error) throw error;
 
-  const table: Record<string, any> = {};
+  const table: Record<string, StandingsRow> = {};
 
-  const ensure = (team: any) => {
-    if (!table[team.id]) {
-      table[team.id] = {
-        team,
+  const ensure = (team: Record<string, unknown>) => {
+    const id = team.id as string;
+    if (!table[id]) {
+      table[id] = {
+        team: team as StandingsRow['team'],
         played: 0,
         won: 0,
         drawn: 0,
@@ -400,21 +412,26 @@ export async function getStandings(competitionId: string): Promise<StandingsRow[
     ensure(m.home_team);
     ensure(m.away_team);
 
-    const h = table[m.home_team_id];
-    const a = table[m.away_team_id];
+    const h = table[(m.home_team_id as string)];
+    const a = table[(m.away_team_id as string)];
+
+    if (!h || !a) continue;
+
+    const homeScore = m.home_score as number;
+    const awayScore = m.away_score as number;
 
     h.played++;
     a.played++;
-    h.gf += m.home_score;
-    h.ga += m.away_score;
-    a.gf += m.away_score;
-    a.ga += m.home_score;
+    h.gf += homeScore;
+    h.ga += awayScore;
+    a.gf += awayScore;
+    a.ga += homeScore;
 
-    if (m.home_score > m.away_score) {
+    if (homeScore > awayScore) {
       h.won++;
       h.points += 3;
       a.lost++;
-    } else if (m.home_score < m.away_score) {
+    } else if (homeScore < awayScore) {
       a.won++;
       a.points += 3;
       h.lost++;
@@ -427,8 +444,8 @@ export async function getStandings(competitionId: string): Promise<StandingsRow[
   }
 
   return Object.values(table)
-    .map((r: any) => ({ ...r, gd: r.gf - r.ga }))
-    .sort((a: any, b: any) => b.points - a.points || (b.gd - a.gd) || (b.gf - a.gf));
+    .map((r) => ({ ...r, gd: r.gf - r.ga }))
+    .sort((a, b) => b.points - a.points || (b.gd - a.gd) || (b.gf - a.gf));
 }
 
 interface MatchResultInput {
@@ -439,16 +456,18 @@ interface MatchResultInput {
 }
 
 export async function saveMatchResult(matchId: string, { homeScore, awayScore, weather, stadium }: MatchResultInput) {
+  const updateData: Record<string, unknown> = {
+    home_score: homeScore,
+    away_score: awayScore,
+    status: 'completed',
+    played_at: new Date().toISOString(),
+  };
+  if (weather !== undefined) updateData.weather = weather;
+  if (stadium !== undefined) updateData.stadium = stadium;
+
   const { error } = await supabase
     .from('matches')
-    .update({
-      home_score: homeScore,
-      away_score: awayScore,
-      weather,
-      stadium,
-      status: 'completed',
-      played_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', matchId);
   if (error) throw error;
 }
@@ -507,15 +526,16 @@ export async function getIdolBoard(
   if (teamErr) throw teamErr;
 
   const byTeam = (teamRows ?? []).reduce(
-    (acc: Record<string, IdolRow[]>, row: any) => {
-      if (!acc[row.team_id]) acc[row.team_id] = [];
-      acc[row.team_id].push(row);
+    (acc: Record<string, unknown[]>, row: Record<string, unknown>) => {
+      const teamId = row.team_id as string;
+      if (!acc[teamId]) acc[teamId] = [];
+      acc[teamId].push(row);
       return acc;
     },
     {},
-  );
+  ) as Record<string, IdolRow[]>;
 
-  return { global: (topRows ?? []) as IdolRow[], byTeam };
+  return { global: ((topRows as unknown) ?? []) as IdolRow[], byTeam };
 }
 
 export async function getPlayerIdolRank(db: SupabaseClient<Database>, playerId: string): Promise<IdolRow | null> {
@@ -541,7 +561,7 @@ export async function getTopIdolsForArchitect(db: SupabaseClient<Database>, limi
       .order('global_rank', { ascending: true })
       .limit(limit);
     if (error) return [];
-    return ((data ?? []) as any[]).map((r: any) => ({ name: r.name, globalRank: r.global_rank }));
+    return ((data as unknown ?? []) as Array<Record<string, unknown>>).map((r) => ({ name: r.name as string, globalRank: r.global_rank as number }));
   } catch {
     return [];
   }
