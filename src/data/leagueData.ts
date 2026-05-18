@@ -1,43 +1,68 @@
-// ── leagueData.js ──────────────────────────────────────────────────────────────
-// Static reference data for all ISL leagues and their member clubs.
-//
-// This file is the single source of truth for the website's league/team
-// structure.  It is purely presentational data — no game mechanics live here.
-//
-// React is imported because STANDINGS_COLS has a `render` callback for the
-// last-5 form column that returns React elements.  All other exports remain
-// pure data.
-
 import React from 'react';
-// The match simulator still uses the separate teams.js / constants.js files.
-//
-// LEAGUE HIERARCHY
-// ────────────────
-//  Rocky Inner League  – inner solar system planets
-//  Gas/Ice Giants League – gas/ice giant moons and ring systems
-//  Outer Reaches League  – asteroid belt bodies
-//  Kuiper Belt League    – trans-Neptunian objects
-//
-// TEAM SHAPE
-// ──────────
-//  id          – URL-safe slug, used for routing (/teams/:id)
-//  name        – Full club name displayed in headings
-//  location    – Planet / moon / body the team represents
-//  homeGround  – Stadium name with nickname in quotes
-//  capacity    – Formatted seating capacity string
-//  color       – Primary brand hex colour (used for accents in team pages)
-//  tagline     – One-line descriptor shown on the teams listing card
-//  description – Long-form prose for the team detail page; may contain \n for
-//                paragraph breaks rendered as <p> elements
+
+// ── Type definitions ────────────────────────────────────────────────────────────
+
+export interface League {
+  id: string;
+  name: string;
+  shortName: string;
+  description: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  location: string;
+  homeGround: string;
+  capacity: string;
+  color: string;
+  tagline: string;
+  description: string;
+}
+
+export interface TeamWithLeague extends Team {
+  leagueId: string;
+}
+
+export interface ColumnDef {
+  key: string;
+  label: string;
+  align?: string;
+  linkField?: string;
+  render?: (row: Record<string, unknown>) => React.ReactElement;
+}
+
+export interface StandingsRow {
+  id: string;
+  team: string;
+  teamLink: string;
+  played: number;
+  wins: number;
+  draws: number;
+  loses: number;
+  points: number;
+  gd?: number;
+  form?: Array<'W' | 'D' | 'L'>;
+}
+
+export interface PlayerStatRow {
+  id: string;
+  player: string;
+  team: string;
+  goals?: number;
+  assists?: number;
+  cards?: number;
+  clean_sheets?: number;
+}
+
+interface FormPipStyle {
+  border: string;
+  text: string;
+  opacity: number;
+}
 
 // ── League definitions ────────────────────────────────────────────────────────
-/**
- * Ordered array of all ISL leagues.
- * Components iterate this to render the Leagues listing page and nav dropdowns.
- *
- * @type {Array<{id: string, name: string, shortName: string, description: string}>}
- */
-export const LEAGUES = [
+export const LEAGUES: League[] = [
   {
     id: 'rocky-inner',
     name: 'Rocky Inner League',
@@ -69,30 +94,8 @@ export const LEAGUES = [
 ];
 
 // ── Teams grouped by league id ─────────────────────────────────────────────────
-/**
- * All ISL clubs keyed by their parent league id.
- *
- * Each league maps to an ordered array of team objects.  The order determines
- * display sequence on the Teams listing page (roughly by in-universe prestige /
- * founding date within the league).
- *
- * @type {Record<string, Array<{
- *   id: string,
- *   name: string,
- *   location: string,
- *   homeGround: string,
- *   capacity: string,
- *   color: string,
- *   tagline: string,
- *   description: string,
- * }>>}
- */
-export const TEAMS_BY_LEAGUE = {
+export const TEAMS_BY_LEAGUE: Record<string, Team[]> = {
 
-  // ── Rocky Inner League ───────────────────────────────────────────────────────
-  // Eight clubs from the four inner rocky planets plus orbital colonies.
-  // The league plays under near-Earth gravity; atmospheric conditions vary
-  // from Mercurian vacuum to Venusian acid clouds.
   'rocky-inner': [
     {
       id: 'mercury-runners',
@@ -100,7 +103,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Mercury',
       homeGround: 'Solar Sprint Stadium, "The Heat Box"',
       capacity: '35,000',
-      color: '#CD7F32', // Burnt Sienna — reflects Mercury's metallic surface tones
+      color: '#CD7F32',
       tagline: 'Notable for their extraordinary speed on the pitch.',
       description:
         'Hailing from the closest planet to the sun, Mercury Runners FC is a founding member of the prestigious Rocky Inner League. They represent the unique challenges and adaptations required for life and sport on the small, scorching planet. True to their name, the Runners are renowned throughout the solar system for their blistering pace and relentless energy. This signature speed isn\'t just tactics; it\'s an evolutionary advantage honed by generations adapting to Mercury\'s extreme temperature swings, demanding rapid movement and endurance.\n\nTheir home matches are played at the Solar Sprint Stadium, aptly nicknamed "The Heat Box" by visiting teams who often struggle with the intense conditions. The team competes in distinctive muted colors of Burnt Sienna, Dark Slate, and Goldenrod, reflecting the metallic hues and deep shadows of their home world. While major silverware has eluded them so far, the Runners are a consistently competitive side, known for causing upsets with their rapid counter-attacks and pushing opponents to their physical limits. Their ambition burns as brightly as their home star as they strive to translate their unique planetary gifts into championship glory.',
@@ -111,7 +114,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Earth',
       homeGround: 'Blue Marble Arena, "The Blue Marble"',
       capacity: '95,000',
-      color: '#4169E1', // Royal Blue — Earth's ocean hue
+      color: '#4169E1',
       tagline: 'The oldest club in the league with a balanced play style.',
       description:
         'Earth United FC is the oldest and most storied club in the Rocky Inner League. Playing at the iconic Blue Marble Arena, they embody the full diversity of human sporting tradition. Their balanced, disciplined approach to the game has produced more league titles than any other Rocky Inner side.',
@@ -122,7 +125,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Venus',
       homeGround: 'Pressure Cooker Stadium',
       capacity: '52,000',
-      color: '#FF6B35', // Volcanic orange — mirrors Venus\'s sulphuric cloud colours
+      color: '#FF6B35',
       tagline: 'Known for their aggressive pressing style.',
       description:
         'Venus Volcanic SC play an intense high-press game that mirrors the volcanic fury of their home world. Few teams can withstand their relentless pressure in the first half.',
@@ -133,7 +136,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Earth',
       homeGround: 'The World Park, "The Greenhouse"',
       capacity: '58,000',
-      color: '#A5D6A7', // Terra Nova green — matches the ISL design system's green token
+      color: '#A5D6A7',
       tagline: 'Focused on youth development and attacking football.',
       description:
         'Terra Nova SC are known across the league for their investment in youth academies and flowing attacking football. Their teams are often the youngest in the league—and among the most exciting.',
@@ -144,7 +147,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Mars',
       homeGround: 'Red Planet Arena, "The Dust Bowl"',
       capacity: '48,000',
-      color: '#FF4500', // Mars red — also used by the simulator\'s mars team
+      color: '#FF4500',
       tagline: 'Disciplined defensive structure and counter-attacks.',
       description:
         'Mars Athletic are renowned as one of the toughest defensive sides in the league. Their low-block system, built on Martian endurance, has frustrated the best attacking teams in the solar system.',
@@ -155,7 +158,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Mars',
       homeGround: 'Limeil Stadium, "The Mountain"',
       capacity: '89,000',
-      color: '#CC4444', // Darker red — distinguishes them from Mars Athletic
+      color: '#CC4444',
       tagline: 'Specialists in aerial duels.',
       description:
         'Playing at the highest-altitude stadium in the league, Olympus Mons FC have developed an unrivalled aerial game. Their set-piece record is the stuff of legend.',
@@ -166,7 +169,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Mars',
       homeGround: 'Canyon Complex, "The Trench"',
       capacity: '61,000',
-      color: '#8B4513', // Saddle Brown — canyon rock colour
+      color: '#8B4513',
       tagline: 'Famous for technical midfielders and positional play.',
       description:
         'Valles Mariners SC are the thinking person\'s team in the Rocky Inner League. Their tiki-taka style, adapted from ancient canyon tactics, produces the highest pass-completion rates in the division.',
@@ -177,16 +180,13 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Largest Orbital Colony',
       homeGround: 'Orbital Stadium, "The Ring"',
       capacity: '72,000',
-      color: '#FFD700', // Gold — solar radiance and colony prosperity
+      color: '#FFD700',
       tagline: 'A diverse team representing the largest inhabited colony.',
       description:
         'Representing the most populous orbital colony in the inner system, Solar City FC draws on a diverse roster of players from across the solar system. Their eclectic style reflects the cosmopolitan nature of their home.',
     },
   ],
 
-  // ── Gas/Ice Giants League ────────────────────────────────────────────────────
-  // Eight clubs from Jupiter's and Saturn's moon systems, Saturn's rings,
-  // Uranus, and Neptune.  Lower-gravity environments allow more aerial play.
   'gas-giants': [
     {
       id: 'jupiter-titans',
@@ -194,7 +194,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Jupiter',
       homeGround: 'Storm Arena, "The Red Spot"',
       capacity: '110,000',
-      color: '#D2691E', // Chocolate — Jupiter's storm-band colouring
+      color: '#D2691E',
       tagline: 'Known for their physical power and fearsome defensive line.',
       description:
         'Jupiter Titans FC are the giants of the Gas/Ice Giants League in every sense. Their imposing physicality, reinforced by Jupiter\'s intense gravity training, makes them the most physically dominant side in the ISL.',
@@ -205,7 +205,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Europa',
       homeGround: 'Subsurface Stadium, "The Ice Bowl"',
       capacity: '53,000',
-      color: '#87CEEB', // Sky Blue — reflects Europa's icy cracked surface
+      color: '#87CEEB',
       tagline: 'Pioneers of fluid football.',
       description:
         'Europa Oceanic SC play a fluid, flowing style inspired by the vast subsurface oceans of their moon home. Their intricate passing weaves like water, impossible to contain.',
@@ -216,7 +216,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Ganymede',
       homeGround: 'Crater Fields, "The Cradle"',
       capacity: '67,000',
-      color: '#708090', // Slate Grey — rocky, cratered surface of Ganymede
+      color: '#708090',
       tagline: 'Founded by miners; emphasises endurance.',
       description:
         'Born from the mining communities of Ganymede, United represent working-class values translated into sport. Their relentless work rate across 90 minutes is unmatched in the division.',
@@ -227,7 +227,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Callisto',
       homeGround: 'Frozen Plains Stadium, "The Howling Den"',
       capacity: '45,000',
-      color: '#B0C4DE', // Light Steel Blue — frozen, ancient surface
+      color: '#B0C4DE',
       tagline: 'Famous for pack mentality and coordinated pressing.',
       description:
         'The Wolves hunt in packs. Their coordinated pressing system, developed through the brutal conditions of Callisto\'s surface, is one of the most tactically sophisticated in the league.',
@@ -238,7 +238,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Saturn Rings',
       homeGround: 'Cassini Colosseum, "The Halo"',
       capacity: '65,000',
-      color: '#9A5CF4', // Quantum Purple — matches the ISL design system accent token
+      color: '#9A5CF4',
       tagline: 'Known for fluid movement and beautiful passing patterns.',
       description:
         'Saturn Rings FC play the most aesthetically pleasing football in the ISL. Their passing patterns mirror the rings of their home planet—circular, hypnotic, and impossible to break.',
@@ -249,7 +249,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Titan',
       homeGround: 'Hydrocarbon Park, "The Orange Haze"',
       capacity: '46,000',
-      color: '#FFA500', // Orange — Titan\'s distinctive hazy orange atmosphere
+      color: '#FFA500',
       tagline: 'Specialists in high-pressing games in thick atmosphere.',
       description:
         'Training in Titan\'s thick methane atmosphere builds extraordinary lung capacity. Titan Methane SC use this to press relentlessly for the full 90 minutes, exhausting opponents.',
@@ -260,7 +260,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Enceladus',
       homeGround: 'Geyser Stadium, "The Spray"',
       capacity: '38,000',
-      color: '#E0F7FA', // Ice Cyan — Enceladus's ice-geyser plumes
+      color: '#E0F7FA',
       tagline: 'Known for explosive counterattacks.',
       description:
         'Like the geysers of their icy home, Enceladus Geysers erupt with sudden, devastating counter-attacks. They can absorb pressure for long periods before unleashing explosive offensives.',
@@ -271,16 +271,13 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Uranus',
       homeGround: 'Polar Tilt Arena, "The Tilted Field"',
       capacity: '55,000',
-      color: '#40E0D0', // Turquoise — Uranus's cyan methane atmosphere
+      color: '#40E0D0',
       tagline: 'Famous for unpredictable play style.',
       description:
         'Playing on a planet tilted at 98 degrees has given the Sidewinders an unconventional perspective on the game. Their unpredictable tactics and lateral movement confuse even the best-prepared opposition.',
     },
   ],
 
-  // ── Outer Reaches League ─────────────────────────────────────────────────────
-  // Six clubs from the asteroid belt between Mars and Jupiter.
-  // Low-gravity, high-eccentricity orbit environments; small stadiums.
   'outer-reaches': [
     {
       id: 'ceres-miners',
@@ -288,7 +285,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Ceres',
       homeGround: 'Dwarf Planet Field, "The Rock"',
       capacity: '29,000',
-      color: '#8B7355', // Tan/brown — asteroid surface regolith
+      color: '#8B7355',
       tagline: 'Oldest and toughest club in the Asteroid Belt.',
       description:
         'The Miners represent the grit and determination of the asteroid belt. Their grinding style of play wears down opponents like rock against rock.',
@@ -299,7 +296,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Vesta',
       homeGround: 'Protoplanet Arena, "The Crater"',
       capacity: '24,000',
-      color: '#C0C0C0', // Silver — Vesta's bright reflective surface
+      color: '#C0C0C0',
       tagline: 'Masters of low-gravity football.',
       description:
         'Vesta FC have mastered the art of football in low gravity. Their floating passing game and long-range shooting make them one of the most entertaining sides in the league.',
@@ -310,7 +307,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Pallas',
       homeGround: 'Nomad Stadium, "The Drifter"',
       capacity: '21,000',
-      color: '#DEB887', // Burlywood — pale rocky surface
+      color: '#DEB887',
       tagline: 'Known for adaptability in tactics.',
       description:
         'The Wanderers live up to their name—they adapt their system each match, unpredictable and versatile in equal measure.',
@@ -321,7 +318,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Hygiea',
       homeGround: 'Subterranean Field, "The Dark Pitch"',
       capacity: '18,000',
-      color: '#696969', // Dim Grey — dark, unlit asteroid surface
+      color: '#696969',
       tagline: 'Famous for solid defensive structures.',
       description:
         'Playing in the darkest reaches of the asteroid belt, Hygiea United have built a fortress. Their defensive record is the best in the outer reaches.',
@@ -332,7 +329,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Psyche',
       homeGround: 'Core Ore Stadium, "The Forge"',
       capacity: '22,000',
-      color: '#B8860B', // Dark Goldenrod — the metallic iron-nickel surface of Psyche
+      color: '#B8860B',
       tagline: 'Known for physical strength and power.',
       description:
         'Playing on a metallic asteroid has given the Metallics an almost supernatural physicality. They are the strongest side in the belt, pound for pound.',
@@ -343,7 +340,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Juno',
       homeGround: 'Juno Memorial Stadium, "The Temple"',
       capacity: '31,000',
-      color: '#9370DB', // Medium Purple — named for the Roman goddess of order
+      color: '#9370DB',
       tagline: 'Values discipline and tactical organisation.',
       description:
         'Juno City FC are the most tactically disciplined club in the outer reaches. Their rigid organisational structure rarely concedes—or entertains—but delivers results.',
@@ -354,7 +351,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Asteroid Belt Colony',
       homeGround: 'Transit Hub Arena, "The Junction"',
       capacity: '19,000',
-      color: '#4A4A8A', // Indigo-slate — colony corridor lighting
+      color: '#4A4A8A',
       tagline: 'Tactical and gritty, forged in the lawless belt colonies.',
       description:
         'Born from the intersection of a dozen asteroid belt trade routes, Beltway FC represent the pragmatic, opportunistic spirit of colony life. Their tactics mirror the belt itself: adaptable, layered, and always looking for the gap. Formed by workers who played football in cargo bays and pressurised corridors, they carry a blue-collar heart into every match.\n\nWith the smallest budget in the Outer Reaches League, Beltway punch well above their weight through organised counterattacking and relentless set-piece preparation. The Junction has an atmosphere disproportionate to its size—belt colony fans are loud, passionate, and unafraid of a fight.',
@@ -365,16 +362,13 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Asteroid Belt Colony',
       homeGround: 'Extraction Field, "The Dig"',
       capacity: '17,000',
-      color: '#E8C84A', // Miner Gold — ore dust and headlamp yellow
+      color: '#E8C84A',
       tagline: 'They drill for every inch of the pitch.',
       description:
         'Solar Miners FC channel the exhausting, relentless work ethic of asteroid mining operations directly into their football. They drill through defences, press without mercy, and never stop running—even when the match is lost. Originally a recreational side for workers at the Kepler-7 extraction colony, they earned promotion through sheer collective effort.\n\nPhysical and direct, Solar Miners rarely produce beautiful football—but they produce results. The Dig is an intimidating venue built partly underground in a decommissioned ore shaft, and visiting teams hate its uneven acoustics and faintly sulfurous atmosphere.',
     },
   ],
 
-  // ── Kuiper Belt League ───────────────────────────────────────────────────────
-  // Six clubs from trans-Neptunian objects.  Smallest stadiums; extreme cold;
-  // the longest travel distances in the ISL create unique home-advantage effects.
   'kuiper-belt': [
     {
       id: 'pluto-frost',
@@ -382,7 +376,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Pluto',
       homeGround: 'Nitrogen Icebox, "The Deep Freeze"',
       capacity: '25,000',
-      color: '#B0E0E6', // Powder Blue — nitrogen ice plains of Tombaugh Regio
+      color: '#B0E0E6',
       tagline: 'Former giants of outer solar system football.',
       description:
         'Still mourning their planet\'s demotion, Pluto Frost channel their righteous anger into football. They are perpetual underdogs with the spirit of former champions.',
@@ -393,7 +387,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Charon',
       homeGround: 'Binary Lagrange Arena, "The Moon"',
       capacity: '18,000',
-      color: '#A9A9A9', // Dark Grey — Charon's grey, ancient crust
+      color: '#A9A9A9',
       tagline: 'Developing their own identity.',
       description:
         'Long overshadowed by their larger neighbour Pluto, Charon United are in the process of forging an identity entirely their own. A young club on the rise.',
@@ -404,7 +398,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Eris',
       homeGround: 'Distant Objects Stadium, "The Outpost"',
       capacity: '16,000',
-      color: '#DDA0DD', // Plum — Eris's pale reddish-white methane frost
+      color: '#DDA0DD',
       tagline: 'Most distant club in the league.',
       description:
         'Eris Wanderers travel the longest distances for away matches, and it shows in their mental fortitude. No club trains harder between fixtures.',
@@ -415,7 +409,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Haumea',
       homeGround: 'Centrifuge Field, "The Oval"',
       capacity: '14,000',
-      color: '#F0E68C', // Khaki — bright, elongated ellipsoidal body colour
+      color: '#F0E68C',
       tagline: 'Known for unusual elliptical wide-area play.',
       description:
         'Playing on Haumea\'s egg-shaped surface has given the Spinners an eccentric wide-play style. Their wingers operate at unusual angles that disorient conventional defences.',
@@ -426,7 +420,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Makemake',
       homeGround: 'Creation Stadium, "The Cradle"',
       capacity: '12,000',
-      color: '#CD853F', // Peru — reddish-brown tholins on the surface
+      color: '#CD853F',
       tagline: 'Specialists in creating chances from nothing.',
       description:
         'As their planetary name suggests, Makemake FC are creators. Their attacking play conjures chances from almost nothing—one of the most inventive clubs in the ISL.',
@@ -437,7 +431,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Orcus',
       homeGround: 'Underworld Arena, "The Pit"',
       capacity: '11,000',
-      color: '#2F4F4F', // Dark Slate Green — the dark, icy underworld of Orcus
+      color: '#2F4F4F',
       tagline: 'Dark horses who excel at free-kicks.',
       description:
         'From the darkest corner of the Kuiper Belt, Orcus Athletic are the ultimate dark horse. Their dead-ball specialists have decided more matches than any other set-piece team in the league.',
@@ -448,7 +442,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Sedna',
       homeGround: 'Perihelion Park, "The Long Way Round"',
       capacity: '9,000',
-      color: '#8B0000', // Deep Crimson — Sedna's blood-red methane-tholins surface
+      color: '#8B0000',
       tagline: 'The most patient team in the outer system.',
       description:
         'Sedna FC Mariners play like their home world orbits: with vast, unhurried patience. Sedna\'s extraordinary 11,400-year elliptical orbit has instilled in its inhabitants a philosophical relationship with time—and their football reflects it. They build slowly, absorb pressure without breaking, and strike only when the moment is certain.\n\nPerihelion Park is among the most remote stadiums in the known solar system, and home advantage here is almost mythological. Visiting teams must travel further than anyone else in the ISL, and they arrive already drained. The Mariners have never beaten a top-four side away from home—but they have never been relegated either.',
@@ -459,7 +453,7 @@ export const TEAMS_BY_LEAGUE = {
       location: 'Outer Kuiper Belt',
       homeGround: 'Void Stadium, "The Scatter"',
       capacity: '8,000',
-      color: '#556B2F', // Dark Olive — scattered rock and ice on the outer disc
+      color: '#556B2F',
       tagline: 'Wild, untamed football from the edge of everything.',
       description:
         'Scattered Disc FC Rangers play from the absolute fringe of the solar system, in a region so loosely defined that cartographers argue about whether it technically exists. Their football is similarly hard to classify: chaotic, improvisational, and occasionally brilliant. Tactics arrive by committee, change at half-time, and are abandoned by the 70th minute.\n\nThe Void Stadium\'s sparse attendance and enormous silence create a unique atmosphere—not intimidating so much as deeply unsettling. Opponents describe games there as "playing against the cosmos itself." In their few seasons in the Kuiper Belt League, the Rangers have delivered both the highest-scoring victory and the most embarrassing defeat in the division\'s history.',
@@ -467,112 +461,32 @@ export const TEAMS_BY_LEAGUE = {
   ],
 };
 
-// ── Shared table column definitions ───────────────────────────────────────────
-// Defined here so Home, LeagueDetail, and TeamDetail all use one source of
-// truth.  Changing a column key or label here propagates automatically.
-
-/**
- * Column definitions for the league standings table.
- * Used by Home (carousel), LeagueDetail, and TeamDetail (season / historic).
- *
- * The 'team' column uses `linkField: 'teamLink'` so IslTable automatically
- * renders each team name as a React Router <Link> to that team's detail page.
- * The `teamLink` property is populated by buildStandingsRows().
- *
- * @type {Array<{key: string, label: string, align?: string, linkField?: string}>}
- */
-export const STANDINGS_COLS = [
+export const STANDINGS_COLS: ColumnDef[] = [
   { key: 'team',   label: 'Team', linkField: 'teamLink' },
   { key: 'played', label: 'P',   align: 'right' },
   { key: 'wins',   label: 'W',   align: 'right' },
   { key: 'draws',  label: 'D',   align: 'right' },
   { key: 'loses',  label: 'L',   align: 'right' },
-  // GD (goal difference = goals for minus goals against) is populated by
-  // computeStandings() in matchResultsService.  Pre-season placeholder rows
-  // have gd = undefined, which IslTable renders as an empty cell — this is
-  // intentional: it signals "no matches played" rather than showing a 0
-  // that could be confused with a genuine 0-goal-difference record.
   { key: 'gd',     label: 'GD',  align: 'right' },
   { key: 'points', label: 'Pts', align: 'right' },
-  // Last-5 form column.  Custom render: 5 coloured pips (green W / dust D /
-  // red L) in most-recent-first order, left-to-right.  Pre-season rows have
-  // form: [] which the renderer turns into 5 empty placeholders so the
-  // column width stays consistent across the table.  See computeStandings
-  // for the underlying data shape.
   { key: 'form',   label: 'Form', align: 'right', render: renderFormCell },
 ];
 
-// ── Form-pip render helper ──────────────────────────────────────────────────
-// Keeping the helper local to this file means STANDINGS_COLS stays the single
-// source of truth for what the standings table looks like.  React is imported
-// at the top of this file for this one callback.
-//
-// Form pip = bordered square box with the result LETTER (W / D / L)
-// centred inside.  Replaces the previous coloured-dot pattern per the
-// 2026-05 Figma redesign — every box reads as a tiny stat tile rather
-// than an inferred colour, so the column is legible without a legend.
-//
-// Visual spec (Frame 39):
-//   W → dust 1 px border + dust letter (positive cue without shouting)
-//   D → dust 1 px border + dust letter at 50% opacity (neutral)
-//   L → solar-flare 1 px border + solar-flare letter (recent defeat)
-//   empty placeholder → dust border @ 20% + em-dash, drawn for any
-//                       form slot the team hasn't filled yet so the
-//                       column width stays stable pre-season.
-//
-// Width 5 placeholders even when form.length < 5 so a freshly-promoted
-// team (1 match played) doesn't render a half-empty cell that collapses
-// the column width on long-running browsers.
-
-/**
- * Per-result rendering map.  Each entry resolves to the border colour,
- * the letter colour, and the glyph rendered inside the box.  Keys are
- * the single-letter result codes computeStandings emits.
- *
- * Mechanically: changing the colours here updates every form column on
- * every page in one place — Home, LeagueDetail, TeamDetail all reuse
- * this renderer via STANDINGS_COLS.
- */
-const FORM_PIP_STYLES = {
+const FORM_PIP_STYLES: Record<string, FormPipStyle> = {
   W: { border: 'var(--color-dust)',  text: 'var(--color-dust)',  opacity: 1   },
   D: { border: 'var(--color-dust)',  text: 'var(--color-dust)',  opacity: 0.5 },
   L: { border: 'var(--color-flare)', text: 'var(--color-flare)', opacity: 1   },
 };
 
-/**
- * Standard pip count drawn per cell.  5 mirrors the array cap inside
- * computeStandings.  Bumping both together is the only safe way to widen
- * the visualisation.
- */
 const FORM_PIP_COUNT = 5;
-
-/**
- * Edge length of a single form pip in pixels.  Square — matches the
- * Figma's tight letter-tile grid.  24 px lines up visually with the
- * standings table's row height (~28 px including the row hairline) so
- * the tiles read as inset within the row rather than floating.
- */
 const FORM_PIP_SIZE_PX = 24;
 
-/**
- * Render a single standings row's form array as a horizontal strip of
- * bordered letter tiles.  Defined at module scope so STANDINGS_COLS can
- * reference it without paying a re-creation cost per render.
- *
- * @param {{form?: Array<'W'|'D'|'L'>}} row  Standings row.  `form` is
- *     most-recent-first; undefined entries render as faint em-dash
- *     placeholders so the column rhythm stays stable pre-season.
- * @returns {ReactElement}  Inline-flex strip of FORM_PIP_COUNT tiles.
- */
-function renderFormCell(row) {
-  const form = Array.isArray(row.form) ? row.form : [];
-  const pips = [];
+function renderFormCell(row: Record<string, unknown>): React.ReactElement {
+  const form = Array.isArray(row.form) ? row.form as Array<'W' | 'D' | 'L'> : [];
+  const pips: React.ReactElement[] = [];
   for (let i = 0; i < FORM_PIP_COUNT; i++) {
-    const result = form[i]; // most-recent-first; undefined when sparse
-    const spec   = FORM_PIP_STYLES[result];
-    // Placeholder (no match yet): faint dust border + em-dash.  Picked
-    // over a solid transparent square because the column without any
-    // mark looks like a layout bug; the em-dash reads as "no data".
+    const result = form[i];
+    const spec = result ? FORM_PIP_STYLES[result] : undefined;
     const border  = spec ? spec.border : 'rgba(227,224,213,0.2)';
     const text    = spec ? spec.text   : 'rgba(227,224,213,0.4)';
     const opacity = spec ? spec.opacity : 1;
@@ -606,107 +520,35 @@ function renderFormCell(row) {
   );
 }
 
-/**
- * Column definitions for the Top Scorers player-stat table.
- *
- * The `goals` key maps to the aggregated total returned by
- * matchResultsService.getTopScorers() — one number per player across all
- * saved results for the league.
- *
- * @type {Array<{key: string, label: string, align?: string}>}
- */
-export const SCORER_COLS = [
+export const SCORER_COLS: ColumnDef[] = [
   { key: 'player', label: 'Player' },
   { key: 'team',   label: 'Team'   },
   { key: 'goals',  label: 'Goals', align: 'right' },
 ];
 
-/**
- * Column definitions for the Top Assists player-stat table.
- *
- * The `assists` key maps to the aggregated total returned by
- * matchResultsService.getTopAssists().
- *
- * @type {Array<{key: string, label: string, align?: string}>}
- */
-export const ASSISTS_COLS = [
+export const ASSISTS_COLS: ColumnDef[] = [
   { key: 'player',  label: 'Player'  },
   { key: 'team',    label: 'Team'    },
   { key: 'assists', label: 'Assists', align: 'right' },
 ];
 
-/**
- * Column definitions for card-count tables (yellow or red).
- *
- * The `cards` key maps to the type-specific tally returned by
- * matchResultsService.getTopCards(leagueId, 'yellow'|'red').
- *
- * @type {Array<{key: string, label: string, align?: string}>}
- */
-export const CARDS_COLS = [
+export const CARDS_COLS: ColumnDef[] = [
   { key: 'player', label: 'Player' },
   { key: 'team',   label: 'Team'   },
   { key: 'cards',  label: 'Cards', align: 'right' },
 ];
 
-/**
- * Column definitions for the Top Clean Sheets player-stat table.
- *
- * The `clean_sheets` key maps to the aggregated total returned by
- * matchResultsService.getTopCleanSheets().  Only meaningful for goalkeepers
- * (GK position) but rendered for all positions for simplicity.
- *
- * @type {Array<{key: string, label: string, align?: string}>}
- */
-export const CLEAN_SHEETS_COLS = [
+export const CLEAN_SHEETS_COLS: ColumnDef[] = [
   { key: 'player',       label: 'Player'       },
   { key: 'team',         label: 'Team'         },
   { key: 'clean_sheets', label: 'Clean Sheets', align: 'right' },
 ];
 
-/**
- * Column definitions shared by all five player-stat tables.
- *
- * Kept for backward-compatibility with existing imports.
- * New code should prefer the specific SCORER_COLS / ASSISTS_COLS / CARDS_COLS
- * exports so column headers accurately describe what they display.
- *
- * @type {Array<{key: string, label: string, align?: string}>}
- * @deprecated Use SCORER_COLS, ASSISTS_COLS, or CARDS_COLS instead.
- */
-const PLAYER_STAT_COLS = [
-  { key: 'player', label: 'Player' },
-  { key: 'team',   label: 'Team'   },
-  { key: 'goals',  label: 'Goals', align: 'right' },
-];
-
-// ── Shared row-builder helpers ─────────────────────────────────────────────────
-
-/**
- * Builds a zeroed-out standings row array for every team in a given league.
- *
- * All numeric fields start at 0 (pre-season state).  When match results are
- * persisted, this function will be replaced by a selector reading from a
- * results store or API response.
- *
- * Each row includes a `teamLink` property (`/teams/:id`) consumed by the
- * `linkField` on STANDINGS_COLS so IslTable renders the team name as a
- * navigable link to that team's detail page — without any extra markup in
- * the calling page component.
- *
- * Used by: Home (carousel), LeagueDetail (full standings table).
- *
- * @param {string} leagueId - League slug (e.g. 'rocky-inner')
- * @returns {Array<{id: string, team: string, teamLink: string, played: number,
- *                  wins: number, draws: number, loses: number, points: number}>}
- */
-export function buildStandingsRows(leagueId) {
+export function buildStandingsRows(leagueId: string): StandingsRow[] {
   const teams = TEAMS_BY_LEAGUE[leagueId] ?? [];
   return teams.map(t => ({
     id:       t.id,
     team:     t.name,
-    // teamLink is read by STANDINGS_COLS' linkField so IslTable can render
-    // the team name as a <Link> without any page-level wiring.
     teamLink: `/teams/${t.id}`,
     played:   0,
     wins:     0,
@@ -716,55 +558,11 @@ export function buildStandingsRows(leagueId) {
   }));
 }
 
-/**
- * Returns 6 placeholder player-stat rows for use before live data is available.
- *
- * 6 rows is the display cap shown in the mockup before the "SEE MORE" button
- * appears.  The em-dash values signal to the user that data is pending rather
- * than showing empty cells.
- *
- * Used by: LeagueDetail and TeamDetail for all five player-stat tables.
- *
- * @returns {Array<{id: string, player: string, team: string, goals: number}>}
- */
-export function placeholderPlayerRows() {
-  // 6 rows — the exact count displayed in every player stat table in the mockup.
+export function placeholderPlayerRows(): PlayerStatRow[] {
   return Array.from({ length: 6 }, (_, i) => ({
     id:     `placeholder-${i}`,
     player: '—',
     team:   '—',
-    goals:  0,
   }));
 }
 
-// ── Derived helpers ────────────────────────────────────────────────────────────
-
-/**
- * Flat array of every team across all leagues, each extended with its
- * `leagueId` for filtering and routing purposes.
- *
- * @type {Array<{leagueId: string, id: string, name: string, [key: string]: any}>}
- */
-const ALL_TEAMS = Object.entries(TEAMS_BY_LEAGUE).flatMap(
-  ([leagueId, teams]) => teams.map(team => ({ ...team, leagueId }))
-);
-
-/**
- * Returns the human-readable league name for a given league id.
- *
- * @param {string} leagueId - The league slug (e.g. 'rocky-inner')
- * @returns {string} League display name, or empty string if not found
- */
-const getLeagueName = (leagueId) => {
-  const league = LEAGUES.find(l => l.id === leagueId);
-  return league ? league.name : '';
-};
-
-/**
- * Looks up a single team by its id across all leagues.
- *
- * @param {string} teamId - The team slug (e.g. 'mercury-runners')
- * @returns {{leagueId: string, [key: string]: any} | undefined} Team object with
- *   leagueId injected, or undefined if no match found
- */
-const findTeam = (teamId) => ALL_TEAMS.find(t => t.id === teamId);
