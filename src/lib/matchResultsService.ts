@@ -143,7 +143,7 @@ interface StandingsAccumulator {
 
 interface StandingsRow {
   id: string;
-  name: string;
+  team: string;
   played: number;
   wins: number;
   draws: number;
@@ -157,7 +157,7 @@ interface StandingsRow {
 
 export function computeStandings(
   leagueId: string,
-  baseRows: Array<{ id: string; name: string; [key: string]: unknown }>,
+  baseRows: Array<{ id: string; team: string; [key: string]: unknown }>,
   results?: MatchResult[],
 ): StandingsRow[] {
   const all = results ?? getResults();
@@ -215,7 +215,7 @@ export function computeStandings(
     if (!data) {
       return {
         id: row.id,
-        name: row.name,
+        team: row.team,
         played: 0,
         wins: 0,
         draws: 0,
@@ -231,7 +231,7 @@ export function computeStandings(
     const gd = data.gf - data.ga;
     return {
       id: row.id,
-      name: row.name,
+      team: row.team,
       played: data.played,
       wins: data.wins,
       draws: data.draws,

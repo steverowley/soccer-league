@@ -11,21 +11,9 @@
 //   • home team perspective vs away team perspective is correctly mirrored
 
 import { describe, expect, it } from 'vitest';
-import { computeStandings } from './matchResultsService';
+import { computeStandings, type MatchResult } from './matchResultsService';
 
-/**
- * Minimal shape the test fixtures use.  computeStandings reads more fields
- * than this in production, but only these are referenced inside the merge
- * + form-tracking branches under test.
- */
-interface TestStandingsRow {
-  id: string;
-  team?: string;
-  form: ('W' | 'D' | 'L')[];
-  [key: string]: unknown;
-}
 
-/** Build a synthetic result row with only the fields computeStandings reads. */
 function result(
   home: string,
   homeGoals: number,
@@ -40,7 +28,7 @@ function result(
     awayLeagueTeamId: away,
     homeGoals,
     awayGoals,
-  };
+  } as unknown as MatchResult;
 }
 
 /** Minimal base row.  All non-stat fields default in the merge step. */
@@ -52,14 +40,14 @@ const baseRows = [
 
 describe('computeStandings — form tracking', () => {
   it('returns empty form array for teams with no results', () => {
-    const rows = computeStandings('rocky-inner', baseRows, []) as TestStandingsRow[];
+    const rows = computeStandings('rocky-inner', baseRows, []);
     expect(rows.every(r => Array.isArray(r.form) && r.form.length === 0)).toBe(true);
   });
 
   it('records W for the winning side and L for the losing side', () => {
     const rows = computeStandings('rocky-inner', baseRows, [
       result('mars-athletic', 2, 'earth-united', 0),
-    ]) as TestStandingsRow[];
+    ]);
     const mars  = rows.find(r => r.id === 'mars-athletic')!;
     const earth = rows.find(r => r.id === 'earth-united')!;
     expect(mars.form).toEqual(['W']);
@@ -69,7 +57,7 @@ describe('computeStandings — form tracking', () => {
   it('records D for both sides on a draw', () => {
     const rows = computeStandings('rocky-inner', baseRows, [
       result('mars-athletic', 1, 'earth-united', 1),
-    ]) as TestStandingsRow[];
+    ]);
     expect(rows.find(r => r.id === 'mars-athletic')!.form).toEqual(['D']);
     expect(rows.find(r => r.id === 'earth-united')!.form).toEqual(['D']);
   });
@@ -80,7 +68,7 @@ describe('computeStandings — form tracking', () => {
       result('mars-athletic', 3, 'earth-united', 0),   // newest: W for Mars
       result('mars-athletic', 0, 'earth-united', 1),   // middle: L for Mars
       result('mars-athletic', 1, 'earth-united', 1),   // oldest: D for Mars
-    ]) as TestStandingsRow[];
+    ]);
     expect(rows.find(r => r.id === 'mars-athletic')!.form).toEqual(['W', 'L', 'D']);
     expect(rows.find(r => r.id === 'earth-united')!.form).toEqual(['L', 'W', 'D']);
   });
@@ -89,7 +77,7 @@ describe('computeStandings — form tracking', () => {
     // Eight consecutive Mars wins; only the most recent 5 should appear.
     const results = Array.from({ length: 8 }, () =>
       result('mars-athletic', 1, 'earth-united', 0));
-    const rows = computeStandings('rocky-inner', baseRows, results) as TestStandingsRow[];
+    const rows = computeStandings('rocky-inner', baseRows, results);
     const mars  = rows.find(r => r.id === 'mars-athletic')!;
     const earth = rows.find(r => r.id === 'earth-united')!;
     expect(mars.form).toEqual(['W', 'W', 'W', 'W', 'W']);
