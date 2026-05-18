@@ -9,7 +9,9 @@
 // Palette (3 tokens, app-wide):
 //   DUST   #E3E0D5  text + active chip
 //   ABYSS  #111111  page background
-//   FLARE  #FF4F5E  the auth CTA (THE attention colour)
+//   QUANTUM #9A5CF4 the auth CTA (THE focus colour — primary attention)
+//                   Solar Flare (#FF4F5E) is error-only per the design
+//                   system; see Layout.jsx COLORS for the full map.
 //
 // Active-page indicator: a faint dust-tinted rectangle behind the label
 // (NOT a coloured underline; NOT a purple pill).
@@ -24,11 +26,21 @@ import { useAuth } from '../features/auth';
 // ── Palette tokens (hard-coded; no design-system file by deliberate choice) ──
 // Re-introducing a tokens layer is deferred until 2+ pages legitimately
 // share the same hex values (premature-abstraction guard).
-const DUST          = '#E3E0D5';
-const ABYSS         = '#111111';
-const FLARE         = '#FF4F5E';
-const DUST_FAINT    = 'rgba(227, 224, 213, 0.12)';
-const HAIRLINE      = 'rgba(227, 224, 213, 0.18)';
+// ── Palette aliases ──────────────────────────────────────────────────────
+// Hard-coded here (not imported from Layout) because Header sits at the
+// top of the providers tree and we want it stable even if Layout's
+// shape changes.  These MUST stay in lock-step with the COLORS object
+// in components/Layout.jsx.
+//
+// QUANTUM is the focus / primary-CTA hue — the Sign Up pill is the only
+// flare-equivalent surface in the header, but Solar Flare is the
+// error-only colour per the design system, so the pill uses Quantum
+// Purple instead.  See Layout.jsx COLORS for the full semantic map.
+const DUST       = '#E3E0D5';
+const ABYSS      = '#111111';
+const QUANTUM    = '#9A5CF4';
+const DUST_FAINT = 'rgba(227, 224, 213, 0.12)';
+const HAIRLINE   = 'rgba(227, 224, 213, 0.18)';
 
 // ── Primary navigation ──────────────────────────────────────────────────────
 // Seven links matching the corrected design.  "News" replaced the
@@ -311,7 +323,10 @@ function AccountMenu() {
           cursor: 'pointer',
         }}
       >
-        <span style={{ color: FLARE, fontVariantNumeric: 'tabular-nums' }}>
+        {/* Credit balance painted in Quantum Purple — the user's
+            focus number, NOT an error state.  Solar Flare here would
+            misread as "your credits are in trouble". */}
+        <span style={{ color: QUANTUM, fontVariantNumeric: 'tabular-nums' }}>
           {credits.toLocaleString()}
         </span>
         <span style={{ color: 'rgba(227, 224, 213, 0.50)' }}>•</span>
@@ -455,11 +470,13 @@ function MobileSignOutButton({ onAfter }) {
 }
 
 /**
- * Solar Flare auth CTA — flare fill + dust text + flare border.
+ * Quantum Purple auth CTA — purple fill + dust text + purple border.
  *
- * Used in the header (Sign Up / Log In) and in the hero (Watch Live
- * Match).  Hover deepens to a darker flare so the affordance reads
- * tactile rather than flat.
+ * Used in the header (Sign Up) and in the mobile drawer.  Quantum
+ * Purple is the design system's focus colour — primary attention.
+ * The component name is kept as `FlareButton` for legacy reasons
+ * (PR 12 corrected the fill colour but renaming all callers across
+ * the desktop + mobile branches is a separate cleanup).
  *
  * @param {object} props
  * @param {string} props.to                Target route
@@ -482,8 +499,8 @@ function FlareButton({ to, onClick, children }) {
         letterSpacing: '0.12em',
         color: DUST,
         textDecoration: 'none',
-        background: FLARE,
-        border: `1px solid ${FLARE}`,
+        background: QUANTUM,
+        border: `1px solid ${QUANTUM}`,
         padding: '12px 24px',
         whiteSpace: 'nowrap',
       }}

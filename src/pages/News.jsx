@@ -30,7 +30,10 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getRecentNarratives } from '../features/entities';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// Architect cards use QUANTUM (the canonical Architect / focus hue per
+// the design system).  Cosmic Disturbance cards stay FLARE — that's
+// the only error-coded narrative kind (catastrophic reality hiccup).
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -50,9 +53,14 @@ const NARRATIVE_KINDS = [
     key:      'architect_whisper',
     label:    'Architect',
     subtitle: 'The Cosmic Architect',
-    border:   '#A78BFA',          // soft violet — matches Package 5 spec
-    glow:     'rgba(167, 139, 250, 0.25)',
-    pip:      '#A78BFA',
+    // Quantum Purple — canonical Architect / focus hue per the design
+    // system.  Earlier drafts used #A78BFA (a lighter violet);
+    // promoted to the actual brand token in PR 12.  Glow is the same
+    // hex at 25 % alpha so the card pulse stays subtle on the abyss
+    // canvas.
+    border:   COLORS.quantum,
+    glow:     'rgba(154, 92, 244, 0.25)',
+    pip:      COLORS.quantum,
   },
   {
     key:      'cosmic_disturbance',

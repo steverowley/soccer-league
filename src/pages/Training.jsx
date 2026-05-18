@@ -41,7 +41,12 @@ import {
 import { getPlayersForTeam } from '../lib/supabase';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// QUANTUM (focus) drives the click button.  TERRA_NOVA (confirmation)
+// borders the stat-bump toast — a stat threshold cross is the most
+// positive event in the training facility, so a confirmation-green
+// pip reads correctly.  FLARE stays for the error-reason text under
+// the click button.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, terraNova: TERRA_NOVA } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -555,8 +560,8 @@ function ClickerWidget({ user, player }) {
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
             color: DUST,
-            background: locked ? 'transparent' : FLARE,
-            border: `1px solid ${locked ? HAIRLINE : FLARE}`,
+            background: locked ? 'transparent' : QUANTUM,
+            border: `1px solid ${locked ? HAIRLINE : QUANTUM}`,
             padding: '20px 24px',
             cursor: locked ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit',
@@ -575,12 +580,15 @@ function ClickerWidget({ user, player }) {
           {errorReason ?? `Session cap: ${SESSION_MAX_CLICKS} clicks / hour`}
         </span>
         {bumpToast && (
+          // Terra Nova border + text — confirmation green for a
+          // successful stat-threshold cross.  Reads as "the void
+          // approves" rather than just "something happened".
           <span style={{
             fontSize: 12,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            color: DUST,
-            border: `1px solid ${DUST}`,
+            color: TERRA_NOVA,
+            border: `1px solid ${TERRA_NOVA}`,
             padding: '8px 12px',
           }}>
             {bumpToast}

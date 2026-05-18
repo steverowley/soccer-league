@@ -27,7 +27,14 @@ import { useAuth } from '../features/auth';
 import { getUserWagers, netCreditChange } from '../features/betting';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// Three semantic accents on this page:
+//   QUANTUM    — focus colour for the credit balance numeric (the
+//                user's headline number, NOT an error state).
+//   FLARE      — error / loss colour: negative net P&L, "Lost" filter
+//                chip, "Lost" status pip, per-row net cell when red.
+//   TERRA_NOVA — confirmation green: positive net P&L (you ended up
+//                ahead of the bookie), per-row net cell when in profit.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, terraNova: TERRA_NOVA } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -265,7 +272,9 @@ function Shell({ children, username }) {
  */
 function SummaryCard({ credits, counts, netPnl }) {
   const settled = counts.won + counts.lost + counts.void;
-  const pnlColor = netPnl < 0 ? FLARE : DUST;
+  // Net P&L tri-state colour: flare when red, terra-nova when green,
+  // dust when zero (neutral, not yet settled).
+  const pnlColor = netPnl < 0 ? FLARE : netPnl > 0 ? TERRA_NOVA : DUST;
   const pnlLabel = netPnl > 0 ? `+${netPnl.toLocaleString()}` : netPnl.toLocaleString();
 
   return (
@@ -277,7 +286,7 @@ function SummaryCard({ credits, counts, netPnl }) {
       gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
       gap: 24,
     }}>
-      <SummaryCell label="Credits" value={credits.toLocaleString()} accent={FLARE} />
+      <SummaryCell label="Credits" value={credits.toLocaleString()} accent={QUANTUM} />
       <SummaryCell label="Open Wagers" value={counts.open.toLocaleString()} />
       <SummaryCell label="Settled" value={settled.toLocaleString()} />
       <SummaryCell label="Net P&amp;L" value={pnlLabel} accent={pnlColor} />
@@ -524,7 +533,13 @@ function WagerRow({ wager, match }) {
         textAlign: 'right',
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
-        color: net === null ? DUST_50 : net < 0 ? FLARE : DUST,
+        // Mirror the summary card's tri-state: null = unsettled (dust
+        // 50 %), red loss = flare, profit = terra-nova green, zero =
+        // dust neutral (rare but possible for a void with stake = 0).
+        color: net === null ? DUST_50
+              : net < 0    ? FLARE
+              : net > 0    ? TERRA_NOVA
+              : DUST,
       }}>
         {net === null
           ? '—'
