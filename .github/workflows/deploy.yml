@@ -41,8 +41,18 @@ jobs:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
 
+      # `enablement: true` lets the action create the Pages site on
+      # first run if it isn't already enabled in repo settings.  Without
+      # it the workflow fails with "Get Pages site failed … Not Found"
+      # the very first time it runs against a repo where Pages hasn't
+      # been turned on under Settings → Pages → "Build and deployment".
+      # The workflow already grants `pages: write` + `id-token: write`
+      # in the top-level permissions block so the auto-enable call has
+      # the credentials it needs.
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -77,8 +87,18 @@ jobs:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
 
+      # `enablement: true` lets the action create the Pages site on
+      # first run if it isn't already enabled in repo settings.  Without
+      # it the workflow fails with "Get Pages site failed … Not Found"
+      # the very first time it runs against a repo where Pages hasn't
+      # been turned on under Settings → Pages → "Build and deployment".
+      # The workflow already grants `pages: write` + `id-token: write`
+      # in the top-level permissions block so the auto-enable call has
+      # the credentials it needs.
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
