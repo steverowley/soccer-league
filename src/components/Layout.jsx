@@ -251,6 +251,42 @@ export function FlareCTA({ to, children }) {
 }
 
 /**
+ * Shield silhouette placeholder for a club crest.  Drawn with
+ * clip-path so the colour is fully data-driven and there is no asset
+ * swap when team.color changes.  56 × 64 px reads at score-row scale
+ * without dominating the row.
+ *
+ * Two tint stops baked off the brand colour:
+ *   - fill: hex + '33' alpha (faint wash, ≈ 20 %)
+ *   - edge: hex + 'AA' alpha (medium border, ≈ 67 %)
+ * Null colour falls back to neutral dust so a missing brand value
+ * paints a placeholder shield rather than an invisible one.
+ *
+ * Extracted into Layout.jsx in PR 11 when MatchDetail duplicated the
+ * Home-page primitive verbatim — crossed the "extract on 2nd use"
+ * threshold the Home.jsx file header sets up.
+ *
+ * @param {{ color: string | null }} props
+ */
+export function TeamCrest({ color }) {
+  const tint = color ? `${color}33` : 'rgba(227,224,213,0.10)';
+  const edge = color ? `${color}AA` : 'rgba(227,224,213,0.30)';
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: 56,
+        height: 64,
+        background: tint,
+        border: `1px solid ${edge}`,
+        clipPath: 'polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%)',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+/**
  * Tiny back-to-listing link used at the top of every detail page above
  * its SectionHeader.  Mono small-caps cue with a ◄ glyph so the
  * direction is obvious at a glance.  Extracted in PR 6 once the third

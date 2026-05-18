@@ -16,10 +16,11 @@
 // PR 3 (Leagues + LeagueDetail) became the second consumer of SectionHeader,
 // StandingsTable, Container, Footer, and the CTA buttons.  Those primitives
 // were extracted into components/Layout.jsx + components/StandingsTable.jsx
-// at that point — matches the "extract on 2nd use" rule.  Everything that
-// is still local to Home (Hero, LiveMatchPanel, UpcomingPanel, FixtureRow,
-// CommentaryBlock, TeamScoreBlock, TeamCrest) has exactly one consumer
-// today and stays inline.
+// at that point — matches the "extract on 2nd use" rule.  PR 11 followed
+// up by extracting TeamCrest into Layout.jsx once MatchDetail duplicated it.
+// Everything that is still local to Home (Hero, LiveMatchPanel,
+// UpcomingPanel, FixtureRow, CommentaryBlock, TeamScoreBlock) has exactly
+// one consumer today and stays inline.
 //
 // DATA SOURCES
 //   - getLiveMatches(db)         → first live match featured in the panel
@@ -40,6 +41,7 @@ import {
   PrimaryButton,
   FlareCTA,
   DustButton,
+  TeamCrest,
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -508,33 +510,6 @@ function TeamScoreBlock({ side, name, location, color }) {
         {location && <> <span style={{ color: DUST_50 }}>•</span> {location}</>}
       </div>
     </div>
-  );
-}
-
-/**
- * Shield silhouette placeholder for a club crest.
- *
- * Drawn with clip-path so the colour is fully data-driven and there is
- * no asset swap when team.color changes.  56 × 64 px reads at score-row
- * scale without dominating the row.
- *
- * @param {{ color: string | null }} props
- */
-function TeamCrest({ color }) {
-  const tint = color ? `${color}33` : 'rgba(227,224,213,0.10)';
-  const edge = color ? `${color}AA` : 'rgba(227,224,213,0.30)';
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        width: 56,
-        height: 64,
-        background: tint,
-        border: `1px solid ${edge}`,
-        clipPath: 'polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%)',
-        flexShrink: 0,
-      }}
-    />
   );
 }
 

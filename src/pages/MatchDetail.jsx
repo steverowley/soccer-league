@@ -26,7 +26,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
+import { COLORS, Container, SectionHeader, Footer, BackLink, TeamCrest } from '../components/Layout';
 import WagerWidget from '../components/WagerWidget';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getMatch } from '../lib/supabase';
@@ -377,31 +377,6 @@ function TeamScoreBlock({ side, name, location, color }) {
         {location && <> <span style={{ color: DUST_50 }}>•</span> {location}</>}
       </div>
     </div>
-  );
-}
-
-/**
- * Shield silhouette placeholder for a club crest.  Identical primitive
- * to the one in Home's LiveMatchPanel; will be lifted into Layout.jsx
- * the next time a third surface needs it (Idols page probably).
- *
- * @param {{ color: string | null }} props
- */
-function TeamCrest({ color }) {
-  const tint = color ? `${color}33` : 'rgba(227,224,213,0.10)';
-  const edge = color ? `${color}AA` : 'rgba(227,224,213,0.30)';
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        width: 56,
-        height: 64,
-        background: tint,
-        border: `1px solid ${edge}`,
-        clipPath: 'polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%)',
-        flexShrink: 0,
-      }}
-    />
   );
 }
 
