@@ -31,6 +31,43 @@ A Blaseball-inspired **social experiment browser game**. Users watch AI-simulate
 
 ---
 
+## Claude Code Session Discipline
+
+### The Golden Rules
+1. **If the codebase is in the repo and the task is clear, don't ask—read and fix.** Clarifying questions waste tokens. Trust the task description + repo context.
+2. **Use agents proactively when they provide objectively better results.** Don't wait to be asked; spawn them when the math favors it.
+
+### Agent Decision Tree
+Use an **Agent** when:
+- **Explore agent**: Searching unknown/large codebase for patterns, multiple file types, or building a mental map. Better than grep when you need to synthesize findings across many files.
+- **Plan agent**: Multi-phase implementation, architectural decisions, or tradeoffs. Better than planning inline when >3 phases or unknown-unknowns exist.
+- **Specialized agent** (`claude-code-guide`, etc.): Domain-specific expertise (Claude API, framework internals). Use proactively when the task involves their specialty.
+- **General-purpose agent**: Complex investigation + implementation spanning multiple areas. Useful for parallel work (spawn agents for investigation, then implement sequentially).
+
+Use **direct tools** (Read, Edit, Bash) when:
+- Single file or tightly scoped task (mutation, debug, one-liner)
+- File path is known and target is visible
+- Refactor or bug fix in a single feature
+- Running tests/linters
+
+### Token Efficiency Imperatives
+1. **No over-explanation.** Commit messages, comments, and text output should state *what changed and why*, not narrate discovery. User can read the diff.
+2. **No speculative abstractions.** One consumer = inline it. Wait for a second consumer before extracting.
+3. **No dead code, commented-out logic, or TODO comments.** Delete or fix immediately. Dead code in PRs signals incomplete thinking.
+4. **Minimize clarifying questions.** You have a repo and a task. Start with a read. Ask only if the task is genuinely ambiguous after you've looked at the code.
+5. **No false starts.** Read the codebase *first*; understand layer boundaries and patterns before proposing a solution.
+6. **Batch independent operations.** Parallel tool calls (Read, Bash) save round-trips. Use them.
+
+### Quality Checklist (before saying "done")
+- [ ] No console.logs, commented code, or debug statements
+- [ ] No dead imports or unused variables
+- [ ] Tests pass (`tsc --noEmit && eslint && vitest`)
+- [ ] Follows existing code patterns (layer boundaries, naming, style)
+- [ ] One concern per file (or clear reason for multiple)
+- [ ] Commit message uses Conventional Commits format
+
+---
+
 ## Git Workflow & Branch Strategy
 
 **Branch Hierarchy:**
