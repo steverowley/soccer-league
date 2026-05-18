@@ -43,4 +43,47 @@ export default defineConfig({
       // namespace for DefinitelyTyped. Use @/* instead: '@/types/database'.
     },
   },
+
+  // ── Build-time chunking ────────────────────────────────────────────────
+  // The post-PR-10 single bundle ballooned past 500 KB minified, which
+  // triggers Vite's chunk-size warning.  Splitting on stable library
+  // boundaries gives the browser parallel downloads + cache hits across
+  // deploys (changing app code doesn't bust the vendor chunk).
+  //
+  // CHUNK STRATEGY:
+  //   - `react`          : react + react-dom + react-router-dom — rarely
+  //                        changes, lives in its own chunk so app deploys
+  //                        don't invalidate it.
+  //   - `supabase`       : @supabase/* — heavy, app-rare-update profile.
+  //   - `engine`         : gameEngine + the leagueData / teams seed
+  //                        modules — large static payload only the match
+  //                        simulator needs.  Keeping it separate means
+  //                        every read-only page (Home, Leagues, Teams,
+  //                        News, Idols) gets a smaller initial paint.
+  //   - everything else  : default bundle.
+  //
+  // Raising `chunkSizeWarningLimit` is the lazy fix; manualChunks is the
+  // honest one and gives genuine caching wins.
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router')) return 'react';
+            if (id.includes('react-dom'))    return 'react';
+            if (id.includes('/react/'))      return 'react';
+            if (id.includes('@supabase'))    return 'supabase';
+            return undefined;
+          }
+          // gameEngine is the largest hand-written module (2700+ LOC) —
+          // group it with the static seed data it imports so the
+          // editorial pages don't pull the simulator into their initial
+          // chunk.
+          if (id.includes('/src/gameEngine')) return 'engine';
+          if (id.includes('/src/data/'))      return 'engine';
+          return undefined;
+        },
+      },
+    },
+  },
 });
