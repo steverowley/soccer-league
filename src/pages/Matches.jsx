@@ -29,7 +29,11 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// QUANTUM (focus) drives LIVE indicators across this page; FLARE is
+// retained for the genuine "fixture data unavailable" error surface
+// only.  Solar Flare on live cues would mis-signal "this match has
+// gone wrong"; LIVE is an attention state, not an error state.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -262,7 +266,7 @@ function StatusFilter({ active, onChange, counts }) {
       <FilterChip
         label={`Live (${counts[FILTER_LIVE] ?? 0})`}
         active={active === FILTER_LIVE}
-        accent={FLARE}
+        accent={QUANTUM}
         onClick={() => onChange(FILTER_LIVE)}
       />
       <FilterChip
@@ -533,8 +537,8 @@ function ScoreBlock({ status, home, away }) {
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: FLARE,
-            boxShadow: `0 0 6px ${FLARE}`,
+            background: QUANTUM,
+            boxShadow: `0 0 6px ${QUANTUM}`,
             display: 'inline-block',
           }}
         />
@@ -570,8 +574,8 @@ function StatusPip({ status }) {
         alignItems: 'center',
         gap: 6,
         padding: '2px 8px',
-        border: `1px solid ${FLARE}`,
-        color: FLARE,
+        border: `1px solid ${QUANTUM}`,
+        color: QUANTUM,
         fontSize: 10,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',

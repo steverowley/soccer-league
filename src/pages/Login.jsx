@@ -23,7 +23,11 @@ import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useAuth } from '../features/auth';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// QUANTUM (focus) drives the Log In / Create Account submit button —
+// the primary attention surface on this page.  FLARE is retained for
+// the form-error message line where validation failures (bad email,
+// short password, auth API error) surface.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -229,8 +233,8 @@ export default function Login() {
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
               color: DUST,
-              background: busy ? 'transparent' : FLARE,
-              border: `1px solid ${FLARE}`,
+              background: busy ? 'transparent' : QUANTUM,
+              border: `1px solid ${QUANTUM}`,
               padding: '14px 24px',
               cursor: busy ? 'wait' : 'pointer',
               fontFamily: 'inherit',

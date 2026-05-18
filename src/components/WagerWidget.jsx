@@ -39,7 +39,12 @@ import {
 } from '../features/betting';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// QUANTUM (focus) drives every primary CTA + selection cue + emphasised
+// numeric in this widget.  FLARE is reserved for the genuine error
+// states: "insufficient credits" hint, form-error message line.  Per
+// the design system Solar Flare is error-only; conflating it with
+// focus would mis-signal that the Place Wager button is dangerous.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -226,8 +231,8 @@ export default function WagerWidget({ match }) {
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
             color: DUST,
-            background: FLARE,
-            border: `1px solid ${FLARE}`,
+            background: QUANTUM,
+            border: `1px solid ${QUANTUM}`,
             padding: '12px 24px',
             textDecoration: 'none',
           }}
@@ -257,7 +262,7 @@ export default function WagerWidget({ match }) {
         }}>
           <span>
             Existing bet: <span style={{ fontWeight: 700 }}>{SIDE_LABEL[existing.team_choice]}</span>
-            {' '}for <span style={{ fontWeight: 700, color: FLARE }}>{existing.stake.toLocaleString()}</span>{' '}credits
+            {' '}for <span style={{ fontWeight: 700, color: QUANTUM }}>{existing.stake.toLocaleString()}</span>{' '}credits
           </span>
           <span style={{ color: DUST_70 }}>
             @ {Number(existing.odds_snapshot).toFixed(2)}
@@ -394,7 +399,7 @@ function SideButton({ sideKey, label, subtitle, oddsValue, active, onSelect }) {
         alignItems: 'flex-start',
         gap: 8,
         background: active ? COLORS.dustFaint : 'transparent',
-        border: `1px solid ${active ? FLARE : HAIRLINE}`,
+        border: `1px solid ${active ? QUANTUM : HAIRLINE}`,
         color: DUST,
         padding: '14px 16px',
         fontFamily: 'inherit',
@@ -423,7 +428,7 @@ function SideButton({ sideKey, label, subtitle, oddsValue, active, onSelect }) {
         fontSize: 18,
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
-        color: active ? FLARE : DUST,
+        color: active ? QUANTUM : DUST,
       }}>
         {Number(oddsValue).toFixed(2)}
       </span>
@@ -539,8 +544,8 @@ function StakeForm({
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
             color: submittable ? DUST : DUST_50,
-            background: submittable ? FLARE : 'transparent',
-            border: `1px solid ${submittable ? FLARE : HAIRLINE}`,
+            background: submittable ? QUANTUM : 'transparent',
+            border: `1px solid ${submittable ? QUANTUM : HAIRLINE}`,
             padding: '14px 24px',
             cursor: submittable ? 'pointer' : 'not-allowed',
             fontFamily: 'inherit',

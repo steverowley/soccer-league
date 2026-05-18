@@ -32,7 +32,11 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getMatch } from '../lib/supabase';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// QUANTUM (focus) drives LIVE indicators; FLARE is retained for both
+// the genuine fetch-failure error and the Cancelled status pip
+// (cancellation is the only match status that genuinely is an error
+// outcome — every wager on it gets voided).
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -330,8 +334,8 @@ function ScoreDisplay({ status, home, away }) {
             width: 10,
             height: 10,
             borderRadius: '50%',
-            background: FLARE,
-            boxShadow: `0 0 8px ${FLARE}`,
+            background: QUANTUM,
+            boxShadow: `0 0 8px ${QUANTUM}`,
           }}
         />
       )}
@@ -381,18 +385,24 @@ function TeamScoreBlock({ side, name, location, color }) {
 }
 
 /**
- * Status pip — small bordered chip in the kicker row.  Live carries
- * the flare colour; completed is bordered hairline + dust text;
- * scheduled is muted; cancelled flares.  Status values are the raw
- * DB enum (`scheduled` / `in_progress` / `completed` / `cancelled`),
- * mapped through STATUS_LABELS for display.
+ * Status pip — small bordered chip in the kicker row.  Per-status
+ * colour assignment:
+ *   in_progress → Quantum Purple (focus / attention cue)
+ *   cancelled   → Solar Flare    (error — every wager voided)
+ *   completed   → Lunar Dust     (neutral, no special cue needed)
+ *   scheduled   → Lunar Dust     (neutral)
+ *
+ * Status values are the raw DB enum, mapped through STATUS_LABELS
+ * for display.  PR 12 split the Live + Cancelled cases — they used
+ * to share Solar Flare under the old "flare = attention" rule.
  *
  * @param {{ status: string }} props
  */
 function StatusPip({ status }) {
   const isLive      = status === 'in_progress';
   const isCancelled = status === 'cancelled';
-  const colour      = isLive || isCancelled ? FLARE : DUST;
+  // Live = quantum (focus); cancelled = flare (genuine error outcome).
+  const colour      = isLive ? QUANTUM : isCancelled ? FLARE : DUST;
   return (
     <span style={{
       display: 'inline-flex',
@@ -413,8 +423,8 @@ function StatusPip({ status }) {
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: FLARE,
-            boxShadow: `0 0 4px ${FLARE}`,
+            background: QUANTUM,
+            boxShadow: `0 0 4px ${QUANTUM}`,
             display: 'inline-block',
           }}
         />

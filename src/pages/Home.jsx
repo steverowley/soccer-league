@@ -8,10 +8,15 @@
 //   III. The Standings   — featured league table with 3-tier position pipe
 //                          and bordered W/D/L form tiles
 //
-// PALETTE (strict 3-colour app-wide; tokens live in components/Layout.jsx):
-//   DUST   #E3E0D5  — text on dark, default borders, button-secondary fill
-//   ABYSS  #111111  — page background, button-primary fill
-//   FLARE  #FF4F5E  — auth CTA + every "attention" highlight in the design
+// PALETTE (seven semantic tokens; live in components/Layout.jsx):
+//   DUST    #E3E0D5  — primary light: text on dark, button-secondary fill
+//   ABYSS   #111111  — primary dark: page bg, btn-primary fill
+//   QUANTUM #9A5CF4  — focus colour: primary CTAs + live indicators +
+//                       Architect.  PR 12 corrected the old "Flare for
+//                       every attention cue" mistake; Quantum is now
+//                       the canonical focus hue.
+//   FLARE   #FF4F5E  — ERROR ONLY: losses, validation failures,
+//                       cosmic disturbances.
 //
 // PR 3 (Leagues + LeagueDetail) became the second consumer of SectionHeader,
 // StandingsTable, Container, Footer, and the CTA buttons.  Those primitives
@@ -39,7 +44,7 @@ import {
   SectionHeader,
   Footer,
   PrimaryButton,
-  FlareCTA,
+  FocusCTA,
   DustButton,
   TeamCrest,
 } from '../components/Layout';
@@ -55,7 +60,12 @@ import { computeStandings } from '../lib/matchResultsService';
 // object.  We alias them here so the inline styles in this file stay
 // terse — every `DUST` / `ABYSS` / etc. in the JSX continues to read the
 // same way it did before extraction.
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+//
+// QUANTUM (focus colour) is the live-now / attention cue on this page;
+// FLARE is kept for future error states.  Both are imported even when
+// only one is currently referenced so the alias block stays a stable
+// single source of truth for this page.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE   = COLORS.hairline;
 const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;
@@ -301,7 +311,7 @@ function Hero() {
                 eye lands on the flare button first. */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <PrimaryButton to="/leagues">Browse Leagues</PrimaryButton>
-              <FlareCTA to="/matches">Watch Live Match</FlareCTA>
+              <FocusCTA to="/matches">Watch Live Match</FocusCTA>
             </div>
 
             {/* Stats grid — 4 small-caps cells separated by a top
@@ -417,12 +427,16 @@ function LiveMatchPanel({ match }) {
           border: `1px solid ${HAIRLINE}`,
           padding: '4px 12px',
         }}>
+          {/* Live pulse dot — Quantum Purple (focus colour, NOT
+              Solar Flare).  Solar Flare would mis-signal "this match
+              has gone wrong"; the LIVE chip is an attention cue, not
+              an error cue. */}
           <span style={{
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: FLARE,
-            boxShadow: `0 0 6px ${FLARE}`,
+            background: QUANTUM,
+            boxShadow: `0 0 6px ${QUANTUM}`,
             display: 'inline-block',
           }} />
           <span>

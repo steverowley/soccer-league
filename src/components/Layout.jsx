@@ -12,24 +12,63 @@
 //   - FlareCTA            flare-filled attention CTA
 //   - DustButton          dust-filled CTA used inside cards
 //
-// PALETTE (strict 3-colour app-wide; mirrors Header.jsx):
-//   DUST   #E3E0D5  — text on dark, default borders, button-secondary fill
-//   ABYSS  #111111  — page background, button-primary fill
-//   FLARE  #FF4F5E  — auth CTA + every "attention" highlight in the design
+// PALETTE (seven semantic tokens, matches the Figma design system):
+//   LUNAR DUST     #E3E0D5  — primary light: text on dark, default borders,
+//                              button-secondary fill
+//   GALACTIC ABYSS #111111  — primary dark: page bg, btn-primary fill
+//   PHOBOS ASH     #1F1F1F  — secondary dark: layered surfaces (cards on
+//                              cards, modal-on-dark)
+//   QUANTUM PURPLE #9A5CF4  — focus colour: PRIMARY CTAs, live indicators,
+//                              Architect, every "attention" highlight
+//   SOLAR FLARE    #FF4F5E  — ERROR ONLY: validation failures, losses,
+//                              relegation, cosmic disturbances
+//   TERRA NOVA     #A5D6A7  — confirmation: "Saved" toasts, positive P&L,
+//                              successful stat bumps
+//   ASTRO EXPLORER #FF6637  — secondary focus: hot-streak / momentum cues
+//                              that aren't errors
+//
+// PR 12 corrected the original 3-token assumption — the rebuild used
+// Solar Flare for both errors AND focus highlights, which conflated
+// two distinct semantic roles.
 
 import { Link } from 'react-router-dom';
 
 // ── Palette tokens ──────────────────────────────────────────────────────────
-// Three brand tokens + four computed dust tints.  Frozen so a stray
+// Seven semantic tokens + four computed dust tints, frozen so a stray
 // `COLORS.flare = '#000'` somewhere downstream fails loud in dev.
+//
+// SEMANTIC ASSIGNMENT (do NOT reuse a token across roles):
+//   - `quantum` is THE focus colour for every primary CTA + live cue +
+//     Architect highlight.  If a button wants attention, it's quantum.
+//   - `flare` is ERROR-ONLY.  Reserved for validation failures, losses,
+//     relegation cues, and cosmic-disturbance narratives.  A primary CTA
+//     painted flare reads as "danger / red alert" — wrong signal.
+//   - `terraNova` is the confirmation colour: positive P&L, "Saved"
+//     toasts, successful stat-bump flashes.
+//   - `astro` is a secondary focus accent for hot-streak / momentum
+//     surfaces that aren't error-coded (e.g. Hot Movers strip).
+//   - `phobosAsh` is the layered-surface fill — slightly lighter than
+//     abyss so a card-on-card stack reads as depth without losing the
+//     mono-dark canvas.
 export const COLORS = Object.freeze({
-  dust:      '#E3E0D5',
-  abyss:     '#111111',
-  flare:     '#FF4F5E',
-  hairline:  'rgba(227, 224, 213, 0.18)',
-  dust50:    'rgba(227, 224, 213, 0.50)',
-  dust70:    'rgba(227, 224, 213, 0.70)',
-  dustFaint: 'rgba(227, 224, 213, 0.12)',
+  // ── Primary surfaces ──────────────────────────────────────────────
+  dust:       '#E3E0D5', // Lunar Dust     — text on dark, button-secondary fill
+  abyss:      '#111111', // Galactic Abyss — page bg, btn-primary fill
+  phobosAsh:  '#1F1F1F', // Phobos Ash     — secondary dark / layered surfaces
+
+  // ── Semantic accents ──────────────────────────────────────────────
+  quantum:    '#9A5CF4', // Quantum Purple — focus / primary CTA / Architect
+  flare:      '#FF4F5E', // Solar Flare    — ERROR ONLY
+  terraNova:  '#A5D6A7', // Terra Nova     — confirmation / success
+  astro:      '#FF6637', // Astro Explorer — secondary focus / momentum
+
+  // ── Computed dust tints ───────────────────────────────────────────
+  // Alpha overlays of Lunar Dust.  Used for hairlines, sub-text,
+  // disabled / placeholder copy, and faint card-fill states.
+  hairline:   'rgba(227, 224, 213, 0.18)',
+  dust50:     'rgba(227, 224, 213, 0.50)',
+  dust70:     'rgba(227, 224, 213, 0.70)',
+  dustFaint:  'rgba(227, 224, 213, 0.12)',
 });
 
 /**
@@ -221,12 +260,19 @@ export function PrimaryButton({ to, children }) {
 }
 
 /**
- * Solar Flare CTA — flare fill, dust text, flare border.
- * THE attention button across the entire app.
+ * Focus CTA — Quantum Purple fill, dust text, purple border.  THE
+ * primary-attention button across the entire app: Sign Up, Watch Live,
+ * Cast Vote, Place Wager, Click for XP, Log In, Save Allegiance.
+ *
+ * Renamed from `FlareCTA` in PR 12 once the actual design palette was
+ * surfaced — Solar Flare is the ERROR colour, not the focus colour.
+ * The old name + flare fill collapsed two distinct semantic roles into
+ * one visual cue; using Quantum Purple here keeps Solar Flare reserved
+ * for genuine error states (validation, losses, cosmic disturbances).
  *
  * @param {{ to: string, children: React.ReactNode }} props
  */
-export function FlareCTA({ to, children }) {
+export function FocusCTA({ to, children }) {
   return (
     <Link
       to={to}
@@ -238,8 +284,8 @@ export function FlareCTA({ to, children }) {
         textTransform: 'uppercase',
         letterSpacing: '0.12em',
         color: COLORS.dust,
-        background: COLORS.flare,
-        border: `1px solid ${COLORS.flare}`,
+        background: COLORS.quantum,
+        border: `1px solid ${COLORS.quantum}`,
         padding: '14px 28px',
         textDecoration: 'none',
         whiteSpace: 'nowrap',

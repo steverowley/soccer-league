@@ -28,7 +28,12 @@ import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../lib/supabase';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+// QUANTUM (focus) drives the Save Allegiance submit button + the
+// credit-balance accent in the account summary card.  TERRA_NOVA
+// could replace the "Saved." italic line below the form — kept dust
+// for now since the form's success state is already clear from the
+// disabled submit + the refresh.  FLARE stays for save-error text.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -270,8 +275,8 @@ export default function Profile() {
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
               color: DUST,
-              background: busy ? 'transparent' : FLARE,
-              border: `1px solid ${FLARE}`,
+              background: busy ? 'transparent' : QUANTUM,
+              border: `1px solid ${QUANTUM}`,
               padding: '12px 24px',
               cursor: busy ? 'wait' : 'pointer',
               fontFamily: 'inherit',
@@ -390,7 +395,7 @@ function AccountSummary({ user, profile }) {
       <SummaryCell
         label="Intergalactic Credits"
         value={credits.toLocaleString()}
-        accent={FLARE}
+        accent={QUANTUM}
       />
       {created && <SummaryCell label="Member Since" value={created} />}
     </div>
