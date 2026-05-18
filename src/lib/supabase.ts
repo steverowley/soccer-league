@@ -1,110 +1,38 @@
-// ── supabase.ts ──────────────────────────────────────────────────────────────
-// Typed replacements for every helper in supabase.js.
-//
-// KEY DIFFERENCE FROM supabase.js
-// ─────────────────────────────────
-// Every async function accepts `db: IslSupabaseClient` as its first argument
-// instead of importing the singleton directly.  Call-sites obtain `db` from
-// `useSupabase()` (React context) so unit tests can inject a fake client
-// without patching module globals.
-//
-// Pure normaliser helpers (normalizeTeam, normalizeLeague,
-// normalizeTeamForEngine) are re-exported unchanged — they contain no I/O.
-//
-// BACKWARD COMPAT
-// ───────────────
-// App.jsx imports `from "./lib/supabase.js"` (explicit extension) so it
-// continues to use the singleton-based JS file unaffected.
+import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database';
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// ── Re-exported pure helpers ─────────────────────────────────────────────────
+export const supabase: SupabaseClient<Database> = createClient<Database>(SUPABASE_URL, SUPABASE_ANON);
 
-export function normalizeTeam(team: Record<string, unknown>) {
+export function normalizeTeam(team: Database['public']['Tables']['teams']['Row']) {
   return {
     ...team,
-    homeGround: team['home_ground'],
-    leagueId:   team['league_id'],
+    homeGround: team.home_ground,
+    leagueId: team.league_id,
   };
 }
 
-export function normalizeLeague(league: Record<string, unknown>) {
+export function normalizeLeague(league: Database['public']['Tables']['leagues']['Row']) {
   return {
     ...league,
-    shortName: league['short_name'],
+    shortName: league.short_name,
   };
 }
 
-type RawTeamForEngine = {
-  name: string;
-  short_name?: string | null;
-  id?: string;
-  color?: string | null;
-  home_ground?: string | null;
-  location?: string | null;
-  capacity?: string | null;
-  players?: Array<{
-    name: string;
-    position: string;
-    starter?: boolean | null;
-    attacking?: number | null;
-    defending?: number | null;
-    mental?: number | null;
-    athletic?: number | null;
-    technical?: number | null;
-    jersey_number?: number | null;
-    // Phase 3: incinerated players have is_active=false and must never appear
-    // in match rosters.  Filtered out in normalizeTeamForEngine.
-    is_active?: boolean | null;
-  }>;
-  managers?: Array<{ name: string; style?: string | null }>;
-};
-
-export function normalizeTeamForEngine(team: RawTeamForEngine) {
-  const manager = team.managers?.[0];
-  return {
-    name:      team.name,
-    shortName: team.short_name
-      || team.id?.split('-')[0]?.slice(0, 3).toUpperCase()
-      || team.name?.slice(0, 3).toUpperCase()
-      || 'UNK',
-    color:     team.color || '#888888',
-    stadium: {
-      name:     team.home_ground || team.name,
-      planet:   team.location   || 'Unknown',
-      capacity: team.capacity   || '50,000',
-    },
-    tactics: manager?.style?.toLowerCase().replace(/\s+/g, '_') || null,
-    manager: manager
-      ? { name: manager.name, personality: manager.style || 'Balanced' }
-      : undefined,
-    // Filter out incinerated players (is_active=false) before mapping into the
-    // engine shape.  The engine has no concept of permadeath — it expects every
-    // row in `players` to be eligible to start or sub on.  An incinerated player
-    // left in the array would still be rotated into matches by the manager AI,
-    // breaking the soul of the love-is-dangerous mechanic.  Default `is_active`
-    // to true when the field is missing (legacy rows / non-Phase 3 schemas)
-    // so this filter never silently drops live players.
-    players: (team.players || [])
-      .filter(p => p.is_active !== false)
-      .map(p => ({
-        name:          p.name,
-        position:      p.position,
-        starter:       p.starter ?? true,
-        attacking:     p.attacking  ?? 70,
-        defending:     p.defending  ?? 70,
-        mental:        p.mental     ?? 70,
-        athletic:      p.athletic   ?? 70,
-        technical:     p.technical  ?? 70,
-        jersey_number: p.jersey_number,
-      })),
-  };
+export async function getSeasons() {
+  const { data, error } = await supabase
+    .from('seasons')
+    .select('*')
+    .order('year', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
-// ── Seasons ───────────────────────────────────────────────────────────────────
-
-export async function getActiveSeason(db: IslSupabaseClient) {
-  const { data, error } = await db
+export async function getActiveSeason() {
+  const { data, error } = await supabase
     .from('seasons')
     .select('*')
     .eq('is_active', true)
@@ -113,23 +41,20 @@ export async function getActiveSeason(db: IslSupabaseClient) {
   return data;
 }
 
-// ── Leagues ───────────────────────────────────────────────────────────────────
-
-export async function getLeagues(db: IslSupabaseClient) {
-  const { data, error } = await db
+export async function getLeagues() {
+  const { data, error } = await supabase
     .from('leagues')
     .select('*')
     .order('name');
   if (error) throw error;
-  return data;
+  return data ?? [];
 }
 
-// ── Competitions ──────────────────────────────────────────────────────────────
-
-export async function getCompetitionsForSeason(db: IslSupabaseClient, seasonId: string) {
-  const { data, error } = await db
+export async function getCompetitionsForSeason(seasonId: string) {
+  const { data, error } = await supabase
     .from('competitions')
-    .select(`
+    .select(
+      `
       *,
       leagues (id, name, short_name),
       competition_teams (
@@ -137,52 +62,94 @@ export async function getCompetitionsForSeason(db: IslSupabaseClient, seasonId: 
         seeding,
         teams (id, name, color, location)
       )
-    `)
+    `,
+    )
     .eq('season_id', seasonId)
     .order('type');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getCompetition(competitionId: string) {
+  const { data, error } = await supabase
+    .from('competitions')
+    .select(
+      `
+      *,
+      seasons (id, name, year),
+      leagues (id, name, short_name),
+      competition_teams (
+        group_name,
+        seeding,
+        teams (*)
+      )
+    `,
+    )
+    .eq('id', competitionId)
+    .single();
   if (error) throw error;
   return data;
 }
 
-// ── Matches ───────────────────────────────────────────────────────────────────
-
-export async function getMatchesWithTeamDetail(db: IslSupabaseClient, competitionId: string) {
-  const { data, error } = await db
+export async function getMatchesForCompetition(competitionId: string) {
+  const { data, error } = await supabase
     .from('matches')
-    .select(`
+    .select(
+      `
+      *,
+      home_team:teams!matches_home_team_id_fkey (id, name, color),
+      away_team:teams!matches_away_team_id_fkey (id, name, color)
+    `,
+    )
+    .eq('competition_id', competitionId)
+    .order('played_at', { nullsFirst: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getMatchesWithTeamDetail(competitionId: string) {
+  const { data, error } = await supabase
+    .from('matches')
+    .select(
+      `
       *,
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
-    `)
+    `,
+    )
     .eq('competition_id', competitionId)
     .order('round', { nullsFirst: true })
     .order('played_at', { nullsFirst: true });
   if (error) throw error;
-  return data;
+  return data ?? [];
 }
 
-export async function getLiveMatches(db: IslSupabaseClient) {
-  const { data, error } = await db
+export async function getLiveMatches() {
+  const { data, error } = await supabase
     .from('matches')
-    .select(`
+    .select(
+      `
       *,
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
-    `)
+    `,
+    )
     .eq('status', 'in_progress')
     .order('scheduled_at', { nullsFirst: true });
   if (error) throw error;
   return data ?? [];
 }
 
-export async function getUpcomingMatches(db: IslSupabaseClient, limit = 6) {
-  const { data, error } = await db
+export async function getUpcomingMatches(limit = 6) {
+  const { data, error } = await supabase
     .from('matches')
-    .select(`
+    .select(
+      `
       *,
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
-    `)
+    `,
+    )
     .eq('status', 'scheduled')
     .not('scheduled_at', 'is', null)
     .order('scheduled_at', { ascending: true })
@@ -191,10 +158,11 @@ export async function getUpcomingMatches(db: IslSupabaseClient, limit = 6) {
   return data ?? [];
 }
 
-export async function getMatch(db: IslSupabaseClient, matchId: string) {
-  const { data, error } = await db
+export async function getMatch(matchId: string) {
+  const { data, error } = await supabase
     .from('matches')
-    .select(`
+    .select(
+      `
       *,
       competitions (id, name, type, format),
       home_team:teams!matches_home_team_id_fkey (*),
@@ -203,187 +171,345 @@ export async function getMatch(db: IslSupabaseClient, matchId: string) {
         *,
         players (id, name, position, overall_rating)
       )
-    `)
+    `,
+    )
     .eq('id', matchId)
     .single();
   if (error) throw error;
   return data;
 }
 
-// ── Teams ─────────────────────────────────────────────────────────────────────
-
-export async function getTeams(db: IslSupabaseClient, leagueId: string | null = null, withPlayers = false) {
+export async function getTeams(leagueId: string | null = null, withPlayers = false) {
   const playerSelect = withPlayers
     ? ', players(id, name, position, nationality, age, overall_rating, personality, starter)'
     : '';
-  let query = db
+  let query = supabase
     .from('teams')
     .select(`*, leagues(id, name, short_name)${playerSelect}`);
   if (leagueId) query = query.eq('league_id', leagueId);
   const { data, error } = await query.order('name');
   if (error) throw error;
-  return data;
+  return data ?? [];
 }
 
-export async function getTeam(db: IslSupabaseClient, teamId: string) {
-  const { data, error } = await db
+export async function getTeam(teamId: string) {
+  const { data, error } = await supabase
     .from('teams')
-    .select(`
+    .select(
+      `
       *,
       leagues (id, name, short_name),
       players (*),
       managers (*)
-    `)
+    `,
+    )
     .eq('id', teamId)
     .single();
   if (error) throw error;
   return data;
 }
 
-/**
- * Fetch only the players for a specific team. More efficient than
- * getTeams(db, null, true) when only one team's roster is needed.
- */
-export async function getPlayersForTeam(db: IslSupabaseClient, teamId: string) {
-  const { data, error } = await db
-    .from('players')
-    .select('id, name, position, nationality, age, overall_rating, personality, starter, jersey_number')
-    .eq('team_id', teamId)
-    .order('starter', { ascending: false })
-    .order('name');
-  if (error) throw error;
-  return data ?? [];
+interface EnginePlayer {
+  name: string;
+  position: string;
+  starter: boolean;
+  attacking: number;
+  defending: number;
+  mental: number;
+  athletic: number;
+  technical: number;
+  jersey_number?: number | null;
 }
 
-export async function getTeamForEngine(db: IslSupabaseClient, teamId: string) {
-  const { data, error } = await db
+interface EngineManager {
+  name: string;
+  personality: string;
+}
+
+interface EngineTeam {
+  name: string;
+  shortName: string;
+  color: string;
+  stadium: {
+    name: string;
+    planet: string;
+    capacity: string;
+  };
+  tactics: string | null;
+  manager?: EngineManager;
+  players: EnginePlayer[];
+}
+
+export function normalizeTeamForEngine(team: Record<string, unknown>): EngineTeam {
+  const name = team.name as string;
+  const id = team.id as string | undefined;
+  const shortName = team.short_name as string | undefined;
+  const color = team.color as string | undefined;
+  const homeGround = team.home_ground as string | undefined;
+  const location = team.location as string | undefined;
+  const capacity = team.capacity as string | undefined;
+  const managers = team.managers as Array<Record<string, unknown>> | undefined;
+  const players = team.players as Array<Record<string, unknown>> | undefined;
+
+  const manager = managers?.[0];
+
+  return {
+    name,
+    shortName:
+      shortName || id?.split('-')[0]?.slice(0, 3).toUpperCase() || name?.slice(0, 3).toUpperCase() || 'UNK',
+    color: color || '#888888',
+
+    stadium: {
+      name: homeGround || name,
+      planet: location || 'Unknown',
+      capacity: capacity || '50,000',
+    },
+
+    tactics: (manager?.style as string | undefined)?.toLowerCase().replace(/\s+/g, '_') || null,
+
+    manager: manager ? { name: manager.name as string, personality: (manager.style as string) || 'Balanced' } : undefined,
+
+    players: (players || [])
+      .filter((p) => (p.is_active as boolean) !== false)
+      .map((p) => ({
+        name: p.name as string,
+        position: p.position as string,
+        starter: (p.starter as boolean) ?? true,
+        attacking: (p.attacking as number) ?? 70,
+        defending: (p.defending as number) ?? 70,
+        mental: (p.mental as number) ?? 70,
+        athletic: (p.athletic as number) ?? 70,
+        technical: (p.technical as number) ?? 70,
+        jersey_number: (p.jersey_number as number) ?? 0,
+      })) as EnginePlayer[],
+  } as EngineTeam;
+}
+
+export async function getTeamForEngine(teamId: string): Promise<EngineTeam> {
+  const { data, error } = await supabase
     .from('teams')
     .select('*, players(*), managers(*)')
     .eq('id', teamId)
     .single();
   if (error) throw error;
-  return normalizeTeamForEngine(data as unknown as RawTeamForEngine);
+  return normalizeTeamForEngine(data as Parameters<typeof normalizeTeamForEngine>[0]);
 }
 
-// ── Players ───────────────────────────────────────────────────────────────────
+interface SeasonStats {
+  goals: number;
+  assists: number;
+  yellow_cards: number;
+  red_cards: number;
+  minutes_played: number;
+  matches_played: number;
+  avg_rating: number | null;
+}
 
-/**
- * Fetch a single player row plus their aggregated season stats.
- * Distinct from `getPlayer` in `gameEngine.js`, which is an in-engine
- * roster lookup used by the simulator — kept under separate names so
- * fallow's duplicate-export check stays clean and so callers aren't
- * surprised by which signature they get.
- */
-export async function getPlayerWithStats(db: IslSupabaseClient, playerId: string) {
+type PlayerWithStats = {
+  seasonStats: SeasonStats;
+  [key: string]: unknown;
+};
+
+export async function getPlayer(playerId: string): Promise<PlayerWithStats> {
   const [playerResult, statsResult] = await Promise.all([
-    db.from('players').select('*, teams(id, name)').eq('id', playerId).single(),
-    db.from('match_player_stats')
+    supabase.from('players').select('*, teams(id, name)').eq('id', playerId).single(),
+    supabase
+      .from('match_player_stats')
       .select('goals, assists, yellow_cards, red_cards, minutes_played, rating')
       .eq('player_id', playerId),
   ]);
 
   if (playerResult.error) throw playerResult.error;
-  if (statsResult.error)  throw statsResult.error;
+  if (statsResult.error) throw statsResult.error;
 
   const statRows = statsResult.data ?? [];
   const agg = statRows.reduce(
-    (acc, row) => ({
-      goals:          acc.goals          + (row.goals          ?? 0),
-      assists:        acc.assists        + (row.assists        ?? 0),
-      yellow_cards:   acc.yellow_cards   + (row.yellow_cards   ?? 0),
-      red_cards:      acc.red_cards      + (row.red_cards      ?? 0),
+    (acc: { goals: number; assists: number; yellow_cards: number; red_cards: number; minutes_played: number; matches_played: number; _rsum: number; _rcnt: number }, row: { goals?: number | null; assists?: number | null; yellow_cards?: number | null; red_cards?: number | null; minutes_played?: number | null; rating?: number | null }) => ({
+      goals: acc.goals + (row.goals ?? 0),
+      assists: acc.assists + (row.assists ?? 0),
+      yellow_cards: acc.yellow_cards + (row.yellow_cards ?? 0),
+      red_cards: acc.red_cards + (row.red_cards ?? 0),
       minutes_played: acc.minutes_played + (row.minutes_played ?? 0),
       matches_played: acc.matches_played + 1,
-      _rsum:          acc._rsum          + (row.rating         ?? 0),
-      _rcnt:          acc._rcnt          + (row.rating != null ? 1 : 0),
+      _rsum: acc._rsum + (row.rating ?? 0),
+      _rcnt: acc._rcnt + (row.rating != null ? 1 : 0),
     }),
-    { goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
-      minutes_played: 0, matches_played: 0, _rsum: 0, _rcnt: 0 }
+    {
+      goals: 0,
+      assists: 0,
+      yellow_cards: 0,
+      red_cards: 0,
+      minutes_played: 0,
+      matches_played: 0,
+      _rsum: 0,
+      _rcnt: 0,
+    },
   );
 
-  const avg_rating = agg._rcnt > 0
-    ? +(agg._rsum / agg._rcnt).toFixed(1)
-    : null;
+  const avg_rating = agg._rcnt > 0 ? +(agg._rsum / agg._rcnt).toFixed(1) : null;
 
   return {
     ...playerResult.data,
     seasonStats: {
-      goals:          agg.goals,
-      assists:        agg.assists,
-      yellow_cards:   agg.yellow_cards,
-      red_cards:      agg.red_cards,
+      goals: agg.goals,
+      assists: agg.assists,
+      yellow_cards: agg.yellow_cards,
+      red_cards: agg.red_cards,
       minutes_played: agg.minutes_played,
       matches_played: agg.matches_played,
       avg_rating,
     },
-  };
+  } as PlayerWithStats;
 }
 
-/**
- * Named alias for `getPlayerWithStats` that preserves the import contract
- * expected by `PlayerDetail.jsx` and any other JS callers. The two names
- * are intentionally distinct in `supabase.js` (singleton) vs here (DI) to
- * avoid confusion with the in-engine `getPlayer` inside `gameEngine.js`,
- * which does a lightweight roster lookup rather than a stats aggregate.
- *
- * Prefer importing `getPlayerWithStats` directly in new TypeScript code —
- * this alias exists only to avoid a breaking rename across legacy JSX files.
- */
-export const getPlayer = getPlayerWithStats;
+interface StandingsRow {
+  team: { id: string; name: string; color: string | null };
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  points: number;
+}
 
-/**
- * Fetch the `player_idol_score` view row for a single player.
- *
- * The idol score view is computed from wager activity: fans who bet on a
- * player's team accumulate idolisation points for that player. Global rank
- * and team rank are both stored so the PlayerDetail page can surface
- * "Idol rank: #N leaguewide" without a second query.
- *
- * Returns `null` (via `.maybeSingle()`) rather than throwing when the player
- * has no idol score row yet — new or unwagered-on players are unranked rather
- * than errored.
- *
- * @param db       - Injected Supabase client.
- * @param playerId - UUID of the player whose idol rank to fetch.
- * @returns The full `player_idol_score` row, or `null` if unranked.
- */
-export async function getPlayerIdolRank(db: IslSupabaseClient, playerId: string) {
-  const { data, error } = await db
-    .from('player_idol_score')
-    .select('*')
-    .eq('player_id', playerId)
-    .maybeSingle();
+export async function getStandings(competitionId: string): Promise<StandingsRow[]> {
+  const { data: matches, error } = await supabase
+    .from('matches')
+    .select(
+      `
+      home_team_id, away_team_id,
+      home_score, away_score,
+      home_team:teams!matches_home_team_id_fkey (id, name, color),
+      away_team:teams!matches_away_team_id_fkey (id, name, color)
+    `,
+    )
+    .eq('competition_id', competitionId)
+    .eq('status', 'completed');
   if (error) throw error;
-  return data;
+
+  const table: Record<string, StandingsRow> = {};
+
+  const ensure = (team: Record<string, unknown>) => {
+    const id = team.id as string;
+    if (!table[id]) {
+      table[id] = {
+        team: team as StandingsRow['team'],
+        played: 0,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        points: 0,
+      };
+    }
+  };
+
+  for (const m of matches ?? []) {
+    ensure(m.home_team);
+    ensure(m.away_team);
+
+    const h = table[(m.home_team_id as string)];
+    const a = table[(m.away_team_id as string)];
+
+    if (!h || !a) continue;
+
+    const homeScore = m.home_score as number;
+    const awayScore = m.away_score as number;
+
+    h.played++;
+    a.played++;
+    h.gf += homeScore;
+    h.ga += awayScore;
+    a.gf += awayScore;
+    a.ga += homeScore;
+
+    if (homeScore > awayScore) {
+      h.won++;
+      h.points += 3;
+      a.lost++;
+    } else if (homeScore < awayScore) {
+      a.won++;
+      a.points += 3;
+      h.lost++;
+    } else {
+      h.drawn++;
+      h.points++;
+      a.drawn++;
+      a.points++;
+    }
+  }
+
+  return Object.values(table)
+    .map((r) => ({ ...r, gd: r.gf - r.ga }))
+    .sort((a, b) => b.points - a.points || (b.gd - a.gd) || (b.gf - a.gf));
 }
 
-/**
- * Fetch the global idol board and per-team breakdowns for the /idols page.
- *
- * WHY TWO QUERIES
- * ────────────────
- * The global top-N leaderboard and the per-club top-5 serve different UI
- * sections and have different size requirements. Fetching them separately
- * avoids pulling 700+ rows for the global board when we only need a bounded
- * set, and avoids filtering by a window function result (unsupported in
- * PostgREST) by using `team_rank` as a plain materialised column instead.
- *
- * WHY idol_score = 0 ROWS ARE INCLUDED
- * ──────────────────────────────────────
- * Players with zero idolisation appear at the bottom of the board. Their
- * presence is intentional narrative design — the absence of fan attention
- * is itself a cosmic signal that fans can interpret and discuss.
- *
- * @param db          - Injected Supabase client.
- * @param opts.globalLimit  - Max rows for the leaderboard section. Default 20.
- * @param opts.teamLimit    - Max `team_rank` value for the club section. Default 5.
- * @returns `{ global: IdolRow[], byTeam: Record<teamId, IdolRow[]> }`
- */
+interface MatchResultInput {
+  homeScore: number;
+  awayScore: number;
+  weather?: string;
+  stadium?: string;
+}
+
+export async function saveMatchResult(matchId: string, { homeScore, awayScore, weather, stadium }: MatchResultInput) {
+  const updateData: Record<string, unknown> = {
+    home_score: homeScore,
+    away_score: awayScore,
+    status: 'completed',
+    played_at: new Date().toISOString(),
+  };
+  if (weather !== undefined) updateData.weather = weather;
+  if (stadium !== undefined) updateData.stadium = stadium;
+
+  const { error } = await supabase
+    .from('matches')
+    .update(updateData)
+    .eq('id', matchId);
+  if (error) throw error;
+}
+
+interface MatchPlayerStat {
+  match_id: string;
+  player_id: string;
+  team_id: string;
+  goals: number;
+  assists: number;
+  yellow_cards: number;
+  red_cards: number;
+  minutes_played: number;
+  rating?: number;
+}
+
+export async function saveMatchPlayerStats(stats: MatchPlayerStat[]) {
+  const { error } = await supabase
+    .from('match_player_stats')
+    .upsert(stats, { onConflict: 'match_id,player_id' });
+  if (error) throw error;
+}
+
+interface IdolRow {
+  id: string;
+  name: string;
+  team_id: string;
+  global_rank: number;
+  team_rank: number;
+  favourite_count: number;
+  training_count_14d: number;
+}
+
+interface IdolBoardResult {
+  global: IdolRow[];
+  byTeam: Record<string, IdolRow[]>;
+}
+
 export async function getIdolBoard(
-  db: IslSupabaseClient,
-  { globalLimit = 20, teamLimit = 5 }: { globalLimit?: number; teamLimit?: number } = {},
-) {
-  // ── Global leaderboard ────────────────────────────────────────────────────
+  db: SupabaseClient<Database>,
+  { globalLimit = 20, teamLimit = 5 } = {},
+): Promise<IdolBoardResult> {
   const { data: topRows, error: topErr } = await db
     .from('player_idol_score')
     .select('*')
@@ -391,9 +517,6 @@ export async function getIdolBoard(
     .limit(globalLimit);
   if (topErr) throw topErr;
 
-  // ── Per-team top-N ────────────────────────────────────────────────────────
-  // team_rank is a materialised window-function column on the view, so
-  // PostgREST can filter it with a simple .lte() call.
   const { data: teamRows, error: teamErr } = await db
     .from('player_idol_score')
     .select('*')
@@ -402,114 +525,44 @@ export async function getIdolBoard(
     .order('team_rank', { ascending: true });
   if (teamErr) throw teamErr;
 
-  // Group by-team rows into a plain object keyed by team_id for O(1) lookup
-  // in the club-breakdown section of the Idols page. Rows whose team_id is
-  // null (orphaned players with no club) are skipped — the view column is
-  // nullable because PostgreSQL marks every view column nullable by default.
-  const byTeam = (teamRows ?? []).reduce<Record<string, typeof teamRows>>((acc, row) => {
-    if (!row.team_id) return acc;
-    if (!acc[row.team_id]) acc[row.team_id] = [];
-    acc[row.team_id]!.push(row);
-    return acc;
-  }, {});
+  const byTeam = (teamRows ?? []).reduce(
+    (acc: Record<string, unknown[]>, row: Record<string, unknown>) => {
+      const teamId = row.team_id as string;
+      if (!acc[teamId]) acc[teamId] = [];
+      acc[teamId].push(row);
+      return acc;
+    },
+    {},
+  ) as Record<string, IdolRow[]>;
 
-  return { global: topRows ?? [], byTeam };
+  return { global: ((topRows as unknown) ?? []) as IdolRow[], byTeam };
 }
 
-/**
- * Fetch the top N "hot idol movers" — players whose training-click activity
- * has spiked in the trailing 7-day window.  Reads from the
- * `player_idol_movers` view created by migration 0016.
- *
- * WHY A SEPARATE QUERY FROM getIdolBoard
- *   The absolute idol board (rank 1..20) and the movers strip serve different
- *   UI purposes — the board is "who the cosmos has watched longest", the
- *   strip is "who the cosmos is paying attention to RIGHT NOW".  They have
- *   different ordering, different inputs (the movers view excludes
- *   favourite_player picks entirely; absolute board includes both halves of
- *   the idol_score formula).  Fetching the same view twice in parallel was
- *   tempting but would obscure that the two surfaces answer different
- *   questions.
- *
- * GRACEFUL DEGRADATION
- *   Returns an empty array on error rather than throwing — the movers strip
- *   is enriching UI, not load-bearing.  A failed fetch must never block the
- *   Home or /idols page render.
- *
- * @param db     Injected Supabase client.
- * @param limit  Max rows to return.  Default 5 matches the Home strip width
- *               at desktop; pages can request more for a dedicated section.
- * @returns      Array of mover rows, ordered by recent_clicks DESC.
- */
-export async function getHotIdolMovers(db: IslSupabaseClient, limit = 5) {
-  try {
-    const { data, error } = await db
-      .from('player_idol_movers')
-      .select('*')
-      .order('recent_clicks', { ascending: false })
-      .order('name', { ascending: true })
-      .limit(limit);
-    if (error) {
-      console.warn('[getHotIdolMovers] failed:', error.message);
-      return [];
-    }
-    return data ?? [];
-  } catch (e) {
-    console.warn('[getHotIdolMovers] threw:', e);
-    return [];
-  }
+export async function getPlayerIdolRank(db: SupabaseClient<Database>, playerId: string): Promise<IdolRow | null> {
+  const { data, error } = await db
+    .from('player_idol_score')
+    .select('*')
+    .eq('player_id', playerId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as IdolRow | null) ?? null;
 }
 
-/**
- * Fetch the top idol-ranked players for a pair of team_ids.  Used by the
- * pre-match build-up surface on MatchDetail to show "Who fans are watching"
- * on each side of the fixture without forcing two sequential round-trips.
- *
- * WHY one query for both teams
- *   Two parallel queries would be marginally faster on a fast network but
- *   double the PostgREST overhead.  An `.in('team_id', [...])` + post-fetch
- *   group-by collapses to a single round-trip and is well within the view's
- *   index plan (team_id is a regular column on `player_idol_score`).
- *
- * GRACEFUL DEGRADATION
- *   Returns an empty map on error rather than throwing.  The build-up section
- *   is enriching UI — a failed fetch must never block the match page.
- *
- * @param db      Injected Supabase client.
- * @param teamIds The pair of team_ids (home + away).  Order doesn't matter;
- *                callers group by team_id in the returned map.
- * @param perTeamLimit  Max rows kept per team after the group-by.  Default 3.
- * @returns       Record keyed by team_id → ordered IdolRow[] (top-rank first).
- */
-export async function getTopIdolsByTeams(
-  db: IslSupabaseClient,
-  teamIds: string[],
-  perTeamLimit = 3,
-) {
-  if (teamIds.length === 0) return {} as Record<string, unknown[]>;
+interface TopIdolForArchitect {
+  name: string;
+  globalRank: number;
+}
+
+export async function getTopIdolsForArchitect(db: SupabaseClient<Database>, limit = 10): Promise<TopIdolForArchitect[]> {
   try {
     const { data, error } = await db
       .from('player_idol_score')
-      .select('*')
-      .in('team_id', teamIds)
-      .lte('team_rank', perTeamLimit)
-      .order('team_id', { ascending: true })
-      .order('team_rank', { ascending: true });
-    if (error) {
-      console.warn('[getTopIdolsByTeams] failed:', error.message);
-      return {} as Record<string, unknown[]>;
-    }
-    const grouped: Record<string, unknown[]> = {};
-    for (const row of data ?? []) {
-      const tid = (row as { team_id: string | null }).team_id;
-      if (!tid) continue;
-      if (!grouped[tid]) grouped[tid] = [];
-      grouped[tid]!.push(row);
-    }
-    return grouped;
-  } catch (e) {
-    console.warn('[getTopIdolsByTeams] threw:', e);
-    return {} as Record<string, unknown[]>;
+      .select('name, global_rank')
+      .order('global_rank', { ascending: true })
+      .limit(limit);
+    if (error) return [];
+    return ((data as unknown ?? []) as Array<Record<string, unknown>>).map((r) => ({ name: r.name as string, globalRank: r.global_rank as number }));
+  } catch {
+    return [];
   }
 }
-
