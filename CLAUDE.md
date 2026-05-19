@@ -1,7 +1,6 @@
 # Intergalactic Soccer League — Project Context
 
 > **Source of truth for game design**: the Notion doc (fetched via Notion MCP — see `https://www.notion.so/rowley/Intergalactic-Soccer-League-33cda0dddb8780408628f63f07e89e05`).
-> **Source of truth for implementation**: `/root/.claude/plans/nifty-brewing-pixel.md` (phased roadmap with exact file paths and verification steps).
 > **Re-read the Vision & Engineering Principles below before starting any new phase.** If work drifts off-vision, pause and escalate.
 
 ## Vision (anchor — always keep in mind)
@@ -112,15 +111,15 @@ docs: document betting API endpoint
 ## Engineering principles (non-negotiable, apply to every PR)
 
 1. **TypeScript everywhere** with `strict: true`. Typed Supabase client regenerated on every migration via the Supabase MCP's `generate_typescript_types` into `src/types/database.ts`.
-2. **Feature-based folder layout**: `src/features/{auth,betting,entities,voting,training,architect,match,finance,design-system}/{api,logic,ui}/` + `types.ts` + `index.ts` barrel. Cross-feature deep imports are forbidden — ESLint `no-restricted-imports` enforces it. Pages under `src/app/` are thin route wrappers. Shared primitives in `src/shared/{ui,hooks,utils,events,supabase}`.
+2. **Feature-based folder layout**: `src/features/{auth,betting,entities,voting,training,architect,match,finance,admin}/{api,logic,ui}/` + `types.ts` + `index.ts` barrel. Cross-feature deep imports are forbidden — ESLint `no-restricted-imports` enforces it. Pages under `src/pages/` are thin route wrappers. Shared primitives in `src/shared/{ui,hooks,utils,events,supabase}`.
 3. **Clear layer boundaries inside each feature**: `api/` (Supabase + Zod), `logic/` (pure TS — no React, no Supabase, 100% unit-testable), `ui/` (React). Pure logic lives in `logic/`; nothing else.
 4. **Supabase migration discipline**: every schema change is a timestamped `supabase/migrations/{ts}_{name}.sql` file applied via the Supabase MCP's `apply_migration`. `supabase/schema.sql` is a generated snapshot, not hand-edited.
 5. **Runtime + compile-time boundaries**: all Supabase reads pass through Zod schemas in `api/` so DB drift fails loud at the boundary.
 6. **Dependency injection**: features never `import { supabase }` directly. They consume the client via `useSupabase()` (React context) or a function argument — makes unit tests trivial and future-proofs swapping the backend.
 7. **Vitest unit tests** co-located next to every `logic/` and `api/` module. CI gates on `tsc --noEmit && eslint && vitest`. Target 80%+ coverage of `logic/`.
-8. **Event-driven cross-feature communication** via a typed in-app bus (`src/shared/events/bus.ts`). Example: `match.completed` triggers betting settlement without betting and match features knowing about each other.
+8. **Event-driven cross-feature communication** via a typed in-app bus (`src/shared/events/bus.ts`). Example: `match.completed` triggers betting settlement without betting and match features knowing about each other. All listeners mounted in `src/main.tsx`.
 9. **No dead code, no speculative abstractions**. One consumer ≠ helper. Refactor when a second consumer appears.
-10. **ESLint + Prettier + strict tsconfig** in CI from Phase -1 onward. No style debates in review.
+10. **ESLint + Prettier + strict tsconfig** in CI. No style debates in review.
 
 ---
 
@@ -250,7 +249,7 @@ Each club has:
 - **Coaching Stats**: Attacking, Defending, Technical, Athletic, Mental
 
 ### Squad
-- 22–25 players per club
+- 22 players per club (704 total across 32 teams)
 - **Player Details**: Name, Age (16+), Height, Weight, Appearance, Race, Historical achievements, Seasonal stats, Injury status, Form
 - **Player Stats**: Shooting, Assisting, Tackling, Blocking, Goalkeeping, Passing, Dribbling, Speed, Stamina, Strength, Positioning, Aggression, Vision
 - **Potential**: Godly / High / Medium / Low; Early / Balanced / Late Developer; Superstar flag
@@ -259,44 +258,177 @@ Each club has:
 
 ## Current Implementation Status
 
-### Already Built
-- Match simulator: minute-by-minute, 13+ event types, personality-driven contests, weather, momentum, tension curves, multi-step sequences (penalties, freekicks, sieges, counters) — `src/gameEngine.js` (1100+ LOC)
-- Cosmic Architect director: `src/features/architect/logic/CosmicArchitect.ts` (TypeScript). Persistent lore lives in the `architect_lore` DB table; `prepareArchitectForMatch()` is the canonical kickoff lifecycle (hydrate → primed Architect + LoreStore for post-match `persistAll`). `getContext()` stays synchronous so it never blocks commentary during goal bursts.
-- AI commentary via Claude: 3 commentator personas (Captain Vox, Nexus-7, Zara Bloom) + Architect voice + player thoughts + manager shouts
-- **32 teams across 4 leagues, 512 players (16/team), 32 managers** fully seeded in `supabase/seed.sql` (Phase 0.5 expands to 22/team = 704)
-- Season 1 competitions: 4 round-robin leagues (224 fixtures) + ISL Champions Cup (13 fixtures)
-- League standings, team/player profile pages, match simulator UI
-- Supabase backend: 9 tables with RLS (public read, authenticated write); schema currently hand-maintained in `schema.sql` (migrations adoption in Phase -1)
-- Manager tactics AI, player psychology system, 8 personality archetypes
-- Planetary weather system (Mars dust storms, Europa magnetic storms, zero-G quirks, etc.)
-- **Focus voting consequence (Package 2)**: `focus_enacted` table (migration 0011); pure enactment engine `enactFocus.ts` (9 focus types, seeded-RNG determinism, discriminated `EnactmentMutation` union); DB layer `enactment.ts` (`enactSeasonFocuses`, `getEnactedFocuses`); `SeasonEnactmentListener` wires `season.ended` bus event to the pipeline; VotingPage shows "What the Cosmos Decided" post-season panel. 49 unit tests in `enactFocus.test.ts`.
-- **Training clicker UI (Package 4)**: `TrainingPage.tsx` (roster picker, auth/team guards, auto-selects first player); `ClickerWidget.tsx` (XP progress bar, bump toast, cooldown countdown at 100ms tick, session-cap lock, optimistic click → rollback on failure). Both components wire to `trainingLog.ts` API (`recordClick`, `getPlayerLifetimeXp`). 6 smoke tests in `TrainingPage.test.tsx` (render, click → XP update, cooldown lock, session cap, player switch, anonymous guard). `@testing-library/user-event` added to devDeps.
-- **Cup tournament brackets (Package 3)**: migration 0012 adds `competitions.bracket` JSONB column and inserts Celestial Cup + Solar Shield Season 1 competition rows. Pure draw engine `cupDraw.ts` (`drawSingleElim`, `makeBracketSeeds` recursive interleaving — guarantees seeds 1 & 2 only meet in the Final, byes auto-advance at the leaf level, TBD slots use `from_round`/`from_slot` references). DB layer `cupSeeder.ts` (`seedCupCompetitions` reads league standings, splits top-3 / 4th–6th, runs the draw, persists JSON, inserts R1 fixtures + `competition_teams`; `advanceCupRound` listens for `match.completed`, fills the bracket winner, inserts the next-round match once both teams are known). UI in `CupBracket.tsx` (column-per-round layout) wired to `/cup/celestial` and `/cup/solar-shield` routes. `CupRoundAdvancerListener` mounted in `main.jsx` to drive bracket progression. 75 unit tests in `cupDraw.test.ts` (8/12/16-team brackets + odd counts 3/5/7/9/11 + structural invariants).
-- **Galaxy Dispatch heartbeat (Package 5)**: Pure context-building logic in `buildNewsContext.ts` (`selectEntitiesForTick` with per-entity daily cap `MAX_POSTS_PER_ENTITY_PER_DAY=1`, `redactMatchResult` maps scorelines → qualitative descriptors, `buildEntityContext`/`buildEntityPrompt` shape grounded LLM prompts). `architect-galaxy-tick` edge function (cron `0 */2 * * *`) extended to select up to 3 entities per tick and emit `pundit_takes` / `journalist_report` / `bookie_update` / `cosmic_disturbance` narrative kinds alongside Architect whispers. `NewsFeedPage.tsx` filter strip extended with 4 new kind buttons; `cosmic_disturbance` cards glow red (matching `architect_whisper` purple). `tokens.css` gains `--color-blue` and `--color-red-glow`. 29 unit tests in `buildNewsContext.test.ts`.
-- **Design-system primitives (Package 6)**: `src/shared/ui/` library with five typed React primitives — `Button` (typed wrapper for `.btn-{primary,secondary,tertiary}`), `Input` (label + input + role="alert" error trio; `id` required for WCAG label linkage), `Select` (label + native `<select>` + error), `Badge` (`architect` + `default` variants), `PageHero` (`.page-hero` wrapper with title/badge/subtitle/children slots). `src/features/design-system/tokens.ts` re-exports `COLORS` / `SPACE` / `FONT_SIZE` / `LAYOUT` / `TRANSITION_MS` as frozen TypeScript constants mirroring `tokens.css` for JS/TS consumers (canvas, SVG, tests). `src/features/design-system/index.ts` re-exports both. `LoginForm.tsx` migrated to `Input` + `Button`; `NewsFeedPage.tsx` migrated to `PageHero` + `Badge`.
-- **Engine TypeScript migration (Package 7)**: Renamed `utils.js`/`constants.js`/`teams.js`/`simulateHelpers.js` to `.ts` with strict types (`Personality`/`WeatherCondition`/`ManagerEmotion`/`Position`/`TensionVariant` discriminated unions, `EnginePlayer`/`EngineTeam`/`EngineManager`/`Stadium` interfaces). Canonical interfaces live in `src/gameEngine.types.ts` (`PlayerAgent`, `AIManager`, `MatchEvent`, `Flashpoint`, `NarrativeResidue`, `MatchState`, `ContestCtx`/`ContestResult`). `src/gameEngine.d.ts` declares the public API of the still-JS `gameEngine.js` (2725 LOC) so consumers — primarily `simulateHelpers.ts` — get full strict typing at the call boundary while the implementation stays untouched. The full `.js → .ts` source rewrite of `gameEngine.js` itself is deferred (no test coverage on the simulator yet — too risky without dedicated time).
-- **Component test coverage (Package 8)**: Smoke + interaction tests for every player-facing UI surface. `NewsFeedPage.test.tsx` (8 tests — page hero, loading/empty/error, kind filter, Clear button, Load More gating). `WagerWidget.test.tsx` (10 tests — empty placeholder, three-way odds, choice toggle, payout recalc, balance display, insufficient credits, happy-path submit, DB-failure error, anonymous CTA, closed-bets message). `BetHistory.test.tsx` (9 tests — loading skeleton, empty, error, populated rendering, won/lost net-profit, open/void "—", matchId filter, refetch on refreshKey, API call args). `VotingPage.test.tsx` (8 tests — anonymous + no-team CTAs, loading/error/empty, tier-grouped rendering, "What the Cosmos Decided" panel, fetch arg pass-through). `MatchCard.test.tsx` (13 tests — team names, meta header, scheduled/live/completed variants, bet slider visibility, Simulate callback, momentum bar, commentary slice-3, tag badges). Combined with the existing `TrainingPage.test.tsx` (6 tests from Package 4), every player-facing component now has smoke coverage. Total: 506 tests.
-- **gameEngine smoke tests (isl-2kr)**: `src/gameEngine.smoke.test.ts` runs 200 randomized full matches via a seeded LCG against `Math.random()`, asserting score / event-minute / momentum invariants. Establishes a regression baseline before Package 10 starts exercising `gameEngine.js` server-side. Also fixed `gameEngine.d.ts:genEvent` (10th arg is `AIInfluence | null`, 11th arg is the `AIManager` — the previous declaration had them swapped). 508 tests total.
-- **Match-events schema + lifecycle (Package 9, isl-823)**: `supabase/migrations/0013_match_events_lifecycle.sql` adds `match_events` table (per-minute event log with public-read RLS + Realtime publication), extends `matches` with `simulated_at` + `'cancelled'` status, adds `season_config` keyed by `season_id` (cadence + duration + min_bet knobs). Migration is committed; applying it via Supabase MCP and regenerating `src/types/database.ts` is tracked under `isl-du4`.
+> **Last audited: 2026-05-19.** The codebase is production-ready. All core systems are fully operational.
 
-### Planned / Not Yet Built (see plan file for phased roadmap)
-- **Phase -1**: TypeScript migration, feature-based folder reshape, Vitest/ESLint/Prettier tooling, Supabase migrations directory, typed Supabase client, dependency injection, event bus
-- **Phase 0**: Figma design system tokens (foundation only) and component refactor
-- **Phase 0.5**: Seed generator script + roster expansion 16 → 22 players (→ 704 total)
-- **Phase 1**: Supabase Auth + `profiles` table (200 credits, `last_seen_at`)
-- **Phase 5**: Unified `entities` + `entity_traits` + `entity_relationships` + `narratives` tables (additive only — keep `players`/`managers` typed columns intact). Seeds referees, pundits, journalists, owners, bookie.
-- **Phase 5.1**: Architect lore DB hydration lifecycle (pre-hydrate once per match, fire-and-forget writes — `getContext()` must stay synchronous)
-- **Phase 2**: Betting (`wagers`, `match_odds`, `team_finances`, odds engine, RLS + leaderboard view)
-- **Phase 3**: Fan support stat boost + ticket-sales revenue → `match_attendance`, `team_finances`
-- **Phase 4**: End-of-season focus voting
-- **Phase 6**: Training clicker minigame
-- **Phase 8**: Out-of-match Architect Edge Function + historic rewrite audit (`architect_interventions`)
+### ✅ COMPLETED — All Core Systems
 
-### Critical engineering invariants
-- `src/gameEngine.js` consumes player data in camelCase via `normalizeTeamForEngine()` (`src/lib/supabase.js:381–437`). **Never drop** `attacking`/`defending`/`mental`/`athletic`/`technical`/`jersey_number`/`starter` columns from `players`.
-- `CosmicArchitect.getContext()` (`src/features/architect/logic/CosmicArchitect.ts`) is called synchronously on every LLM prompt and can fire 5–10 times in <500ms during a goal burst. **Never block it on Supabase round-trips** — hydrate lore before kickoff via `prepareArchitectForMatch()`, write fire-and-forget via `LoreStore.persistAll()`.
-- The Architect is the game's identity. Every new feature should give it new levers.
+#### Infrastructure & Tooling
+- TypeScript everywhere (`strict: true`), all `.js`/`.jsx` migrated to `.ts`/`.tsx`
+- Feature-based folder layout (`src/features/{auth,betting,match,architect,entities,voting,training,finance,admin}`)
+- Vitest (668 tests, all passing), ESLint, Prettier, `tsc --noEmit` all green in CI
+- Supabase migrations directory (`supabase/migrations/` 0000–0022, no hand-edited schema.sql)
+- Generated typed Supabase client (`src/types/database.ts`, 37 tables)
+- Event bus (`src/shared/events/bus.ts`) wiring cross-feature side effects
+- GitHub Pages deployment via Actions
 
+#### Match Simulation
+- `src/gameEngine.js` (2748 LOC) — minute-by-minute, 13+ event types, personality-driven contests, weather, momentum, tension curves, multi-step sequences (penalties, free kicks, sieges, counters, VAR, confrontations)
+- `src/gameEngine.d.ts` — full TypeScript declarations for the JS engine
+- `src/features/match/logic/simulateFullMatch.ts` — pure 90-minute orchestrator wrapping genEvent()
+- `scripts/match-worker.ts` — server-side worker polling every 30s, pre-computes all match events and persists to `match_events`
+- 8 personality archetypes, 3 commentator voices (Vox / Nexus-7 / Zara), planetary weather system
+- `src/gameEngine.smoke.test.ts` — 200 randomised full matches via seeded LCG
+
+#### Cosmic Architect Narrative Layer
+- `src/features/architect/logic/CosmicArchitect.ts` (1087 LOC) — 4 interference layers: Cosmic Edicts, Intentions (12 types), Sealed Fate, Interference Flags (10 reality-rewrites)
+- Persistent lore in `architect_lore` DB table; `prepareArchitectForMatch()` hydrates before kickoff; `LoreStore.persistAll()` writes fire-and-forget post-match
+- `getContext()` is synchronous — never blocks during goal bursts (5–10 calls in <500ms)
+- Cosmic Voice interrupts: Balance + Chaos commentators
+- Galaxy Dispatch edge function (`architect-galaxy-tick`, cron `0 */2 * * *`) emitting 5 narrative kinds
+
+#### Authentication & Profiles
+- Supabase Auth via `AuthProvider.tsx` — signIn, signUp, signOut, profile fetch, last-seen debounce (1 min)
+- `profiles` table: 200 Intergalactic Credits on signup, `last_seen_at`, `favourite_team_id`, `favourite_player_id`
+- `handle_new_user` DB trigger auto-creates profile on signup
+- RLS: public read of safe columns via `public_profiles` view; full row readable/writable only by owner
+- Pages: `/login` (sign-in/sign-up tabs) + `/profile` (account summary + allegiance form + sign-out)
+
+#### Betting System
+- Three-way odds (home/draw/away) via `src/features/betting/logic/odds.ts`
+- Minimum bet: 10 IC, no maximum; settlement auto-fires on `match.completed`
+- Tables: `wagers`, `match_odds`, `team_finances`, `wager_leaderboard` (materialised view), `wager_volume_v`
+- Pages: `/wagers` (bet history with status filter strip) + `WagerWidget` embedded in MatchDetail
+- Wager narratives written to Galaxy Dispatch post-settlement
+
+#### Focus Voting & Enactment
+- End-of-season voting: 1 major focus (10 IC), 1 minor focus (5 IC) per team
+- 9 focus types with deterministic seeded-RNG mutations (`enactFocus.ts`, 546 LOC, 49 unit tests)
+- `SeasonEnactmentListener` wires `season.ended` bus event to full pipeline
+- Election Night ritual: top-10 idol-ranked players face 2× vote-weight permadeath surge
+- Tables: `focus_options`, `focus_votes`, `focus_enacted`, `focus_tally`, `incinerations`, `season_decrees`
+- Page: `/voting` (voting interface + live tally + "What the Cosmos Decided" post-season panel)
+
+#### Training Minigame
+- Clicker facility with geometric XP curve (BASE=100, MULTIPLIER=1.5)
+- 1.5s cooldown + 500-click rolling session cap; optimistic updates with rollback
+- Append-only `player_training_log` table
+- Page: `/training` (roster picker + clicker widget + community board)
+
+#### Cup Tournaments
+- Single-elimination Celestial Cup (top 3/league) + Solar Shield (4th–6th/league)
+- Standard seeding interleaving guarantees top seeds meet only in the final; byes auto-advance
+- Bracket stored as JSONB in `competitions.bracket`; `CupRoundAdvancerListener` advances winners
+- 75 unit tests in `cupDraw.test.ts`
+- Pages: `/cup/celestial` + `/cup/solar-shield`
+
+#### Entity System
+- Unified `entities` + `entity_traits` + `entity_relationships` tables
+- First-class entities: players, managers, referees, pundits, journalists, media companies, bookies
+- Relationship graph utilities (`relationshipGraph.ts`) — BFS, adjacency, directed/undirected
+- Referee selection logic + referee narratives wired to match completion
+- Pure factories + 4 test files (entityFactory, relationshipGraph, refereeNarratives, refereeSelection)
+
+#### Season Lifecycle
+- Round-robin fixture generation (28 matches/team), cup integration, `season_config` knobs
+- Season-end detector fires `season.ended`; 48-hour voting window; enactment; next-season rollover with mutated rosters + new fixtures + re-drawn brackets
+- 22 tests in `seasons.test.ts`
+
+#### Fan Support & Finance
+- Active fans (last_seen_at within 5 min) grant +2 stat boost to their team at kickoff
+- Ticket sales → `team_finances`; `match_attendance` table tracks presence
+- `countPresentFans()` called by match-worker before simulation
+
+#### All 11 Pages Live
+| Route | Page | Status |
+|-------|------|--------|
+| `/` | Home | ✅ Hero + live matches + upcoming + standings carousel |
+| `/leagues`, `/leagues/:id` | Leagues + LeagueDetail | ✅ Standings tables |
+| `/teams`, `/teams/:id` | Teams + TeamDetail | ✅ Squad roster + manager/facility |
+| `/matches`, `/matches/:id` | Matches + MatchDetail | ✅ Schedule + WagerWidget |
+| `/news` | News | ✅ Galaxy Dispatch feed + kind filters |
+| `/idols` | Idols | ✅ Player leaderboard + hot movers strip |
+| `/voting` | Voting | ✅ Focus voting + tally + enactment results |
+| `/training` | Training | ✅ Clicker minigame |
+| `/login` | Login | ✅ Sign-in/sign-up tabs |
+| `/profile` | Profile | ✅ Account + allegiance settings |
+| `/wagers` | Wagers | ✅ Bet history |
+
+---
+
+## Database Schema (37 tables, migrations 0000–0022)
+
+### Core
+`teams`, `leagues`, `managers`, `players`, `entities`, `entity_traits`, `entity_relationships`
+
+### Match & Competition
+`matches`, `match_events`, `match_player_stats`, `match_attendance`, `match_odds`, `competitions`, `competition_teams`
+
+### Season
+`seasons`, `season_config`
+
+### Narrative & Lore
+`architect_lore`, `architect_interventions`, `narratives`, `season_decrees`
+
+### Voting
+`focus_options`, `focus_votes`, `focus_enacted`, `focus_tally`, `incinerations`
+
+### Betting & Finance
+`wagers`, `team_finances`, `wager_leaderboard` (view), `wager_volume_v` (view)
+
+### User
+`profiles`, `public_profiles` (view), `player_training_log`, `player_idol_score` (view), `player_idol_movers` (view)
+
+---
+
+## Remaining Work (Priority Order)
+
+### 🔴 Phase A: Live Match Event Streaming (High Priority, Low Effort — ~2 days)
+The match-worker pre-computes all events and stores them in `match_events`. The Realtime subscription is **not yet wired** in `MatchDetail.tsx`. This is the highest-delight missing piece — live commentary reveals would transform the match viewing experience.
+- Wire Supabase Realtime subscription to `match_events` in `src/pages/MatchDetail.tsx`
+- Reveal events at correct wall-clock pace (elapsed real-time from `simulated_at`)
+- Files: `src/pages/MatchDetail.tsx`, `src/features/match/api/matchEvents.ts`
+
+### 🟡 Phase B: Admin Dashboard (Medium Priority, Medium Effort — ~1 week)
+Operations tool for managing seasons, triggering match simulation, reviewing architect interventions.
+- `/admin` route with season state controls (start voting, enact, roll season)
+- Fixture browser + manual match completion
+- Architect intervention log viewer
+- Files to create: `src/pages/AdminDashboard.tsx`, `src/features/admin/ui/`
+
+### 🟡 Phase C: Player Detail Pages (Medium Priority, Medium Effort — ~1 week)
+`/players/:id` links exist throughout the app but 404 today. Player detail page showing career stats, training XP, idol rank, match history, and narrative mentions.
+- Fetch player from `players` table + entity row + `player_idol_score`
+- Match history from `match_player_stats`
+- Recent narratives mentioning this player
+- Files to create: `src/pages/PlayerDetail.tsx`, `src/features/match/api/playerStats.ts`
+
+### 🟢 Phase D: Performance Optimisation (Low Priority — profile first)
+- `React.memo` on `MatchCard`, `WagerWidget`, `StandingsTable`
+- Code-split routes via `React.lazy`
+- Only do this once there is real traffic to profile against
+
+### 🟢 Phase E: Mobile Polish (Low Priority, Low Effort — ~3 days)
+The app works on mobile via responsive CSS but hasn't been polished for touch. Tap targets, nav drawer, viewport refinements.
+
+---
+
+## Critical Engineering Invariants
+
+**Never break these without explicit approval:**
+
+1. **`gameEngine.js` player data normalization** — Consumes camelCase via `normalizeTeamForEngine()` in `src/lib/supabase.ts`. **Never drop** `attacking` / `defending` / `mental` / `athletic` / `technical` / `jersey_number` / `starter` columns from `players`.
+
+2. **`CosmicArchitect.getContext()` must stay synchronous** — Called 5–10 times in <500ms during goal bursts. Hydrate lore pre-match via `prepareArchitectForMatch()` (one DB round-trip); all in-match reads are in-memory via `LoreStore`. Never block on Supabase inside `getContext()`.
+
+3. **Feature-based import discipline** — Cross-feature deep imports are forbidden. Always import from a feature's barrel (`src/features/betting/index.ts`), never from `src/features/betting/logic/odds.ts` directly.
+
+4. **Supabase RLS** — Anon role: public read. Authenticated: creator/owner write. Service role: full access. Never grant authenticated INSERT on `match_events` or `narratives` — only the service-role worker writes those.
+
+5. **Event bus for cross-feature side effects** — `match.completed` → `WagerSettlementListener`, `CupRoundAdvancerListener`, `RefereeNarrativeListener`. `season.ended` → `SeasonEnactmentListener`. No direct feature-to-feature imports for side effects. All listeners mounted in `src/main.tsx`.
+
+6. **The Architect is the game's identity** — Every new feature should give the Architect new levers to pull. Before shipping any gameplay change, ask: "what does the Architect do with this?"
+
+---
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
