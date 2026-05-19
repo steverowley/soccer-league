@@ -194,7 +194,7 @@ export default function Voting() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 16px 16px' }}>
+      <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Voting"
@@ -208,7 +208,7 @@ export default function Voting() {
 
       {/* Section II — Auth / team guard.  Short-circuits all later
           sections when the reader can't legally vote. */}
-      <section style={{ padding: '0 16px 48px' }}>
+      <section style={{ padding: '0 0 48px' }}>
         <Container>
           {!user && <SignInCta />}
           {user && !teamId && <PickTeamCta />}
