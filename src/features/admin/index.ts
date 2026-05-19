@@ -31,10 +31,16 @@ export type { AdminAllowlist } from './logic/allowlist';
 
 // ── API (Supabase) ───────────────────────────────────────────────────────────
 export {
+  getActiveSeason,
+  getAdminFixtures,
+  getArchitectInterventions,
   fastForwardScheduledMatches,
   triggerSeasonEnactment,
 } from './api/admin';
 export type {
+  AdminSeason,
+  AdminFixture,
+  ArchitectIntervention,
   FastForwardResult,
   TriggerEnactmentResult,
 } from './api/admin';
