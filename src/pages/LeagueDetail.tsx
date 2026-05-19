@@ -1,4 +1,4 @@
-// ── LeagueDetail.jsx ────────────────────────────────────────────────────────
+// ── LeagueDetail.tsx ─────────────────────────────────────────────────────────
 // Single-league detail page — rebuilt in PR 3.
 //
 // Route:   /leagues/:leagueId
@@ -21,6 +21,7 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { LEAGUES, TEAMS_BY_LEAGUE, buildStandingsRows } from '../data/leagueData';
+import type { League, Team } from '../data/leagueData';
 import { computeStandings } from '../lib/matchResultsService';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -44,11 +45,9 @@ const DUST_70  = COLORS.dust70;
  * `computeStandings` — same pure functions Home uses for its featured
  * league.  No fetch on this page; results are persisted to localStorage
  * by the match simulator and read here on every render.
- *
- * @returns {JSX.Element}
  */
 export default function LeagueDetail() {
-  const { leagueId } = useParams();
+  const { leagueId } = useParams<{ leagueId: string }>();
   const league = LEAGUES.find((l) => l.id === leagueId);
 
   if (!league) return <UnknownLeague leagueId={leagueId} />;
@@ -56,9 +55,14 @@ export default function LeagueDetail() {
   // Full standings (no slice).  The 1-based position stamp drives the
   // StandingsTable's qualification / relegation pipes; without it every
   // row would default to position 0.
+  //
+  // buildStandingsRows returns leagueData.StandingsRow[] (typed, no index
+  // signature).  computeStandings expects { id, team, [key]: unknown }[]
+  // for its baseRows — widening through unknown is safe because the
+  // function only reads `id` and `team` from baseRows.
   const rows = computeStandings(
     league.id,
-    buildStandingsRows(league.id),
+    buildStandingsRows(league.id) as unknown as Parameters<typeof computeStandings>[1],
   ).map((row, idx) => ({ ...row, position: idx + 1 }));
 
   const teams = TEAMS_BY_LEAGUE[league.id] ?? [];
@@ -143,6 +147,10 @@ export default function LeagueDetail() {
   );
 }
 
+interface ClubRosterProps {
+  teams: Team[];
+}
+
 /**
  * 4-column responsive grid of club entries.
  *
@@ -152,10 +160,8 @@ export default function LeagueDetail() {
  *
  * Collapses to 2-col under 900 px and 1-col under 600 px so the entries
  * stay readable on mobile.
- *
- * @param {{ teams: Array<{id: string, name: string, location: string}> }} props
  */
-function ClubRoster({ teams }) {
+function ClubRoster({ teams }: ClubRosterProps) {
   if (teams.length === 0) {
     return (
       <p style={{
@@ -180,7 +186,7 @@ function ClubRoster({ teams }) {
           marginTop: 24,
         }}
       >
-        {teams.map((team) => (
+        {teams.map((team: any) => (
           <Link
             key={team.id}
             to={`/teams/${team.id}`}
@@ -221,15 +227,21 @@ function ClubRoster({ teams }) {
   );
 }
 
+interface UnknownLeagueProps {
+  // string | undefined rather than optional (?:) because useParams returns
+  // string | undefined and exactOptionalPropertyTypes treats those as distinct:
+  // `leagueId?: string` would reject an explicit `undefined` value at the
+  // call site even though the runtime value can be undefined.
+  leagueId: string | undefined;
+}
+
 /**
  * "Not Found" surface rendered when the URL `:leagueId` doesn't match
  * any LEAGUES entry.  Renders the global header + a tight central
  * message + a backlink to /leagues.  Deliberately minimal so a bad URL
  * doesn't claim to be a real page.
- *
- * @param {{ leagueId?: string }} props
  */
-function UnknownLeague({ leagueId }) {
+function UnknownLeague({ leagueId }: UnknownLeagueProps) {
   return (
     <div style={{
       background: ABYSS,

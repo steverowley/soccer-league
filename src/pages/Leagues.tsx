@@ -1,4 +1,4 @@
-// ── Leagues.jsx ─────────────────────────────────────────────────────────────
+// ── Leagues.tsx ─────────────────────────────────────────────────────────────
 // Leagues index page — second page rebuilt after the 2026-05 nuke (PR 3).
 //
 // Layout:
@@ -22,13 +22,21 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { LEAGUES, buildStandingsRows } from '../data/leagueData';
+import type { League } from '../data/leagueData';
 import { computeStandings } from '../lib/matchResultsService';
+
+// ── Derived row type ─────────────────────────────────────────────────────────
+// computeStandings returns its own internal StandingsRow shape (gf/ga/gd
+// present, no teamLink) which differs from leagueData.StandingsRow.  Deriving
+// from ReturnType keeps this component in sync automatically if the service
+// type ever changes, and avoids duplicating the field list here.
+type ComputedStandingsRow = ReturnType<typeof computeStandings>[number];
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // COLORS is the source of truth; we destructure into single-letter aliases
 // so the JSX below reads close to the design spec rather than verbose
 // COLORS.dust70 lookups on every line.
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+const { dust: DUST, abyss: ABYSS } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -54,8 +62,6 @@ const CARD_DESCRIPTION_MAX_CHARS = 320;
  * complete) so the top-3 list reflects current state without any
  * additional fetch — buildStandingsRows + computeStandings are pure
  * and synchronous.
- *
- * @returns {JSX.Element}
  */
 export default function Leagues() {
   return (
@@ -92,7 +98,7 @@ export default function Leagues() {
               marginTop: 24,
             }}
           >
-            {LEAGUES.map((league) => (
+            {LEAGUES.map((league: any) => (
               <LeagueCard key={league.id} league={league} />
             ))}
           </div>
@@ -112,6 +118,10 @@ export default function Leagues() {
   );
 }
 
+interface LeagueCardProps {
+  league: League;
+}
+
 /**
  * Single league card.
  *
@@ -124,22 +134,18 @@ export default function Leagues() {
  * The card itself is a clickable region (`<Link>` wrapping the chrome)
  * so anywhere on the card navigates to the detail page — the footer
  * link is a redundant cue for keyboard / screen-reader users.
- *
- * @param {object} props
- * @param {object} props.league             League record from LEAGUES.
- * @param {string} props.league.id          Slug used for routing.
- * @param {string} props.league.name        Full display name.
- * @param {string} props.league.shortName   Three-letter badge.
- * @param {string} props.league.description Editorial paragraph.
- * @returns {JSX.Element}
  */
-function LeagueCard({ league }) {
+function LeagueCard({ league }: LeagueCardProps) {
   // Standings are computed synchronously from buildStandingsRows (zeroed
   // base) + computeStandings (overlay real results).  The top CARD_TOP_N
   // rows drive the card's "leaders" strip without any fetch.
+  // buildStandingsRows returns leagueData.StandingsRow[] which carries a
+  // teamLink field and no index signature.  computeStandings only needs
+  // { id, team, [key: string]: unknown }, so the cast is safe — no data
+  // is dropped, only the excess typed fields are widened.
   const topRows = computeStandings(
     league.id,
-    buildStandingsRows(league.id),
+    buildStandingsRows(league.id) as unknown as Parameters<typeof computeStandings>[1],
   )
     .slice(0, CARD_TOP_N)
     .map((row, idx) => ({ ...row, position: idx + 1 }));
@@ -234,7 +240,7 @@ function LeagueCard({ league }) {
             ? Array.from({ length: CARD_TOP_N }, (_, i) => (
                 <PlaceholderLeaderRow key={i} position={i + 1} />
               ))
-            : topRows.map((row) => (
+            : topRows.map((row: any) => (
                 <LeaderRow key={row.id ?? row.team ?? row.position} row={row} />
               ))
           }
@@ -258,6 +264,12 @@ function LeagueCard({ league }) {
   );
 }
 
+interface LeaderRowProps {
+  // position is stamped on by the .map() caller; all other fields come
+  // directly from computeStandings so the shape stays in sync automatically.
+  row: ComputedStandingsRow & { position: number };
+}
+
 /**
  * Single leader row inside a league card.
  *
@@ -265,11 +277,8 @@ function LeagueCard({ league }) {
  * (bold), and points (mono numeric, right-aligned).  Plays the same
  * visual chord as a single row of the full standings table without the
  * surrounding chrome.
- *
- * @param {object} props
- * @param {{ position: number, team: string, points: number, gd?: number }} props.row
  */
-function LeaderRow({ row }) {
+function LeaderRow({ row }: LeaderRowProps) {
   const pos = row.position ?? 0;
   const points = row.points ?? 0;
   return (
@@ -308,15 +317,17 @@ function LeaderRow({ row }) {
   );
 }
 
+interface PlaceholderLeaderRowProps {
+  position: number;
+}
+
 /**
  * Pre-season placeholder row.  Mirrors the LeaderRow layout but with
  * em-dash glyphs so the card height stays stable before any fixtures
  * have been simulated.  The position numeral is real (rendered with
  * faint-pipe colour) so the row still reads as "slot one / two / three".
- *
- * @param {{ position: number }} props
  */
-function PlaceholderLeaderRow({ position }) {
+function PlaceholderLeaderRow({ position }: PlaceholderLeaderRowProps) {
   return (
     <li style={{
       display: 'grid',
@@ -346,12 +357,8 @@ function PlaceholderLeaderRow({ position }) {
  *   - empty / null / undefined → returns ''
  *   - no whitespace before `limit` → returns the hard-truncated slice + …
  *     (rare; only fires on pathological inputs like 320-char single words)
- *
- * @param {string} text
- * @param {number} limit  Maximum character count BEFORE the ellipsis.
- * @returns {string}
  */
-function truncateAtWord(text, limit) {
+function truncateAtWord(text: string, limit: number): string {
   if (!text) return '';
   if (text.length <= limit) return text;
   const sliced = text.slice(0, limit);

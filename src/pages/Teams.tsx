@@ -1,4 +1,4 @@
-// ── Teams.jsx ───────────────────────────────────────────────────────────────
+// ── Teams.tsx ────────────────────────────────────────────────────────────────
 // Teams index page — `/teams` route, rebuilt in PR 4.
 //
 // Layout:
@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
+import type { Team } from '../data/leagueData';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // Matches the pattern in Home / Leagues / LeagueDetail: destructure the
@@ -36,26 +37,36 @@ const DUST_70  = COLORS.dust70;
 // React state without special-casing.  The "all" branch is the default.
 const FILTER_ALL = 'all';
 
-/**
- * Build a single flat array of every club across every league, each
- * entry carrying its `leagueId`, `leagueName`, and `leagueShortName`
- * so cards can render the league chip without a second lookup.
- *
- * Pure derivation — runs at module load (Object.entries on a static
- * import) so the result is a frozen constant captured in closure on
- * every render.  Switching back to dynamic leagues would require
- * lifting this into render scope.
- *
- * @returns {Array<object>}
- */
-const ALL_TEAMS = (() => {
-  // Build a {id → {name, shortName}} lookup once so the inner map
-  // doesn't re-scan LEAGUES.find() per team (32 teams × 4 leagues).
+// ── TeamWithLeagueMeta ───────────────────────────────────────────────────────
+// ALL_TEAMS entries carry the base Team fields plus three league-context
+// fields joined at module load.  Keeping them co-located on the object means
+// TeamCard never needs a second lookup into LEAGUES.
+interface TeamWithLeagueMeta extends Team {
+  /** Slug of the league this team belongs to — matches LEAGUES[*].id. */
+  leagueId: string;
+  /** Full display name of the parent league, e.g. "Rocky Inner League". */
+  leagueName: string;
+  /** Three-letter badge shown inside the card chip, e.g. "RIL". */
+  leagueShortName: string;
+}
+
+// ── ALL_TEAMS ────────────────────────────────────────────────────────────────
+// Flat array of every club across every league, each entry enriched with
+// its parent league's id / name / shortName so TeamCard can render the
+// league chip without a second lookup.
+//
+// Pure derivation — runs once at module load (Object.entries on a static
+// import) so the result is stable across renders.  Switching to dynamic
+// leagues would require lifting this into render scope.
+const ALL_TEAMS: TeamWithLeagueMeta[] = (() => {
+  // Build a {leagueId → {name, shortName}} lookup once so the inner flatMap
+  // doesn't re-scan LEAGUES.find() per team (32 teams × 4 leagues = 128
+  // avoidable iterations).
   const leagueMeta = Object.fromEntries(
-    LEAGUES.map((l) => [l.id, { name: l.name, shortName: l.shortName }]),
+    LEAGUES.map((l: any) => [l.id, { name: l.name, shortName: l.shortName }]),
   );
   return Object.entries(TEAMS_BY_LEAGUE).flatMap(([leagueId, teams]) =>
-    teams.map((team) => ({
+    teams.map((team: any) => ({
       ...team,
       leagueId,
       leagueName:      leagueMeta[leagueId]?.name      ?? leagueId,
@@ -67,16 +78,21 @@ const ALL_TEAMS = (() => {
 /**
  * Teams index page.
  *
- * Renders a single 4-col grid of every club.  A league filter chip strip
- * above the grid lets the reader narrow to one conference; the active
- * chip is highlighted with the same subtle dust tint Header uses for
- * the active nav route (keeps the visual language consistent).
+ * Renders a single 4-col grid of every club across all four ISL conferences.
+ * A league filter chip strip above the grid lets the reader narrow to one
+ * conference; the active chip is highlighted with the same subtle dust tint
+ * Header uses for the active nav route (keeps the visual language consistent).
  *
- * @returns {JSX.Element}
+ * Filter state lives here and is passed down to LeagueFilter — no global
+ * state needed since only this page owns the filter.
  */
 export default function Teams() {
-  const [filter, setFilter] = useState(FILTER_ALL);
+  const [filter, setFilter] = useState<string>(FILTER_ALL);
 
+  // When filter === FILTER_ALL show the full pre-built flat list; otherwise
+  // narrow to the matching leagueId.  Both branches reference ALL_TEAMS
+  // (stable module-level constant) so no new array is allocated on every
+  // keystroke — only the filtered slice.
   const visibleTeams = filter === FILTER_ALL
     ? ALL_TEAMS
     : ALL_TEAMS.filter((t) => t.leagueId === filter);
@@ -132,7 +148,7 @@ export default function Teams() {
                 marginTop: 24,
               }}
             >
-              {visibleTeams.map((team) => (
+              {visibleTeams.map((team: any) => (
                 <TeamCard key={team.id} team={team} />
               ))}
             </div>
@@ -144,7 +160,10 @@ export default function Teams() {
 
       {/* 4 → 3 → 2 → 1 collapse cascade keeps the grid readable across
           desktop, tablet portrait, and mobile.  Breakpoints picked so
-          each card stays at least 240 px wide. */}
+          each card stays at least 240 px wide:
+            1199 px → 3 cols (≈ 373 px each at 1200 px viewport)
+             899 px → 2 cols (≈ 430 px each at 900 px viewport)
+             599 px → 1 col  (full width on narrow mobile) */}
       <style>{`
         @media (max-width: 1199px) {
           .isl-teams-grid { grid-template-columns: repeat(3, 1fr) !important; }
@@ -160,19 +179,22 @@ export default function Teams() {
   );
 }
 
+interface LeagueFilterProps {
+  /** Current active filter value — either FILTER_ALL or a league id slug. */
+  active: string;
+  /** Called with the new filter value when the user clicks a chip. */
+  onChange: (next: string) => void;
+}
+
 /**
- * Horizontal chip strip for filtering the grid by league.
+ * Horizontal chip strip for filtering the team grid by league.
  *
- * Renders five chips: ALL + one per league (using each league's
- * shortName as the visible label).  Active chip uses a dust-tinted
- * background — same affordance as the Header's active nav indicator
- * — so the active filter is obvious without colour.
- *
- * @param {object} props
- * @param {string} props.active  Current filter (FILTER_ALL or a leagueId).
- * @param {(next: string) => void} props.onChange
+ * Renders five chips: ALL + one per league (using each league's shortName
+ * as the visible label).  Active chip uses a dust-tinted background —
+ * the same affordance as the Header's active nav indicator — so the active
+ * filter is obvious without colour.
  */
-function LeagueFilter({ active, onChange }) {
+function LeagueFilter({ active, onChange }: LeagueFilterProps) {
   return (
     <div style={{
       display: 'flex',
@@ -181,12 +203,14 @@ function LeagueFilter({ active, onChange }) {
       paddingBottom: 16,
       borderBottom: `1px solid ${HAIRLINE}`,
     }}>
+      {/* "All" chip is always first and uses the FILTER_ALL sentinel value
+          so it's never mistaken for a real league id. */}
       <FilterChip
         label="All"
         active={active === FILTER_ALL}
         onClick={() => onChange(FILTER_ALL)}
       />
-      {LEAGUES.map((league) => (
+      {LEAGUES.map((league: any) => (
         <FilterChip
           key={league.id}
           label={league.shortName}
@@ -199,19 +223,25 @@ function LeagueFilter({ active, onChange }) {
   );
 }
 
+interface FilterChipProps {
+  /** Visible chip label — either "All" or a league shortName. */
+  label: string;
+  /** Optional tooltip showing the full league name on hover. */
+  title?: string;
+  /** Whether this chip represents the currently active filter. */
+  active: boolean;
+  /** Called when the chip is clicked. */
+  onClick: () => void;
+}
+
 /**
- * Single chip in the filter strip.  Bordered hairline by default; flips
- * to dust-faint background when active.  The `title` attribute carries
- * the long league name as a tooltip so the shortName chip's meaning is
- * discoverable on hover.
+ * Single chip in the league filter strip.
  *
- * @param {object} props
- * @param {string} props.label
- * @param {string} [props.title]  Optional tooltip text.
- * @param {boolean} props.active
- * @param {() => void} props.onClick
+ * Bordered hairline by default; flips to dust-faint background when active.
+ * The `title` attribute carries the long league name as a native tooltip so
+ * the shortName chip's meaning is discoverable on hover without extra UI.
  */
-function FilterChip({ label, title, active, onClick }) {
+function FilterChip({ label, title, active, onClick }: FilterChipProps) {
   return (
     <button
       type="button"
@@ -235,34 +265,27 @@ function FilterChip({ label, title, active, onClick }) {
   );
 }
 
+interface TeamCardProps {
+  team: TeamWithLeagueMeta;
+}
+
 /**
  * Single team card.
  *
  * Layout (top → bottom):
- *   1. Top hairline    — coloured by the team's brand colour (data-driven)
+ *   1. Top hairline    — 2 px, coloured by the team's brand colour
  *   2. Header row      — league shortName chip + bold team name
  *   3. Body            — location small-caps line + italic tagline prose
- *   4. Footer          — "View Club ►" link redundant with the card's
- *                        wrapping <Link>
+ *   4. Footer          — "View Club ►" redundant cue for keyboard / SR users
  *
  * The entire card is a `<Link>` so any keyboard / pointer interaction
- * navigates to the detail page.  The brand colour appears only as a
+ * navigates to the team detail page.  The brand colour appears only as a
  * 2 px top hairline so it never overpowers the dust/abyss canvas.
- *
- * @param {object} props
- * @param {object} props.team
- * @param {string} props.team.id
- * @param {string} props.team.name
- * @param {string} props.team.location
- * @param {string} props.team.tagline
- * @param {string} props.team.color
- * @param {string} props.team.leagueShortName
- * @param {string} props.team.leagueName
  */
-function TeamCard({ team }) {
-  // Brand-colour hairline.  Fall back to dust so a missing colour
-  // doesn't paint an invisible line.  2 px (not 1 px) so it reads as
-  // a deliberate accent rather than a default hairline.
+function TeamCard({ team }: TeamCardProps) {
+  // Brand-colour hairline.  Fall back to DUST so a missing colour field
+  // doesn't produce an invisible (transparent) border.  2 px rather than
+  // 1 px so it reads as a deliberate accent rather than a default hairline.
   const accent = team.color ?? DUST;
 
   return (
@@ -334,7 +357,8 @@ function TeamCard({ team }) {
         )}
       </div>
 
-      {/* Footer link — explicit affordance for screen-reader users. */}
+      {/* Footer link — explicit affordance for screen-reader users.
+          Sighted users can click anywhere on the card (the whole Link). */}
       <div style={{
         marginTop: 'auto',
         paddingTop: 8,

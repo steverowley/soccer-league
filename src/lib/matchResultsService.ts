@@ -157,7 +157,7 @@ interface StandingsRow {
 
 export function computeStandings(
   leagueId: string,
-  baseRows: Array<{ id: string; team: string; [key: string]: unknown }>,
+  baseRows: Array<{ id: string; team: string; [key: string]: unknown } | StandingsRow>,
   results?: MatchResult[],
 ): StandingsRow[] {
   const all = results ?? getResults();

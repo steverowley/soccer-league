@@ -566,3 +566,37 @@ export async function getTopIdolsForArchitect(db: SupabaseClient<Database>, limi
     return [];
   }
 }
+
+// ── db-injected helpers used by Profile and Training pages ──────────────────
+// These take an explicit SupabaseClient first argument (dependency injection
+// pattern) so the pages can use the client from useSupabase() rather than
+// importing the singleton.  The underlying queries are identical to the
+// singleton-based counterparts above.
+
+/** Flat list of all teams (with league join) — injected-client variant. */
+export async function getTeamsWithDb(
+  db: SupabaseClient<Database>,
+): Promise<Array<Record<string, unknown>>> {
+  const { data, error } = await db
+    .from('teams')
+    .select('*, leagues(id, name, short_name)')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as Array<Record<string, unknown>>;
+}
+
+/** Players for a single team — used by the Profile allegiance picker and
+ *  the Training roster.  Returns the fields the pickers consume. */
+export async function getPlayersForTeam(
+  db: SupabaseClient<Database>,
+  teamId: string,
+): Promise<Array<Record<string, unknown>>> {
+  const { data, error } = await db
+    .from('players')
+    .select('id, name, position, jersey_number, starter')
+    .eq('team_id', teamId)
+    .order('starter', { ascending: false })
+    .order('jersey_number', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Array<Record<string, unknown>>;
+}

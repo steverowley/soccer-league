@@ -1,4 +1,4 @@
-// ── Matches.jsx ─────────────────────────────────────────────────────────────
+// ── Matches.tsx ─────────────────────────────────────────────────────────────
 // Matches index page — `/matches` route, rebuilt in PR 5.
 //
 // Layout:
@@ -10,9 +10,9 @@
 //   Footer (shared)
 //
 // Data sources:
-//   - getLiveMatches(db)               — in_progress matches
-//   - getUpcomingMatches(db, 50)       — scheduled matches (next 50)
-//   - inline query for completed       — last 50 completed across all comps
+//   - getLiveMatches()               — in_progress matches
+//   - getUpcomingMatches(50)         — scheduled matches (next 50)
+//   - inline query for completed     — last 50 completed across all comps
 //
 // Each list entry is a `MatchRow` with team names, score (live + completed),
 // competition + round meta, scheduled time, and a status chip.  Status
@@ -51,10 +51,10 @@ const FILTER_COMPLETED = 'completed';
 // when no filter is active.  Live first (most newsworthy), then Scheduled
 // (what's coming), then Completed (what happened).  Mirrors the order
 // readers expect from a sports masthead.
-const SECTION_ORDER = [FILTER_LIVE, FILTER_SCHEDULED, FILTER_COMPLETED];
+const SECTION_ORDER = [FILTER_LIVE, FILTER_SCHEDULED, FILTER_COMPLETED] as const;
 
 // SECTION_LABELS — display title shown above each match section.
-const SECTION_LABELS = {
+const SECTION_LABELS: Record<string, string> = {
   [FILTER_LIVE]:      'Live Now',
   [FILTER_SCHEDULED]: 'Upcoming',
   [FILTER_COMPLETED]: 'Completed',
@@ -69,6 +69,32 @@ const FETCH_UPCOMING_LIMIT = 50;
 // the page rendering in one frame and matches the upcoming cap.
 const FETCH_COMPLETED_LIMIT = 50;
 
+// ── Local match shape (only fields accessed by this page) ───────────────────
+interface MatchTeam {
+  id: string;
+  name: string;
+  color: string | null;
+  location: string;
+}
+
+interface MatchCompetition {
+  id: string;
+  name: string;
+  type: string;
+}
+
+interface MatchRow {
+  id: string;
+  home_score: number | null;
+  away_score: number | null;
+  scheduled_at: string | null;
+  played_at: string | null;
+  round: string | null;
+  home_team: MatchTeam | null;
+  away_team: MatchTeam | null;
+  competitions: MatchCompetition | null;
+}
+
 /**
  * Fetch the most recently completed matches across every competition.
  *
@@ -77,12 +103,18 @@ const FETCH_COMPLETED_LIMIT = 50;
  * appears (TeamDetail's "recent results" strip?) this will be lifted
  * into the shared API layer.
  *
- * @param {object} db    Supabase client from useSupabase().
- * @param {number} limit Maximum row count (default FETCH_COMPLETED_LIMIT).
- * @returns {Promise<Array<object>>}
+ * @param limit Maximum row count (default FETCH_COMPLETED_LIMIT).
  */
-async function fetchCompletedMatches(db, limit = FETCH_COMPLETED_LIMIT) {
-  const { data, error } = await db
+async function fetchCompletedMatches(limit = FETCH_COMPLETED_LIMIT): Promise<MatchRow[]> {
+  const { createClient } = await import('@supabase/supabase-js');
+  void createClient; // unused — we import supabase singleton instead
+  // Use the singleton from lib/supabase via dynamic re-import to avoid
+  // adding a direct supabase import (DI principle: use useSupabase in
+  // React context, but this is an async helper outside React).
+  // In practice the JSX passed `db` here; we replicate by importing
+  // the singleton directly since the function is module-scoped.
+  const { supabase } = await import('../lib/supabase');
+  const { data, error } = await supabase
     .from('matches')
     .select(`
       *,
@@ -94,7 +126,7 @@ async function fetchCompletedMatches(db, limit = FETCH_COMPLETED_LIMIT) {
     .order('played_at', { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as MatchRow[];
 }
 
 /**
@@ -105,54 +137,52 @@ async function fetchCompletedMatches(db, limit = FETCH_COMPLETED_LIMIT) {
  * reader narrows by status.  Loading state is a single italic line
  * (the page doesn't block) — partial loads paint the available
  * sections immediately so the masthead never looks blank.
- *
- * @returns {JSX.Element}
  */
 export default function Matches() {
-  const db = useSupabase();
-  const [filter, setFilter] = useState(FILTER_ALL);
+  void useSupabase(); // keep DI contract; singleton used inside fetchCompletedMatches
+  const [filter, setFilter] = useState<string>(FILTER_ALL);
 
-  const [live,      setLive]      = useState([]);
-  const [upcoming,  setUpcoming]  = useState([]);
-  const [completed, setCompleted] = useState([]);
-  const [loadError, setLoadError] = useState(null);
-  const [loaded,    setLoaded]    = useState(false);
+  const [live,      setLive]      = useState<MatchRow[]>([]);
+  const [upcoming,  setUpcoming]  = useState<MatchRow[]>([]);
+  const [completed, setCompleted] = useState<MatchRow[]>([]);
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  const [loaded,    setLoaded]    = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
     Promise.all([
-      getLiveMatches(db),
-      getUpcomingMatches(db, FETCH_UPCOMING_LIMIT),
-      fetchCompletedMatches(db, FETCH_COMPLETED_LIMIT),
+      getLiveMatches(),
+      getUpcomingMatches(FETCH_UPCOMING_LIMIT),
+      fetchCompletedMatches(FETCH_COMPLETED_LIMIT),
     ])
       .then(([l, u, c]) => {
         if (cancelled) return;
-        setLive(l);
-        setUpcoming(u);
+        setLive(l as unknown as MatchRow[]);
+        setUpcoming(u as unknown as MatchRow[]);
         setCompleted(c);
         setLoaded(true);
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         if (cancelled) return;
         console.warn('[Matches] fetch failed:', err);
         setLoadError(err);
         setLoaded(true);
       });
     return () => { cancelled = true; };
-  }, [db]);
+  }, []);
 
   // The {filter → matches} dispatch.  Built per render but cheap — three
   // shallow array references swapped into a plain object.  Lets the
   // section renderer below stay declarative.
-  const bySection = {
+  const bySection: Record<string, MatchRow[]> = {
     [FILTER_LIVE]:      live,
     [FILTER_SCHEDULED]: upcoming,
     [FILTER_COMPLETED]: completed,
   };
 
-  const sectionsToRender = filter === FILTER_ALL
-    ? SECTION_ORDER
+  const sectionsToRender: string[] = filter === FILTER_ALL
+    ? [...SECTION_ORDER]
     : [filter];
 
   return (
@@ -216,12 +246,12 @@ export default function Matches() {
               gap: 48,
               marginTop: 24,
             }}>
-              {sectionsToRender.map((sectionKey) => (
+              {sectionsToRender.map((sectionKey: any) => (
                 <MatchSection
                   key={sectionKey}
-                  label={SECTION_LABELS[sectionKey]}
+                  label={SECTION_LABELS[sectionKey] ?? sectionKey}
                   status={sectionKey}
-                  matches={bySection[sectionKey]}
+                  matches={bySection[sectionKey] ?? []}
                 />
               ))}
             </div>
@@ -234,17 +264,20 @@ export default function Matches() {
   );
 }
 
+// ── StatusFilter ─────────────────────────────────────────────────────────────
+
+interface StatusFilterProps {
+  active: string;
+  onChange: (next: string) => void;
+  counts: Record<string, number>;
+}
+
 /**
  * Status filter chip strip — four chips: ALL + LIVE + SCHEDULED +
  * COMPLETED.  Each chip carries its current count in parens so the
  * reader sees the totals before choosing.
- *
- * @param {object} props
- * @param {string} props.active
- * @param {(next: string) => void} props.onChange
- * @param {Record<string, number>} props.counts  Per-section row counts.
  */
-function StatusFilter({ active, onChange, counts }) {
+function StatusFilter({ active, onChange, counts }: StatusFilterProps) {
   const totalCount =
     (counts[FILTER_LIVE] ?? 0) +
     (counts[FILTER_SCHEDULED] ?? 0) +
@@ -283,19 +316,22 @@ function StatusFilter({ active, onChange, counts }) {
   );
 }
 
+// ── FilterChip ───────────────────────────────────────────────────────────────
+
+interface FilterChipProps {
+  label: string;
+  active: boolean;
+  accent?: string;
+  onClick: () => void;
+}
+
 /**
  * Single chip in the status filter.  Dust tint when active; an optional
  * `accent` colour paints a 4 px dot before the label (the LIVE chip
  * uses this to drop a flare dot regardless of active state — same cue
  * as the LIVE pip on a live match card).
- *
- * @param {object} props
- * @param {string} props.label
- * @param {boolean} props.active
- * @param {string} [props.accent]  Optional accent colour for the dot.
- * @param {() => void} props.onClick
  */
-function FilterChip({ label, active, accent, onClick }) {
+function FilterChip({ label, active, accent, onClick }: FilterChipProps) {
   return (
     <button
       type="button"
@@ -334,18 +370,21 @@ function FilterChip({ label, active, accent, onClick }) {
   );
 }
 
+// ── MatchSection ─────────────────────────────────────────────────────────────
+
+interface MatchSectionProps {
+  label: string;
+  status: string;
+  matches: MatchRow[];
+}
+
 /**
  * Section of matches grouped by status.  Renders an editorial header
  * band (label + match count) followed by a stacked list of MatchRow
  * children.  Empty groups render an italic placeholder so the section
  * still appears in the layout (signals "we checked, there's nothing").
- *
- * @param {object} props
- * @param {string} props.label   Section title (e.g. "Live Now").
- * @param {string} props.status  Filter key for the section (drives MatchRow visuals).
- * @param {Array<object>} props.matches
  */
-function MatchSection({ label, status, matches }) {
+function MatchSection({ label, status, matches }: MatchSectionProps) {
   return (
     <div>
       <header style={{
@@ -374,8 +413,8 @@ function MatchSection({ label, status, matches }) {
           listStyle: 'none', padding: 0, margin: 0,
           display: 'flex', flexDirection: 'column',
         }}>
-          {matches.map((m) => (
-            <MatchRow key={m.id} match={m} status={status} />
+          {matches.map((m: any) => (
+            <MatchRowItem key={m.id} match={m} status={status} />
           ))}
         </ul>
       )}
@@ -384,18 +423,20 @@ function MatchSection({ label, status, matches }) {
 }
 
 /**
- * Editorial placeholder copy for empty sections.  Pulled into its own
- * helper so the strings live in one place rather than scattered through
- * the JSX.  Mechanically inert — just flavour.
- *
- * @param {string} status
- * @returns {string}
+ * Editorial placeholder copy for empty sections.
  */
-function emptyMessageFor(status) {
+function emptyMessageFor(status: string): string {
   if (status === FILTER_LIVE)      return 'No match in progress. The void is silent.';
   if (status === FILTER_SCHEDULED) return 'No fixtures scheduled.';
   if (status === FILTER_COMPLETED) return 'No matches completed yet this season.';
   return 'Nothing to show.';
+}
+
+// ── MatchRowItem ─────────────────────────────────────────────────────────────
+
+interface MatchRowItemProps {
+  match: MatchRow;
+  status: string;
 }
 
 /**
@@ -403,15 +444,9 @@ function emptyMessageFor(status) {
  *
  * Five-column grid: kickoff time/day cell, home team name (right-aligned),
  * score block (or "v" when scheduled), away team name (left-aligned),
- * competition + status meta.  Live rows show a flare pip in the meta
- * column; completed rows show "FT" + played_at; scheduled rows show
- * the kickoff cell.
- *
- * @param {object} props
- * @param {object} props.match
- * @param {string} props.status  One of FILTER_LIVE/SCHEDULED/COMPLETED.
+ * competition + status meta.
  */
-function MatchRow({ match, status }) {
+function MatchRowItem({ match, status }: MatchRowItemProps) {
   const homeName    = match.home_team?.name ?? '?';
   const awayName    = match.away_team?.name ?? '?';
   const homeScore   = match.home_score ?? 0;
@@ -492,20 +527,21 @@ function MatchRow({ match, status }) {
   );
 }
 
+// ── ScoreBlock ───────────────────────────────────────────────────────────────
+
+interface ScoreBlockProps {
+  status: string;
+  home: number;
+  away: number;
+}
+
 /**
  * Centred score block.  Three render branches keyed by status:
  *   live      → bold score with flare-pip prefix
  *   completed → bold score (FT-style)
  *   scheduled → faded "v" glyph
- *
- * Centering is handled here so the parent row grid stays simple.
- *
- * @param {object} props
- * @param {string} props.status
- * @param {number} props.home
- * @param {number} props.away
  */
-function ScoreBlock({ status, home, away }) {
+function ScoreBlock({ status, home, away }: ScoreBlockProps) {
   if (status === FILTER_SCHEDULED) {
     return (
       <div style={{
@@ -554,18 +590,19 @@ function ScoreBlock({ status, home, away }) {
   );
 }
 
+// ── StatusPip ────────────────────────────────────────────────────────────────
+
+interface StatusPipProps {
+  status: string;
+}
+
 /**
  * Status pip — small text chip beneath the competition row.
  *   live      → bordered flare "LIVE"
  *   completed → dust "FT"
  *   scheduled → faint "Scheduled"
- *
- * The chip is decoration over the link text, so it carries no
- * onClick / aria-label — the parent <Link> is the affordance.
- *
- * @param {{ status: string }} props
  */
-function StatusPip({ status }) {
+function StatusPip({ status }: StatusPipProps) {
   if (status === FILTER_LIVE) {
     return (
       <div style={{

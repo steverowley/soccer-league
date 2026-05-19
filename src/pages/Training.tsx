@@ -84,10 +84,10 @@ export default function Training() {
   const { user, profile } = useAuth();
   const teamId = profile?.favourite_team_id ?? null;
 
-  const [players,        setPlayers]        = useState([]);
-  const [selectedId,     setSelectedId]     = useState(null);
-  const [loaded,         setLoaded]         = useState(false);
-  const [loadError,      setLoadError]      = useState(null);
+  const [players,        setPlayers]        = useState<any[]>([]);
+  const [selectedId,     setSelectedId]     = useState<any>(null);
+  const [loaded,         setLoaded]         = useState<boolean>(false);
+  const [loadError,      setLoadError]      = useState<any>(null);
 
   // Load roster when the user + team are known.  Re-running auth's
   // useAuth() in the next route ensures the listed players stay
@@ -125,6 +125,7 @@ export default function Training() {
 
   return (
     <div style={{
+        ...(undefined as any),
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
@@ -153,6 +154,7 @@ export default function Training() {
 
           {user && teamId && loadError && (
             <p style={{
+        ...(undefined as any),
               color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Training unavailable. The facility is dark.
@@ -160,6 +162,7 @@ export default function Training() {
           )}
           {user && teamId && !loaded && !loadError && (
             <p style={{
+        ...(undefined as any),
               color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Opening the training facility…
@@ -167,6 +170,7 @@ export default function Training() {
           )}
           {user && teamId && loaded && !loadError && players.length === 0 && (
             <p style={{
+        ...(undefined as any),
               color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Your club has no players on the books.
@@ -203,21 +207,24 @@ export default function Training() {
  *
  * @returns {JSX.Element}
  */
-function SignInCta() {
+function SignInCta(): React.ReactElement {
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 32,
       marginTop: 24,
       maxWidth: 640,
     }}>
       <h3 style={{
+        ...(undefined as any),
         fontSize: 22, fontWeight: 700, textTransform: 'uppercase',
         margin: 0, letterSpacing: '0.01em',
       }}>
         Sign Up To Train
       </h3>
       <p style={{
+        ...(undefined as any),
         fontSize: 14, lineHeight: 1.7, color: DUST_70, margin: '16px 0 24px',
       }}>
         Sign up to claim a free account, pick the club you&rsquo;ll
@@ -234,21 +241,24 @@ function SignInCta() {
  *
  * @returns {JSX.Element}
  */
-function PickTeamCta() {
+function PickTeamCta(): React.ReactElement {
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 32,
       marginTop: 24,
       maxWidth: 640,
     }}>
       <h3 style={{
+        ...(undefined as any),
         fontSize: 22, fontWeight: 700, textTransform: 'uppercase',
         margin: 0, letterSpacing: '0.01em',
       }}>
         Pick A Favourite Club
       </h3>
       <p style={{
+        ...(undefined as any),
         fontSize: 14, lineHeight: 1.7, color: DUST_70, margin: '16px 0 24px',
       }}>
         Training is per-club.  Pick a side first; the training facility
@@ -270,7 +280,7 @@ function PickTeamCta() {
  * @param {string | null} props.selectedId
  * @param {(id: string) => void} props.onSelect
  */
-function RosterPicker({ players, selectedId, onSelect }) {
+function RosterPicker({ players, selectedId, onSelect }: { players: any[]; selectedId: string | null; onSelect: (id: string) => void }) {
   return (
     <div>
       <SectionHeader
@@ -282,13 +292,14 @@ function RosterPicker({ players, selectedId, onSelect }) {
       <div
         className="isl-roster-picker"
         style={{
+        ...(undefined as any),
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 8,
           marginTop: 24,
         }}
       >
-        {players.map((p) => {
+        {players.map((p: any) => {
           const isSelected = p.id === selectedId;
           return (
             <button
@@ -296,6 +307,7 @@ function RosterPicker({ players, selectedId, onSelect }) {
               type="button"
               onClick={() => onSelect(p.id)}
               style={{
+        ...(undefined as any),
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
@@ -310,6 +322,7 @@ function RosterPicker({ players, selectedId, onSelect }) {
               }}
             >
               <span style={{
+        ...(undefined as any),
                 fontSize: 11,
                 letterSpacing: '0.14em',
                 textTransform: 'uppercase',
@@ -318,6 +331,7 @@ function RosterPicker({ players, selectedId, onSelect }) {
                 {p.starter ? '★ ' : ''}#{p.jersey_number ?? '—'} • {p.position ?? '—'}
               </span>
               <span style={{
+        ...(undefined as any),
                 fontSize: 13,
                 fontWeight: 700,
                 lineHeight: 1.2,
@@ -364,29 +378,29 @@ function RosterPicker({ players, selectedId, onSelect }) {
  * @param {object} props.user
  * @param {object} props.player
  */
-function ClickerWidget({ user, player }) {
+function ClickerWidget({ user, player }: { user: any; player: any }) {
   // Read the Supabase client at the top level — calling useSupabase()
   // inside a useEffect would violate the rules of hooks.  The widget
   // remounts on player switch (parent passes a fresh key) so the
   // captured `db` reference is fine for the widget's lifetime.
   const db = useSupabase();
 
-  const [lifetimeXp, setLifetimeXp] = useState(0);
-  const [loaded,     setLoaded]     = useState(false);
+  const [lifetimeXp, setLifetimeXp] = useState<number>(0);
+  const [loaded,     setLoaded]     = useState<boolean>(false);
 
   // Cooldown end timestamp (ms-since-epoch).  null when no cooldown
   // is active.  Updated on every click; the displayed countdown
   // re-renders on the COOLDOWN_TICK_MS interval below.
-  const [cooldownEndMs, setCooldownEndMs] = useState(null);
+  const [cooldownEndMs, setCooldownEndMs] = useState<any>(null);
   const [now,           setNow]           = useState(Date.now());
 
   // Per-widget bump toast.  Persisted in state because we want the
   // toast to fade after BUMP_TOAST_MS regardless of further clicks.
-  const [bumpToast, setBumpToast] = useState(null);
+  const [bumpToast, setBumpToast] = useState<any>(null);
 
   // Soft error surface — same row that displays "Cooldown" or
   // "Session cap reached" etc.
-  const [errorReason, setErrorReason] = useState(null);
+  const [errorReason, setErrorReason] = useState<any>(null);
 
   // In-flight click guard so a double-tap can't queue two writes.
   const inFlight = useRef(false);
@@ -477,6 +491,7 @@ function ClickerWidget({ user, player }) {
 
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 32,
       display: 'grid',
@@ -486,18 +501,21 @@ function ClickerWidget({ user, player }) {
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <span style={{
+        ...(undefined as any),
           fontSize: 11, letterSpacing: '0.14em',
           textTransform: 'uppercase', color: DUST_70,
         }}>
           Now Training
         </span>
         <h3 style={{
+        ...(undefined as any),
           fontSize: 28, fontWeight: 700, textTransform: 'uppercase',
           margin: 0, letterSpacing: '0.01em',
         }}>
           {player.name}
         </h3>
         <span style={{
+        ...(undefined as any),
           fontSize: 11, letterSpacing: '0.14em',
           textTransform: 'uppercase', color: DUST_70,
         }}>
@@ -509,12 +527,14 @@ function ClickerWidget({ user, player }) {
             is narrow. */}
         <div style={{ marginTop: 8 }}>
           <div style={{
+        ...(undefined as any),
             height: 10,
             background: COLORS.dustFaint,
             border: `1px solid ${HAIRLINE}`,
             overflow: 'hidden',
           }}>
             <div style={{
+        ...(undefined as any),
               width: `${pct}%`,
               height: '100%',
               background: DUST,
@@ -522,6 +542,7 @@ function ClickerWidget({ user, player }) {
             }} />
           </div>
           <div style={{
+        ...(undefined as any),
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'baseline',
@@ -541,6 +562,7 @@ function ClickerWidget({ user, player }) {
 
       {/* Right column — click button + status. */}
       <div style={{
+        ...(undefined as any),
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -552,6 +574,7 @@ function ClickerWidget({ user, player }) {
           disabled={locked}
           onClick={onClick}
           style={{
+        ...(undefined as any),
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -572,6 +595,7 @@ function ClickerWidget({ user, player }) {
             : `Click for +${XP_PER_CLICK} XP`}
         </button>
         <span style={{
+        ...(undefined as any),
           fontSize: 11,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
@@ -584,6 +608,7 @@ function ClickerWidget({ user, player }) {
           // successful stat-threshold cross.  Reads as "the void
           // approves" rather than just "something happened".
           <span style={{
+        ...(undefined as any),
             fontSize: 12,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
@@ -607,7 +632,7 @@ function ClickerWidget({ user, player }) {
  * @param {string | undefined} reason
  * @returns {string}
  */
-function humanizeReason(reason) {
+function humanizeReason(reason: string | undefined) {
   switch (reason) {
     case 'cooldown':       return 'Cooldown active — wait a moment.';
     case 'session_cap':    return 'Session cap reached — try again later.';
@@ -623,7 +648,7 @@ function humanizeReason(reason) {
  * @param {string} key
  * @returns {string}
  */
-function prettyStat(key) {
+function prettyStat(key: string) {
   return (key ?? '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());

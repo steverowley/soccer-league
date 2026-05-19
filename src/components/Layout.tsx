@@ -1,70 +1,38 @@
-// ── Layout.jsx ──────────────────────────────────────────────────────────────
-// Shared page chrome extracted from Home.jsx when the second page (Leagues)
-// legitimately needed the same primitives — matches the rule called out in
-// Home.jsx's file header.
+// ── Layout.tsx ──────────────────────────────────────────────────────────────
+// Shared page chrome — typed React primitives for the ISL design system.
 //
 // Exports:
-//   - COLORS              palette object (the three brand tokens + tints)
+//   - COLORS              palette object (seven semantic tokens + tints)
 //   - Container           fixed-max-width content wrapper
 //   - SectionHeader       editorial kicker + title + subtitle + action header
 //   - Footer              site-wide hairline footer
 //   - PrimaryButton       dark Abyss + dust border CTA
-//   - FlareCTA            flare-filled attention CTA
+//   - FocusCTA            quantum-filled focus CTA
+//   - TeamCrest           clip-path shield placeholder for a club crest
+//   - BackLink            tiny back-to-listing link for detail pages
 //   - DustButton          dust-filled CTA used inside cards
 //
 // PALETTE (seven semantic tokens, matches the Figma design system):
-//   LUNAR DUST     #E3E0D5  — primary light: text on dark, default borders,
-//                              button-secondary fill
+//   LUNAR DUST     #E3E0D5  — primary light: text on dark, default borders
 //   GALACTIC ABYSS #111111  — primary dark: page bg, btn-primary fill
-//   PHOBOS ASH     #1F1F1F  — secondary dark: layered surfaces (cards on
-//                              cards, modal-on-dark)
-//   QUANTUM PURPLE #9A5CF4  — focus colour: PRIMARY CTAs, live indicators,
-//                              Architect, every "attention" highlight
-//   SOLAR FLARE    #FF4F5E  — ERROR ONLY: validation failures, losses,
-//                              relegation, cosmic disturbances
-//   TERRA NOVA     #A5D6A7  — confirmation: "Saved" toasts, positive P&L,
-//                              successful stat bumps
+//   PHOBOS ASH     #1F1F1F  — secondary dark: layered surfaces
+//   QUANTUM PURPLE #9A5CF4  — focus colour: PRIMARY CTAs, live indicators
+//   SOLAR FLARE    #FF4F5E  — ERROR ONLY: losses, relegation, disturbances
+//   TERRA NOVA     #A5D6A7  — confirmation: "Saved" toasts, positive P&L
 //   ASTRO EXPLORER #FF6637  — secondary focus: hot-streak / momentum cues
-//                              that aren't errors
-//
-// PR 12 corrected the original 3-token assumption — the rebuild used
-// Solar Flare for both errors AND focus highlights, which conflated
-// two distinct semantic roles.
 
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 // ── Palette tokens ──────────────────────────────────────────────────────────
-// Seven semantic tokens + four computed dust tints, frozen so a stray
-// `COLORS.flare = '#000'` somewhere downstream fails loud in dev.
-//
-// SEMANTIC ASSIGNMENT (do NOT reuse a token across roles):
-//   - `quantum` is THE focus colour for every primary CTA + live cue +
-//     Architect highlight.  If a button wants attention, it's quantum.
-//   - `flare` is ERROR-ONLY.  Reserved for validation failures, losses,
-//     relegation cues, and cosmic-disturbance narratives.  A primary CTA
-//     painted flare reads as "danger / red alert" — wrong signal.
-//   - `terraNova` is the confirmation colour: positive P&L, "Saved"
-//     toasts, successful stat-bump flashes.
-//   - `astro` is a secondary focus accent for hot-streak / momentum
-//     surfaces that aren't error-coded (e.g. Hot Movers strip).
-//   - `phobosAsh` is the layered-surface fill — slightly lighter than
-//     abyss so a card-on-card stack reads as depth without losing the
-//     mono-dark canvas.
 export const COLORS = Object.freeze({
-  // ── Primary surfaces ──────────────────────────────────────────────
-  dust:       '#E3E0D5', // Lunar Dust     — text on dark, button-secondary fill
-  abyss:      '#111111', // Galactic Abyss — page bg, btn-primary fill
-  phobosAsh:  '#1F1F1F', // Phobos Ash     — secondary dark / layered surfaces
-
-  // ── Semantic accents ──────────────────────────────────────────────
-  quantum:    '#9A5CF4', // Quantum Purple — focus / primary CTA / Architect
-  flare:      '#FF4F5E', // Solar Flare    — ERROR ONLY
-  terraNova:  '#A5D6A7', // Terra Nova     — confirmation / success
-  astro:      '#FF6637', // Astro Explorer — secondary focus / momentum
-
-  // ── Computed dust tints ───────────────────────────────────────────
-  // Alpha overlays of Lunar Dust.  Used for hairlines, sub-text,
-  // disabled / placeholder copy, and faint card-fill states.
+  dust:       '#E3E0D5',
+  abyss:      '#111111',
+  phobosAsh:  '#1F1F1F',
+  quantum:    '#9A5CF4',
+  flare:      '#FF4F5E',
+  terraNova:  '#A5D6A7',
+  astro:      '#FF6637',
   hairline:   'rgba(227, 224, 213, 0.18)',
   dust50:     'rgba(227, 224, 213, 0.50)',
   dust70:     'rgba(227, 224, 213, 0.70)',
@@ -73,16 +41,23 @@ export const COLORS = Object.freeze({
 
 /**
  * Fixed-max-width content container — centres children at 1248 px.
- * Outer <section> still owns padding; this only constrains width.
- *
- * @param {{ children: React.ReactNode }} props
  */
-export function Container({ children }) {
+export function Container({ children }: { children: ReactNode }) {
   return (
     <div style={{ maxWidth: 1248, margin: '0 auto', width: '100%' }}>
       {children}
     </div>
   );
+}
+
+interface SectionHeaderProps {
+  pageKicker?: string;
+  kicker: string;
+  label?: string;
+  title: string;
+  subtitle?: string;
+  actionLabel?: string;
+  actionTo?: string;
 }
 
 /**
@@ -94,15 +69,6 @@ export function Container({ children }) {
  *   3. TITLE             — big display heading
  *   4. SUBTITLE + ACTION — subtitle prose + right-aligned ► action
  *   5. HAIRLINE          — divider that anchors the header
- *
- * @param {object} props
- * @param {string} [props.pageKicker]   Optional page-level kicker above the row.
- * @param {string} props.kicker         Roman numeral / index (e.g. "II").
- * @param {string} [props.label]        Two-part kicker label after the bullet.
- * @param {string} props.title          Display heading.
- * @param {string} [props.subtitle]     Subtitle prose under the title.
- * @param {string} [props.actionLabel]  Optional ► action label.
- * @param {string} [props.actionTo]     Required when actionLabel is set.
  */
 export function SectionHeader({
   pageKicker,
@@ -112,7 +78,7 @@ export function SectionHeader({
   subtitle,
   actionLabel,
   actionTo,
-}) {
+}: SectionHeaderProps) {
   return (
     <header>
       {pageKicker && (
@@ -203,9 +169,7 @@ export function SectionHeader({
 }
 
 /**
- * Site-wide footer.  Single hairline + tracked small-caps band.  Build
- * version is a literal because the value is rendered for editorial flavour,
- * not for diagnostics.
+ * Site-wide footer. Single hairline + tracked small-caps band.
  */
 export function Footer() {
   return (
@@ -227,15 +191,10 @@ export function Footer() {
   );
 }
 
-// ── Buttons ──────────────────────────────────────────────────────────────────
-
 /**
  * Primary CTA — dark Abyss fill, 1 px dust border, dust text.
- * App-wide standard "secondary entry path" button.
- *
- * @param {{ to: string, children: React.ReactNode }} props
  */
-export function PrimaryButton({ to, children }) {
+export function PrimaryButton({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link
       to={to}
@@ -260,19 +219,12 @@ export function PrimaryButton({ to, children }) {
 }
 
 /**
- * Focus CTA — Quantum Purple fill, dust text, purple border.  THE
- * primary-attention button across the entire app: Sign Up, Watch Live,
- * Cast Vote, Place Wager, Click for XP, Log In, Save Allegiance.
+ * Focus CTA — Quantum Purple fill, dust text, purple border.
+ * THE primary-attention button: Sign Up, Watch Live, Cast Vote, Place Wager.
  *
- * Renamed from `FlareCTA` in PR 12 once the actual design palette was
- * surfaced — Solar Flare is the ERROR colour, not the focus colour.
- * The old name + flare fill collapsed two distinct semantic roles into
- * one visual cue; using Quantum Purple here keeps Solar Flare reserved
- * for genuine error states (validation, losses, cosmic disturbances).
- *
- * @param {{ to: string, children: React.ReactNode }} props
+ * Uses Quantum Purple (not Solar Flare) — flare is the ERROR colour.
  */
-export function FocusCTA({ to, children }) {
+export function FocusCTA({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link
       to={to}
@@ -297,24 +249,13 @@ export function FocusCTA({ to, children }) {
 }
 
 /**
- * Shield silhouette placeholder for a club crest.  Drawn with
- * clip-path so the colour is fully data-driven and there is no asset
- * swap when team.color changes.  56 × 64 px reads at score-row scale
- * without dominating the row.
+ * Shield silhouette placeholder for a club crest. Drawn with clip-path
+ * so the colour is fully data-driven. 56 × 64 px reads at score-row scale.
  *
- * Two tint stops baked off the brand colour:
- *   - fill: hex + '33' alpha (faint wash, ≈ 20 %)
- *   - edge: hex + 'AA' alpha (medium border, ≈ 67 %)
  * Null colour falls back to neutral dust so a missing brand value
  * paints a placeholder shield rather than an invisible one.
- *
- * Extracted into Layout.jsx in PR 11 when MatchDetail duplicated the
- * Home-page primitive verbatim — crossed the "extract on 2nd use"
- * threshold the Home.jsx file header sets up.
- *
- * @param {{ color: string | null }} props
  */
-export function TeamCrest({ color }) {
+export function TeamCrest({ color }: { color: string | null }) {
   const tint = color ? `${color}33` : 'rgba(227,224,213,0.10)';
   const edge = color ? `${color}AA` : 'rgba(227,224,213,0.30)';
   return (
@@ -333,15 +274,10 @@ export function TeamCrest({ color }) {
 }
 
 /**
- * Tiny back-to-listing link used at the top of every detail page above
- * its SectionHeader.  Mono small-caps cue with a ◄ glyph so the
- * direction is obvious at a glance.  Extracted in PR 6 once the third
- * detail surface (MatchDetail) duplicated it from LeagueDetail and
- * TeamDetail.
- *
- * @param {{ to: string, children: React.ReactNode }} props
+ * Tiny back-to-listing link used at the top of every detail page.
+ * Mono small-caps cue with a ◄ glyph so the direction is obvious.
  */
-export function BackLink({ to, children }) {
+export function BackLink({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link
       to={to}
@@ -364,13 +300,10 @@ export function BackLink({ to, children }) {
 }
 
 /**
- * Dust-filled CTA — dust fill, abyss text.  Used inside cards where the
- * surrounding panel is already Abyss and a third dark-outline button
- * would lose contrast.
- *
- * @param {{ to: string, children: React.ReactNode }} props
+ * Dust-filled CTA — dust fill, abyss text. Used inside cards where the
+ * surrounding panel is already Abyss.
  */
-export function DustButton({ to, children }) {
+export function DustButton({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link
       to={to}
