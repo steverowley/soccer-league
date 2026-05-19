@@ -158,7 +158,7 @@ export default function Home() {
       <Hero />
 
       {/* Section II — Live From The Void. */}
-      <section style={{ padding: '64px 16px' }}>
+      <section style={{ padding: '64px 0' }}>
         <Container>
           <SectionHeader
             pageKicker="The Present"
