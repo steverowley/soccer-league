@@ -134,7 +134,7 @@ export default function Training() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '64px 32px 24px' }}>
+      <section style={{ padding: '48px 16px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Training"
@@ -147,7 +147,7 @@ export default function Training() {
       </section>
 
       {/* Section II — Auth / team guard. */}
-      <section style={{ padding: '0 32px 64px' }}>
+      <section style={{ padding: '0 16px 48px' }}>
         <Container>
           {!user && <SignInCta />}
           {user && !teamId && <PickTeamCta />}

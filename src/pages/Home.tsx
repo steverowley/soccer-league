@@ -158,7 +158,7 @@ export default function Home() {
       <Hero />
 
       {/* Section II — Live From The Void. */}
-      <section style={{ padding: '80px 32px' }}>
+      <section style={{ padding: '64px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="The Present"
@@ -183,7 +183,7 @@ export default function Home() {
       </section>
 
       {/* Section III — Standings. */}
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>
           <SectionHeader
             pageKicker="Tables"
@@ -202,11 +202,15 @@ export default function Home() {
 
       <Footer />
 
-      {/* Responsive grid: live section collapses to 1 column < 900 px. */}
+      {/* Responsive grids for tablet and mobile. */}
       <style>{`
         @media (max-width: 899px) {
           .isl-live-grid { grid-template-columns: 1fr !important; }
           .isl-hero-grid { grid-template-columns: 1fr !important; }
+          .isl-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+        @media (max-width: 599px) {
+          .isl-stats-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>
@@ -235,7 +239,7 @@ function Hero() {
           gridTemplateColumns: '1fr 1fr',
           gap: 48,
           alignItems: 'stretch',
-          padding: '32px',
+          padding: '32px 16px',
         }}>
           {/* Pillars image — fixed aspect frame so the page rhythm is
               stable even before the PNG loads.  No border decoration;
@@ -337,9 +341,10 @@ function Hero() {
             </div>
 
             {/* Stats grid — 4 small-caps cells separated by a top
-                hairline.  Values are placeholder until wired to live
+                hairline.  Responsive: 4 cols on desktop, 2 on tablet,
+                1 on mobile. Values are placeholder until wired to live
                 season state. */}
-            <div style={{
+            <div className="isl-stats-grid" style={{
         ...(undefined as any),
               display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',

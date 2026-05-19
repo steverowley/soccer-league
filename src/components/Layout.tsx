@@ -193,6 +193,7 @@ export function Footer() {
 
 /**
  * Primary CTA — dark Abyss fill, 1 px dust border, dust text.
+ * Touch-friendly: 44px+ minimum height for WCAG AAA tap target compliance.
  */
 export function PrimaryButton({ to, children }: { to: string; children: ReactNode }) {
   return (
@@ -208,9 +209,10 @@ export function PrimaryButton({ to, children }: { to: string; children: ReactNod
         color: COLORS.dust,
         background: COLORS.abyss,
         border: `1px solid ${COLORS.dust}`,
-        padding: '14px 28px',
+        padding: '16px 28px',
         textDecoration: 'none',
         whiteSpace: 'nowrap',
+        minHeight: 44,
       }}
     >
       {children}
@@ -223,6 +225,7 @@ export function PrimaryButton({ to, children }: { to: string; children: ReactNod
  * THE primary-attention button: Sign Up, Watch Live, Cast Vote, Place Wager.
  *
  * Uses Quantum Purple (not Solar Flare) — flare is the ERROR colour.
+ * Touch-friendly: 44px+ minimum height for WCAG AAA tap target compliance.
  */
 export function FocusCTA({ to, children }: { to: string; children: ReactNode }) {
   return (
@@ -238,9 +241,10 @@ export function FocusCTA({ to, children }: { to: string; children: ReactNode }) 
         color: COLORS.dust,
         background: COLORS.quantum,
         border: `1px solid ${COLORS.quantum}`,
-        padding: '14px 28px',
+        padding: '16px 28px',
         textDecoration: 'none',
         whiteSpace: 'nowrap',
+        minHeight: 44,
       }}
     >
       {children}
@@ -302,6 +306,7 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
 /**
  * Dust-filled CTA — dust fill, abyss text. Used inside cards where the
  * surrounding panel is already Abyss.
+ * Touch-friendly: 44px+ minimum height for WCAG AAA tap target compliance.
  */
 export function DustButton({ to, children }: { to: string; children: ReactNode }) {
   return (
@@ -317,10 +322,11 @@ export function DustButton({ to, children }: { to: string; children: ReactNode }
         color: COLORS.abyss,
         background: COLORS.dust,
         border: `1px solid ${COLORS.dust}`,
-        padding: '14px 28px',
+        padding: '16px 28px',
         textDecoration: 'none',
         whiteSpace: 'nowrap',
         alignSelf: 'flex-start',
+        minHeight: 44,
       }}
     >
       {children}

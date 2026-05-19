@@ -278,7 +278,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     }}>
       <Header />
 
-      <section style={{ padding: '64px 32px 24px' }}>
+      <section style={{ padding: '48px 16px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Account"
@@ -290,7 +290,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </Container>
       </section>
 
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>{children}</Container>
       </section>
 

@@ -74,7 +74,7 @@ export default function Leagues() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '64px 32px 24px' }}>
+      <section style={{ padding: '48px 16px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Tables"
@@ -87,7 +87,7 @@ export default function Leagues() {
       </section>
 
       {/* Section II — League grid. */}
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>
           <div
             className="isl-leagues-grid"
