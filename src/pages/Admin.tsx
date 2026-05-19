@@ -175,7 +175,7 @@ export default function Admin() {
         {/* ── Page hero ────────────────────────────────────────────────── */}
         <div style={{ borderBottom: `1px solid ${HAIRLINE}`, marginBottom: 0 }}>
           <Container>
-            <div style={{ padding: '48px 0 40px' }}>
+            <div style={{ padding: '48px 16px 40px' }}>
               <p style={{ ...LABEL_STYLE, color: QUANTUM, marginBottom: 10 }}>
                 Admin Dashboard
               </p>
@@ -199,7 +199,7 @@ export default function Admin() {
 
         {/* ── Body panels ───────────────────────────────────────────────── */}
         <Container>
-          <div style={{ padding: '40px 0 80px', display: 'flex', flexDirection: 'column', gap: 48 }}>
+          <div style={{ padding: '40px 16px 80px', display: 'flex', flexDirection: 'column', gap: 48 }}>
             <SeasonPanel db={db} />
             <FixtureBrowser db={db} />
             <ArchitectLog db={db} />
