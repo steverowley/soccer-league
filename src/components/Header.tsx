@@ -55,17 +55,17 @@ export default function Header() {
         style={{
           maxWidth: 1312,
           margin: '0 auto',
-          padding: '20px 32px',
+          padding: '16px 16px',
           display: 'flex',
           alignItems: 'center',
-          gap: 24,
+          gap: 12,
         }}
       >
         <Link to="/" aria-label="ISL home" style={{ display: 'block', flexShrink: 0 }}>
           <img
             src={`${import.meta.env.BASE_URL}isl-logo.svg`}
             alt="Intergalactic Soccer League"
-            style={{ width: 64, height: 64, display: 'block' }}
+            style={{ width: 56, height: 56, display: 'block' }}
           />
         </Link>
 
@@ -98,11 +98,14 @@ export default function Header() {
             border: `1px solid ${HAIRLINE}`,
             color: DUST,
             cursor: 'pointer',
-            padding: 8,
+            padding: 12,
+            minHeight: 44,
+            minWidth: 44,
             display: 'none',
+            flexShrink: 0,
           }}
         >
-          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
@@ -110,10 +113,10 @@ export default function Header() {
         <nav
           style={{
             background: ABYSS,
-            padding: '16px 32px 24px',
+            padding: '12px 16px 16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
+            gap: 8,
             borderTop: `1px solid ${HAIRLINE}`,
           }}
         >
@@ -168,6 +171,7 @@ interface NavLinkProps {
 /**
  * Single nav link with a subtle dust-tinted active chip.
  * Active state paints a faint dust rectangle behind the label.
+ * Touch-friendly: 44px+ minimum height for mobile tap target compliance.
  */
 function NavLink({ to, active, onClick, children }: NavLinkProps) {
   return (
@@ -175,7 +179,9 @@ function NavLink({ to, active, onClick, children }: NavLinkProps) {
       to={to}
       onClick={onClick}
       style={{
-        display: 'inline-block',
+        display: 'inline-flex',
+        alignItems: 'center',
+        minHeight: 44,
         fontFamily: 'Space Mono, monospace',
         fontSize: 13,
         fontWeight: 700,
@@ -183,7 +189,7 @@ function NavLink({ to, active, onClick, children }: NavLinkProps) {
         letterSpacing: '0.12em',
         color: DUST,
         textDecoration: 'none',
-        padding: '8px 12px',
+        padding: '12px 16px',
         background: active ? DUST_FAINT : 'transparent',
         transition: 'background 0.12s ease',
       }}
@@ -236,7 +242,8 @@ function AccountMenu() {
           background: open ? DUST_FAINT : 'transparent',
           border: `1px solid ${HAIRLINE}`,
           color: DUST,
-          padding: '8px 14px',
+          padding: '12px 14px',
+          minHeight: 44,
           fontFamily: 'Space Mono, monospace',
           fontSize: 12,
           fontWeight: 700,
@@ -384,6 +391,7 @@ interface FlareButtonProps {
  * Quantum Purple auth CTA — purple fill + dust text + purple border.
  * Named FlareButton for legacy reasons; the fill was corrected to Quantum
  * Purple in PR 12 (Solar Flare is error-only per the design system).
+ * Touch-friendly: 44px+ minimum height for mobile tap target compliance.
  */
 function FlareButton({ to, onClick, children }: FlareButtonProps) {
   return (
@@ -394,6 +402,7 @@ function FlareButton({ to, onClick, children }: FlareButtonProps) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
+        minHeight: 44,
         fontFamily: 'Space Mono, monospace',
         fontSize: 13,
         fontWeight: 700,

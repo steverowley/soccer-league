@@ -102,7 +102,7 @@ export default function Idols() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '64px 32px 24px' }}>
+      <section style={{ padding: '48px 16px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Idols"
@@ -115,7 +115,7 @@ export default function Idols() {
       </section>
 
       {/* Section II — Hot Movers strip. */}
-      <section style={{ padding: '0 32px 32px' }}>
+      <section style={{ padding: '0 16px 24px' }}>
         <Container>
           <SectionHeader
             kicker="I"
@@ -154,7 +154,7 @@ export default function Idols() {
       </section>
 
       {/* Section III — Global leaderboard. */}
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>
           <SectionHeader
             kicker="II"

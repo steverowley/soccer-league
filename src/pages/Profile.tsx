@@ -348,7 +348,7 @@ function Shell({ children, username }: { children: React.ReactNode; username?: s
     }}>
       <Header />
 
-      <section style={{ padding: '64px 32px 24px' }}>
+      <section style={{ padding: '48px 16px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Profile"
@@ -360,7 +360,7 @@ function Shell({ children, username }: { children: React.ReactNode; username?: s
         </Container>
       </section>
 
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>{children}</Container>
       </section>
 

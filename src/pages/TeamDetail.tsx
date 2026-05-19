@@ -129,7 +129,7 @@ export default function TeamDetail() {
       <ClubHero team={staticTeam} league={league} />
 
       {/* Section II — Squad. */}
-      <section style={{ padding: '32px 32px 64px' }}>
+      <section style={{ padding: '48px 16px 48px' }}>
         <Container>
           <SectionHeader
             kicker="II"
@@ -162,7 +162,7 @@ export default function TeamDetail() {
       </section>
 
       {/* Section III — Manager. */}
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>
           <SectionHeader
             kicker="III"
@@ -216,7 +216,7 @@ function ClubHero({ team, league  }: any) {
   const accent = team.color ?? DUST;
   return (
     <section style={{
-      padding: '64px 32px 32px',
+      padding: '48px 16px 24px',
       borderTop: `2px solid ${accent}`,
     }}>
       <Container>

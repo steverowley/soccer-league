@@ -77,7 +77,7 @@ export default function LeagueDetail() {
       <Header />
 
       {/* Section I — Hero. */}
-      <section style={{ padding: '64px 32px 32px' }}>
+      <section style={{ padding: '48px 16px 24px' }}>
         <Container>
           <BackLink to="/leagues">All Leagues</BackLink>
 
@@ -115,7 +115,7 @@ export default function LeagueDetail() {
       </section>
 
       {/* Section II — Standings. */}
-      <section style={{ padding: '32px 32px 64px' }}>
+      <section style={{ padding: '48px 16px 48px' }}>
         <Container>
           <SectionHeader
             kicker="II"
@@ -130,7 +130,7 @@ export default function LeagueDetail() {
       </section>
 
       {/* Section III — Club roster. */}
-      <section style={{ padding: '0 32px 120px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>
           <SectionHeader
             kicker="III"
@@ -250,7 +250,7 @@ function UnknownLeague({ leagueId }: UnknownLeagueProps) {
       fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
-      <section style={{ padding: '120px 32px' }}>
+      <section style={{ padding: '80px 16px' }}>
         <Container>
           <BackLink to="/leagues">All Leagues</BackLink>
           <h1 style={{
