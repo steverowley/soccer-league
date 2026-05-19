@@ -26,9 +26,9 @@
 // Pages under that sub-path (matches vite.config.js `base`).  Without it the
 // router treats every URL as unmatched and renders nothing.
 
-import { lazy, StrictMode, Suspense } from 'react';
+import { lazy, StrictMode, Suspense, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 
 import './index.css';
 
@@ -83,6 +83,21 @@ const Wagers       = lazy(() => import('./pages/Wagers'));
 const Admin        = lazy(() => import('./pages/Admin'));
 const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
 
+// Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
+// 404.html redirects to the root and stores the original path in sessionStorage.
+// This component checks for that stored path on mount and navigates to it.
+function RedirectHandler() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const redirect = sessionStorage.redirect;
+    delete sessionStorage.redirect;
+    if (redirect && redirect !== '/soccer-league/') {
+      navigate(redirect, { replace: true });
+    }
+  }, [navigate]);
+  return null;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Error boundary outside everything so render errors anywhere in the
@@ -105,6 +120,7 @@ createRoot(document.getElementById('root')!).render(
                 useful on fast connections and would distract on slow ones;
                 null is the correct trade-off here. */}
             <Suspense fallback={null}>
+            <RedirectHandler />
             <Routes>
               {/* / → Home.  Other routes will be added as each page is
                   rebuilt; until then they 404 — intentional during the
