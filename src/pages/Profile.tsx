@@ -26,6 +26,7 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../lib/supabase';
+import { parseAllowlist, isAdminUser } from '../features/admin';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives the Save Allegiance submit button + the
@@ -67,6 +68,10 @@ export default function Profile() {
 
   const [teams,   setTeams]   = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
+
+  // Check if user has admin access via VITE_ADMIN_USER_IDS allowlist.
+  const adminAllowlist = parseAllowlist(import.meta.env.VITE_ADMIN_USER_IDS);
+  const isAdmin = isAdminUser(user?.id, adminAllowlist);
 
   // Local copy of the editable fields — initialised from the profile on
   // first paint, mutated by the form controls, then persisted on save.
@@ -296,10 +301,34 @@ export default function Profile() {
       <div style={{ marginTop: 48 }}>
         <SectionHeader
           kicker="III"
-          label="Exit"
-          title="Step Back Into The Void"
+          label="Controls"
+          title={isAdmin ? "Administration & Exit" : "Step Back Into The Void"}
         />
-        <div style={{ marginTop: 24, display: 'flex', gap: 16, alignItems: 'center' }}>
+        <div style={{ marginTop: 24, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              style={{
+        ...(undefined as any),
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: 13,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.12em',
+                color: DUST,
+                background: QUANTUM,
+                border: `1px solid ${QUANTUM}`,
+                padding: '14px 28px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                minHeight: 44,
+              }}
+            >
+              Admin Dashboard
+            </button>
+          )}
           <button
             type="button"
             onClick={onSignOut}
@@ -317,6 +346,7 @@ export default function Profile() {
               padding: '14px 28px',
               cursor: 'pointer',
               fontFamily: 'inherit',
+              minHeight: 44,
             }}
           >
             Sign Out
