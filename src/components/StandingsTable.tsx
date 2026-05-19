@@ -10,6 +10,7 @@
 //   - the "losses bleeding" flare flag on the L column
 //   - the 5-cell bordered-letter Form strip and its em-dash placeholders
 
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { COLORS } from './Layout';
 
@@ -56,7 +57,7 @@ interface StandingsRowData {
  * - Form renders bordered W/D/L letter tiles, most-recent-first.
  * - Loses column flips to flare when losses ≥ half the matches played.
  */
-export default function StandingsTable({ rows }: { rows: StandingsRowData[] }) {
+function StandingsTable({ rows }: { rows: StandingsRowData[] }) {
   const cols = [
     { key: 'pos',    label: '#',    align: 'left',  width: 64 },
     { key: 'club',   label: 'Club', align: 'left' },
@@ -245,3 +246,8 @@ function FormPip({ result }: { result?: FormResult | undefined }) {
     </span>
   );
 }
+
+// Memoised: Home.tsx renders multiple StandingsTable instances in a carousel;
+// memoising means a standings fetch for league A does not re-render the tables
+// for leagues B–D whose row data has not changed.
+export default memo(StandingsTable);

@@ -21,7 +21,7 @@
 //   scheduled → bordered chip, no score, kickoff time visible
 //   completed → dust chip, score visible, played_at timestamp visible
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
@@ -446,7 +446,10 @@ interface MatchRowItemProps {
  * score block (or "v" when scheduled), away team name (left-aligned),
  * competition + status meta.
  */
-function MatchRowItem({ match, status }: MatchRowItemProps) {
+// Memoised: the Matches page re-renders when any section's data arrives
+// (live / upcoming / completed fetch in parallel); memo means an upcoming
+// fetch completing does not re-render the already-painted live match rows.
+const MatchRowItem = memo(function MatchRowItem({ match, status }: MatchRowItemProps) {
   const homeName    = match.home_team?.name ?? '?';
   const awayName    = match.away_team?.name ?? '?';
   const homeScore   = match.home_score ?? 0;
@@ -525,7 +528,7 @@ function MatchRowItem({ match, status }: MatchRowItemProps) {
       </Link>
     </li>
   );
-}
+});
 
 // ── ScoreBlock ───────────────────────────────────────────────────────────────
 

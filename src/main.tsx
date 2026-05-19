@@ -26,7 +26,7 @@
 // Pages under that sub-path (matches vite.config.js `base`).  Without it the
 // router treats every URL as unmatched and renders nothing.
 
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
@@ -57,25 +57,31 @@ import { CupRoundAdvancerListener } from './features/match';
 import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 
-// ── Routes ───────────────────────────────────────────────────────────────────
-// Page imports.  Each route lands in src/pages/.  More routes will be
-// added as each page is rebuilt against the new design.
-import Home          from './pages/Home';
-import Leagues       from './pages/Leagues';
-import LeagueDetail  from './pages/LeagueDetail';
-import Teams         from './pages/Teams';
-import TeamDetail    from './pages/TeamDetail';
-import Matches       from './pages/Matches';
-import MatchDetail   from './pages/MatchDetail';
-import News          from './pages/News';
-import Idols         from './pages/Idols';
-import Voting        from './pages/Voting';
-import Training      from './pages/Training';
-import Login         from './pages/Login';
-import Profile       from './pages/Profile';
-import Wagers        from './pages/Wagers';
-import Admin         from './pages/Admin';
-import PlayerDetail  from './pages/PlayerDetail';
+// ── Routes (code-split) ───────────────────────────────────────────────────────
+// Each page is loaded with React.lazy so Vite emits a separate chunk per
+// route.  The initial JS bundle only contains the shell (providers +
+// listeners + router); page code is fetched on first navigation.
+//
+// WHY LAZY HERE AND NOT PER-PAGE: Route-level splitting is the highest-
+// leverage point — a visitor to /matches never downloads the Voting or
+// Admin bundles.  Component-level splitting inside a page is a follow-up
+// concern that requires real profiling data to justify the added complexity.
+const Home         = lazy(() => import('./pages/Home'));
+const Leagues      = lazy(() => import('./pages/Leagues'));
+const LeagueDetail = lazy(() => import('./pages/LeagueDetail'));
+const Teams        = lazy(() => import('./pages/Teams'));
+const TeamDetail   = lazy(() => import('./pages/TeamDetail'));
+const Matches      = lazy(() => import('./pages/Matches'));
+const MatchDetail  = lazy(() => import('./pages/MatchDetail'));
+const News         = lazy(() => import('./pages/News'));
+const Idols        = lazy(() => import('./pages/Idols'));
+const Voting       = lazy(() => import('./pages/Voting'));
+const Training     = lazy(() => import('./pages/Training'));
+const Login        = lazy(() => import('./pages/Login'));
+const Profile      = lazy(() => import('./pages/Profile'));
+const Wagers       = lazy(() => import('./pages/Wagers'));
+const Admin        = lazy(() => import('./pages/Admin'));
+const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -91,6 +97,14 @@ createRoot(document.getElementById('root')!).render(
         <RefereeNarrativeListener />
         <AuthProvider>
           <BrowserRouter basename="/soccer-league/">
+            {/* Suspense boundary: lazy page chunks resolve asynchronously.
+                The null fallback renders nothing while the chunk loads —
+                the Header is outside the Suspense so it always paints,
+                giving the user an immediate non-blank viewport on cold
+                navigations.  A spinner would flash too briefly to be
+                useful on fast connections and would distract on slow ones;
+                null is the correct trade-off here. */}
+            <Suspense fallback={null}>
             <Routes>
               {/* / → Home.  Other routes will be added as each page is
                   rebuilt; until then they 404 — intentional during the
@@ -188,6 +202,7 @@ createRoot(document.getElementById('root')!).render(
                   before this route those URLs 404'd. */}
               <Route path="players/:playerId"   element={<PlayerDetail />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </AuthProvider>
       </SupabaseProvider>
