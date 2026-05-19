@@ -31,13 +31,21 @@ export type { AdminAllowlist } from './logic/allowlist';
 
 // ── API (Supabase) ───────────────────────────────────────────────────────────
 export {
+  getActiveSeason,
+  getAdminFixtures,
+  getArchitectInterventions,
   fastForwardScheduledMatches,
   triggerSeasonEnactment,
 } from './api/admin';
 export type {
+  AdminSeason,
+  AdminFixture,
+  ArchitectIntervention,
   FastForwardResult,
   TriggerEnactmentResult,
 } from './api/admin';
 
 // ── UI ───────────────────────────────────────────────────────────────────────
-export { AdminPage } from './ui/AdminPage';
+// Page component removed in the 2026-05 nuke — admin route will be rebuilt
+// against the new design language.  Listeners stay in their own files;
+// none belong to this feature.

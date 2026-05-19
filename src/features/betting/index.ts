@@ -50,6 +50,22 @@ export {
   houseProfitFromWager,
 } from './logic/settlement';
 
+// ── Logic — bettor narratives (Phase 4) ────────────────────────────────────
+// Pure pattern detection + voice assignment + template selection for the
+// anonymized cosmic-voice narrative line that surfaces in Galaxy Dispatch
+// after every settlement batch.  No I/O — fully unit-testable.
+export {
+  detectPattern,
+  pickNarrativeVoice,
+  buildSettlementNarrative,
+  buildSettlementBatch,
+} from './logic/bettorNarratives';
+export type {
+  NarrativeVoice,
+  SettlementBatch,
+  SettledWager,
+} from './logic/bettorNarratives';
+
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   placeWager,
@@ -63,19 +79,32 @@ export {
   saveMatchOdds,
 } from './api/oddsRepo';
 
-// ── UI (React components) ──────────────────────────────────────────────────
-// The widget is the user's primary on-ramp; the history list is the personal
-// counterpart to the public `wager_leaderboard` view. Both are exported via
-// the barrel so feature pages can import them with `@features/betting`
-// instead of poking into the ui/ folder directly.
-export { WagerWidget } from './ui/WagerWidget';
-export type { WagerWidgetMatch, WagerWidgetProps } from './ui/WagerWidget';
+// ── API — bettor narratives (Phase 4) ──────────────────────────────────────
+// I/O boundary that takes a settled-match summary and writes one anonymized
+// cosmic-voice narrative row to the `narratives` table.  Used by the
+// WagerSettlementListener — exported here so any future surface (e.g. a
+// season-recap dashboard or admin replay tool) can call it directly.
+export { writeWagerNarrativeForMatch } from './api/narrativeWriter';
 
-export { BetHistory } from './ui/BetHistory';
-export type { BetHistoryProps } from './ui/BetHistory';
+// ── UI (React components) ──────────────────────────────────────────────────
+// WagerWidget / BetHistory / WagerVolumeStrip were removed in the 2026-05
+// nuke and will be rebuilt against the new design language.  The
+// WagerSettlementListener stays — it's a side-effect-only listener,
+// not a visual surface.
 
 // ── Side-effect listener ────────────────────────────────────────────────────
 // WagerSettlementListener registers a `match.completed` bus subscription and
 // renders null.  Mount it once inside <SupabaseProvider> at the app root so
 // it has DB client access for every settlement write.
 export { WagerSettlementListener } from './ui/WagerSettlementListener';
+
+// ── Wager volume — pure data layer only ────────────────────────────────────
+// WagerVolumeStrip (the visual bar) was removed in the 2026-05 nuke; the
+// aggregation logic + API stay because they remain useful for the rebuilt
+// MatchDetail and any future market-pulse surface.
+export {
+  summariseMatchWagers,
+  MIN_WAGERS_FOR_SIGNAL,
+} from './logic/wagerVolume';
+export type { WagerVolumeSummary, SideBreakdown } from './logic/wagerVolume';
+export { getWagerVolumeForMatch } from './api/wagerVolume';

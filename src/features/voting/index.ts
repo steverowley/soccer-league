@@ -44,6 +44,19 @@ export {
 
 export { ALL_FOCUS_TEMPLATES } from './logic/focusTemplates';
 
+// ── Logic — election night (pure TS, Phase 3) ─────────────────────────────
+export {
+  selectIncinerationTargets,
+  resolveFocusWinners,
+  buildFocusMutations,
+  sortDecreesForElectionNight,
+} from './logic/electionLogic';
+export type {
+  IncinerationCandidate,
+  IncinerationTarget,
+  FocusMutation,
+} from './logic/electionLogic';
+
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export {
   generateFocusOptions,
@@ -75,16 +88,64 @@ export type {
   FocusEnactmentSpec,
 } from './logic/enactFocus';
 
+// ── API — election night (Phase 3) ────────────────────────────────────────
+export {
+  getActiveSeasonWithPhase,
+  getSeasonDecrees,
+  getAllIncinerations,
+  getSeasonFocusTally,
+  advanceSeasonPhase,
+  insertSeasonDecrees,
+  incinerate,
+} from './api/election';
+export type {
+  SeasonWithPhase,
+  SeasonDecree,
+  IncinerationRecord,
+} from './api/election';
+
+// ── API — election night orchestrator (Phase 3) ───────────────────────────
+// `runElectionNight` is the single entry point that closes a season: it
+// resolves focus winners, runs incinerations via the atomic RPC, writes the
+// full decree set, and emits `season.ended` so SeasonEnactmentListener
+// applies focus mutations.  Pure-logic decree builders are also exported
+// so future LLM enrichment can A/B against the template baseline.
+export { runElectionNight } from './api/orchestrator';
+export type { ElectionNightResult } from './api/orchestrator';
+export {
+  buildProclamationDecree,
+  buildFocusEnactmentDecree,
+  buildIncinerationDecree,
+} from './logic/decreeTemplates';
+
+// ── Logic — replacement player generation (Phase 3.1) ─────────────────────
+// Pure name + stat generator used by runElectionNight to fill rosters after
+// each incineration.  Exported so future LLM-bio generation can A/B against
+// the template baseline (same pattern as decreeTemplates).
+export {
+  buildReplacementPlayer,
+  generateReplacementName,
+} from './logic/replacementPlayer';
+export type {
+  GeneratedReplacementPlayer,
+  ReplacementContext,
+  TeammateNameSeed,
+} from './logic/replacementPlayer';
+
+// ── Logic — arrival narratives (Phase 3.2) ────────────────────────────────
+// Pure template builder for the "New Arrival" news post emitted whenever
+// runElectionNight generates a replacement player.  Closes the lore loop
+// on incinerations.
+export {
+  NEW_ARRIVAL_KIND,
+  buildArrivalNarrative,
+} from './logic/arrivalNarrative';
+export type { ArrivalContext } from './logic/arrivalNarrative';
+
 // ── UI (React components) ──────────────────────────────────────────────────
-// VotingPage is the route-level component (mounted at /voting). FocusCard
-// is the per-option subcomponent — exported separately so other surfaces
-// (e.g. a season-recap dashboard) can render individual cards in isolation.
-// SeasonEnactmentListener is a side-effect-only component; mount it once
-// near the application root to wire the season.ended → enactment pipeline.
-export { VotingPage } from './ui/VotingPage';
-export type { VotingPageProps } from './ui/VotingPage';
-
-export { FocusCard } from './ui/FocusCard';
-export type { FocusCardProps } from './ui/FocusCard';
-
+// VotingPage + FocusCard were removed in the 2026-05 nuke and will be
+// rebuilt against the new design language.
+// SeasonEnactmentListener stays — it's a side-effect-only component;
+// mount it once near the application root to wire the season.ended →
+// enactment pipeline.
 export { SeasonEnactmentListener } from './ui/SeasonEnactmentListener';

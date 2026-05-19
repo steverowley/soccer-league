@@ -242,6 +242,45 @@ export interface ArchitectProclamationItem extends BaseFeedItem {
   cosmicThread: string;
 }
 
+/**
+ * An intrusion from one of the unnamed cosmic voices (Balance or Chaos).
+ *
+ * DESIGN INTENT
+ * ─────────────
+ * These feed items carry no label, no emoji, no name — only text and a subtle
+ * left-border accent.  Players are meant to notice patterns over many matches
+ * and gradually intuit which voice is which, rather than being told.  Naming
+ * them in the UI would collapse the mystery.
+ *
+ * voiceIndex values:
+ *   2 = Balance  — measured, accounting cadence; slate-blue accent (#64748b).
+ *                  Speaks when it senses imbalance that needs correcting.
+ *   3 = Chaos    — jagged, gleeful fragments; amber accent (#f59e0b).
+ *                  Speaks when the expected thing happens (boring) or when
+ *                  something beautifully wrong occurs.
+ *
+ * The color field is set by CosmicVoiceEngine to the per-voice accent and
+ * used only for the 2px left border in CosmicVoiceCard.  It is never shown
+ * as a background or header colour — just a whisper of difference.
+ *
+ * NOTE: The First Voice (Fate / Architect, voiceIndex=1) uses the existing
+ * ArchitectProclamationItem type and is not represented here.
+ */
+export interface CosmicVoiceItem {
+  type: 'cosmic_voice';
+  /** 2 = Balance, 3 = Chaos.  First Voice (1 = Fate) uses ArchitectProclamationItem. */
+  voiceIndex: 2 | 3;
+  /** The line of text from the voice's template bank. */
+  text: string;
+  /** Match minute when this intrusion occurred. */
+  minute: number;
+  /**
+   * Per-voice accent colour for the left border only.
+   * Balance: '#64748b' (slate-blue).  Chaos: '#f59e0b' (amber).
+   */
+  color: string;
+}
+
 export type FeedItem =
   | PlayByPlayItem
   | PlayByPlayUpdateItem
@@ -249,7 +288,8 @@ export type FeedItem =
   | PlayerThoughtItem
   | ManagerItem
   | RefereeItem
-  | ArchitectProclamationItem;
+  | ArchitectProclamationItem
+  | CosmicVoiceItem;
 
 // ── Commentator profile ───────────────────────────────────────────────────────
 

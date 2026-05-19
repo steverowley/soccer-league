@@ -19,7 +19,7 @@ Multi-page app with client-side routing and live Supabase data fetching. All pag
   - **Live Games** — MatchCard components displaying all active matches (status='active') with momentum bars and pulsing when matches are in progress; section hidden when no live matches
   - **Upcoming Games** — next 6 scheduled fixtures (status='upcoming') as MatchCard components with bet sliders
   - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
-- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor) with purple glow highlighting on `architect_whisper` cards; public route (no auth required)
+- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives and wager narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor, wager_narrative) with accent colors per kind; public route (no auth required)
 - **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables; per-league carousel navigation with arrow controls
 - **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
 - **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
@@ -63,6 +63,11 @@ Three distinct voices powered by Claude Haiku, running in parallel for minimal l
 
 Plus player inner thoughts, manager reactions, and referee justifications generated live. Commentary latency ~500ms at TURBO speed via parallel streaming dispatch.
 
+**Cosmic Voices** — Two unnamed stochastic interrupters (Balance and Chaos) that inject unsettling commentary into match feeds independently:
+- **Balance** (slate-blue accent) — obsessed with symmetry, equilibrium, and cosmic debt
+- **Chaos** (amber accent) — seeks novelty, revels in disruption, hungers for wonder
+- **Design**: Fully synchronous `CosmicVoiceEngine` with independent internal state (`equilibriumDebt`, `noveltyHunger`) and template banks per voice × category. Voices interrupt after each event's mortal commentary via `maybeInterrupt()`, appearing unlabelled and unnamed in the feed. Players intuit identity from cadence over many matches.
+
 **Simulation speeds**: SLOW / NORMAL / FAST / TURBO / DRAMATIC (real-time pacing with staggered voice waves)
 
 ### Betting System
@@ -71,6 +76,8 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 - Wager settlement auto-fires after match completion
 - Kickoff-timer gate prevents bets after the match starts
 - Wager ledger with status pills (WON/LOST/OPEN/VOID) and net-profit column
+- **Wager Volume Strip** — Live visualization of market sentiment (home/draw/away bet distribution) displayed on match detail pages, updated in real-time after each wager placement. Self-hides while loading and shows "Too few wagers" state if below signaling threshold.
+- **Phase 4 Bettor Narratives** — Settlement listener generates anonymized cosmic-voice narratives from wager patterns (mass loss, upset victories, clean sweeps) and writes them to the Galaxy Dispatch feed as `wager_narrative` kind entries. Voices are assigned stochastically based on pattern type, creating an additional layer of narrative texture in the public news feed.
 
 ### Focus Voting
 - End-of-season: fans spend credits to vote on club focus (signings, youth, training, upgrades)
@@ -83,6 +90,7 @@ Plus player inner thoughts, manager reactions, and referee justifications genera
 - **Post-enactment UI**: VotingPage shows "What the Cosmos Decided" panel listing all enacted focuses and their effects; voting is disabled after enactment
 - Running tally visible to all fans during voting period
 - Enacted focuses logged to `focus_enacted` table (with `architect_interventions` audit trail)
+- **Permadeath election system** — Top-10 idol-ranked players (by pure idol_score, no tie-breaking) face a 2× vote-weight surge during election phases, creating high-risk "love-is-dangerous" mechanics. Rank computation uses standard SQL RANK() semantics (no alphabetical tie-breaking) to ensure consistent cosmic favoritism across voting rounds.
 
 ### Cup Tournament Logic
 - **Single-elimination brackets** for Celestial Cup (top 3 from each league) and Solar Shield (4th–6th from each league)
@@ -133,22 +141,35 @@ This project maintains two primary documentation sources:
 - **[CLAUDE.md](./CLAUDE.md)** — Project context, vision, engineering principles, game design document, and implementation roadmap. **Start here** when joining the project or planning new work.
 - **[AGENTS.md](./AGENTS.md)** — Agent workflow instructions, including beads issue tracker (`bd`) commands, shell command best practices, and session completion protocol.
 
-## Developer Setup & Workflows
+## Issue Tracking with Beads
 
-### Issue Tracking with Beads
-This project uses **Beads** (`bd`), a git-native issue tracking system designed for AI-assisted development. Issues live in your repo at `.beads/` and integrate seamlessly with git branches and commits.
+This project uses **Beads** (`bd`), a git-native issue tracking system designed for AI-assisted development workflows. Issues live in your repo at `.beads/issues.jsonl` (version-controlled) rather than on an external web platform — no context switching required.
 
-**Quick commands:**
+### Quick Start
+
 ```bash
-bd ready              # Find available work
-bd create "Issue title"   # Create new issue
-bd show <id>          # View issue details
-bd update <id> --claim    # Claim and start work
-bd close <id>         # Complete work
-bd dolt push          # Sync issues to remote
+bd list                # View all issues
+bd ready               # Find unassigned work available to claim
+bd create "Title"      # Create a new issue
+bd show <id>           # View issue details
+bd update <id> --claim # Claim and start work
+bd update <id> --status done  # Mark work complete
+bd close <id>          # Close an issue
+bd dolt push           # Sync issues to remote (before pushing code)
 ```
 
-See `.beads/README.md` for full documentation, or run `bd quickstart` to see guided workflow.
+### Workflow
+
+1. **Find work:** `bd ready` shows available issues
+2. **Claim it:** `bd update <id> --claim` to start work
+3. **Push your changes:** Commit code normally, then `bd dolt push` before `git push`
+4. **Close when done:** `bd close <id>` marks the issue complete
+
+**Learn more:** Run `bd quickstart` for an interactive tutorial, or see `.beads/README.md` for full documentation.
+
+---
+
+## Developer Setup & Workflows
 
 ## Getting Started
 
@@ -188,18 +209,67 @@ Run the SQL files in order in the Supabase SQL Editor:
 
 ## Available Scripts
 
+### Development & Build
+
 | Command | Description |
 |---|---|
-| `npm run dev` | Start local dev server |
+| `npm run dev` | Start local dev server on `http://localhost:5173` |
 | `npm run build` | Build for production |
-| `npm run preview` | Preview production build |
-| `npm run typecheck` | TypeScript type checking |
-| `npm run lint` | ESLint checks |
-| `npm run lint:fix` | ESLint with auto-fix |
-| `npm run format` | Format with Prettier |
-| `npm run test` | Run Vitest unit tests |
-| `npm run test:coverage` | Run tests with coverage |
-| `npm run check` | Full CI suite (typecheck + lint + test) |
+| `npm run preview` | Preview production build locally |
+
+### Testing
+
+| Command | Description |
+|---|---|
+| `npm run test` | Run Vitest unit tests (single run) |
+| `npm run test:watch` | Run Vitest in watch mode (recommended during development) |
+| `npm run test:coverage` | Run tests with coverage report |
+
+### Code Quality & CI Gate
+
+| Command | Description |
+|---|---|
+| `npm run typecheck` | TypeScript strict type checking (`tsc --noEmit`) |
+| `npm run lint` | ESLint checks (strict, flat config) |
+| `npm run lint:fix` | ESLint with automatic fixes |
+| `npm run format` | Format code with Prettier |
+| `npm run format:check` | Verify Prettier formatting without changes |
+| **`npm run check`** | **Full CI gate** — runs typecheck + lint + test in sequence; all three must pass for CI/PR approval |
+
+**Note:** All PRs require `npm run check` to pass before merging. Run this locally before pushing to catch issues early.
+
+## Code Quality Standards
+
+All code adheres to strict engineering practices enforced by automated tools and CI gates:
+
+### TypeScript (`strict: true`)
+- **Strict mode enabled** — all new code must be fully typed
+- **Type-safe Supabase client** — regenerated on every migration via `npx supabase gen types`
+- **Shared types in `src/types/database.ts`** — auto-generated from Supabase schema
+- **Feature-specific domain types** — co-located in each feature's `types.ts` module
+- Run `npm run typecheck` to verify zero type errors before committing
+
+### Linting & Formatting
+- **ESLint 9** (flat config) — enforces feature boundary rules (prevents deep cross-feature imports)
+- **Prettier** — unified code formatting (no style debates in review)
+- **Pre-commit hooks** — linting and formatting run automatically (configured via `.husky/`)
+- Run `npm run lint` and `npm run format` locally; CI will reject poorly formatted code
+
+### Testing
+- **Vitest** — unit tests co-located next to logic modules (`*.logic.ts` → `*.logic.test.ts`)
+- **80%+ coverage target** for `logic/` and `api/` modules; UI tests are smoke tests
+- **Structural types** — Zod schemas at Supabase boundaries ensure runtime validation
+- Run `npm run test:watch` during development for instant feedback
+
+### CI Gate (`npm run check`)
+Before any commit reaches `dev` or `main`, all three must pass:
+1. `npm run typecheck` — zero TypeScript errors
+2. `npm run lint` — zero ESLint violations  
+3. `npm run test` — all unit tests pass
+
+This gate is **non-negotiable** — PRs cannot merge without a green check.
+
+---
 
 ## Project Structure
 
@@ -264,15 +334,17 @@ soccer-league/
 │   │   ├── ArchitectLog.jsx     # Dev-only intervention audit
 │   │   └── Login.jsx            # Supabase magic link auth
 │   ├── components/              # UI components (layout, match simulator, design system)
-│   └── types/database.ts        # Typed Supabase schema
+│   └── types/database.ts        # Typed Supabase schema (auto-generated)
 ├── supabase/
-│   ├── migrations/              # Timestamped schema migrations
-│   ├── schema.sql               # Database schema snapshot
-│   └── seed.sql                 # Seed data
+│   ├── migrations/              # Timestamped schema migrations (numbered 0000–0022)
+│   ├── schema.sql               # Database schema snapshot (generated)
+│   └── seed.sql                 # Seed data (teams, players, managers, seasons)
+├── .beads/
+│   └── issues.jsonl             # Git-native issue tracking (version-controlled)
 ├── tsconfig.json                # TypeScript strict mode config
 ├── eslint.config.js             # Flat ESLint config with feature boundary rules
-├── vitest.config.ts             # Unit test runner
-└── .github/workflows/deploy.yml # GitHub Pages deployment
+├── vitest.config.ts             # Unit test runner with jsdom
+└── .github/workflows/deploy.yml # GitHub Pages deployment CI
 ```
 
 ## Architecture
@@ -284,9 +356,10 @@ All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injec
 - **Type safety**: All helpers in `lib/supabase.ts` are strictly typed with `db: IslSupabaseClient` as the first parameter
 
 ### Supabase Helpers (`src/lib/supabase.ts`)
-15 TypeScript helper functions for common queries/mutations:
+20+ TypeScript helper functions for common queries/mutations:
 - `getPlayersForTeam(db, teamId)` — efficient team roster fetches (prevents 512-player over-fetch)
 - `getLeagueStandings()`, `getTeamDetail()`, `getMatchSchedule()`, etc.
+- `saveNarrative()` — writes narrative rows (architect, wager_narrative, etc.) to the `narratives` table
 - Each function accepts `db` from context, enabling easy mocking in tests
 - **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
 
@@ -303,13 +376,13 @@ This eliminates type drift between game engine (`App.jsx`, `gameEngine.js`) and 
 
 ### AI Commentary & Architect System (`features/architect/` & `features/match/logic/AgentSystem.ts`)
 Migrated from legacy `agents.js` to strict TypeScript with clean feature separation:
-- **CosmicArchitect.ts** — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `architect_lore` table. `getContext()` is guaranteed synchronous (never blocks on Supabase) — lore is always resident in memory from match start.
-- **prepareArchitect.ts** — Pre-match lifecycle helper that constructs the Architect and hydrates lore in a single DB round-trip (~100ms) before match kickoff. Returns both the primed Architect and LoreStore, so App.jsx can call `persistAll()` fire-and-forget after the match completes. This is the canonical entry point for Architect initialization — hydration only happens at match boundaries, never on the hot path.
-- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Latency ~500ms at TURBO speed via staggered voice dispatch. Calls `arch.getContext()` 5–10 times per goal burst (parallel prompts).
-- **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. LoreStore handles DB hydration at kickoff via `prepareArchitectForMatch()`, and persists post-match via `persistAll()`. All in-match reads are pure object-property accesses (no Supabase calls).
-- **Integration test** (`CosmicArchitect.match.test.ts`) — Validates that `getContext()` runs synchronously through a 10× tight loop (returning strings, never Promises) and exercises the lore hydration path against a fake Supabase client.
+- **CosmicArchitect.ts** (374+ lines) — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `narratives` table. Exports `FIRST_VOICE_ENTITY_ID` (Fate) for Phase 5.1 lore hydration. `getContext()` is guaranteed synchronous (never blocks on Supabase) — lore is always resident in memory from match start.
+- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Integrates `CosmicVoiceEngine.maybeInterrupt()` after each event's mortal commentary. Latency ~500ms at TURBO speed via staggered voice dispatch. Calls `arch.getContext()` 5–10 times per goal burst (parallel prompts).
+- **CosmicVoiceEngine** (`features/match/logic/cosmicVoices.ts`) — Stochastic unnamed voice interrupter with two entities (Balance & Chaos). Independent internal state (`equilibriumDebt`, `noveltyHunger`, `interestLevel`) per voice, template banks (8+ entries × 5 categories per voice), and pure synchronous design (no I/O). Exports `BALANCE_ENTITY_ID` / `CHAOS_ENTITY_ID` for Phase 5.1 DB lore hydration. Also used by the Phase 4 WagerSettlementListener for bettor-narrative voice assignment.
+- **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. Lore is database-backed, hydrated before match start, and persisted post-match for session coherence.
 - **API layer** (`architect/api/`) — Thin modules for reading narratives and interventions from Supabase, enabling future front-end feeds (Galaxy Dispatch narrative UI, intervention audit).
-- **Type safety**: Both systems depend on `IArchitect` interface (duck typing) rather than concrete CosmicArchitect, enabling loose coupling and testability.
+- **Bettor Narratives (Phase 4)** — WagerSettlementListener (in `betting/ui/`) runs after wager settlement completes, detects patterns (mass loss, upset victory, clean sweep), assigns narrative voices stochastically, and writes anonymized cosmic-voice entries to the `narratives` table as `wager_narrative` kind. Pattern detection is pure logic in `betting/logic/bettorNarratives.ts`; I/O is isolated in `betting/api/narrativeWriter.ts`.
+- **Type safety**: All systems depend on `IArchitect` interface (duck typing) rather than concrete implementations, enabling loose coupling and testability. `CosmicVoiceItem` interface in `match/types.ts` extends `FeedItem` union.
 
 ### Design System (`features/design-system/` & `src/index.css`)
 Unified visual language and component library aligned to the Figma design specification:

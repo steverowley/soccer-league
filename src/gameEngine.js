@@ -145,7 +145,7 @@ export function createAgent(player, isHome) {
 //   • Captains (highest mental on each side)
 //   • Stadium and weather (randomly selected from the home team's planet table)
 //   • Tactics (from team data or randomly picked from 6 styles)
-//   • Referee (random name + leniency/strictness values 0–100)
+//   • Referee (random fallback OR entity-graph officials when refOverride given)
 //   • Home and away managers (names and initial calm emotion)
 //   • Temperature (-50°C to +70°C — galactic range!) and time of day
 //
@@ -159,7 +159,19 @@ export function createAgent(player, isHome) {
 //   aim.getDecisionInfluence()     – aggregates agent decision bonuses
 //   aim.giveTeamTalk(isHome, diff) – halftime team-talk text
 //   aim.managerTacticalShout(...)  – 10% chance touchline instruction text
-export function createAIManager(homeTeam, awayTeam) {
+//
+// REFEREE INJECTION (Phase 5a follow-up):
+//   The third parameter `refOverride` is optional.  When omitted, the
+//   engine fabricates a random referee as it always has — preserving the
+//   existing smoke-test invariants and any caller (App.jsx, tests) that
+//   doesn't yet plumb entity referees through.
+//
+//   When provided, `refOverride` must be `{ name, strictness }` where
+//   `strictness` is the gameEngine's 0–100 scale (entity-graph values
+//   are 1–10, so callers multiply by 10 before passing).  `leniency` is
+//   no longer used by any card-decision branch in this engine, so we
+//   set it to a neutral mid-range default when overriding.
+export function createAIManager(homeTeam, awayTeam, refOverride = null) {
   const homeAgents = homeTeam.players.map(p => createAgent(p, true));
   const awayAgents = awayTeam.players.map(p => createAgent(p, false));
   const allH = homeAgents, allA = awayAgents;
@@ -175,7 +187,18 @@ export function createAIManager(homeTeam, awayTeam) {
   const tactics   = ['high_press','possession','counter_attack','park_the_bus','gegenpress','tiki_taka'];
   const homeTactics = homeTeam.tactics?.toLowerCase().replace(' ', '_') || pick(tactics);
   const awayTactics = awayTeam.tactics?.toLowerCase().replace(' ', '_') || pick(tactics);
-  const ref       = { name: pick(REFS), leniency: 30 + Math.random() * 70, strictness: Math.random() * 100 };
+  // ── Referee assignment ──────────────────────────────────────────────────────
+  // When the caller passed an entity-graph referee, use those values verbatim
+  // and skip the random fallback.  This is how Phase 5a's IEOB officials reach
+  // the engine's card thresholds (severity > 90 - strictness*0.3 for red,
+  // severity > 60 - strictness*0.2 for yellow — see the closure further down).
+  //
+  // `leniency` is set to a neutral 65 (mid of the legacy 30–100 random range)
+  // when overriding because the engine no longer reads it in any branch — keep
+  // the field defined for any downstream code still expecting the shape.
+  const ref = refOverride
+    ? { name: refOverride.name, leniency: 65, strictness: refOverride.strictness }
+    : { name: pick(REFS), leniency: 30 + Math.random() * 70, strictness: Math.random() * 100 };
   const homeM     = { name: homeTeam.manager?.name || 'Manager Alpha', emotion: MGER_EMO.CALM, personality: homeTeam.manager?.personality || 'Aggressive', team: homeTeam };
   const awayM     = { name: awayTeam.manager?.name || 'Manager Beta',  emotion: MGER_EMO.CALM, personality: awayTeam.manager?.personality || 'Calculated', team: awayTeam };
 

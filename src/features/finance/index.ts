@@ -37,6 +37,12 @@ export {
 } from './logic/fanBoost';
 
 export {
+  applyFanBoostToTeam,
+  type FanBoostableTeam,
+  type FanBoostablePlayer,
+} from './logic/applyFanBoost';
+
+export {
   calculateTicketRevenue,
   DEFAULT_TICKET_PRICE,
 } from './logic/ticketPricing';

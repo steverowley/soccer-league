@@ -1,24 +1,18 @@
 // ── features/admin/api/admin.ts ──────────────────────────────────────────────
-// Supabase mutations powering the /admin testing tooling (Package 14).
+// Supabase queries + mutations powering the /admin testing tooling.
 //
 // WHAT THIS MODULE OWNS
-//   • `fastForwardScheduledMatches` — bumps the worker's effective clock by
-//     subtracting hours from `matches.scheduled_at`.  This is the cheapest
-//     way to make the worker pick a match up *now* without injecting a
-//     side-channel clock service.
-//   • `triggerSeasonEnactment` — wraps the existing `enactSeasonFocuses`
-//     pipeline so the admin page can fire it manually without waiting for
-//     the worker's normal "all league matches done" detection.
+//   • `getActiveSeason`             — current season row + config.
+//   • `getAdminFixtures`            — paginated match rows for the fixture browser.
+//   • `getArchitectInterventions`   — recent architect_interventions rows.
+//   • `fastForwardScheduledMatches` — bumps the worker's effective clock.
+//   • `triggerSeasonEnactment`      — fires the enactment pipeline manually.
 //
 // WHAT IT DOES NOT DO
 //   • No business logic — the season-completion rule lives in
 //     features/match/logic/seasonLifecycle.ts.
 //   • No allowlist enforcement — the route + UI gate that.  Server-side
 //     enforcement still relies on RLS at the matches/seasons tables.
-//   • No "skip to season end" — that's a separate concern handled by the
-//     match worker simulating each due match in turn after a large
-//     fast-forward.  Keeping the surface small avoids tempting an admin to
-//     bypass the simulator entirely.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 
@@ -156,4 +150,246 @@ export async function triggerSeasonEnactment(
   const { enactSeasonFocuses } = await import('@features/voting');
   const result = await enactSeasonFocuses(db, seasonId);
   return { enacted: result.enacted, skipped: result.skipped };
+}
+
+// ── Read queries ──────────────────────────────────────────────────────────────
+
+/**
+ * Shape of the active-season row returned by `getActiveSeason`.
+ *
+ * Intentionally narrow — the admin UI only needs the fields listed here.
+ * Extending later is additive and does not break existing call sites.
+ */
+export interface AdminSeason {
+  id:                  string;
+  name:                string;
+  year:                number;
+  /** Lifecycle status: 'active' | 'voting' | 'completed' | 'upcoming'. */
+  status:              string;
+  /** ISO timestamp when league play started; null when still upcoming. */
+  started_at:          string | null;
+  /** ISO timestamp when league play ended; null when still in progress. */
+  ended_at:            string | null;
+  /** ISO timestamp when election opens; null when not yet scheduled. */
+  election_opens_at:   string | null;
+  /** ISO timestamp when election closes; null when not yet scheduled. */
+  election_closes_at:  string | null;
+  /** Real-world seconds mapped to one 90-minute game. 600 = 10 min/match. */
+  match_duration_seconds: number | null;
+  /** Minutes between consecutive match kickoffs in the automated schedule. */
+  match_cadence_minutes:  number | null;
+  /** Minimum bet allowed during this season, in Intergalactic Credits. */
+  min_bet:                number | null;
+}
+
+/**
+ * Fetch the currently active season together with its season_config row.
+ *
+ * Returns `null` when no row has `is_active = true` — callers should
+ * treat null as "season not yet seeded" and show a placeholder rather
+ * than throwing.
+ *
+ * The join to `season_config` is a left-join (PostgREST `!left`) so the
+ * season row is always returned even when the config row is missing; in
+ * that case the config fields arrive as null.
+ *
+ * @param db  Any authenticated Supabase client (public-read RLS on seasons).
+ * @returns   Active season + config, or null.
+ */
+export async function getActiveSeason(
+  db: IslSupabaseClient,
+): Promise<AdminSeason | null> {
+  // ── Join season_config ────────────────────────────────────────────────────
+  // PostgREST expresses a left join by suffixing the FK relationship with
+  // `!left`.  The config columns land in a nested object under `season_config`;
+  // we spread them to flatten the shape for callers.
+  const { data, error } = await (db as AnyDb)
+    .from('seasons')
+    .select(`
+      id, name, year, status, started_at, ended_at,
+      election_opens_at, election_closes_at,
+      season_config!left (
+        match_duration_seconds,
+        match_cadence_minutes,
+        min_bet
+      )
+    `)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[getActiveSeason] query failed:', error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  // Flatten the nested season_config object so callers work with a flat row.
+  const cfg = data.season_config ?? {};
+  return {
+    id:                  data.id,
+    name:                data.name,
+    year:                data.year,
+    status:              data.status,
+    started_at:          data.started_at,
+    ended_at:            data.ended_at,
+    election_opens_at:   data.election_opens_at,
+    election_closes_at:  data.election_closes_at,
+    match_duration_seconds: cfg.match_duration_seconds ?? null,
+    match_cadence_minutes:  cfg.match_cadence_minutes  ?? null,
+    min_bet:                cfg.min_bet                ?? null,
+  };
+}
+
+/**
+ * A single match row in the fixture browser.
+ *
+ * The join pulls minimal team name data so the table can display
+ * "Home FC vs Away SC" without a second fetch.
+ */
+export interface AdminFixture {
+  id:           string;
+  status:       string;
+  round:        string | null;
+  scheduled_at: string | null;
+  played_at:    string | null;
+  home_score:   number | null;
+  away_score:   number | null;
+  home_team:    string;
+  away_team:    string;
+  competition:  string | null;
+}
+
+/**
+ * Maximum fixtures fetched per `getAdminFixtures` call.
+ *
+ * 100 covers a full matchday (32 teams = 16 simultaneous matches × a few
+ * rounds) without hammering the network.  The admin browser paginates by
+ * status rather than by offset, so 100 is a practical ceiling rather than
+ * a hard page size.
+ */
+const FIXTURE_FETCH_LIMIT = 100;
+
+/**
+ * Fetch the most recent / upcoming fixtures for the admin fixture browser.
+ *
+ * Returns up to `FIXTURE_FETCH_LIMIT` rows across all statuses, ordered
+ * by `scheduled_at` ascending so the next kick-off appears first.
+ * Passing `statusFilter` narrows to one status bucket (e.g. 'scheduled')
+ * for the admin's status-filter chip strip.
+ *
+ * @param db            Any authenticated Supabase client.
+ * @param statusFilter  Optional status to filter by; omit for all statuses.
+ * @returns             Flat fixture list with team names inlined.
+ */
+export async function getAdminFixtures(
+  db:            IslSupabaseClient,
+  statusFilter?: string,
+): Promise<AdminFixture[]> {
+  // ── Build base query ──────────────────────────────────────────────────────
+  // home_team and away_team arrive as nested objects from PostgREST's FK
+  // resolution; we flatten them to strings in the mapping step below.
+  let query = (db as AnyDb)
+    .from('matches')
+    .select(`
+      id, status, round, scheduled_at, played_at, home_score, away_score,
+      home_team:teams!matches_home_team_id_fkey ( name ),
+      away_team:teams!matches_away_team_id_fkey ( name ),
+      competition:competitions!matches_competition_id_fkey ( name )
+    `)
+    .order('scheduled_at', { ascending: true })
+    .limit(FIXTURE_FETCH_LIMIT);
+
+  if (statusFilter) {
+    query = query.eq('status', statusFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn('[getAdminFixtures] query failed:', error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row: {
+    id: string;
+    status: string;
+    round: string | null;
+    scheduled_at: string | null;
+    played_at: string | null;
+    home_score: number | null;
+    away_score: number | null;
+    home_team: { name: string } | null;
+    away_team: { name: string } | null;
+    competition: { name: string } | null;
+  }) => ({
+    id:           row.id,
+    status:       row.status,
+    round:        row.round,
+    scheduled_at: row.scheduled_at,
+    played_at:    row.played_at,
+    home_score:   row.home_score,
+    away_score:   row.away_score,
+    home_team:    row.home_team?.name  ?? 'Unknown',
+    away_team:    row.away_team?.name  ?? 'Unknown',
+    competition:  row.competition?.name ?? null,
+  }));
+}
+
+/**
+ * A single row from the architect_interventions log.
+ *
+ * Each intervention records a mutation the Cosmic Architect made to a
+ * database entity (player stat bump, referee strictness change, etc.) so
+ * the admin can audit the chaos director's activity.
+ */
+export interface ArchitectIntervention {
+  id:           string;
+  /** Which table was mutated, e.g. 'players', 'matches'. */
+  target_table: string;
+  /** UUID of the mutated row. */
+  target_id:    string;
+  /** Column name that was changed; null for row-level interventions. */
+  field:        string | null;
+  /** Human-readable rationale the Architect emitted with the intervention. */
+  reason:       string;
+  /** Value before the Architect changed it (jsonb — any scalar or object). */
+  old_value:    unknown;
+  /** Value after the change. */
+  new_value:    unknown;
+  created_at:   string;
+}
+
+/**
+ * How many intervention rows to fetch per page of the log viewer.
+ *
+ * 50 covers several rounds of matches without making the table unwieldy
+ * on a single page.  The log is append-only so the most recent 50 rows
+ * represent the Architect's latest activity, which is what admins care about.
+ */
+const INTERVENTION_FETCH_LIMIT = 50;
+
+/**
+ * Fetch the most recent Architect interventions for the admin log viewer.
+ *
+ * Ordered newest-first so the most dramatic recent interference appears at
+ * the top of the table.  Returns an empty array (not an error) when the
+ * table has no rows — new seasons always start with a clean log.
+ *
+ * @param db  Any authenticated Supabase client (public-read RLS applies).
+ * @returns   Up to `INTERVENTION_FETCH_LIMIT` interventions, newest first.
+ */
+export async function getArchitectInterventions(
+  db: IslSupabaseClient,
+): Promise<ArchitectIntervention[]> {
+  const { data, error } = await (db as AnyDb)
+    .from('architect_interventions')
+    .select('id, target_table, target_id, field, reason, old_value, new_value, created_at')
+    .order('created_at', { ascending: false })
+    .limit(INTERVENTION_FETCH_LIMIT);
+
+  if (error) {
+    console.warn('[getArchitectInterventions] query failed:', error.message);
+    return [];
+  }
+
+  return (data ?? []) as ArchitectIntervention[];
 }

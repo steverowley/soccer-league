@@ -46,7 +46,8 @@ export {
 } from './api/profiles';
 
 // ── UI (React components) ───────────────────────────────────────────────────
+// AuthProvider stays — it's the React context that makes auth state
+// available to every route via useAuth().  LoginForm / SignupForm /
+// AccountMenu were removed in the 2026-05 nuke and will be rebuilt
+// against the new design language.
 export { AuthProvider, useAuth } from './ui/AuthProvider';
-export { LoginForm } from './ui/LoginForm';
-export { SignupForm } from './ui/SignupForm';
-export { AccountMenu } from './ui/AccountMenu';

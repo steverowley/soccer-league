@@ -82,15 +82,8 @@ export {
 } from './logic/edicts';
 
 // ── UI (React components) ──────────────────────────────────────────────────
-// Dev-only audit-log viewer. The route that mounts this should gate it
-// behind import.meta.env.DEV (or a feature flag) so it never reaches
-// production users.
-export { ArchitectLogPage } from './ui/ArchitectLogPage';
-
-// Public-facing Galaxy Dispatch news feed. Surfaces narratives from the
-// `narratives` table — both architect-tick (source='scheduled') and
-// in-match (source='match') fragments — in a paginated, kind-filterable view.
-export { NewsFeedPage } from './ui/NewsFeedPage';
+// Page components removed in the 2026-05 nuke — ArchitectLogPage +
+// NewsFeedPage will be rebuilt against the new design language.
 
 // ── In-match Architect (CosmicArchitect class) ─────────────────────────────
 // The class that drives in-match proclamations, interference, and persistent
