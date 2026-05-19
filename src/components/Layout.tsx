@@ -41,11 +41,11 @@ export const COLORS = Object.freeze({
 
 /**
  * Fixed-max-width content container — centres children at 1248 px with
- * consistent 16 px left/right padding for text breathing room on all pages.
+ * 16 px left/right padding for consistent text spacing and page alignment.
  */
 export function Container({ children }: { children: ReactNode }) {
   return (
-    <div style={{ maxWidth: 1248, margin: '0 auto', width: '100%', padding: '0 16px' }}>
+    <div style={{ maxWidth: 1248, margin: '0 auto', width: '100%', paddingLeft: 16, paddingRight: 16, boxSizing: 'border-box' }}>
       {children}
     </div>
   );

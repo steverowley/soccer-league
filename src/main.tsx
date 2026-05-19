@@ -22,8 +22,9 @@
 //     All page components were deleted in the nuke; routes will be re-added
 //     one at a time as each page is rebuilt.
 //
-// Route base path is `/soccer-league/` because the app is deployed to GitHub
-// Pages under that sub-path (matches vite.config.js `base`).  Without it the
+// Route base path matches Vite's base configuration. This allows the app to
+// work consistently across all deployment environments (localhost: '/', GitHub
+// Pages: '/soccer-league/'). Without matching basename to the actual base, the
 // router treats every URL as unmatched and renders nothing.
 
 import { lazy, StrictMode, Suspense, useEffect } from 'react';
@@ -111,7 +112,7 @@ createRoot(document.getElementById('root')!).render(
         <SeasonEnactmentListener />
         <RefereeNarrativeListener />
         <AuthProvider>
-          <BrowserRouter basename="/soccer-league/">
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
             {/* Suspense boundary: lazy page chunks resolve asynchronously.
                 The null fallback renders nothing while the chunk loads —
                 the Header is outside the Suspense so it always paints,
