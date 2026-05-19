@@ -63,12 +63,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  build-and-deploy-dev:
+  build-dev:
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
-    environment:
-      name: dev
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -87,24 +84,3 @@ jobs:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
           VITE_ADMIN_USER_IDS: ${{ secrets.VITE_ADMIN_USER_IDS }}
-
-      # Pages must be enabled out-of-band before this step succeeds:
-      #   Settings → Pages → Build and deployment → Source: GitHub Actions
-      # PR #224 + #225 tried to auto-provision via `enablement: true` +
-      # `administration: write`; both were defeated by an org-level
-      # Actions permission policy that refuses to grant administration
-      # scope to the workflow's GITHUB_TOKEN.  Until the policy
-      # changes, the UI click is the only path — keeping this step
-      # plain so the failure message stays readable when Pages is
-      # disabled.
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
