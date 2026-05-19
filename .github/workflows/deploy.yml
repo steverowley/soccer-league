@@ -11,16 +11,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  # `administration: write` lets configure-pages@v4 create the Pages
-  # site on first run via the REST endpoint POST /repos/{owner}/{repo}/pages.
-  # The `pages` scope is enough to PUBLISH to an existing site but is
-  # NOT enough to CREATE one — that endpoint sits under repo
-  # administration.  Without this scope the workflow fails with:
-  #   "Create Pages site failed: HttpError: Resource not accessible by integration"
-  # the very first time it runs against a repo where Pages hasn't yet
-  # been turned on.  Once the site exists the auto-enable call is a
-  # no-op, so this scope is only used during first-time provisioning.
-  administration: write
 
 concurrency:
   group: pages
