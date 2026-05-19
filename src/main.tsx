@@ -75,6 +75,7 @@ import Login         from './pages/Login';
 import Profile       from './pages/Profile';
 import Wagers        from './pages/Wagers';
 import Admin         from './pages/Admin';
+import PlayerDetail  from './pages/PlayerDetail';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -177,6 +178,15 @@ createRoot(document.getElementById('root')!).render(
                   visitors see an "Access Denied" surface.  The actual
                   security boundary is Supabase RLS — this is a dev tool. */}
               <Route path="admin"               element={<Admin />} />
+
+              {/* /players/:playerId (Phase C).
+                  Player profile page — name, team, position, bio, season
+                  outcome stats (goals/assists/cards), and idol standing.
+                  Raw engine stats (attacking/defending/etc.) are intentionally
+                  omitted — the hidden-mechanics design pillar applies here.
+                  Links from Idols.tsx and MatchDetail.tsx both point here;
+                  before this route those URLs 404'd. */}
+              <Route path="players/:playerId"   element={<PlayerDetail />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
