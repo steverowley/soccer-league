@@ -183,7 +183,7 @@ export default function Home() {
       </section>
 
       {/* Section III — Standings. */}
-      <section style={{ padding: '0 16px 80px' }}>
+      <section style={{ padding: '0 0 80px' }}>
         <Container>
           <SectionHeader
             pageKicker="Tables"

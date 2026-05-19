@@ -107,7 +107,7 @@ export default function Teams() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 16px 16px' }}>
+      <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Clubs"
@@ -120,14 +120,14 @@ export default function Teams() {
       </section>
 
       {/* Section II — League filter chips. */}
-      <section style={{ padding: '0 16px 16px' }}>
+      <section style={{ padding: '0 0 16px' }}>
         <Container>
           <LeagueFilter active={filter} onChange={setFilter} />
         </Container>
       </section>
 
       {/* Section III — Team grid. */}
-      <section style={{ padding: '0 16px 80px' }}>
+      <section style={{ padding: '0 0 80px' }}>
         <Container>
           {visibleTeams.length === 0 ? (
             <p style={{

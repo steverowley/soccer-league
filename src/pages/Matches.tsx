@@ -195,7 +195,7 @@ export default function Matches() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 16px 16px' }}>
+      <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Fixtures"
@@ -208,7 +208,7 @@ export default function Matches() {
       </section>
 
       {/* Section II — Status filter. */}
-      <section style={{ padding: '0 16px 16px' }}>
+      <section style={{ padding: '0 0 16px' }}>
         <Container>
           <StatusFilter
             active={filter}
@@ -223,7 +223,7 @@ export default function Matches() {
       </section>
 
       {/* Section III — Match list (one or many groups). */}
-      <section style={{ padding: '0 16px 80px' }}>
+      <section style={{ padding: '0 0 80px' }}>
         <Container>
           {!loaded && (
             <p style={{
