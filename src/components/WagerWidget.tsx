@@ -11,7 +11,7 @@
 //                                   3-side picker + stake input +
 //                                   payout preview + Place CTA
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { COLORS } from './Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -83,7 +83,7 @@ interface ExistingWager {
  * the match itself, so the widget paints inline as soon as its 2 parallel
  * queries return.
  */
-export default function WagerWidget({ match }: { match: MatchRef }) {
+function WagerWidget({ match }: { match: MatchRef }) {
   const db = useSupabase();
   const { user, profile, refreshProfile } = useAuth();
 
@@ -450,3 +450,8 @@ function StakeForm({
     </div>
   );
 }
+
+// Memoised: MatchDetail re-renders on every Realtime event; WagerWidget's
+// props (the match row) change at most once per minute so skipping re-renders
+// eliminates redundant odds/wager sub-tree diffs during live commentary ticks.
+export default memo(WagerWidget);
