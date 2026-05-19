@@ -149,7 +149,7 @@ export default function MatchDetail() {
           this section always appears on every match — same visual
           weight whether the user can or cannot bet. */}
       {match && !loadError && (
-        <section style={{ padding: '0 16px 48px' }}>
+        <section style={{ padding: '0 0 48px' }}>
           <Container>
             <SectionHeader
               kicker="II"
@@ -171,7 +171,7 @@ export default function MatchDetail() {
           completed, dumps the full pre-simulated log so the user can
           replay the match's narrative arc end-to-end. */}
       {match && !loadError && (
-        <section style={{ padding: '0 16px 48px' }}>
+        <section style={{ padding: '0 0 48px' }}>
           <Container>
             <LiveCommentary match={match} />
           </Container>
@@ -179,7 +179,7 @@ export default function MatchDetail() {
       )}
 
       {match && !loadError && (
-        <section style={{ padding: '0 16px 80px' }}>
+        <section style={{ padding: '0 0 80px' }}>
           <Container>
             <SectionHeader
               kicker="IV"

@@ -130,7 +130,7 @@ export default function LeagueDetail() {
       </section>
 
       {/* Section III — Club roster. */}
-      <section style={{ padding: '0 16px 80px' }}>
+      <section style={{ padding: '0 0 80px' }}>
         <Container>
           <SectionHeader
             kicker="III"

@@ -162,7 +162,7 @@ export default function TeamDetail() {
       </section>
 
       {/* Section III — Manager. */}
-      <section style={{ padding: '0 16px 80px' }}>
+      <section style={{ padding: '0 0 80px' }}>
         <Container>
           <SectionHeader
             kicker="III"
