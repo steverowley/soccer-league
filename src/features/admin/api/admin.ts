@@ -393,3 +393,178 @@ export async function getArchitectInterventions(
 
   return (data ?? []) as ArchitectIntervention[];
 }
+
+// ── System stats ──────────────────────────────────────────────────────────────
+
+/** Aggregate metrics shown in the System Stats bar at the top of the admin page. */
+export interface SystemStats {
+  totalUsers:       number;
+  totalCredits:     number;
+  openWagers:       number;
+  completedMatches: number;
+}
+
+/**
+ * Fetch four cross-table aggregate metrics in parallel.
+ *
+ * Uses `count: 'exact'` + `head: true` (HTTP HEAD) for the count-only
+ * queries so Supabase doesn't stream row data we don't need.
+ *
+ * @param db  Any authenticated Supabase client.
+ */
+export async function getSystemStats(db: IslSupabaseClient): Promise<SystemStats> {
+  const [usersRes, creditsRes, wagersRes, matchesRes] = await Promise.all([
+    (db as AnyDb).from('profiles').select('id', { count: 'exact', head: true }),
+    (db as AnyDb).from('profiles').select('credits'),
+    (db as AnyDb).from('wagers').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    (db as AnyDb).from('matches').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+  ]);
+  const credits = (creditsRes.data ?? []).reduce(
+    (sum: number, r: { credits: number }) => sum + (r.credits ?? 0),
+    0,
+  );
+  return {
+    totalUsers:       usersRes.count        ?? 0,
+    totalCredits:     credits,
+    openWagers:       wagersRes.count        ?? 0,
+    completedMatches: matchesRes.count       ?? 0,
+  };
+}
+
+// ── Season status mutations ───────────────────────────────────────────────────
+
+/**
+ * Set the active season's lifecycle status.
+ *
+ * Side effects:
+ *   - `voting`    → stamps `election_opens_at`  with now().
+ *   - `completed` → stamps `election_closes_at` with now().
+ *
+ * @param db        Any authenticated Supabase client (service-role for RLS bypass).
+ * @param seasonId  UUID of the target season.
+ * @param status    New status value.
+ */
+export async function setSeasonStatus(
+  db:       IslSupabaseClient,
+  seasonId: string,
+  status:   'active' | 'voting' | 'completed',
+): Promise<void> {
+  const patch: Record<string, unknown> = { status };
+  if (status === 'voting')    patch.election_opens_at  = new Date().toISOString();
+  if (status === 'completed') patch.election_closes_at = new Date().toISOString();
+  const { error } = await (db as AnyDb).from('seasons').update(patch).eq('id', seasonId);
+  if (error) throw new Error(error.message);
+}
+
+// ── Season reset RPC ──────────────────────────────────────────────────────────
+
+/**
+ * Call the `admin_reset_season` SQL function (migration 0023).
+ *
+ * The function wipes all transient/result data (events, wagers, narratives,
+ * etc.) and reschedules every match starting 5 minutes from now, preserving
+ * relative spacing.
+ *
+ * @param db  Service-role client (the function is SECURITY DEFINER but is still
+ *            gated by the admin UI; anon callers hit RLS before reaching it).
+ */
+export async function resetSeasonResults(db: IslSupabaseClient): Promise<{ matchesReset: number }> {
+  const { data, error } = await (db as AnyDb).rpc('admin_reset_season');
+  if (error) throw new Error(error.message);
+  return { matchesReset: (data as { matches_reset: number }).matches_reset ?? 0 };
+}
+
+// ── Narrative injection ───────────────────────────────────────────────────────
+
+/**
+ * Insert a single narrative row into the `narratives` table with `source='admin'`.
+ *
+ * The row appears immediately in the Galaxy Dispatch feed.  There is no
+ * undo — the admin must delete the row directly from the DB if they make a
+ * mistake.
+ *
+ * @param db      Service-role client (anon INSERT is blocked by RLS).
+ * @param kind    One of the five narrative kinds recognised by the Dispatch feed.
+ * @param summary Human-readable narrative text.
+ */
+export async function injectNarrative(
+  db:      IslSupabaseClient,
+  kind:    string,
+  summary: string,
+): Promise<void> {
+  const { error } = await (db as AnyDb).from('narratives').insert({
+    kind,
+    summary,
+    source: 'admin',
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ── Player creation ───────────────────────────────────────────────────────────
+
+/** Input shape for the Add Player form. */
+export interface AddPlayerInput {
+  teamId:        string;
+  name:          string;
+  position:      string;
+  overallRating: number;
+  starter:       boolean;
+  jerseyNumber:  number | null;
+}
+
+/**
+ * Insert a new player row into the `players` table.
+ *
+ * Derived stat columns (attacking, defending, mental, athletic, technical) are
+ * seeded from `overallRating` so the match engine has a consistent starting
+ * point.  The coaching staff can refine via the training facility afterwards.
+ *
+ * @param db     Service-role client (RLS blocks anon INSERT on players).
+ * @param input  Form-sourced player data.
+ */
+export async function addPlayer(
+  db:    IslSupabaseClient,
+  input: AddPlayerInput,
+): Promise<void> {
+  const { error } = await (db as AnyDb).from('players').insert({
+    team_id:        input.teamId,
+    name:           input.name,
+    position:       input.position,
+    overall_rating: input.overallRating,
+    starter:        input.starter,
+    jersey_number:  input.jerseyNumber,
+    // Minimal stat defaults — match engine derives from overall_rating
+    attacking:  input.overallRating,
+    defending:  input.overallRating,
+    mental:     input.overallRating,
+    athletic:   input.overallRating,
+    technical:  input.overallRating,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ── Team list ─────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch a flat list of all teams (id + name + league name) for the Add Player
+ * team selector.  Ordered alphabetically by team name.
+ *
+ * Returns an empty array on error so the form renders (with no options) rather
+ * than crashing.
+ *
+ * @param db  Any authenticated Supabase client.
+ */
+export async function getTeamList(
+  db: IslSupabaseClient,
+): Promise<Array<{ id: string; name: string; league: string }>> {
+  const { data, error } = await (db as AnyDb)
+    .from('teams')
+    .select('id, name, league:leagues!teams_league_id_fkey(name)')
+    .order('name');
+  if (error) return [];
+  return (data ?? []).map((r: { id: string; name: string; league: { name: string } | null }) => ({
+    id:     r.id,
+    name:   r.name,
+    league: r.league?.name ?? '',
+  }));
+}

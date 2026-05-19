@@ -38,9 +38,16 @@ import {
   getAdminFixtures,
   getArchitectInterventions,
   fastForwardScheduledMatches,
+  getSystemStats,
+  setSeasonStatus,
+  resetSeasonResults,
+  injectNarrative,
+  addPlayer,
+  getTeamList,
   type AdminSeason,
   type AdminFixture,
   type ArchitectIntervention,
+  type SystemStats,
 } from '../features/admin';
 
 // ── Design tokens ────────────────────────────────────────────────────────────
@@ -78,6 +85,41 @@ const VALUE_STYLE: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 400,
   color: DUST,
+};
+
+// ── Form input style constants ────────────────────────────────────────────────
+// Shared inline-style objects for the Testing Controls form fields.
+// Centralised here so the narrative injector and add-player form stay
+// visually consistent without duplicating the 6-property object inline.
+
+/**
+ * Base style for <select> dropdowns in the admin testing forms.
+ * Background matches ABYSS so form fields recede against the PHOBOS panel,
+ * keeping visual weight on the labels and button CTAs.
+ */
+const adminSelectStyle: React.CSSProperties = {
+  background:  ABYSS,
+  border:      `1px solid ${HAIRLINE}`,
+  color:       DUST,
+  fontFamily:  'Space Mono, monospace',
+  fontSize:    13,
+  padding:     '8px 10px',
+  width:       '100%',
+};
+
+/**
+ * Base style for <input type="text|number"> fields in the admin testing forms.
+ * Intentionally identical to adminSelectStyle — both are entry fields and
+ * should feel like the same widget family to the admin's eye.
+ */
+const adminInputStyle: React.CSSProperties = {
+  background:  ABYSS,
+  border:      `1px solid ${HAIRLINE}`,
+  color:       DUST,
+  fontFamily:  'Space Mono, monospace',
+  fontSize:    13,
+  padding:     '8px 10px',
+  width:       '100%',
 };
 
 // ── Admin allowlist (resolved once at module load) ────────────────────────────
@@ -197,12 +239,19 @@ export default function Admin() {
           </Container>
         </div>
 
+        {/* ── System stats bar ──────────────────────────────────────────── */}
+        {/* Rendered outside the padded Container so it spans full width and
+            sits flush against the hero border — same treatment as the live
+            match ticker on the home page. */}
+        <SystemStatsBar db={db} />
+
         {/* ── Body panels ───────────────────────────────────────────────── */}
         <Container>
           <div style={{ padding: '40px 0 80px', display: 'flex', flexDirection: 'column', gap: 48 }}>
             <SeasonPanel db={db} />
             <FixtureBrowser db={db} />
             <ArchitectLog db={db} />
+            <TestingPanel db={db} />
           </div>
         </Container>
       </main>
@@ -229,6 +278,9 @@ function SeasonPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
   const [ffHours, setFfHours]     = useState('24');
   const [ffBusy, setFfBusy]       = useState(false);
   const [enactBusy, setEnactBusy] = useState(false);
+  // Shared busy flag for Open/Close voting — both write to the same season row
+  // so we disable both buttons while either mutation is in-flight.
+  const [votingBusy, setVotingBusy] = useState(false);
 
   // Fetch active season once on mount.
   useEffect(() => {
@@ -269,6 +321,43 @@ function SeasonPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
       setToast({ kind: 'error', message: `Fast-forward failed: ${String(err)}` });
     } finally {
       setFfBusy(false);
+    }
+  };
+
+  // ── Voting window handlers ────────────────────────────────────────────────
+  // onOpenVoting transitions 'active' → 'voting', stamping election_opens_at.
+  // onCloseVoting transitions 'voting' → 'completed', stamping election_closes_at.
+  // Both share `votingBusy` so we disable both buttons while either write is
+  // in-flight, preventing a double-click race that would stamp both timestamps.
+  // After each mutation we re-fetch the season so the Status field and button
+  // disabled states update immediately.
+  const onOpenVoting = async () => {
+    if (!season) return;
+    setVotingBusy(true);
+    try {
+      await setSeasonStatus(db, season.id, 'voting');
+      setToast({ kind: 'success', message: 'Voting window opened. Election opens at stamped.' });
+      const fresh = await getActiveSeason(db);
+      setSeason(fresh);
+    } catch (err) {
+      setToast({ kind: 'error', message: `Open voting failed: ${String(err)}` });
+    } finally {
+      setVotingBusy(false);
+    }
+  };
+
+  const onCloseVoting = async () => {
+    if (!season) return;
+    setVotingBusy(true);
+    try {
+      await setSeasonStatus(db, season.id, 'completed');
+      setToast({ kind: 'success', message: 'Voting closed. Season marked completed.' });
+      const fresh = await getActiveSeason(db);
+      setSeason(fresh);
+    } catch (err) {
+      setToast({ kind: 'error', message: `Close voting failed: ${String(err)}` });
+    } finally {
+      setVotingBusy(false);
     }
   };
 
@@ -417,6 +506,38 @@ function SeasonPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
                 <p style={{ ...LABEL_STYLE, color: DUST_50, marginTop: 8 }}>
                   Season must be in 'voting' status.
                 </p>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+
+            {/* Open / Close voting */}
+            <div>
+              <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Voting Window</p>
+              <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 14 }}>
+                Open or close the voting window manually. Only available at the correct season phase.
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <AdminButton
+                  onClick={onOpenVoting}
+                  busy={votingBusy}
+                  variant="primary"
+                  disabled={season.status !== 'active'}
+                >
+                  Open Voting
+                </AdminButton>
+                <AdminButton
+                  onClick={onCloseVoting}
+                  busy={votingBusy}
+                  variant="danger"
+                  disabled={season.status !== 'voting'}
+                >
+                  Close Voting
+                </AdminButton>
+              </div>
+              {season.status === 'completed' && (
+                <p style={{ ...LABEL_STYLE, color: DUST_50, marginTop: 8 }}>Season is completed.</p>
               )}
             </div>
           </div>
