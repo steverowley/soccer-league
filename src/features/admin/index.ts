@@ -36,6 +36,13 @@ export {
   getArchitectInterventions,
   fastForwardScheduledMatches,
   triggerSeasonEnactment,
+  // Phase B additions — system stats, season controls, testing tools
+  getSystemStats,
+  setSeasonStatus,
+  resetSeasonResults,
+  injectNarrative,
+  addPlayer,
+  getTeamList,
 } from './api/admin';
 export type {
   AdminSeason,
@@ -43,6 +50,9 @@ export type {
   ArchitectIntervention,
   FastForwardResult,
   TriggerEnactmentResult,
+  // Phase B additions
+  SystemStats,
+  AddPlayerInput,
 } from './api/admin';
 
 // ── UI ───────────────────────────────────────────────────────────────────────
