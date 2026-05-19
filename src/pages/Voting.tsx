@@ -1,4 +1,4 @@
-// ── Voting.jsx ──────────────────────────────────────────────────────────────
+// ── Voting.tsx ──────────────────────────────────────────────────────────────
 // End-of-season focus voting page — `/voting` route, rebuilt in PR 7.
 //
 // Layout:
@@ -76,22 +76,22 @@ export default function Voting() {
   const db = useSupabase();
   const { user, profile, refreshProfile } = useAuth();
 
-  const [season,         setSeason]         = useState(null);
-  const [options,        setOptions]        = useState([]);
-  const [tally,          setTally]          = useState([]);
-  const [enactedHistory, setEnactedHistory] = useState([]);
-  const [loaded,         setLoaded]         = useState(false);
-  const [loadError,      setLoadError]      = useState(null);
+  const [season,         setSeason]         = useState<any>(null);
+  const [options,        setOptions]        = useState<any[]>([]);
+  const [tally,          setTally]          = useState<any[]>([]);
+  const [enactedHistory, setEnactedHistory] = useState<any[]>([]);
+  const [loaded,         setLoaded]         = useState<boolean>(false);
+  const [loadError,      setLoadError]      = useState<any>(null);
 
   // Per-option in-flight vote state — keyed by option_id.  Cleared on
   // success so the spinner / disabled state lifts as soon as the
   // optimistic write returns.
-  const [voteInFlight, setVoteInFlight] = useState(null);
-  const [voteError,    setVoteError]    = useState(null);
+  const [voteInFlight, setVoteInFlight] = useState<any>(null);
+  const [voteError,    setVoteError]    = useState<any>(null);
 
   // Trigger to re-fetch the tally after a successful vote.  Plain
   // incrementing number keeps the useEffect dep array simple.
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
 
   const teamId = profile?.favourite_team_id ?? null;
 
@@ -106,7 +106,7 @@ export default function Voting() {
     setLoaded(false);
     (async () => {
       try {
-        const s = await getActiveSeason(db);
+        const s = await getActiveSeason();
         if (cancelled || !s) return;
         const [opts, t, history] = await Promise.all([
           getTeamFocusOptions(db, teamId, s.id),
@@ -132,7 +132,7 @@ export default function Voting() {
   // tally → quick lookup by option_id so each OptionCard can paint its
   // bar in O(1) without re-scanning the tally array.
   const tallyByOptionId = useMemo(() => {
-    const m = {};
+    const m: Record<string, any> = {};
     for (const t of tally) m[t.option_id] = t;
     return m;
   }, [tally]);
@@ -160,7 +160,7 @@ export default function Voting() {
    * @param {string} optionId
    * @param {number} credits
    */
-  const onVote = async (optionId, credits) => {
+  const onVote = async (optionId: string, credits: number) => {
     if (!user || !profile) return;
     if (!canAffordVote(profile.credits, credits)) {
       setVoteError(`Need at least ${credits} credits.`);
@@ -391,6 +391,10 @@ function TierSection({
   kicker, label, title, subtitle,
   options, tallyByOptionId, tierTotal,
   credits, voteInFlight, onVote,
+}: {
+  kicker: string; label: string; title: string; subtitle: string;
+  options: any[]; tallyByOptionId: any; tierTotal: number;
+  credits: number; voteInFlight: string | null; onVote: (id: string, credits: number) => void;
 }) {
   return (
     <div>
@@ -408,7 +412,7 @@ function TierSection({
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 24 }}>
-          {options.map((option) => (
+          {options.map((option: any) => (
             <OptionCard
               key={option.id}
               option={option}
@@ -445,7 +449,7 @@ function TierSection({
  * @param {boolean} props.busy
  * @param {(optionId: string, credits: number) => void} props.onVote
  */
-function OptionCard({ option, tally, tierTotal, credits, busy, onVote }) {
+function OptionCard({ option, tally, tierTotal, credits, busy, onVote  }: any) {
   const [amount, setAmount] = useState(DEFAULT_VOTE);
   const totalCredits = tally?.total_credits ?? 0;
   const voteCount    = tally?.vote_count    ?? 0;
@@ -593,7 +597,7 @@ function OptionCard({ option, tally, tierTotal, credits, busy, onVote }) {
  *
  * @param {{ rows: Array<object> }} props
  */
-function EnactedPanel({ rows }) {
+function EnactedPanel({ rows  }: any) {
   return (
     <div style={{
       display: 'grid',
@@ -601,7 +605,7 @@ function EnactedPanel({ rows }) {
       gap: 16,
       marginTop: 24,
     }}>
-      {rows.map((row) => (
+      {rows.map((row: any) => (
         <article key={row.id ?? `${row.team_id}-${row.tier}`} style={{
           border: `1px solid ${HAIRLINE}`,
           padding: 24,

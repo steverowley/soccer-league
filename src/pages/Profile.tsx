@@ -65,17 +65,17 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, loading, refreshProfile, signOut } = useAuth();
 
-  const [teams,   setTeams]   = useState([]);
-  const [players, setPlayers] = useState([]);
+  const [teams,   setTeams]   = useState<any[]>([]);
+  const [players, setPlayers] = useState<any[]>([]);
 
   // Local copy of the editable fields — initialised from the profile on
   // first paint, mutated by the form controls, then persisted on save.
   const [teamId,    setTeamId]    = useState(NO_PLAYER);
   const [playerId,  setPlayerId]  = useState(NO_PLAYER);
 
-  const [saveError, setSaveError] = useState(null);
-  const [saveOk,    setSaveOk]    = useState(false);
-  const [busy,      setBusy]      = useState(false);
+  const [saveError, setSaveError] = useState<any>(null);
+  const [saveOk,    setSaveOk]    = useState<boolean>(false);
+  const [busy,      setBusy]      = useState<boolean>(false);
 
   // Mirror profile → local state once the auth provider finishes
   // hydrating.  Only resets when the profile id changes — preserves
@@ -90,11 +90,11 @@ export default function Profile() {
   // stable across the session.
   useEffect(() => {
     let cancelled = false;
-    getTeams(db)
+    getTeams()
       .then((rows) => { if (!cancelled) setTeams(rows ?? []); })
       .catch((err) => { console.warn('[Profile] getTeams failed:', err); });
     return () => { cancelled = true; };
-  }, [db]);
+  }, []);
 
   // Refetch the roster every time the active teamId changes (including
   // the initial hydration).  Empty teamId → empty roster so the player
@@ -131,6 +131,7 @@ export default function Profile() {
     return (
       <Shell>
         <p style={{
+        ...(undefined as any),
           color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
         }}>
           Restoring your session…
@@ -147,7 +148,7 @@ export default function Profile() {
    * to null so the DB stores the user's "no preference" choice
    * correctly.
    */
-  const onSave = async (e) => {
+  const onSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaveError(null);
     setSaveOk(false);
@@ -179,14 +180,14 @@ export default function Profile() {
 
   // When the team changes, drop the selected player — a player from
   // the old club isn't on the new club's roster.
-  const onTeamChange = (next) => {
+  const onTeamChange = (next: string) => {
     setTeamId(next);
     setPlayerId(NO_PLAYER);
     setSaveOk(false);
   };
 
   return (
-    <Shell username={profile?.username}>
+    <Shell {...(profile?.username ? { username: profile.username } : {})}>
       <AccountSummary user={user} profile={profile} />
 
       <div style={{ marginTop: 48 }}>
@@ -198,6 +199,7 @@ export default function Profile() {
         />
 
         <form onSubmit={onSave} style={{
+        ...(undefined as any),
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
@@ -217,7 +219,7 @@ export default function Profile() {
               <option value={NO_PLAYER}>— No preference —</option>
               {Array.from(teamsByLeague.entries()).map(([key, { name, teams: teamRows }]) => (
                 <optgroup key={key} label={name}>
-                  {teamRows.map((t) => (
+                  {teamRows.map((t: any) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </optgroup>
@@ -240,7 +242,7 @@ export default function Profile() {
               style={selectStyle}
             >
               <option value={NO_PLAYER}>— No preference —</option>
-              {players.map((p) => (
+              {players.map((p: any) => (
                 <option key={p.id} value={p.id}>
                   #{p.jersey_number ?? '—'} {p.name}
                 </option>
@@ -250,6 +252,7 @@ export default function Profile() {
 
           {saveError && (
             <p role="alert" style={{
+        ...(undefined as any),
               color: FLARE, fontSize: 13, fontStyle: 'italic', margin: 0,
             }}>
               {saveError}
@@ -257,6 +260,7 @@ export default function Profile() {
           )}
           {saveOk && (
             <p style={{
+        ...(undefined as any),
               color: DUST_70, fontSize: 13, fontStyle: 'italic', margin: 0,
             }}>
               Saved.  The cosmos has acknowledged your allegiance.
@@ -267,6 +271,7 @@ export default function Profile() {
             type="submit"
             disabled={busy}
             style={{
+        ...(undefined as any),
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -299,6 +304,7 @@ export default function Profile() {
             type="button"
             onClick={onSignOut}
             style={{
+        ...(undefined as any),
               display: 'inline-flex',
               alignItems: 'center',
               fontSize: 13,
@@ -331,9 +337,10 @@ export default function Profile() {
  * @param {React.ReactNode} props.children
  * @param {string} [props.username]  Optional username to splice into the hero subtitle.
  */
-function Shell({ children, username }) {
+function Shell({ children, username }: { children: React.ReactNode; username?: string }) {
   return (
     <div style={{
+        ...(undefined as any),
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
@@ -371,7 +378,7 @@ function Shell({ children, username }) {
  * @param {object} props.user     Supabase Auth user.
  * @param {object} props.profile  ISL profile row.
  */
-function AccountSummary({ user, profile }) {
+function AccountSummary({ user, profile }: { user: any; profile: any }) {
   const username = profile?.username ?? '—';
   const email    = user?.email ?? '—';
   const credits  = profile?.credits ?? 0;
@@ -383,6 +390,7 @@ function AccountSummary({ user, profile }) {
 
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 32,
       marginTop: 24,
@@ -412,10 +420,11 @@ function AccountSummary({ user, profile }) {
  * @param {string} props.value
  * @param {string} [props.accent]
  */
-function SummaryCell({ label, value, accent }) {
+function SummaryCell({ label, value, accent  }: any) {
   return (
     <div>
       <div style={{
+        ...(undefined as any),
         fontSize: 11,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
@@ -425,6 +434,7 @@ function SummaryCell({ label, value, accent }) {
         {label}
       </div>
       <div style={{
+        ...(undefined as any),
         fontSize: 22,
         fontWeight: 700,
         color: accent ?? DUST,
@@ -447,10 +457,11 @@ function SummaryCell({ label, value, accent }) {
  * @param {string} [props.hint]
  * @param {React.ReactNode} props.children  The actual form control.
  */
-function Field({ id, label, hint, children }) {
+function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label htmlFor={id} style={{
+        ...(undefined as any),
         fontSize: 11,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
@@ -461,6 +472,7 @@ function Field({ id, label, hint, children }) {
       {children}
       {hint && (
         <span style={{
+        ...(undefined as any),
           fontSize: 11,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',

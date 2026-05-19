@@ -45,7 +45,7 @@ const POSITION_ORDER = ['GK', 'DF', 'MF', 'FW'];
 // header above each squad sub-table; the labels are deliberately full
 // words rather than abbreviations so the page reads less like a stats
 // dump and more like a roster listing.
-const POSITION_LABELS = {
+const POSITION_LABELS: Record<string, string> = {
   GK: 'Goalkeepers',
   DF: 'Defenders',
   MF: 'Midfielders',
@@ -63,10 +63,10 @@ const POSITION_LABELS = {
  * @param {string | undefined} teamId
  * @returns {object | null}
  */
-function findStaticTeam(teamId) {
+function findStaticTeam(teamId: string | undefined): any {
   if (!teamId) return null;
   for (const [leagueId, teams] of Object.entries(TEAMS_BY_LEAGUE)) {
-    const found = teams.find((t) => t.id === teamId);
+    const found = teams.find((t: any) => t.id === teamId);
     if (found) return { ...found, leagueId };
   }
   return null;
@@ -91,15 +91,15 @@ export default function TeamDetail() {
   // collections via getTeam's relational select.  Null while loading
   // or on error; the squad / manager sections degrade to an empty
   // state in that case.
-  const [liveTeam, setLiveTeam] = useState(null);
-  const [loadError, setLoadError] = useState(null);
+  const [liveTeam, setLiveTeam] = useState<any>(null);
+  const [loadError, setLoadError] = useState<any>(null);
 
   useEffect(() => {
     if (!staticTeam || !teamId) return undefined;
     let cancelled = false;
     setLoadError(null);
-    getTeam(db, teamId)
-      .then((data) => { if (!cancelled) setLiveTeam(data); })
+    getTeam(teamId)
+      .then((data: any) => { if (!cancelled) setLiveTeam(data); })
       .catch((err) => {
         if (cancelled) return;
         // Surface the error to the squad / manager sections without
@@ -212,7 +212,7 @@ export default function TeamDetail() {
  * @param {object} props.team    Static team record (already validated).
  * @param {object} [props.league] Parent league record (LEAGUES entry).
  */
-function ClubHero({ team, league }) {
+function ClubHero({ team, league  }: any) {
   const accent = team.color ?? DUST;
   return (
     <section style={{
@@ -254,7 +254,7 @@ function ClubHero({ team, league }) {
         {/* Description — paragraph-broken on \n.  Max-width caps line
             length at ~80ch for comfortable reading on wide displays. */}
         <div style={{ marginTop: 32, maxWidth: '80ch' }}>
-          {(team.description ?? '').split('\n').filter(Boolean).map((para, i) => (
+          {(team.description ?? '').split('\n').filter(Boolean).map((para: string, i: number) => (
             <p
               key={i}
               style={{
@@ -285,10 +285,10 @@ function ClubHero({ team, league }) {
  *
  * @param {{ players: Array<object> }} props
  */
-function Squad({ players }) {
+function Squad({ players  }: any) {
   // Pre-bucket by position once per render — avoids four full passes
   // through the players array in the JSX below.
-  const buckets = Object.fromEntries(POSITION_ORDER.map((p) => [p, []]));
+  const buckets = Object.fromEntries(POSITION_ORDER.map((p: any) => [p, []]));
   for (const p of players) {
     const key = POSITION_ORDER.includes(p.position) ? p.position : 'FW';
     buckets[key].push(p);
@@ -296,7 +296,7 @@ function Squad({ players }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32, marginTop: 24 }}>
-      {POSITION_ORDER.map((pos) => (
+      {POSITION_ORDER.map((pos: any) => (
         <SquadGroup
           key={pos}
           label={POSITION_LABELS[pos]}
@@ -319,7 +319,7 @@ function Squad({ players }) {
  * @param {string} props.label
  * @param {Array<object>} props.players
  */
-function SquadGroup({ label, players }) {
+function SquadGroup({ label, players  }: any) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}` }}>
       <header style={{
@@ -361,7 +361,7 @@ function SquadGroup({ label, players }) {
             </tr>
           </thead>
           <tbody>
-            {players.map((p) => (
+            {players.map((p: any) => (
               <tr key={p.id} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
                 <td style={{ ...squadTd, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                   {p.starter && (
@@ -383,8 +383,8 @@ function SquadGroup({ label, players }) {
   );
 }
 
-const squadTd = { textAlign: 'left', padding: '12px 16px' };
-const squadTh = (width) => ({
+const squadTd: React.CSSProperties = { textAlign: 'left', padding: '12px 16px' };
+const squadTh = (width?: number | string): React.CSSProperties => ({
   textAlign: 'left',
   padding: '12px 16px',
   fontSize: 11,
@@ -405,11 +405,11 @@ const squadTh = (width) => ({
  * @param {object} props
  * @param {object} props.manager
  */
-function ManagerCard({ manager }) {
+function ManagerCard({ manager  }: any) {
   const styleLabel = manager.style
     ? manager.style
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/\b\w/g, (c: string) => c.toUpperCase())
     : null;
 
   return (
@@ -460,7 +460,7 @@ function ManagerCard({ manager }) {
  *
  * @param {{ teamId?: string }} props
  */
-function UnknownClub({ teamId }) {
+function UnknownClub({ teamId  }: any) {
   return (
     <div style={{
       background: ABYSS,

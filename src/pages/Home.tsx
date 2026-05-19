@@ -103,12 +103,12 @@ export default function Home() {
   // Single fetch on mount; live + upcoming are stable for a session.  No
   // polling — live updates would come through Realtime subscriptions in
   // a follow-up.
-  const [liveMatches,     setLiveMatches]     = useState([]);
-  const [upcomingMatches, setUpcomingMatches] = useState([]);
+  const [liveMatches, setLiveMatches] = useState<any[]>([]);
+  const [upcomingMatches, setUpcomingMatches] = useState<any[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getLiveMatches(db), getUpcomingMatches(db, 3)])
+    Promise.all([(getLiveMatches() as any), (getUpcomingMatches(3) as any)])
       .then(([live, upcoming]) => {
         if (cancelled) return;
         setLiveMatches(live);
@@ -125,14 +125,28 @@ export default function Home() {
   // sorts by points DESC + GD tiebreak; we stamp a 1-based position on
   // each row so the renderer can show the 3-tier pipe (dust top-3 /
   // none middle / flare bottom-2).
-  const featuredLeague = LEAGUES[0];
+  const featuredLeague = LEAGUES[0]!;
   const standingsRows  = computeStandings(
     featuredLeague.id,
-    buildStandingsRows(featuredLeague.id),
-  ).map((row, idx) => ({ ...row, position: idx + 1 }));
+    buildStandingsRows(featuredLeague.id) as any,
+  ).map((row: any, idx: number) => ({
+    id: row.id,
+    position: idx + 1,
+    team: row.team,
+    club: row.team,
+    team_link: row.teamLink,
+    played: row.played,
+    wins: row.wins,
+    draws: row.draws,
+    loses: row.loses,
+    gd: row.gd,
+    points: row.points,
+    form: row.form,
+  }));
 
   return (
     <div style={{
+        ...(undefined as any),
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
@@ -156,6 +170,7 @@ export default function Home() {
             actionTo="/matches"
           />
           <div className="isl-live-grid" style={{
+        ...(undefined as any),
             display: 'grid',
             gridTemplateColumns: '2fr 1fr',
             gap: 32,
@@ -215,6 +230,7 @@ function Hero() {
     <section style={{ padding: '0 0 0 0' }}>
       <Container>
         <div className="isl-hero-grid" style={{
+        ...(undefined as any),
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
           gap: 48,
@@ -225,6 +241,7 @@ function Hero() {
               stable even before the PNG loads.  No border decoration;
               the image carries its own halftone edge. */}
           <div style={{
+        ...(undefined as any),
             aspectRatio: '4 / 5',
             overflow: 'hidden',
             background: '#000',
@@ -239,6 +256,7 @@ function Hero() {
 
           {/* Right column — content stack. */}
           <div style={{
+        ...(undefined as any),
             display: 'flex',
             flexDirection: 'column',
             gap: 24,
@@ -248,6 +266,7 @@ function Hero() {
                 mono small-caps; same opacity for all three so the row
                 reads as a single label rather than three. */}
             <div style={{
+        ...(undefined as any),
               display: 'flex',
               gap: 16,
               fontSize: 13,
@@ -268,6 +287,7 @@ function Hero() {
                 match the design.  Tight line-height + uppercase + bold
                 weight gives the publication-header look. */}
             <h1 style={{
+        ...(undefined as any),
               fontSize: 48,
               fontWeight: 700,
               lineHeight: 1.1,
@@ -282,6 +302,7 @@ function Hero() {
                 where we are".  Bullets at 50 % dust so the labels +
                 values read as one continuous data row. */}
             <div style={{
+        ...(undefined as any),
               display: 'flex',
               flexWrap: 'wrap',
               gap: 16,
@@ -297,6 +318,7 @@ function Hero() {
             </div>
 
             <p style={{
+        ...(undefined as any),
               fontSize: 16,
               lineHeight: 1.6,
               margin: 0,
@@ -318,6 +340,7 @@ function Hero() {
                 hairline.  Values are placeholder until wired to live
                 season state. */}
             <div style={{
+        ...(undefined as any),
               display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',
               borderTop: `1px solid ${HAIRLINE}`,
@@ -342,13 +365,14 @@ function Hero() {
  *
  * @param {{ label: string, value: string }} props
  */
-function HeroStat({ label, value }) {
+function HeroStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
         {value}
       </div>
       <div style={{
+        ...(undefined as any),
         fontSize: 11,
         textTransform: 'uppercase',
         letterSpacing: '0.14em',
@@ -373,10 +397,11 @@ function HeroStat({ label, value }) {
  *
  * @param {{ match: object | null }} props
  */
-function LiveMatchPanel({ match }) {
+function LiveMatchPanel({ match }: { match: any | null }) {
   if (!match) {
     return (
       <div style={{
+        ...(undefined as any),
         border: `1px solid ${HAIRLINE}`,
         minHeight: 280,
         display: 'flex',
@@ -407,6 +432,7 @@ function LiveMatchPanel({ match }) {
     <div style={{ border: `1px solid ${HAIRLINE}`, background: ABYSS }}>
       {/* Row 1 — meta + bordered LIVE chip. */}
       <div style={{
+        ...(undefined as any),
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -421,6 +447,7 @@ function LiveMatchPanel({ match }) {
           {round && <> <span style={{ color: DUST_50 }}>•</span> {round}</>}
         </span>
         <span style={{
+        ...(undefined as any),
           display: 'inline-flex',
           alignItems: 'center',
           gap: 8,
@@ -432,6 +459,7 @@ function LiveMatchPanel({ match }) {
               has gone wrong"; the LIVE chip is an attention cue, not
               an error cue. */}
           <span style={{
+        ...(undefined as any),
             width: 8,
             height: 8,
             borderRadius: '50%',
@@ -448,6 +476,7 @@ function LiveMatchPanel({ match }) {
 
       {/* Row 2 — three-column score row with shield placeholders. */}
       <div style={{
+        ...(undefined as any),
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
@@ -465,6 +494,7 @@ function LiveMatchPanel({ match }) {
       {/* Row 3 — commentary stack.  Placeholder copy until live
           match_events writes land. */}
       <div style={{
+        ...(undefined as any),
         padding: '24px',
         borderBottom: `1px solid ${HAIRLINE}`,
         display: 'flex',
@@ -500,11 +530,12 @@ function LiveMatchPanel({ match }) {
  * @param {string} props.location
  * @param {string|null} props.color  Brand-colour hex.  Falls back to dust.
  */
-function TeamScoreBlock({ side, name, location, color }) {
+function TeamScoreBlock({ side, name, location, color  }: any) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <TeamCrest color={color} />
       <h3 style={{
+        ...(undefined as any),
         fontSize: 20,
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -515,6 +546,7 @@ function TeamScoreBlock({ side, name, location, color }) {
         {name}
       </h3>
       <div style={{
+        ...(undefined as any),
         fontSize: 11,
         color: DUST_50,
         letterSpacing: '0.14em',
@@ -539,10 +571,11 @@ function TeamScoreBlock({ side, name, location, color }) {
  * @param {number|null} props.minute
  * @param {string} props.quote
  */
-function CommentaryBlock({ speaker, role, minute, quote }) {
+function CommentaryBlock({ speaker, role, minute, quote }: { speaker: string; role: string; minute: number | null; quote: string }) {
   return (
     <div>
       <div style={{
+        ...(undefined as any),
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'baseline',
@@ -562,6 +595,7 @@ function CommentaryBlock({ speaker, role, minute, quote }) {
         )}
       </div>
       <p style={{
+        ...(undefined as any),
         fontSize: 13,
         lineHeight: 1.6,
         fontStyle: 'italic',
@@ -586,7 +620,7 @@ function CommentaryBlock({ speaker, role, minute, quote }) {
  * @param {object} match  Match row with optional scheduled_at.
  * @returns {number | null}
  */
-function computeRoughMatchMinute(match) {
+function computeRoughMatchMinute(match: any): number | null {
   if (!match?.scheduled_at) return null;
   const startMs = new Date(match.scheduled_at).getTime();
   if (Number.isNaN(startMs)) return null;
@@ -605,15 +639,17 @@ function computeRoughMatchMinute(match) {
  *
  * @param {{ matches: object[] }} props
  */
-function UpcomingPanel({ matches }) {
+function UpcomingPanel({ matches  }: any) {
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 24,
       display: 'flex',
       flexDirection: 'column',
     }}>
       <header style={{
+        ...(undefined as any),
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'baseline',
@@ -634,6 +670,7 @@ function UpcomingPanel({ matches }) {
         </p>
       ) : (
         <ul style={{
+        ...(undefined as any),
           listStyle: 'none',
           padding: 0,
           margin: 0,
@@ -641,7 +678,7 @@ function UpcomingPanel({ matches }) {
           flexDirection: 'column',
           gap: 16,
         }}>
-          {matches.map((m) => <FixtureRow key={m.id} match={m} />)}
+          {matches.map((m: any) => <FixtureRow key={m.id} match={m} />)}
         </ul>
       )}
 
@@ -661,7 +698,7 @@ function UpcomingPanel({ matches }) {
  *
  * @param {{ match: object }} props
  */
-function FixtureRow({ match }) {
+function FixtureRow({ match  }: any) {
   const day  = match.scheduled_at
     ? new Date(match.scheduled_at).toLocaleString(undefined, { weekday: 'short' })
     : null;
@@ -675,6 +712,7 @@ function FixtureRow({ match }) {
       <Link
         to={`/matches/${match.id}`}
         style={{
+        ...(undefined as any),
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
@@ -691,6 +729,7 @@ function FixtureRow({ match }) {
         </div>
 
         <div style={{
+        ...(undefined as any),
           fontSize: 11,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
@@ -701,6 +740,7 @@ function FixtureRow({ match }) {
 
         {(day || time) && (
           <div style={{
+        ...(undefined as any),
             fontSize: 11,
             letterSpacing: '0.14em',
             textTransform: 'uppercase',

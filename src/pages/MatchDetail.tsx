@@ -1,4 +1,4 @@
-// ── MatchDetail.jsx ─────────────────────────────────────────────────────────
+// ── MatchDetail.tsx ─────────────────────────────────────────────────────────
 // Single-match detail page — `/matches/:matchId` route, rebuilt in PR 5.
 //
 // Layout:
@@ -45,7 +45,7 @@ const DUST_70  = COLORS.dust70;
 // STATUS_LABELS — display copy for the status pip on the score row.
 // Matches the wording used on the Matches index so the two surfaces
 // agree on terminology.
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<string, string> = {
   in_progress: 'Live',
   completed:   'Full Time',
   scheduled:   'Scheduled',
@@ -66,17 +66,17 @@ export default function MatchDetail() {
   const { matchId } = useParams();
   const db          = useSupabase();
 
-  const [match,     setMatch]     = useState(null);
-  const [loadError, setLoadError] = useState(null);
-  const [loaded,    setLoaded]    = useState(false);
+  const [match,     setMatch]     = useState<any>(null);
+  const [loadError, setLoadError] = useState<any>(null);
+  const [loaded,    setLoaded]    = useState<boolean>(false);
 
   useEffect(() => {
     if (!matchId) return undefined;
     let cancelled = false;
     setLoadError(null);
     setLoaded(false);
-    getMatch(db, matchId)
-      .then((data) => {
+    getMatch(matchId)
+      .then((data: any) => {
         if (cancelled) return;
         setMatch(data);
         setLoaded(true);
@@ -180,7 +180,7 @@ export default function MatchDetail() {
  *
  * @param {{ match: object }} props
  */
-function MatchHero({ match }) {
+function MatchHero({ match  }: any) {
   const competition = match.competitions?.name ?? 'League';
   const round       = match.round ?? '';
   const status      = match.status ?? 'scheduled';
@@ -286,10 +286,10 @@ function MatchHero({ match }) {
  * @param {string} key
  * @returns {string}
  */
-function prettifyWeather(key) {
+function prettifyWeather(key: string): string {
   return key
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
 /**
@@ -302,7 +302,7 @@ function prettifyWeather(key) {
  * @param {number} props.home
  * @param {number} props.away
  */
-function ScoreDisplay({ status, home, away }) {
+function ScoreDisplay({ status, home, away  }: any) {
   if (status === 'scheduled' || status === 'cancelled') {
     return (
       <div style={{
@@ -357,7 +357,7 @@ function ScoreDisplay({ status, home, away }) {
  * @param {string} props.location
  * @param {string|null} props.color
  */
-function TeamScoreBlock({ side, name, location, color }) {
+function TeamScoreBlock({ side, name, location, color  }: any) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <TeamCrest color={color} />
@@ -398,7 +398,7 @@ function TeamScoreBlock({ side, name, location, color }) {
  *
  * @param {{ status: string }} props
  */
-function StatusPip({ status }) {
+function StatusPip({ status  }: any) {
   const isLive      = status === 'in_progress';
   const isCancelled = status === 'cancelled';
   // Live = quantum (focus); cancelled = flare (genuine error outcome).
@@ -447,7 +447,7 @@ function StatusPip({ status }) {
  * @param {object} props.awayTeam
  * @param {Array<object>} props.stats
  */
-function PlayerStats({ homeTeam, awayTeam, stats }) {
+function PlayerStats({ homeTeam, awayTeam, stats  }: any) {
   if (stats.length === 0) {
     return (
       <p style={{
@@ -461,9 +461,9 @@ function PlayerStats({ homeTeam, awayTeam, stats }) {
   // Bucket by team_id so home / away tables render side-by-side.  The
   // sort is stable (rating DESC → goals DESC) so MVPs surface at the
   // top of each list.
-  const sortStats = (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.goals ?? 0) - (a.goals ?? 0);
-  const homeStats = stats.filter((s) => s.team_id === homeTeam?.id).sort(sortStats);
-  const awayStats = stats.filter((s) => s.team_id === awayTeam?.id).sort(sortStats);
+  const sortStats = (a: any, b: any) => (b.rating ?? 0) - (a.rating ?? 0) || (b.goals ?? 0) - (a.goals ?? 0);
+  const homeStats = stats.filter((s: any) => s.team_id === homeTeam?.id).sort(sortStats);
+  const awayStats = stats.filter((s: any) => s.team_id === awayTeam?.id).sort(sortStats);
 
   return (
     <div
@@ -497,7 +497,7 @@ function PlayerStats({ homeTeam, awayTeam, stats }) {
  * @param {object} props.team   Home or away team row.
  * @param {Array<object>} props.rows
  */
-function StatsTable({ team, rows }) {
+function StatsTable({ team, rows  }: any) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}` }}>
       <header style={{
@@ -527,7 +527,7 @@ function StatsTable({ team, rows }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((s) => (
+          {rows.map((s: any) => (
             <tr key={s.id} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
               <td style={statsTd}>
                 <Link
@@ -558,8 +558,8 @@ function StatsTable({ team, rows }) {
   );
 }
 
-const statsTd = { textAlign: 'left', padding: '10px 12px' };
-const statsTh = (width) => ({
+const statsTd: React.CSSProperties = { textAlign: 'left', padding: '10px 12px' };
+const statsTh = (width?: number | string): React.CSSProperties => ({
   textAlign: 'left',
   padding: '10px 12px',
   fontSize: 11,
@@ -580,7 +580,7 @@ const statsTh = (width) => ({
  * @param {number | null | undefined} rating
  * @returns {string}
  */
-function formatRating(rating) {
+function formatRating(rating: number | null | undefined): string {
   if (rating === null || rating === undefined) return '—';
   return Number(rating).toFixed(1);
 }
@@ -592,7 +592,7 @@ function formatRating(rating) {
  *
  * @param {{ matchId?: string }} props
  */
-function UnknownMatch({ matchId }) {
+function UnknownMatch({ matchId  }: any) {
   return (
     <div style={{
       background: ABYSS,

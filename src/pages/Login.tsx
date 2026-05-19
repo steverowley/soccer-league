@@ -1,4 +1,4 @@
-// ── Login.jsx ───────────────────────────────────────────────────────────────
+// ── Login.tsx ───────────────────────────────────────────────────────────────
 // Auth gateway — `/login` route, rebuilt in PR 8.
 //
 // Layout:
@@ -39,6 +39,8 @@ const DUST_70  = COLORS.dust70;
 const MODE_LOGIN  = 'login';
 const MODE_SIGNUP = 'signup';
 
+type Mode = typeof MODE_LOGIN | typeof MODE_SIGNUP;
+
 // ── Field constraints ─────────────────────────────────────────────────────
 // Mirror the Supabase Auth defaults — these are the validation rules
 // the API will enforce server-side anyway, but surfacing them client-side
@@ -53,19 +55,17 @@ const MIN_USERNAME_LENGTH = 3;
  * email + password; signup mode adds a username field above them.
  * Already-signed-in users are redirected to /profile via
  * <Navigate /> on render (cheaper than an effect).
- *
- * @returns {JSX.Element}
  */
 export default function Login() {
   const { user, signIn, signUp, loading } = useAuth();
   const navigate = useNavigate();
 
-  const [mode,     setMode]     = useState(MODE_LOGIN);
+  const [mode,     setMode]     = useState<Mode>(MODE_LOGIN);
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [error,    setError]    = useState(null);
-  const [busy,     setBusy]     = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [busy,     setBusy]     = useState<boolean>(false);
 
   // Reset transient form state on mode swap so values entered in one
   // mode don't bleed into the other (e.g. a half-typed signup password
@@ -98,7 +98,7 @@ export default function Login() {
    * on the active mode.  On success: navigate to /.  On failure:
    * surface the error string returned by the auth helper.
    */
-  const onSubmit = async (e) => {
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -267,10 +267,8 @@ export default function Login() {
  * Page shell — shared chrome between the loading state and the form
  * state.  Extracted so the two render branches can't drift on padding,
  * Header, Footer, or hero copy.
- *
- * @param {{ children: React.ReactNode }} props
  */
-function Shell({ children }) {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       background: ABYSS,
@@ -301,17 +299,18 @@ function Shell({ children }) {
   );
 }
 
+interface ModeTabProps {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}
+
 /**
  * Single tab in the Log In / Sign Up toggle.  Renders as a button
  * inside the toggle's bordered shell so the active tab has a
  * background fill without breaking the surrounding border.
- *
- * @param {object} props
- * @param {string} props.label
- * @param {boolean} props.active
- * @param {() => void} props.onClick
  */
-function ModeTab({ label, active, onClick }) {
+function ModeTab({ label, active, onClick }: ModeTabProps) {
   return (
     <button
       type="button"
@@ -336,21 +335,22 @@ function ModeTab({ label, active, onClick }) {
   );
 }
 
+interface FieldProps {
+  label: string;
+  id: string;
+  type: string;
+  autoComplete?: string | undefined;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string | undefined;
+}
+
 /**
  * Labelled form field.  Renders a small-caps label tied to its input
  * via `htmlFor` + `id` (WCAG 2.5 label association), the input itself,
  * and an optional faint hint line below.
- *
- * @param {object} props
- * @param {string} props.label
- * @param {string} props.id
- * @param {string} props.type        Native input type (text / email / password).
- * @param {string} [props.autoComplete]
- * @param {string} props.value
- * @param {(v: string) => void} props.onChange
- * @param {string} [props.hint]
  */
-function Field({ label, id, type, autoComplete, value, onChange, hint }) {
+function Field({ label, id, type, autoComplete, value, onChange, hint }: FieldProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label htmlFor={id} style={{
@@ -366,7 +366,7 @@ function Field({ label, id, type, autoComplete, value, onChange, hint }) {
         type={type}
         autoComplete={autoComplete}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         style={{
           background: ABYSS,
           border: `1px solid ${HAIRLINE}`,

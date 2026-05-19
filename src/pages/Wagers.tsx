@@ -68,10 +68,10 @@ export default function Wagers() {
   const db = useSupabase();
   const { user, profile, loading } = useAuth();
 
-  const [wagers,    setWagers]    = useState([]);
-  const [matchMap,  setMatchMap]  = useState({});
-  const [loaded,    setLoaded]    = useState(false);
-  const [loadError, setLoadError] = useState(null);
+  const [wagers, setWagers] = useState<any[]>([]);
+  const [matchMap, setMatchMap] = useState<Record<string, any>>({});
+  const [loaded,    setLoaded]    = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<any>(null);
   const [filter,    setFilter]    = useState(FILTER_ALL);
 
   // Fetch wager history + match metadata once the user is known.
@@ -90,7 +90,7 @@ export default function Wagers() {
         // Distinct match ids across the wager set — fed to a single
         // .in() query so we only round-trip once even when the user
         // has bet on dozens of matches.
-        const matchIds = Array.from(new Set(ws.map((w) => w.match_id)));
+        const matchIds = Array.from(new Set(ws.map((w: any) => w.match_id)));
         if (matchIds.length === 0) {
           setMatchMap({});
           setLoaded(true);
@@ -110,7 +110,7 @@ export default function Wagers() {
           console.warn('[Wagers] match meta fetch failed:', error.message);
           setMatchMap({});
         } else {
-          const map = {};
+          const map: Record<string, any> = {};
           for (const m of data ?? []) map[m.id] = m;
           setMatchMap(map);
         }
@@ -146,7 +146,7 @@ export default function Wagers() {
     let total = 0;
     for (const w of wagers) {
       if (w.status === 'won' || w.status === 'lost' || w.status === 'void') {
-        total += netCreditChange(w);
+        total += netCreditChange(w.status, w.stake, w.payout);
       }
     }
     return total;
@@ -163,6 +163,7 @@ export default function Wagers() {
     return (
       <Shell>
         <p style={{
+        ...(undefined as any),
           color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
         }}>
           Restoring your session…
@@ -192,6 +193,7 @@ export default function Wagers() {
 
         {loadError && (
           <p style={{
+        ...(undefined as any),
             color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
           }}>
             Wager history unavailable. The bookie&rsquo;s ledger is locked.
@@ -199,6 +201,7 @@ export default function Wagers() {
         )}
         {!loadError && !loaded && (
           <p style={{
+        ...(undefined as any),
             color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
           }}>
             Counting your stakes…
@@ -209,6 +212,7 @@ export default function Wagers() {
         )}
         {!loadError && loaded && wagers.length > 0 && visibleWagers.length === 0 && (
           <p style={{
+        ...(undefined as any),
             color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
           }}>
             No wagers in this filter.  Try a different status chip.
@@ -229,9 +233,10 @@ export default function Wagers() {
  *
  * @param {{ children: React.ReactNode, username?: string }} props
  */
-function Shell({ children, username }) {
+function Shell({ children, username  }: any) {
   return (
     <div style={{
+        ...(undefined as any),
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
@@ -270,7 +275,7 @@ function Shell({ children, username }) {
  * @param {{ open: number, won: number, lost: number, void: number }} props.counts
  * @param {number} props.netPnl
  */
-function SummaryCard({ credits, counts, netPnl }) {
+function SummaryCard({ credits, counts, netPnl  }: any) {
   const settled = counts.won + counts.lost + counts.void;
   // Net P&L tri-state colour: flare when red, terra-nova when green,
   // dust when zero (neutral, not yet settled).
@@ -279,6 +284,7 @@ function SummaryCard({ credits, counts, netPnl }) {
 
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 32,
       marginTop: 24,
@@ -304,10 +310,11 @@ function SummaryCard({ credits, counts, netPnl }) {
  * @param {string} props.value
  * @param {string} [props.accent]
  */
-function SummaryCell({ label, value, accent }) {
+function SummaryCell({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div>
       <div style={{
+        ...(undefined as any),
         fontSize: 11,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
@@ -317,6 +324,7 @@ function SummaryCell({ label, value, accent }) {
         {label}
       </div>
       <div style={{
+        ...(undefined as any),
         fontSize: 22,
         fontWeight: 700,
         color: accent ?? DUST,
@@ -339,8 +347,8 @@ function SummaryCell({ label, value, accent }) {
  * @param {{ open: number, won: number, lost: number, void: number }} props.counts
  * @param {number} props.totalCount
  */
-function FilterStrip({ active, onChange, counts, totalCount }) {
-  const labelFor = (key) => {
+function FilterStrip({ active, onChange, counts, totalCount }: { active: string; onChange: (next: string) => void; counts: any; totalCount: number }) {
+  const labelFor = (key: string) => {
     switch (key) {
       case FILTER_ALL:  return `All (${totalCount})`;
       case FILTER_OPEN: return `Open (${counts.open})`;
@@ -352,7 +360,7 @@ function FilterStrip({ active, onChange, counts, totalCount }) {
   };
   // Win / loss / void carry hue accents so the active chip cue matches
   // the row colouring in the table below.
-  const accentFor = (key) => {
+  const accentFor = (key: string) => {
     if (key === FILTER_WON)  return DUST;
     if (key === FILTER_LOST) return FLARE;
     if (key === FILTER_VOID) return DUST_50;
@@ -361,18 +369,20 @@ function FilterStrip({ active, onChange, counts, totalCount }) {
 
   return (
     <div style={{
+        ...(undefined as any),
       display: 'flex',
       flexWrap: 'wrap',
       gap: 8,
       paddingBottom: 16,
       borderBottom: `1px solid ${HAIRLINE}`,
     }}>
-      {FILTER_ORDER.map((key) => (
+      {FILTER_ORDER.map((key: string) => (
         <button
           key={key}
           type="button"
           onClick={() => onChange(key)}
           style={{
+        ...(undefined as any),
             background: active === key ? COLORS.dustFaint : 'transparent',
             border: `1px solid ${HAIRLINE}`,
             color: accentFor(key) ?? DUST,
@@ -402,18 +412,21 @@ function FilterStrip({ active, onChange, counts, totalCount }) {
 function EmptyHistory() {
   return (
     <div style={{
+        ...(undefined as any),
       border: `1px solid ${HAIRLINE}`,
       padding: 32,
       marginTop: 24,
       maxWidth: 560,
     }}>
       <h3 style={{
+        ...(undefined as any),
         fontSize: 22, fontWeight: 700, textTransform: 'uppercase',
         margin: 0, letterSpacing: '0.01em',
       }}>
         No Wagers Placed
       </h3>
       <p style={{
+        ...(undefined as any),
         fontSize: 14, lineHeight: 1.7, color: DUST_70, margin: '16px 0 24px',
       }}>
         The ledger is empty.  Pick a scheduled match and stake at least 10
@@ -434,10 +447,11 @@ function EmptyHistory() {
  * @param {Array<object>} props.wagers
  * @param {Record<string, object>} props.matchMap
  */
-function WagersTable({ wagers, matchMap }) {
+function WagersTable({ wagers, matchMap }: { wagers: any[]; matchMap: Record<string, any> }) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}`, overflowX: 'auto', marginTop: 24 }}>
       <table style={{
+        ...(undefined as any),
         width: '100%',
         borderCollapse: 'collapse',
         fontSize: 13,
@@ -454,7 +468,7 @@ function WagersTable({ wagers, matchMap }) {
           </tr>
         </thead>
         <tbody>
-          {wagers.map((w) => (
+          {wagers.map((w: any) => (
             <WagerRow key={w.id} wager={w} match={matchMap[w.match_id] ?? null} />
           ))}
         </tbody>
@@ -474,7 +488,7 @@ function WagersTable({ wagers, matchMap }) {
  * @param {object} props.wager
  * @param {object | null} props.match
  */
-function WagerRow({ wager, match }) {
+function WagerRow({ wager, match }: { wager: any; match: any | null }) {
   const homeName = match?.home_team?.name ?? '?';
   const awayName = match?.away_team?.name ?? '?';
   const scoreLabel = match && match.status === 'completed'
@@ -485,7 +499,7 @@ function WagerRow({ wager, match }) {
   const statusColour = statusColourFor(wager.status);
 
   const net = wager.status === 'won' || wager.status === 'lost' || wager.status === 'void'
-    ? netCreditChange(wager)
+    ? netCreditChange(wager.status, wager.stake, wager.payout)
     : null;
 
   return (
@@ -493,6 +507,7 @@ function WagerRow({ wager, match }) {
       <td style={wagerTd}>
         {match ? (
           <Link to={`/matches/${match.id}`} style={{
+        ...(undefined as any),
             color: DUST, textDecoration: 'none',
           }}>
             <span style={{ fontWeight: 700 }}>{homeName}</span>
@@ -515,6 +530,7 @@ function WagerRow({ wager, match }) {
       </td>
       <td style={wagerTd}>
         <span style={{
+        ...(undefined as any),
           display: 'inline-flex',
           alignItems: 'center',
           padding: '3px 8px',
@@ -529,6 +545,7 @@ function WagerRow({ wager, match }) {
         </span>
       </td>
       <td style={{
+        ...(undefined as any),
         ...wagerTd,
         textAlign: 'right',
         fontWeight: 700,
@@ -549,8 +566,8 @@ function WagerRow({ wager, match }) {
   );
 }
 
-const wagerTd = { textAlign: 'left', padding: '12px 16px' };
-const wagerTh = {
+const wagerTd: React.CSSProperties = { textAlign: 'left', padding: '12px 16px' };
+const wagerTh: React.CSSProperties = {
   textAlign: 'left',
   padding: '12px 16px',
   fontSize: 11,
@@ -568,7 +585,7 @@ const wagerTh = {
  * @param {string} choice
  * @returns {string}
  */
-function sideLabelFor(choice) {
+function sideLabelFor(choice: string) {
   if (choice === 'home') return 'Home Win';
   if (choice === 'draw') return 'Draw';
   if (choice === 'away') return 'Away Win';
@@ -586,7 +603,7 @@ function sideLabelFor(choice) {
  * @param {string} status
  * @returns {string}
  */
-function statusColourFor(status) {
+function statusColourFor(status: string) {
   if (status === 'lost') return FLARE;
   if (status === 'void') return DUST_50;
   return DUST;

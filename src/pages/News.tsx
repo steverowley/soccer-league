@@ -96,7 +96,7 @@ const NARRATIVE_KINDS = [
 // KIND_BY_KEY — lookup map built once at module load.  Saves a
 // per-render Array.find() call inside NarrativeCard (the feed can show
 // 30–50 cards at a time on Load More).
-const KIND_BY_KEY = Object.fromEntries(NARRATIVE_KINDS.map((k) => [k.key, k]));
+const KIND_BY_KEY = Object.fromEntries(NARRATIVE_KINDS.map((k: any) => [k.key, k]));
 
 // FILTER_ALL — sentinel for the unfiltered view.
 const FILTER_ALL = 'all';
@@ -123,9 +123,9 @@ export default function News() {
   const [filter, setFilter] = useState(FILTER_ALL);
   const [limit,  setLimit]  = useState(PAGE_SIZE);
 
-  const [rows,      setRows]      = useState([]);
-  const [loadError, setLoadError] = useState(null);
-  const [loaded,    setLoaded]    = useState(false);
+  const [rows,      setRows]      = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<any>(null);
+  const [loaded,    setLoaded]    = useState<boolean>(false);
 
   // Fetch effect — re-fires on (db, filter, limit).  The early-cancel
   // flag prevents a stale fetch from overwriting newer results when
@@ -152,7 +152,7 @@ export default function News() {
 
   // When the reader switches filters, drop back to the first page so
   // they don't carry a 60-row cap forward and pay for it again.
-  const onFilterChange = (next) => {
+  const onFilterChange = (next: string) => {
     setFilter(next);
     setLimit(PAGE_SIZE);
   };
@@ -219,7 +219,7 @@ export default function News() {
                 listStyle: 'none', padding: 0, margin: '24px 0 0',
                 display: 'flex', flexDirection: 'column', gap: 12,
               }}>
-                {rows.map((n) => (
+                {rows.map((n: any) => (
                   <li key={n.id}>
                     <NarrativeCard narrative={n} />
                   </li>
@@ -251,7 +251,7 @@ export default function News() {
  * @param {string} props.active
  * @param {(next: string) => void} props.onChange
  */
-function KindFilter({ active, onChange }) {
+function KindFilter({ active, onChange  }: any) {
   return (
     <div style={{
       display: 'flex',
@@ -265,7 +265,7 @@ function KindFilter({ active, onChange }) {
         active={active === FILTER_ALL}
         onClick={() => onChange(FILTER_ALL)}
       />
-      {NARRATIVE_KINDS.map((kind) => (
+      {NARRATIVE_KINDS.map((kind: any) => (
         <KindChip
           key={kind.key}
           label={kind.label}
@@ -289,7 +289,7 @@ function KindFilter({ active, onChange }) {
  * @param {boolean} props.active
  * @param {() => void} props.onClick
  */
-function KindChip({ label, pip, active, onClick }) {
+function KindChip({ label, pip, active, onClick  }: any) {
   return (
     <button
       type="button"
@@ -342,7 +342,7 @@ function KindChip({ label, pip, active, onClick }) {
  *
  * @param {{ narrative: object }} props
  */
-function NarrativeCard({ narrative }) {
+function NarrativeCard({ narrative  }: any) {
   const kindMeta = KIND_BY_KEY[narrative.kind] ?? null;
   const border   = kindMeta?.border ?? HAIRLINE;
   const glow     = kindMeta?.glow;
@@ -407,7 +407,7 @@ function NarrativeCard({ narrative }) {
  *
  * @param {{ onClick: () => void }} props
  */
-function LoadMoreButton({ onClick }) {
+function LoadMoreButton({ onClick  }: any) {
   return (
     <button
       type="button"
@@ -441,7 +441,7 @@ function LoadMoreButton({ onClick }) {
  * @param {string | null | undefined} iso
  * @returns {string}
  */
-function formatRelativeTime(iso) {
+function formatRelativeTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '—';
@@ -465,8 +465,8 @@ function formatRelativeTime(iso) {
  * @param {string} key
  * @returns {string}
  */
-function prettifyKind(key) {
+function prettifyKind(key: string): string {
   return (key ?? 'narrative')
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .replace(/\b\w/g, (c: string) => c.toUpperCase());
 }

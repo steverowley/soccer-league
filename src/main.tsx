@@ -75,7 +75,7 @@ import Login         from './pages/Login';
 import Profile       from './pages/Profile';
 import Wagers        from './pages/Wagers';
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Error boundary outside everything so render errors anywhere in the
         tree — including providers and listeners — show the fallback. */}

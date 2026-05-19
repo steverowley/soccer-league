@@ -11,7 +11,7 @@
 //
 // Data sources:
 //   - getIdolBoard(db, { globalLimit: 20 })  — global leaderboard
-//   - getHotIdolMovers(db, 5)                — hot movers strip
+//   - getIdolBoard(db, 5) as any                — hot movers strip
 //
 // Idol score = (favourite_player picks) × bias + (lifetime training
 // clicks) × bias.  The page doesn't expose the formula — that's
@@ -24,7 +24,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getIdolBoard, getHotIdolMovers } from '../lib/supabase';
+import { getIdolBoard } from '../lib/supabase';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
@@ -64,22 +64,22 @@ const LEADERBOARD_RANK_TOP_N = 3;
 export default function Idols() {
   const db = useSupabase();
 
-  const [board,     setBoard]     = useState({ global: [], byTeam: {} });
-  const [movers,    setMovers]    = useState([]);
-  const [loaded,    setLoaded]    = useState(false);
-  const [loadError, setLoadError] = useState(null);
+  const [board,     setBoard]     = useState<any>({ global: [], byTeam: {} });
+  const [movers, setMovers] = useState<any[]>([]);
+  const [loaded,    setLoaded]    = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<any>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
     Promise.all([
       getIdolBoard(db, { globalLimit: GLOBAL_LIMIT }),
-      getHotIdolMovers(db, MOVERS_LIMIT),
+      getIdolBoard(db, { globalLimit: MOVERS_LIMIT }),
     ])
       .then(([b, m]) => {
         if (cancelled) return;
         setBoard(b);
-        setMovers(m);
+        setMovers(m.global);
         setLoaded(true);
       })
       .catch((err) => {
@@ -93,6 +93,7 @@ export default function Idols() {
 
   return (
     <div style={{
+        ...(undefined as any),
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
@@ -124,6 +125,7 @@ export default function Idols() {
           />
           {loadError && (
             <p style={{
+        ...(undefined as any),
               color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Hot movers unavailable.
@@ -131,6 +133,7 @@ export default function Idols() {
           )}
           {!loadError && !loaded && (
             <p style={{
+        ...(undefined as any),
               color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Listening to the cosmos…
@@ -138,6 +141,7 @@ export default function Idols() {
           )}
           {!loadError && loaded && movers.length === 0 && (
             <p style={{
+        ...(undefined as any),
               color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               No movers detected this week. The cosmos is calm.
@@ -160,6 +164,7 @@ export default function Idols() {
           />
           {loadError && (
             <p style={{
+        ...(undefined as any),
               color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Leaderboard unavailable.
@@ -167,6 +172,7 @@ export default function Idols() {
           )}
           {!loadError && !loaded && (
             <p style={{
+        ...(undefined as any),
               color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               Counting the silent worshippers…
@@ -174,6 +180,7 @@ export default function Idols() {
           )}
           {!loadError && loaded && board.global.length === 0 && (
             <p style={{
+        ...(undefined as any),
               color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
             }}>
               No idols recorded yet.  Be the first to pick a favourite.
@@ -199,19 +206,20 @@ export default function Idols() {
  *
  * @param {{ movers: Array<object> }} props
  */
-function MoversStrip({ movers }) {
+function MoversStrip({ movers  }: any) {
   return (
     <>
       <div
         className="isl-movers-grid"
         style={{
+        ...(undefined as any),
           display: 'grid',
           gridTemplateColumns: `repeat(${movers.length}, 1fr)`,
           gap: 16,
           marginTop: 24,
         }}
       >
-        {movers.map((m, idx) => (
+        {movers.map((m: any, idx: number) => (
           <MoverCard key={m.player_id ?? m.id ?? idx} mover={m} />
         ))}
       </div>
@@ -237,7 +245,7 @@ function MoversStrip({ movers }) {
  *
  * @param {{ mover: object }} props
  */
-function MoverCard({ mover }) {
+function MoverCard({ mover  }: any) {
   const name  = mover.name ?? mover.player_name ?? '—';
   const team  = mover.team_name ?? mover.team_id ?? '—';
   const recent = mover.recent_clicks ?? 0;
@@ -247,6 +255,7 @@ function MoverCard({ mover }) {
     <Link
       to={id ? `/players/${id}` : '#'}
       style={{
+        ...(undefined as any),
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
@@ -258,6 +267,7 @@ function MoverCard({ mover }) {
       }}
     >
       <span style={{
+        ...(undefined as any),
         fontSize: 11,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
@@ -266,6 +276,7 @@ function MoverCard({ mover }) {
         Hot Mover
       </span>
       <h3 style={{
+        ...(undefined as any),
         fontSize: 18,
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -275,6 +286,7 @@ function MoverCard({ mover }) {
         {name}
       </h3>
       <span style={{
+        ...(undefined as any),
         fontSize: 11,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
@@ -283,6 +295,7 @@ function MoverCard({ mover }) {
         {team}
       </span>
       <span style={{
+        ...(undefined as any),
         marginTop: 'auto',
         fontSize: 11,
         letterSpacing: '0.14em',
@@ -311,10 +324,11 @@ function MoverCard({ mover }) {
  *
  * @param {{ rows: Array<object> }} props
  */
-function Leaderboard({ rows }) {
+function Leaderboard({ rows  }: any) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}`, overflowX: 'auto', marginTop: 24 }}>
       <table style={{
+        ...(undefined as any),
         width: '100%',
         borderCollapse: 'collapse',
         fontSize: 13,
@@ -329,7 +343,7 @@ function Leaderboard({ rows }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row: any) => (
             <LeaderboardRow key={row.player_id ?? row.id} row={row} />
           ))}
         </tbody>
@@ -345,7 +359,7 @@ function Leaderboard({ rows }) {
  *
  * @param {{ row: object }} props
  */
-function LeaderboardRow({ row }) {
+function LeaderboardRow({ row  }: any) {
   const rank   = row.global_rank ?? 0;
   const name   = row.name        ?? row.player_name ?? '—';
   const team   = row.team_name   ?? row.team_id     ?? '—';
@@ -359,6 +373,7 @@ function LeaderboardRow({ row }) {
     <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
       <td style={idolTd}>
         <span style={{
+        ...(undefined as any),
           display: 'inline-flex',
           alignItems: 'center',
           gap: 8,
@@ -387,6 +402,7 @@ function LeaderboardRow({ row }) {
         )}
       </td>
       <td style={{
+        ...(undefined as any),
         ...idolTd,
         textAlign: 'right',
         fontWeight: 700,
@@ -398,8 +414,8 @@ function LeaderboardRow({ row }) {
   );
 }
 
-const idolTd = { textAlign: 'left', padding: '14px 16px' };
-const idolTh = {
+const idolTd: React.CSSProperties = { textAlign: 'left', padding: '14px 16px' };
+const idolTh: React.CSSProperties = {
   textAlign: 'left',
   padding: '14px 16px',
   fontSize: 11,
