@@ -170,7 +170,7 @@ export default function News() {
       <Header />
 
       {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 0 16px' }}>
+      <section style={{ padding: '48px 16px 16px' }}>
         <Container>
           <SectionHeader
             pageKicker="Dispatch"
@@ -183,14 +183,14 @@ export default function News() {
       </section>
 
       {/* Section II — Kind filter. */}
-      <section style={{ padding: '0 0 16px' }}>
+      <section style={{ padding: '0 16px 16px' }}>
         <Container>
           <KindFilter active={filter} onChange={onFilterChange} />
         </Container>
       </section>
 
       {/* Section III — Feed. */}
-      <section style={{ padding: '0 0 80px' }}>
+      <section style={{ padding: '0 16px 80px' }}>
         <Container>
           {!loaded && (
             <p style={{
