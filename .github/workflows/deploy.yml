@@ -4,22 +4,46 @@ on:
   push:
     branches:
       - main
-      - dev
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
+  actions: write
 
 jobs:
-  build-and-deploy-main:
-    if: github.ref == 'refs/heads/main'
+  build:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
+          VITE_ADMIN_USER_IDS: ${{ secrets.VITE_ADMIN_USER_IDS }}
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: main
       url: ${{ steps.deployment.outputs.page_url }}
@@ -44,15 +68,27 @@ jobs:
 
       # Pages must be enabled out-of-band before this step succeeds:
       #   Settings → Pages → Build and deployment → Source: GitHub Actions
-      # PR #224 + #225 tried to auto-provision via `enablement: true` +
-      # `administration: write`; both were defeated by an org-level
-      # Actions permission policy that refuses to grant administration
-      # scope to the workflow's GITHUB_TOKEN.  Until the policy
-      # changes, the UI click is the only path — keeping this step
-      # plain so the failure message stays readable when Pages is
-      # disabled.
       - name: Setup Pages
         uses: actions/configure-pages@v4
+
+      - name: Delete stale github-pages artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'github-pages',
+              per_page: 100,
+            });
+            for (const artifact of data.artifacts) {
+              console.log(`Deleting stale artifact ${artifact.id} (${artifact.created_at})`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+              });
+            }
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -62,25 +98,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-  build-dev:
-    if: github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-        env:
-          VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
-          VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
-          VITE_ADMIN_USER_IDS: ${{ secrets.VITE_ADMIN_USER_IDS }}

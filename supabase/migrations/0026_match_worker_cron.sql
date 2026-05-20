@@ -9,7 +9,7 @@ SELECT cron.schedule(
   '* * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://ddtpbipkqamuxnvupddc.supabase.co/functions/v1/clever-processor',
+    url := 'https://ddtpbipkqamuxnvupddc.supabase.co/functions/v1/match-worker',
     body := '{}'::jsonb,
     headers := jsonb_build_object('Content-Type', 'application/json')
   ) AS request_id;
