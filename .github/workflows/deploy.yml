@@ -12,14 +12,15 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   build-and-deploy-main:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Only the Pages deployment needs the concurrency guard — dev builds
+    # don't deploy anywhere so they must not share this group.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: main
       url: ${{ steps.deployment.outputs.page_url }}
