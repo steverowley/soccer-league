@@ -107,12 +107,23 @@ async function claimDueMatches() {
 
 /**
  * Fetch a single team by ID including all relations (manager, players).
- * Returns null if the team doesn't exist or fetch fails.
+ *
+ * The select intentionally requests only the five canonical player stat
+ * columns that exist in `public.players` (attacking, defending, mental,
+ * technical, athletic) — see migration 0000_init.sql.  The engine's expanded
+ * stat surface (passing, dribbling, speed, stamina, positioning, vision,
+ * goalkeeping, aggression, strength) is *derived* at runtime by
+ * normalizeTeamForEngine(), which defaults missing fields to 70.  Asking
+ * PostgREST for columns that don't exist returns a 400 from the boundary,
+ * causing fetchTeamForSimulation to return null and the whole batch to revert.
+ *
+ * @param teamId - Slug (text PK) of the team to load.
+ * @returns      Team row with nested managers[] and players[], or null on error.
  */
 async function fetchTeamForSimulation(teamId: string) {
   const { data, error } = await supabase
     .from('teams')
-    .select('id, name, location, home_ground, managers(id, name, attacking, defending, mental, athletic, technical), players(id, name, position, age, jersey_number, starter, attacking, defending, passing, dribbling, speed, stamina, strength, positioning, vision, goalkeeping, aggression, mental, technical, athletic, is_active)')
+    .select('id, name, location, home_ground, managers(id, name, attacking, defending, mental, athletic, technical), players(id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
     .eq('id', teamId)
     .single();
 
@@ -158,6 +169,23 @@ async function processMatch(match: any): Promise<boolean> {
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
+    // ── Append a terminal MVP event ────────────────────────────────────────
+    // The matches table has no mvp column, so we surface the engine-chosen
+    // MVP as a final event in match_events at minute=91 (a sentinel value
+    // beyond regulation, before stoppage-time events would land).  This
+    // keeps MVP-derived narratives, idol score boosts, and post-match UI
+    // rendering working off a single source of truth — the events feed —
+    // and means a missing-column schema drift can never silently erase the
+    // result of a successful 90-minute simulation again.
+    if (result.mvp && result.mvp !== '—') {
+      result.events.push({
+        minute: 91,
+        subminute: 0,
+        type: 'mvp',
+        payload: { player: result.mvp },
+      });
+    }
+
     // ── Persist events (batch-insert) ──────────────────────────────────────
     // The engine may produce 30–60 events; batch into chunks of 500
     // to avoid payload size limits.
@@ -183,13 +211,19 @@ async function processMatch(match: any): Promise<boolean> {
     console.log(`[match-worker] Inserted ${result.events.length} events`);
 
     // ── Update match to completed ──────────────────────────────────────────
+    // The matches table only has columns for status / scores / timestamps —
+    // there is intentionally no `mvp_player_name` column.  The MVP is captured
+    // inside the final `mvp` event payload in match_events, where downstream
+    // views (player_idol_score, public match feed) read it from.  Updating a
+    // non-existent column here would throw at the PostgREST boundary and
+    // revert every match in this batch back to 'scheduled' — masking the
+    // simulation work that just succeeded.
     const { error: updateError } = await supabase
       .from('matches')
       .update({
         status: 'completed',
         home_score: result.finalScore[0],
         away_score: result.finalScore[1],
-        mvp_player_name: result.mvp,
       })
       .eq('id', match.id);
 
