@@ -256,18 +256,22 @@ export async function maybeTransitionSeasonForMatch(
   // The `/voting` UI lists rows from focus_options for the active season;
   // if we transition without seeding them the page renders empty until a
   // human runs the rollover script.  Generating them here means voting is
-  // live the instant the last league match completes.  Idempotent
-  // (upsert), so it's safe even on the lost-race branch — if some other
-  // path already populated them this is a no-op.
-  if (wonRace) {
-    try {
-      const focusSummary = await ensureFocusOptionsForSeason(db, competition.season_id);
-      if (focusSummary.rowsUpserted > 0) {
-        console.log(`[maybeTransitionSeasonForMatch] Generated focus_options: ${focusSummary.rowsUpserted} rows across ${focusSummary.teams} teams`);
-      }
-    } catch (e) {
-      console.warn('[maybeTransitionSeasonForMatch] focus-options generation failed:', e);
+  // live the instant the last league match completes.
+  //
+  // Run on BOTH the won-race and lost-race branches: only one worker wins
+  // the CAS that flips status to 'voting', so if that single seed attempt
+  // hits a transient DB error every other worker would skip and the
+  // season would stay in 'voting' with empty options until a human noticed.
+  // The upsert is idempotent on (team_id, season_id, option_key), so
+  // re-running from the lost-race branch is harmless when the winner
+  // already seeded and is automatic-recovery when it didn't.
+  try {
+    const focusSummary = await ensureFocusOptionsForSeason(db, competition.season_id);
+    if (focusSummary.rowsUpserted > 0) {
+      console.log(`[maybeTransitionSeasonForMatch] Generated focus_options: ${focusSummary.rowsUpserted} rows across ${focusSummary.teams} teams`);
     }
+  } catch (e) {
+    console.warn('[maybeTransitionSeasonForMatch] focus-options generation failed:', e);
   }
 
   return {
