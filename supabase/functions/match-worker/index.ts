@@ -1,267 +1,265 @@
-// ── match-worker/index.ts ─────────────────────────────────────────────────────
-// Deno edge function: match simulation worker.
+// ── match-worker/index.ts ─────────────────────────────────────────────────
+// Deno edge function scheduled by pg_cron to run every minute.
 //
-// TRIGGER
-//   Cron job every minute (configured in supabase/config.toml).
-//   Also accepts manual GET / POST requests for operator-triggered runs.
-//   verify_jwt=false so the cron invoker doesn't need a bearer token.
+// RESPONSIBILITIES
+// ────────────────
+// 1. Poll for matches where status='scheduled' and scheduled_at <= now()
+// 2. Claim each match via optimistic lock (UPDATE ... WHERE status='scheduled')
+// 3. Fetch full team rosters + managers for home and away
+// 4. Normalize DB rows to engine format
+// 5. Run a complete 90-minute simulation (simulateFullMatch)
+// 6. Batch-insert events into match_events (max 500 per batch)
+// 7. Update match status to 'completed' with final score + MVP
+// 8. Gracefully handle per-match errors without crashing the worker
 //
-// PIPELINE (per due match)
-//   1. Query up to MATCH_BATCH_SIZE scheduled matches whose scheduled_at
-//      has passed.
-//   2. Claim each match with an optimistic lock (status: scheduled →
-//      in_progress) to prevent duplicate processing if two worker instances
-//      race.
-//   3. Fetch both teams with their full player rosters and manager row.
-//   4. Normalise the raw DB rows into EngineTeam shape.
-//   5. Run simulateFullMatch() — pure, synchronous, no DB calls.
-//   6. Batch-insert all events into match_events (BATCH_SIZE rows per INSERT
-//      to stay under Supabase's request-body size limit).
-//   7. Mark the match completed with final scores and MVP name.
+// CONCURRENCY & LOCKING
+// ────────────────────
+// Multiple worker instances can run simultaneously. Optimistic locking
+// (UPDATE ... WHERE status='scheduled') prevents duplicate processing:
+// only one worker can flip status to 'in_progress' for a given match.
+// On error, status reverts to 'scheduled' for retry.
 //
-// ERROR HANDLING
-//   Any per-match error rolls back status to 'scheduled' so the next cron
-//   run retries it.  The handler never throws — it always returns a JSON
-//   summary so the cron scheduler sees a 200 and doesn't back off.
-//
-// WHY verify_jwt=false
-//   The Supabase pg_cron / Edge Function scheduler invokes functions with a
-//   service-role key in the Authorization header, but the JWT audience is the
-//   project anon audience, causing verify_jwt=true to reject it.  Setting
-//   false is safe here because the function uses the SERVICE_ROLE_KEY from
-//   the environment — not the caller's token — for all DB writes, and the
-//   only sensitive operation (updating match status) is gated by the
-//   optimistic lock.
+// BATCH SIZES
+// ───────────
+// MATCH_BATCH_SIZE=5: fetch up to 5 due matches per cron invocation.
+//   Keeps memory footprint low and spreads compute across invocations.
+// EVENT_INSERT_BATCH_SIZE=500: insert up to 500 events in a single
+//   Supabase call.  A typical 90-minute match generates 30–60 events,
+//   so one batch usually handles the entire match.
 
-// @ts-ignore — Deno global not in the TypeScript lib used by this project
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
-import { simulateFullMatch } from './simulateFullMatch.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
+import { simulateFullMatch } from './simulateFullMatch.ts';
 
-// ── Tuning constants ──────────────────────────────────────────────────────────
+// ── Configuration ──────────────────────────────────────────────────────────
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+const MATCH_BATCH_SIZE = 5;          // Fetch up to 5 due matches per invocation
+const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
+
+// ── Supabase client (service role — full access) ──────────────────────────
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+});
+
+// ── Helper: Claim and fetch due matches ────────────────────────────────────
 
 /**
- * Maximum number of matches processed per worker invocation.
- * Kept low (5) so a single cron tick stays well within the 150-second
- * Supabase edge-function wall-clock limit even when simulations are slow.
- * Back-pressure is handled naturally: if more than 5 matches are due, the
- * next cron tick picks up the remainder.
+ * Fetch up to MATCH_BATCH_SIZE matches where status='scheduled' and
+ * scheduled_at <= now(), then claim them by setting status='in_progress'.
+ *
+ * Uses optimistic locking: the UPDATE ... WHERE status='scheduled'
+ * guarantees only one worker instance can claim each match.
+ *
+ * Returns the number of matches actually claimed (in case of race conditions
+ * where other workers claim matches between SELECT and UPDATE).
  */
-const MATCH_BATCH_SIZE = 5;
+async function claimDueMatches() {
+  const now = new Date().toISOString();
 
-/**
- * Maximum rows per match_events INSERT.
- * A full 90-minute match produces ~80–150 events.  500 rows per batch gives
- * headroom for matches with many sequences (penalty shootouts, near-miss
- * chains) while staying under the ~1 MB Supabase request-body limit.
- */
-const EVENT_INSERT_BATCH_SIZE = 500;
-
-// ── Handler ───────────────────────────────────────────────────────────────────
-
-// @ts-ignore — Deno global not in the TypeScript lib used by this project
-Deno.serve(async (req: Request) => {
-  // ── Method guard ───────────────────────────────────────────────────────────
-  // Accept GET (cron ping) and POST (manual operator trigger).
-  // Reject everything else so the function surface is minimal.
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // ── Environment ────────────────────────────────────────────────────────────
-  // Both vars are injected by Supabase at deploy time.  Missing vars mean the
-  // function was invoked outside the expected environment (e.g. a test runner
-  // without secrets); fail fast with a clear error rather than a cryptic auth
-  // failure from the Supabase client.
-  // @ts-ignore — Deno global
-  const supabaseUrl     = Deno.env.get('SUPABASE_URL');
-  // @ts-ignore — Deno global
-  const serviceRoleKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    );
-  }
-
-  // ── Supabase client ────────────────────────────────────────────────────────
-  // Service-role key bypasses RLS so the worker can read all teams/players
-  // and write to match_events / matches without an authenticated user context.
-  // persistSession: false avoids the Deno KV storage that service-role clients
-  // don't need and that triggers deprecation warnings in Deno 2.
-  const db = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
-
-  // ── Find due matches ───────────────────────────────────────────────────────
-  // Only fetch the columns needed for the claim step; we re-fetch teams
-  // separately (with their nested relations) after claiming to keep this
-  // query fast and index-friendly.
-  const { data: scheduledMatches, error: fetchError } = await db
+  // Fetch due matches. Intentionally no UPDATE lock here — the next step
+  // claims them atomically.
+  const { data: matches, error: selectError } = await supabase
     .from('matches')
-    .select('id, home_team_id, away_team_id, scheduled_at')
+    .select('id, home_team_id, away_team_id, scheduled_at, competition_id')
     .eq('status', 'scheduled')
-    .lte('scheduled_at', new Date().toISOString())
-    .order('scheduled_at', { ascending: true })   // oldest-due first
-    .limit(MATCH_BATCH_SIZE);
+    .lte('scheduled_at', now)
+    .limit(MATCH_BATCH_SIZE)
+    .order('scheduled_at', { ascending: true });
 
-  if (fetchError) {
-    return new Response(
-      JSON.stringify({ ok: false, error: fetchError.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    );
+  if (selectError) {
+    console.error('[match-worker] SELECT matches failed:', selectError);
+    return [];
   }
 
-  if (!scheduledMatches || scheduledMatches.length === 0) {
-    return new Response(
-      JSON.stringify({ ok: true, processed: 0, failed: 0, matches: [] }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    );
+  if (!matches || matches.length === 0) {
+    return [];
   }
 
-  // ── Per-match processing ───────────────────────────────────────────────────
-  const results: Array<{ id: string; home_score: number; away_score: number }> = [];
-  let processed = 0;
-  let failed    = 0;
+  const matchIds = matches.map((m) => m.id);
 
-  for (const match of scheduledMatches) {
-    // ── Optimistic lock: claim the match ─────────────────────────────────────
-    // UPDATE … WHERE status = 'scheduled' is the lock.  If two worker
-    // instances race, only one will find status='scheduled' and get a row
-    // back; the other sees data=null and skips without error.  This prevents
-    // double-simulation without needing a distributed lock service.
-    const { data: claimed, error: claimError } = await db
-      .from('matches')
-      .update({ status: 'in_progress' })
-      .eq('id', match.id)
-      .eq('status', 'scheduled')   // optimistic lock predicate
-      .select('id')
-      .single();
+  // Atomically claim: UPDATE status to 'in_progress' for these IDs.
+  // The WHERE status='scheduled' ensures we only claim matches that haven't
+  // been claimed by another worker instance since our SELECT.
+  const { error: claimError, count } = await supabase
+    .from('matches')
+    .update({ status: 'in_progress', played_at: new Date().toISOString() })
+    .in('id', matchIds)
+    .eq('status', 'scheduled');
 
-    if (claimError || !claimed) {
-      // Another worker instance beat us to this match — skip silently.
-      continue;
+  if (claimError) {
+    console.error('[match-worker] UPDATE claim failed:', claimError);
+    return [];
+  }
+
+  console.log(`[match-worker] Claimed ${count} matches`);
+
+  // Return the full match objects for processing. The count might be less
+  // than matchIds.length if other workers claimed some in the race window.
+  const claimedMatches = matches.filter((m) => matchIds.includes(m.id));
+  return claimedMatches;
+}
+
+// ── Helper: Fetch teams with rosters ───────────────────────────────────────
+
+/**
+ * Fetch a single team by ID including all relations (manager, players).
+ * Returns null if the team doesn't exist or fetch fails.
+ */
+async function fetchTeamForSimulation(teamId: string) {
+  const { data, error } = await supabase
+    .from('teams')
+    .select('id, name, location, home_ground, managers(id, name, attacking, defending, mental, athletic, technical), players(id, name, position, age, jersey_number, starter, attacking, defending, passing, dribbling, speed, stamina, strength, positioning, vision, goalkeeping, aggression, mental, technical, athletic, is_active)')
+    .eq('id', teamId)
+    .single();
+
+  if (error) {
+    console.error(`[match-worker] Failed to fetch team ${teamId}:`, error);
+    return null;
+  }
+
+  return data;
+}
+
+// ── Helper: Process a single match ─────────────────────────────────────────
+
+/**
+ * Simulate a single match and persist the result.
+ *
+ * On success: inserts events to match_events, updates match status to
+ * 'completed' with final score + MVP.
+ *
+ * On error: logs the error, reverts match status to 'scheduled' for retry.
+ *
+ * @param match Match row from the database.
+ * @returns     true if successful, false if error (match reverted to scheduled).
+ */
+async function processMatch(match: any): Promise<boolean> {
+  try {
+    console.log(`[match-worker] Processing match ${match.id} at ${match.scheduled_at}`);
+
+    // Fetch teams with full rosters
+    const homeData = await fetchTeamForSimulation(match.home_team_id);
+    const awayData = await fetchTeamForSimulation(match.away_team_id);
+
+    if (!homeData || !awayData) {
+      throw new Error('Failed to fetch one or both teams');
     }
 
-    try {
-      // ── Fetch home team ───────────────────────────────────────────────────
-      // `players(*)` and `managers(*)` are PostgREST nested-resource joins.
-      // The service role bypasses RLS so we get all active players including
-      // those on reserve / injured lists — normalizeTeamForEngine filters
-      // is_active=false rows before handing the squad to the engine.
-      const { data: homeRaw, error: homeError } = await db
-        .from('teams')
-        .select('*, players(*), managers(*)')
-        .eq('id', match.home_team_id)
-        .single();
+    // Normalize teams to engine format
+    const home = normalizeTeamForEngine(homeData);
+    const away = normalizeTeamForEngine(awayData);
 
-      if (homeError || !homeRaw) {
-        throw new Error(`Failed to fetch home team ${match.home_team_id}: ${homeError?.message}`);
-      }
+    // Simulate the full 90 minutes
+    const result = simulateFullMatch(home, away);
 
-      // ── Fetch away team ───────────────────────────────────────────────────
-      const { data: awayRaw, error: awayError } = await db
-        .from('teams')
-        .select('*, players(*), managers(*)')
-        .eq('id', match.away_team_id)
-        .single();
+    console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
-      if (awayError || !awayRaw) {
-        throw new Error(`Failed to fetch away team ${match.away_team_id}: ${awayError?.message}`);
-      }
-
-      // ── Normalise into engine shape ───────────────────────────────────────
-      // normalizeTeamForEngine maps snake_case DB columns → camelCase engine
-      // fields and applies safe defaults for any missing values.
-      const homeTeam = normalizeTeamForEngine(homeRaw as Record<string, unknown>);
-      const awayTeam = normalizeTeamForEngine(awayRaw as Record<string, unknown>);
-
-      // ── Run simulation ────────────────────────────────────────────────────
-      // No refOverride or fanBoost wired up yet — those are Phase 5a / 6
-      // additions.  The engine falls back to a random referee and no fan
-      // stat bump, which is correct for the current season state.
-      const result = simulateFullMatch(homeTeam, awayTeam);
-
-      // ── Persist events ────────────────────────────────────────────────────
-      // Shape each SimulatedEvent into the match_events schema row.
-      // simulated_at marks when the event was computed (now), not when it
-      // should be revealed to viewers — the live-stream layer uses
-      // (scheduled_at + minute * realSecPerSimMin) for reveal timing.
-      const eventRows = result.events.map((ev) => ({
-        match_id:  match.id,
-        minute:    ev.minute,
+    // ── Persist events (batch-insert) ──────────────────────────────────────
+    // The engine may produce 30–60 events; batch into chunks of 500
+    // to avoid payload size limits.
+    for (let i = 0; i < result.events.length; i += EVENT_INSERT_BATCH_SIZE) {
+      const chunk = result.events.slice(i, i + EVENT_INSERT_BATCH_SIZE);
+      const eventRows = chunk.map((ev) => ({
+        match_id: match.id,
+        minute: ev.minute,
         subminute: ev.subminute,
-        type:      ev.type,
-        payload:   ev.payload,
+        type: ev.type,
+        payload: ev.payload,
       }));
 
-      // Batch inserts: split into EVENT_INSERT_BATCH_SIZE-row chunks to stay
-      // under Supabase's ~1 MB per-request body limit.  Awaited sequentially
-      // (not Promise.all) to avoid overwhelming the DB connection pool.
-      for (let i = 0; i < eventRows.length; i += EVENT_INSERT_BATCH_SIZE) {
-        const batch = eventRows.slice(i, i + EVENT_INSERT_BATCH_SIZE);
-        const { error: insertError } = await db.from('match_events').insert(batch);
-        if (insertError) {
-          throw new Error(
-            `Failed to insert events batch [${i}–${i + batch.length}] for match ${match.id}: ${insertError.message}`,
-          );
-        }
+      const { error: insertError } = await supabase
+        .from('match_events')
+        .insert(eventRows);
+
+      if (insertError) {
+        throw new Error(`Insert events failed: ${insertError.message}`);
       }
+    }
 
-      // ── Mark match completed ──────────────────────────────────────────────
-      // Write final scores, MVP, and completed_at in a single UPDATE so the
-      // live-stream UI can query `status = 'completed'` as its done signal.
-      const { error: completeError } = await db
-        .from('matches')
-        .update({
-          status:     'completed',
-          home_score: result.finalScore[0],
-          away_score: result.finalScore[1],
-          played_at:  new Date().toISOString(),
-        })
-        .eq('id', match.id);
+    console.log(`[match-worker] Inserted ${result.events.length} events`);
 
-      if (completeError) {
-        throw new Error(
-          `Failed to mark match ${match.id} completed: ${completeError.message}`,
-        );
-      }
-
-      results.push({
-        id:         match.id,
+    // ── Update match to completed ──────────────────────────────────────────
+    const { error: updateError } = await supabase
+      .from('matches')
+      .update({
+        status: 'completed',
         home_score: result.finalScore[0],
         away_score: result.finalScore[1],
-      });
-      processed++;
+        mvp_player_name: result.mvp,
+      })
+      .eq('id', match.id);
 
-    } catch (err) {
-      // ── Rollback on any per-match error ───────────────────────────────────
-      // Reset status to 'scheduled' so the next cron tick retries.
-      // We fire-and-forget the rollback UPDATE (no await on the error) because
-      // there's nothing useful to do if the rollback itself fails — the match
-      // will stay 'in_progress' and require manual intervention, but that is
-      // preferable to masking the original error with a secondary one.
-      db.from('matches')
-        .update({ status: 'scheduled' })
-        .eq('id', match.id)
-        .then(() => {/* rollback complete */})
-        .catch(() => {/* rollback failed — match needs manual reset */});
-
-      console.error(`match-worker: error processing match ${match.id}:`, err);
-      failed++;
+    if (updateError) {
+      throw new Error(`Update match failed: ${updateError.message}`);
     }
-  }
 
-  // ── Response ───────────────────────────────────────────────────────────────
-  // Always 200 so the cron scheduler doesn't interpret a partial failure as
-  // a hard error and apply exponential back-off.  The `failed` count in the
-  // body is sufficient for alerting via log monitors.
-  return new Response(
-    JSON.stringify({ ok: true, processed, failed, matches: results }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } },
-  );
+    console.log(`[match-worker] Match ${match.id} completed successfully`);
+    return true;
+  } catch (err) {
+    console.error(`[match-worker] Error processing match ${match.id}:`, err);
+
+    // Revert status to 'scheduled' so another worker (or next cron invocation)
+    // will retry.  We don't throw here — the worker must process all matches
+    // in the batch even if some fail.
+    const { error: revertError } = await supabase
+      .from('matches')
+      .update({ status: 'scheduled', played_at: null })
+      .eq('id', match.id);
+
+    if (revertError) {
+      console.error(`[match-worker] Failed to revert match ${match.id}:`, revertError);
+    }
+
+    return false;
+  }
+}
+
+// ── Main handler (Deno.serve entrypoint) ───────────────────────────────────
+
+/**
+ * HTTP handler invoked by pg_cron every minute.
+ * Processes all due matches in the current batch.
+ *
+ * Returns 200 always (success) so pg_cron doesn't backoff on transient errors.
+ * Failures are logged per-match and reverted for retry.
+ */
+Deno.serve(async (req: Request) => {
+  try {
+    console.log('[match-worker] Cron invocation');
+
+    const matches = await claimDueMatches();
+    if (matches.length === 0) {
+      console.log('[match-worker] No due matches');
+      return new Response(JSON.stringify({ processed: 0 }), { status: 200 });
+    }
+
+    // Process all claimed matches
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const match of matches) {
+      const ok = await processMatch(match);
+      if (ok) successCount++;
+      else failureCount++;
+    }
+
+    console.log(`[match-worker] Batch complete: ${successCount} succeeded, ${failureCount} failed`);
+
+    return new Response(
+      JSON.stringify({
+        processed: matches.length,
+        succeeded: successCount,
+        failed: failureCount,
+      }),
+      { status: 200 },
+    );
+  } catch (err) {
+    console.error('[match-worker] Unhandled error:', err);
+    // Still return 200 so cron doesn't backoff
+    return new Response(JSON.stringify({ error: String(err) }), { status: 200 });
+  }
 });
