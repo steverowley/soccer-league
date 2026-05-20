@@ -259,7 +259,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     console.error('[match-worker] Unhandled error:', err);
-    // Still return 200 so cron doesn't backoff
-    return new Response(JSON.stringify({ error: String(err) }), { status: 200 });
+    // Return 200 so cron doesn't backoff; full error is in logs only
+    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 200 });
   }
 });
