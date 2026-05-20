@@ -195,6 +195,35 @@ export function simulateFullMatch(
     const subminute = Math.min(withinMinuteCount, SUBMINUTE_CAP) / SUBMINUTE_DIVISOR;
     events.push(toSimulatedEvent(ev, subminute));
 
+    // ── Flatten multi-step narrative sequences ─────────────────────────────
+    // gameEngine.js returns an event for outcomes like a penalty, free kick,
+    // confrontation, near-miss, or counter-attack with the constituent step
+    // events attached as a `<type>Sequence` array (e.g. `penaltySequence`,
+    // `freekickSequence`).  Each step event is a self-contained MatchEvent
+    // describing one beat of the action: the foul, the card, the wall, the
+    // run-up, the shot, etc.  Without flattening them into match_events the
+    // live feed only ever shows the climactic summary — the "GOAL!" line —
+    // and the entire dramatic build-up is invisible to readers.  We persist
+    // the summary first (acts as a metadata header carrying outcome fields
+    // like cardType, penaltyTaker, foulerTeam) then each beat in emit
+    // order, so the live UI can reveal them chronologically.
+    const SEQUENCE_FIELDS = [
+      'penaltySequence',
+      'freekickSequence',
+      'confrontationSequence',
+      'nearMissSequence',
+      'counterSequence',
+    ] as const;
+    for (const field of SEQUENCE_FIELDS) {
+      const seq = (ev as any)[field];
+      if (!Array.isArray(seq)) continue;
+      for (const sub of seq) {
+        withinMinuteCount += 1;
+        const subSub = Math.min(withinMinuteCount, SUBMINUTE_CAP) / SUBMINUTE_DIVISOR;
+        events.push(toSimulatedEvent(sub, subSub));
+      }
+    }
+
     // ── Apply event side-effects ───────────────────────────────────────────
     // Update score, momentum, and player stats as events fire.
     //
