@@ -102,9 +102,16 @@ function runFullMatch(rng: () => number): SimResult {
   // bag (intentions, edicts, sealed fate, curses, …).  Passing {} means
   // every Architect branch sees a falsy value and skips its overrides,
   // which is exactly what we want for invariant-only smoke testing.
+  // possession is [homeShare, awayShare]; the engine reads index 0 to pick
+  // the in-possession side each minute.  A scalar here silently sends every
+  // event to the away team (see worker simulateFullMatch.ts WHY block) —
+  // smoke tests that pass `50` here only succeeded because their assertions
+  // never check home/away parity.
+  const possession: [number, number] = [50, 50];
+
   for (let min = 1; min <= 90; min++) {
     const ev = genEvent(
-      min, home, away, momentum, 50, playerStats, score,
+      min, home, away, momentum, possession, playerStats, score,
       activePlayers, substitutionsUsed, null, aim, 0, lastEventType, {},
     ) as MatchEvent | null;
 

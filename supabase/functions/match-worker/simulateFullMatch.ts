@@ -149,8 +149,22 @@ export function simulateFullMatch(
   // ── Per-minute simulation loop ─────────────────────────────────────────────
   // We track an in-minute counter so multiple events within the same minute
   // get distinct subminute values for deterministic ordering.
+  //
+  // SUBMINUTE ENCODING
+  // ──────────────────
+  // The DB column has CHECK (subminute < 1).  We encode the per-minute index
+  // as `count / 100`, giving 100 slots per minute (0.00 … 0.99) and a hard
+  // cap that's safe regardless of how many events the engine emits.  The
+  // previous implementation incremented by 0.05 and would overflow to 1.00
+  // on the 20th event in a minute, causing the batch INSERT to violate the
+  // CHECK constraint and the entire match to revert with partial state.
+  // Multi-step narrative sequences (penalty, free-kick, confrontation) can
+  // realistically push 15+ events into a single minute, so a 0.05 step was
+  // genuinely at risk.
+  const SUBMINUTE_DIVISOR = 100;          // CHECK (subminute < 1) → max 99 slots
+  const SUBMINUTE_CAP = SUBMINUTE_DIVISOR - 1;
   let currentMinute = 0;
-  let withinMinute = 0;
+  let withinMinuteCount = 0;
 
   for (let min = 1; min <= REGULATION_MINUTES; min++) {
     // Call the engine's event generator. 14 positional args:
@@ -165,16 +179,21 @@ export function simulateFullMatch(
     if (!ev) continue;
 
     // ── subminute assignment ───────────────────────────────────────────────
-    // Reset counter on a new minute, increment within a minute (step 0.05).
-    // This allows up to 19 events per minute before hitting subminute=1.0.
+    // Reset the in-minute index on a new minute, otherwise advance it.  The
+    // persistable subminute is `count / 100`, clamped at 0.99 so we can
+    // never violate the CHECK (subminute < 1) constraint — any overflow
+    // beyond 100 events in a single minute collapses to the same 0.99 slot
+    // and still preserves engine-emit ordering (events are inserted in
+    // emit order regardless of subminute ties).
     if (min !== currentMinute) {
       currentMinute = min;
-      withinMinute = 0;
+      withinMinuteCount = 0;
     } else {
-      withinMinute += 0.05;
+      withinMinuteCount += 1;
     }
 
-    events.push(toSimulatedEvent(ev, withinMinute));
+    const subminute = Math.min(withinMinuteCount, SUBMINUTE_CAP) / SUBMINUTE_DIVISOR;
+    events.push(toSimulatedEvent(ev, subminute));
 
     // ── Apply event side-effects ───────────────────────────────────────────
     // Update score, momentum, and player stats as events fire.
