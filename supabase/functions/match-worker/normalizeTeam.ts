@@ -22,6 +22,13 @@ import type { EngineTeam, EnginePlayer } from './gameEngine.types.ts';
 export function normalizeTeamForEngine(team: Record<string, any>): EngineTeam {
   const name = team.name as string;
   const id = team.id as string;
+  // gameEngine.js tags every event with `team: posTeam.shortName` and the
+  // simulateFullMatch wrapper credits goals based on that field.  If shortName
+  // is missing the comparison `ev.team === home.shortName` is always false and
+  // every goal lands on the away column — producing the 0–N "home never scores"
+  // pattern.  Fall back to `name` so we always have *some* stable identifier
+  // even on legacy team rows where short_name was never populated.
+  const shortName = (team.short_name as string | undefined) || name;
   const homeGround = team.home_ground as string | undefined;
   const planet = team.location as string | undefined;
   const managers = team.managers as Array<Record<string, any>> | undefined;
@@ -32,6 +39,7 @@ export function normalizeTeamForEngine(team: Record<string, any>): EngineTeam {
   return {
     id,
     name,
+    shortName,
     homeGround: homeGround || name,
     planet: planet || 'Unknown',
     manager: manager

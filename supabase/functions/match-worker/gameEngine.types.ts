@@ -37,6 +37,11 @@ export interface EnginePlayer extends PlayerStats {
 export interface EngineTeam {
   id: string;
   name: string;
+  /** Short identifier (e.g. "MAR", "VEN") used by gameEngine.js as the event
+   *  `team` tag.  simulateFullMatch credits goals by matching `ev.team` against
+   *  this field — it MUST be populated by normalizeTeamForEngine or every goal
+   *  silently falls to the away column. */
+  shortName: string;
   homeGround: string;
   planet: string;
   players: EnginePlayer[];

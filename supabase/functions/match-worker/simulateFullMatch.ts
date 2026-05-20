@@ -168,8 +168,17 @@ export function simulateFullMatch(
 
     // ── Apply event side-effects ───────────────────────────────────────────
     // Update score, momentum, and player stats as events fire.
+    //
+    // GOAL ATTRIBUTION
+    // ────────────────
+    // gameEngine.js stamps every event with `team: posTeam.shortName`, so we
+    // must compare against `home.shortName` here — comparing against `home.name`
+    // (the full club name) only works by accident when shortName === name and
+    // silently misattributes EVERY goal to the away column when they differ,
+    // which is the actual bug that produced the 0–N "home never scores"
+    // pattern on the first round of completed matches.
     if (ev.isGoal) {
-      if (ev.team === home.name) score[0]++;
+      if (ev.team === home.shortName) score[0]++;
       else score[1]++;
     }
 
