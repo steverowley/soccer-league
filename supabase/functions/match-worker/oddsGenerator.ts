@@ -206,16 +206,26 @@ export interface OddsGenerationSummary {
  * @returns         Counts for log diagnostics.
  */
 export async function ensureOddsForUpcoming(supabase: any): Promise<OddsGenerationSummary> {
+  const nowISO = new Date().toISOString();
   const horizonISO = new Date(Date.now() + ODDS_HORIZON_HOURS * 3_600_000).toISOString();
 
-  // Pull every scheduled match in the horizon window.  We don't pre-filter to
-  // "missing odds" because PostgREST left-joins are awkward; instead we
-  // check existence per-match (a tiny SELECT each) which keeps the SQL
-  // straightforward and is still fast at 16 matches/day × 3 days = ~48 rows.
+  // Pull every scheduled match strictly inside the [now, now+horizon] window.
+  // We don't pre-filter to "missing odds" because PostgREST left-joins are
+  // awkward; instead we check existence per-match (a tiny SELECT each) which
+  // keeps the SQL straightforward and is still fast at 16 matches/day × 3
+  // days = ~48 rows.
+  //
+  // The `.gte(scheduled_at, nowISO)` lower bound is essential: without it,
+  // any stale `status='scheduled'` rows from the past (delayed/backlogged
+  // fixtures, post-reset backlog) would be iterated on every cron tick, each
+  // one running a per-match SELECT against match_odds before claimDueMatches
+  // even gets to fire.  Overdue matches don't need fresh odds either — the
+  // betting UI closes the market at kickoff, so pricing them is wasted work.
   const { data: upcoming, error: upcomingErr } = await supabase
     .from('matches')
     .select('id, home_team_id, away_team_id, scheduled_at, competition_id')
     .eq('status', 'scheduled')
+    .gte('scheduled_at', nowISO)
     .lte('scheduled_at', horizonISO)
     .order('scheduled_at', { ascending: true });
 
