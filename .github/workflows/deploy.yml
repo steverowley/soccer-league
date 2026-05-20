@@ -20,7 +20,7 @@ jobs:
     # don't deploy anywhere so they must not share this group.
     concurrency:
       group: pages
-      cancel-in-progress: false
+      cancel-in-progress: true
     environment:
       name: main
       url: ${{ steps.deployment.outputs.page_url }}
