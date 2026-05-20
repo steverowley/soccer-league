@@ -25,7 +25,7 @@
 //   Control actions (fast-forward, enactment) re-fetch the affected panel on
 //   success so the UI reflects the mutation without a full page reload.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
@@ -37,7 +37,6 @@ import {
   getActiveSeason,
   getAdminFixtures,
   getArchitectInterventions,
-  fastForwardScheduledMatches,
   getSystemStats,
   setSeasonStatus,
   resetSeasonResults,
@@ -456,7 +455,7 @@ function SeasonPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
             <div>
               <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Fast-Forward Scheduled Matches</p>
               <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 14 }}>
-                Subtracts hours from every scheduled match's kickoff time, making the
+                Subtracts hours from every scheduled match&apos;s kickoff time, making the
                 worker pick them up on its next poll cycle.
               </p>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -504,7 +503,7 @@ function SeasonPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
               </AdminButton>
               {season.status !== 'voting' && (
                 <p style={{ ...LABEL_STYLE, color: DUST_50, marginTop: 8 }}>
-                  Season must be in 'voting' status.
+                  Season must be in &apos;voting&apos; status.
                 </p>
               )}
             </div>
@@ -572,15 +571,16 @@ function FixtureBrowser({ db }: { db: ReturnType<typeof useSupabase> }) {
   const [loading, setLoading]   = useState(true);
   const [filter, setFilter]     = useState<string>(FIXTURE_ALL);
 
-  const fetchFixtures = (f: string) => {
+  const fetchFixtures = useCallback((f: string) => {
     setLoading(true);
     getAdminFixtures(db, f === FIXTURE_ALL ? undefined : f)
       .then(setFixtures)
       .finally(() => setLoading(false));
-  };
+  }, [db]);
 
-  // Initial fetch on mount.
-  useEffect(() => { fetchFixtures(FIXTURE_ALL); }, [db]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial fetch on mount. setState is called through fetchFixtures (async), not synchronously.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchFixtures(FIXTURE_ALL); }, [fetchFixtures]);
 
   const onChipClick = (id: string) => {
     setFilter(id);
@@ -904,7 +904,7 @@ function TestingPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
           <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 16 }}>
             Wipes match events, scores, wagers, narratives, architect logs, training logs,
             and focus votes. Reschedules all matches starting 5 minutes from now,
-            preserving their relative spacing. Resets season to 'active'. Irreversible.
+            preserving their relative spacing. Resets season to &apos;active&apos;. Irreversible.
           </p>
           <AdminButton onClick={onReset} busy={resetBusy} variant="danger">
             Reset Season Results
