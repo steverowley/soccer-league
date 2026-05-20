@@ -183,15 +183,33 @@ export function simulateFullMatch(
     // minute, home, away, momentum, possession, playerStats, score,
     // activePlayers, substitutionsUsed, aiInfluence, aim, momentum_magnitude,
     // lastEventType, genCtx (empty).
-    // genCtx.architect threading: gameEngine.js reads `genCtx.architect` in
-    // resolveContest (relationship modifiers), buildCommentary (weird-pool
-    // rate), and _genEventBranches (foul rival-selection bias).  When the
-    // bridge is absent (null), every architect lookup falls through to its
-    // empty-state branch — no behaviour change vs the pre-Phase-2 worker.
+    // genCtx threading.  gameEngine.js reads four cosmic fields:
+    //   • architect            — feeds getRelationshipFor / getFeaturedMortals
+    //                            / getActiveRelationships in contest +
+    //                            commentary + foul-bias paths.
+    //   • architectIntentions  — pre-decided narrative pulls; filtered to
+    //                            the current minute so windows close cleanly.
+    //   • architectEdictFn     — closure (isHome) → resolved edict modifiers
+    //                            for the requested side, or {} when no edict.
+    //   • architectFate        — sealed-fate decree (or null) the engine may
+    //                            force-fire inside its window.
+    //   • consumeFate          — callback gameEngine fires the moment it
+    //                            executes the fated event so it can't double-fire.
+    //
+    // When `architect` is absent every accessor short-circuits to `null`/`[]`
+    // / `{}` and gameEngine runs the empty-state branches — no behaviour
+    // change vs the pre-Slice-6 worker.
+    const architectIntentions = architect?.getIntentions?.(min) ?? [];
+    const architectEdictFn    = architect
+      ? (isHome: boolean) => architect.getEdictModifiers(isHome)
+      : null;
+    const architectFate       = architect?.getFate?.(min) ?? null;
+    const consumeFate         = architect ? () => architect.consumeFate() : null;
+
     const ev = genEvent(
       min, home, away, momentum, INITIAL_POSSESSION, playerStats, score,
       activePlayers, substitutionsUsed, null, aim, 0, lastEventType,
-      { architect },
+      { architect, architectIntentions, architectEdictFn, architectFate, consumeFate },
     );
 
     if (!ev) continue;

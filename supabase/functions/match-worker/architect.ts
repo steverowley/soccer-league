@@ -1,5 +1,6 @@
 // ── match-worker/architect.ts ────────────────────────────────────────────────
-// Deno-side port of the CosmicArchitect persistence loop (Slice 5).
+// Deno-side port of the CosmicArchitect persistence + pre-match decision
+// loop (Slices 5 + 6).
 //
 // WHY THIS REPLACES architectBridge.ts
 // ────────────────────────────────────
@@ -25,15 +26,28 @@
 //      Mutations land on the in-memory `arch.lore` object, which is then
 //      batch-upserted via LoreStore.persistAll + flush.
 //
-// SCOPE OF THIS PORT — explicitly excluded
-// ────────────────────────────────────────
-// The in-match `maybeUpdate` / `maybeInterfereWith` flow is NOT ported.  Those
-// require splitting the synchronous 90-minute simulation loop into LLM-bounded
-// chunks (each LLM call adds ~500ms; 9 updates + 18 interference checks ≈ 14s
-// extra per match).  That refactor is a follow-up slice; on its own the
-// persistence loop unlocks the most valuable cosmic behaviour because every
-// future match starts reading real rivalry / arc / relationship data from
-// lore that the previous matches wrote.
+// SLICE 6 — PRE-MATCH DECISION SEEDING
+// ────────────────────────────────────
+// `seedPreMatchDecisions()` fires ONE additional Claude call before kickoff
+// that returns the match's cosmic edict (boon/curse/chaos polarity + numeric
+// modifiers), up to three narrative intentions (redemption / villain_arc /
+// climax / …) with time windows and contest biases, and an optional sealed
+// fate (a guaranteed dramatic outcome at a specific minute window).  All of
+// these populate gameEngine-readable state on the architect (`cosmicEdict`,
+// `intentions`, `sealedFate`); per-minute synchronous accessors
+// (`getEdictModifiers`, `getIntentions`, `getFate`) let `genEvent()` apply
+// the cosmic flavour without any in-match LLM round-trip.
+//
+// Trade-off vs the React-side live update flow: the Architect cannot react
+// to events as they unfold (one decision pre-kickoff is FINAL for 90 mins).
+// In exchange: zero added in-match latency and no simulation-loop refactor.
+//
+// SCOPE STILL EXCLUDED — in-match interference (`maybeInterfereWith`)
+// ──────────────────────────────────────────────────────────────────
+// Live curses / blesses / possessions / annul-goal etc. require breaking
+// the synchronous 90-minute loop into LLM-bounded chunks (~14s added
+// latency per match across ~18 interference checks).  Deferred to a
+// future slice when that latency / cost is justified.
 //
 // SAFETY POSTURE
 // ──────────────
@@ -51,14 +65,71 @@
 // @ts-ignore — Deno-only import resolved at deploy time.
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
 
+// ── Random helpers (local, intentionally tiny) ─────────────────────────────
+
+/**
+ * Uniform float in [min, max).  Used by `_resolveCosmicEdict` to derive
+ * numeric modifier ranges from the LLM-supplied magnitude.
+ */
+const rnd  = (min: number, max: number): number => Math.random() * (max - min) + min;
+
+/**
+ * Uniform integer in [min, max] (both inclusive).  Used to jitter the sealed
+ * fate's minute window so consecutive matches don't pick identical windows.
+ */
+const rndI = (min: number, max: number): number => Math.floor(rnd(min, max + 1));
+
 // ── Tuning constants ────────────────────────────────────────────────────────
 
 /** Claude model for cosmic narration. Matches architect-galaxy-tick. */
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-/** Max output tokens per Architect call. Omens are short; verdicts ~550 tokens. */
+/** Max output tokens per Architect call. Omens are short; seeds ~350; verdicts ~550. */
 const OMEN_MAX_TOKENS    = 90;
+const SEED_MAX_TOKENS    = 420;
 const VERDICT_MAX_TOKENS = 600;
+
+// ── Edict / intention / fate validation constants ──────────────────────────
+
+/**
+ * Polarity values the LLM is allowed to choose for the cosmic edict.  Each
+ * resolves to a different numeric modifier curve in {@link CosmicArchitect._resolveCosmicEdict}:
+ *   • `boon`  → negative rollMod (favourable), positive conversionBonus,
+ *               cardSeverityMult = 1.0, positive contestMod.
+ *   • `curse` → positive rollMod (unfavourable), zero conversionBonus,
+ *               cardSeverityMult > 1.0, negative contestMod.
+ *   • `chaos` → randomly boon-or-curse each roll, multiplied by 0.8–1.4;
+ *               occasionally doubles for catastrophic flavour.
+ * Unknown polarities fall back to 'chaos' so the LLM can't break the engine
+ * by inventing new ones.
+ */
+const VALID_EDICT_POLARITIES = ['boon', 'curse', 'chaos'] as const;
+
+/**
+ * Intention types the LLM may emit.  Each one is a NARRATIVE label that
+ * gameEngine.js inspects (or, more often, just records as flavourTag) to
+ * inform commentary tone.  The numeric biases (`contestBonus`, `selectBias`,
+ * `cardBias`) drive ACTUAL gameplay shifts regardless of type; the type
+ * mostly exists for prompts/commentary.  Adding new types is safe — the
+ * filter just drops anything not on this list.
+ */
+const VALID_INTENTION_TYPES = [
+  'redemption', 'rivalry_flashpoint', 'fall_from_grace', 'breakout_moment',
+  'comeback_arc', 'veteran_farewell', 'youth_emergence', 'captain_crisis',
+  'curse_broken', 'villain_arc', 'silent_hero', 'climax',
+] as const;
+
+/**
+ * Outcomes the Architect may pre-write for a Sealed Fate.  Each one drives
+ * a specific gameEngine.js branch when the fate's minute window opens:
+ *   • `goal`         → force-construct a goal for the fated player.
+ *   • `red_card`     → force-construct a red card on the fated player.
+ *   • `injury`       → force-construct an injury event.
+ *   • `wonder_save`  → force-construct a saved shot (often + commentary boost).
+ *   • `chaos`        → engine picks a dramatic event without further direction.
+ * Unknown outcomes fall back to 'chaos'.
+ */
+const VALID_FATE_OUTCOMES = ['goal', 'red_card', 'injury', 'wonder_save', 'chaos'] as const;
 
 /**
  * Maximum match ledger entries.  Oldest are dropped when exceeded so the
@@ -87,6 +158,83 @@ export interface PlayerRelationship {
   matchCount?: number;
   /** Stable key (sorted_a + '_vs_' + sorted_b for cross-team) populated by getActiveRelationships. */
   key?: string;
+}
+
+// ── Pre-match decision shapes (consumed by gameEngine.js via genCtx) ───────
+
+/**
+ * Resolved cosmic edict.  The LLM emits a polarity + magnitude + free-form
+ * sentence; `_resolveCosmicEdict()` bakes that into deterministic numeric
+ * modifiers ONCE so every `genEvent()` call sees identical values.
+ *
+ * Field meanings (consumed by gameEngine.js `resolveContest` + `genEvent`):
+ *   • rollMod          — additive to per-event dice rolls; negative = favourable.
+ *   • conversionBonus  — adds to shot→goal conversion probability (boon only).
+ *   • cardSeverityMult — multiplies card-severity rolls; >1.0 → harsher refs.
+ *   • contestMod       — additive to contest atkMod; positive = favours target.
+ *   • chaosDouble      — when polarity='chaos', occasionally doubles the effect.
+ *   • raw              — the Architect's freeform declaration, surfaced in
+ *                        commentary so players see the cosmic verdict.
+ */
+export interface CosmicEdict {
+  target: string;
+  polarity: typeof VALID_EDICT_POLARITIES[number];
+  rollMod: number;
+  conversionBonus: number;
+  cardSeverityMult: number;
+  contestMod: number;
+  chaosDouble: boolean;
+  raw: string;
+  magnitude?: number;
+}
+
+/**
+ * A single narrative intention pre-decided by the Architect.  Each one has a
+ * minute window inside which its biases apply; outside that window the
+ * intention is filtered out by `getIntentions(minute)` and gameEngine sees
+ * an empty list for it.
+ *
+ * Field meanings:
+ *   • type         — narrative label (validated against VALID_INTENTION_TYPES);
+ *                    purely cosmetic in gameplay terms, but tags commentary.
+ *   • player       — primary target name; nullable when the intention is
+ *                    diffuse (e.g. 'climax' for an entire team).
+ *   • players      — additional targets (max 2) for multi-actor intentions.
+ *   • window       — [startMin, endMin], inclusive on both ends.
+ *   • contestBonus — added to resolveContest atkMod when the player is the
+ *                    attacker; clamped ±26 to avoid making fate trivial.
+ *   • selectBias   — added to player-selection weight inside _genEventBranches;
+ *                    0–16 range.  Higher = more likely to be the protagonist.
+ *   • cardBias     — multiplies card-severity rolls for events involving the
+ *                    player; 0.8–2.2 range (1.0 = neutral).
+ *   • flavourTag   — stamp on emitted events for commentary template lookup.
+ */
+export interface Intention {
+  type: typeof VALID_INTENTION_TYPES[number];
+  player: string | null;
+  players: string[];
+  window: [number, number];
+  contestBonus: number;
+  selectBias: number;
+  cardBias: number;
+  flavourTag: string;
+}
+
+/**
+ * A guaranteed dramatic outcome the Architect has pre-written.  Fires AT MOST
+ * ONCE inside its minute window with probability `probability` (78–94% so
+ * even fate isn't certain — the cosmos is capricious).
+ *
+ * `consumed` is flipped to true the moment gameEngine fires the event so the
+ * fate doesn't fire again on subsequent ticks within the same window.
+ */
+export interface SealedFate {
+  outcome: typeof VALID_FATE_OUTCOMES[number];
+  player: string | null;
+  window: [number, number];
+  probability: number;
+  prophecy: string;
+  consumed: boolean;
 }
 
 export interface MatchLedgerEntry {
@@ -399,6 +547,23 @@ export class CosmicArchitect {
    */
   lore: ArchitectLore = emptyLore();
 
+  // ── Slice 6: pre-match decisions ───────────────────────────────────────
+  //
+  // Populated ONCE by `seedPreMatchDecisions()` (called from
+  // `prepareArchitectForMatch()` after hydrate).  Read per-minute by
+  // gameEngine via `getEdictModifiers` / `getIntentions` / `getFate`.
+  // Mutating these mid-match would silently desync the simulation — the
+  // accessors close over the same object reference gameEngine reads.
+
+  /** Resolved cosmic edict, or null when no edict was issued (or LLM failed). */
+  cosmicEdict: CosmicEdict | null = null;
+
+  /** Active narrative intentions; up to 3. Filtered by time window on read. */
+  intentions: Intention[] = [];
+
+  /** Sealed fate, or null when none was set. Consumed exactly once when fired. */
+  sealedFate: SealedFate | null = null;
+
   /**
    * Construct an Architect for a single match.
    *
@@ -470,6 +635,239 @@ export class CosmicArchitect {
   getActiveRelationships(): PlayerRelationship[] {
     return Object.entries(this.lore.playerRelationships)
       .map(([key, rel]) => ({ ...rel, key }));
+  }
+
+  // ── Slice 6: pre-match decision accessors (consumed by gameEngine.js) ──────
+
+  /**
+   * Returns active intentions whose minute window includes `minute`.
+   * Pure filter — no mutation.  Safe to call on every per-minute genEvent.
+   *
+   * @param minute  Current sim minute (1–90).
+   * @returns       Subset of `this.intentions` whose [startMin,endMin]
+   *                window contains `minute`.  Empty array when no intention
+   *                applies — gameEngine treats that as the no-op default.
+   */
+  getIntentions(minute: number): Intention[] {
+    return this.intentions.filter((i) => minute >= i.window[0] && minute <= i.window[1]);
+  }
+
+  /**
+   * Returns the cosmic edict's resolved modifiers for the given side, or an
+   * empty object when no edict applies.  `target='both'` returns the edict
+   * for either side; `target='home'`/`'away'` returns only when the side
+   * matches.  Player-targeted edicts (where `target` is a player name) are
+   * intentionally rejected here — only team-side resolution is wired into
+   * gameEngine today.
+   *
+   * @param isHome  true → returning the home-side modifiers.
+   * @returns       The edict itself (which IS the modifier object) or `{}`.
+   */
+  getEdictModifiers(isHome: boolean): CosmicEdict | Record<string, never> {
+    if (!this.cosmicEdict) return {};
+    const e        = this.cosmicEdict;
+    const teamKey  = isHome ? 'home' : 'away';
+    const applies  = e.target === 'both' || e.target === teamKey;
+    if (!applies) return {};
+    return e;
+  }
+
+  /**
+   * Returns the sealed fate if its window contains `minute` AND it has not
+   * been consumed; null otherwise.  gameEngine.js calls this per-minute to
+   * decide whether to force-construct the fated event.
+   *
+   * @param minute  Current sim minute.
+   * @returns       The live (unconsumed, in-window) fate, or null.
+   */
+  getFate(minute: number): SealedFate | null {
+    if (!this.sealedFate || this.sealedFate.consumed) return null;
+    if (minute < this.sealedFate.window[0] || minute > this.sealedFate.window[1]) return null;
+    return this.sealedFate;
+  }
+
+  /**
+   * Marks the sealed fate as consumed.  gameEngine calls this through the
+   * `consumeFate` callback passed via genCtx the moment it fires the fated
+   * event so the fate doesn't double-fire on the next tick.
+   */
+  consumeFate(): void {
+    if (this.sealedFate) this.sealedFate.consumed = true;
+  }
+
+  /**
+   * Convert the LLM's polarity + magnitude + target text into deterministic
+   * numeric modifiers baked once at parse time.  gameEngine.js never calls
+   * rnd() against these values — they stay stable for the entire 90 minutes.
+   *
+   * Magnitude is clamped to 1–10 (the LLM is asked for 1–10; we defend
+   * against out-of-range values).  Scale = magnitude/10 so a mag-1 edict
+   * barely registers and a mag-10 edict is brutal.
+   *
+   * @param polarity  'boon' | 'curse' | 'chaos' (anything else → 'chaos').
+   * @param magnitude 1–10 intensity.
+   * @param target    'home' | 'away' | 'both' | player name.
+   * @param rawText   The LLM's freeform declaration sentence.
+   * @returns         Fully resolved CosmicEdict with deterministic modifiers.
+   */
+  _resolveCosmicEdict(
+    polarity: string,
+    magnitude: number,
+    target: string,
+    rawText: string,
+  ): CosmicEdict {
+    // Coerce out-of-range / NaN inputs to the middle of the magnitude band.
+    const mag   = Math.min(10, Math.max(1, Number(magnitude) || 5));
+    const scale = mag / 10;
+    const pol: CosmicEdict['polarity'] =
+      (VALID_EDICT_POLARITIES as readonly string[]).includes(polarity)
+        ? (polarity as CosmicEdict['polarity']) : 'chaos';
+
+    // Per-roll modifier curves — kept tight so even a mag-10 edict can't
+    // swing every event by more than ±10% on the dice (3%–10% × scale).
+    const boonRoll  = () => -(rnd(0.03, 0.10) * scale);
+    const curseRoll = () =>  (rnd(0.02, 0.08) * scale);
+    const chaosRoll = () =>  (Math.random() < 0.5 ? boonRoll() : curseRoll()) * rnd(0.8, 1.4);
+
+    const rollMod          = pol === 'boon'  ? boonRoll()
+                           : pol === 'curse' ? curseRoll()
+                           :                   chaosRoll();
+    const conversionBonus  = pol === 'boon'  ? rnd(0.04, 0.12) * scale : 0;
+    const cardSeverityMult = pol === 'curse' ? 1 + rnd(0.2, 0.8) * scale
+                           : pol === 'chaos' ? rnd(0.6, 1.8)
+                           :                   1.0;
+    // baseContest is the magnitude-scaled contest swing; sign depends on polarity.
+    const baseContest      = rnd(5, 18) * scale;
+    const contestMod       = pol === 'boon'  ?  baseContest
+                           : pol === 'curse' ? -baseContest
+                           :                   (Math.random() < 0.5 ? 1 : -1) * baseContest;
+    // 40% chance chaos polarity ALSO triggers an outcome-doubling flag.
+    const chaosDouble      = pol === 'chaos' && Math.random() < 0.40;
+
+    return {
+      target,
+      polarity: pol,
+      rollMod,
+      conversionBonus,
+      cardSeverityMult,
+      contestMod,
+      chaosDouble,
+      raw: rawText,
+      magnitude: mag,
+    };
+  }
+
+  // ── Pre-match decision LLM call ─────────────────────────────────────────────
+
+  /**
+   * Pre-kickoff Claude call.  Asks the Architect to issue, in one shot:
+   *   • a cosmic edict (polarity + magnitude + targeted side + text),
+   *   • up to 3 narrative intentions with windows + biases,
+   *   • optionally a sealed fate (outcome + player + minute + prophecy).
+   *
+   * Results land on `this.cosmicEdict`, `this.intentions`, `this.sealedFate`
+   * so gameEngine's per-minute accessors see them for the rest of the match.
+   *
+   * BEST-EFFORT: missing API key → no-op (gameEngine reads stay empty, sim
+   * runs as today).  LLM / parse failures are warn-logged and leave the
+   * three fields at their initial values.  Match completion is NEVER blocked.
+   */
+  async seedPreMatchDecisions(): Promise<void> {
+    if (!this.client) return;
+
+    const rivalry  = this.lore.rivalryThreads[this._rivalryKey()];
+    const rivalryLine = rivalry?.thread
+      ? `Prior rivalry thread: "${rivalry.thread}". Last result: ${rivalry.lastResult || 'unknown'}.`
+      : 'No prior rivalry thread.';
+
+    // Surface known player arcs on the active rosters so the LLM can write
+    // intentions/fate targeting players the Architect has already authored.
+    const allNames = [
+      ...(this.homeTeam.players ?? []).map((p) => p.name),
+      ...(this.awayTeam.players ?? []).map((p) => p.name),
+    ];
+    const arcedNames = allNames
+      .filter((n) => this.lore.playerArcs[n])
+      .slice(0, 6);
+    const arcLine = arcedNames.length > 0
+      ? `Mortals already in the ledger this match: ${arcedNames.join(', ')}.`
+      : 'No mortals in the ledger for this match yet.';
+
+    const userMsg =
+      `Before kickoff. ${this.homeTeam.name} (home) vs ${this.awayTeam.name} (away). ` +
+      `Stadium: ${this.stadium?.name ?? 'Unknown'}. Weather: ${this.weather || 'unknown'}.\n` +
+      `${rivalryLine}\n${arcLine}\n\n` +
+      `Issue your pre-match decree. Return JSON only:\n` +
+      `{"cosmicEdict":"<one sentence>",` +
+      `"edictTarget":"home"|"away"|"both",` +
+      `"edictPolarity":"boon"|"curse"|"chaos",` +
+      `"edictMagnitude":1-10,` +
+      `"intentions":[{"type":"redemption|rivalry_flashpoint|fall_from_grace|breakout_moment|comeback_arc|veteran_farewell|youth_emergence|captain_crisis|curse_broken|villain_arc|silent_hero|climax",` +
+      `"player":"<name or null>","window":[<start>,<end>],"contestBonus":-18..26,"selectBias":0..16,"cardBias":0.8..2.2}],` +
+      `"sealedFate":"<one prophecy sentence or null>","fatedPlayer":"<name or null>",` +
+      `"fatedMinute":55-88,"fatedOutcome":"goal|red_card|injury|wonder_save|chaos"}`;
+
+    const system = `You are THE ARCHITECT. Before this match begins, you decree the cosmic forces that will shape its 90 minutes. Speak with weight, inevitability, and dark poetry. Players are mortals. The pitch is a tapestry. Return ONLY valid JSON.`;
+
+    const raw = await this._call(system, userMsg, SEED_MAX_TOKENS);
+    if (!raw) return;
+
+    let parsed: Record<string, unknown>;
+    try {
+      const clean = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
+      parsed = JSON.parse(clean) as Record<string, unknown>;
+    } catch (e) {
+      console.warn('[seedPreMatchDecisions] JSON parse failed:', (e as Error)?.message ?? e);
+      return;
+    }
+
+    // ── Edict ─────────────────────────────────────────────────────────────
+    if (typeof parsed['cosmicEdict'] === 'string' && parsed['cosmicEdict']) {
+      const target = (typeof parsed['edictTarget'] === 'string' ? parsed['edictTarget'] : 'both');
+      this.cosmicEdict = this._resolveCosmicEdict(
+        parsed['edictPolarity'] as string,
+        parsed['edictMagnitude'] as number,
+        target,
+        parsed['cosmicEdict'] as string,
+      );
+    }
+
+    // ── Intentions (filter to known types; clamp numeric biases) ───────────
+    if (Array.isArray(parsed['intentions'])) {
+      this.intentions = (parsed['intentions'] as Array<Record<string, unknown>>)
+        .filter((i) => i && (VALID_INTENTION_TYPES as readonly string[]).includes(i['type'] as string))
+        .slice(0, 3)
+        .map((i) => ({
+          type:         i['type'] as Intention['type'],
+          player:       typeof i['player'] === 'string' ? i['player'] : null,
+          players:      Array.isArray(i['players']) ? (i['players'] as string[]).slice(0, 2) : [],
+          window:       Array.isArray(i['window']) && (i['window'] as unknown[]).length === 2
+                          ? [Number((i['window'] as number[])[0]) || 0,
+                             Number((i['window'] as number[])[1]) || 90] as [number, number]
+                          : [0, 90] as [number, number],
+          contestBonus: Math.min(26,  Math.max(-18, Number(i['contestBonus']) || 0)),
+          selectBias:   Math.min(16,  Math.max(0,   Number(i['selectBias'])   || 0)),
+          cardBias:     Math.min(2.2, Math.max(0.8, Number(i['cardBias'])     || 1.0)),
+          flavourTag:   `architect_${i['type']}`,
+        }));
+    }
+
+    // ── Sealed Fate (window jittered ±a few minutes for variety) ───────────
+    if (typeof parsed['sealedFate'] === 'string' && parsed['sealedFate']) {
+      // Clamp fatedMinute to 55–88 so fate fires in meaningful play.
+      const fateMin  = Math.min(88, Math.max(55, Number(parsed['fatedMinute']) || 72));
+      const outcome  = (VALID_FATE_OUTCOMES as readonly string[]).includes(parsed['fatedOutcome'] as string)
+        ? (parsed['fatedOutcome'] as SealedFate['outcome']) : 'chaos';
+      this.sealedFate = {
+        outcome,
+        player:      typeof parsed['fatedPlayer'] === 'string' ? parsed['fatedPlayer'] : null,
+        window:      [fateMin - rndI(2, 4), fateMin + rndI(2, 5)],
+        // 78–94% probability — not 100%, because the cosmos is capricious.
+        probability: rnd(0.78, 0.94),
+        prophecy:    parsed['sealedFate'] as string,
+        consumed:    false,
+      };
+    }
   }
 
   // ── Private Claude wrapper ──────────────────────────────────────────────────
@@ -761,6 +1159,19 @@ export async function prepareArchitectForMatch(
     architect.lore = await loreStore.hydrate();
   } catch (e) {
     console.warn('[prepareArchitectForMatch] hydrate failed; empty lore:', (e as Error)?.message ?? e);
+  }
+
+  // Slice 6: pre-match cosmic decisions.  Fires AFTER hydrate so the LLM
+  // can reference existing rivalry thread + player arcs when deciding.
+  // Best-effort: any failure leaves edict/intentions/sealedFate empty and
+  // gameEngine simulates the match as today.  Awaited (not fire-and-forget)
+  // because the simulation reads these synchronously the moment it starts —
+  // returning early would race with kickoff and emit a no-edict match even
+  // when the LLM was about to succeed.
+  try {
+    await architect.seedPreMatchDecisions();
+  } catch (e) {
+    console.warn('[prepareArchitectForMatch] seed failed; no edict/intentions/fate:', (e as Error)?.message ?? e);
   }
 
   return { architect, loreStore };
