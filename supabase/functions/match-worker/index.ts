@@ -30,6 +30,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
+import { settleMatchWagers, maybeTransitionSeasonForMatch } from './postMatchEffects.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -290,6 +291,38 @@ async function processMatch(match: any): Promise<boolean> {
 
     if (updateError) {
       throw new Error(`Update match failed: ${updateError.message}`);
+    }
+
+    // ── Post-match orchestration ──────────────────────────────────────────
+    // These side-effects used to be wired through the browser-side
+    // `match.completed` event bus, which is an in-memory singleton that
+    // can never reach a server-side edge worker.  Now they run inline in
+    // service-role context immediately after the match is marked complete.
+    //
+    // Failures here are logged but do NOT throw — the match is already
+    // recorded as completed and we shouldn't revert simulation work just
+    // because a downstream effect (e.g. settlement) hit a transient DB
+    // blip.  Each effect is independently retry-safe; cron will pick up
+    // missed work in the next pass for season transitions, and a manual
+    // settlement sweep can clean up any open wagers that slipped through.
+    try {
+      const settlement = await settleMatchWagers(
+        supabase, match.id, result.finalScore[0], result.finalScore[1],
+      );
+      if (settlement.settled > 0) {
+        console.log(`[match-worker] Settled ${settlement.settled} wagers, total payout ${settlement.totalPayout}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] settleMatchWagers threw for ${match.id}:`, (err as Error)?.message ?? err);
+    }
+
+    try {
+      const seasonTx = await maybeTransitionSeasonForMatch(supabase, match.id);
+      if (seasonTx.transitioned) {
+        console.log(`[match-worker] Season opened for voting after match ${match.id}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] maybeTransitionSeasonForMatch threw for ${match.id}:`, (err as Error)?.message ?? err);
     }
 
     console.log(`[match-worker] Match ${match.id} completed successfully`);
