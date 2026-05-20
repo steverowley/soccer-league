@@ -1,0 +1,219 @@
+// ── simulateFullMatch.ts ──────────────────────────────────────────────────
+// Pure 90-minute match simulator orchestrating the gameEngine.js event loop.
+// Takes two normalized teams and returns a complete match result: events,
+// final score, and MVP — all ready for DB persistence.
+
+// @ts-expect-error - gameEngine.js has no TS declarations in this edge context
+import { createAIManager, calcMVP, genEvent } from './gameEngine.js';
+import type { EngineTeam, SimulationResult } from './gameEngine.types.ts';
+import { applyFanBoostToTeam } from './applyFanBoost.ts';
+
+// ── Input types ────────────────────────────────────────────────────────────
+
+/**
+ * Fan-boost result shape passed to simulateFullMatch.
+ * Indicates which side gets a stat boost and by how many points.
+ */
+export interface FanBoostInput {
+  boostedSide: 'home' | 'away' | 'none';
+  boostAmount: number;
+}
+
+// ── Simulated match result types ───────────────────────────────────────────
+
+/**
+ * A single match event from the 90-minute simulation.
+ * Every field is plain JSON-serializable data — ready for match_events INSERT.
+ */
+export interface SimulatedEvent {
+  minute: number;
+  subminute: number;
+  type: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Complete 90-minute simulation output — events, score, MVP, player stats.
+ * All fields are plain data suitable for direct DB insertion.
+ */
+export interface SimulatedMatchResult {
+  /** Every event that occurred during 90 minutes, ordered by (minute, subminute). */
+  events: SimulatedEvent[];
+  /** Final score as [homeGoals, awayGoals]. */
+  finalScore: [number, number];
+  /** MVP player name or '—' if no clear MVP. */
+  mvp: string;
+  /** Per-player stats accumulated during the match. */
+  playerStats: Record<string, {
+    goals: number;
+    assists: number;
+    shots: number;
+    saves: number;
+    tackles: number;
+    yellowCard: boolean;
+    redCard: boolean;
+  }>;
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+/** Regulation minutes simulated: 1–90 (stoppage time deferred). */
+const REGULATION_MINUTES = 90;
+
+/** Initial momentum split: 50/50 represents neutral balance. */
+const INITIAL_MOMENTUM: [number, number] = [50, 50];
+
+/** Possession percentage seed: held constant at 50, momentum carries the bias. */
+const INITIAL_POSSESSION = 50;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Convert an in-memory MatchEvent from the engine into a persistable
+ * SimulatedEvent shape (minute, subminute, type, payload).
+ *
+ * @param ev        Engine-generated event.
+ * @param subminute Deterministic counter assigning order within the same minute.
+ * @returns         Persistable event shape.
+ */
+function toSimulatedEvent(ev: Record<string, any>, subminute: number): SimulatedEvent {
+  const { minute, type, ...rest } = ev;
+  return {
+    minute,
+    subminute,
+    type,
+    payload: rest as Record<string, unknown>,
+  };
+}
+
+// ── Main entry point ──────────────────────────────────────────────────────
+
+/**
+ * Simulate a full 90-minute match between `home` and `away`.
+ *
+ * Pure function — given the same teams + same Math.random() sequence,
+ * the output is byte-identical. Orchestrates genEvent() across 90 minutes,
+ * accumulates score + momentum + player stats, derives MVP.
+ *
+ * @param home     Home team object as produced by normalizeTeamForEngine().
+ * @param away     Away team object as produced by normalizeTeamForEngine().
+ * @param fanBoost Optional fan-support boost result. When boostedSide is
+ *                 'home' or 'away', that team's players get +boostAmount
+ *                 to each stat BEFORE AI manager creation.
+ * @returns        Events + final score + MVP — ready for DB persistence.
+ */
+export function simulateFullMatch(
+  home: EngineTeam,
+  away: EngineTeam,
+  fanBoost: FanBoostInput | null = null,
+): SimulatedMatchResult {
+  // ── Apply fan-support boost ────────────────────────────────────────────────
+  // The team with more logged-in fans gets a small stat boost across every
+  // player. Boost is applied BEFORE createAIManager runs — agents cache
+  // their stats at construction so a post-construction boost would have no
+  // effect.
+  const homeBoost = fanBoost?.boostedSide === 'home' ? fanBoost.boostAmount : 0;
+  const awayBoost = fanBoost?.boostedSide === 'away' ? fanBoost.boostAmount : 0;
+  const boostedHome = applyFanBoostToTeam(home, homeBoost);
+  const boostedAway = applyFanBoostToTeam(away, awayBoost);
+
+  // ── Per-match state ────────────────────────────────────────────────────────
+  // createAIManager seeds initial agent fatigue/morale and picks weather,
+  // referee, and other per-match setup.
+  const aim = createAIManager(boostedHome, boostedAway, null);
+
+  const score: [number, number] = [0, 0];
+  let momentum: [number, number] = [...INITIAL_MOMENTUM];
+  const playerStats: Record<string, any> = {};
+  const events: SimulatedEvent[] = [];
+
+  // Active XI = starters at kickoff. No subs simulated in this iteration.
+  const activePlayers = {
+    home: home.players.filter((p) => p.starter).map((p) => p.name),
+    away: away.players.filter((p) => p.starter).map((p) => p.name),
+  };
+  const substitutionsUsed = { home: 0, away: 0 };
+
+  let lastEventType: string | null = null;
+
+  // ── Per-minute simulation loop ─────────────────────────────────────────────
+  // We track an in-minute counter so multiple events within the same minute
+  // get distinct subminute values for deterministic ordering.
+  let currentMinute = 0;
+  let withinMinute = 0;
+
+  for (let min = 1; min <= REGULATION_MINUTES; min++) {
+    // Call the engine's event generator. 14 positional args:
+    // minute, home, away, momentum, possession, playerStats, score,
+    // activePlayers, substitutionsUsed, aiInfluence, aim, momentum_magnitude,
+    // lastEventType, genCtx (empty).
+    const ev = genEvent(
+      min, home, away, momentum, INITIAL_POSSESSION, playerStats, score,
+      activePlayers, substitutionsUsed, null, aim, 0, lastEventType, {},
+    );
+
+    if (!ev) continue;
+
+    // ── subminute assignment ───────────────────────────────────────────────
+    // Reset counter on a new minute, increment within a minute (step 0.05).
+    // This allows up to 19 events per minute before hitting subminute=1.0.
+    if (min !== currentMinute) {
+      currentMinute = min;
+      withinMinute = 0;
+    } else {
+      withinMinute += 0.05;
+    }
+
+    events.push(toSimulatedEvent(ev, withinMinute));
+
+    // ── Apply event side-effects ───────────────────────────────────────────
+    // Update score, momentum, and player stats as events fire.
+    if (ev.isGoal) {
+      if (ev.team === home.name) score[0]++;
+      else score[1]++;
+    }
+
+    // Momentum: clamp [0, 100]. The engine's deltas can be any signed integer,
+    // but running momentum should stay in the valid display range.
+    const dh = ev.momentumChange?.[0] ?? 0;
+    const da = ev.momentumChange?.[1] ?? 0;
+    momentum = [
+      Math.max(0, Math.min(100, momentum[0] + dh)),
+      Math.max(0, Math.min(100, momentum[1] + da)),
+    ];
+
+    // Player stats accumulation — goals, assists, shots, saves, tackles, cards.
+    // The engine writes these when relevant events fire.
+    if (ev.player) {
+      const slot = playerStats[ev.player] ??= {
+        goals: 0, assists: 0, shots: 0, saves: 0, tackles: 0,
+        yellowCard: false, redCard: false,
+      };
+      if (ev.isGoal) slot.goals++;
+      if (ev.type === 'shot') slot.shots++;
+      if (ev.cardType === 'yellow') slot.yellowCard = true;
+      if (ev.cardType === 'red') slot.redCard = true;
+    }
+    if (ev.assister) {
+      const slot = playerStats[ev.assister] ??= {
+        goals: 0, assists: 0, shots: 0, saves: 0, tackles: 0,
+        yellowCard: false, redCard: false,
+      };
+      slot.assists++;
+    }
+
+    lastEventType = ev.type;
+  }
+
+  // ── Final-time derivations ─────────────────────────────────────────────────
+  // calcMVP selects the best-performing player based on accumulated stats.
+  const mvpResult = calcMVP(playerStats, home, away);
+  const mvp = mvpResult?.name ?? '—';
+
+  return {
+    events,
+    finalScore: score,
+    mvp,
+    playerStats,
+  };
+}
