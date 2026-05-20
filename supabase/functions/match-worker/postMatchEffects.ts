@@ -30,6 +30,8 @@
 // browser-side callers.
 // deno-lint-ignore-file no-explicit-any
 
+import { ensureFocusOptionsForSeason } from './focusOptionsGenerator.ts';
+
 // ── Pure logic: wager outcome resolution ─────────────────────────────────
 
 export type MatchOutcome = 'home' | 'away' | 'draw';
@@ -249,6 +251,29 @@ export async function maybeTransitionSeasonForMatch(
   }
 
   const wonRace = Array.isArray(updated) && updated.length > 0;
+
+  // ── Auto-generate focus_options for the new voting phase ───────────────
+  // The `/voting` UI lists rows from focus_options for the active season;
+  // if we transition without seeding them the page renders empty until a
+  // human runs the rollover script.  Generating them here means voting is
+  // live the instant the last league match completes.
+  //
+  // Run on BOTH the won-race and lost-race branches: only one worker wins
+  // the CAS that flips status to 'voting', so if that single seed attempt
+  // hits a transient DB error every other worker would skip and the
+  // season would stay in 'voting' with empty options until a human noticed.
+  // The upsert is idempotent on (team_id, season_id, option_key), so
+  // re-running from the lost-race branch is harmless when the winner
+  // already seeded and is automatic-recovery when it didn't.
+  try {
+    const focusSummary = await ensureFocusOptionsForSeason(db, competition.season_id);
+    if (focusSummary.rowsUpserted > 0) {
+      console.log(`[maybeTransitionSeasonForMatch] Generated focus_options: ${focusSummary.rowsUpserted} rows across ${focusSummary.teams} teams`);
+    }
+  } catch (e) {
+    console.warn('[maybeTransitionSeasonForMatch] focus-options generation failed:', e);
+  }
+
   return {
     transitioned: wonRace,
     reason: wonRace ? 'season_opened_for_voting' : 'season_already_transitioned',
