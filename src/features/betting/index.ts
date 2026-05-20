@@ -87,10 +87,13 @@ export {
 export { writeWagerNarrativeForMatch } from './api/narrativeWriter';
 
 // ── UI (React components) ──────────────────────────────────────────────────
-// WagerWidget / BetHistory / WagerVolumeStrip were removed in the 2026-05
-// nuke and will be rebuilt against the new design language.  The
-// WagerSettlementListener stays — it's a side-effect-only listener,
-// not a visual surface.
+// WagerWidget lives at `src/components/WagerWidget.tsx` (rebuilt against
+// the current design system after the 2026-05 nuke) and is consumed
+// directly by `src/pages/MatchDetail.tsx`; we don't re-export it from this
+// barrel because that page imports it via its concrete path.  BetHistory
+// and WagerVolumeStrip are still pending rebuilds.  The
+// WagerSettlementListener stays — it's a side-effect-only listener for
+// the (still-aspirational) in-browser match-completion path.
 
 // ── Side-effect listener ────────────────────────────────────────────────────
 // WagerSettlementListener registers a `match.completed` bus subscription and
