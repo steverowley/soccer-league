@@ -123,7 +123,10 @@ async function claimDueMatches() {
 async function fetchTeamForSimulation(teamId: string) {
   const { data, error } = await supabase
     .from('teams')
-    .select('id, name, location, home_ground, managers(id, name, attacking, defending, mental, athletic, technical), players(id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
+    // managers table stores only identity (id, name, nationality, style) —
+    // the engine's coaching stat surface (attacking/defending/mental/athletic/
+    // technical) is filled in by normalizeTeamForEngine at default 70.
+    .select('id, name, location, home_ground, managers(id, name), players(id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
     .eq('id', teamId)
     .single();
 
