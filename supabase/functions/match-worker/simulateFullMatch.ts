@@ -110,7 +110,7 @@ function toSimulatedEvent(ev: Record<string, any>, subminute: number): Simulated
  * @param fanBoost  Optional fan-support boost result. When boostedSide is
  *                  'home' or 'away', that team's players get +boostAmount
  *                  to each stat BEFORE AI manager creation.
- * @param architect Optional Architect bridge (see architectBridge.ts).  When
+ * @param architect Optional CosmicArchitect (see architect.ts).  When
  *                  provided, gameEngine threads `getRelationshipFor`,
  *                  `getFeaturedMortals`, and `getActiveRelationships` into
  *                  contest resolution + commentary, activating rivalry-based
@@ -125,7 +125,7 @@ export function simulateFullMatch(
   // `getFeaturedMortals`, `getActiveRelationships`.  When omitted, gameEngine
   // sees a falsy `genCtx.architect` and falls back to its empty-state
   // branches — relationship contests apply no modifier, weird-pool stays at
-  // its 3% baseline.  See architectBridge.ts for the canonical implementation.
+  // its 3% baseline.  See architect.ts for the canonical implementation.
   // deno-lint-ignore no-explicit-any
   architect: any | null = null,
 ): SimulatedMatchResult {
