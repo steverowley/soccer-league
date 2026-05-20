@@ -33,6 +33,7 @@ import { simulateFullMatch } from './simulateFullMatch.ts';
 import { settleMatchWagers, maybeTransitionSeasonForMatch } from './postMatchEffects.ts';
 import { hydrateArchitectBridge } from './architectBridge.ts';
 import { computeFanBoost } from './fanBoost.ts';
+import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -385,6 +386,21 @@ async function processMatch(match: any): Promise<boolean> {
 Deno.serve(async (req: Request) => {
   try {
     console.log('[match-worker] Cron invocation');
+
+    // ── Pre-claim: ensure odds exist for upcoming matches ──────────────────
+    // Runs at the top of every cron tick (cheap when there's nothing new
+    // to price — a few SELECTs against match_odds and out).  Without odds
+    // the WagerWidget cannot render a bet form and placeWager has no
+    // snapshot to lock in.  Failures are non-blocking: we still process
+    // due matches even if pricing the horizon failed entirely.
+    try {
+      const oddsSummary = await ensureOddsForUpcoming(supabase);
+      if (oddsSummary.priced > 0) {
+        console.log(`[match-worker] Priced ${oddsSummary.priced} new matches (${oddsSummary.skipped} already had odds, ${oddsSummary.considered} considered)`);
+      }
+    } catch (err) {
+      console.warn('[match-worker] ensureOddsForUpcoming threw:', (err as Error)?.message ?? err);
+    }
 
     const matches = await claimDueMatches();
     if (matches.length === 0) {
