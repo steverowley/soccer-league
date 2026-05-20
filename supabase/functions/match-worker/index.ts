@@ -30,7 +30,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
-import { settleMatchWagers, maybeTransitionSeasonForMatch } from './postMatchEffects.ts';
+import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket } from './postMatchEffects.ts';
 import { hydrateArchitectBridge } from './architectBridge.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
@@ -332,6 +332,21 @@ async function processMatch(match: any): Promise<boolean> {
     } catch (err) {
       console.warn(`[match-worker] settleMatchWagers threw for ${match.id}:`, (err as Error)?.message ?? err);
     }
+
+    // Advance the cup bracket if this match belonged to one.  A no-op for
+    // league matches (their competition has no bracket).  Draws are logged
+    // but skipped — extra-time / penalty resolution is not yet simulated,
+    // so a drawn cup match leaves the bracket frozen until a future slice
+    // resolves the tie.
+    await maybeAdvanceCupBracket(
+      supabase,
+      match.id,
+      match.competition_id ?? null,
+      match.home_team_id,
+      match.away_team_id,
+      result.finalScore[0],
+      result.finalScore[1],
+    );
 
     try {
       const seasonTx = await maybeTransitionSeasonForMatch(supabase, match.id);
