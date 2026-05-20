@@ -63,8 +63,18 @@ const REGULATION_MINUTES = 90;
 /** Initial momentum split: 50/50 represents neutral balance. */
 const INITIAL_MOMENTUM: [number, number] = [50, 50];
 
-/** Possession percentage seed: held constant at 50, momentum carries the bias. */
-const INITIAL_POSSESSION = 50;
+/**
+ * Per-side possession percentage seed.  gameEngine.js picks the in-possession
+ * side every minute via `Math.random() * 100 < possession[0] ? home : away` —
+ * so this MUST be an array where index 0 is the home share.  Passing a scalar
+ * makes `possession[0]` undefined, `Math.random() * 100 < undefined` is always
+ * false, and the away team gets the ball on every single event — that was the
+ * cause of the original "home team never scores" pattern.
+ *
+ * 50/50 is the kickoff seed; the engine then biases per-minute selection by
+ * momentum, fatigue, tactics, etc., so a neutral start is correct here.
+ */
+const INITIAL_POSSESSION: [number, number] = [50, 50];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
