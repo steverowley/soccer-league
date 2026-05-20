@@ -105,17 +105,29 @@ function toSimulatedEvent(ev: Record<string, any>, subminute: number): Simulated
  * the output is byte-identical. Orchestrates genEvent() across 90 minutes,
  * accumulates score + momentum + player stats, derives MVP.
  *
- * @param home     Home team object as produced by normalizeTeamForEngine().
- * @param away     Away team object as produced by normalizeTeamForEngine().
- * @param fanBoost Optional fan-support boost result. When boostedSide is
- *                 'home' or 'away', that team's players get +boostAmount
- *                 to each stat BEFORE AI manager creation.
- * @returns        Events + final score + MVP — ready for DB persistence.
+ * @param home      Home team object as produced by normalizeTeamForEngine().
+ * @param away      Away team object as produced by normalizeTeamForEngine().
+ * @param fanBoost  Optional fan-support boost result. When boostedSide is
+ *                  'home' or 'away', that team's players get +boostAmount
+ *                  to each stat BEFORE AI manager creation.
+ * @param architect Optional Architect bridge (see architectBridge.ts).  When
+ *                  provided, gameEngine threads `getRelationshipFor`,
+ *                  `getFeaturedMortals`, and `getActiveRelationships` into
+ *                  contest resolution + commentary, activating rivalry-based
+ *                  card-bias multipliers and the weird-pool rate boost.
+ * @returns         Events + final score + MVP — ready for DB persistence.
  */
 export function simulateFullMatch(
   home: EngineTeam,
   away: EngineTeam,
   fanBoost: FanBoostInput | null = null,
+  // Duck-typed Architect bridge.  Required surface: `getRelationshipFor`,
+  // `getFeaturedMortals`, `getActiveRelationships`.  When omitted, gameEngine
+  // sees a falsy `genCtx.architect` and falls back to its empty-state
+  // branches — relationship contests apply no modifier, weird-pool stays at
+  // its 3% baseline.  See architectBridge.ts for the canonical implementation.
+  // deno-lint-ignore no-explicit-any
+  architect: any | null = null,
 ): SimulatedMatchResult {
   // ── Apply fan-support boost ────────────────────────────────────────────────
   // The team with more logged-in fans gets a small stat boost across every
@@ -171,9 +183,15 @@ export function simulateFullMatch(
     // minute, home, away, momentum, possession, playerStats, score,
     // activePlayers, substitutionsUsed, aiInfluence, aim, momentum_magnitude,
     // lastEventType, genCtx (empty).
+    // genCtx.architect threading: gameEngine.js reads `genCtx.architect` in
+    // resolveContest (relationship modifiers), buildCommentary (weird-pool
+    // rate), and _genEventBranches (foul rival-selection bias).  When the
+    // bridge is absent (null), every architect lookup falls through to its
+    // empty-state branch — no behaviour change vs the pre-Phase-2 worker.
     const ev = genEvent(
       min, home, away, momentum, INITIAL_POSSESSION, playerStats, score,
-      activePlayers, substitutionsUsed, null, aim, 0, lastEventType, {},
+      activePlayers, substitutionsUsed, null, aim, 0, lastEventType,
+      { architect },
     );
 
     if (!ev) continue;

@@ -1,8 +1,11 @@
 // ── features/match/logic/simulateFullMatch.ts ────────────────────────────────
-// Pure 90-minute match simulator built on top of gameEngine.genEvent().  The
-// match worker (scripts/match-worker.ts) calls this once per due fixture at
-// its kickoff_at instant, then persists the returned event array to
-// match_events for the live viewer to reveal in elapsed real-time.
+// Pure 90-minute match simulator built on top of gameEngine.genEvent().
+//
+// The PRODUCTION worker now lives in the Deno edge function at
+// `supabase/functions/match-worker/simulateFullMatch.ts` (a near-identical
+// twin of this file).  This src/ copy is the client-side simulator used by
+// in-app preview / debug tooling.  Keep the two in lockstep manually until
+// a build step consolidates them.
 //
 // WHY THIS LIVES IN logic/ (not next to gameEngine.js)
 //   gameEngine.js owns *event generation* — given current state, decide what

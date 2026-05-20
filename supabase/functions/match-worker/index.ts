@@ -31,6 +31,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
 import { settleMatchWagers, maybeTransitionSeasonForMatch } from './postMatchEffects.ts';
+import { hydrateArchitectBridge } from './architectBridge.ts';
+import { computeFanBoost } from './fanBoost.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -180,8 +182,22 @@ async function processMatch(match: any): Promise<boolean> {
     const home = normalizeTeamForEngine(homeData);
     const away = normalizeTeamForEngine(awayData);
 
+    // ── Pre-match context ───────────────────────────────────────────────────
+    // Fan boost + Architect bridge are both hydrated here in parallel and
+    // threaded into simulateFullMatch.  Either falling back to a no-op
+    // (no fans / no lore) is the common case in the early life of the DB
+    // and is the deliberate degradation path — never block kickoff on
+    // either of these reads.
+    const [fanBoost, architect] = await Promise.all([
+      computeFanBoost(supabase, match.home_team_id, match.away_team_id),
+      hydrateArchitectBridge(supabase),
+    ]);
+    if (fanBoost.boostedSide !== 'none') {
+      console.log(`[match-worker] Fan boost: +${fanBoost.boostAmount} to ${fanBoost.boostedSide}`);
+    }
+
     // Simulate the full 90 minutes
-    const result = simulateFullMatch(home, away);
+    const result = simulateFullMatch(home, away, fanBoost, architect);
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
