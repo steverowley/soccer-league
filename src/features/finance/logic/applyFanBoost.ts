@@ -32,8 +32,9 @@
 // HISTORY
 //   This helper started life as `applyFanBoostToTeam` in `src/App.jsx`
 //   (the legacy client-side match simulator).  It's extracted here so the
-//   server-side `scripts/match-worker.ts` pipeline can apply the same boost
-//   contract end-to-end through `simulateFullMatch.ts`.
+//   client-side simulator and the Deno edge function match-worker (which
+//   has its own port at `supabase/functions/match-worker/applyFanBoost.ts`)
+//   apply the same boost contract end-to-end through `simulateFullMatch.ts`.
 
 /**
  * Stat-bearing fields on an engine player.  Listed once so future stat

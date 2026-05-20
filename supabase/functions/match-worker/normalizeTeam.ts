@@ -22,8 +22,20 @@ import type { EngineTeam, EnginePlayer } from './gameEngine.types.ts';
 export function normalizeTeamForEngine(team: Record<string, any>): EngineTeam {
   const name = team.name as string;
   const id = team.id as string;
+  // gameEngine.js tags every event with `team: posTeam.shortName` and the
+  // simulateFullMatch wrapper credits goals based on that field.  If shortName
+  // is missing the comparison `ev.team === home.shortName` is always false and
+  // every goal lands on the away column — producing the 0–N "home never scores"
+  // pattern.  Fall back to `name` so we always have *some* stable identifier
+  // even on legacy team rows where short_name was never populated.
+  const shortName = (team.short_name as string | undefined) || name;
   const homeGround = team.home_ground as string | undefined;
   const planet = team.location as string | undefined;
+  const capacity = team.capacity as string | undefined;
+  // `color` feeds the per-goal animation payload (`{ type: 'goal', color }`).
+  // Without it, every goal event renders against an `undefined` colour and
+  // the UI falls back to its neutral default — a small but visible bug.
+  const color = (team.color as string | undefined) || '#888888';
   const managers = team.managers as Array<Record<string, any>> | undefined;
   const players = team.players as Array<Record<string, any>> | undefined;
 
@@ -32,6 +44,21 @@ export function normalizeTeamForEngine(team: Record<string, any>): EngineTeam {
   return {
     id,
     name,
+    shortName,
+    color,
+    // `stadium` is consumed by gameEngine.js in createAIManager (line ~183):
+    //   `homeTeam.stadium || pick(STADIUMS)` → `PLANET_WX[stadium.planet]`.
+    // If we don't supply a stadium, the engine picks a random one from the
+    // hard-coded STADIUMS list, which in turn picks the wrong planet, which
+    // selects the wrong weather distribution for the match — Mars matches
+    // were getting Saturn-ring weather, Triton matches got Earth-orbit clear,
+    // etc.  Building the stadium object from the team's own DB fields keeps
+    // the planet-weather correlation real.
+    stadium: {
+      name: homeGround || name,
+      planet: planet || 'Unknown',
+      capacity: capacity || 'Unknown',
+    },
     homeGround: homeGround || name,
     planet: planet || 'Unknown',
     manager: manager

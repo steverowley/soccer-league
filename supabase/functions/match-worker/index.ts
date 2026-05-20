@@ -30,6 +30,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
+import { settleMatchWagers, maybeTransitionSeasonForMatch } from './postMatchEffects.ts';
+import { hydrateArchitectBridge } from './architectBridge.ts';
+import { computeFanBoost } from './fanBoost.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -51,20 +54,31 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
  * Fetch up to MATCH_BATCH_SIZE matches where status='scheduled' and
  * scheduled_at <= now(), then claim them by setting status='in_progress'.
  *
- * Uses optimistic locking: the UPDATE ... WHERE status='scheduled'
- * guarantees only one worker instance can claim each match.
+ * Returns the *actually claimed* rows — i.e. only matches whose UPDATE
+ * succeeded under the `status='scheduled'` predicate.  Any rows that another
+ * worker race-grabbed between our SELECT and UPDATE are excluded, so we never
+ * double-simulate or duplicate event inserts.
  *
- * Returns the number of matches actually claimed (in case of race conditions
- * where other workers claim matches between SELECT and UPDATE).
+ * CONCURRENCY
+ * ───────────
+ * The original implementation returned `matches.filter(m => matchIds.includes(m.id))`,
+ * which silently included every row from the SELECT regardless of who actually
+ * won the UPDATE race — meaning two concurrent worker invocations could both
+ * "claim" the same match, run two simulations against it, and double-insert
+ * match_events.  Chaining `.select(...)` on the UPDATE returns exactly the
+ * rows whose `status='scheduled'` predicate matched, making the claim
+ * authoritative.
+ *
+ * @returns Array of match rows this worker owns for the duration of the call.
  */
 async function claimDueMatches() {
   const now = new Date().toISOString();
 
   // Fetch due matches. Intentionally no UPDATE lock here — the next step
-  // claims them atomically.
-  const { data: matches, error: selectError } = await supabase
+  // claims them atomically via the predicate on the UPDATE.
+  const { data: candidates, error: selectError } = await supabase
     .from('matches')
-    .select('id, home_team_id, away_team_id, scheduled_at, competition_id')
+    .select('id')
     .eq('status', 'scheduled')
     .lte('scheduled_at', now)
     .limit(MATCH_BATCH_SIZE)
@@ -74,45 +88,60 @@ async function claimDueMatches() {
     console.error('[match-worker] SELECT matches failed:', selectError);
     return [];
   }
+  if (!candidates || candidates.length === 0) return [];
 
-  if (!matches || matches.length === 0) {
-    return [];
-  }
-
-  const matchIds = matches.map((m) => m.id);
-
-  // Atomically claim: UPDATE status to 'in_progress' for these IDs.
-  // The WHERE status='scheduled' ensures we only claim matches that haven't
-  // been claimed by another worker instance since our SELECT.
-  const { error: claimError, count } = await supabase
+  // Atomically claim. The .select() on the UPDATE returns only the rows
+  // whose `status='scheduled'` predicate matched — i.e. rows we actually
+  // won.  This is the race-safe variant of the old "filter by candidate IDs"
+  // approach, which credulously trusted the SELECT result set.
+  const candidateIds = candidates.map((m) => m.id);
+  const { data: claimed, error: claimError } = await supabase
     .from('matches')
     .update({ status: 'in_progress', played_at: new Date().toISOString() })
-    .in('id', matchIds)
-    .eq('status', 'scheduled');
+    .in('id', candidateIds)
+    .eq('status', 'scheduled')
+    .select('id, home_team_id, away_team_id, scheduled_at, competition_id');
 
   if (claimError) {
     console.error('[match-worker] UPDATE claim failed:', claimError);
     return [];
   }
 
-  console.log(`[match-worker] Claimed ${count} matches`);
-
-  // Return the full match objects for processing. The count might be less
-  // than matchIds.length if other workers claimed some in the race window.
-  const claimedMatches = matches.filter((m) => matchIds.includes(m.id));
-  return claimedMatches;
+  console.log(`[match-worker] Claimed ${claimed?.length ?? 0} of ${candidateIds.length} candidate matches`);
+  return claimed ?? [];
 }
 
 // ── Helper: Fetch teams with rosters ───────────────────────────────────────
 
 /**
  * Fetch a single team by ID including all relations (manager, players).
- * Returns null if the team doesn't exist or fetch fails.
+ *
+ * The select intentionally requests only the five canonical player stat
+ * columns that exist in `public.players` (attacking, defending, mental,
+ * technical, athletic) — see migration 0000_init.sql.  The engine's expanded
+ * stat surface (passing, dribbling, speed, stamina, positioning, vision,
+ * goalkeeping, aggression, strength) is *derived* at runtime by
+ * normalizeTeamForEngine(), which defaults missing fields to 70.  Asking
+ * PostgREST for columns that don't exist returns a 400 from the boundary,
+ * causing fetchTeamForSimulation to return null and the whole batch to revert.
+ *
+ * @param teamId - Slug (text PK) of the team to load.
+ * @returns      Team row with nested managers[] and players[], or null on error.
  */
 async function fetchTeamForSimulation(teamId: string) {
   const { data, error } = await supabase
     .from('teams')
-    .select('id, name, location, home_ground, managers(id, name, attacking, defending, mental, athletic, technical), players(id, name, position, age, jersey_number, starter, attacking, defending, passing, dribbling, speed, stamina, strength, positioning, vision, goalkeeping, aggression, mental, technical, athletic, is_active)')
+    // managers table stores only identity (id, name, nationality, style) —
+    // the engine's coaching stat surface (attacking/defending/mental/athletic/
+    // technical) is filled in by normalizeTeamForEngine at default 70.
+    //
+    // `color` and `capacity` feed the engine's per-event animation payload and
+    // its stadium/weather selection.  Omitting them (as the worker did before
+    // this commit) made gameEngine fall back to a *random* STADIUMS entry,
+    // which in turn picked a random `planet` and therefore the wrong
+    // PLANET_WX table — every weather-keyed mechanic was running off the
+    // wrong distribution.
+    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name), players(id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
     .eq('id', teamId)
     .single();
 
@@ -153,10 +182,41 @@ async function processMatch(match: any): Promise<boolean> {
     const home = normalizeTeamForEngine(homeData);
     const away = normalizeTeamForEngine(awayData);
 
+    // ── Pre-match context ───────────────────────────────────────────────────
+    // Fan boost + Architect bridge are both hydrated here in parallel and
+    // threaded into simulateFullMatch.  Either falling back to a no-op
+    // (no fans / no lore) is the common case in the early life of the DB
+    // and is the deliberate degradation path — never block kickoff on
+    // either of these reads.
+    const [fanBoost, architect] = await Promise.all([
+      computeFanBoost(supabase, match.home_team_id, match.away_team_id),
+      hydrateArchitectBridge(supabase),
+    ]);
+    if (fanBoost.boostedSide !== 'none') {
+      console.log(`[match-worker] Fan boost: +${fanBoost.boostAmount} to ${fanBoost.boostedSide}`);
+    }
+
     // Simulate the full 90 minutes
-    const result = simulateFullMatch(home, away);
+    const result = simulateFullMatch(home, away, fanBoost, architect);
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
+
+    // ── Append a terminal MVP event ────────────────────────────────────────
+    // The matches table has no mvp column, so we surface the engine-chosen
+    // MVP as a final event in match_events at minute=91 (a sentinel value
+    // beyond regulation, before stoppage-time events would land).  This
+    // keeps MVP-derived narratives, idol score boosts, and post-match UI
+    // rendering working off a single source of truth — the events feed —
+    // and means a missing-column schema drift can never silently erase the
+    // result of a successful 90-minute simulation again.
+    if (result.mvp && result.mvp !== '—') {
+      result.events.push({
+        minute: 91,
+        subminute: 0,
+        type: 'mvp',
+        payload: { player: result.mvp },
+      });
+    }
 
     // ── Persist events (batch-insert) ──────────────────────────────────────
     // The engine may produce 30–60 events; batch into chunks of 500
@@ -182,14 +242,66 @@ async function processMatch(match: any): Promise<boolean> {
 
     console.log(`[match-worker] Inserted ${result.events.length} events`);
 
+    // ── Persist per-player stats ───────────────────────────────────────────
+    // The engine returns playerStats keyed by player *name*; the DB table
+    // match_player_stats is keyed by player_id (uuid) + team_id (slug).
+    // Build a name→{id, team_id} map from the rosters we already loaded so
+    // we don't need a second round-trip.  Players who never touched a stat
+    // counter during the match (no goals/assists/cards) are skipped so the
+    // table only carries meaningful rows — the idol leaderboard reads sum
+    // aggregates and treats missing rows as zeros.
+    //
+    // `minutes_played` defaults to 90 because the current engine has no
+    // substitution path; once subs are simulated this can switch to the
+    // real on-pitch duration.  `rating` is intentionally left NULL — there
+    // is no agreed scoring formula yet and downstream views accept null.
+    const playerIndex: Record<string, { id: string; teamId: string }> = {};
+    for (const p of homeData.players || []) {
+      if (p?.name && p?.id) playerIndex[p.name] = { id: p.id, teamId: homeData.id };
+    }
+    for (const p of awayData.players || []) {
+      if (p?.name && p?.id) playerIndex[p.name] = { id: p.id, teamId: awayData.id };
+    }
+
+    const statRows = Object.entries(result.playerStats || {})
+      .map(([name, s]) => {
+        const idx = playerIndex[name];
+        if (!idx) return null;
+        return {
+          match_id: match.id,
+          player_id: idx.id,
+          team_id: idx.teamId,
+          goals: s.goals || 0,
+          assists: s.assists || 0,
+          yellow_cards: s.yellowCard ? 1 : 0,
+          red_cards: s.redCard ? 1 : 0,
+          minutes_played: 90,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    if (statRows.length > 0) {
+      const { error: statsError } = await supabase
+        .from('match_player_stats')
+        .insert(statRows);
+      if (statsError) throw new Error(`Insert match_player_stats failed: ${statsError.message}`);
+      console.log(`[match-worker] Persisted ${statRows.length} player-stat rows`);
+    }
+
     // ── Update match to completed ──────────────────────────────────────────
+    // The matches table only has columns for status / scores / timestamps —
+    // there is intentionally no `mvp_player_name` column.  The MVP is captured
+    // inside the final `mvp` event payload in match_events, where downstream
+    // views (player_idol_score, public match feed) read it from.  Updating a
+    // non-existent column here would throw at the PostgREST boundary and
+    // revert every match in this batch back to 'scheduled' — masking the
+    // simulation work that just succeeded.
     const { error: updateError } = await supabase
       .from('matches')
       .update({
         status: 'completed',
         home_score: result.finalScore[0],
         away_score: result.finalScore[1],
-        mvp_player_name: result.mvp,
       })
       .eq('id', match.id);
 
@@ -197,14 +309,57 @@ async function processMatch(match: any): Promise<boolean> {
       throw new Error(`Update match failed: ${updateError.message}`);
     }
 
+    // ── Post-match orchestration ──────────────────────────────────────────
+    // These side-effects used to be wired through the browser-side
+    // `match.completed` event bus, which is an in-memory singleton that
+    // can never reach a server-side edge worker.  Now they run inline in
+    // service-role context immediately after the match is marked complete.
+    //
+    // Failures here are logged but do NOT throw — the match is already
+    // recorded as completed and we shouldn't revert simulation work just
+    // because a downstream effect (e.g. settlement) hit a transient DB
+    // blip.  Each effect is independently retry-safe; cron will pick up
+    // missed work in the next pass for season transitions, and a manual
+    // settlement sweep can clean up any open wagers that slipped through.
+    try {
+      const settlement = await settleMatchWagers(
+        supabase, match.id, result.finalScore[0], result.finalScore[1],
+      );
+      if (settlement.settled > 0) {
+        console.log(`[match-worker] Settled ${settlement.settled} wagers, total payout ${settlement.totalPayout}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] settleMatchWagers threw for ${match.id}:`, (err as Error)?.message ?? err);
+    }
+
+    try {
+      const seasonTx = await maybeTransitionSeasonForMatch(supabase, match.id);
+      if (seasonTx.transitioned) {
+        console.log(`[match-worker] Season opened for voting after match ${match.id}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] maybeTransitionSeasonForMatch threw for ${match.id}:`, (err as Error)?.message ?? err);
+    }
+
     console.log(`[match-worker] Match ${match.id} completed successfully`);
     return true;
   } catch (err) {
     console.error(`[match-worker] Error processing match ${match.id}:`, err);
 
-    // Revert status to 'scheduled' so another worker (or next cron invocation)
-    // will retry.  We don't throw here — the worker must process all matches
-    // in the batch even if some fail.
+    // ── Roll back partial state before reverting status ────────────────────
+    // If the failure landed *after* some events / stat rows were already
+    // inserted (e.g. a mid-match insert hit a CHECK violation), leaving the
+    // partial rows in place would cause the next retry to duplicate them —
+    // and `match_events` has no per-(match_id, minute, type) unique index to
+    // catch that.  Delete cascade isn't an option because we want to keep
+    // the failed match around to retry, so we explicitly clear any rows
+    // this attempt left behind before flipping status back to 'scheduled'.
+    await supabase.from('match_events').delete().eq('match_id', match.id);
+    await supabase.from('match_player_stats').delete().eq('match_id', match.id);
+
+    // Revert status so another worker (or next cron invocation) will retry.
+    // We don't throw — the worker must process the rest of the batch even
+    // if one match fails.
     const { error: revertError } = await supabase
       .from('matches')
       .update({ status: 'scheduled', played_at: null })
@@ -259,7 +414,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     console.error('[match-worker] Unhandled error:', err);
-    // Still return 200 so cron doesn't backoff
-    return new Response(JSON.stringify({ error: 'Internal worker error' }), { status: 200 });
+    // Return 200 so cron doesn't backoff; full error is in logs only
+    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 200 });
   }
 });

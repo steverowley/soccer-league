@@ -37,6 +37,25 @@ export interface EnginePlayer extends PlayerStats {
 export interface EngineTeam {
   id: string;
   name: string;
+  /** Short identifier (e.g. "MAR", "VEN") used by gameEngine.js as the event
+   *  `team` tag.  simulateFullMatch credits goals by matching `ev.team` against
+   *  this field — it MUST be populated by normalizeTeamForEngine or every goal
+   *  silently falls to the away column. */
+  shortName: string;
+  /** Team colour (CSS / hex) baked into every goal event's `animation.color`
+   *  payload.  If absent, the renderer falls back to a neutral default and the
+   *  goal-celebration UI loses its team identity. */
+  color: string;
+  /** Stadium object consumed by gameEngine.js `createAIManager`:
+   *    `homeTeam.stadium || pick(STADIUMS)` → `PLANET_WX[stadium.planet]`
+   *  Supplying this from the team's own DB row keeps the planet/weather
+   *  correlation real; omitting it makes the engine pick a random stadium
+   *  and therefore the wrong PLANET_WX distribution. */
+  stadium: {
+    name: string;
+    planet: string;
+    capacity: string;
+  };
   homeGround: string;
   planet: string;
   players: EnginePlayer[];

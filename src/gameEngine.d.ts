@@ -372,7 +372,10 @@ export function genEvent(
   homeTeam:           EngineTeam,
   awayTeam:           EngineTeam,
   momentum:           [number, number],
-  possession:         number,
+  // Tuple: [homeShare, awayShare].  Engine reads possession[0] to pick the
+  // in-possession side each minute; the previous `number` declaration here
+  // was a lie that masked a real "home never scores" bug in the wrappers.
+  possession:         [number, number],
   playerStats:        PlayerStatsMap,
   score:              [number, number],
   activePlayers:      { home: string[]; away: string[] },

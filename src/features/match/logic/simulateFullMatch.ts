@@ -1,8 +1,11 @@
 // ── features/match/logic/simulateFullMatch.ts ────────────────────────────────
-// Pure 90-minute match simulator built on top of gameEngine.genEvent().  The
-// match worker (scripts/match-worker.ts) calls this once per due fixture at
-// its kickoff_at instant, then persists the returned event array to
-// match_events for the live viewer to reveal in elapsed real-time.
+// Pure 90-minute match simulator built on top of gameEngine.genEvent().
+//
+// The PRODUCTION worker now lives in the Deno edge function at
+// `supabase/functions/match-worker/simulateFullMatch.ts` (a near-identical
+// twin of this file).  This src/ copy is the client-side simulator used by
+// in-app preview / debug tooling.  Keep the two in lockstep manually until
+// a build step consolidates them.
 //
 // WHY THIS LIVES IN logic/ (not next to gameEngine.js)
 //   gameEngine.js owns *event generation* — given current state, decide what
@@ -110,11 +113,19 @@ const REGULATION_MINUTES = 90;
 const INITIAL_MOMENTUM: [number, number] = [50, 50];
 
 /**
- * Possession is a coarse 0–100 home-bias percentage threaded into genEvent.
- * The engine recomputes it implicitly via momentum, so we feed a constant 50
- * here and let momentum carry the bias.
+ * Per-side possession percentage seed.  gameEngine picks the in-possession
+ * side every minute via `Math.random() * 100 < possession[0] ? home : away`
+ * — so this MUST be a tuple where index 0 is the home share.  Passing a
+ * scalar makes `possession[0]` undefined, `Math.random() * 100 < undefined`
+ * is always false, and the away team gets the ball on every single event,
+ * producing the "home team never scores" pattern.  This was a real bug in
+ * production (see worker `simulateFullMatch.ts`) before being fixed; this
+ * UI-side simulator had the same drift until now.
+ *
+ * 50/50 is the kickoff seed; the engine biases per-minute selection by
+ * momentum, fatigue, tactics, etc., so a neutral start is correct here.
  */
-const INITIAL_POSSESSION = 50;
+const INITIAL_POSSESSION: [number, number] = [50, 50];
 
 // ── Internal helper: extract a SimulatedEvent from a MatchEvent ───────────────
 
