@@ -50,6 +50,16 @@ import {
   type PunditTakeContext,
   type PunditTakeResult,
 } from './resolvers/punditTake';
+import {
+  resolveShootOrPass,
+  type ShootOrPassContext,
+  type ShootOrPassResult,
+} from './resolvers/shootOrPass';
+import {
+  resolveCardSeverity,
+  type CardSeverityContext,
+  type CardSeverityResult,
+} from './resolvers/cardSeverity';
 
 // ── Decision-kind union ─────────────────────────────────────────────────────
 // Each enum-shaped string keys into the registry.  Adding a new resolver
@@ -61,13 +71,18 @@ export type DecisionKind =
   // Reflection tier — Phase 6
   | 'odds_slant'
   | 'journalist_story_pick'
-  | 'pundit_take';
+  | 'pundit_take'
+  // Reflex tier — Phase 8 (in-match, sub-second; pure weight outputs)
+  | 'shoot_or_pass'
+  | 'card_severity';
 
 /** Decision-kind → context input shape. */
 export interface DecisionInputs {
   odds_slant: OddsSlantContext;
   journalist_story_pick: JournalistStoryPickContext;
   pundit_take: PunditTakeContext;
+  shoot_or_pass: ShootOrPassContext;
+  card_severity: CardSeverityContext;
 }
 
 /** Decision-kind → result shape. */
@@ -75,6 +90,8 @@ export interface DecisionResults {
   odds_slant: OddsSlantResult;
   journalist_story_pick: JournalistStoryPickResult;
   pundit_take: PunditTakeResult;
+  shoot_or_pass: ShootOrPassResult;
+  card_severity: CardSeverityResult;
 }
 
 // ── Shared resolver-argument shape ─────────────────────────────────────────
@@ -127,6 +144,14 @@ export function runDecision<K extends DecisionKind>(
       const r = req as DecisionRequest<'pundit_take'>;
       return resolvePunditTake(r.persona, r.memories, r.context) as DecisionResults[K];
     }
+    case 'shoot_or_pass': {
+      const r = req as DecisionRequest<'shoot_or_pass'>;
+      return resolveShootOrPass(r.persona, r.memories, r.context) as DecisionResults[K];
+    }
+    case 'card_severity': {
+      const r = req as DecisionRequest<'card_severity'>;
+      return resolveCardSeverity(r.persona, r.memories, r.context) as DecisionResults[K];
+    }
     default: {
       // Exhaustiveness check — TypeScript will complain here if a new
       // DecisionKind is added without updating the switch.
@@ -139,10 +164,14 @@ export function runDecision<K extends DecisionKind>(
 // Re-export types so callers can import from the barrel without
 // reaching into the resolvers/ directory.
 export type {
+  CardSeverityContext,
+  CardSeverityResult,
   JournalistStoryPickContext,
   JournalistStoryPickResult,
   OddsSlantContext,
   OddsSlantResult,
   PunditTakeContext,
   PunditTakeResult,
+  ShootOrPassContext,
+  ShootOrPassResult,
 };
