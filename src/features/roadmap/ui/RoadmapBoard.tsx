@@ -56,6 +56,11 @@ import {
 } from '../api/items';
 import { fetchBdSnapshot, type BdIssue } from '../api/bdSnapshot';
 import { mapBdPriority, mapBdStatus } from '../logic/bdMapping';
+import {
+  listActiveClaudeSessions,
+  subscribeToClaudeSessions,
+  type ClaudeSession,
+} from '../api/claudeSessions';
 import { RoadmapColumn } from './RoadmapColumn';
 import { RoadmapCard } from './RoadmapCard';
 import { ItemEditorModal } from './ItemEditorModal';
@@ -125,6 +130,43 @@ function fromBd(issue: BdIssue): BoardItem {
   };
 }
 
+// ── Claude-session adapter ─────────────────────────────────────────────────
+// Active sessions are always pinned to the "In Progress" lane regardless
+// of anything else.  They sort to the TOP of the column via a synthetic
+// priority of -1 (lower = higher in the `priorityOrder` helper) — the
+// "Claude is working RIGHT NOW" signal beats every static bd / Supabase
+// item.
+
+/**
+ * Synthetic priority assigned to every active Claude session card so it
+ * sorts above all bd / Supabase items in the In Progress column.
+ * `priorityOrder` treats lower values as higher priority, so -1 wins
+ * against every valid 0..100 priority on a curated / bd card.
+ */
+const SESSION_BOARD_PRIORITY = -1;
+
+/**
+ * Wrap a validated `ClaudeSession` row in the `kind === 'session'`
+ * variant.  The title falls back to the branch name and then to a
+ * static placeholder so the card always renders SOMETHING readable
+ * even if the hook wrote a null title.
+ *
+ * @param session - Validated row from `listActiveClaudeSessions`.
+ * @returns       A `BoardItem` ready for `groupBoardItemsByStatus`.
+ */
+function fromSession(session: ClaudeSession): BoardItem {
+  return {
+    kind: 'session',
+    id: session.id,
+    title: session.title ?? session.branch_name ?? 'Claude session',
+    status: 'in_progress',
+    priority: SESSION_BOARD_PRIORITY,
+    created_at: session.started_at,
+    updated_at: session.updated_at,
+    session,
+  };
+}
+
 /**
  * Render the full roadmap kanban board.
  *
@@ -138,11 +180,14 @@ export function RoadmapBoard() {
   const { user, profile } = useAuth();
   const isAdmin = profile?.is_admin === true;
 
-  const [supabaseItems, setSupabaseItems] = useState<RoadmapItem[]>([]);
-  const [bdIssues, setBdIssues]           = useState<BdIssue[]>([]);
-  const [bdSnapshotAt, setBdSnapshotAt]   = useState<string>('');
-  const [loaded, setLoaded]               = useState(false);
-  const [editor, setEditor]               = useState<EditorState>({ kind: 'closed' });
+  const [supabaseItems, setSupabaseItems]   = useState<RoadmapItem[]>([]);
+  const [bdIssues, setBdIssues]             = useState<BdIssue[]>([]);
+  const [bdSnapshotAt, setBdSnapshotAt]     = useState<string>('');
+  // Live Claude sessions land in the In Progress lane and update via
+  // Supabase Realtime — see the second effect below.
+  const [sessions, setSessions]             = useState<ClaudeSession[]>([]);
+  const [loaded, setLoaded]                 = useState(false);
+  const [editor, setEditor]                 = useState<EditorState>({ kind: 'closed' });
 
   // Bumping this counter triggers the Supabase refetch — used to refresh
   // after every successful mutation without duplicating fetch logic.
@@ -151,29 +196,65 @@ export function RoadmapBoard() {
   const [refresh, setRefresh] = useState(0);
 
   // ── Initial parallel fetch + Supabase refetch on `refresh` bump ────────
+  // Three data sources fan out concurrently:
+  //   * Supabase `roadmap_items` — curated rows.
+  //   * `public/bd-snapshot.json` — bd mirror (build artefact).
+  //   * Supabase `claude_sessions` — live session ledger (also subscribes
+  //     via Realtime in the second effect below).
+  // We resolve all three before flipping `loaded` so the board renders
+  // with a complete view rather than progressively populating.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listItems(db), fetchBdSnapshot()]).then(([sb, bd]) => {
+    Promise.all([
+      listItems(db),
+      fetchBdSnapshot(),
+      listActiveClaudeSessions(db),
+    ]).then(([sb, bd, sess]) => {
       if (cancelled) return;
       setSupabaseItems(sb);
       setBdIssues(bd.issues);
       setBdSnapshotAt(bd.generated_at);
+      setSessions(sess);
       setLoaded(true);
     });
     return () => { cancelled = true; };
   }, [db, refresh]);
 
+  // ── Realtime subscription: live session changes ────────────────────────
+  // The `claude_sessions` table is written by the cloud SessionStart /
+  // Stop hooks.  On any insert / update / delete we refetch the active
+  // set — cheap because the table is tiny — and re-render.  The
+  // subscription is independent of the `refresh` counter so it stays
+  // alive across mutations on other sources.
+  useEffect(() => {
+    let cancelled = false;
+    const channel = subscribeToClaudeSessions(db, () => {
+      // Fire-and-forget refetch; cancellation guards against unmount
+      // races.  We don't propagate errors — `listActiveClaudeSessions`
+      // already logs + returns [] on failure.
+      void listActiveClaudeSessions(db).then((rows) => {
+        if (cancelled) return;
+        setSessions(rows);
+      });
+    });
+    return () => {
+      cancelled = true;
+      void channel.unsubscribe();
+    };
+  }, [db]);
+
   // ── Merge + group ──────────────────────────────────────────────────────
-  // The grouped object is recomputed only when either source changes, so
-  // typical re-renders (modal open/close, hover state) don't re-traverse
-  // the whole stream.
+  // The grouped object is recomputed only when one of the three sources
+  // changes, so typical re-renders (modal open/close, hover state) don't
+  // re-traverse the whole stream.
   const grouped = useMemo(() => {
     const merged: BoardItem[] = [
       ...supabaseItems.map(fromSupabase),
       ...bdIssues.map(fromBd),
+      ...sessions.map(fromSession),
     ];
     return groupBoardItemsByStatus(merged);
-  }, [supabaseItems, bdIssues]);
+  }, [supabaseItems, bdIssues, sessions]);
 
   /**
    * Trigger a Supabase refetch.  The increment is opaque to consumers —
@@ -293,11 +374,13 @@ export function RoadmapBoard() {
     );
   }
 
-  // bd / Supabase counts for the legend strip above the board — gives an
-  // at-a-glance signal of where the data came from and when bd was last
-  // snapshotted.
-  const bdCount = bdIssues.length;
+  // Legend-strip counts for each data source.  Surfacing all three lets
+  // the user see at a glance which streams the board is currently
+  // merging — useful when a column unexpectedly empties (snapshot stale,
+  // hook env vars unset, etc.).
+  const bdCount       = bdIssues.length;
   const supabaseCount = supabaseItems.length;
+  const sessionCount  = sessions.length;
 
   return (
     <>
@@ -328,6 +411,24 @@ export function RoadmapBoard() {
           }} />
           <span style={{ color: COLORS.dust70 }}>{bdCount}</span> mirrored · bd
         </span>
+        {/* Live session count.  Hidden when zero so the legend stays
+            quiet during off-hours and lights up only when something is
+            actually happening on the branch. */}
+        {sessionCount > 0 && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: COLORS.astro,
+                boxShadow: `0 0 6px ${COLORS.astro}`,
+              }}
+            />
+            <span style={{ color: COLORS.dust70 }}>{sessionCount}</span> live · claude
+          </span>
+        )}
         {bdSnapshotAt && (
           <span>snapshot · {bdSnapshotAt.slice(0, 16).replace('T', ' ')}</span>
         )}

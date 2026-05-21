@@ -120,12 +120,14 @@ export function RoadmapCard({
       style={{
         background: CARD_BG,
         border: `1px solid ${BORDER}`,
-        // bd cards get a subtle quantum-tinted left edge to read at a
-        // glance as "linked / mirrored" without overwhelming the
-        // dust/abyss palette.
-        borderLeft: item.kind === 'bd'
-          ? `2px solid ${COLORS.quantum}`
-          : `1px solid ${BORDER}`,
+        // Left-edge accent encodes the source of the card at a glance:
+        //   * supabase → default hairline (curator-authored, no accent)
+        //   * bd       → quantum tint (mirrored / linked from bd)
+        //   * session  → astro tint (LIVE Claude session in progress)
+        borderLeft:
+          item.kind === 'bd'      ? `2px solid ${COLORS.quantum}` :
+          item.kind === 'session' ? `2px solid ${COLORS.astro}`   :
+          `1px solid ${BORDER}`,
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
@@ -181,6 +183,29 @@ export function RoadmapCard({
             bd · {item.issue.id}
           </span>
         )}
+
+        {/* Live-session badge.  Uses the astro accent + a small pulsing
+            dot to read as "happening right now" at a glance — the same
+            visual language as the legend strip on the board.  The dot
+            animation is defined inline at the bottom of the file. */}
+        {item.kind === 'session' && (
+          <span
+            style={{
+              ...CHIP_FONT,
+              color: COLORS.astro,
+              border: `1px solid ${COLORS.astro}`,
+              padding: '2px 6px',
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            title="Claude Code session in progress"
+          >
+            <span className="roadmap-session-dot" />
+            LIVE
+          </span>
+        )}
       </header>
 
       {/* ── Title ───────────────────────────────────────────────────── */}
@@ -216,6 +241,40 @@ export function RoadmapCard({
         </div>
       )}
 
+      {/* Session metadata — branch chip + optional PR link.  Branch
+          comes from git via the SessionStart hook; PR link is populated
+          later when a draft PR is pushed (currently no writer, but the
+          column is reserved so the link surfaces as soon as the hook
+          knows about it). */}
+      {item.kind === 'session' && (
+        <div
+          style={{
+            ...CHIP_FONT,
+            fontSize: 9,
+            color: COLORS.dust50,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          {item.session.branch_name && (
+            <span title={item.session.branch_name}>
+              ⎇ {item.session.branch_name}
+            </span>
+          )}
+          {item.session.pr_url && (
+            <a
+              href={item.session.pr_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: COLORS.astro, textDecoration: 'none' }}
+            >
+              PR ↗
+            </a>
+          )}
+        </div>
+      )}
+
       {/* ── Source / bd link micro-line ─────────────────────────────── */}
       {item.kind === 'supabase' && (item.item.source || item.item.bd_issue_id) && (
         <div style={{ ...CHIP_FONT, fontSize: 9, color: COLORS.dust50 }}>
@@ -234,8 +293,14 @@ export function RoadmapCard({
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        {/* Session cards anchor their footer on kickoff time — the "how
+            long has Claude been at this" signal is more useful than
+            "last db update" (Realtime patches updated_at on every
+            heartbeat).  Other variants keep the standard updated-ago. */}
         <span style={{ ...CHIP_FONT, fontSize: 9, color: COLORS.dust50 }}>
-          Updated {timeAgo(item.updated_at)}
+          {item.kind === 'session'
+            ? `Started ${timeAgo(item.session.started_at)}`
+            : `Updated ${timeAgo(item.updated_at)}`}
         </span>
 
         {showAdminActions && (
@@ -252,6 +317,28 @@ export function RoadmapCard({
           </div>
         )}
       </footer>
+
+      {/* ── Live-session dot keyframes ──────────────────────────────────
+          Scoped to the card surface; only renders inside the LIVE chip
+          when the variant is 'session'.  The animation gently scales +
+          fades a small astro-orange dot to telegraph "active right now"
+          without being distracting on a board full of static cards.
+          1.6s loop chosen so the pulse is perceptible but never urgent. */}
+      <style>{`
+        .roadmap-session-dot {
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: ${COLORS.astro};
+          box-shadow: 0 0 4px ${COLORS.astro};
+          animation: roadmap-session-dot-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes roadmap-session-dot-pulse {
+          0%, 100% { opacity: 1;   transform: scale(1);    }
+          50%      { opacity: 0.4; transform: scale(0.85); }
+        }
+      `}</style>
     </article>
   );
 }
@@ -267,7 +354,20 @@ export function RoadmapCard({
  * @returns    A paragraph element, or `null` if there is nothing to show.
  */
 function renderPreview(item: BoardItem): ReactNode {
-  const body = item.kind === 'supabase' ? item.item.notes : item.issue.description;
+  // Each variant exposes its prose under a different key:
+  //   * supabase → `notes` column
+  //   * bd       → `description` from the snapshot
+  //   * session  → no body (the card uses the live badge + branch chip
+  //                instead).  Returning `null` keeps the rendering
+  //                exhaustive without forcing a placeholder string.
+  let body: string | null = null;
+  if (item.kind === 'supabase') {
+    body = item.item.notes;
+  } else if (item.kind === 'bd') {
+    body = item.issue.description;
+  } else {
+    body = null;
+  }
   if (!body) return null;
   const shown = body.length > 140 ? `${body.slice(0, 140)}…` : body;
   return (

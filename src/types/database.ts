@@ -118,6 +118,48 @@ export type Database = {
         }
         Relationships: []
       }
+      claude_sessions: {
+        Row: {
+          account_uuid: string | null
+          branch_name: string | null
+          container_id: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          pr_url: string | null
+          session_id: string
+          started_at: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_uuid?: string | null
+          branch_name?: string | null
+          container_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          pr_url?: string | null
+          session_id: string
+          started_at?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_uuid?: string | null
+          branch_name?: string | null
+          container_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          pr_url?: string | null
+          session_id?: string
+          started_at?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       competition_teams: {
         Row: {
           competition_id: string
