@@ -741,13 +741,27 @@ interface LiveCommentaryMatch {
 function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   const db = useSupabase();
 
-  // ── Match-status guards ───────────────────────────────────────────────────
-  // Status drives every branch in this component, so we cache the three
-  // booleans up front to avoid re-typing the string comparisons everywhere.
-  const status       = match?.status ?? 'scheduled';
-  const isInProgress = status === 'in_progress';
-  const isCompleted  = status === 'completed';
-  const showSection  = isInProgress || isCompleted;
+  // ── Guard derivations ─────────────────────────────────────────────────────
+  // The "live experience" anchors on wall-clock vs scheduled_at, NOT on the
+  // match's row status.  This decouples the viewer's pacing from the worker's
+  // 30-second simulation burst: a match that completed in the DB ten minutes
+  // before a viewer opens the page should still play out at the viewer's
+  // pace from kickoff if the elapsed wall-clock is < match_duration_seconds.
+  //
+  // STATUS still gates a few things:
+  //   • Cancelled matches never render this section (no events to show).
+  //   • Pre-kickoff scheduled matches in the *future* don't render either —
+  //     there's nothing to fetch yet.
+  // Otherwise everything is time-driven via `scheduled_at + duration`.
+  const status      = match?.status ?? 'scheduled';
+  const isCancelled = status === 'cancelled';
+  const kickoffMs   = match?.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  const kickoffPassed = kickoffMs != null && kickoffMs <= Date.now();
+
+  // Render the section once kickoff has passed for any non-cancelled match,
+  // OR for any completed match (covers retroactive replays of matches whose
+  // scheduled_at metadata was lost / never set).
+  const showSection = !isCancelled && (kickoffPassed || status === 'completed');
 
   const [events,        setEvents]        = useState<MatchEventRow[]>([]);
   const [duration,      setDuration]      = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
@@ -755,11 +769,20 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   const [loaded,        setLoaded]        = useState<boolean>(false);
   const [loadError,     setLoadError]     = useState<unknown>(null);
 
+  // Derived "is the viewer still inside the paced window?" — true while
+  // wall-clock elapsed-from-kickoff is < match_duration_seconds.  Used to
+  // (a) keep the per-second tick going only while it can change anything,
+  // (b) keep the Realtime subscription open only while new events are
+  // expected, and (c) decide between "Live" headings and "Replay" headings.
+  const livePacingWindowOpen =
+    kickoffMs != null &&
+    Date.now() < kickoffMs + duration * 1000;
+
   // ── Initial fetch: event log + season pacing knob ─────────────────────────
   // Both queries fire in parallel — they hit independent tables and the page
   // can't render anything useful until both settle.  Promise.all keeps total
-  // wall-clock latency to the slower of the two.  Skipped entirely for
-  // scheduled / cancelled matches because the empty section won't render.
+  // wall-clock latency to the slower of the two.  Skipped for cancelled and
+  // pre-kickoff scheduled matches because the empty section won't render.
   useEffect(() => {
     if (!showSection || !match?.id) return undefined;
     let cancelled = false;
@@ -785,25 +808,32 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   }, [db, match?.id, showSection]);
 
   // ── Elapsed-minute clock ──────────────────────────────────────────────────
-  // Completed matches jump straight to 120 so filterEventsByElapsedMinute
-  // returns the full log on the first paint (no interval needed — nothing
-  // is going to change).  Live matches tick every LIVE_TICK_MS and feed
-  // the latest wall-clock into computeElapsedGameMinute.  The initial
-  // tick() call before setInterval guarantees we don't render an empty
-  // feed for ~1 s while waiting for the first interval fire.
+  // Always anchors on `scheduled_at + duration`.  Three branches:
+  //   1. No scheduled_at metadata → fall back to "show all" via 120 so
+  //      legacy / malformed rows still render their full event log.
+  //   2. Paced window still open (now < kickoff + duration) → tick every
+  //      LIVE_TICK_MS so freshly-elapsed events appear without a refresh.
+  //   3. Paced window has closed (replay state) → jump straight to 120 so
+  //      filterEventsByElapsedMinute returns the full log on first paint.
   useEffect(() => {
-    if (isCompleted) {
+    const kickoff = match?.scheduled_at;
+    if (!kickoff) {
+      // No anchor → defer to status for the "show everything" behaviour.
+      // Completed matches with no scheduled_at still display fully; pre-
+      // kickoff scheduled matches without metadata won't render at all
+      // (showSection is false above).
+      if (status === 'completed') setElapsedMinute(120);
+      return undefined;
+    }
+
+    const kickoffAtMs = new Date(kickoff).getTime();
+    const endAtMs     = kickoffAtMs + duration * 1000;
+
+    if (Date.now() >= endAtMs) {
+      // Paced window already closed — render as replay (full log).
       setElapsedMinute(120);
       return undefined;
     }
-    if (!isInProgress) return undefined;
-
-    // scheduled_at is the canonical kickoff anchor: matches that have
-    // transitioned to in_progress always have a scheduled_at value because
-    // the worker requires it to pick the fixture up.  Guard anyway so a
-    // malformed row can't divide-by-undefined here.
-    const kickoff = match?.scheduled_at;
-    if (!kickoff) return undefined;
 
     const tick = (): void => {
       setElapsedMinute(computeElapsedGameMinute(kickoff, new Date(), duration));
@@ -811,16 +841,20 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
     tick();
     const interval = setInterval(tick, LIVE_TICK_MS);
     return () => clearInterval(interval);
-  }, [isInProgress, isCompleted, match?.scheduled_at, duration]);
+  }, [status, match?.scheduled_at, duration]);
 
-  // ── Realtime subscription (live matches only) ─────────────────────────────
-  // Worker writes new events as it simulates them; without this subscription
-  // a viewer who landed on the page after kickoff would only ever see the
-  // events that existed at fetch time.  De-dupe by id because Realtime
-  // payloads can arrive while the initial fetch is still in flight (race
-  // window: subscribe completes before the fetch resolves).
+  // ── Realtime subscription (whenever new events may still arrive) ──────────
+  // Worker writes events as it simulates; without this a viewer who landed
+  // on the page mid-simulation would miss everything written after fetch.
+  //
+  // We keep the subscription open whenever the paced window is still open
+  // (not just for `status='in_progress'` as the old code did) because the
+  // worker may flip a match to `completed` within seconds of kickoff while
+  // the viewer is still pacing through minutes 1–89.  Closed after the
+  // window because no further events can arrive then.  De-dupe by id —
+  // Realtime payloads can arrive while the initial fetch is still in flight.
   useEffect(() => {
-    if (!isInProgress || !match?.id) return undefined;
+    if (!livePacingWindowOpen || !match?.id) return undefined;
     return subscribeToMatchEvents(db, match.id, (row) => {
       setEvents((prev) => {
         if (prev.some((e) => e.id === row.id)) return prev;
@@ -831,16 +865,20 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
         );
       });
     });
-  }, [db, match?.id, isInProgress]);
+  }, [db, match?.id, livePacingWindowOpen]);
 
   // ── Visible-event derivation ─────────────────────────────────────────────
-  // Recomputed only when events / elapsedMinute / status change.  Memoised
-  // to avoid re-running filterEventsByElapsedMinute on every parent render
-  // (cheap today but the list can grow to ~150 rows per match).
-  const visibleEvents = useMemo(() => {
-    if (isCompleted) return events;
-    return filterEventsByElapsedMinute(events, elapsedMinute);
-  }, [events, elapsedMinute, isCompleted]);
+  // Recomputed only when events / elapsedMinute change.  Memoised to avoid
+  // re-running filterEventsByElapsedMinute on every parent render (cheap
+  // today but the list can grow to ~150 rows per match).
+  //
+  // No special-case for completed matches: the elapsed-minute effect above
+  // already jumps elapsedMinute → 120 once the paced window closes, which
+  // makes filterEventsByElapsedMinute return everything anyway.
+  const visibleEvents = useMemo(
+    () => filterEventsByElapsedMinute(events, elapsedMinute),
+    [events, elapsedMinute],
+  );
 
   if (!showSection) return null;
 
@@ -849,7 +887,7 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   // either "the match is happening right now" or "here's what happened".
   // Kept inline (not extracted) because each status branch only ever appears
   // once per page render and pulling it out adds indirection without reuse.
-  const heading = isInProgress
+  const heading = livePacingWindowOpen
     ? {
         kicker:   'III',
         label:    'Live Feed',
@@ -876,7 +914,7 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
           progress so the viewer can see the clock is ticking even during
           a quiet patch of play.  Hidden on completed matches because the
           static "90" would just read as decorative chrome. */}
-      {isInProgress && loaded && (
+      {livePacingWindowOpen && loaded && (
         <div style={{
           marginTop: 24,
           display: 'inline-flex',
@@ -926,7 +964,7 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
         <p style={{
           marginTop: 24, color: DUST_50, fontSize: 13, fontStyle: 'italic',
         }}>
-          {isInProgress
+          {livePacingWindowOpen
             ? 'The void is silent. Awaiting the first whistle…'
             : 'No events were recorded for this match.'}
         </p>
