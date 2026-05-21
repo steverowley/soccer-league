@@ -79,6 +79,10 @@ export {
   saveMatchOdds,
 } from './api/oddsRepo';
 
+// Public read of the `wager_leaderboard` SQL view — top-N by net profit.
+// Consumed by /leaderboards and any future "who's winning" widget.
+export { getWagerLeaderboard } from './api/wagerLeaderboard';
+
 // ── API — bettor narratives (Phase 4) ──────────────────────────────────────
 // I/O boundary that takes a settled-match summary and writes one anonymized
 // cosmic-voice narrative row to the `narratives` table.  Used by the

@@ -80,6 +80,7 @@ const Matches      = lazy(() => import('./pages/Matches'));
 const MatchDetail  = lazy(() => import('./pages/MatchDetail'));
 const News         = lazy(() => import('./pages/News'));
 const Idols        = lazy(() => import('./pages/Idols'));
+const Leaderboards = lazy(() => import('./pages/Leaderboards'));
 const Voting       = lazy(() => import('./pages/Voting'));
 const Training     = lazy(() => import('./pages/Training'));
 const Login        = lazy(() => import('./pages/Login'));
@@ -181,6 +182,14 @@ createRoot(document.getElementById('root')!).render(
                   the score number, no formula breakdown). */}
               <Route path="news"                element={<News />} />
               <Route path="idols"               element={<Idols />} />
+              {/* /leaderboards (bd isl-aah) — combined "who's winning"
+                  surface.  Reads the wager_leaderboard SQL view sorted
+                  by net profit AND the player_idol_score view sorted by
+                  global rank, renders both side-by-side on desktop and
+                  stacked on mobile.  Public-read on both views; no auth
+                  gate.  Reuses Idols.tsx visual treatment so the two
+                  pages feel like one product. */}
+              <Route path="leaderboards"        element={<Leaderboards />} />
 
               {/* /voting + /training (PR 7).
                   Both pages are gated on auth + favourite_team_id —

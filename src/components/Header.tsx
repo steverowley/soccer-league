@@ -29,6 +29,9 @@ const NAV_LINKS = [
   { label: 'Matches', to: '/matches' },
   { label: 'News',    to: '/news'    },
   { label: 'Idols',   to: '/idols'   },
+  // Boards live alongside Idols (devotion) — same "who's winning" lens
+  // but seen through the betting + idol-score views combined on one page.
+  { label: 'Boards',  to: '/leaderboards' },
   { label: 'Voting',  to: '/voting'  },
   { label: 'Roadmap', to: '/roadmap' },
 ];
