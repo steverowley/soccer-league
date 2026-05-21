@@ -51,7 +51,7 @@ import {
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
-import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
+import { getLiveMatches, getUpcomingMatches, getActiveSeason } from '../lib/supabase';
 import { LEAGUES } from '../data/leagueData';
 import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
 
@@ -71,12 +71,10 @@ const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;
 const DUST_FAINT = COLORS.dustFaint;
 
-// ── Hero kicker constants ────────────────────────────────────────────────────
-// Hard-coded matchday/season strings until they're sourced from the
-// active-season row.  Mechanical effect: cosmetic only — these never
-// drive simulation, only the editorial banner above the masthead.
-const HERO_SEASON   = 'SEASON VII';
-const HERO_MATCHDAY = 'MATCHDAY XIV';
+// ── Hero constants ──────────────────────────────────────────────────────────
+// Cosmetic-only editorials; season/matchday are sourced live from the
+// active-season row.  Coordinates + epoch are decorative and never
+// drive simulation.
 const HERO_LIVE     = 'LIVE NOW';
 const HERO_RA       = 'RA 14ʰ 04ᵐ 12ˢ';
 const HERO_EPOCH    = 'EPOCH MMXXXVII';
@@ -106,15 +104,25 @@ export default function Home() {
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [upcomingMatches, setUpcomingMatches] = useState<any[]>([]);
 
+  // ── Active season state ──────────────────────────────────────────────────
+  // Fetched once on mount and drives hero stat values (current matchday,
+  // season year, completion percentage).  Stable across session.
+  const [activeSeason, setActiveSeason] = useState<any>(null);
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([(getLiveMatches() as any), (getUpcomingMatches(3) as any)])
-      .then(([live, upcoming]) => {
+    Promise.all([
+      (getLiveMatches() as any),
+      (getUpcomingMatches(3) as any),
+      (getActiveSeason() as any),
+    ])
+      .then(([live, upcoming, season]) => {
         if (cancelled) return;
         setLiveMatches(live);
         setUpcomingMatches(upcoming);
+        setActiveSeason(season);
       })
-      .catch((err) => { console.warn('[Home] fixture fetch failed:', err); });
+      .catch((err) => { console.warn('[Home] fixture/season fetch failed:', err); });
     return () => { cancelled = true; };
   }, [db]);
 
@@ -165,7 +173,7 @@ export default function Home() {
       <Header />
 
       {/* Hero — full bleed, two-column. */}
-      <Hero />
+      <Hero season={activeSeason} liveMatchCount={liveMatches.length} />
 
       {/* Section II — Live From The Void. */}
       <section style={{ padding: '64px 0' }}>
@@ -237,9 +245,24 @@ export default function Home() {
  *
  * Collapses to single column < 900 px (image stacks above content).
  *
+ * @param {{ season: any | null, liveMatchCount: number }} props
+ *   - season: active season row with year, current_round, total_rounds
+ *   - liveMatchCount: number of matches currently in progress
  * @returns {JSX.Element}
  */
-function Hero() {
+function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: number }) {
+  // ── Compute hero stats from live data ─────────────────────────────────────
+  // Season is fetched on Home mount; fallback to placeholders during load.
+  const year = season?.year ?? '—';
+  const currentRound = season?.current_round ?? '—';
+  const totalRounds = season?.total_rounds ?? '—';
+  const seasonLabel = season ? `SEASON ${year}` : 'SEASON —';
+  const roundLabel = season ? `MATCHDAY ${currentRound}` : 'MATCHDAY —';
+  const completionPct = season && season.total_rounds
+    ? Math.round((season.current_round / season.total_rounds) * 100)
+    : '—';
+  const matchesStr = `${String(liveMatchCount).padStart(2, '0')} / 16`;
+  const cycleStr = `${String(currentRound).padStart(3, '0')} / ${String(totalRounds).padStart(3, '0')}`;
   return (
     <section style={{ padding: '0 0 0 0' }}>
       <Container>
@@ -278,7 +301,8 @@ function Hero() {
           }}>
             {/* Kicker row — SEASON • MATCHDAY • LIVE.  Tightly tracked
                 mono small-caps; same opacity for all three so the row
-                reads as a single label rather than three. */}
+                reads as a single label rather than three.  Season/matchday
+                sourced from active_season row; LIVE is decorative. */}
             <div style={{
         ...(undefined as any),
               display: 'flex',
@@ -288,9 +312,9 @@ function Hero() {
               textTransform: 'uppercase',
               color: DUST,
             }}>
-              <span>{HERO_SEASON}</span>
+              <span>{seasonLabel}</span>
               <span style={{ color: DUST_50 }}>•</span>
-              <span>{HERO_MATCHDAY}</span>
+              <span>{roundLabel}</span>
               <span style={{ color: DUST_50 }}>•</span>
               <span>{HERO_LIVE}</span>
             </div>
@@ -352,8 +376,8 @@ function Hero() {
 
             {/* Stats grid — 4 small-caps cells separated by a top
                 hairline.  Responsive: 4 cols on desktop, 2 on tablet,
-                1 on mobile. Values are placeholder until wired to live
-                season state. */}
+                1 on mobile. Values are live from active_season + match
+                counts; show placeholders during fetch. */}
             <div className="isl-stats-grid" style={{
         ...(undefined as any),
               display: 'grid',
@@ -363,9 +387,9 @@ function Hero() {
               gap: 16,
               marginTop: 8,
             }}>
-              <HeroStat label="Active Matches" value="03 / 16" />
-              <HeroStat label="Season Cycle"   value="014 / 030" />
-              <HeroStat label="Architect"      value="Elevated" />
+              <HeroStat label="Active Matches" value={matchesStr} />
+              <HeroStat label="Season Cycle"   value={cycleStr} />
+              <HeroStat label="Completion"     value={`${completionPct}%`} />
               <HeroStat label="Build"          value="v 0.7.0" />
             </div>
           </div>
