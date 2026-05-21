@@ -28,11 +28,12 @@
 //   success so the UI reflects the mutation without a full page reload.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
+import { RoadmapBoard } from '../features/roadmap';
 import {
   getActiveSeason,
   getAdminFixtures,
@@ -151,6 +152,57 @@ interface Toast {
   message: string;
 }
 
+// ── Admin tabs ────────────────────────────────────────────────────────────────
+// Tabbed sub-nav replaces the previous single-scroll layout (1.4k lines of
+// vertical scroll) with one focused panel at a time.  Active tab is synced
+// with `?tab=…` so it's bookmarkable and the browser back-button works
+// across tab switches.  The `overview` tab is the implicit default and
+// drops the query param when active to keep `/admin` clean for the
+// no-deep-link case.
+//
+// Adding a new tab requires three lines: an entry in `ADMIN_TABS`, a
+// matching case in the body switch in `Admin()`, and (usually) a new
+// panel component.  Order in this array drives the visual tab strip
+// order; keep it stable to avoid muscle-memory churn for admins.
+
+/** Tab identifiers — narrow string union for exhaustive matching. */
+type AdminTab =
+  | 'overview'   // System stats summary — the "at a glance" landing tab.
+  | 'season'     // Season status + fast-forward / voting / enactment controls.
+  | 'fixtures'   // Paginated match table with status filter strip.
+  | 'roadmap'    // The bd-mirrored kanban board (formerly /roadmap public page).
+  | 'testing'    // Danger zone: season reset, narrative injector, player adder.
+  | 'architect'; // Architect intervention log.
+
+/**
+ * Ordered tab descriptors driving the tab strip.  Each row is a `{id, label}`
+ * pair; the id matches the `AdminTab` union and goes into the URL as `?tab=id`.
+ */
+const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
+  { id: 'overview',  label: 'Overview'  },
+  { id: 'season',    label: 'Season'    },
+  { id: 'fixtures',  label: 'Fixtures'  },
+  { id: 'roadmap',   label: 'Roadmap'   },
+  { id: 'testing',   label: 'Testing'   },
+  { id: 'architect', label: 'Architect' },
+];
+
+/** Default tab when no `?tab=…` query param is present in the URL. */
+const DEFAULT_ADMIN_TAB: AdminTab = 'overview';
+
+/**
+ * Narrow an arbitrary string (typically `URLSearchParams.get('tab')`) to the
+ * `AdminTab` union.  Returns `null` for unknown values so the caller can
+ * fall back to the default — never throws, never trusts inbound URL data.
+ *
+ * @param raw  Candidate string (e.g. `?tab=foo`) or `null` if absent.
+ * @returns    A valid `AdminTab` id, or `null` for unknown / missing input.
+ */
+function parseAdminTab(raw: string | null): AdminTab | null {
+  if (!raw) return null;
+  return ADMIN_TABS.some((t) => t.id === raw) ? (raw as AdminTab) : null;
+}
+
 // ── Root page ─────────────────────────────────────────────────────────────────
 
 /**
@@ -160,6 +212,32 @@ interface Toast {
 export default function Admin() {
   const db   = useSupabase();
   const { profile, loading: authLoading } = useAuth();
+
+  // ── Tab state (URL-synced) ─────────────────────────────────────────────────
+  // `?tab=…` drives which panel renders.  Keeping state in the URL (rather
+  // than a local `useState`) makes the active tab bookmarkable and lets
+  // browser back/forward step between tabs naturally.  Unknown / missing
+  // values fall back to DEFAULT_ADMIN_TAB without touching the URL.
+  const [params, setParams] = useSearchParams();
+  const activeTab: AdminTab = parseAdminTab(params.get('tab')) ?? DEFAULT_ADMIN_TAB;
+
+  /**
+   * Update the active tab and reflect the change in the URL.  Selecting
+   * the default tab deletes the `?tab=…` param so `/admin` stays the
+   * canonical form for the landing view.  We use `replace: true` so a
+   * burst of clicks during exploration doesn't flood the browser history.
+   *
+   * @param next  The newly-selected tab id.
+   */
+  const onTabSelect = (next: AdminTab): void => {
+    const params2 = new URLSearchParams(params);
+    if (next === DEFAULT_ADMIN_TAB) {
+      params2.delete('tab');
+    } else {
+      params2.set('tab', next);
+    }
+    setParams(params2, { replace: true });
+  };
 
   // ── Auth gate ─────────────────────────────────────────────────────────────
   // While auth is resolving we show nothing (avoids a flash of "Access Denied"
@@ -240,24 +318,167 @@ export default function Admin() {
           </Container>
         </div>
 
-        {/* ── System stats bar ──────────────────────────────────────────── */}
-        {/* Rendered outside the padded Container so it spans full width and
-            sits flush against the hero border — same treatment as the live
-            match ticker on the home page. */}
-        <SystemStatsBar db={db} />
+        {/* ── Tab strip ──────────────────────────────────────────────────
+            Persistent across all tabs so admins can jump between panels
+            without scrolling back up.  Sits flush against the hero
+            border (no padding-top) so the visual hierarchy reads
+            "title → tabs → content". */}
+        <AdminTabStrip active={activeTab} onSelect={onTabSelect} />
 
-        {/* ── Body panels ───────────────────────────────────────────────── */}
+        {/* ── Body panel (switched on tab) ───────────────────────────────
+            Only the active panel renders — unmounted tabs lose state on
+            switch, which is intentional: a stale fixture filter or
+            in-flight toast shouldn't survive context switches between
+            unrelated panels.  Each panel re-fetches on mount, so first
+            paint of a tab is always a fresh view. */}
         <Container>
-          <div style={{ padding: '40px 16px 80px', display: 'flex', flexDirection: 'column', gap: 48 }}>
-            <SeasonPanel db={db} />
-            <FixtureBrowser db={db} />
-            <ArchitectLog db={db} />
-            <TestingPanel db={db} />
+          <div style={{ padding: '32px 16px 80px' }}>
+            {activeTab === 'overview'  && <OverviewPanel  db={db} />}
+            {activeTab === 'season'    && <SeasonPanel    db={db} />}
+            {activeTab === 'fixtures'  && <FixtureBrowser db={db} />}
+            {activeTab === 'roadmap'   && <RoadmapPanel              />}
+            {activeTab === 'testing'   && <TestingPanel   db={db} />}
+            {activeTab === 'architect' && <ArchitectLog   db={db} />}
           </div>
         </Container>
       </main>
       <Footer />
     </>
+  );
+}
+
+// ── Tab strip ────────────────────────────────────────────────────────────────
+
+/**
+ * Horizontal sub-nav rendered immediately below the page hero.  Each tab is
+ * a button styled to match the global Header nav — Space Mono uppercase,
+ * 44px tap target, DUST_FAINT background on the active tab.  Scrolls
+ * horizontally on narrow viewports rather than wrapping, so the bar stays
+ * one row tall and admins can swipe through tabs on mobile.
+ *
+ * @param active    The currently-active tab id (drives the active chip).
+ * @param onSelect  Called with the tab id on click.  The caller is
+ *                  responsible for URL sync; this component is presentational.
+ */
+function AdminTabStrip({
+  active,
+  onSelect,
+}: {
+  active:   AdminTab;
+  onSelect: (id: AdminTab) => void;
+}) {
+  return (
+    <div
+      style={{
+        borderBottom: `1px solid ${HAIRLINE}`,
+        background: ABYSS,
+      }}
+    >
+      <Container>
+        <nav
+          aria-label="Admin sections"
+          style={{
+            display: 'flex',
+            gap: 4,
+            overflowX: 'auto',
+            // Hide the scrollbar on the horizontal scroll affordance — the
+            // tabs are short labels so users won't scroll often, and the
+            // scrollbar reads as visual noise underneath the active chip.
+            scrollbarWidth: 'none',
+          }}
+          className="isl-admin-tabstrip"
+        >
+          {ADMIN_TABS.map((t) => {
+            const isActive = t.id === active;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => onSelect(t.id)}
+                aria-current={isActive ? 'page' : undefined}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  minHeight: 44,
+                  fontFamily: 'Space Mono, monospace',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: isActive ? DUST : DUST_70,
+                  background: isActive ? DUST_FAINT : 'transparent',
+                  border: 'none',
+                  // 3px Quantum underline on the active tab — same
+                  // accent as the AdminButton primary fill, ties the
+                  // strip to the rest of the admin design language.
+                  borderBottom: isActive ? `3px solid ${QUANTUM}` : '3px solid transparent',
+                  padding: '10px 18px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'color 0.12s ease, background 0.12s ease',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
+      </Container>
+      <style>{`
+        .isl-admin-tabstrip::-webkit-scrollbar { display: none; }
+      `}</style>
+    </div>
+  );
+}
+
+// ── Panel: Overview ─────────────────────────────────────────────────────────
+
+/**
+ * Default landing panel.  Shows the SystemStatsBar (the "at a glance"
+ * counts that used to live above every panel) plus a short copy block
+ * explaining how to navigate the rest of the admin surface.  Kept light —
+ * the goal is "you know where you are" not "everything on one screen."
+ *
+ * @param db  Supabase client — forwarded to the embedded SystemStatsBar.
+ */
+function OverviewPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
+  return (
+    <section aria-labelledby="overview-heading">
+      <PanelHeader id="overview-heading" title="At a Glance" />
+
+      {/* Stats strip — same component the page used to render
+          unconditionally; now lives inside the overview tab. */}
+      <SystemStatsBar db={db} />
+
+      <p style={{ ...VALUE_STYLE, color: DUST_50, marginTop: 32, maxWidth: 560 }}>
+        Use the tabs above to drive the league: <strong style={{ color: DUST }}>Season</strong> for
+        status + voting controls, <strong style={{ color: DUST }}>Fixtures</strong> for the match
+        table, <strong style={{ color: DUST }}>Roadmap</strong> for the planning board,
+        <strong style={{ color: DUST }}> Testing</strong> for destructive ops, and
+        <strong style={{ color: DUST }}> Architect</strong> for the intervention log.
+      </p>
+    </section>
+  );
+}
+
+// ── Panel: Roadmap ──────────────────────────────────────────────────────────
+
+/**
+ * Embeds the bd-mirrored kanban board inside the admin tab strip.  Same
+ * component the (formerly public, now admin-gated) `/roadmap` page renders;
+ * surfacing it here gives admins a one-click path from operational state
+ * (Season, Fixtures, Architect) to planning state (Roadmap) without
+ * leaving the admin context.
+ *
+ * No `db` prop — the board pulls its own Supabase client via
+ * `useSupabase()` inside its own component tree.
+ */
+function RoadmapPanel() {
+  return (
+    <section aria-labelledby="roadmap-heading">
+      <PanelHeader id="roadmap-heading" title="Roadmap" />
+      <RoadmapBoard />
+    </section>
   );
 }
 
@@ -389,7 +610,7 @@ function SeasonPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
 
   return (
     <section aria-labelledby="season-heading">
-      <PanelHeader id="season-heading" kicker="I" title="Season Status + Controls" />
+      <PanelHeader id="season-heading" title="Season Status + Controls" />
 
       {loading ? (
         <Skeleton height={120} />
@@ -591,7 +812,7 @@ function FixtureBrowser({ db }: { db: ReturnType<typeof useSupabase> }) {
 
   return (
     <section aria-labelledby="fixture-heading">
-      <PanelHeader id="fixture-heading" kicker="II" title="Fixture Browser" />
+      <PanelHeader id="fixture-heading" title="Fixture Browser" />
 
       {/* Filter strip */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -893,7 +1114,7 @@ function TestingPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
 
   return (
     <section aria-labelledby="testing-heading">
-      <PanelHeader id="testing-heading" kicker="IV" title="Testing &amp; Data Controls" />
+      <PanelHeader id="testing-heading" title="Testing &amp; Data Controls" />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
@@ -1119,7 +1340,7 @@ function ArchitectLog({ db }: { db: ReturnType<typeof useSupabase> }) {
 
   return (
     <section aria-labelledby="architect-heading">
-      <PanelHeader id="architect-heading" kicker="III" title="Architect Intervention Log" />
+      <PanelHeader id="architect-heading" title="Architect Intervention Log" />
 
       {loading ? (
         <Skeleton height={160} />
@@ -1180,17 +1401,30 @@ function ArchitectLog({ db }: { db: ReturnType<typeof useSupabase> }) {
 // ── Primitive components ──────────────────────────────────────────────────────
 
 /**
- * Section heading with a roman-numeral kicker above the title, consistent
- * with the editorial-header pattern used across the ISL design system.
+ * Section heading rendered at the top of each admin panel.
+ *
+ * Layout: optional kicker label (small uppercase mono, dust-tinted) above
+ * a panel title (20px Space Mono).  In the pre-tabs layout the kicker
+ * held a roman numeral ("I", "II"…) to indicate panel order in the long
+ * scroll; with tabs that ordering is conveyed by the tab strip itself,
+ * so callers now omit the kicker for an unadorned title.  Kept optional
+ * rather than removed so a future editorial-style sub-section ("Phase II:
+ * Voting") can still use it.
+ *
+ * @param id      Accessible id used by the section's `aria-labelledby`.
+ * @param title   Panel title (e.g. "Season Status").
+ * @param kicker  Optional small uppercase label above the title.
  */
 function PanelHeader({ id, kicker, title }: {
-  id:     string;
-  kicker: string;
-  title:  string;
+  id:      string;
+  kicker?: string;
+  title:   string;
 }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <p style={{ ...LABEL_STYLE, color: DUST_50, marginBottom: 6 }}>{kicker}</p>
+      {kicker && (
+        <p style={{ ...LABEL_STYLE, color: DUST_50, marginBottom: 6 }}>{kicker}</p>
+      )}
       <h2
         id={id}
         style={{

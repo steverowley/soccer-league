@@ -33,7 +33,9 @@ const NAV_LINKS = [
   // but seen through the betting + idol-score views combined on one page.
   { label: 'Boards',  to: '/leaderboards' },
   { label: 'Voting',  to: '/voting'  },
-  { label: 'Roadmap', to: '/roadmap' },
+  // Roadmap is admin-only now and reached via /admin's tabbed nav.  It's
+  // intentionally absent from this public NAV strip so non-admins don't
+  // see an Access Denied surface when they click it.
 ];
 
 /**
