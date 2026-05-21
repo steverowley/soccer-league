@@ -84,6 +84,14 @@ export type {
   SimulatedEvent,
 } from './logic/simulateFullMatch';
 
+// ── League standings (Supabase-backed) ────────────────────────────────────
+// Replaces the legacy localStorage-based `computeStandings` in
+// `src/lib/matchResultsService.ts`.  Reads completed `matches` rows joined
+// to `competitions` filtered by `league_id`, aggregates W/D/L/Pts/GD per
+// team, and returns the same `StandingsRow` shape the UI already consumes.
+export { fetchLeagueStandings } from './api/standings';
+export type { StandingsRow as LeagueStandingsRow } from './api/standings';
+
 // ── Live match — data layer only ───────────────────────────────────────────
 // MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
 // pure elapsed-minute helpers and the Supabase + Realtime client stay

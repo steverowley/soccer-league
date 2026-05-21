@@ -16,13 +16,15 @@
 // surface with a backlink to /leagues.  No redirect, no router shenanigans
 // — just an honest message so the URL stays the user's URL.
 
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
-import { LEAGUES, TEAMS_BY_LEAGUE, buildStandingsRows } from '../data/leagueData';
+import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { League, Team } from '../data/leagueData';
-import { computeStandings } from '../lib/matchResultsService';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // Same pattern as Home / Leagues — destructure the shared COLORS frozen
@@ -48,22 +50,42 @@ const DUST_70  = COLORS.dust70;
  */
 export default function LeagueDetail() {
   const { leagueId } = useParams<{ leagueId: string }>();
+  const db     = useSupabase();
   const league = LEAGUES.find((l) => l.id === leagueId);
 
-  if (!league) return <UnknownLeague leagueId={leagueId} />;
-
-  // Full standings (no slice).  The 1-based position stamp drives the
-  // StandingsTable's qualification / relegation pipes; without it every
-  // row would default to position 0.
+  // ── Standings fetch ──────────────────────────────────────────────────────
+  // The legacy synchronous path read from localStorage via `computeStandings`
+  // and `buildStandingsRows`, which silently surfaced stale results from
+  // older browser sessions (and zeros for everyone else, because the new
+  // Supabase-backed worker never writes to that cache).  Now we fetch from
+  // the canonical source — completed `matches` rows joined to
+  // `competitions.league_id` — every time the leagueId changes.
   //
-  // buildStandingsRows returns leagueData.StandingsRow[] (typed, no index
-  // signature).  computeStandings expects { id, team, [key]: unknown }[]
-  // for its baseRows — widening through unknown is safe because the
-  // function only reads `id` and `team` from baseRows.
-  const rows = computeStandings(
-    league.id,
-    buildStandingsRows(league.id) as unknown as Parameters<typeof computeStandings>[1],
-  ).map((row, idx) => ({ ...row, position: idx + 1 }));
+  // `rows` starts as null (pre-fetch) so we can show a loading state without
+  // confusing it with an empty array (which now genuinely means "no fixtures
+  // in this league yet").
+  const [rows, setRows] = useState<Array<LeagueStandingsRow & { position: number }> | null>(null);
+
+  useEffect(() => {
+    if (!league) return undefined;
+    let cancelled = false;
+    setRows(null);
+    fetchLeagueStandings(db, league.id)
+      .then((fetched) => {
+        if (cancelled) return;
+        // Stamp 1-based position so StandingsTable's qualification /
+        // relegation pipes know which rows to highlight.
+        setRows(fetched.map((row, idx) => ({ ...row, position: idx + 1 })));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[LeagueDetail] standings fetch failed:', err);
+        setRows([]);
+      });
+    return () => { cancelled = true; };
+  }, [db, league?.id]);
+
+  if (!league) return <UnknownLeague leagueId={leagueId} />;
 
   const teams = TEAMS_BY_LEAGUE[league.id] ?? [];
 
@@ -124,7 +146,19 @@ export default function LeagueDetail() {
             subtitle="Full league table. Top three qualify for the Celestial Cup; ranks four through six fall into the Solar Shield. Form column shows the last five results, most-recent first."
           />
           <div style={{ marginTop: 24 }}>
-            <StandingsTable rows={rows} />
+            {/* Loading vs ready vs empty are three distinct states:
+                  rows === null   → fetch in flight (italic loading note)
+                  rows.length=0   → fetch returned no completed fixtures
+                  rows.length>0   → real standings
+                The legacy synchronous path collapsed all three into the
+                same render branch, which is part of how stale localStorage
+                rows used to bleed through. */}
+            {rows === null && (
+              <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
+                Tabulating cosmic results…
+              </p>
+            )}
+            {rows !== null && <StandingsTable rows={rows} />}
           </div>
         </Container>
       </section>
