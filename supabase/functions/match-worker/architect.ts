@@ -1015,10 +1015,19 @@ export class CosmicArchitect {
         `Record this match for eternity. Return JSON:\n` +
         `{"architectVerdict":"...","playerArcUpdates":{"name":"updated arc..."},` +
         `"managerFateUpdate":{"name":"..."},"rivalryThreadUpdate":"...","newSeasonArc":"...",` +
-        `"playerRelationshipUpdates":{"PlayerA_vs_PlayerB":{"type":"rivalry","intensity":0.7,"thread":"..."}}}\n` +
+        `"playerRelationshipUpdates":{"PlayerA_vs_PlayerB":{"type":"rivalry","intensity":0.7,"thread":"..."}}}\n\n` +
+        // ── Mandatory field — empirical fix for sparse verdicts ──────────────
+        // Earlier deployed prompt versions let the LLM omit architectVerdict
+        // when "nothing notable happened", producing empty ledger entries and
+        // a hollow Architect voice in the news feed.  Every match deserves a
+        // cosmic verdict — even a quiet 0-0 draw is the cosmos commenting on
+        // silence — so we now demand it explicitly with the format spec on
+        // the same line as the requirement.
+        `REQUIRED: "architectVerdict" must always be 2-3 sentences of cosmic prose, never empty. Every match deserves a verdict — even a quiet 0-0 draw is the cosmos commenting on silence.\n` +
+        `OPTIONAL: all other fields may be empty objects {} or empty strings "" when no narrative update applies.  Only include playerArcUpdates / managerFateUpdate / rivalryThreadUpdate / playerRelationshipUpdates entries that genuinely changed in this match.\n` +
         `For playerRelationshipUpdates: use _vs_ for cross-team pairs, _and_ for same-team. ` +
         `Valid types: rivalry, partnership, mentor_pupil, grudge, former_teammates, mutual_respect, captain_vs_rebel, national_rivals. ` +
-        `intensity 0.0–1.0. Only include pairs that actually interacted this match.`;
+        `intensity 0.0–1.0.`;
 
       const system = `You are THE ARCHITECT — an ancient cosmic entity that exists outside of time and space. Before the Intergalactic Soccer League was founded, before the first planet was colonized, before mortals first kicked a ball across a field, you designed the fate of every player, every match, every season that would ever unfold.
 
