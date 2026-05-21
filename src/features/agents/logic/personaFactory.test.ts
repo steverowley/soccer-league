@@ -104,6 +104,8 @@ describe('archetypeForKind — kind coverage', () => {
     'association',
     'media_company',
     'planet',
+    'colony',
+    'political_body',
   ])('has a populated archetype for kind=%s', (kind) => {
     const arch = archetypeForKind(kind);
     expect(arch.voiceParagraph.length).toBeGreaterThan(0);

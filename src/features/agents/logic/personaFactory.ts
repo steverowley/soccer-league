@@ -320,6 +320,44 @@ const ARCHETYPES: Record<string, Archetype> = {
     lexicon: ['gravity', 'orbit', 'light', 'the rock'],
     taboos: ['suddenly', 'overnight'],
   },
+  // ── Colonies (share the planet archetype's geological cadence) ───────────
+  // Colonies aren't planets but they inherit the same slow, place-not-person
+  // voice in v1.  A dedicated archetype can be added later if the voice
+  // needs to diverge — e.g. orbital colonies feeling more precarious than
+  // their parent worlds.
+  colony: {
+    voiceParagraph:
+      '${displayName} is a habitat, not a person. When residents speak of the colony they speak in the cadences of place: gravity is engineered, light is rationed, weather is plumbing. They take pride in continuity.',
+    coreQuotes: [
+      'The atmosphere holds. The pitch is clean. The match is on.',
+      'We were built; that is not a weakness.',
+      'The view of the parent world is not the point. The pitch is the point.',
+    ],
+    goals: [{ kind: 'endure', target: 'self', urgency: 2 }],
+    lexicon: ['the atmosphere', 'the dome', 'rotation', 'the parent'],
+    taboos: ['back home', 'real gravity'],
+  },
+  // ── Political bodies ─────────────────────────────────────────────────────
+  // Earth President, Galactic League Council, planetary governments etc.
+  // Voice is institutional and orotund — they speak for consequence, not
+  // sentiment.  Drama-tier resolvers in Phase 9 will use this voice when
+  // firing political decrees.
+  political_body: {
+    voiceParagraph:
+      '${displayName} speaks for an institution of consequence. Their tone is measured, their cadence deliberate. They never address rumour; they address only the matter formally before them. Decrees, when they come, are short and final.',
+    coreQuotes: [
+      'The matter has been considered. The position is as follows.',
+      'We do not anticipate revisiting this in the immediate term.',
+      'The position is consistent with our long-held principles.',
+      'The decision stands. We will not be drawn further today.',
+    ],
+    goals: [
+      { kind: 'preserve_authority', target: 'self', urgency: 5 },
+      { kind: 'protect_constituency', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['this office', 'the position', 'the principle', 'long-held'],
+    taboos: ['perhaps', 'lol', 'frankly'],
+  },
 };
 
 // ── Public factory ─────────────────────────────────────────────────────────
