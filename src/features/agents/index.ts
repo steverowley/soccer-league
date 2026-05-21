@@ -145,3 +145,17 @@ export type {
 } from './logic/decisions';
 export type { JournalistStoryCandidate } from './logic/resolvers/journalistStoryPick';
 export type { PunditTakeCandidate } from './logic/resolvers/punditTake';
+
+// ── Logic — voice coherence guard (Phase 10) ───────────────────────────────
+// Pure ingest-time validator for LLM-generated snippets.  Combines a
+// case-insensitive taboo substring check with a bag-of-words cosine
+// drift score against the persona's core_quotes + lexicon anchor.
+// Designed to be wired into the corpus-enricher AND into any other
+// LLM consumer that wants the same coherence guarantee.
+export {
+  DRIFT_MIN_COSINE,
+  acceptSnippet,
+  buildReferenceVector,
+  driftScore,
+  findTabooViolation,
+} from './logic/voiceGuard';
