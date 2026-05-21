@@ -33,6 +33,31 @@
 import { ensureFocusOptionsForSeason } from './focusOptionsGenerator.ts';
 import { seedCupCompetitions, advanceCupRound } from './cupSeeder.ts';
 
+// ── Tuning constants (KEEP IN SYNC with src/features/agents/logic/memoryWriter.ts) ──
+// Two separate runtimes, one canonical scale.  When either constant moves
+// in src/, update it here too — the dedup index on (entity_id, fact_kind,
+// occurred_at, md5(payload)) only merges rows with identical payloads, so
+// salience drift would split the dual writes into two rows.
+
+/**
+ * Default salience for `match_result` memories.
+ *
+ * MECHANICAL EFFECT: 4 of 10.  Routine results are ambient texture in the
+ * 448-match season; the corpus-enricher's "top-N high-salience memories"
+ * prompt slice prefers career beats over weekly fixtures.  Trouncings
+ * escalate to 6 via LOPSIDED_SCORE_DELTA.
+ */
+const MATCH_RESULT_SALIENCE = 4;
+
+/**
+ * Score delta (in goals) above which a match memory escalates to salience 6.
+ *
+ * MECHANICAL EFFECT: 3 goals.  A 3-0 or 4-1 result is a story; a 1-0 is
+ * Tuesday.  Drives the same threshold as src/features/agents — see the
+ * MATCH_RESULT_SALIENCE / LOPSIDED_SCORE_DELTA pair in memoryWriter.ts.
+ */
+const LOPSIDED_SCORE_DELTA = 3;
+
 // ── Pure logic: wager outcome resolution ─────────────────────────────────
 
 export type MatchOutcome = 'home' | 'away' | 'draw';
@@ -298,6 +323,240 @@ export async function maybeTransitionSeasonForMatch(
     transitioned: wonRace,
     reason: wonRace ? 'season_opened_for_voting' : 'season_already_transitioned',
   };
+}
+
+// ── Side-effect: write entity_memories rows for the completed match ─────
+// Mirrors the browser-side MemoryWriteListener (src/features/agents/ui/
+// MemoryWriteListener.tsx) so the corpus-enricher receives memories even
+// when no user happens to be online at match-completion time.
+//
+// DUPLICATION RATIONALE
+//   The browser listener imports from src/features/agents/logic/memoryWriter.ts
+//   (pure builder) + src/features/agents/api/memories.ts (insertMemory).
+//   Edge functions can't reach either path — see the WHY block at the top
+//   of this file.  We duplicate `buildMatchCompletionMemories` as a pure
+//   helper here so the two runtimes produce IDENTICAL rows that the dedup
+//   unique index on (entity_id, fact_kind, occurred_at, md5(payload))
+//   silently merges into a single record.  Keep this in sync with the
+//   source-of-truth implementation in src/features/agents/logic/memoryWriter.ts.
+//
+// FACT KINDS WRITTEN
+//   - 'match_result' for the referee (when assigned) and both managers.
+//     One row each, identical JSONB payload skeleton, differentiated by
+//     `perspective: 'home' | 'away'` on the manager rows.
+
+/** Subset of an `entity_memories` row this duplicated builder produces. */
+interface MatchMemoryInsert {
+  entity_id: string;
+  fact_kind: string;
+  payload: Record<string, unknown>;
+  salience: number;
+  subjects: string[];
+  occurred_at: string;
+}
+
+/** Inputs the duplicated builder needs.  Mirrors `MatchCompletedPayload`. */
+interface MatchMemoryEventInput {
+  matchId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number;
+  awayScore: number;
+  competitionId: string;
+}
+
+/** DB-resolved entity IDs the builder ties memories to. */
+interface MatchMemoryContext {
+  refereeId: string | null;
+  homeManagerId: string | null;
+  awayManagerId: string | null;
+  occurredAt: string;
+}
+
+/**
+ * Pure mapping from a completed-match event + resolved involved-entities
+ * context to the memory rows that need writing.  Mirrors
+ * `buildMatchCompletionMemories` in src/features/agents/logic/memoryWriter.ts
+ * — identical inputs MUST yield identical outputs so the dedup index can
+ * collapse the dual-write to one row.
+ *
+ * @param event  Match-completion event data.
+ * @param ctx    Resolved entity IDs + the canonical occurred_at timestamp.
+ * @returns      Memory rows for whichever entity IDs are non-null.  Empty
+ *               when no involved entities were resolved.
+ */
+function buildMatchCompletionMemories(
+  event: MatchMemoryEventInput,
+  ctx: MatchMemoryContext,
+): MatchMemoryInsert[] {
+  // Salience escalates for lopsided results — see LOPSIDED_SCORE_DELTA
+  // for the rationale.
+  const scoreDelta = Math.abs(event.homeScore - event.awayScore);
+  const salience = scoreDelta >= LOPSIDED_SCORE_DELTA ? 6 : MATCH_RESULT_SALIENCE;
+
+  // Common JSONB body — every involved entity records the same factual
+  // skeleton so the enricher can quote "your 3-0 win at Mars Athletic"
+  // without joining out to matches.
+  const commonPayload: Record<string, unknown> = {
+    matchId: event.matchId,
+    homeTeamId: event.homeTeamId,
+    awayTeamId: event.awayTeamId,
+    homeScore: event.homeScore,
+    awayScore: event.awayScore,
+    competitionId: event.competitionId,
+  };
+
+  const memories: MatchMemoryInsert[] = [];
+
+  // The referee remembers the match.  `subjects` stays empty because team
+  // slugs aren't UUIDs and the column expects entity_id UUIDs only.
+  if (ctx.refereeId) {
+    memories.push({
+      entity_id: ctx.refereeId,
+      fact_kind: 'match_result',
+      payload: commonPayload,
+      salience,
+      subjects: [],
+      occurred_at: ctx.occurredAt,
+    });
+  }
+
+  // Each manager remembers the match from their perspective — `perspective`
+  // tags the JSONB body so the enricher can frame win/loss/draw correctly.
+  if (ctx.homeManagerId) {
+    memories.push({
+      entity_id: ctx.homeManagerId,
+      fact_kind: 'match_result',
+      payload: { ...commonPayload, perspective: 'home' },
+      salience,
+      subjects: [],
+      occurred_at: ctx.occurredAt,
+    });
+  }
+
+  if (ctx.awayManagerId) {
+    memories.push({
+      entity_id: ctx.awayManagerId,
+      fact_kind: 'match_result',
+      payload: { ...commonPayload, perspective: 'away' },
+      salience,
+      subjects: [],
+      occurred_at: ctx.occurredAt,
+    });
+  }
+
+  return memories;
+}
+
+/** Diagnostic returned by {@link writeMatchCompletionMemories}. */
+export interface MemoryWriteSummary {
+  /** Number of `entity_memories` rows attempted (referee + managers actually resolved). */
+  attempted: number;
+  /** Number of inserts the DB accepted (the rest were either errors or no-op duplicates). */
+  inserted: number;
+}
+
+/**
+ * Resolve the involved entities for a just-completed match (referee + both
+ * managers), build the matching `match_result` memory rows, and bulk-insert.
+ *
+ * Safe to call multiple times for the same match — the dedup unique index
+ * on (entity_id, fact_kind, occurred_at, md5(payload)) makes repeat inserts
+ * a no-op.
+ *
+ * Best-effort throughout: missing lookups are silently skipped (no
+ * involved entity → no orphan memory) and insertion failures are
+ * warn-logged without throwing.  The caller does not act on the result
+ * beyond logging.
+ *
+ * @param db              Supabase service-role client.
+ * @param matchId         UUID of the completed match (drives the referee lookup).
+ * @param homeTeamId      Home team slug.
+ * @param awayTeamId      Away team slug.
+ * @param homeScore       Final home goals.
+ * @param awayScore       Final away goals.
+ * @param competitionId   UUID of the match's competition (carried in payload only).
+ * @returns               Summary with attempted + inserted counts.
+ */
+export async function writeMatchCompletionMemories(
+  db: any,
+  matchId: string,
+  homeTeamId: string,
+  awayTeamId: string,
+  homeScore: number,
+  awayScore: number,
+  competitionId: string,
+): Promise<MemoryWriteSummary> {
+  // STEP 1: referee_id + canonical timestamp from the match row.
+  // `played_at` is the schema's "match finished" timestamp; fallback to
+  // wall clock when null keeps memories aligned with reality without
+  // crashing.
+  const matchRow = await db
+    .from('matches')
+    .select('referee_id, played_at')
+    .eq('id', matchId)
+    .maybeSingle();
+
+  if (matchRow.error) {
+    console.warn('[writeMatchCompletionMemories] match fetch failed:', matchRow.error.message);
+  }
+  const refereeId: string | null = matchRow.data?.referee_id ?? null;
+  const occurredAt: string =
+    matchRow.data?.played_at ?? new Date().toISOString();
+
+  // STEP 2: manager entity_ids for both teams.  One query covers both —
+  // managers are 1:1 with teams.
+  const managersRow = await db
+    .from('managers')
+    .select('team_id, entity_id')
+    .in('team_id', [homeTeamId, awayTeamId]);
+
+  if (managersRow.error) {
+    console.warn('[writeMatchCompletionMemories] managers fetch failed:', managersRow.error.message);
+  }
+  const managerRows: Array<{ team_id: string; entity_id: string | null }> =
+    managersRow.data ?? [];
+  const homeManagerId: string | null =
+    managerRows.find((m) => m.team_id === homeTeamId)?.entity_id ?? null;
+  const awayManagerId: string | null =
+    managerRows.find((m) => m.team_id === awayTeamId)?.entity_id ?? null;
+
+  // STEP 3: build the rows.
+  const memories = buildMatchCompletionMemories(
+    {
+      matchId,
+      homeTeamId,
+      awayTeamId,
+      homeScore,
+      awayScore,
+      competitionId,
+    },
+    { refereeId, homeManagerId, awayManagerId, occurredAt },
+  );
+
+  if (memories.length === 0) {
+    return { attempted: 0, inserted: 0 };
+  }
+
+  // STEP 4: bulk insert.  Single batched insert keeps the round-trip count
+  // at 3 (match fetch + managers fetch + insert) regardless of how many
+  // entities turned up.  Dedup index makes this safe to retry.
+  const { error: insertErr, count } = await db
+    .from('entity_memories')
+    .insert(memories, { count: 'exact' });
+
+  if (insertErr) {
+    // 23505 = unique_violation — every row was a duplicate of a prior
+    // browser-side write.  That's the expected happy path when a user was
+    // online; log at debug-only level once we have one.
+    if (insertErr.code === '23505') {
+      return { attempted: memories.length, inserted: 0 };
+    }
+    console.warn('[writeMatchCompletionMemories] insert failed:', insertErr.message);
+    return { attempted: memories.length, inserted: 0 };
+  }
+
+  return { attempted: memories.length, inserted: count ?? memories.length };
 }
 
 // ── Side-effect: advance the cup bracket after a cup match completes ─────

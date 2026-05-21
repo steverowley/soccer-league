@@ -30,7 +30,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
-import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket } from './postMatchEffects.ts';
+import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket, writeMatchCompletionMemories } from './postMatchEffects.ts';
 import { prepareArchitectForMatch, type CosmicArchitect, type LoreStore } from './architect.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
@@ -491,6 +491,31 @@ async function processMatch(match: any): Promise<boolean> {
       }
     } catch (err) {
       console.warn(`[match-worker] maybeTransitionSeasonForMatch threw for ${match.id}:`, (err as Error)?.message ?? err);
+    }
+
+    // ── Server-side memory writes ───────────────────────────────────────────
+    // The browser-side MemoryWriteListener writes entity_memories rows for
+    // every involved actor (referee + both managers) on `match.completed`,
+    // but only when a user is online to receive the bus event.  This is the
+    // server-side mirror — guarantees the corpus-enricher always has fresh
+    // memories to consume, regardless of who's watching.  Dual writes
+    // collapse to one row via the dedup unique index on
+    // (entity_id, fact_kind, occurred_at, md5(payload)) in migration 0035.
+    try {
+      const memSummary = await writeMatchCompletionMemories(
+        supabase,
+        match.id,
+        match.home_team_id,
+        match.away_team_id,
+        result.finalScore[0],
+        result.finalScore[1],
+        match.competition_id ?? '',
+      );
+      if (memSummary.inserted > 0) {
+        console.log(`[match-worker] Wrote ${memSummary.inserted}/${memSummary.attempted} match_result memories for match ${match.id}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] writeMatchCompletionMemories threw for ${match.id}:`, (err as Error)?.message ?? err);
     }
 
     // ── Post-match Architect lore save ─────────────────────────────────────
