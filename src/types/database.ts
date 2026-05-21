@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       agent_runs: {
@@ -325,71 +350,6 @@ export type Database = {
         }
         Relationships: []
       }
-      entity_relationships: {
-        Row: {
-          from_id: string
-          kind: string
-          meta: Json | null
-          strength: number
-          to_id: string
-        }
-        Insert: {
-          from_id: string
-          kind: string
-          meta?: Json | null
-          strength?: number
-          to_id: string
-        }
-        Update: {
-          from_id?: string
-          kind?: string
-          meta?: Json | null
-          strength?: number
-          to_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "entity_relationships_from_id_fkey"
-            columns: ["from_id"]
-            isOneToOne: false
-            referencedRelation: "entities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "entity_relationships_to_id_fkey"
-            columns: ["to_id"]
-            isOneToOne: false
-            referencedRelation: "entities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      entity_traits: {
-        Row: {
-          entity_id: string
-          trait_key: string
-          trait_value: Json
-        }
-        Insert: {
-          entity_id: string
-          trait_key: string
-          trait_value?: Json
-        }
-        Update: {
-          entity_id?: string
-          trait_key?: string
-          trait_value?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "entity_traits_entity_id_fkey"
-            columns: ["entity_id"]
-            isOneToOne: false
-            referencedRelation: "entities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       entity_memories: {
         Row: {
           consumed_count: number
@@ -475,6 +435,45 @@ export type Database = {
           },
         ]
       }
+      entity_relationships: {
+        Row: {
+          from_id: string
+          kind: string
+          meta: Json | null
+          strength: number
+          to_id: string
+        }
+        Insert: {
+          from_id: string
+          kind: string
+          meta?: Json | null
+          strength?: number
+          to_id: string
+        }
+        Update: {
+          from_id?: string
+          kind?: string
+          meta?: Json | null
+          strength?: number
+          to_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_relationships_from_id_fkey"
+            columns: ["from_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entity_relationships_to_id_fkey"
+            columns: ["to_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entity_snippets: {
         Row: {
           context_tags: string[]
@@ -534,6 +533,32 @@ export type Database = {
             columns: ["seed_memory_id"]
             isOneToOne: false
             referencedRelation: "entity_memories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_traits: {
+        Row: {
+          entity_id: string
+          trait_key: string
+          trait_value: Json
+        }
+        Insert: {
+          entity_id: string
+          trait_key: string
+          trait_value?: Json
+        }
+        Update: {
+          entity_id?: string
+          trait_key?: string
+          trait_value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_traits_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
             referencedColumns: ["id"]
           },
         ]
@@ -1517,47 +1542,6 @@ export type Database = {
           },
         ]
       }
-      shadow_match_results: {
-        Row: {
-          away_goals: number
-          created_at: string
-          home_goals: number
-          id: string
-          match_id: string
-          outcome: string
-          perturbation: string
-          timeline_index: number
-        }
-        Insert: {
-          away_goals: number
-          created_at?: string
-          home_goals: number
-          id?: string
-          match_id: string
-          outcome: string
-          perturbation?: string
-          timeline_index: number
-        }
-        Update: {
-          away_goals?: number
-          created_at?: string
-          home_goals?: number
-          id?: string
-          match_id?: string
-          outcome?: string
-          perturbation?: string
-          timeline_index?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shadow_match_results_match_id_fkey"
-            columns: ["match_id"]
-            isOneToOne: false
-            referencedRelation: "matches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       seasons: {
         Row: {
           created_at: string
@@ -1602,6 +1586,54 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      shadow_match_results: {
+        Row: {
+          away_goals: number
+          created_at: string
+          home_goals: number
+          id: string
+          match_id: string
+          outcome: string
+          perturbation: string
+          timeline_index: number
+        }
+        Insert: {
+          away_goals: number
+          created_at?: string
+          home_goals: number
+          id?: string
+          match_id: string
+          outcome: string
+          perturbation?: string
+          timeline_index: number
+        }
+        Update: {
+          away_goals?: number
+          created_at?: string
+          home_goals?: number
+          id?: string
+          match_id?: string
+          outcome?: string
+          perturbation?: string
+          timeline_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shadow_match_results_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "match_referee_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "shadow_match_results_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       team_finances: {
         Row: {
@@ -2098,6 +2130,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
