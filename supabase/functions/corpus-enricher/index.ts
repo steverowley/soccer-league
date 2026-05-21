@@ -51,6 +51,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 // @ts-ignore — Deno-only import, resolved at deploy time.
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
 
+// ── Voice-coherence ingest gate (Phase 10) ──────────────────────────────────
+// Local copy of the pure logic in `src/features/agents/logic/voiceGuard.ts`
+// because edge functions cannot import from `src/` (Vite-bundled browser
+// tree, with React + Zod deps that don't belong on Deno).  Keep the two
+// files in sync — see the WHY block in `./voiceGuard.ts`.
+import { acceptSnippet, type GuardPersona } from './voiceGuard.ts';
+
 // ── Tuning constants ────────────────────────────────────────────────────────
 // Conservative defaults — Phase 5 ships with a small enrichment surface so
 // we can watch the first week of traffic before opening the throttle.
@@ -649,11 +656,63 @@ async function handler(): Promise<Response> {
       cache_create_tokens: usage.cacheCreate,
     });
 
-    // ── Validate + insert ──────────────────────────────────────────────────
+    // ── Validate + voice-guard + insert ────────────────────────────────────
+    // Two-stage filter before insert:
+    //   1. validateSnippet  — structural + entity-reference hallucination check.
+    //   2. acceptSnippet    — voice coherence: taboo substrings (categorical
+    //      reject) and bag-of-words drift cosine (skipped on sparse anchors).
+    // Rejections are logged to `agent_runs` as `voice_reject_taboo` /
+    // `voice_reject_drift` with zero tokens — same pattern as `corpus_hit` /
+    // `corpus_miss`, so the cost-observability table doubles as the
+    // ingest-quality audit log without a schema change.
+    const guardPersona: GuardPersona = {
+      core_quotes: ctx.persona.core_quotes,
+      lexicon: ctx.persona.lexicon,
+      taboos: ctx.persona.taboos,
+    };
     const validated: GeneratedSnippet[] = [];
+    const rejectionLogs: Array<{ kind: 'voice_reject_taboo' | 'voice_reject_drift' }> = [];
     for (const cand of candidates) {
       const v = validateSnippet(cand, entityId, seedMemoryIds, subjectWhitelist);
-      if (v) validated.push(v);
+      if (!v) continue;
+      const decision = acceptSnippet(v.text, guardPersona);
+      if (decision.accept) {
+        validated.push(v);
+        continue;
+      }
+      // Reject — log a zero-token row keyed by reason so we can later
+      // query rejection rates per persona / kind.
+      if (decision.reason === 'taboo') {
+        console.warn(
+          `[corpus-enricher] voice-guard taboo reject for ${entityId}: matched="${decision.offending}"`,
+        );
+        rejectionLogs.push({ kind: 'voice_reject_taboo' });
+      } else {
+        console.warn(
+          `[corpus-enricher] voice-guard drift reject for ${entityId}: cosine=${decision.cosine.toFixed(3)}`,
+        );
+        rejectionLogs.push({ kind: 'voice_reject_drift' });
+      }
+    }
+
+    // Persist rejection telemetry in one batched insert when any fired.
+    // Zero token counts because no LLM call is being attributed — this is
+    // post-call quality filtering.  The model field still records WHICH
+    // model produced the rejected output for downstream analysis.
+    if (rejectionLogs.length > 0) {
+      const rejectInserts = rejectionLogs.map((r) => ({
+        entity_id: entityId,
+        kind: r.kind,
+        model: CLAUDE_MODEL,
+        prompt_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_create_tokens: 0,
+      }));
+      const { error: rejectErr } = await db.from('agent_runs').insert(rejectInserts);
+      if (rejectErr) {
+        console.warn('[corpus-enricher] rejection log insert failed:', rejectErr.message);
+      }
     }
 
     if (validated.length > 0) {
