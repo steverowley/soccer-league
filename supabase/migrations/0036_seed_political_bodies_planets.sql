@@ -40,15 +40,17 @@
 
 INSERT INTO entities (id, kind, name, display_name, meta) VALUES
   -- ── System-wide governance ───────────────────────────────────────────────
-  ('40000000-0000-0000-0000-000000000001', 'political_body',
+  -- 41000000-… namespace because 40000000-…001..003 were already claimed
+  -- by 0011_voices.sql for the three commentator entities (Vox / Nexus-7 / Zara).
+  ('41000000-0000-0000-0000-000000000001', 'political_body',
    'Solar Federation', 'Solar Federation',
    '{"role": "federation", "scope": "system", "description": "The interplanetary governing union; arbitrates disputes between planets, ratifies cross-planet trade pacts, and signs off on league fixture calendars."}'::jsonb),
 
-  ('40000000-0000-0000-0000-000000000002', 'political_body',
+  ('41000000-0000-0000-0000-000000000002', 'political_body',
    'Galactic League Council', 'GLC',
    '{"role": "league_oversight", "scope": "system", "description": "The supreme oversight body of the ISL; ratifies rule changes, hears appeals, and audits Architect interventions when challenged in formal hearings."}'::jsonb),
 
-  ('40000000-0000-0000-0000-000000000003', 'political_body',
+  ('41000000-0000-0000-0000-000000000003', 'political_body',
    'Office of the Earth President', 'Earth President',
    '{"role": "head_of_state", "scope": "regional", "description": "The most visible single human seat of power in the league; speaks for Earth-aligned clubs in interplanetary disputes and rarely passes a season without a public footballing intervention."}'::jsonb),
 
@@ -58,7 +60,7 @@ INSERT INTO entities (id, kind, name, display_name, meta) VALUES
   -- player transfer windows shaped by orbital alignment).
   ('40000000-0000-0000-0000-000000000010', 'political_body',
    'Mercury Solar Authority', 'Mercury Authority',
-   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Mercury", "description": "Compact technocratic council that schedules everything around the planet's solar exposure cycles."}'::jsonb),
+   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Mercury", "description": "Compact technocratic council that schedules everything around the planet''s solar exposure cycles."}'::jsonb),
 
   ('40000000-0000-0000-0000-000000000011', 'political_body',
    'Venus Cloud Senate', 'Venus Senate',
@@ -66,15 +68,15 @@ INSERT INTO entities (id, kind, name, display_name, meta) VALUES
 
   ('40000000-0000-0000-0000-000000000012', 'political_body',
    'Earth Sport Ministry', 'Earth Sport Ministry',
-   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Earth", "description": "Earth's footballing arm of state; oversees development pathways, broadcast rights, and the heritage of the game on its mother world."}'::jsonb),
+   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Earth", "description": "Earth''s footballing arm of state; oversees development pathways, broadcast rights, and the heritage of the game on its mother world."}'::jsonb),
 
   ('40000000-0000-0000-0000-000000000013', 'political_body',
    'Mars Republic Assembly', 'Mars Assembly',
-   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Mars", "description": "Federated assembly of Mars's four major settlements; rivalries between members occasionally leak into footballing politics."}'::jsonb),
+   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Mars", "description": "Federated assembly of Mars''s four major settlements; rivalries between members occasionally leak into footballing politics."}'::jsonb),
 
   ('40000000-0000-0000-0000-000000000014', 'political_body',
    'Jovian League Conclave', 'Jovian Conclave',
-   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Jupiter", "description": "Rotating chairmanship between Jupiter's habitat-clouds; outwardly genteel, internally fractious."}'::jsonb),
+   '{"role": "planetary_government", "scope": "planetary", "homeworld": "Jupiter", "description": "Rotating chairmanship between Jupiter''s habitat-clouds; outwardly genteel, internally fractious."}'::jsonb),
 
   ('40000000-0000-0000-0000-000000000015', 'political_body',
    'Saturnian Ring Council', 'Saturn Council',
@@ -107,11 +109,13 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO entities (id, kind, name, display_name, meta) VALUES
   -- ── Rocky Inner League ───────────────────────────────────────────────────
-  ('50000000-0000-0000-0000-000000000001', 'planet', 'Mercury', 'Mercury',
+  -- 51000000-… namespace because 50000000-…001..003 were already claimed
+  -- by 0011_voices.sql for the three cosmic_voice entities.
+  ('51000000-0000-0000-0000-000000000001', 'planet', 'Mercury', 'Mercury',
    '{"league": "rocky-inner", "gravity_g": 0.38, "atmosphere": "tenuous", "weather": "solar_flares", "description": "Closest to the sun. Days bake; nights chill. Football here is fast, brittle, and short."}'::jsonb),
-  ('50000000-0000-0000-0000-000000000002', 'planet', 'Venus', 'Venus',
+  ('51000000-0000-0000-0000-000000000002', 'planet', 'Venus', 'Venus',
    '{"league": "rocky-inner", "gravity_g": 0.91, "atmosphere": "thick", "weather": "acid_rain", "description": "Pressure-domed pitches under a sulfuric sky. Movement is heavy; lungs are precious."}'::jsonb),
-  ('50000000-0000-0000-0000-000000000003', 'planet', 'Earth', 'Earth',
+  ('51000000-0000-0000-0000-000000000003', 'planet', 'Earth', 'Earth',
    '{"league": "rocky-inner", "gravity_g": 1.00, "atmosphere": "standard", "weather": "varied", "description": "The mother of the game. Every other planet measures itself against the templates born here."}'::jsonb),
   ('50000000-0000-0000-0000-000000000004', 'planet', 'Mars', 'Mars',
    '{"league": "rocky-inner", "gravity_g": 0.38, "atmosphere": "thin", "weather": "dust_storms", "description": "Red, low-gravity, frontier. Jumps go higher; tackles slide further; dust gets everywhere."}'::jsonb),
@@ -132,7 +136,7 @@ INSERT INTO entities (id, kind, name, display_name, meta) VALUES
   ('50000000-0000-0000-0000-00000000000a', 'planet', 'Vesta', 'Vesta',
    '{"league": "asteroid-belt", "gravity_g": 0.025, "atmosphere": "none", "weather": "vacuum_dust", "description": "Bright, basaltic, ancient. Stadium foundations are anchored to a billion-year-old crust."}'::jsonb),
   ('50000000-0000-0000-0000-00000000000b', 'planet', 'Pallas', 'Pallas',
-   '{"league": "asteroid-belt", "gravity_g": 0.020, "atmosphere": "none", "weather": "vacuum_dust", "description": "Heavily inclined orbit; the league's most awkward away trip."}'::jsonb),
+   '{"league": "asteroid-belt", "gravity_g": 0.020, "atmosphere": "none", "weather": "vacuum_dust", "description": "Heavily inclined orbit; the league''s most awkward away trip."}'::jsonb),
   ('50000000-0000-0000-0000-00000000000c', 'planet', 'Hygiea', 'Hygiea',
    '{"league": "asteroid-belt", "gravity_g": 0.014, "atmosphere": "none", "weather": "vacuum_dust", "description": "Dim, dark, the most distant of the major belt worlds; small but obstinate."}'::jsonb),
   ('50000000-0000-0000-0000-00000000000d', 'planet', 'Juno', 'Juno',
@@ -172,11 +176,11 @@ INSERT INTO entities (id, kind, name, display_name, meta) VALUES
   ('60000000-0000-0000-0000-000000000004', 'colony', 'Solar Miners Habitat', 'Solar Miners',
    '{"league": "asteroid-belt", "parent": "Asteroid Belt", "habitat": "mining_complex", "description": "Working colony retrofitted with a stadium; pitch is small, the crowd is loud."}'::jsonb),
   ('60000000-0000-0000-0000-000000000005', 'colony', 'Plutino Region', 'Plutino Region',
-   '{"league": "kuiper", "parent": "Plutino", "habitat": "scattered_outposts", "description": "Loose belt of habitats sharing Pluto's orbital resonance; FC Plutino plays nominally home games across half a dozen of them."}'::jsonb),
+   '{"league": "kuiper", "parent": "Plutino", "habitat": "scattered_outposts", "description": "Loose belt of habitats sharing Pluto''s orbital resonance; FC Plutino plays nominally home games across half a dozen of them."}'::jsonb),
   ('60000000-0000-0000-0000-000000000006', 'colony', 'Outer Kuiper Belt', 'Outer Kuiper',
    '{"league": "kuiper", "parent": "Scattered Disc", "habitat": "frontier_stations", "description": "Last outposts before deep space; remote, self-reliant, fond of underdog mythologies."}'::jsonb),
   ('60000000-0000-0000-0000-000000000007', 'colony', 'Jupiter Region', 'Jupiter Region',
-   '{"league": "gas-giant", "parent": "Jupiter", "habitat": "moons_and_clouds", "description": "Catch-all label for habitats around Jupiter's moons that don't anchor to one specific body."}'::jsonb)
+   '{"league": "gas-giant", "parent": "Jupiter", "habitat": "moons_and_clouds", "description": "Catch-all label for habitats around Jupiter''s moons that don''t anchor to one specific body."}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════════════

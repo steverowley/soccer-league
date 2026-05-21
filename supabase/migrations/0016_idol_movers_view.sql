@@ -34,6 +34,22 @@
 -- noticed" narrative; the movers widget is by definition about activity.
 -- ──────────────────────────────────────────────────────────────────────────────
 
+-- ── Defensive players.is_active column ───────────────────────────────────────
+-- The view body filters by `p.is_active = true` (incinerated players cannot
+-- trend).  That column is also added by 0021_election_permadeath.sql, but
+-- production applied 0021 BEFORE 0016 by actual timestamp despite the file
+-- numbering — see `supabase_migrations.schema_migrations`.  Fresh Supabase
+-- Preview branches replay migrations in filename order (0016 before 0021)
+-- and would fail at the view definition with:
+--
+--   ERROR: column p.is_active does not exist (SQLSTATE 42703)
+--
+-- IDEMPOTENT — `ADD COLUMN IF NOT EXISTS` keeps production unchanged
+-- (column already exists from 0021) while creating it on fresh DBs so
+-- 0021's later identical `ADD COLUMN IF NOT EXISTS` is also a no-op.
+ALTER TABLE players
+  ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+
 CREATE OR REPLACE VIEW player_idol_movers AS
 WITH
 
