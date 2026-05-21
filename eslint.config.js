@@ -37,13 +37,29 @@ import globals from 'globals';
 export default tseslint.config(
   // ── Global ignores ─────────────────────────────────────────────────────────
   // Files that should NEVER be linted: build output, deps, Deno Edge
-  // Functions (their own tooling), and the ISL Logo image.
+  // Functions (their own tooling), and the ISL Logo image.  We lint a
+  // narrow whitelist of Deno-free helpers inside edge functions (e.g.
+  // `bd-sync-now/pagination.ts`) by switching the ignore from a broad
+  // `supabase/functions/**` to per-function entry-point + sibling patterns
+  // — every Deno-only file still ignored, but plain TS shared with
+  // Vitest tests is now linted under the project baseline.
   {
     ignores: [
       'dist/**',
       'node_modules/**',
       'coverage/**',
-      'supabase/functions/**',
+      // Edge function entry points (always Deno-only).
+      'supabase/functions/**/index.ts',
+      // Match-worker has many helpers that import Deno-specific code;
+      // keep the whole folder ignored other than entry points which are
+      // already covered above.  Listed individually so future Deno-free
+      // helpers don't get silently ignored.
+      'supabase/functions/match-worker/**',
+      'supabase/functions/match-notify-worker/**',
+      'supabase/functions/shadow-match-worker/**',
+      'supabase/functions/drama-tick/**',
+      'supabase/functions/corpus-enricher/**',
+      'supabase/functions/architect-galaxy-tick/**',
       // Static assets copied verbatim into the build. Includes `sw.js` —
       // a ServiceWorker script whose `self` global is not declared in the
       // browser/node globals lists and which otherwise produces a dozen

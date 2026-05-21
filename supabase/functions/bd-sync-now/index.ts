@@ -43,6 +43,11 @@
 
 // @ts-ignore — Deno-only import, resolved at deploy time.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+// Pure pagination helper.  Lives in a Deno- and Supabase-free sibling
+// file so Vitest (Node runtime) can import the same logic in tests; the
+// edge-function entry point isn't testable directly because of the
+// `Deno.serve` + `https://esm.sh/...` imports above.
+import { fetchAllIds } from './pagination.ts';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -254,27 +259,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ── Tombstone delete ───────────────────────────────────────────────────
-  // List current ids, diff against the JSONL set, delete the difference.
-  // 25 % cap (identical to the CI sync) prevents a partially-parsed
-  // JSONL from mass-deleting live rows.
-  const { data: current, error: listErr } = await serviceClient
-    .from('bd_issues')
-    .select('id');
-  if (listErr) {
-    console.error('[bd-sync-now] list failed:', listErr.message);
-    return json(500, { error: 'list_failed', detail: listErr.message });
+  // Walk every id in the mirror via paginated `.range()` reads, diff
+  // against the JSONL set, then delete the difference.  Pagination is
+  // essential: PostgREST caps a single `.select()` at the `max-rows`
+  // setting (1000 by default), so a non-paginated read would silently
+  // miss every row past the cap and the mirror would drift permanently
+  // once `bd_issues` exceeds it.  The 25 % cap (identical to the CI
+  // sync) prevents a partially-parsed JSONL from mass-deleting live rows.
+  let existingIds: Set<string>;
+  let existingCount: number;
+  try {
+    const result = await fetchAllIds(async (start, end) => {
+      const { data, error } = await serviceClient
+        .from('bd_issues')
+        .select('id')
+        .range(start, end);
+      return { data: data as { id: string }[] | null, error };
+    });
+    existingIds   = result.ids;
+    existingCount = result.count;
+  } catch (err) {
+    console.error('[bd-sync-now] list failed:', (err as Error).message);
+    return json(500, { error: 'list_failed', detail: (err as Error).message });
   }
-  const tombstones = (current ?? [])
-    .map((r) => r.id as string)
-    .filter((id) => !ids.has(id));
 
-  const tombCap = Math.max(5, Math.floor((current?.length ?? 0) * MAX_TOMBSTONE_FRACTION));
+  const tombstones: string[] = [];
+  for (const id of existingIds) {
+    if (!ids.has(id)) tombstones.push(id);
+  }
+
+  // ── Tombstone cap ──────────────────────────────────────────────────────
+  // Floor at 5 so a tiny mirror can still tombstone a handful of rows;
+  // otherwise scale linearly with the existing count.  Matches
+  // `scripts/sync-bd-to-supabase.mjs` so both sync paths refuse the same
+  // mass-deletion shapes.
+  const tombCap = Math.max(5, Math.floor(existingCount * MAX_TOMBSTONE_FRACTION));
   if (tombstones.length > tombCap) {
     return json(409, {
       error:           'tombstone_cap_exceeded',
       attempted:       tombstones.length,
       cap:             tombCap,
-      existing_count:  current?.length ?? 0,
+      existing_count:  existingCount,
       hint:            'JSONL parse likely partial — inspect the raw file and retry.',
     });
   }

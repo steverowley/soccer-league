@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -464,6 +465,64 @@ function OverviewPanel({ db }: { db: ReturnType<typeof useSupabase> }) {
 // ── Panel: Roadmap ──────────────────────────────────────────────────────────
 
 /**
+ * Pull the structured `error` code out of a Supabase Functions invocation
+ * failure.  The Functions SDK throws `FunctionsHttpError` for any non-2xx
+ * response and stows the raw `Response` object on `error.context` — the
+ * function's JSON body (e.g. `{ error: 'not_admin' }`) is only readable
+ * by parsing that response.  Other error subclasses (`FunctionsFetchError`,
+ * `FunctionsRelayError`) have no body to parse, so we return `null` and
+ * let the caller fall back to `error.message`.
+ *
+ * @param error  The error object returned by `db.functions.invoke()`.
+ * @returns      The `error` field from the JSON body if available, the
+ *               raw response text if it isn't JSON but is non-empty,
+ *               or `null` if there's no readable body / wrong error type.
+ *
+ * Edge cases:
+ *   * `error.context.json()` consumes the response body — we clone first
+ *     in case any caller wants to re-read it.
+ *   * Empty body → returns `null` (caller falls back to `error.message`).
+ *   * Body parses as JSON but has no `error` field → returns the raw
+ *     text so admins still see something actionable.
+ */
+async function extractFunctionErrorCode(error: unknown): Promise<string | null> {
+  // ── Type narrowing ────────────────────────────────────────────────────
+  // Only `FunctionsHttpError` carries a usable `.context` Response; the
+  // sibling subclasses for network/relay failures don't.  `instanceof`
+  // is the cheapest and most accurate discriminator.
+  if (!(error instanceof FunctionsHttpError)) return null;
+
+  const response = error.context as Response | undefined;
+  if (!response || typeof response.clone !== 'function') return null;
+
+  // ── Body parse ─────────────────────────────────────────────────────────
+  // Clone before consuming so the original error object stays inspectable
+  // (e.g. for logging downstream).  Body might be empty, plain text, or
+  // JSON; we handle all three without throwing.
+  let body: string;
+  try {
+    body = await response.clone().text();
+  } catch {
+    return null;
+  }
+  if (!body) return null;
+
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    if (typeof parsed?.error === 'string' && parsed.error.length > 0) {
+      return parsed.error;
+    }
+    // ── JSON without `error` field: surface raw body so the admin
+    // still sees the server's response rather than a generic SDK string.
+    return body;
+  } catch {
+    // ── Non-JSON body (e.g. an Nginx 502 HTML page): return the raw
+    // text — truncated callers can format it as needed.
+    return body;
+  }
+}
+
+/**
  * Embeds the bd-mirrored kanban board inside the admin tab strip, plus a
  * "Resync from main" button that calls the `bd-sync-now` Edge Function
  * for an on-demand pull of the latest `.beads/issues.jsonl` from main
@@ -508,7 +567,18 @@ function RoadmapPanel() {
         method: 'POST',
       });
       if (error) {
-        setResult({ kind: 'error', message: error.message });
+        // ── Surface the function's structured error code ─────────────
+        // `invoke()` only sets `error` for transport- or HTTP-level
+        // failures.  For a non-2xx response the SDK throws a
+        // `FunctionsHttpError` whose `context` is the raw `Response`
+        // object — the function's JSON body (e.g. `{ error: 'not_admin' }`)
+        // lives there.  Reading `error.message` alone yields the generic
+        // "Edge Function returned a non-2xx status code" string which
+        // hides the actual failure mode from admins.  We parse the body
+        // and prefer its `error` field; we fall back to `error.message`
+        // for non-JSON responses or non-HTTP failures (network, relay).
+        const code = await extractFunctionErrorCode(error);
+        setResult({ kind: 'error', message: code ?? error.message });
         return;
       }
       const payload = data as { upserted?: number; deleted?: number; warning?: string; error?: string };

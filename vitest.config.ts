@@ -38,8 +38,16 @@ export default defineConfig({
     // Global setup: jest-dom matchers, any per-test teardown, shared mocks.
     setupFiles: ['./src/shared/test/setup.ts'],
 
-    // Co-located test files next to the modules they exercise.
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.{test,spec}.{ts,tsx}'],
+    // Co-located test files next to the modules they exercise.  The
+    // `supabase/functions/**` glob covers pure helpers inside edge
+    // functions (the edge-function entry points themselves can't run
+    // here because of `Deno.serve` + remote ESM imports, but pure
+    // siblings — e.g. `bd-sync-now/pagination.ts` — are testable).
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx}',
+      'scripts/**/*.{test,spec}.{ts,tsx}',
+      'supabase/functions/**/*.{test,spec}.{ts,tsx}',
+    ],
 
     coverage: {
       provider: 'v8',
