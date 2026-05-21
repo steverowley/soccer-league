@@ -36,9 +36,23 @@ const SOURCE = resolve(HERE, '..', '.beads', 'issues.jsonl');
 const SUPABASE_URL              = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// ── Pre-activation no-op ───────────────────────────────────────────────────
+// Before the repo secrets are configured (one-time setup post-merge),
+// we want this job to exit cleanly rather than fail every push.  A
+// failing check on every commit that touches bd state would be noisy
+// and would discourage merges of unrelated work.
+//
+// Once `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set in repo
+// secrets, this branch never runs and any real failure (auth, missing
+// table, etc.) still hard-fails as it should.
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('[bd-sync] missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env var');
-  process.exit(1);
+  console.warn(
+    '[bd-sync] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — skipping sync.',
+  );
+  console.warn(
+    '[bd-sync] add both as repo secrets under Settings → Secrets and variables → Actions to activate.',
+  );
+  process.exit(0);
 }
 
 // ── Row shape ──────────────────────────────────────────────────────────────
