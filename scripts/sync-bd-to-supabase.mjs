@@ -175,28 +175,45 @@ async function main() {
   // in the JSONL.  This handles bd issues hard-deleted via `bd delete`.
   // We list-then-delete (rather than a single `not.in.(…)`) to keep the
   // request URL bounded for large tables.
-
-  const { data: current, error: listErr } = await client
-    .from('bd_issues')
-    .select('id');
-  if (listErr) {
-    console.error('[bd-sync] list-for-tombstones failed:', listErr.message);
-    process.exit(1);
+  //
+  // PAGINATION: PostgREST applies the project-level `max-rows` cap
+  // (default 1000) to every `.select()` query.  A naive single-page read
+  // would silently drop any row beyond that cap from the tombstone diff,
+  // leaving stale rows undeletable and the mirror permanently drifted
+  // once `bd_issues` exceeds 1000 entries.  We walk pages of `ID_PAGE_SIZE`
+  // rows until a page returns fewer than a full page — the unambiguous
+  // end-of-table signal.  Same algorithm + page size as
+  // `supabase/functions/bd-sync-now/pagination.ts` so both sync paths
+  // see the same id set.
+  const ID_PAGE_SIZE = 1000;
+  const allIds = [];
+  for (let start = 0; ; start += ID_PAGE_SIZE) {
+    const end = start + ID_PAGE_SIZE - 1;
+    const { data: page, error: listErr } = await client
+      .from('bd_issues')
+      .select('id')
+      .range(start, end);
+    if (listErr) {
+      console.error('[bd-sync] list-for-tombstones failed:', listErr.message);
+      process.exit(1);
+    }
+    const rows = page ?? [];
+    for (const row of rows) allIds.push(row.id);
+    // Short page (or empty) ⇒ tail of the table reached; stop paging.
+    if (rows.length < ID_PAGE_SIZE) break;
   }
 
-  const tombstones = (current ?? [])
-    .map((r) => r.id)
-    .filter((id) => !ids.has(id));
+  const tombstones = allIds.filter((id) => !ids.has(id));
 
   // ── Bulk-delete cap ───────────────────────────────────────────────────
   // Even with the empty-input guard above, a partially-corrupted JSONL
   // (e.g. half the rows fail to parse) could mass-tombstone live work.
   // Cap a single sync at deleting at most 25% of the existing table
   // count; anything more requires manual intervention.
-  const cap = Math.max(5, Math.floor(((current ?? []).length) / 4));
+  const cap = Math.max(5, Math.floor(allIds.length / 4));
   if (tombstones.length > cap) {
     console.error(
-      `[bd-sync] tombstone count ${tombstones.length} exceeds cap ${cap} (25% of ${(current ?? []).length}) — aborting.`,
+      `[bd-sync] tombstone count ${tombstones.length} exceeds cap ${cap} (25% of ${allIds.length}) — aborting.`,
     );
     console.error(
       '[bd-sync] this usually means a partially-parsed JSONL.  Inspect .beads/issues.jsonl and retry.',

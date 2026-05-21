@@ -264,37 +264,72 @@ async function sendPushTo(sub: DispatchSubscription, payload: object): Promise<b
 
 /**
  * Push the "starting soon" notification for one match to every user
- * who hasn't already been notified.  Writes the ledger row before
- * sending — that's the conservative ordering: if the function crashes
- * mid-send the ledger entry prevents re-notifying when the next tick
- * resurrects.  Reverse ordering would risk double-pushes after a crash,
- * which is the user-visible failure we most want to avoid.
+ * who hasn't already been notified.
+ *
+ * LEDGER ORDERING (race safety)
+ *   Migration 0039 schedules two cron rows (0s + 30s offset) that emulate
+ *   a 30-second cadence on pg_cron's 1-minute granularity.  Both ticks
+ *   can race for the same match: a naive "read ledger → send → write
+ *   ledger" sequence lets each tick see an empty ledger before either
+ *   writes, fan out, then both upsert — DOUBLING every push.
+ *
+ *   The fix: write the ledger FIRST with `upsert({ ignoreDuplicates:true,
+ *   onConflict:'match_id,user_id' }).select('user_id')`.  PostgREST returns
+ *   ONLY the rows that were actually inserted (conflicts are silently
+ *   skipped), so the returned `user_id` set is a unique-per-tick
+ *   "reservation" of users this tick is responsible for pushing to.
+ *   The losing tick gets an empty set back and exits without pushing.
+ *
+ *   Trade-off: a crash between ledger-write and send drops that user's
+ *   notification for this match.  A silent miss is the friendlier
+ *   user-visible failure than a duplicate buzz.
  *
  * @param match  Dispatch-ready match row from `findUpcomingMatches`.
  * @returns      Per-match telemetry counters used for the worker's
- *               aggregate response body.
+ *               aggregate response body — `users` reflects the count of
+ *               eligible profiles for this match (not just the ones we
+ *               pushed this tick); `pushes` is the count of successful
+ *               sends from this tick.
  */
 async function dispatchMatch(match: DispatchMatch): Promise<{ users: number; pushes: number }> {
   const userIds = await resolveInterestedUsers(match);
   if (userIds.length === 0) return { users: 0, pushes: 0 };
 
+  // ── Reserve ledger rows BEFORE sending ──────────────────────────────────
+  // `ignoreDuplicates:true` makes a (match_id,user_id) collision a no-op
+  // instead of a unique-violation that would roll back the whole batch.
+  // `.select('user_id')` returns ONLY the rows that were actually
+  // inserted — exactly the users this tick is responsible for pushing.
+  // Any user already in the ledger (claimed by a concurrent tick) is
+  // absent from the returned set, so we skip pushing them.
+  const ledgerRows = userIds.map((uid) => ({ match_id: match.id, user_id: uid }));
+  const { data: claimedRows, error: ledgerError } = await supabase
+    .from('match_notification_sends')
+    .upsert(ledgerRows, { onConflict: 'match_id,user_id', ignoreDuplicates: true })
+    .select('user_id');
+  if (ledgerError) {
+    console.error('[match-notify-worker] ledger upsert failed:', ledgerError);
+    return { users: 0, pushes: 0 };
+  }
+  const usersToPush = (claimedRows ?? []).map((r) => r.user_id);
+  if (usersToPush.length === 0) {
+    // Another concurrent tick already claimed every eligible user for
+    // this match.  Nothing to push from here.
+    return { users: userIds.length, pushes: 0 };
+  }
+
   const { data: subscriptions, error: subError } = await supabase
     .from('push_subscriptions')
     .select('id, user_id, endpoint, p256dh_key, auth_key')
-    .in('user_id', userIds);
+    .in('user_id', usersToPush);
 
   if (subError) {
     console.error('[match-notify-worker] subscription fetch failed:', subError);
-    return { users: 0, pushes: 0 };
+    return { users: userIds.length, pushes: 0 };
   }
   if (!subscriptions || subscriptions.length === 0) {
-    // User opted in but never enrolled a device.  Mark them in the
-    // ledger anyway so we don't keep re-checking them every tick — a
-    // ledger row is cheaper than re-running this branch.
-    await supabase
-      .from('match_notification_sends')
-      .insert(userIds.map((uid) => ({ match_id: match.id, user_id: uid })))
-      .select();
+    // User opted in but never enrolled a device.  Ledger row already
+    // written above so we don't re-check on next tick.
     return { users: userIds.length, pushes: 0 };
   }
 
@@ -319,19 +354,6 @@ async function dispatchMatch(match: DispatchMatch): Promise<{ users: number; pus
   for (const sub of subscriptions as DispatchSubscription[]) {
     const ok = await sendPushTo(sub, payload);
     if (ok) pushes += 1;
-  }
-
-  // Insert ledger rows AFTER the send loop so a partial failure of the
-  // dispatch still records the users we tried for.  upsert with onConflict
-  // is a no-op for any user already in the ledger.
-  if (userIds.length > 0) {
-    const ledgerRows = userIds.map((uid) => ({ match_id: match.id, user_id: uid }));
-    const { error: ledgerError } = await supabase
-      .from('match_notification_sends')
-      .upsert(ledgerRows, { onConflict: 'match_id,user_id' });
-    if (ledgerError) {
-      console.error('[match-notify-worker] ledger upsert failed:', ledgerError);
-    }
   }
 
   return { users: userIds.length, pushes };
