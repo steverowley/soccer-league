@@ -1,0 +1,75 @@
+-- ── 0033_pg_net_extension_schema.sql ───────────────────────────────────────
+-- Closes the `extension_in_public` advisor warning by moving the `pg_net`
+-- extension out of the public schema and into the canonical `extensions`
+-- schema (the Supabase default for non-core extensions).
+--
+-- WHY THIS MIGRATION IS A DROP + CREATE (not ALTER … SET SCHEMA)
+-- ─────────────────────────────────────────────────────────────
+-- pg_net's control file declares `relocatable = false`, so Postgres rejects
+-- `ALTER EXTENSION pg_net SET SCHEMA extensions` with
+-- `0A000 extension "pg_net" does not support SET SCHEMA`.  The only path
+-- to a different home schema is `DROP EXTENSION pg_net CASCADE` followed
+-- by `CREATE EXTENSION pg_net WITH SCHEMA extensions`.
+--
+-- WHAT WITH SCHEMA ACTUALLY MOVES
+-- ───────────────────────────────
+-- This is the trap that bit a previous attempt at this migration: pg_net
+-- ALWAYS installs its callable surface (`http_post`, `http_get`,
+-- `http_delete`, `http_collect_response`, the queue tables, and the custom
+-- types) inside a hard-coded `net` schema.  The WITH SCHEMA clause only
+-- changes the value of `pg_extension.extnamespace` (the catalog attribute
+-- that the advisor inspects) — it does NOT move any actual function or
+-- table.  So:
+--
+--   • `pg_extension.extnamespace` flips from `public` → `extensions`
+--     (this is what clears the `extension_in_public` advisor warning).
+--   • Callers continue to invoke `net.http_post(...)` exactly as before;
+--     the `net` schema is recreated by `CREATE EXTENSION` with the same
+--     functions in the same place.
+--   • Cron jobs that already qualify `net.http_post(...)` keep working
+--     across the swap — NO cron rewrite is needed.
+--
+-- An earlier draft of this migration rewrote the two cron commands to
+-- `extensions.http_post(...)` on the assumption WITH SCHEMA moved the
+-- functions.  It didn't.  The cron jobs were rolled back inside the same
+-- session and the rewrite is intentionally omitted here.
+--
+-- WHAT DROP EXTENSION DESTROYS
+-- ────────────────────────────
+-- `DROP EXTENSION pg_net CASCADE` removes every object the extension owns:
+--   • The `net` schema and its functions / queue tables / response log.
+--   • The pg_net response history (`net._http_response`) — these are
+--     transient outbound HTTP responses that downstream code reads
+--     within seconds of their request; nothing depends on them long-term.
+--
+-- Pre-flight queries confirmed the cost is acceptable for this dev/testing
+-- environment:
+--   • `http_request_queue`: 0 rows in flight (no requests would be lost).
+--   • `_http_response`:    ~363 disposable historical rows.
+-- A production move would require draining the queue first; testing has
+-- no such constraint.
+--
+-- WHY NOT JUST IGNORE THE WARNING
+-- ───────────────────────────────
+-- pg_net's callable surface is in the `net` schema regardless of where
+-- the extension's `extnamespace` points, so the practical attack surface
+-- is unchanged.  But the warning shows up in `get_advisors` and clutters
+-- the security feed.  Moving it makes the security panel clean and
+-- matches Supabase's documented best practice (every non-builtin
+-- extension lives in `extensions`).
+
+-- ── Ensure the `extensions` schema exists ──────────────────────────────────
+-- Supabase provisions this schema on every project, but a fresh local stack
+-- may not — CREATE IF NOT EXISTS keeps the migration portable.
+CREATE SCHEMA IF NOT EXISTS extensions;
+
+-- ── Drop pg_net (CASCADE removes the `net` schema and queue tables) ────────
+-- Pre-flight verified there are zero in-flight requests in
+-- `net.http_request_queue`, so no live work is interrupted.
+DROP EXTENSION IF EXISTS pg_net CASCADE;
+
+-- ── Reinstall pg_net with the extension homed in `extensions` ──────────────
+-- The functions themselves land in the hard-coded `net` schema (pg_net
+-- always creates that schema), but `pg_extension.extnamespace` now points
+-- to `extensions`, which is what the advisor checks.
+CREATE EXTENSION pg_net WITH SCHEMA extensions;
