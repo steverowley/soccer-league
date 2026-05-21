@@ -81,6 +81,7 @@ const MatchDetail  = lazy(() => import('./pages/MatchDetail'));
 const News         = lazy(() => import('./pages/News'));
 const Idols        = lazy(() => import('./pages/Idols'));
 const Leaderboards = lazy(() => import('./pages/Leaderboards'));
+const ManagerDetail = lazy(() => import('./pages/ManagerDetail'));
 const Voting       = lazy(() => import('./pages/Voting'));
 const Training     = lazy(() => import('./pages/Training'));
 const Login        = lazy(() => import('./pages/Login'));
@@ -253,6 +254,13 @@ createRoot(document.getElementById('root')!).render(
                   Links from Idols.tsx and MatchDetail.tsx both point here;
                   before this route those URLs 404'd. */}
               <Route path="players/:playerId"   element={<PlayerDetail />} />
+
+              {/* /managers/:managerId (bd isl-aai) — Manager profile.
+                  Reads managers row joined to teams + entity + traits
+                  via getManager.  Engine coaching stats stay hidden
+                  per the hidden-mechanics design pillar; narrative-
+                  coloured entity_traits surface as a Lore section. */}
+              <Route path="managers/:managerId" element={<ManagerDetail />} />
 
               {/* /entities/:entityId — Phase 10 voice-corpus inspection.
                   Renders persona + recent snippets + recent memories

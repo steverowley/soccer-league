@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database';
+import type { Database, Json } from '../types/database';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -446,6 +446,85 @@ export async function getPlayer(playerId: string): Promise<PlayerWithStats> {
       avg_rating,
     },
   } as PlayerWithStats;
+}
+
+// ── Manager fetch ────────────────────────────────────────────────────────────
+// Powers the /managers/:managerId detail page (bd isl-aai).  Returns the
+// manager row joined to its current team + the entity row + entity_traits
+// so the page can render bio fields without a chain of follow-up queries.
+
+/**
+ * Manager row + adjacent context the detail page renders.
+ *
+ * `teams` is the join from `managers.team_id` (null when the manager
+ * is detached — e.g. after a drama-tier resignation).  `entity` and
+ * `traits` come from the Universal Agent System entity graph so the
+ * page can read JSON-shaped flavour (tactical preferences, voice
+ * fragments) without exposing raw engine stats.
+ */
+export interface ManagerWithContext {
+  id: string;
+  name: string;
+  nationality: string | null;
+  style: string | null;
+  team_id: string | null;
+  entity_id: string | null;
+  teams: { id: string; name: string; color: string | null } | null;
+  entity: { id: string; display_name: string | null; meta: Json | null } | null;
+  traits: Array<{ trait_key: string; trait_value: Json }>;
+}
+
+/**
+ * Fetch a manager + the join to teams + their entity row + traits.
+ *
+ * Best-effort: returns null when the manager id doesn't exist or the
+ * primary query errors so callers can render the standard "Unknown
+ * Manager" surface rather than getting a thrown error.  Entity / trait
+ * lookup failures degrade silently — the page still renders with
+ * `entity: null` / `traits: []` and the bio just omits those fields.
+ *
+ * @param db         Injected Supabase client.
+ * @param managerId  Manager UUID.
+ * @returns          Manager bundle or null.
+ */
+export async function getManager(
+  db: SupabaseClient<Database>,
+  managerId: string,
+): Promise<ManagerWithContext | null> {
+  const { data: managerRow, error: managerErr } = await db
+    .from('managers')
+    .select('id, name, nationality, style, team_id, entity_id, teams(id, name, color)')
+    .eq('id', managerId)
+    .maybeSingle();
+
+  if (managerErr || !managerRow) {
+    if (managerErr) console.warn('[getManager] manager fetch failed:', managerErr.message);
+    return null;
+  }
+
+  // Entity + traits — best-effort.  Empty results render gracefully.
+  let entity: ManagerWithContext['entity'] = null;
+  let traits: ManagerWithContext['traits'] = [];
+
+  if (managerRow.entity_id) {
+    const [entityRes, traitsRes] = await Promise.all([
+      db.from('entities')
+        .select('id, display_name, meta')
+        .eq('id', managerRow.entity_id)
+        .maybeSingle(),
+      db.from('entity_traits')
+        .select('trait_key, trait_value')
+        .eq('entity_id', managerRow.entity_id),
+    ]);
+    if (entityRes.data) entity = entityRes.data;
+    if (traitsRes.data) traits = traitsRes.data;
+  }
+
+  return {
+    ...(managerRow as unknown as ManagerWithContext),
+    entity,
+    traits,
+  };
 }
 
 interface StandingsRow {

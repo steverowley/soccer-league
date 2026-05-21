@@ -427,7 +427,16 @@ function ManagerCard({ manager  }: any) {
         margin: 0,
         letterSpacing: '0.01em',
       }}>
-        {manager.name}
+        {/* When the manager has an id, link to /managers/:id (bd isl-aai).
+            Missing id falls back to plain text so we never render a
+            broken link. */}
+        {manager.id ? (
+          <Link to={`/managers/${manager.id}`} style={{ color: DUST, textDecoration: 'none' }}>
+            {manager.name}
+          </Link>
+        ) : (
+          manager.name
+        )}
       </h3>
       {manager.nationality && (
         <div style={{
