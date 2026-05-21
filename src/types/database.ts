@@ -1019,6 +1019,7 @@ export type Database = {
           favourite_player_id: string | null
           favourite_team_id: string | null
           id: string
+          is_admin: boolean
           last_seen_at: string | null
           username: string
         }
@@ -1028,6 +1029,7 @@ export type Database = {
           favourite_player_id?: string | null
           favourite_team_id?: string | null
           id: string
+          is_admin?: boolean
           last_seen_at?: string | null
           username: string
         }
@@ -1037,6 +1039,7 @@ export type Database = {
           favourite_player_id?: string | null
           favourite_team_id?: string | null
           id?: string
+          is_admin?: boolean
           last_seen_at?: string | null
           username?: string
         }
@@ -1070,6 +1073,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      roadmap_items: {
+        Row: {
+          bd_issue_id: string | null
+          created_at: string
+          created_by: string | null
+          effort: string | null
+          id: string
+          notes: string | null
+          pillar: string | null
+          priority: number
+          shipped_at: string | null
+          source: string | null
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bd_issue_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          effort?: string | null
+          id?: string
+          notes?: string | null
+          pillar?: string | null
+          priority?: number
+          shipped_at?: string | null
+          source?: string | null
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bd_issue_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          effort?: string | null
+          id?: string
+          notes?: string | null
+          pillar?: string | null
+          priority?: number
+          shipped_at?: string | null
+          source?: string | null
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       season_config: {
         Row: {
@@ -1566,6 +1620,15 @@ export type Database = {
       admin_reset_season: { Args: never; Returns: Json }
       assign_match_referee: {
         Args: { p_match_id: string; p_referee_id: string }
+        Returns: undefined
+      }
+      berger_round_robin_fixtures: {
+        Args: {
+          p_cadence_minutes: number
+          p_competition_id: string
+          p_first_kickoff: string
+          p_teams: string[]
+        }
         Returns: undefined
       }
       incinerate_player: {

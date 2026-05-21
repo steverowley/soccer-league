@@ -83,6 +83,7 @@ const Profile      = lazy(() => import('./pages/Profile'));
 const Wagers       = lazy(() => import('./pages/Wagers'));
 const Admin        = lazy(() => import('./pages/Admin'));
 const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
+const Roadmap      = lazy(() => import('./pages/Roadmap'));
 
 // Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
 // 404.html redirects to the root and stores the original path in sessionStorage.
@@ -205,10 +206,22 @@ createRoot(document.getElementById('root')!).render(
               {/* /admin (Phase B).
                   Admin dashboard: season status, fast-forward controls,
                   fixture browser, and Architect intervention log.  Access
-                  is gated client-side by VITE_ADMIN_USER_IDS; non-admin
-                  visitors see an "Access Denied" surface.  The actual
-                  security boundary is Supabase RLS — this is a dev tool. */}
+                  is gated client-side by `profiles.is_admin` (migration
+                  0032); non-admin visitors and anonymous viewers both
+                  see an "Access Denied" surface.  The actual security
+                  boundary is the server-side admin_reset_season() RPC,
+                  which itself rejects non-admins with HTTP 403. */}
               <Route path="admin"               element={<Admin />} />
+
+              {/* /roadmap (Phase B+).
+                  Curator-tended project management dashboard backed by
+                  the `roadmap_items` table (migration 0034).  Public-read
+                  so players can see what's coming; admin-only write via
+                  RLS keyed on `profiles.is_admin`.  Kanban layout with
+                  four columns: Ideas / Planned / In Progress / Shipped.
+                  Replaces ad-hoc tracking in Notion + chat threads, and
+                  cross-links to `bd` issues via the `bd_issue_id` field. */}
+              <Route path="roadmap"             element={<Roadmap />} />
 
               {/* /players/:playerId (Phase C).
                   Player profile page — name, team, position, bio, season

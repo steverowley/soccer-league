@@ -30,14 +30,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
-import { settleMatchWagers, maybeTransitionSeasonForMatch } from './postMatchEffects.ts';
-import { hydrateArchitectBridge } from './architectBridge.ts';
+import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket } from './postMatchEffects.ts';
+import { prepareArchitectForMatch, type CosmicArchitect, type LoreStore } from './architect.ts';
 import { computeFanBoost } from './fanBoost.ts';
+import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+/**
+ * Anthropic API key for Architect LLM calls (pre-match omen + post-match
+ * verdict).  Optional: when empty, the architect falls back to deterministic
+ * templates and the post-match save only writes a match-ledger entry — no
+ * verdict, no player-arc updates, no relationship mutations.  Match
+ * completion is never blocked on this key being present.
+ */
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 const MATCH_BATCH_SIZE = 5;          // Fetch up to 5 due matches per invocation
 const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
@@ -100,7 +110,10 @@ async function claimDueMatches() {
     .update({ status: 'in_progress', played_at: new Date().toISOString() })
     .in('id', candidateIds)
     .eq('status', 'scheduled')
-    .select('id, home_team_id, away_team_id, scheduled_at, competition_id');
+    // `round` is read post-match by postMatchLoreSave to surface the matchday
+    // in the Architect verdict prompt (e.g. 'Matchday 7', 'Final').  Absent
+    // matches still process — the field is treated as 0 downstream.
+    .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round');
 
   if (claimError) {
     console.error('[match-worker] UPDATE claim failed:', claimError);
@@ -153,6 +166,78 @@ async function fetchTeamForSimulation(teamId: string) {
   return data;
 }
 
+// ── Helper: Post-match lore save ───────────────────────────────────────────
+
+/**
+ * Builds the match-state shape the Architect expects, calls saveMatchToLore
+ * (LLM-driven verdict + lore mutations) and persists the mutated lore.
+ *
+ * Extracted so the post-match orchestration block in processMatch stays
+ * focused on cron-level concerns (settlement, cup advance, season tx) and
+ * the lore-specific marshalling/persistence logic lives in one place.
+ *
+ * @param architect  The CosmicArchitect from prepareArchitectForMatch.
+ *                   `architect.lore` is mutated in place by saveMatchToLore.
+ * @param loreStore  The LoreStore from prepareArchitectForMatch.  Used to
+ *                   batch-upsert the mutated lore + drain pending writes.
+ * @param match      The DB match row this worker just simulated; we use
+ *                   `round` as the matchday hint in the verdict prompt.
+ * @param result     Output of simulateFullMatch — events, score, MVP, stats.
+ * @param homeData   Raw home team row (for the team shape + player roster
+ *                   the verdict prompt references).
+ * @param awayData   Raw away team row.
+ */
+async function postMatchLoreSave(
+  architect: CosmicArchitect,
+  loreStore: LoreStore,
+  match: any,
+  result: { events: any[]; finalScore: [number, number]; mvp: string; playerStats: any },
+  homeData: any,
+  awayData: any,
+): Promise<void> {
+  // The events array carries the minute-by-minute commentary; saveMatchToLore
+  // inlines goals + red cards + injuries into the verdict prompt so the LLM
+  // can reference specific moments.  We forward only the fields it reads.
+  const matchState = {
+    events:      result.events.map((ev: any) => ({
+      minute:     ev.minute,
+      type:       ev.type,
+      commentary: ev.payload?.commentary,
+      isGoal:     ev.payload?.isGoal,
+      cardType:   ev.payload?.cardType,
+      isInjury:   ev.payload?.isInjury,
+    })),
+    score:       result.finalScore,
+    playerStats: result.playerStats,
+    mvp:         result.mvp,
+    homeTeam: {
+      name:      homeData.name,
+      shortName: homeData.short_name ?? homeData.name,
+      players:   (homeData.players ?? []).map((p: any) => ({ name: p.name })),
+    },
+    awayTeam: {
+      name:      awayData.name,
+      shortName: awayData.short_name ?? awayData.name,
+      players:   (awayData.players ?? []).map((p: any) => ({ name: p.name })),
+    },
+  };
+
+  // leagueContext carries only what we can derive without another DB round-trip:
+  //   - matchday: `match.round` is a free-form string ('Matchday 1', 'Final').
+  //     We strip non-digits for the numeric ledger column; 0 when not parseable.
+  //   - seasonId / season / league: would require a competitions JOIN that
+  //     isn't worth the round-trip for v1; the architect just won't write a
+  //     season-arc row when seasonId is absent (the rest of the verdict still lands).
+  const matchdayDigits = String(match.round ?? '').replace(/\D/g, '');
+  const leagueContext = {
+    matchday: matchdayDigits ? Number(matchdayDigits) : 0,
+  };
+
+  await architect.saveMatchToLore(matchState, leagueContext);
+  loreStore.persistAll(architect.lore);
+  await loreStore.flush();
+}
+
 // ── Helper: Process a single match ─────────────────────────────────────────
 
 /**
@@ -183,17 +268,69 @@ async function processMatch(match: any): Promise<boolean> {
     const away = normalizeTeamForEngine(awayData);
 
     // ── Pre-match context ───────────────────────────────────────────────────
-    // Fan boost + Architect bridge are both hydrated here in parallel and
-    // threaded into simulateFullMatch.  Either falling back to a no-op
-    // (no fans / no lore) is the common case in the early life of the DB
-    // and is the deliberate degradation path — never block kickoff on
-    // either of these reads.
-    const [fanBoost, architect] = await Promise.all([
+    // Fan boost + Architect lifecycle are both hydrated here in parallel and
+    // threaded into simulateFullMatch.  Both falling back to no-ops (no
+    // fans / empty lore) is the common case early in the DB's life and is
+    // the deliberate degradation path — kickoff must never block on either.
+    //
+    // `prepareArchitectForMatch` REPLACES the previous `hydrateArchitectBridge`
+    // wiring: it returns a full CosmicArchitect (not just the read-only
+    // GhostArchitect) so the same instance can mint pre-match omens AND
+    // accept the post-match `saveMatchToLore` call that closes the
+    // architect_lore persistence loop.  See architect.ts for the rationale.
+    const [fanBoost, prepared] = await Promise.all([
       computeFanBoost(supabase, match.home_team_id, match.away_team_id),
-      hydrateArchitectBridge(supabase),
+      prepareArchitectForMatch(supabase, {
+        apiKey:   ANTHROPIC_API_KEY,
+        homeTeam: {
+          name:      home.name,
+          shortName: home.shortName,
+          color:     home.color,
+          players:   home.players.map((p) => ({ name: p.name })),
+        },
+        awayTeam: {
+          name:      away.name,
+          shortName: away.shortName,
+          color:     away.color,
+          players:   away.players.map((p) => ({ name: p.name })),
+        },
+        homeManager: { name: home.manager.name },
+        awayManager: { name: away.manager.name },
+        // home.stadium is always populated by normalizeTeamForEngine — but
+        // guard anyway in case future schema lets it be null.
+        stadium: home.stadium
+          ? { name: home.stadium.name, planet: home.stadium.planet }
+          : null,
+        // Weather is selected by gameEngine inside createAIManager once the
+        // simulation starts; we don't have it at omen time and the omen
+        // prompt only references it as flavour.  Empty string is acceptable.
+        weather: '',
+      }),
     ]);
+    const { architect, loreStore } = prepared;
     if (fanBoost.boostedSide !== 'none') {
       console.log(`[match-worker] Fan boost: +${fanBoost.boostAmount} to ${fanBoost.boostedSide}`);
+    }
+
+    // ── Pre-match Cosmic Omen ──────────────────────────────────────────────
+    // Fire-and-forget Architect prologue: generate a cryptic omen +
+    // matchTitle and write to `narratives` (kind='cosmic_omen') so the news
+    // feed gets a pre-kickoff atmospheric beat.  Awaited so we don't race
+    // with the worker isolate shutdown, but wrapped in its own try/catch so
+    // an LLM or insert failure NEVER blocks the simulation.
+    try {
+      const omen = await architect.getPreMatchOmen();
+      const { error: omenErr } = await supabase.from('narratives').insert({
+        kind:              'cosmic_omen',
+        summary:           `${omen.matchTitle}. ${omen.omen}`,
+        entities_involved: [],
+        source:            'match',
+      });
+      if (omenErr) {
+        console.warn(`[match-worker] cosmic_omen insert failed: ${omenErr.message}`);
+      }
+    } catch (err) {
+      console.warn('[match-worker] getPreMatchOmen threw:', (err as Error)?.message ?? err);
     }
 
     // Simulate the full 90 minutes
@@ -332,6 +469,21 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn(`[match-worker] settleMatchWagers threw for ${match.id}:`, (err as Error)?.message ?? err);
     }
 
+    // Advance the cup bracket if this match belonged to one.  A no-op for
+    // league matches (their competition has no bracket).  Draws are logged
+    // but skipped — extra-time / penalty resolution is not yet simulated,
+    // so a drawn cup match leaves the bracket frozen until a future slice
+    // resolves the tie.
+    await maybeAdvanceCupBracket(
+      supabase,
+      match.id,
+      match.competition_id ?? null,
+      match.home_team_id,
+      match.away_team_id,
+      result.finalScore[0],
+      result.finalScore[1],
+    );
+
     try {
       const seasonTx = await maybeTransitionSeasonForMatch(supabase, match.id);
       if (seasonTx.transitioned) {
@@ -339,6 +491,24 @@ async function processMatch(match: any): Promise<boolean> {
       }
     } catch (err) {
       console.warn(`[match-worker] maybeTransitionSeasonForMatch threw for ${match.id}:`, (err as Error)?.message ?? err);
+    }
+
+    // ── Post-match Architect lore save ─────────────────────────────────────
+    // Closes the architect_lore persistence loop: one Claude call to mint a
+    // verdict + lore mutations (player arcs, manager fates, rivalry thread,
+    // player relationships) which then feed every FUTURE match's
+    // simulation via the synchronous getRelationshipFor / getFeaturedMortals
+    // / getActiveRelationships reads gameEngine.js makes.
+    //
+    // Failures are non-blocking — the match is already recorded as completed
+    // and a missed save just means the next match runs with the same lore
+    // it would have had anyway.  We MUST await loreStore.flush() before
+    // returning so the Deno isolate doesn't get reclaimed mid-upsert and
+    // silently drop the mutations.
+    try {
+      await postMatchLoreSave(architect, loreStore, match, result, homeData, awayData);
+    } catch (err) {
+      console.warn(`[match-worker] postMatchLoreSave threw for ${match.id}:`, (err as Error)?.message ?? err);
     }
 
     console.log(`[match-worker] Match ${match.id} completed successfully`);
@@ -385,6 +555,21 @@ async function processMatch(match: any): Promise<boolean> {
 Deno.serve(async (req: Request) => {
   try {
     console.log('[match-worker] Cron invocation');
+
+    // ── Pre-claim: ensure odds exist for upcoming matches ──────────────────
+    // Runs at the top of every cron tick (cheap when there's nothing new
+    // to price — a few SELECTs against match_odds and out).  Without odds
+    // the WagerWidget cannot render a bet form and placeWager has no
+    // snapshot to lock in.  Failures are non-blocking: we still process
+    // due matches even if pricing the horizon failed entirely.
+    try {
+      const oddsSummary = await ensureOddsForUpcoming(supabase);
+      if (oddsSummary.priced > 0) {
+        console.log(`[match-worker] Priced ${oddsSummary.priced} new matches (${oddsSummary.skipped} already had odds, ${oddsSummary.considered} considered)`);
+      }
+    } catch (err) {
+      console.warn('[match-worker] ensureOddsForUpcoming threw:', (err as Error)?.message ?? err);
+    }
 
     const matches = await claimDueMatches();
     if (matches.length === 0) {

@@ -30,6 +30,9 @@
 // browser-side callers.
 // deno-lint-ignore-file no-explicit-any
 
+import { ensureFocusOptionsForSeason } from './focusOptionsGenerator.ts';
+import { seedCupCompetitions, advanceCupRound } from './cupSeeder.ts';
+
 // ── Pure logic: wager outcome resolution ─────────────────────────────────
 
 export type MatchOutcome = 'home' | 'away' | 'draw';
@@ -249,8 +252,102 @@ export async function maybeTransitionSeasonForMatch(
   }
 
   const wonRace = Array.isArray(updated) && updated.length > 0;
+
+  // ── Auto-generate focus_options for the new voting phase ───────────────
+  // The `/voting` UI lists rows from focus_options for the active season;
+  // if we transition without seeding them the page renders empty until a
+  // human runs the rollover script.  Generating them here means voting is
+  // live the instant the last league match completes.
+  //
+  // Run on BOTH the won-race and lost-race branches: only one worker wins
+  // the CAS that flips status to 'voting', so if that single seed attempt
+  // hits a transient DB error every other worker would skip and the
+  // season would stay in 'voting' with empty options until a human noticed.
+  // The upsert is idempotent on (team_id, season_id, option_key), so
+  // re-running from the lost-race branch is harmless when the winner
+  // already seeded and is automatic-recovery when it didn't.
+  try {
+    const focusSummary = await ensureFocusOptionsForSeason(db, competition.season_id);
+    if (focusSummary.rowsUpserted > 0) {
+      console.log(`[maybeTransitionSeasonForMatch] Generated focus_options: ${focusSummary.rowsUpserted} rows across ${focusSummary.teams} teams`);
+    }
+  } catch (e) {
+    console.warn('[maybeTransitionSeasonForMatch] focus-options generation failed:', e);
+  }
+
+  // ── Auto-seed cup brackets for the new voting phase ────────────────────
+  // The Celestial Cup (top 3 per league) and Solar Shield (4th–6th) draw
+  // off the final league standings.  Standings are stable now that every
+  // league fixture is `completed`, so this is the canonical moment to
+  // compute qualifiers + draw the bracket.  Same lost-race recovery story
+  // as the focus-options call above: seedCupCompetitions is idempotent
+  // (the readBracket early-return short-circuits when a bracket already
+  // exists), so it's safe to fire from any worker that reaches this point.
+  try {
+    const cupSummary = await seedCupCompetitions(db, competition.season_id);
+    const c = cupSummary.celestial;
+    const s = cupSummary.solarShield;
+    if (c.status === 'seeded' || s.status === 'seeded') {
+      console.log(`[maybeTransitionSeasonForMatch] Seeded cups: Celestial ${c.status} (${c.qualifiers} teams, ${c.round1Matches} R1 matches); Shield ${s.status} (${s.qualifiers} teams, ${s.round1Matches} R1 matches)`);
+    }
+  } catch (e) {
+    console.warn('[maybeTransitionSeasonForMatch] cup seeding failed:', e);
+  }
+
   return {
     transitioned: wonRace,
     reason: wonRace ? 'season_opened_for_voting' : 'season_already_transitioned',
   };
+}
+
+// ── Side-effect: advance the cup bracket after a cup match completes ─────
+
+/**
+ * After a match is marked `completed` by the worker, slot the winner into
+ * the next-round cup bracket position if the match was part of a cup.
+ * No-op for league matches (their competition has no bracket so
+ * advanceCupRound's readBracket early-returns null).
+ *
+ * Draws have no winner in single-elimination knockout football; in the
+ * absence of an engine extra-time / penalty-shootout path, we log a
+ * warning and leave the bracket untouched so a future extra-time slice
+ * can resolve the tie without losing the match data.
+ *
+ * @param db              Supabase service-role client.
+ * @param matchId         UUID of the just-completed match.
+ * @param competitionId   The match's competition (may belong to a league).
+ * @param homeTeamId      Match's home team slug.
+ * @param awayTeamId      Match's away team slug.
+ * @param homeScore       Final home goals.
+ * @param awayScore       Final away goals.
+ */
+export async function maybeAdvanceCupBracket(
+  db: any,
+  matchId: string,
+  competitionId: string | null,
+  homeTeamId: string,
+  awayTeamId: string,
+  homeScore: number,
+  awayScore: number,
+): Promise<void> {
+  if (!competitionId) return;
+
+  if (homeScore === awayScore) {
+    console.warn(`[maybeAdvanceCupBracket] match ${matchId} ended in a draw; bracket left untouched (extra-time/penalties not yet simulated)`);
+    return;
+  }
+  const winnerTeamId = homeScore > awayScore ? homeTeamId : awayTeamId;
+
+  try {
+    const result = await advanceCupRound(db, competitionId, matchId, winnerTeamId);
+    if (result) {
+      if (result.nextMatchId && !result.nextMatchAlreadyExisted) {
+        console.log(`[maybeAdvanceCupBracket] R${result.completedRound} match ${matchId} → scheduled next-round match ${result.nextMatchId} (slot ${result.nextMatchSlot})`);
+      } else if (result.nextMatchSlot === null) {
+        console.log(`[maybeAdvanceCupBracket] Final completed for cup ${competitionId}; winner=${winnerTeamId}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`[maybeAdvanceCupBracket] advance failed for match ${matchId}:`, e);
+  }
 }

@@ -26,7 +26,6 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../lib/supabase';
-import { parseAllowlist, isAdminUser } from '../features/admin';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives the Save Allegiance submit button + the
@@ -69,9 +68,16 @@ export default function Profile() {
   const [teams,   setTeams]   = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
 
-  // Check if user has admin access via VITE_ADMIN_USER_IDS allowlist.
-  const adminAllowlist = parseAllowlist(import.meta.env.VITE_ADMIN_USER_IDS);
-  const isAdmin = isAdminUser(user?.id, adminAllowlist);
+  // ── Admin gate ─────────────────────────────────────────────────────────────
+  // Pre-0032 this was a `VITE_ADMIN_USER_IDS` CSV baked into the bundle at
+  // build time, which leaked the operator's UUID to every visitor and forced
+  // a redeploy to grant access.  We now derive the flag from `profiles.is_admin`
+  // (server-side column added in migration 0032).  RLS on `profiles` restricts
+  // SELECT to `auth.uid() = id`, so non-admins can't even read their own
+  // `is_admin` field as `true` — and other users' rows are wholly invisible.
+  // Anonymous viewers see `profile === null` and therefore fall through to
+  // the non-admin branch with no flash of admin UI.
+  const isAdmin = profile?.is_admin === true;
 
   // Local copy of the editable fields — initialised from the profile on
   // first paint, mutated by the form controls, then persisted on save.

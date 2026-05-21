@@ -39,6 +39,12 @@ export interface Profile {
   credits: number;
   last_seen_at: string | null;
   created_at: string;
+  /**
+   * Server-side admin flag from migration 0032.  RLS only returns this column
+   * to the owning user (profiles_select_own), so it never leaks across users.
+   * Drives the `/admin` route and the "Admin Dashboard" button on /profile.
+   */
+  is_admin: boolean;
 }
 
 /**

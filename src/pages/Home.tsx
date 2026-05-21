@@ -51,9 +51,9 @@ import {
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
-import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
-import { LEAGUES, buildStandingsRows } from '../data/leagueData';
-import { computeStandings } from '../lib/matchResultsService';
+import { getLiveMatches, getUpcomingMatches, getActiveSeason } from '../lib/supabase';
+import { LEAGUES } from '../data/leagueData';
+import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
 
 // ── Palette aliases ─────────────────────────────────────────────────────────
 // The hex constants live in components/Layout.jsx as the frozen COLORS
@@ -69,14 +69,11 @@ const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE   = COLORS.hairline;
 const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;
-const DUST_FAINT = COLORS.dustFaint;
 
-// ── Hero kicker constants ────────────────────────────────────────────────────
-// Hard-coded matchday/season strings until they're sourced from the
-// active-season row.  Mechanical effect: cosmetic only — these never
-// drive simulation, only the editorial banner above the masthead.
-const HERO_SEASON   = 'SEASON VII';
-const HERO_MATCHDAY = 'MATCHDAY XIV';
+// ── Hero constants ──────────────────────────────────────────────────────────
+// Cosmetic-only editorials; season/matchday are sourced live from the
+// active-season row.  Coordinates + epoch are decorative and never
+// drive simulation.
 const HERO_LIVE     = 'LIVE NOW';
 const HERO_RA       = 'RA 14ʰ 04ᵐ 12ˢ';
 const HERO_EPOCH    = 'EPOCH MMXXXVII';
@@ -96,8 +93,7 @@ const HERO_BODY     =
  * @returns {JSX.Element}
  */
 export default function Home() {
-  const db        = useSupabase();
-  const { user }  = useAuth();
+  const db = useSupabase();
 
   // ── Live + upcoming match state ───────────────────────────────────────────
   // Single fetch on mount; live + upcoming are stable for a session.  No
@@ -106,43 +102,63 @@ export default function Home() {
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [upcomingMatches, setUpcomingMatches] = useState<any[]>([]);
 
+  // ── Active season state ──────────────────────────────────────────────────
+  // Fetched once on mount and drives hero stat values (current matchday,
+  // season year, completion percentage).  Stable across session.
+  const [activeSeason, setActiveSeason] = useState<any>(null);
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([(getLiveMatches() as any), (getUpcomingMatches(3) as any)])
-      .then(([live, upcoming]) => {
+    Promise.all([
+      (getLiveMatches() as any),
+      (getUpcomingMatches(3) as any),
+      (getActiveSeason() as any),
+    ])
+      .then(([live, upcoming, season]) => {
         if (cancelled) return;
         setLiveMatches(live);
         setUpcomingMatches(upcoming);
+        setActiveSeason(season);
       })
-      .catch((err) => { console.warn('[Home] fixture fetch failed:', err); });
+      .catch((err) => { console.warn('[Home] fixture/season fetch failed:', err); });
     return () => { cancelled = true; };
   }, [db]);
 
   const featuredLive = liveMatches[0] ?? null;
 
   // ── Featured standings ────────────────────────────────────────────────────
-  // Rocky Inner is the default featured league on Home.  computeStandings
-  // sorts by points DESC + GD tiebreak; we stamp a 1-based position on
-  // each row so the renderer can show the 3-tier pipe (dust top-3 /
-  // none middle / flare bottom-2).
+  // Rocky Inner is the default featured league on Home.  Standings are
+  // fetched from Supabase (completed matches in this league's competitions)
+  // and sorted by points DESC → GD DESC → GF DESC.  We stamp a 1-based
+  // position on each row so the renderer can show the 3-tier pipe
+  // (dust top-3 / none middle / flare bottom-2).
+  //
+  // Loaded asynchronously via fetchLeagueStandings — Home renders a
+  // placeholder strip while pending so we don't paint zeros that get
+  // replaced 200ms later.
   const featuredLeague = LEAGUES[0]!;
-  const standingsRows  = computeStandings(
-    featuredLeague.id,
-    buildStandingsRows(featuredLeague.id) as any,
-  ).map((row: any, idx: number) => ({
-    id: row.id,
-    position: idx + 1,
-    team: row.team,
-    club: row.team,
-    team_link: row.teamLink,
-    played: row.played,
-    wins: row.wins,
-    draws: row.draws,
-    loses: row.loses,
-    gd: row.gd,
-    points: row.points,
-    form: row.form,
-  }));
+  const [standingsRows, setStandingsRows] = useState<
+    Array<LeagueStandingsRow & { position: number; club: string; team_link: string }>
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLeagueStandings(db, featuredLeague.id)
+      .then((rows) => {
+        if (cancelled) return;
+        setStandingsRows(rows.map((row, idx) => ({
+          ...row,
+          position:  idx + 1,
+          // StandingsTable accepts both `team` and `club` for the label;
+          // keep the duplicated key so any consumer that reads `club`
+          // continues to work without prop edits.
+          club:      row.team,
+          team_link: row.teamLink,
+        })));
+      })
+      .catch((err) => { console.warn('[Home] standings fetch failed:', err); });
+    return () => { cancelled = true; };
+  }, [db, featuredLeague.id]);
 
   return (
     <div style={{
@@ -155,7 +171,7 @@ export default function Home() {
       <Header />
 
       {/* Hero — full bleed, two-column. */}
-      <Hero />
+      <Hero season={activeSeason} liveMatchCount={liveMatches.length} />
 
       {/* Section II — Live From The Void. */}
       <section style={{ padding: '64px 0' }}>
@@ -227,9 +243,19 @@ export default function Home() {
  *
  * Collapses to single column < 900 px (image stacks above content).
  *
+ * @param {{ season: any | null, liveMatchCount: number }} props
+ *   - season: active season row with year, current_round, total_rounds
+ *   - liveMatchCount: number of matches currently in progress
  * @returns {JSX.Element}
  */
-function Hero() {
+function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: number }) {
+  // ── Compute hero stats from live data ─────────────────────────────────────
+  // Season is fetched on Home mount; fallback to placeholders during load.
+  // The seasons table only stores year, name, is_active, start/end dates.
+  // Matchday/round tracking happens via match completion counts.
+  const year = season?.year ?? '—';
+  const seasonLabel = season ? `SEASON ${year}` : 'SEASON —';
+  const matchesStr = `${String(liveMatchCount).padStart(2, '0')} / 16`;
   return (
     <section style={{ padding: '0 0 0 0' }}>
       <Container>
@@ -266,9 +292,8 @@ function Hero() {
             gap: 24,
             paddingBlock: 32,
           }}>
-            {/* Kicker row — SEASON • MATCHDAY • LIVE.  Tightly tracked
-                mono small-caps; same opacity for all three so the row
-                reads as a single label rather than three. */}
+            {/* Kicker row — SEASON • LIVE.  Tightly tracked
+                mono small-caps; sourced from active_season row. */}
             <div style={{
         ...(undefined as any),
               display: 'flex',
@@ -278,9 +303,7 @@ function Hero() {
               textTransform: 'uppercase',
               color: DUST,
             }}>
-              <span>{HERO_SEASON}</span>
-              <span style={{ color: DUST_50 }}>•</span>
-              <span>{HERO_MATCHDAY}</span>
+              <span>{seasonLabel}</span>
               <span style={{ color: DUST_50 }}>•</span>
               <span>{HERO_LIVE}</span>
             </div>
@@ -340,22 +363,21 @@ function Hero() {
               <FocusCTA to="/matches">Watch Live Match</FocusCTA>
             </div>
 
-            {/* Stats grid — 4 small-caps cells separated by a top
-                hairline.  Responsive: 4 cols on desktop, 2 on tablet,
-                1 on mobile. Values are placeholder until wired to live
-                season state. */}
+            {/* Stats grid — 3 small-caps cells separated by a top
+                hairline.  Responsive: 3 cols on desktop, 2 on tablet,
+                1 on mobile. Values are live from active_season + match
+                counts; show placeholders during fetch. */}
             <div className="isl-stats-grid" style={{
         ...(undefined as any),
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
+              gridTemplateColumns: 'repeat(3, 1fr)',
               borderTop: `1px solid ${HAIRLINE}`,
               paddingTop: 24,
               gap: 16,
               marginTop: 8,
             }}>
-              <HeroStat label="Active Matches" value="03 / 16" />
-              <HeroStat label="Season Cycle"   value="014 / 030" />
-              <HeroStat label="Architect"      value="Elevated" />
+              <HeroStat label="Active Matches" value={matchesStr} />
+              <HeroStat label="Season Year"   value={year} />
               <HeroStat label="Build"          value="v 0.7.0" />
             </div>
           </div>
@@ -514,9 +536,13 @@ function LiveMatchPanel({ match }: { match: any | null }) {
         />
       </div>
 
-      {/* Row 4 — dust-filled CTA. */}
+      {/* Row 4 — dust-filled CTA.
+          Routes to /matches/:id (the only match detail route).  The legacy
+          /matches/:id/live URL was removed in the 2026-05 nuke when the
+          standalone MatchLivePage was folded into MatchDetail; the link
+          here was stale and rendered a 404 page. */}
       <div style={{ padding: 24 }}>
-        <DustButton to={`/matches/${match.id}/live`}>Watch Live Match</DustButton>
+        <DustButton to={`/matches/${match.id}`}>Watch Live Match</DustButton>
       </div>
     </div>
   );
