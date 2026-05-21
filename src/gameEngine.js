@@ -201,9 +201,13 @@ export function createAIManager(homeTeam, awayTeam, refOverride = null) {
   // `leniency` is set to a neutral 65 (mid of the legacy 30–100 random range)
   // when overriding because the engine no longer reads it in any branch — keep
   // the field defined for any downstream code still expecting the shape.
+  // entity_id threads through when the caller supplied an entity-graph
+  // referee, enabling Phase 8 reflex resolvers (card_severity).  Random
+  // fallback refs are not linked to entities — the resolver wiring will
+  // skip the shading when entity_id is null/undefined.
   const ref = refOverride
-    ? { name: refOverride.name, leniency: 65, strictness: refOverride.strictness }
-    : { name: pick(REFS), leniency: 30 + Math.random() * 70, strictness: Math.random() * 100 };
+    ? { name: refOverride.name, leniency: 65, strictness: refOverride.strictness, entity_id: refOverride.entity_id ?? null }
+    : { name: pick(REFS), leniency: 30 + Math.random() * 70, strictness: Math.random() * 100, entity_id: null };
   const homeM     = { name: homeTeam.manager?.name || 'Manager Alpha', emotion: MGER_EMO.CALM, personality: homeTeam.manager?.personality || 'Aggressive', team: homeTeam };
   const awayM     = { name: awayTeam.manager?.name || 'Manager Beta',  emotion: MGER_EMO.CALM, personality: awayTeam.manager?.personality || 'Calculated', team: awayTeam };
 
@@ -1164,7 +1168,17 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
         // so genEvent() can self-expire them without a separate cleanup pass.
         // Defaults to null so legacy / test callers that don't supply genCtx are
         // completely unaffected.
-        matchFlags = null } = genCtx;
+        matchFlags = null,
+        // ── Phase 8: Universal Agent System reflex-tier hooks ─────────────────
+        // `agentCorpus` is the in-memory persona + memory snapshot produced
+        // by prepareCorpusForMatch().  Both maps are entity_id-keyed.
+        // `runDecision` is the typed dispatcher from features/agents.  When
+        // BOTH are present and a player carries an entity_id, the engine's
+        // shoot-vs-pass and card-severity branches consult the resolvers to
+        // shade their outputs by personality + memory.  When EITHER is
+        // missing (tests, legacy callers, no-DB previews), the engine falls
+        // back to its original stat-driven behaviour with zero overhead.
+        agentCorpus = null, runDecision = null } = genCtx;
 
   // ── Feature 3: Cosmic Edict — event-gate modifier ────────────────────────
   // The edict's rollMod shifts the probability gate before the roll.
@@ -1449,7 +1463,12 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
   // _genEventBranches is a top-level function (not a closure inside genEvent),
   // so matchFlags / archModCtx from genEvent's scope are NOT available here.
   // Reconstruct them from genCtx which is already passed as the last argument.
-  const { architectCurses: _bac = [], architectBlesses: _bab = [], architectPossessions: _bap = [], matchFlags = null } = genCtx;
+  const { architectCurses: _bac = [], architectBlesses: _bab = [], architectPossessions: _bap = [], matchFlags = null,
+          // Phase 8 reflex-tier hooks — see the matching destructure in
+          // genEvent() for the contract.  Both are nullable; the engine's
+          // resolver-aware paths gracefully bail out to legacy behaviour
+          // when either is absent.
+          agentCorpus = null, runDecision = null } = genCtx;
   const archModCtx = {
     architectCurses:      _bac,
     architectBlesses:     _bab,
@@ -1619,7 +1638,41 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
       // because the foul branch already has its own flashpoint multipliers.
       sevRaw *= rnd(1.2, 1.8) * (foulRel.intensity || 0.5);
     }
-    const sev = Math.min(100, sevRaw);
+    let sev = Math.min(100, sevRaw);
+
+    // ── Phase 8: card-severity reflex resolver ──────────────────────────────
+    // When the agent corpus + runDecision are wired (worker context),
+    // shade `sev` by the referee's persona + per-player memory grudges.
+    // The resolver takes baseSeverity in [0,1] and returns shadedSeverity
+    // in [0,1]; rescale back to the engine's 0..100 scale before threshold
+    // comparison.  Falls back to the raw value when:
+    //   • the corpus isn't hydrated (legacy / no-DB callers), OR
+    //   • the offending player has no entity_id, OR
+    //   • the referee has no entity_id / persona on file.
+    if (runDecision && agentCorpus && player?.entity_id && aim?.referee?.entity_id) {
+      const refPersona = agentCorpus.personas.get(aim.referee.entity_id);
+      if (refPersona) {
+        try {
+          const refMemories = agentCorpus.memories.get(aim.referee.entity_id) ?? [];
+          const decision = runDecision({
+            kind: 'card_severity',
+            persona: refPersona,
+            memories: refMemories,
+            context: {
+              playerEntityId: player.entity_id,
+              // Convert engine's 0..100 scale to the resolver's [0,1].
+              baseSeverity: sevRaw / 100,
+            },
+          });
+          // shadedSeverity is in [0,1]; rescale to 0..100.
+          sev = Math.min(100, Math.max(0, decision.shadedSeverity * 100));
+        } catch (_e) {
+          // Resolver errors must never break match flow — keep the
+          // pre-resolver `sev` and proceed with the engine's defaults.
+        }
+      }
+    }
+
     let card = aim ? aim.shouldGiveCard(sev) : (sev > 85 ? 'red' : sev > 60 ? 'yellow' : null);
 
     // ── Second-yellow detection ───────────────────────────────────────────
@@ -1839,7 +1892,41 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const isClutchMoment = shooterAgent?.isClutch && min >= 80 && Math.abs(score[0] - score[1]) <= 1;
     const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null, ...archModCtx });
     const formAdj        = formBonus(player.name, playerStats) - formBonus(gk.name, playerStats) + (aim?.getAgentByName(player.name)?.getDecisionBonus() || 0) - wxStatPen + wxGkPen;
-    const net            = shotResult.margin + formAdj;
+
+    // ── Phase 8: shoot-or-pass reflex resolver — confidence/grudge shading ──
+    // The agent system's `shoot_or_pass` resolver returns a probability
+    // weight in [0.2, 0.8] reflecting how confident THIS striker feels
+    // about shooting at THIS keeper, given their persona + per-keeper
+    // memory history (hat-tricks vs saves vs misses).  We map the delta
+    // from neutral (0.5) onto a small margin nudge so a confident shooter
+    // tips a borderline contest goalward while a wary one tips it
+    // miss-ward.  Cap the impact at ±6 margin points — meaningful enough
+    // to matter on 50/50 strikes, not enough to override the stat-driven
+    // engine math on clear-cut chances.
+    //
+    // ANNOTATED MAGIC NUMBERS
+    //   MARGIN_PER_WEIGHT_POINT = 20  — at the resolver's MAX_DELTA (0.30),
+    //     this yields a ±6 margin nudge.  Tune up to give reflex stronger
+    //     influence; tune down for more conservative shading.
+    let shootDelta = 0;
+    if (runDecision && agentCorpus && player?.entity_id && gk?.entity_id) {
+      const shooterPersona = agentCorpus.personas.get(player.entity_id);
+      if (shooterPersona) {
+        try {
+          const shooterMemories = agentCorpus.memories.get(player.entity_id) ?? [];
+          const decision = runDecision({
+            kind: 'shoot_or_pass',
+            persona: shooterPersona,
+            memories: shooterMemories,
+            context: { keeperEntityId: gk.entity_id },
+          });
+          shootDelta = (decision.shootWeight - 0.5) * 20;
+        } catch (_e) {
+          // Resolver errors leave shootDelta at 0 (no shading).
+        }
+      }
+    }
+    const net            = shotResult.margin + formAdj + shootDelta;
     const shotFlavour    = shotResult.flavour;
 
     // ── Feature 6: matchState flag overrides — applied after resolveContest ──

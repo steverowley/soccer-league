@@ -357,6 +357,10 @@ export function normalizeTeamForEngine(team: Record<string, unknown>): EngineTea
         name: p.name as string,
         position: p.position as string,
         starter: (p.starter as boolean) ?? true,
+        // entity_id threads through so reflex-tier resolvers can look up
+        // the player's persona + memories.  Optional — pre-Phase 2
+        // fixtures still omit it; engine falls back to name-only behavior.
+        entity_id: (p.entity_id as string | null | undefined) ?? null,
         attacking: (p.attacking as number) ?? 70,
         defending: (p.defending as number) ?? 70,
         mental: (p.mental as number) ?? 70,
