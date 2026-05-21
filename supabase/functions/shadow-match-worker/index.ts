@@ -472,7 +472,7 @@ Deno.serve(async (_req: Request) => {
   } catch (err) {
     console.error('[shadow-match-worker] fatal:', err);
     return new Response(
-      JSON.stringify({ error: String(err) }),
+      JSON.stringify({ error: 'internal server error' }),
       { status: 500, headers: { 'content-type': 'application/json' } },
     );
   }
