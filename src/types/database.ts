@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_runs: {
+        Row: {
+          cache_create_tokens: number
+          cache_read_tokens: number
+          created_at: string
+          entity_id: string | null
+          id: string
+          kind: string
+          model: string | null
+          output_tokens: number
+          prompt_tokens: number
+        }
+        Insert: {
+          cache_create_tokens?: number
+          cache_read_tokens?: number
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          kind: string
+          model?: string | null
+          output_tokens?: number
+          prompt_tokens?: number
+        }
+        Update: {
+          cache_create_tokens?: number
+          cache_read_tokens?: number
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          kind?: string
+          model?: string | null
+          output_tokens?: number
+          prompt_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       architect_interventions: {
         Row: {
           created_at: string
@@ -249,6 +293,154 @@ export type Database = {
             columns: ["entity_id"]
             isOneToOne: false
             referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_memories: {
+        Row: {
+          consumed_count: number
+          entity_id: string
+          fact_kind: string
+          id: string
+          occurred_at: string
+          payload: Json
+          salience: number
+          subjects: string[]
+        }
+        Insert: {
+          consumed_count?: number
+          entity_id: string
+          fact_kind: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          salience?: number
+          subjects?: string[]
+        }
+        Update: {
+          consumed_count?: number
+          entity_id?: string
+          fact_kind?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          salience?: number
+          subjects?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_memories_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_persona: {
+        Row: {
+          core_quotes: string[]
+          entity_id: string
+          goals: Json
+          last_enriched_at: string | null
+          lexicon: string[]
+          personality_vec: Json
+          taboos: string[]
+          updated_at: string
+          voice_paragraph: string
+        }
+        Insert: {
+          core_quotes?: string[]
+          entity_id: string
+          goals?: Json
+          last_enriched_at?: string | null
+          lexicon?: string[]
+          personality_vec?: Json
+          taboos?: string[]
+          updated_at?: string
+          voice_paragraph?: string
+        }
+        Update: {
+          core_quotes?: string[]
+          entity_id?: string
+          goals?: Json
+          last_enriched_at?: string | null
+          lexicon?: string[]
+          personality_vec?: Json
+          taboos?: string[]
+          updated_at?: string
+          voice_paragraph?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_persona_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: true
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_snippets: {
+        Row: {
+          context_tags: string[]
+          created_at: string
+          entity_id: string
+          id: string
+          kind: string
+          last_used_at: string | null
+          mood: string | null
+          pinned: boolean
+          seed_memory_id: string | null
+          subjects: string[]
+          text: string
+          usage_count: number
+          valence: number
+        }
+        Insert: {
+          context_tags?: string[]
+          created_at?: string
+          entity_id: string
+          id?: string
+          kind: string
+          last_used_at?: string | null
+          mood?: string | null
+          pinned?: boolean
+          seed_memory_id?: string | null
+          subjects?: string[]
+          text: string
+          usage_count?: number
+          valence?: number
+        }
+        Update: {
+          context_tags?: string[]
+          created_at?: string
+          entity_id?: string
+          id?: string
+          kind?: string
+          last_used_at?: string | null
+          mood?: string | null
+          pinned?: boolean
+          seed_memory_id?: string | null
+          subjects?: string[]
+          text?: string
+          usage_count?: number
+          valence?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_snippets_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entity_snippets_seed_memory_id_fkey"
+            columns: ["seed_memory_id"]
+            isOneToOne: false
+            referencedRelation: "entity_memories"
             referencedColumns: ["id"]
           },
         ]
@@ -855,6 +1047,7 @@ export type Database = {
       narratives: {
         Row: {
           acknowledged_by: Json | null
+          composed_from: string[]
           created_at: string
           entities_involved: Json | null
           id: string
@@ -864,6 +1057,7 @@ export type Database = {
         }
         Insert: {
           acknowledged_by?: Json | null
+          composed_from?: string[]
           created_at?: string
           entities_involved?: Json | null
           id?: string
@@ -873,6 +1067,7 @@ export type Database = {
         }
         Update: {
           acknowledged_by?: Json | null
+          composed_from?: string[]
           created_at?: string
           entities_involved?: Json | null
           id?: string
