@@ -770,7 +770,7 @@ Deno.serve(async (_req: Request) => {
     return await handler();
   } catch (err) {
     console.error('[corpus-enricher] fatal:', err);
-    return new Response(JSON.stringify({ error: String(err) }), {
+    return new Response(JSON.stringify({ error: 'internal server error' }), {
       status: 500,
       headers: { 'content-type': 'application/json' },
     });
