@@ -90,6 +90,11 @@ const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
 // EntityDetail (Phase 10 of the Universal Agent System): inspects any
 // entity's persona + recent snippets + recent memories.  Read-only.
 const EntityDetail = lazy(() => import('./pages/EntityDetail'));
+// WhatIf (Phase 12 of the Universal Agent System): admin-only viewer
+// for the shadow_match_results table.  Reads the alternate-timeline
+// distributions Phase 11 fills in.  Service-role RLS keeps the data
+// admin-only at the DB layer regardless of client-side gating.
+const WhatIf = lazy(() => import('./pages/WhatIf'));
 const Roadmap      = lazy(() => import('./pages/Roadmap'));
 
 // Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
@@ -245,6 +250,11 @@ createRoot(document.getElementById('root')!).render(
                   for any entity (player, ref, journalist, planet, …).
                   No raw stats exposed — text only. */}
               <Route path="entities/:entityId"  element={<EntityDetail />} />
+
+              {/* /admin/what-if — Phase 12 alternate-timeline viewer.
+                  Admin-gated client-side; service-role RLS gates the
+                  underlying shadow_match_results table at the DB. */}
+              <Route path="admin/what-if"       element={<WhatIf />} />
             </Routes>
             </Suspense>
           </BrowserRouter>
