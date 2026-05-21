@@ -215,7 +215,7 @@ export default function MatchDetail() {
 function MatchHero({ match  }: any) {
   const competition = match.competitions?.name ?? 'League';
   const round       = match.round ?? '';
-  const status      = match.status ?? 'scheduled';
+  const rawStatus   = match.status ?? 'scheduled';
 
   const homeName  = match.home_team?.name     ?? '?';
   const awayName  = match.away_team?.name     ?? '?';
@@ -225,6 +225,41 @@ function MatchHero({ match  }: any) {
   const awayLoc   = match.away_team?.location ?? '';
   const homeScore = match.home_score ?? 0;
   const awayScore = match.away_score ?? 0;
+
+  // ── Perceived status (time-based override of the DB status) ───────────────
+  // The match-worker pre-simulates the entire 90 minutes in ~10–60 s and
+  // flips `status` to `completed` long before the viewer is done pacing the
+  // event log on the wall clock.  For the hero pip and the pulsing score dot
+  // we want the answer to "is this match live RIGHT NOW from the user's
+  // perspective?", not "has the worker finished writing rows?".
+  //
+  // PERCEIVED_LIVE_WINDOW_MS is the wall-clock budget the viewer uses to
+  // reveal the match minute-by-minute.  Mirrors season_config.
+  // match_duration_seconds default (600 s = 10 minutes).  Sourcing the
+  // actual season knob would require an extra DB roundtrip the hero doesn't
+  // currently make; LiveCommentary fetches it for the event filter and a
+  // mismatch here would only show "Full Time" up to a few minutes early on
+  // non-default seasons, which is acceptable for v1.
+  const PERCEIVED_LIVE_WINDOW_MS = 600 * 1000;
+  const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  // Snapshot Date.now() once for both boundary checks.  React-hooks's purity
+  // rule flags Date.now() in render — we accept that here for the same reason
+  // LiveCommentary does (lines 790/810 in this file): the hero re-renders
+  // when the parent's match state changes, and stale "Live" past the pacing
+  // window is harmless (it resolves on refresh / nav).  Hero has no per-second
+  // tick because the pip / pulse don't need sub-minute precision.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
+  const inPacingWindow = kickoffMs != null
+    && nowMs >= kickoffMs
+    && nowMs < kickoffMs + PERCEIVED_LIVE_WINDOW_MS;
+  // 'completed' rows get upgraded to 'in_progress' while still inside the
+  // pacing window so the pip reads "Live" and the score pulses.  Scheduled
+  // and cancelled rows are untouched — a scheduled match should never read
+  // as live, and a cancelled match was never played.
+  const status = (rawStatus === 'completed' && inPacingWindow)
+    ? 'in_progress'
+    : rawStatus;
 
   const ts = match.played_at
     ? new Date(match.played_at)

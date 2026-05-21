@@ -124,7 +124,52 @@ export async function getMatchesWithTeamDetail(competitionId: string) {
   return data ?? [];
 }
 
+/**
+ * Window (in seconds) over which the viewer paces a match's events on the
+ * wall clock.  Mirrors `season_config.match_duration_seconds` default of
+ * 600 s (10 minutes real → 90 simulated minutes ≈ 6.7 s per game minute).
+ *
+ * WHY THIS CONSTANT EXISTS HERE (and not just in features/match):
+ *   The match-worker pre-simulates every match in ~10–60 s and flips the DB
+ *   `status` column from `scheduled` → `in_progress` → `completed` within
+ *   that brief burst.  But the LIVE viewer (MatchDetail's LiveCommentary)
+ *   reveals events at wall-clock pace over `match_duration_seconds`.  So
+ *   filtering live matches by `status='in_progress'` misses everything —
+ *   by the time the home page loads, the DB row already says `completed`
+ *   even though the viewer is still mid-pace.
+ *
+ *   This constant gives the home / matches list queries a way to surface
+ *   matches that are STILL inside their pacing window so the lists agree
+ *   with MatchDetail's pacing logic.  600 s matches the production default;
+ *   non-default seasons would need a per-season join to read the actual
+ *   knob, but no such seasons exist today.
+ */
+const LIVE_WINDOW_SECONDS = 600;
+
+/**
+ * Fetch matches the viewer should treat as "currently live" — kickoff has
+ * passed and the pacing window has not yet closed.
+ *
+ * SELECTION RULES:
+ *   • `scheduled_at` is within the last `LIVE_WINDOW_SECONDS` seconds, AND
+ *   • `scheduled_at` is ≤ now (kickoff happened), AND
+ *   • `status` is not `cancelled` (every non-cancelled status — scheduled,
+ *     in_progress, completed — can validly sit inside the window depending
+ *     on where the worker is in its simulation pipeline).
+ *
+ * Status is intentionally not constrained beyond cancellation: a match the
+ * worker just finished still belongs in this list because the viewer is
+ * still revealing its events minute-by-minute on the wall clock.
+ *
+ * @returns Array of match rows joined with home/away team metadata, ordered
+ *          by scheduled_at DESC so the most-recently-kicked-off matches
+ *          appear first.  Empty array on no live matches.
+ * @throws Re-throws the Supabase error if the query fails.
+ */
 export async function getLiveMatches() {
+  const now = new Date();
+  const windowOpenIso = new Date(now.getTime() - LIVE_WINDOW_SECONDS * 1000).toISOString();
+  const nowIso = now.toISOString();
   const { data, error } = await supabase
     .from('matches')
     .select(
@@ -134,12 +179,34 @@ export async function getLiveMatches() {
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
     `,
     )
-    .eq('status', 'in_progress')
-    .order('scheduled_at', { nullsFirst: true });
+    .gte('scheduled_at', windowOpenIso)
+    .lte('scheduled_at', nowIso)
+    .neq('status', 'cancelled')
+    .order('scheduled_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
 
+/**
+ * Fetch the next `limit` upcoming matches — strictly future kickoffs.
+ *
+ * SELECTION RULES:
+ *   • `status = 'scheduled'` (the worker hasn't claimed it yet), AND
+ *   • `scheduled_at > now` (strictly in the future).
+ *
+ * The `scheduled_at > now` predicate is what prevents this list from
+ * overlapping with `getLiveMatches()`: a match whose kickoff has already
+ * passed but the worker hasn't picked up yet (status still 'scheduled' for
+ * a few seconds) belongs in the live list, not upcoming.  Without this
+ * predicate that match would appear in both lists at once.
+ *
+ * @param limit Maximum number of rows to return.  Defaults to 6, sized for
+ *              the home page's upcoming sidebar.
+ * @returns     Array of match rows joined with team metadata, ordered by
+ *              scheduled_at ASC (next kickoff first).  Empty array if no
+ *              matches are scheduled.
+ * @throws Re-throws the Supabase error if the query fails.
+ */
 export async function getUpcomingMatches(limit = 6) {
   const { data, error } = await supabase
     .from('matches')
@@ -151,7 +218,7 @@ export async function getUpcomingMatches(limit = 6) {
     `,
     )
     .eq('status', 'scheduled')
-    .not('scheduled_at', 'is', null)
+    .gt('scheduled_at', new Date().toISOString())
     .order('scheduled_at', { ascending: true })
     .limit(limit);
   if (error) throw error;

@@ -548,9 +548,13 @@ function LiveMatchPanel({ match }: { match: any | null }) {
         />
       </div>
 
-      {/* Row 4 — dust-filled CTA. */}
+      {/* Row 4 — dust-filled CTA.
+          Routes to /matches/:id (the only match detail route).  The legacy
+          /matches/:id/live URL was removed in the 2026-05 nuke when the
+          standalone MatchLivePage was folded into MatchDetail; the link
+          here was stale and rendered a 404 page. */}
       <div style={{ padding: 24 }}>
-        <DustButton to={`/matches/${match.id}/live`}>Watch Live Match</DustButton>
+        <DustButton to={`/matches/${match.id}`}>Watch Live Match</DustButton>
       </div>
     </div>
   );
