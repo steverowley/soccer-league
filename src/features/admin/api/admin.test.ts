@@ -38,8 +38,26 @@ interface MatchRow {
   played_at?:      string | null;
 }
 
+/**
+ * Row shape the fake DB supports for the `competitions` table.  Only the
+ * fields `completeMatchManually` actually reads (`id`, `type`) are modelled;
+ * additional columns (`name`, `format`, `status`, …) are intentionally absent
+ * so a regression that starts reading them trips a compile error.
+ */
+interface CompetitionRow {
+  /** UUID — matches `matches.competition_id` for the lookup join. */
+  id:   string;
+  /** Discriminator the cup-draw guard checks for: 'cup' vs 'league'. */
+  type: 'cup' | 'league';
+}
+
 interface FakeStore {
-  matches: MatchRow[];
+  matches:      MatchRow[];
+  /**
+   * Competitions referenced by `matches.competition_id`.  Seeded by tests
+   * that exercise the cup-draw guard; other tests can leave it empty.
+   */
+  competitions: CompetitionRow[];
 }
 
 /**
@@ -114,7 +132,7 @@ function makeFakeDb(store: FakeStore): IslSupabaseClient {
 let store: FakeStore;
 
 beforeEach(() => {
-  store = { matches: [] };
+  store = { matches: [], competitions: [] };
 });
 
 // ── fastForwardScheduledMatches ──────────────────────────────────────────────
@@ -337,6 +355,98 @@ describe('completeMatchManually', () => {
     expect(fakeBus.calls).toHaveLength(2);
     expect(fakeBus.calls.map((c) => (c.payload as { matchId: string }).matchId))
       .toEqual(['match-1', 'match-2']);
+  });
+
+  // ── Cup-draw guard ────────────────────────────────────────────────────────
+  // Knockout brackets refuse to advance on tied scorelines (see
+  // CupRoundAdvancerListener).  These two cases prove the admin path
+  // mirrors that rule: tied input on a cup match throws before the UPDATE,
+  // while tied input on a league match flows through unchanged (league
+  // draws are legal under standard 3-1-0 points scoring).
+  it('rejects a tied scoreline on a cup match without touching the DB or bus', async () => {
+    // Seed both the match row (linked to a cup competition) and the
+    // competitions row the guard's lookup reads.  `type='cup'` is the
+    // exact discriminator the production guard checks.
+    store.matches.push(seedMatch());
+    store.competitions.push({ id: 'comp-celestial-cup', type: 'cup' });
+    const fakeBus = makeFakeBus();
+
+    // 1–1 draw on a cup match must surface as the cup-tie error.
+    await expect(
+      completeMatchManually(makeFakeDb(store), 'match-1', 1, 1, fakeBus),
+    ).rejects.toThrow(/Cup matches cannot end in a draw/);
+
+    // Row stayed scheduled, no scores written, no event emitted — the
+    // guard fired BEFORE the UPDATE and BEFORE the emit.
+    const row = store.matches[0]!;
+    expect(row.status).toBe('scheduled');
+    expect(row.home_score).toBeUndefined();
+    expect(row.away_score).toBeUndefined();
+    expect(row.played_at).toBeUndefined();
+    expect(fakeBus.calls).toHaveLength(0);
+  });
+
+  it('accepts a tied scoreline on a league match and emits the bus event', async () => {
+    // Same seed shape as the cup test, but the linked competition has
+    // type='league' — draws are a legitimate league result (1 point each).
+    store.matches.push({
+      ...seedMatch(),
+      // Override competition_id to a league competition row.
+      competition_id: 'comp-league-1',
+    });
+    store.competitions.push({ id: 'comp-league-1', type: 'league' });
+    const fakeBus = makeFakeBus();
+
+    const result = await completeMatchManually(
+      makeFakeDb(store), 'match-1', 2, 2, fakeBus,
+    );
+
+    // Result echoes the tied scoreline back unchanged.
+    expect(result).toEqual({ matchId: 'match-1', homeScore: 2, awayScore: 2 });
+    // Row was actually written, including the tied scores.
+    const row = store.matches[0]!;
+    expect(row.status).toBe('completed');
+    expect(row.home_score).toBe(2);
+    expect(row.away_score).toBe(2);
+    // Exactly one emit, with the league competitionId in the payload.
+    expect(fakeBus.calls).toHaveLength(1);
+    expect(fakeBus.calls[0]!.payload).toMatchObject({
+      matchId:       'match-1',
+      homeScore:     2,
+      awayScore:     2,
+      competitionId: 'comp-league-1',
+    });
+  });
+
+  // ── Status guard ──────────────────────────────────────────────────────────
+  // Optimistic-concurrency guard: a stale editor whose row was already
+  // moved to `in_progress` / `completed` by the worker must NOT overwrite
+  // the worker's write, and must NOT re-emit `match.completed` (which
+  // would double-settle wagers and double-advance cups).
+  it('throws and does not emit when the row is no longer scheduled', async () => {
+    // Seed a row whose status the worker has already advanced to
+    // `in_progress` — exactly the race the guard is designed to catch.
+    store.matches.push({
+      ...seedMatch(),
+      status: 'in_progress',
+    });
+    const fakeBus = makeFakeBus();
+
+    await expect(
+      completeMatchManually(makeFakeDb(store), 'match-1', 2, 1, fakeBus),
+    ).rejects.toThrow(/no longer scheduled/);
+
+    // The UPDATE's WHERE clause excluded this row, so its scores and
+    // played_at must be untouched.  Status stays `in_progress` exactly
+    // as the worker set it.
+    const row = store.matches[0]!;
+    expect(row.status).toBe('in_progress');
+    expect(row.home_score).toBeUndefined();
+    expect(row.away_score).toBeUndefined();
+    expect(row.played_at).toBeUndefined();
+    // Critical: no bus emission on the failure path — wagers must not
+    // settle and cups must not advance against a write that didn't land.
+    expect(fakeBus.calls).toHaveLength(0);
   });
 
   it('defaults to the app singleton bus when no override is supplied', async () => {

@@ -610,6 +610,17 @@ export interface CompleteMatchManuallyResult {
  *   - Throws when `matchId` is empty / non-string.
  *   - Throws when either score is non-integer or outside `[MIN_SCORE, MAX_SCORE]`.
  *   - Throws when the match row does not exist.
+ *   - Throws `"Cup matches cannot end in a draw — enter a tiebreak winner"`
+ *     when the match belongs to a single-elimination cup competition
+ *     (`competitions.type='cup'`) and the scoreline is tied.  Knockout
+ *     brackets require a decisive winner; `CupRoundAdvancerListener` would
+ *     otherwise refuse to advance and the row would be `completed` while
+ *     the bracket stays stuck.
+ *   - Throws `"Match is no longer scheduled — refresh and try again"` when
+ *     the optimistic-concurrency guard (`status='scheduled'`) misses,
+ *     meaning the worker or another admin already moved the row.  No bus
+ *     event is emitted in this case — preserves the exactly-once invariant
+ *     for `WagerSettlementListener` + `CupRoundAdvancerListener`.
  *   - Throws when the UPDATE returns an error (RLS denial, network blip…).
  *
  * @param db          Supabase client.  Needs UPDATE rights on `matches`
@@ -662,10 +673,42 @@ export async function completeMatchManually(
     throw new Error(`completeMatchManually: match ${matchId} not found`);
   }
 
-  // ── Step 2: persist the result ───────────────────────────────────────────
+  // ── Step 2: cup-match draw guard ─────────────────────────────────────────
+  // `CupRoundAdvancerListener` refuses to advance the bracket on a tied
+  // scoreline (knockouts need a decisive winner).  If we allowed a draw
+  // through here, the match would flip to `completed` but the bracket would
+  // remain stuck — a silently broken cup.  Resolve the discriminator by
+  // looking up the competition's `type` column ('cup' = single-elimination).
+  if (homeScore === awayScore && matchRow.competition_id) {
+    const { data: comp, error: compErr } = await (db as AnyDb)
+      .from('competitions')
+      .select('type')
+      .eq('id', matchRow.competition_id)
+      .maybeSingle();
+    if (compErr) {
+      throw new Error(
+        `completeMatchManually: competition lookup failed: ${compErr.message}`,
+      );
+    }
+    if (comp?.type === 'cup') {
+      throw new Error(
+        'Cup matches cannot end in a draw — enter a tiebreak winner',
+      );
+    }
+  }
+
+  // ── Step 3: persist the result with optimistic-concurrency guard ─────────
   // played_at is stamped with the wall-clock so downstream readers that
   // sort by played_at order this row exactly like a worker-simulated one.
-  const { error: updateErr } = await (db as AnyDb)
+  //
+  // The extra `.eq('status', 'scheduled')` clause makes the UPDATE a no-op
+  // when the worker (or another admin) has already moved the row to
+  // `in_progress` / `completed`.  Without it, a stale Fixture Browser tab
+  // could overwrite a freshly-completed simulation and re-emit
+  // `match.completed`, double-settling wagers and double-advancing cups.
+  // We use `.select()` to make PostgREST return the affected rows; an empty
+  // array means the guard skipped the write and we throw before emitting.
+  const { data: updatedRows, error: updateErr } = await (db as AnyDb)
     .from('matches')
     .update({
       status:     'completed',
@@ -673,13 +716,20 @@ export async function completeMatchManually(
       away_score: awayScore,
       played_at:  new Date().toISOString(),
     })
-    .eq('id', matchId);
+    .eq('id', matchId)
+    .eq('status', 'scheduled')
+    .select();
 
   if (updateErr) {
     throw new Error(`completeMatchManually: update failed: ${updateErr.message}`);
   }
+  if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+    throw new Error(
+      'Match is no longer scheduled — refresh and try again',
+    );
+  }
 
-  // ── Step 3: emit the bus event ───────────────────────────────────────────
+  // ── Step 4: emit the bus event ───────────────────────────────────────────
   // Reaches all four cross-feature listeners.  Synchronous — listeners run
   // inline on this microtask; their async DB work is handled inside the
   // listener bodies themselves and intentionally not awaited here.
