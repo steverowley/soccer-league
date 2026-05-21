@@ -2,13 +2,15 @@
 // Admin dashboard — `/admin` route.
 //
 // WHO CAN SEE THIS
-//   Access is gated client-side by the VITE_ADMIN_USER_IDS env var (a CSV of
-//   Supabase user UUIDs).  Non-admin authenticated users and anonymous visitors
-//   both see a generic "Access Denied" surface — no information about the
-//   allowlist is surfaced to the browser.  The actual security boundary is
-//   Supabase RLS: admin mutations (match updates, enactment) require the
-//   service-role key, which is never shipped to the browser.  This page is
-//   therefore a dev-convenience tool, not a hardened admin panel.
+//   Access is gated client-side by the `profiles.is_admin` column (server-side
+//   flag added in migration 0032 + RLS-protected so a user can only ever read
+//   their own flag).  Non-admin authenticated users and anonymous visitors
+//   both see a generic "Access Denied" surface — no information about who is
+//   an admin is surfaced to the browser.  The actual security boundary is
+//   the RPC-side check inside `admin_reset_season()` (also added in 0032),
+//   which raises SQLSTATE 28000 (HTTP 403) for any non-admin caller.  This
+//   page is therefore a dev-convenience tool, not a hardened admin panel —
+//   the server-side check is what actually protects the destructive ops.
 //
 // LAYOUT
 //   Header (global)
@@ -32,8 +34,6 @@ import { COLORS, Container, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import {
-  parseAllowlist,
-  isAdminUser,
   getActiveSeason,
   getAdminFixtures,
   getArchitectInterventions,
@@ -121,12 +121,6 @@ const adminInputStyle: React.CSSProperties = {
   width:       '100%',
 };
 
-// ── Admin allowlist (resolved once at module load) ────────────────────────────
-// VITE_ADMIN_USER_IDS is baked into the bundle at build time — it's not a
-// runtime secret.  The real gate is RLS; this resolves the allowlist once
-// rather than re-parsing the env var on every render.
-const ADMIN_ALLOWLIST = parseAllowlist(import.meta.env.VITE_ADMIN_USER_IDS ?? '');
-
 // ── Fixture status filter sentinels ──────────────────────────────────────────
 // String literals (not enums) so they can be fed directly to the Supabase
 // `eq('status', filter)` call without a mapping step.
@@ -165,12 +159,16 @@ interface Toast {
  */
 export default function Admin() {
   const db   = useSupabase();
-  const { user, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
 
   // ── Auth gate ─────────────────────────────────────────────────────────────
   // While auth is resolving we show nothing (avoids a flash of "Access Denied"
   // for a legitimate admin whose session token is still loading).  Once auth
-  // settles, evaluate the allowlist and gate accordingly.
+  // settles, evaluate the server-side `profiles.is_admin` flag (migration
+  // 0032) and gate accordingly.  RLS only returns this column to the owning
+  // user so the value can be trusted as long as the session is valid; the
+  // real enforcement still happens inside admin_reset_season() on the DB
+  // side, which rejects non-admins with HTTP 403.
   if (authLoading) {
     return (
       <>
@@ -187,7 +185,11 @@ export default function Admin() {
     );
   }
 
-  if (!isAdminUser(user?.id, ADMIN_ALLOWLIST)) {
+  // Non-admins (including anonymous viewers — `profile === null`) hit this
+  // branch.  We deliberately reveal nothing about the gating mechanism in the
+  // copy below: no hint about a flag, RPC, or env var that could give an
+  // attacker something to target.
+  if (profile?.is_admin !== true) {
     return (
       <>
         <Header />

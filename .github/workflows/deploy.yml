@@ -35,7 +35,6 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
-          VITE_ADMIN_USER_IDS: ${{ secrets.VITE_ADMIN_USER_IDS }}
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -64,7 +63,6 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
-          VITE_ADMIN_USER_IDS: ${{ secrets.VITE_ADMIN_USER_IDS }}
 
       # Pages must be enabled out-of-band before this step succeeds:
       #   Settings → Pages → Build and deployment → Source: GitHub Actions
