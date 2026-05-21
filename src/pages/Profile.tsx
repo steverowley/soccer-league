@@ -26,6 +26,11 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../lib/supabase';
+// Match-start push notifications surface — self-contained card that
+// owns its own state (subscription endpoint + opt-in toggles).  Mounted
+// between Allegiance and Controls so the page reads top-to-bottom as
+// "who you are → what you support → how the cosmos reaches you → exit".
+import { NotificationSettings } from '../features/notifications';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives the Save Allegiance submit button + the
@@ -304,9 +309,24 @@ export default function Profile() {
         </form>
       </div>
 
+      {/* Push notification settings.  Lives between Allegiance and
+          Controls so the page reads as: who you are → what you support
+          → how the cosmos reaches you → exit.  The card hides itself
+          gracefully in unsupported browsers (Safari without PWA install,
+          etc.) by rendering an advisory line instead of controls. */}
       <div style={{ marginTop: 48 }}>
         <SectionHeader
           kicker="III"
+          label="Signals"
+          title="Match-Start Alerts"
+          subtitle="Opt in to receive a push notification 1 minute before kick-off.  We will ask your browser for permission once you click Enable."
+        />
+        <NotificationSettings />
+      </div>
+
+      <div style={{ marginTop: 48 }}>
+        <SectionHeader
+          kicker="IV"
           label="Controls"
           title={isAdmin ? "Administration & Exit" : "Step Back Into The Void"}
         />
