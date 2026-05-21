@@ -2,14 +2,28 @@
 // Supabase queries powering the per-player surfaces on /players/:playerId.
 //
 // WHAT THIS MODULE OWNS
-//   • `getPlayerRecentMatches` — the player's last N appearances joined to
-//     the match row + opponent team, transformed into the narrative-shaped
-//     `PlayerRecentMatch` (result W/D/L, opponent name, home/away) the
-//     detail page renders.
+//   • `getPlayerRecentMatches` — the player's last N STAT-LINE appearances
+//     joined to the match row + opponent team, transformed into the
+//     narrative-shaped `PlayerRecentMatch` (result W/D/L, opponent name,
+//     home/away) the detail page renders.
 //   • `getNarrativesMentioningPlayer` — narratives where the player's
 //     `entity_id` appears in `entities_involved` (JSONB array contains).
 //     Falls back to an empty list when the player has no linked entity
 //     (legacy rows that pre-date the universal-agent migration).
+//
+// KNOWN LIMITATION — STAT-ONLY APPEARANCES
+//   `match_player_stats` is the only source of per-match data we have
+//   today, and the match-worker (`supabase/functions/match-worker/
+//   index.ts:407-422`) intentionally only inserts rows for players who
+//   accrued at least one goal / assist / yellow / red during the match.
+//   Quiet shifts — defenders with a clean sheet, keepers with no logged
+//   saves, fringe forwards who never touched a stat counter — produce no
+//   row, so this surface lists "matches with a recorded contribution"
+//   rather than a true participation log.  Closing that gap needs either
+//   (a) the worker persisting all 22 starters with zero-stat rows or
+//   (b) a dedicated `match_lineups` table; both require a backfill of
+//   historical matches and are tracked as a separate beads issue.  The
+//   UI copy on PlayerDetail's "Recent Stat Lines" section reflects this.
 //
 // LAYER BOUNDARY
 //   • No React, no direct Supabase singleton — every function takes an
@@ -123,7 +137,7 @@ export interface NarrativeMention {
 // ── Recent matches ───────────────────────────────────────────────────────────
 
 /**
- * Fetch the player's `limit` most recent match appearances.
+ * Fetch the player's `limit` most recent STAT-LINE appearances.
  *
  * SELECT match_player_stats rows for this player, joining the parent
  * `matches` row (for scoreline + date) and both teams (for the opponent
@@ -136,11 +150,21 @@ export interface NarrativeMention {
  * filtered out and logged; the function returns at most `limit` valid
  * rows rather than blowing up.
  *
+ * IMPORTANT — STAT-ONLY APPEARANCES
+ *   See the module-header "KNOWN LIMITATION" block: `match_player_stats`
+ *   only contains rows for players who scored, assisted, or were carded
+ *   in a match.  A defender with 30 clean sheets will show zero rows
+ *   here; an out-of-form striker with no goals across a season the same.
+ *   Callers (the PlayerDetail "Recent Stat Lines" section) MUST surface
+ *   that caveat in the UI rather than imply "this is every game played".
+ *
  * @param db        Injected Supabase client.
  * @param playerId  UUID of the player to fetch matches for.
  * @param limit     Max rows to return (default 10).
  * @returns         Transformed PlayerRecentMatch rows, newest first.
- *                  Empty array on error or for a player with no appearances.
+ *                  Empty array on error or for a player with no recorded
+ *                  stat-line appearances (NOT necessarily "no games
+ *                  played" — see limitation above).
  */
 export async function getPlayerRecentMatches(
   db:       IslSupabaseClient,
