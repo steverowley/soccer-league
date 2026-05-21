@@ -17,17 +17,19 @@
 //
 // LAYOUT
 //   Header (global)
-//   I.   Hero           — player identity (name, team, position, bio fields)
-//   II.  Season Stats   — outcome stats from match_player_stats aggregate
-//   III. Idol Standing  — global rank + popularity data from player_idol_score
+//   I.   Hero               — player identity (name, team, position, bio)
+//   II.  Season Stats       — outcome stats from match_player_stats aggregate
+//   III. Idol Standing      — global rank + popularity data from player_idol_score
+//   IV.  Recent Matches     — last N appearances with opponent + W/D/L + line
+//   V.   Narrative Mentions — narratives referencing this player's entity_id
 //   Footer (global)
 //
 // DATA STRATEGY
-//   `getPlayer` and `getPlayerIdolRank` fire in parallel on mount.  Neither
-//   is required for the other — the player identity section renders as soon
-//   as the player fetch resolves, even if the idol rank is still loading.
-//   Unknown playerId → error state (no redirect, URL stays, error surface
-//   shown inline — same pattern as TeamDetail and LeagueDetail).
+//   Four fetches fire in parallel on mount: `getPlayer`, `getPlayerIdolRank`,
+//   `getPlayerRecentMatches`, `getNarrativesMentioningPlayer`.  None depend
+//   on each other, so each section paints as soon as its own fetch settles
+//   without blocking the hero.  Unknown playerId → error state (no redirect,
+//   URL stays, inline error surface — same pattern as TeamDetail).
 
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -35,6 +37,12 @@ import Header from '../components/Header';
 import { COLORS, Container, BackLink, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getPlayer, getPlayerIdolRank } from '../lib/supabase';
+import {
+  getPlayerRecentMatches,
+  getNarrativesMentioningPlayer,
+  type PlayerRecentMatch,
+  type NarrativeMention,
+} from '../features/match';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const {
@@ -117,16 +125,20 @@ export default function PlayerDetail() {
   const { playerId }  = useParams<{ playerId: string }>();
   const db            = useSupabase();
 
-  const [player,     setPlayer]     = useState<PlayerWithStats | null>(null);
-  const [idol,       setIdol]       = useState<IdolRank | null>(null);
-  const [playerErr,  setPlayerErr]  = useState<string | null>(null);
-  const [playerDone, setPlayerDone] = useState(false);
-  const [idolDone,   setIdolDone]   = useState(false);
+  const [player,        setPlayer]        = useState<PlayerWithStats | null>(null);
+  const [idol,          setIdol]          = useState<IdolRank | null>(null);
+  const [recentMatches, setRecentMatches] = useState<PlayerRecentMatch[]>([]);
+  const [narratives,    setNarratives]    = useState<NarrativeMention[]>([]);
+  const [playerErr,     setPlayerErr]     = useState<string | null>(null);
+  const [playerDone,    setPlayerDone]    = useState(false);
+  const [idolDone,      setIdolDone]      = useState(false);
+  const [matchesDone,   setMatchesDone]   = useState(false);
+  const [narrativesDone, setNarrativesDone] = useState(false);
 
   // ── Parallel fetch on mount ───────────────────────────────────────────────
-  // Both queries fire simultaneously.  `playerDone` and `idolDone` gate their
-  // respective loading skeletons independently so the hero renders as soon as
-  // the player data arrives without waiting for the idol rank.
+  // Four queries fire simultaneously.  Each `*Done` flag gates its own
+  // skeleton independently so the hero paints the moment the player row
+  // resolves — the page never blocks behind the slower narrative fetch.
   useEffect(() => {
     if (!playerId) return undefined;
     let cancelled = false;
@@ -152,6 +164,18 @@ export default function PlayerDetail() {
       })
       .catch(() => { /* idol rank is supplementary; silently omit on error */ })
       .finally(() => { if (!cancelled) setIdolDone(true); });
+
+    // Last 10 appearances — feature API already returns [] on error so the
+    // section degrades to an empty state without a catch().
+    getPlayerRecentMatches(db, playerId, 10)
+      .then((rows) => { if (!cancelled) setRecentMatches(rows); })
+      .finally(() => { if (!cancelled) setMatchesDone(true); });
+
+    // Last 10 narratives mentioning the player's entity_id.  Empty when
+    // the player has no entity link or no narratives reference them.
+    getNarrativesMentioningPlayer(db, playerId, 10)
+      .then((rows) => { if (!cancelled) setNarratives(rows); })
+      .finally(() => { if (!cancelled) setNarrativesDone(true); });
 
     return () => { cancelled = true; };
   }, [db, playerId]);
@@ -236,7 +260,7 @@ export default function PlayerDetail() {
         {/* ── III. Idol Standing ───────────────────────────────────────── */}
         <section aria-labelledby="idol-heading">
           <Container>
-            <div style={{ padding: '40px 0 80px' }}>
+            <div style={{ padding: '40px 0' }}>
               <SectionLabel id="idol-heading" kicker="III" title="Idol Standing" />
 
               {!idolDone ? (
@@ -246,6 +270,48 @@ export default function PlayerDetail() {
               ) : (
                 <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
                   Not yet ranked in the cosmos.
+                </p>
+              )}
+            </div>
+          </Container>
+        </section>
+
+        <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+
+        {/* ── IV. Recent Matches ───────────────────────────────────────── */}
+        <section aria-labelledby="matches-heading">
+          <Container>
+            <div style={{ padding: '40px 0' }}>
+              <SectionLabel id="matches-heading" kicker="IV" title="Recent Matches" />
+
+              {!matchesDone ? (
+                <Skeleton height={120} />
+              ) : recentMatches.length > 0 ? (
+                <RecentMatchesTable rows={recentMatches} />
+              ) : (
+                <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
+                  No recorded appearances yet.
+                </p>
+              )}
+            </div>
+          </Container>
+        </section>
+
+        <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+
+        {/* ── V. Narrative Mentions ────────────────────────────────────── */}
+        <section aria-labelledby="narratives-heading">
+          <Container>
+            <div style={{ padding: '40px 0 80px' }}>
+              <SectionLabel id="narratives-heading" kicker="V" title="Narrative Mentions" />
+
+              {!narrativesDone ? (
+                <Skeleton height={100} />
+              ) : narratives.length > 0 ? (
+                <NarrativeList rows={narratives} />
+              ) : (
+                <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
+                  The cosmos has not yet whispered their name.
                 </p>
               )}
             </div>
@@ -471,6 +537,283 @@ function IdolPanel({ idol }: { idol: IdolRank }) {
     </div>
   );
 }
+
+/**
+ * Recent Matches table — one row per appearance, newest first.
+ *
+ * Each row links the opponent name to `/matches/:matchId` so a reader
+ * can jump from the player profile straight into the match detail.  We
+ * deliberately keep the rendered columns tight (Date · Opponent · Result
+ * · G · A · Min · ⭐) so the table reads as a quick activity log rather
+ * than a stats dump — the season aggregate up in II already covers the
+ * "totals" surface.
+ *
+ * VISUAL TREATMENT FOR RESULT
+ *   W → Terra Nova green, L → Flare red, D → Dust grey.  Mirrors the
+ *   convention used by the StandingsTable and the MatchCard chips so
+ *   colour semantics stay consistent across the app.
+ */
+function RecentMatchesTable({ rows }: { rows: PlayerRecentMatch[] }) {
+  return (
+    <div style={{ border: `1px solid ${HAIRLINE}` }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+            <th style={th(120)}>Date</th>
+            <th style={th()}>Opponent</th>
+            <th style={{ ...th(60),  textAlign: 'center' }}>Res.</th>
+            <th style={{ ...th(48),  textAlign: 'right'  }}>G</th>
+            <th style={{ ...th(48),  textAlign: 'right'  }}>A</th>
+            <th style={{ ...th(64),  textAlign: 'right'  }}>Min</th>
+            <th style={{ ...th(72),  textAlign: 'right'  }}>Rating</th>
+            <th style={{ ...th(56),  textAlign: 'right'  }}>Cards</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.matchId} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+              <td style={{ ...td, color: DUST_70 }}>{formatDate(r.date)}</td>
+              <td style={td}>
+                {/* Opponent name links straight to the match detail page so
+                    the row doubles as a "open the match" affordance. */}
+                <Link
+                  to={`/matches/${r.matchId}`}
+                  style={{ color: DUST, textDecoration: 'none' }}
+                >
+                  {/* The vs / @ prefix encodes home/away without a separate
+                      column — fewer columns, same information density. */}
+                  <span style={{ color: DUST_50, marginRight: 6 }}>
+                    {r.isHome ? 'vs' : '@'}
+                  </span>
+                  {r.opponent?.name ?? '—'}
+                </Link>
+              </td>
+              <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>
+                <ResultPill result={r.result} />
+              </td>
+              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {r.goals}
+              </td>
+              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {r.assists}
+              </td>
+              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: DUST_70 }}>
+                {r.minutes}
+              </td>
+              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.rating != null ? TERRA : DUST_50 }}>
+                {r.rating != null ? r.rating.toFixed(1) : '—'}
+              </td>
+              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <CardsCell yellow={r.yellowCards} red={r.redCards} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Coloured one-letter pill encoding the result of a single appearance.
+ * Renders an em-dash for `null` (a row joined to an unsimulated match).
+ *
+ * COLOUR MAP
+ *   W → Terra Nova (#5DE0A6) — the canonical "win" hue in the design system
+ *   D → Dust 70%               — neutral grey, no opinion
+ *   L → Flare (#FF4F5E)        — the canonical "loss" hue
+ */
+function ResultPill({ result }: { result: 'W' | 'D' | 'L' | null }) {
+  if (result == null) return <span style={{ color: DUST_50 }}>—</span>;
+  const color = result === 'W' ? TERRA : result === 'L' ? FLARE : DUST_70;
+  return (
+    <span style={{
+      color,
+      fontFamily: 'Space Mono, monospace',
+      fontWeight: 700,
+      letterSpacing: '0.04em',
+    }}>
+      {result}
+    </span>
+  );
+}
+
+/**
+ * Single-cell representation of yellow + red cards for a match.
+ *
+ * Renders "—" when the player took no cards (the common case) so the
+ * column doesn't churn the eye with a wall of zeros.  Otherwise emits
+ * up to two coloured glyphs: a 🟨 (yellow, #F5C518) for each yellow,
+ * and a 🟥 (red, FLARE) when the player saw red.  Numbers above 1
+ * (rare — a second yellow always converts to red) print as `Nx`.
+ */
+function CardsCell({ yellow, red }: { yellow: number; red: number }) {
+  if (yellow === 0 && red === 0) {
+    return <span style={{ color: DUST_50 }}>—</span>;
+  }
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'baseline' }}>
+      {yellow > 0 && (
+        <span style={{ color: '#F5C518' }}>
+          {yellow > 1 ? `${yellow}×` : ''}■
+        </span>
+      )}
+      {red > 0 && (
+        <span style={{ color: FLARE }}>
+          {red > 1 ? `${red}×` : ''}■
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Narrative Mentions list — one card per narrative, newest first.
+ *
+ * Each card carries the narrative kind (small-caps), a relative
+ * timestamp, and the summary text.  Pundit takes render in italics
+ * inside quote marks to match the News page treatment so the same
+ * narrative reads identically in both surfaces.
+ */
+function NarrativeList({ rows }: { rows: NarrativeMention[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {rows.map((n) => (
+        <NarrativeCard key={n.id} narrative={n} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Single narrative card — kind + relative time header above the summary.
+ *
+ * Pundit takes (kind === 'pundit_takes') get the italic + curly-quote
+ * treatment, mirroring the News page so the cosmetics don't drift
+ * between surfaces.
+ *
+ * @param narrative  Validated NarrativeMention row.
+ */
+function NarrativeCard({ narrative }: { narrative: NarrativeMention }) {
+  const isPundit = narrative.kind === 'pundit_takes';
+  return (
+    <article style={{
+      border:     `1px solid ${HAIRLINE}`,
+      background: PHOBOS,
+      padding:    16,
+    }}>
+      <header style={{
+        display:        'flex',
+        justifyContent: 'space-between',
+        alignItems:     'baseline',
+        marginBottom:   10,
+        gap:            12,
+      }}>
+        <span style={{ ...LABEL_STYLE, color: QUANTUM }}>
+          {prettifyKind(narrative.kind)}
+        </span>
+        <span style={{ ...LABEL_STYLE, color: DUST_50, fontWeight: 400 }}>
+          {formatRelativeTime(narrative.created_at)}
+        </span>
+      </header>
+      <p style={{
+        fontFamily: 'Space Mono, monospace',
+        fontSize:   14,
+        lineHeight: 1.6,
+        color:      DUST,
+        fontStyle:  isPundit ? 'italic' : 'normal',
+        margin:     0,
+      }}>
+        {isPundit ? `“${narrative.summary}”` : narrative.summary}
+      </p>
+    </article>
+  );
+}
+
+// ── Sub-section formatting helpers ────────────────────────────────────────────
+
+/**
+ * Render an ISO timestamp as a short "12 Apr" style label for the Recent
+ * Matches table.  Falls back to em-dash for null/invalid input so the
+ * column never collapses to whitespace.
+ *
+ * @param iso  ISO timestamp string, or null.
+ * @returns    Short date label, or "—".
+ */
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return '—';
+  return t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Render an ISO timestamp as a human-readable relative time
+ * ("3h ago", "yesterday", "5d ago") for the narrative card header.
+ *
+ * Mirrors the News page implementation so a narrative shown in both
+ * surfaces reads identically.  Falls back to a calendar-style label
+ * for anything over a week old.
+ *
+ * @param iso  ISO timestamp string, or null/undefined.
+ * @returns    Relative-time string, or "—".
+ */
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const diffMs = Date.now() - t;
+  // Width thresholds — match the News page exactly.  Each branch returns
+  // before the next so the longest-matching label wins.
+  const min  = Math.floor(diffMs / 60_000);
+  const hour = Math.floor(diffMs / 3_600_000);
+  const day  = Math.floor(diffMs / 86_400_000);
+  if (min  < 1)   return 'just now';
+  if (min  < 60)  return `${min}m ago`;
+  if (hour < 24)  return `${hour}h ago`;
+  if (day  === 1) return 'yesterday';
+  if (day  < 7)   return `${day}d ago`;
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Prettify a snake_case narrative kind into a Title-Case label.
+ *
+ * Mirrors the same helper on the News page so unknown kinds (added
+ * after a future migration) don't leak their raw underscores into the
+ * UI.  Defensive default keeps the chip from ever rendering blank.
+ *
+ * @param key  Narrative kind from the DB (e.g. 'pundit_takes').
+ * @returns    Title-cased label (e.g. 'Pundit Takes').
+ */
+function prettifyKind(key: string): string {
+  return (key ?? 'narrative')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ── Recent Matches table style tokens ─────────────────────────────────────────
+// Mirrors the squadTd / squadTh pattern from TeamDetail.tsx so the two
+// detail pages share visual rhythm.
+
+/** Body cell — base style applied via spread; per-cell overrides handle alignment. */
+const td: React.CSSProperties = {
+  textAlign: 'left',
+  padding:   '12px 14px',
+  color:     DUST,
+};
+
+/** Header cell factory — width is optional to let the Opponent column flex. */
+const th = (width?: number | string): React.CSSProperties => ({
+  textAlign:     'left',
+  padding:       '12px 14px',
+  fontSize:      11,
+  fontWeight:    700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.14em',
+  color:         DUST_70,
+  width,
+});
 
 // ── Primitive components ──────────────────────────────────────────────────────
 

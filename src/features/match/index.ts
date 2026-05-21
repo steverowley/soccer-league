@@ -112,6 +112,20 @@ export type {
   MatchEventRow,
 } from './api/matchEvents';
 
+// ── Per-player surfaces (powers /players/:playerId) ───────────────────────
+// Recent appearances + narrative mentions for the Player Detail page.
+// Pulled into the feature barrel so the page (and any future surface
+// rendering a player's match log) imports from the feature root rather
+// than reaching into a deep API path.
+export {
+  getPlayerRecentMatches,
+  getNarrativesMentioningPlayer,
+} from './api/playerStats';
+export type {
+  PlayerRecentMatch,
+  NarrativeMention,
+} from './api/playerStats';
+
 // ── Cup bracket — listener stays, visual bracket UI removed ────────────────
 // CupBracket (visual) was removed in the 2026-05 nuke and will be rebuilt.
 // CupRoundAdvancerListener stays — pure side-effect listener that fills
