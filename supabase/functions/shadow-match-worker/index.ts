@@ -1,0 +1,315 @@
+// ── shadow-match-worker / index.ts ──────────────────────────────────────────
+// Phase 11 of the Universal Agent System (bd isl-bqx.12).  Cron-driven
+// edge function that populates `shadow_match_results` for upcoming
+// matches.  Each fixture gets N (3-5) shadow outcomes — alternate
+// timelines the canonical (live) match would never produce — so the
+// Architect council can read the distribution pre-kickoff and decide
+// whether the canonical story needs nudging.
+//
+// CHEAP MONTE-CARLO, NOT FULL SIM
+//   v1 deliberately avoids running the full gameEngine.js per shadow.
+//   The match-worker already runs the canonical timeline; running 4
+//   additional 90-minute simulations per fixture would balloon compute
+//   for relatively little signal.  Instead, we draw shadows from the
+//   already-computed `match_odds` distribution (home/draw/away
+//   probabilities) and use a Poisson-ish goal model to fabricate
+//   credible scorelines.  This costs near-zero, produces a reasonable
+//   spread, and is easily upgraded later by swapping the inner draw
+//   for a real-engine call — the table shape doesn't change.
+//
+// CADENCE
+//   Cron: `15 */1 * * *` (every hour, 15 minutes past).  Off-cycle from
+//   architect-galaxy-tick + drama-tick so the three never thunder on
+//   the same minute.  Picks up to MATCH_HORIZON matches scheduled in
+//   the next SHADOW_HORIZON_HOURS hours that don't yet have a full set
+//   of shadow rows.
+//
+// COST
+//   Zero LLM tokens.  Compute: a handful of Math.random rolls per
+//   match.  Service-role queries only.  Safe to run frequently.
+//
+// INVARIANTS
+//   - service_role only; never exposed to user-facing reads (RLS).
+//   - Idempotent via the (match_id, timeline_index) unique constraint —
+//     re-running on a partially-populated match upserts cleanly.
+//   - Skips matches with status != 'scheduled' so we never produce
+//     shadows for in-progress or completed games.
+
+// deno-lint-ignore-file no-explicit-any
+
+// @ts-ignore — Deno-only import, resolved at deploy time.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+
+// ── Tuning constants ────────────────────────────────────────────────────────
+
+/** Shadows per match.  3-5 is enough for "majority of timelines say X" without bloating storage. */
+const SHADOWS_PER_MATCH = 5;
+
+/** How many upcoming matches to process per tick.  Avoids thundering on a freshly-seeded season. */
+const MATCH_HORIZON = 40;
+
+/** Hours of fixture lookahead from now() — only matches kicking off inside this window get shadows. */
+const SHADOW_HORIZON_HOURS = 36;
+
+/**
+ * Mean goals per team per match used by the goal model when match_odds
+ * is missing.  2.7 total goals (1.35/team) reflects league averages.
+ * Independent (not correlated) per side; the model is intentionally
+ * simple — outcome selection comes from match_odds, scoreline from
+ * here.
+ */
+const FALLBACK_TEAM_LAMBDA = 1.35;
+
+/**
+ * Caps on the goal model output.  Anything above MAX_TEAM_GOALS clamps
+ * to MAX_TEAM_GOALS — a 9-1 shadow is statistically rare and visually
+ * weird in the council's "distribution" read.
+ */
+const MAX_TEAM_GOALS = 6;
+
+// ── Environment ────────────────────────────────────────────────────────────
+
+// @ts-ignore — Deno global type.
+declare const Deno: { env: { get(name: string): string | undefined } };
+
+/**
+ * Read a required env var or throw with a clear message.  Same
+ * pattern as the other edge functions; fails at boot rather than
+ * runtime.
+ *
+ * @param name  The env var name.
+ * @returns     The non-empty value.
+ */
+function requireEnv(name: string): string {
+  const value = Deno.env.get(name);
+  if (!value) throw new Error(`Missing required env var: ${name}`);
+  return value;
+}
+
+// ── Goal sampling ──────────────────────────────────────────────────────────
+
+/**
+ * Draw a Poisson-distributed integer using the Knuth multiplicative
+ * algorithm.  Sufficient for the small lambda values we use here
+ * (≤2 expected goals/team).  Clamped to MAX_TEAM_GOALS.
+ *
+ * @param lambda  Mean of the Poisson distribution.
+ * @returns       A non-negative integer ≤ MAX_TEAM_GOALS.
+ */
+function samplePoisson(lambda: number): number {
+  const L = Math.exp(-lambda);
+  let k = 0;
+  let p = 1;
+  do {
+    k += 1;
+    p *= Math.random();
+  } while (p > L);
+  const result = k - 1;
+  return result > MAX_TEAM_GOALS ? MAX_TEAM_GOALS : result;
+}
+
+/**
+ * Sample one shadow scoreline conditioned on the chosen outcome.  We
+ * draw home + away goals independently from Poisson(lambdaHome) /
+ * Poisson(lambdaAway) and resample if the result contradicts the
+ * outcome (rejection sampling is fine at small N because the rejection
+ * rate is bounded).
+ *
+ * @param outcome      'home' | 'draw' | 'away' — chosen from match_odds.
+ * @param lambdaHome   Home team's goal-rate parameter.
+ * @param lambdaAway   Away team's goal-rate parameter.
+ * @returns            {home, away} non-negative integers consistent with outcome.
+ */
+function sampleScoreline(
+  outcome: 'home' | 'draw' | 'away',
+  lambdaHome: number,
+  lambdaAway: number,
+): { home: number; away: number } {
+  // Cap retries so a pathological lambda choice doesn't loop forever.
+  // 30 attempts at the worst case (Poisson(1.35) on both sides) gives
+  // ~99.9% probability of finding a draw with at least one goal.
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const home = samplePoisson(lambdaHome);
+    const away = samplePoisson(lambdaAway);
+    if (outcome === 'draw' && home === away) return { home, away };
+    if (outcome === 'home' && home > away) return { home, away };
+    if (outcome === 'away' && away > home) return { home, away };
+  }
+  // Fallback — produce a minimum-bias result consistent with outcome
+  // when sampling fails.  Keeps the function deterministic-output even
+  // in degenerate cases.
+  if (outcome === 'draw') return { home: 1, away: 1 };
+  if (outcome === 'home') return { home: 1, away: 0 };
+  return { home: 0, away: 1 };
+}
+
+/**
+ * Pick an outcome category according to weighted probabilities.  Falls
+ * back to a 45/30/25 home-leaning split when match_odds is missing.
+ *
+ * @param probs  {home, draw, away} implied probabilities summing to ~1.
+ * @returns      One of 'home' | 'draw' | 'away'.
+ */
+function sampleOutcome(probs: {
+  home: number;
+  draw: number;
+  away: number;
+}): 'home' | 'draw' | 'away' {
+  const r = Math.random();
+  if (r < probs.home) return 'home';
+  if (r < probs.home + probs.draw) return 'draw';
+  return 'away';
+}
+
+// ── Per-match shadow generation ────────────────────────────────────────────
+
+interface ShadowRow {
+  match_id: string;
+  timeline_index: number;
+  home_goals: number;
+  away_goals: number;
+  outcome: 'home' | 'draw' | 'away';
+  perturbation: string;
+}
+
+/**
+ * Generate the SHADOWS_PER_MATCH shadow rows for one upcoming match.
+ * Reads match_odds (if present) so the outcome distribution matches
+ * the canonical pricing; falls back to a default split when odds are
+ * missing.
+ *
+ * @param db         Supabase client.
+ * @param matchId    Match UUID.
+ * @returns          Array of ShadowRow inserts.
+ */
+async function generateShadows(db: any, matchId: string): Promise<ShadowRow[]> {
+  // ── Outcome probabilities from match_odds, if present. ──────────────────
+  const oddsQ = await db
+    .from('match_odds')
+    .select('home_implied_prob, draw_implied_prob, away_implied_prob')
+    .eq('match_id', matchId)
+    .maybeSingle();
+
+  let probs = { home: 0.45, draw: 0.30, away: 0.25 };
+  if (!oddsQ.error && oddsQ.data) {
+    probs = {
+      home: oddsQ.data.home_implied_prob ?? 0.45,
+      draw: oddsQ.data.draw_implied_prob ?? 0.30,
+      away: oddsQ.data.away_implied_prob ?? 0.25,
+    };
+  }
+  // ── Lambda derivation from probs. ───────────────────────────────────────
+  // Mild slope around the canonical 1.35 mean: stronger sides score
+  // more.  Bounded to [0.4, 2.6] so a 90%-home favourite still doesn't
+  // produce 5-0 every shadow.
+  const lambdaHome = Math.max(
+    0.4,
+    Math.min(2.6, FALLBACK_TEAM_LAMBDA + (probs.home - 0.45) * 1.8),
+  );
+  const lambdaAway = Math.max(
+    0.4,
+    Math.min(2.6, FALLBACK_TEAM_LAMBDA + (probs.away - 0.25) * 1.8),
+  );
+
+  // ── Per-shadow draw. ────────────────────────────────────────────────────
+  const rows: ShadowRow[] = [];
+  for (let i = 0; i < SHADOWS_PER_MATCH; i += 1) {
+    const outcome = sampleOutcome(probs);
+    const { home, away } = sampleScoreline(outcome, lambdaHome, lambdaAway);
+    rows.push({
+      match_id: matchId,
+      timeline_index: i,
+      home_goals: home,
+      away_goals: away,
+      outcome,
+      perturbation: 'rng_only',
+    });
+  }
+  return rows;
+}
+
+// ── Main entry point ──────────────────────────────────────────────────────
+
+/**
+ * Cron handler.  Pulls upcoming scheduled matches missing a full
+ * shadow set, generates the shadows, upserts them.
+ *
+ * @returns  JSON Response with `{ processed, shadowsInserted }`.
+ */
+async function handler(): Promise<Response> {
+  const supabaseUrl = requireEnv('SUPABASE_URL');
+  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const db = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // ── Pick candidate matches. ─────────────────────────────────────────────
+  const horizonIso = new Date(
+    Date.now() + SHADOW_HORIZON_HOURS * 3600 * 1000,
+  ).toISOString();
+  const nowIso = new Date().toISOString();
+
+  const matchesQ = await db
+    .from('matches')
+    .select('id, scheduled_at')
+    .eq('status', 'scheduled')
+    .gte('scheduled_at', nowIso)
+    .lte('scheduled_at', horizonIso)
+    .order('scheduled_at', { ascending: true })
+    .limit(MATCH_HORIZON);
+
+  if (matchesQ.error) {
+    console.warn('[shadow-match-worker] matches fetch failed:', matchesQ.error.message);
+    return new Response(
+      JSON.stringify({ error: 'matches_fetch_failed' }),
+      { status: 500, headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  const candidateMatches = matchesQ.data ?? [];
+
+  // ── Skip matches that already have a full shadow set. ──────────────────
+  let processed = 0;
+  let shadowsInserted = 0;
+  for (const match of candidateMatches) {
+    const existingQ = await db
+      .from('shadow_match_results')
+      .select('id', { count: 'exact', head: true })
+      .eq('match_id', match.id);
+    if ((existingQ.count ?? 0) >= SHADOWS_PER_MATCH) continue;
+
+    const rows = await generateShadows(db, match.id);
+    if (rows.length === 0) continue;
+
+    const { error: upsertErr } = await db
+      .from('shadow_match_results')
+      .upsert(rows, { onConflict: 'match_id,timeline_index' });
+    if (upsertErr) {
+      console.warn(
+        `[shadow-match-worker] upsert failed for ${match.id}:`,
+        upsertErr.message,
+      );
+      continue;
+    }
+    processed += 1;
+    shadowsInserted += rows.length;
+  }
+
+  return new Response(
+    JSON.stringify({ processed, shadowsInserted }),
+    { headers: { 'content-type': 'application/json' } },
+  );
+}
+
+// @ts-ignore — Deno-only API.
+Deno.serve(async (_req: Request) => {
+  try {
+    return await handler();
+  } catch (err) {
+    console.error('[shadow-match-worker] fatal:', err);
+    return new Response(
+      JSON.stringify({ error: String(err) }),
+      { status: 500, headers: { 'content-type': 'application/json' } },
+    );
+  }
+});

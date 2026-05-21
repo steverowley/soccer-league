@@ -1424,6 +1424,47 @@ export type Database = {
           },
         ]
       }
+      shadow_match_results: {
+        Row: {
+          away_goals: number
+          created_at: string
+          home_goals: number
+          id: string
+          match_id: string
+          outcome: string
+          perturbation: string
+          timeline_index: number
+        }
+        Insert: {
+          away_goals: number
+          created_at?: string
+          home_goals: number
+          id?: string
+          match_id: string
+          outcome: string
+          perturbation?: string
+          timeline_index: number
+        }
+        Update: {
+          away_goals?: number
+          created_at?: string
+          home_goals?: number
+          id?: string
+          match_id?: string
+          outcome?: string
+          perturbation?: string
+          timeline_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shadow_match_results_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seasons: {
         Row: {
           created_at: string
