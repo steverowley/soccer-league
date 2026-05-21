@@ -21,6 +21,10 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { CosmicArchitect } from './CosmicArchitect';
 import { LoreStore } from './loreStore';
+// Phase 11.2: pre-match shadow distribution loaded into the architect so
+// the council deliberates against the alternate-timeline read without
+// touching the hot path.
+import { loadShadowDistribution } from '../api/shadowDistribution';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +51,14 @@ export interface PrepareArchitectOptions {
    * helper construct its own from the supabase client argument.
    */
   loreStore?: LoreStore;
+  /**
+   * Match UUID — when present, the helper loads the pre-computed shadow
+   * distribution for this match and injects it onto the architect via
+   * `setShadowDistribution()` so the council's deliberation paths can
+   * reference alternate-timeline outcomes synchronously.  When omitted
+   * (legacy callers / tests), the shadow path is skipped entirely.
+   */
+  matchId?: string;
 }
 
 /**
@@ -105,6 +117,23 @@ export async function prepareArchitectForMatch(
     architect.lore = hydrated;
   } catch (e) {
     console.warn('[prepareArchitectForMatch] hydrate failed; using empty lore:', e);
+  }
+
+  // ── Shadow distribution (Phase 11.2) ────────────────────────────────────
+  // Best-effort pre-match load.  Failure (or no shadows in the table)
+  // leaves architect.shadowDistribution null and the council deliberates
+  // without the alternate-timeline read — kickoff must never be blocked
+  // on this lookup.
+  if (opts.matchId) {
+    try {
+      const distribution = await loadShadowDistribution(supabase, opts.matchId);
+      architect.setShadowDistribution(distribution);
+    } catch (e) {
+      console.warn(
+        '[prepareArchitectForMatch] shadow distribution load failed:',
+        e,
+      );
+    }
   }
 
   return { architect, loreStore };

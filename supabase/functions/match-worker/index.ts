@@ -305,6 +305,10 @@ async function processMatch(match: any): Promise<boolean> {
         // simulation starts; we don't have it at omen time and the omen
         // prompt only references it as flavour.  Empty string is acceptable.
         weather: '',
+        // Phase 11.2: matchId drives the shadow-distribution load inside
+        // prepareArchitectForMatch.  Without it the council would
+        // deliberate without the alternate-timeline read.
+        matchId: match.id,
       }),
     ]);
     const { architect, loreStore } = prepared;
