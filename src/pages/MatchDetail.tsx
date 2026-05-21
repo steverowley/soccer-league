@@ -740,6 +740,59 @@ function UnknownMatch({ matchId  }: any) {
 const LIVE_TICK_MS = 1000;
 
 /**
+ * Merge two event lists into one, de-duplicating by `id` and re-sorting
+ * chronologically by (minute, subminute).  The single funnel through which
+ * BOTH the initial `getMatchEvents()` fetch and the Realtime `INSERT` stream
+ * pass — that uniformity is what makes `filterEventsByElapsedMinute` correct
+ * regardless of which source delivered a given row first.
+ *
+ * WHY DEDUP IS NECESSARY
+ *   The two sources can deliver the same row twice in a narrow window:
+ *     - Worker batch-inserts events → Realtime fires for each row
+ *     - A late-mounting viewer's initial fetch may complete *after* the
+ *       Realtime subscription has already captured those same rows
+ *   Identifying by `id` (the `match_events.id` UUID) is the only stable
+ *   join key — `(match_id, minute, subminute)` is not unique because the
+ *   gameEngine can emit multiple events at the same subminute.
+ *
+ * WHY WE RE-SORT EVERY MERGE
+ *   `filterEventsByElapsedMinute` preserves input order; downstream
+ *   `CommentaryFeed` reverses the array to show newest-first.  Both contracts
+ *   assume chronological input.  Keeping the merged list sorted here saves a
+ *   sort in the visible-event memo on every tick (which fires every second
+ *   during the paced window).
+ *
+ * @param existing  The current event list held in React state.
+ * @param incoming  Newly arrived events from either the initial fetch
+ *                  (potentially the full pre-simulated log) or the Realtime
+ *                  channel (one row at a time).
+ * @returns         A new array — never the same reference as either input —
+ *                  containing every unique-by-id event from both sources,
+ *                  ordered by (minute ASC, subminute ASC).
+ */
+export function mergeAndSortEvents(
+  existing: MatchEventRow[],
+  incoming: MatchEventRow[],
+): MatchEventRow[] {
+  // Build a set of existing IDs in O(n) so the dedup pass below is O(m) over
+  // the incoming batch.  This matters for the initial-fetch case where
+  // `incoming` may contain ~150 rows.
+  const seen = new Set(existing.map((e) => e.id));
+  const merged: MatchEventRow[] = existing.slice();
+  for (const row of incoming) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    merged.push(row);
+  }
+  // Stable chronological sort: (minute ASC, then subminute ASC as numeric).
+  // subminute is `numeric` in PostgREST which can surface as a string in the
+  // typed row — Number() normalises so the comparator never compares strings.
+  return merged.sort(
+    (a, b) => a.minute - b.minute || Number(a.subminute) - Number(b.subminute),
+  );
+}
+
+/**
  * Subset of the matches row this component actually reads.  Declared loosely
  * because `getMatch()` returns the full joined row with many more fields the
  * commentary feed doesn't need — narrowing here keeps the prop contract
@@ -773,7 +826,7 @@ interface LiveCommentaryMatch {
  * @param props.match  Match row from getMatch() — needs id, status, and
  *                     scheduled_at (the kickoff anchor for elapsed math).
  */
-function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
+export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   const db = useSupabase();
 
   // ── Guard derivations ─────────────────────────────────────────────────────
@@ -818,9 +871,17 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   // can't render anything useful until both settle.  Promise.all keeps total
   // wall-clock latency to the slower of the two.  Skipped for cancelled and
   // pre-kickoff scheduled matches because the empty section won't render.
+  //
+  // Reset-on-match-change: when the user navigates between /matches/:a and
+  // /matches/:b without the component unmounting (client-side routing), the
+  // `events` state from match A would otherwise leak into match B's feed —
+  // dedup-by-id won't catch them because the ids differ.  Clearing first
+  // guarantees a clean slate, so the fetched rows can be assigned directly
+  // (the Realtime stream still merges its own arrivals).
   useEffect(() => {
     if (!showSection || !match?.id) return undefined;
     let cancelled = false;
+    setEvents([]);
     setLoaded(false);
     setLoadError(null);
     Promise.all([
@@ -829,7 +890,9 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
     ])
       .then(([evRows, durSeconds]) => {
         if (cancelled) return;
-        setEvents(evRows);
+        // Merge against current state (not []) so a Realtime row that landed
+        // between the setEvents([]) above and this resolution is preserved.
+        setEvents((prev) => mergeAndSortEvents(prev, evRows));
         setDuration(durSeconds);
         setLoaded(true);
       })
@@ -889,18 +952,15 @@ function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   // window because no further events can arrive then.  De-dupe by id —
   // Realtime payloads can arrive while the initial fetch is still in flight.
   useEffect(() => {
-    if (!livePacingWindowOpen || !match?.id) return undefined;
+    // showSection mirrors the render-side guard so we don't open a WebSocket
+    // channel for cancelled / not-yet-kicked-off matches — those branches
+    // return null below and would never display anything the subscription
+    // delivered anyway.
+    if (!showSection || !livePacingWindowOpen || !match?.id) return undefined;
     return subscribeToMatchEvents(db, match.id, (row) => {
-      setEvents((prev) => {
-        if (prev.some((e) => e.id === row.id)) return prev;
-        // Keep the list sorted so filterEventsByElapsedMinute can rely on
-        // the input order being chronological — saves a sort on every tick.
-        return [...prev, row].sort(
-          (a, b) => a.minute - b.minute || Number(a.subminute) - Number(b.subminute),
-        );
-      });
+      setEvents((prev) => mergeAndSortEvents(prev, [row]));
     });
-  }, [db, match?.id, livePacingWindowOpen]);
+  }, [db, match?.id, showSection, livePacingWindowOpen]);
 
   // ── Visible-event derivation ─────────────────────────────────────────────
   // Recomputed only when events / elapsedMinute change.  Memoised to avoid

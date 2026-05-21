@@ -382,11 +382,11 @@ Each club has:
 
 ## Remaining Work (Priority Order)
 
-### 🔴 Phase A: Live Match Event Streaming (High Priority, Low Effort — ~2 days)
-The match-worker pre-computes all events and stores them in `match_events`. The Realtime subscription is **not yet wired** in `MatchDetail.tsx`. This is the highest-delight missing piece — live commentary reveals would transform the match viewing experience.
-- Wire Supabase Realtime subscription to `match_events` in `src/pages/MatchDetail.tsx`
-- Reveal events at correct wall-clock pace (elapsed real-time from `simulated_at`)
-- Files: `src/pages/MatchDetail.tsx`, `src/features/match/api/matchEvents.ts`
+### ✅ Phase A: Live Match Event Streaming — SHIPPED
+- `subscribeToMatchEvents()` in `src/features/match/api/matchEvents.ts:173` opens a `postgres_changes` channel filtered by `match_id`.
+- `LiveCommentary` in `src/pages/MatchDetail.tsx` mounts the subscription whenever the paced window is open (`scheduled_at + season_config.match_duration_seconds`), funnels both the initial fetch and Realtime stream through `mergeAndSortEvents()` (dedup-by-id + chronological sort), then filters by `filterEventsByElapsedMinute(events, elapsedMinute)` on every per-second tick.
+- Pacing anchor is `matches.scheduled_at` (there is no `simulated_at` column).
+- Component-level tests cover normal paced replay, mid-simulation join (incl. duplicate Realtime delivery), and early completion (worker flips `status=completed` mid-pacing without skipping the timeline) — see `src/pages/MatchDetail.LiveCommentary.test.tsx`.
 
 ### 🟡 Phase B: Admin Dashboard (Medium Priority, Medium Effort — ~1 week)
 Operations tool for managing seasons, triggering match simulation, reviewing architect interventions.

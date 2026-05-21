@@ -15,6 +15,7 @@
 //     enforcement still relies on RLS at the matches/seasons tables.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import { bus, type IslEventBus } from '@shared/events/bus';
 
 // TYPE ESCAPE HATCH — same pattern as betting/api/oddsRepo.ts (CAST:*).
 // The `seasons.status` column from migration 0014 isn't yet in
@@ -541,6 +542,207 @@ export async function addPlayer(
     technical:  input.overallRating,
   });
   if (error) throw new Error(error.message);
+}
+
+// ── Manual match completion ──────────────────────────────────────────────────
+
+/**
+ * Lower bound for a valid score input on the manual-completion form.
+ *
+ * Negative scores are not a real-world soccer concept — a typo of `-1` should
+ * surface as a validation error rather than silently corrupt the fixture row.
+ */
+const MIN_SCORE = 0;
+
+/**
+ * Upper bound for a valid score input on the manual-completion form.
+ *
+ * 99 covers any realistic scoreline (record real-world wins land in the 30s)
+ * while still trapping obvious typos like a stray `200` from a misclicked
+ * number-stepper.  Picked generously rather than tightly because exotic
+ * Architect-influenced scorelines are gameplay-legal — see
+ * `gameEngine.smoke.test.ts` for the wider distribution the engine can emit.
+ */
+const MAX_SCORE = 99;
+
+/**
+ * Shape returned by {@link completeMatchManually} on success.  Echoes the
+ * inputs back so the caller can keep its toast / UI state up to date without
+ * re-deriving them.
+ */
+export interface CompleteMatchManuallyResult {
+  /** UUID of the match row that was completed. */
+  matchId:    string;
+  /** Final home score written to the row. */
+  homeScore:  number;
+  /** Final away score written to the row. */
+  awayScore:  number;
+}
+
+/**
+ * Manually mark a match as `completed`, write the final scores, and emit
+ * `match.completed` on the in-app event bus so the standard side-effect
+ * listeners fire (`WagerSettlementListener`, `CupRoundAdvancerListener`,
+ * `RefereeNarrativeListener`, `MemoryWriteListener`).
+ *
+ * Used by the admin Fixture Browser's per-row "Complete" affordance so an
+ * operator can drive a dev/test season forward without waiting for the
+ * worker to simulate every fixture in real time.  The match-worker takes
+ * the same final step (`status='completed'` UPDATE) when a real simulation
+ * finishes — this function is therefore a parallel, manually-triggered
+ * shortcut that produces the same downstream state.
+ *
+ * BUS PAYLOAD
+ *   We fetch the match row before the update so we can populate the full
+ *   {@link MatchCompletedPayload} (team ids + competition id) rather than a
+ *   stripped-down `{ matchId }`.  The standard listeners destructure the
+ *   richer fields (`homeTeamId`, `awayTeamId`, `competitionId`), so emitting
+ *   a partial payload would silently break cup-advancement and other flows.
+ *
+ * EXACTLY-ONCE EMISSION
+ *   The function emits exactly one bus event per successful invocation, only
+ *   after the DB UPDATE returns without error.  A failed read or failed
+ *   update throws before reaching the emit — no event is fired.  This keeps
+ *   downstream listeners from settling wagers against a row whose update
+ *   was rolled back.
+ *
+ * ERRORS
+ *   - Throws when `matchId` is empty / non-string.
+ *   - Throws when either score is non-integer or outside `[MIN_SCORE, MAX_SCORE]`.
+ *   - Throws when the match row does not exist.
+ *   - Throws `"Cup matches cannot end in a draw — enter a tiebreak winner"`
+ *     when the match belongs to a single-elimination cup competition
+ *     (`competitions.type='cup'`) and the scoreline is tied.  Knockout
+ *     brackets require a decisive winner; `CupRoundAdvancerListener` would
+ *     otherwise refuse to advance and the row would be `completed` while
+ *     the bracket stays stuck.
+ *   - Throws `"Match is no longer scheduled — refresh and try again"` when
+ *     the optimistic-concurrency guard (`status='scheduled'`) misses,
+ *     meaning the worker or another admin already moved the row.  No bus
+ *     event is emitted in this case — preserves the exactly-once invariant
+ *     for `WagerSettlementListener` + `CupRoundAdvancerListener`.
+ *   - Throws when the UPDATE returns an error (RLS denial, network blip…).
+ *
+ * @param db          Supabase client.  Needs UPDATE rights on `matches`
+ *                    (admin RLS policy or service-role).
+ * @param matchId     UUID of the target match.
+ * @param homeScore   Final home score in `[MIN_SCORE, MAX_SCORE]`.
+ * @param awayScore   Final away score in `[MIN_SCORE, MAX_SCORE]`.
+ * @param busOverride Optional bus instance for tests; defaults to the app
+ *                    singleton.  Production callers should not pass this.
+ * @returns           `{ matchId, homeScore, awayScore }` on success.
+ */
+export async function completeMatchManually(
+  db:           IslSupabaseClient,
+  matchId:      string,
+  homeScore:    number,
+  awayScore:    number,
+  busOverride:  IslEventBus = bus,
+): Promise<CompleteMatchManuallyResult> {
+  // ── Input validation ──────────────────────────────────────────────────────
+  // Cheap synchronous checks fire BEFORE any DB call — a malformed call
+  // shouldn't cost a network round-trip just to fail at the row level.
+  if (typeof matchId !== 'string' || matchId.length === 0) {
+    throw new Error('completeMatchManually: matchId is required');
+  }
+  if (!Number.isInteger(homeScore) || homeScore < MIN_SCORE || homeScore > MAX_SCORE) {
+    throw new Error(
+      `completeMatchManually: homeScore must be an integer in [${MIN_SCORE}, ${MAX_SCORE}] (got ${homeScore})`,
+    );
+  }
+  if (!Number.isInteger(awayScore) || awayScore < MIN_SCORE || awayScore > MAX_SCORE) {
+    throw new Error(
+      `completeMatchManually: awayScore must be an integer in [${MIN_SCORE}, ${MAX_SCORE}] (got ${awayScore})`,
+    );
+  }
+
+  // ── Step 1: fetch the row for the bus payload ────────────────────────────
+  // We need home_team_id, away_team_id, and competition_id to populate the
+  // full MatchCompletedPayload.  Using `.maybeSingle()` so a missing row
+  // surfaces as `data === null` rather than a PostgREST error.
+  const { data: matchRow, error: readErr } = await (db as AnyDb)
+    .from('matches')
+    .select('id, home_team_id, away_team_id, competition_id')
+    .eq('id', matchId)
+    .maybeSingle();
+
+  if (readErr) {
+    throw new Error(`completeMatchManually: read failed: ${readErr.message}`);
+  }
+  if (!matchRow) {
+    throw new Error(`completeMatchManually: match ${matchId} not found`);
+  }
+
+  // ── Step 2: cup-match draw guard ─────────────────────────────────────────
+  // `CupRoundAdvancerListener` refuses to advance the bracket on a tied
+  // scoreline (knockouts need a decisive winner).  If we allowed a draw
+  // through here, the match would flip to `completed` but the bracket would
+  // remain stuck — a silently broken cup.  Resolve the discriminator by
+  // looking up the competition's `type` column ('cup' = single-elimination).
+  if (homeScore === awayScore && matchRow.competition_id) {
+    const { data: comp, error: compErr } = await (db as AnyDb)
+      .from('competitions')
+      .select('type')
+      .eq('id', matchRow.competition_id)
+      .maybeSingle();
+    if (compErr) {
+      throw new Error(
+        `completeMatchManually: competition lookup failed: ${compErr.message}`,
+      );
+    }
+    if (comp?.type === 'cup') {
+      throw new Error(
+        'Cup matches cannot end in a draw — enter a tiebreak winner',
+      );
+    }
+  }
+
+  // ── Step 3: persist the result with optimistic-concurrency guard ─────────
+  // played_at is stamped with the wall-clock so downstream readers that
+  // sort by played_at order this row exactly like a worker-simulated one.
+  //
+  // The extra `.eq('status', 'scheduled')` clause makes the UPDATE a no-op
+  // when the worker (or another admin) has already moved the row to
+  // `in_progress` / `completed`.  Without it, a stale Fixture Browser tab
+  // could overwrite a freshly-completed simulation and re-emit
+  // `match.completed`, double-settling wagers and double-advancing cups.
+  // We use `.select()` to make PostgREST return the affected rows; an empty
+  // array means the guard skipped the write and we throw before emitting.
+  const { data: updatedRows, error: updateErr } = await (db as AnyDb)
+    .from('matches')
+    .update({
+      status:     'completed',
+      home_score: homeScore,
+      away_score: awayScore,
+      played_at:  new Date().toISOString(),
+    })
+    .eq('id', matchId)
+    .eq('status', 'scheduled')
+    .select();
+
+  if (updateErr) {
+    throw new Error(`completeMatchManually: update failed: ${updateErr.message}`);
+  }
+  if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+    throw new Error(
+      'Match is no longer scheduled — refresh and try again',
+    );
+  }
+
+  // ── Step 4: emit the bus event ───────────────────────────────────────────
+  // Reaches all four cross-feature listeners.  Synchronous — listeners run
+  // inline on this microtask; their async DB work is handled inside the
+  // listener bodies themselves and intentionally not awaited here.
+  busOverride.emit('match.completed', {
+    matchId,
+    homeTeamId:    matchRow.home_team_id,
+    awayTeamId:    matchRow.away_team_id,
+    homeScore,
+    awayScore,
+    competitionId: matchRow.competition_id ?? '',
+  });
+
+  return { matchId, homeScore, awayScore };
 }
 
 // ── Team list ─────────────────────────────────────────────────────────────────

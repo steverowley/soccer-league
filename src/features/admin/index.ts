@@ -37,6 +37,9 @@ export {
   injectNarrative,
   addPlayer,
   getTeamList,
+  // Manual completion path used by the Fixture Browser's per-row "Complete"
+  // affordance.  Emits `match.completed` so the standard listeners fire.
+  completeMatchManually,
 } from './api/admin';
 export type {
   AdminSeason,
@@ -47,9 +50,20 @@ export type {
   // Phase B additions
   SystemStats,
   AddPlayerInput,
+  CompleteMatchManuallyResult,
 } from './api/admin';
 
 // ── UI ───────────────────────────────────────────────────────────────────────
-// Page component removed in the 2026-05 nuke — admin route will be rebuilt
-// against the new design language.  Listeners stay in their own files;
-// none belong to this feature.
+// Panel subcomponents live under `ui/` and are composed by `pages/Admin.tsx`
+// into the full dashboard.  Re-exported here so cross-feature callers
+// (currently none — the panels are only used by the route file) can import
+// from `@features/admin` without reaching into the deep `ui/<file>` paths.
+export {
+  AdminAccessGate,
+  OverviewPanel,
+  SystemStatsCard,
+  SeasonControlsPanel,
+  FixtureBrowser,
+  TestingPanel,
+  ArchitectInterventionLog,
+} from './ui';
