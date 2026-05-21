@@ -114,14 +114,22 @@ export type {
   FactoryTraitInput,
 } from './logic/personaFactory';
 
-// ── Logic — decision dispatcher + reflection-tier resolvers (Phase 6) ──────
-// Three-tier decision model (reflex / reflection / drama).  Phase 6 ships
-// the reflection tier — bookies slant odds by mood + grudges, journalists
-// pick stories by beat + sources, pundits pick subjects by specialty +
-// take history.  Resolvers are pure; the dispatcher is the typed routing
+// ── Logic — decision dispatcher + resolvers (Phases 6 + 8) ─────────────────
+// Three-tier decision model (reflex / reflection / drama).
+//   Phase 6 — reflection tier: bookies slant odds by mood + grudges,
+//             journalists pick stories by beat + sources, pundits pick
+//             subjects by specialty + take history.
+//   Phase 8 — reflex tier (in-match, sub-second, pure weight outputs):
+//             strikers' shoot-vs-pass weight shaded by per-keeper memory;
+//             refs' card severity shaded by per-player flare-ups /
+//             goodwill.  Engine still drives match flow — resolvers only
+//             shade probability weights, never make absolute decisions.
+// All resolvers are pure functions; the dispatcher is the typed routing
 // switch.
 export { runDecision } from './logic/decisions';
 export type {
+  CardSeverityContext,
+  CardSeverityResult,
   DecisionInputs,
   DecisionKind,
   DecisionRequest,
@@ -132,6 +140,8 @@ export type {
   OddsSlantResult,
   PunditTakeContext,
   PunditTakeResult,
+  ShootOrPassContext,
+  ShootOrPassResult,
 } from './logic/decisions';
 export type { JournalistStoryCandidate } from './logic/resolvers/journalistStoryPick';
 export type { PunditTakeCandidate } from './logic/resolvers/punditTake';
