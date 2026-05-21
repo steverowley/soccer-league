@@ -6,14 +6,18 @@
 // DATA SOURCES (merged into one card stream):
 //   1. `roadmap_items` from Supabase — curator-authored ideas, full
 //      admin write chrome (create / edit / move / delete).
-//   2. `public/bd-snapshot.json` — read-only mirror of bd issues
-//      (`.beads/issues.jsonl`) regenerated on every dev/build run.
-//      Mapped through `bdMapping` into the kanban's status + priority
-//      vocabulary.
+//   2. `bd_issues` in Supabase — read-only mirror of the bd issue
+//      tracker, populated by `scripts/sync-bd-to-supabase.mjs` on
+//      every push.  Streamed via Supabase Realtime so cards re-render
+//      live as bd state changes.  Mapped through `bdMapping` into the
+//      kanban's status + priority vocabulary.
+//   3. `claude_sessions` from Supabase — live Claude Code session
+//      ledger; always pinned to the In Progress lane.
 //
 // DATA FLOW:
-//   load          — listItems(db) + fetchBdSnapshot() in parallel on mount.
-//   create        — Supabase only.  bd cards never mutate.
+//   load          — listItems(db) + listBdIssues(db) + getBdSyncedAt(db)
+//                   + listActiveClaudeSessions(db) in parallel on mount.
+//   create        — Supabase only.  bd cards never mutate from the UI.
 //   update        — Supabase only.
 //   delete        — Supabase only.
 //   move up/down  — Supabase only.  Mixing bd into the swap targets
@@ -22,8 +26,8 @@
 //
 // REFRESH STRATEGY:
 //   Supabase items refetch after every successful write (via `bumpRefresh`).
-//   The bd snapshot is a build artefact — it only changes on
-//   deploy — so we load it once on mount and don't re-poll.
+//   bd_issues and claude_sessions both re-fetch on any Realtime event
+//   on their respective tables — see the two subscription effects below.
 //
 // ADMIN GUARD: the board renders for everyone, but every write branch
 // checks both `isAdmin` and `item.kind === 'supabase'`.  RLS + the bd
@@ -54,7 +58,12 @@ import {
   updateItem,
   type CreateItemInput,
 } from '../api/items';
-import { fetchBdSnapshot, type BdIssue } from '../api/bdSnapshot';
+import {
+  listBdIssues,
+  getBdSyncedAt,
+  subscribeToBdIssues,
+  type BdIssue,
+} from '../api/bdIssues';
 import { mapBdPriority, mapBdStatus } from '../logic/bdMapping';
 import {
   listActiveClaudeSessions,
@@ -110,11 +119,11 @@ function fromSupabase(item: RoadmapItem): BoardItem {
 }
 
 /**
- * Map a trimmed bd issue into the `BoardItem.kind === 'bd'` variant.
+ * Map a bd issue row into the `BoardItem.kind === 'bd'` variant.
  * Status and priority pass through the mapping layer; everything else
- * is verbatim from the snapshot.
+ * is verbatim from the `bd_issues` row.
  *
- * @param issue - Trimmed issue from `bd-snapshot.json`.
+ * @param issue - Validated row from `listBdIssues`.
  * @returns     A `BoardItem` ready for `groupBoardItemsByStatus`.
  */
 function fromBd(issue: BdIssue): BoardItem {
@@ -182,43 +191,76 @@ export function RoadmapBoard() {
 
   const [supabaseItems, setSupabaseItems]   = useState<RoadmapItem[]>([]);
   const [bdIssues, setBdIssues]             = useState<BdIssue[]>([]);
-  const [bdSnapshotAt, setBdSnapshotAt]     = useState<string>('');
+  // Most-recent `synced_at` across all bd_issues rows.  Drives the
+  // legend strip's "synced · <ts>" chip so the user can see how stale
+  // the mirror is.  Refreshes on every bd-realtime event below.
+  const [bdSyncedAt, setBdSyncedAt]         = useState<string>('');
   // Live Claude sessions land in the In Progress lane and update via
-  // Supabase Realtime — see the second effect below.
+  // Supabase Realtime — see the third effect below.
   const [sessions, setSessions]             = useState<ClaudeSession[]>([]);
   const [loaded, setLoaded]                 = useState(false);
   const [editor, setEditor]                 = useState<EditorState>({ kind: 'closed' });
 
-  // Bumping this counter triggers the Supabase refetch — used to refresh
-  // after every successful mutation without duplicating fetch logic.
-  // We deliberately do NOT re-fetch the bd snapshot on bump; bd is a
-  // build artefact and won't change between user actions.
+  // Bumping this counter triggers the curated-items refetch — used to
+  // refresh after every successful mutation without duplicating fetch
+  // logic.  bd_issues and claude_sessions have their own Realtime
+  // subscriptions and don't need to bump on this counter.
   const [refresh, setRefresh] = useState(0);
 
   // ── Initial parallel fetch + Supabase refetch on `refresh` bump ────────
-  // Three data sources fan out concurrently:
-  //   * Supabase `roadmap_items` — curated rows.
-  //   * `public/bd-snapshot.json` — bd mirror (build artefact).
-  //   * Supabase `claude_sessions` — live session ledger (also subscribes
-  //     via Realtime in the second effect below).
-  // We resolve all three before flipping `loaded` so the board renders
+  // Four data sources fan out concurrently:
+  //   * Supabase `roadmap_items`   — curated rows.
+  //   * Supabase `bd_issues`        — live bd mirror (also subscribed via
+  //                                   Realtime in the second effect).
+  //   * Supabase `bd_issues`.synced_at — latest sync timestamp for the
+  //                                       legend strip.
+  //   * Supabase `claude_sessions`  — live session ledger (also subscribed
+  //                                   via Realtime in the third effect).
+  // We resolve all four before flipping `loaded` so the board renders
   // with a complete view rather than progressively populating.
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       listItems(db),
-      fetchBdSnapshot(),
+      listBdIssues(db),
+      getBdSyncedAt(db),
       listActiveClaudeSessions(db),
-    ]).then(([sb, bd, sess]) => {
+    ]).then(([sb, bd, syncedAt, sess]) => {
       if (cancelled) return;
       setSupabaseItems(sb);
-      setBdIssues(bd.issues);
-      setBdSnapshotAt(bd.generated_at);
+      setBdIssues(bd);
+      setBdSyncedAt(syncedAt);
       setSessions(sess);
       setLoaded(true);
     });
     return () => { cancelled = true; };
   }, [db, refresh]);
+
+  // ── Realtime subscription: live bd_issues changes ──────────────────────
+  // The `bd_issues` table is written by the bd-sync GitHub Action on
+  // every push.  On any insert / update / delete we refetch the full
+  // set + the latest synced_at — cheap because the table tops out at a
+  // few hundred rows.  Subscription is independent of the `refresh`
+  // counter so it stays alive across curated-item mutations.
+  useEffect(() => {
+    let cancelled = false;
+    const channel = subscribeToBdIssues(db, () => {
+      // Fire-and-forget parallel refetch.  Errors are already logged +
+      // swallowed inside listBdIssues / getBdSyncedAt; we just guard
+      // against unmount races.
+      void Promise.all([listBdIssues(db), getBdSyncedAt(db)]).then(
+        ([rows, syncedAt]) => {
+          if (cancelled) return;
+          setBdIssues(rows);
+          setBdSyncedAt(syncedAt);
+        },
+      );
+    });
+    return () => {
+      cancelled = true;
+      void channel.unsubscribe();
+    };
+  }, [db]);
 
   // ── Realtime subscription: live session changes ────────────────────────
   // The `claude_sessions` table is written by the cloud SessionStart /
@@ -429,8 +471,8 @@ export function RoadmapBoard() {
             <span style={{ color: COLORS.dust70 }}>{sessionCount}</span> live · claude
           </span>
         )}
-        {bdSnapshotAt && (
-          <span>snapshot · {bdSnapshotAt.slice(0, 16).replace('T', ' ')}</span>
+        {bdSyncedAt && (
+          <span>synced · {bdSyncedAt.slice(0, 16).replace('T', ' ')}</span>
         )}
       </div>
 

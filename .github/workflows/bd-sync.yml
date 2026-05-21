@@ -1,0 +1,60 @@
+name: bd-sync
+
+# ── Why ───────────────────────────────────────────────────────────────────
+# Mirrors `.beads/issues.jsonl` into the Supabase `bd_issues` table on
+# every push so the /roadmap board can render bd state live (via
+# Supabase Realtime) instead of waiting for a GitHub Pages rebuild.
+#
+# Trigger model:
+#   * push to ANY branch — covers the normal commit flow.  Branch
+#     filters are intentionally loose because the roadmap reflects bd's
+#     state regardless of which branch the human is on; whichever push
+#     happened last wins.
+#   * workflow_dispatch — manual resync from the Actions tab.
+#
+# Secrets required (Settings → Secrets and variables → Actions):
+#   * SUPABASE_URL              — same project URL the app uses.
+#   * SUPABASE_SERVICE_ROLE_KEY — service-role JWT (NEVER commit;
+#                                 bypasses RLS, write access only.)
+
+on:
+  push:
+    paths:
+      - '.beads/issues.jsonl'
+      - 'scripts/sync-bd-to-supabase.mjs'
+      - '.github/workflows/bd-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize sync jobs on the same ref so two rapid pushes don't race the
+# upsert + tombstone-delete pair.  `cancel-in-progress: false` because
+# the second push's bd state is a superset of the first — we want both
+# to apply, not the later to clobber.
+concurrency:
+  group: bd-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Only need the Supabase JS client; --omit=dev skips Vite + friends
+      # for a faster cold start.
+      - name: Install runtime deps
+        run: npm install --omit=dev --ignore-scripts
+
+      - name: Run sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sync-bd-to-supabase.mjs
