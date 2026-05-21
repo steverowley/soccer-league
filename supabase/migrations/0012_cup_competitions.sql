@@ -25,6 +25,28 @@
 ALTER TABLE competitions
   ADD COLUMN IF NOT EXISTS bracket JSONB;
 
+-- ── 1.5. Defensive seasons-row seed ──────────────────────────────────────────
+-- Section 2 below inserts cup competitions whose season_id FK targets
+-- `00000000-…001`.  Prior to this fix, that row was created out-of-band
+-- (manual insert / seed.sql / admin_reset RPC) on the production DB, so
+-- a fresh Supabase Preview branch — which replays migrations against an
+-- empty schema — would fail at this point with:
+--
+--   ERROR: insert or update on table "competitions" violates foreign key
+--   constraint "competitions_season_id_fkey" (SQLSTATE 23503)
+--   Key (season_id)=(00000000-0000-0000-0000-000000000001) is not present
+--   in table "seasons".
+--
+-- IDEMPOTENT — `ON CONFLICT (id) DO NOTHING` keeps production unchanged
+-- (the row already exists with this id and `is_active=true`) while
+-- creating it on any fresh database.  is_active=true respects the
+-- `seasons_one_active` partial unique index because no other migration
+-- inserts a seasons row.
+INSERT INTO seasons (id, name, year, is_active, start_date, end_date) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Season 1 — 2600', 2600, true,
+   DATE '2600-01-01', DATE '2600-12-31')
+ON CONFLICT (id) DO NOTHING;
+
 -- ── 2. Celestial Cup & Solar Shield competition rows ──────────────────────────
 INSERT INTO competitions (id, season_id, league_id, name, type, format, status) VALUES
 
