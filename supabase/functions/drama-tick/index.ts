@@ -48,6 +48,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 // @ts-ignore — Deno-only import, resolved at deploy time.
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
 
+// ── Drama-tier consequences (Phase 9.1) ─────────────────────────────────────
+// Structural side-effects fired AFTER the narrative lands.  See the WHY
+// block in ./applyConsequence.ts for the design rationale.  Narrative-only
+// drama kinds (retirement_announcement, feud_declaration) flow through the
+// dispatcher as no-ops.
+import { applyDramaConsequence } from './applyConsequence.ts';
+
 // ── Tuning constants ────────────────────────────────────────────────────────
 
 /**
@@ -478,11 +485,52 @@ async function handler(): Promise<Response> {
     );
   }
 
+  // ── Structural consequence dispatch (Phase 9.1) ────────────────────────
+  // Narrative landed.  For the three structural drama kinds (transfer_demand,
+  // manager_resignation, political_decree), call the matching applier so
+  // the world actually changes around the announcement.  Best-effort: a
+  // failed mutation never reverts the narrative — fans already saw it; the
+  // operator can backfill the structural change manually if it matters.
+  //
+  // Narrative-only kinds (retirement_announcement, feud_declaration) flow
+  // through the dispatcher as no-ops — keeping the call site uniform and
+  // making the log line consistent for all dramas.
+  let consequence: Awaited<ReturnType<typeof applyDramaConsequence>> = {
+    applied: false,
+    reason: 'not_attempted',
+  };
+  try {
+    consequence = await applyDramaConsequence(
+      db,
+      draft.kind,
+      candidate.entity_id,
+      draft.text,
+    );
+    if (consequence.applied) {
+      console.log(
+        `[drama-tick] consequence applied: ${draft.kind} → ${consequence.reason}`,
+        consequence.meta ?? {},
+      );
+    } else {
+      console.log(
+        `[drama-tick] consequence skipped: ${draft.kind} → ${consequence.reason}`,
+        consequence.meta ?? {},
+      );
+    }
+  } catch (err) {
+    // Defensive: a thrown error here must not break the function's response.
+    console.warn('[drama-tick] applyDramaConsequence threw:', err);
+  }
+
   return new Response(
     JSON.stringify({
       emitted: 1,
       kind: draft.kind,
       entity: candidate.display_name ?? candidate.name,
+      consequence: {
+        applied: consequence.applied,
+        reason: consequence.reason,
+      },
     }),
     { headers: { 'content-type': 'application/json' } },
   );
