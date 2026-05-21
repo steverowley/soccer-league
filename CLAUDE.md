@@ -466,13 +466,15 @@ bd close <id>         # Complete work
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **Subscribe to PR activity** - If this session opened or pushed to a PR, you MUST call `mcp__github__subscribe_pr_activity` for that PR number **before ending your turn**. Without this, review comments and CI failures will not wake any session. The subscription is per-session and per-PR; opening the PR does NOT auto-subscribe. Skipping this step strands the PR with nobody watching it.
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - All changes committed AND pushed
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+- NEVER end a session that opened a PR without subscribing to its activity
 <!-- END BEADS INTEGRATION -->
