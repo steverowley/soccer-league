@@ -154,7 +154,7 @@ async function fetchTeamForSimulation(teamId: string) {
     // which in turn picked a random `planet` and therefore the wrong
     // PLANET_WX table — every weather-keyed mechanic was running off the
     // wrong distribution.
-    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name), players(id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
+    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
     .eq('id', teamId)
     .single();
 

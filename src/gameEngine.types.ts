@@ -28,6 +28,14 @@ export interface EnginePlayer {
   position:      Position;
   starter:       boolean;
   jersey_number: number;
+  /**
+   * Universal Agent System identity (entity_id FK).  Optional because the
+   * column was added in migration 0002 and old test fixtures still omit it.
+   * When present, the engine forwards it through to the reflex-tier
+   * resolvers (`shoot_or_pass`, `card_severity`) so they can look up the
+   * player's persona + memories without a name-string fallback.
+   */
+  entity_id?:    string | null;
   /** Primary stat for shooting, running, and finishing. */
   attacking:     number;
   /** Primary stat for tackling, blocking, and goalkeeping. */

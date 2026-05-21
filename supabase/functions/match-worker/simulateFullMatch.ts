@@ -117,6 +117,21 @@ function toSimulatedEvent(ev: Record<string, any>, subminute: number): Simulated
  *                  card-bias multipliers and the weird-pool rate boost.
  * @returns         Events + final score + MVP — ready for DB persistence.
  */
+/**
+ * Optional Phase 8 reflex-tier hooks.  Mirrors the src/ side's
+ * `AgentReflexHooks`.  When provided, the engine's shoot_or_pass +
+ * card_severity sites consult the resolvers via runDecision with
+ * matching persona + memories looked up out of agentCorpus.  When
+ * omitted, the engine falls back to legacy stat-driven behaviour.
+ */
+// deno-lint-ignore no-explicit-any
+export interface AgentReflexHooks {
+  // deno-lint-ignore no-explicit-any
+  agentCorpus: any;
+  // deno-lint-ignore no-explicit-any
+  runDecision: (req: any) => any;
+}
+
 export function simulateFullMatch(
   home: EngineTeam,
   away: EngineTeam,
@@ -128,6 +143,7 @@ export function simulateFullMatch(
   // its 3% baseline.  See architect.ts for the canonical implementation.
   // deno-lint-ignore no-explicit-any
   architect: any | null = null,
+  reflexHooks: AgentReflexHooks | null = null,
 ): SimulatedMatchResult {
   // ── Apply fan-support boost ────────────────────────────────────────────────
   // The team with more logged-in fans gets a small stat boost across every
@@ -206,10 +222,17 @@ export function simulateFullMatch(
     const architectFate       = architect?.getFate?.(min) ?? null;
     const consumeFate         = architect ? () => architect.consumeFate() : null;
 
+    // Phase 8 reflex-tier hooks ride alongside the architect bag.  Both are
+    // optional; the engine bails to legacy behaviour when either piece is
+    // missing on a given decision call.
     const ev = genEvent(
       min, home, away, momentum, INITIAL_POSSESSION, playerStats, score,
       activePlayers, substitutionsUsed, null, aim, 0, lastEventType,
-      { architect, architectIntentions, architectEdictFn, architectFate, consumeFate },
+      {
+        architect, architectIntentions, architectEdictFn, architectFate, consumeFate,
+        agentCorpus: reflexHooks?.agentCorpus ?? null,
+        runDecision: reflexHooks?.runDecision ?? null,
+      },
     );
 
     if (!ev) continue;

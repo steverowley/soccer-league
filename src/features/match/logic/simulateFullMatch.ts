@@ -195,11 +195,31 @@ function toSimulatedEvent(ev: MatchEvent, subminute: number): SimulatedEvent {
  *                    fully deterministic.
  * @returns           Events + final score + MVP — ready for DB persistence.
  */
+/**
+ * Optional Universal Agent System hooks for the reflex-tier resolvers.
+ * When provided, the engine consults `runDecision` at the `shoot_or_pass`
+ * and `card_severity` decision sites with the matching persona + memories
+ * looked up out of `agentCorpus`.  When omitted, the engine falls back to
+ * its legacy stat-driven behaviour with zero overhead.
+ *
+ * Callers hydrate `agentCorpus` once before kickoff via
+ * `prepareCorpusForMatch(db, entityIds)` from `@features/agents`.
+ */
+export interface AgentReflexHooks {
+  /** Pre-hydrated persona + memory snapshot keyed by entity_id. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  agentCorpus: any;
+  /** The runDecision dispatcher from features/agents. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  runDecision: (req: any) => any;
+}
+
 export function simulateFullMatch(
   home: EngineTeam,
   away: EngineTeam,
   refOverride: RefereeOverride | null = null,
   fanBoost: FanBoostInput | null = null,
+  reflexHooks: AgentReflexHooks | null = null,
 ): SimulatedMatchResult {
   // ── Apply fan-support boost (Phase 6+) ─────────────────────────────────
   // The team with more logged-in fans gets a small stat bump across every
@@ -241,10 +261,15 @@ export function simulateFullMatch(
   for (let min = 1; min <= REGULATION_MINUTES; min++) {
     // The 10th positional arg (aiInfluence) is the SHOOT/ATTACK bias bag —
     // null in the worker since we're not modelling manager AI here.
-    // The 14th arg (genCtx) is empty — no Architect features active.
+    // The 14th arg (genCtx) carries Phase 8 reflex hooks when the caller
+    // supplied them.  Empty object preserves the legacy behaviour when no
+    // hooks are passed.
+    const genCtx = reflexHooks
+      ? { agentCorpus: reflexHooks.agentCorpus, runDecision: reflexHooks.runDecision }
+      : {};
     const ev = genEvent(
       min, home, away, momentum, INITIAL_POSSESSION, playerStats, score,
-      activePlayers, substitutionsUsed, null, aim, 0, lastEventType, {},
+      activePlayers, substitutionsUsed, null, aim, 0, lastEventType, genCtx,
     );
 
     if (!ev) continue;

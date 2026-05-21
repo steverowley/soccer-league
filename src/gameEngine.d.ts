@@ -59,6 +59,14 @@ export interface RefereeOverride {
   name: string;
   /** Card-threshold strictness on the engine's 0–100 scale. */
   strictness: number;
+  /**
+   * Universal Agent System identity for the referee.  Optional — when
+   * present, the engine forwards it through to the `card_severity`
+   * reflex resolver so the ref's persona + per-player memory grudges
+   * shade the card decision.  When absent, the engine uses the legacy
+   * strictness-only threshold path.
+   */
+  entity_id?: string | null;
 }
 
 export function createAIManager(

@@ -84,6 +84,11 @@ export function normalizeTeamForEngine(team: Record<string, any>): EngineTeam {
       .filter((p) => (p.is_active as boolean) !== false)
       .map((p) => ({
         id: (p.id as string) || 'unknown',
+        // Universal Agent System identity — threads through to the reflex-
+        // tier resolvers (shoot_or_pass / card_severity) so they can look
+        // up the player's persona + memories without a name-string match.
+        // Optional: pre-Phase 2 fixtures may omit it.
+        entity_id: (p.entity_id as string | null | undefined) ?? null,
         name: (p.name as string) || 'Unknown Player',
         position: (p.position as string) || 'MF',
         age: (p.age as number) ?? 25,

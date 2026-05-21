@@ -79,6 +79,14 @@ export {
   upsertPersona,
 } from './api/personas';
 export { logAgentRun } from './api/agentRuns';
+// Pre-match in-memory hydration for reflex-tier resolvers (Phase 8 hot-path).
+// Caller batches every involved entity_id through this helper once before
+// kickoff; the returned snapshot lives on `genCtx.agentCorpus` and is read
+// synchronously from inside the engine.
+export {
+  prepareCorpusForMatch,
+} from './api/prepareCorpusForMatch';
+export type { AgentCorpusSnapshot } from './api/prepareCorpusForMatch';
 
 // ── Logic — memory writer (Phase 2) ─────────────────────────────────────────
 // Pure mappings from bus payloads to entity_memories rows.  Consumed by
