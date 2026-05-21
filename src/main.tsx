@@ -87,6 +87,9 @@ const Profile      = lazy(() => import('./pages/Profile'));
 const Wagers       = lazy(() => import('./pages/Wagers'));
 const Admin        = lazy(() => import('./pages/Admin'));
 const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
+// EntityDetail (Phase 10 of the Universal Agent System): inspects any
+// entity's persona + recent snippets + recent memories.  Read-only.
+const EntityDetail = lazy(() => import('./pages/EntityDetail'));
 const Roadmap      = lazy(() => import('./pages/Roadmap'));
 
 // Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
@@ -236,6 +239,12 @@ createRoot(document.getElementById('root')!).render(
                   Links from Idols.tsx and MatchDetail.tsx both point here;
                   before this route those URLs 404'd. */}
               <Route path="players/:playerId"   element={<PlayerDetail />} />
+
+              {/* /entities/:entityId — Phase 10 voice-corpus inspection.
+                  Renders persona + recent snippets + recent memories
+                  for any entity (player, ref, journalist, planet, …).
+                  No raw stats exposed — text only. */}
+              <Route path="entities/:entityId"  element={<EntityDetail />} />
             </Routes>
             </Suspense>
           </BrowserRouter>
