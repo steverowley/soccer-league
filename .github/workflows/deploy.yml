@@ -35,6 +35,12 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
+          # VAPID public key for browser push notifications (match-start
+          # alerts). Public by design — see the matching VAPID_PRIVATE_KEY
+          # secret on the Supabase edge function for the signing half of
+          # the pair. Empty value silently disables push enrolment in the
+          # NotificationSettings UI (renders the 'no-vapid-key' branch).
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -63,6 +69,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
+          # Same VAPID public key as the build job above — both stages
+          # rebuild the bundle, so both need the env var available.
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
 
       # Pages must be enabled out-of-band before this step succeeds:
       #   Settings → Pages → Build and deployment → Source: GitHub Actions
