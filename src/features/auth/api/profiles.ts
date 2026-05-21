@@ -62,6 +62,12 @@ const ProfileSchema = z.object({
   last_seen_at: z.string().nullable(),
   created_at: z.string(),
   is_admin: z.boolean(),
+  // The two opt-in toggles added by migration 0039.  Both default to
+  // false server-side; parsing them here means a missing column on the
+  // remote (e.g. migration not yet applied) fails loud rather than
+  // silently disabling the push-notification UI.
+  notify_favourite_team: z.boolean(),
+  notify_all_matches: z.boolean(),
 });
 
 // ── Queries ─────────────────────────────────────────────────────────────────

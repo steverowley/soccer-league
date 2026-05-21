@@ -45,6 +45,20 @@ export interface Profile {
    * Drives the `/admin` route and the "Admin Dashboard" button on /profile.
    */
   is_admin: boolean;
+  /**
+   * Opt-in flag (migration 0039) for match-start push notifications keyed on
+   * the user's `favourite_team_id`.  When true AND a favourite team is set,
+   * the match-notify-worker cron pushes a "kicks off in 1 minute" alert
+   * before every game involving that club.  No effect without a favourite.
+   */
+  notify_favourite_team: boolean;
+  /**
+   * Opt-in flag (migration 0039) for match-start push notifications across
+   * the entire league.  Independent of favourite-team status.  Use with
+   * care — there can be 4–6 matches per day, producing 4–6 OS notifications
+   * per day per device the user has enrolled.
+   */
+  notify_all_matches: boolean;
 }
 
 /**

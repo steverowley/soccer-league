@@ -62,6 +62,29 @@ import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 import { MemoryWriteListener }      from './features/agents';
 
+// ── Service worker bootstrap ─────────────────────────────────────────────────
+// Registers `public/sw.js` once on app load if the browser supports
+// service workers.  Idempotent — re-registration with the same script URL
+// returns the existing record rather than spawning a second worker.
+//
+// We do it at module load (not inside a component) so the worker is alive
+// for the entire session, including before AuthProvider hydrates.  The
+// worker's only responsibility today is the `push` event listener that
+// shows match-start notifications; without this bootstrap the user would
+// have to visit /profile before the worker became active.
+//
+// `import.meta.env.BASE_URL` prefixes the script path so the worker
+// resolves under both `/` (local dev) and `/soccer-league/` (GitHub Pages).
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  // Fire-and-forget — registration failure is non-fatal (push notifications
+  // simply won't work) and we don't want to noisy-log on every page load.
+  navigator.serviceWorker
+    .register(`${import.meta.env.BASE_URL}sw.js`)
+    .catch((err) => {
+      console.warn('[main] service worker registration failed:', err);
+    });
+}
+
 // ── Routes (code-split) ───────────────────────────────────────────────────────
 // Each page is loaded with React.lazy so Vite emits a separate chunk per
 // route.  The initial JS bundle only contains the shell (providers +

@@ -44,6 +44,12 @@ export default tseslint.config(
       'node_modules/**',
       'coverage/**',
       'supabase/functions/**',
+      // Static assets copied verbatim into the build. Includes `sw.js` —
+      // a ServiceWorker script whose `self` global is not declared in the
+      // browser/node globals lists and which otherwise produces a dozen
+      // no-undef errors. Service workers have their own runtime; linting
+      // them under the React/browser baseline is the wrong rule set.
+      'public/**',
       '*.png',
     ],
   },
