@@ -84,6 +84,32 @@ const RECENT_FOCUS_ENACTED_LIMIT = 6;
  */
 const COSMIC_DISTURBANCES_LIMIT = 3;
 
+// ── Phase 7: corpus-first selector tuning ──────────────────────────────────
+// Before calling Claude per entity, try the persisted voice corpus
+// (entity_snippets in migration 0035).  Cache hits cost zero tokens.
+// The miss-rate is logged to agent_runs so we can measure the
+// corpus-driven cost reduction over time.
+
+/**
+ * Snippet kinds the corpus-first selector will accept as a substitute
+ * for an entity narrative.  Each maps to the natural-fit narrative
+ * shape produced by generateEntityNarrative.
+ */
+const CORPUS_PREFERRED_KINDS = ['quote', 'observation', 'boast', 'lament'] as const;
+
+/**
+ * Days back to look for a corpus snippet.  Older than this and the
+ * snippet feels stale next to fresh world events; the LLM fallback
+ * gets used instead.
+ */
+const CORPUS_SNIPPET_MAX_AGE_DAYS = 30;
+
+/**
+ * Max usage_count a snippet may have before we treat it as exhausted.
+ * 3 reuses is the soft cap; beyond that we prefer fresh LLM generation.
+ */
+const CORPUS_SNIPPET_MAX_USAGE = 3;
+
 /**
  * Claude model. Sonnet 4.6 for out-of-match narration — lower
  * latency-sensitivity than in-match commentary; benefit from a stronger model.
@@ -409,10 +435,92 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }));
 
     // ── Generate entity narratives ───────────────────────────────────────
+    // Phase 7 (corpus-first): before each LLM call, try to serve a
+    // fitting snippet from `entity_snippets`.  Cache hits cost zero
+    // tokens AND zero latency; only true misses (no eligible snippet)
+    // fall through to generateEntityNarrative.  Hit/miss outcomes land
+    // in `agent_runs` so the corpus effectiveness metric is queryable.
     const allInserted: Array<Record<string, unknown>> = [];
 
     for (const entity of selected) {
       const kind = narrativeKindForEntityKind(entity.kind);
+
+      // ── Corpus-first attempt ───────────────────────────────────────────
+      // Pull the freshest eligible snippet for this entity.  Eligibility
+      // gates filter out exhausted (usage_count >= CORPUS_SNIPPET_MAX_USAGE)
+      // and stale (older than CORPUS_SNIPPET_MAX_AGE_DAYS) rows so the feed
+      // never serves a tired or off-time line.  Ordered by usage_count
+      // ASC then created_at DESC so the freshest unused snippet wins.
+      const cutoffIso = new Date(
+        Date.now() - CORPUS_SNIPPET_MAX_AGE_DAYS * 86_400_000,
+      ).toISOString();
+      const corpusQ = await db
+        .from('entity_snippets')
+        .select('id, text, kind, usage_count, created_at')
+        .eq('entity_id', entity.id)
+        .in('kind', CORPUS_PREFERRED_KINDS as unknown as string[])
+        .lt('usage_count', CORPUS_SNIPPET_MAX_USAGE)
+        .gte('created_at', cutoffIso)
+        .order('usage_count', { ascending: true })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const snippet = corpusQ.error ? null : corpusQ.data;
+
+      if (snippet) {
+        // ── HIT: serve cached snippet ────────────────────────────────────
+        // Insert narrative + composed_from pointer + bump usage_count.
+        // Log a zero-token `corpus_hit` row to agent_runs for cost
+        // observability — proves cache served traffic without LLM spend.
+        const { error, data } = await db.from('narratives').insert({
+          kind,
+          summary:           snippet.text,
+          entities_involved: [entity.id],
+          source:            'scheduled',
+          composed_from:     [snippet.id],
+        }).select();
+
+        if (error) {
+          console.warn(`[galaxy-tick] corpus narrative insert failed for ${entity.name}:`, error.message);
+        } else {
+          allInserted.push(...((data as Array<Record<string, unknown>>) ?? []));
+          // Bump usage so the next tick prefers a different snippet.
+          await db
+            .from('entity_snippets')
+            .update({
+              usage_count: snippet.usage_count + 1,
+              last_used_at: new Date().toISOString(),
+            })
+            .eq('id', snippet.id);
+
+          await db.from('agent_runs').insert({
+            entity_id: entity.id,
+            kind: 'corpus_hit',
+            model: null,
+            prompt_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_create_tokens: 0,
+          });
+        }
+        continue; // skip the LLM call entirely on hit
+      }
+
+      // ── MISS: log + fall through to LLM ──────────────────────────────
+      // Zero-cost miss log lets the team chart the hit rate ramp over
+      // time as the enricher fills the library.  After this, the
+      // existing LLM path runs unchanged.
+      await db.from('agent_runs').insert({
+        entity_id: entity.id,
+        kind: 'corpus_miss',
+        model: null,
+        prompt_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_create_tokens: 0,
+      });
+
       const draft = await generateEntityNarrative(
         anthropic,
         entity,
