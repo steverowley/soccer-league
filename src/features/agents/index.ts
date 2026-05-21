@@ -78,3 +78,25 @@ export {
   upsertPersona,
 } from './api/personas';
 export { logAgentRun } from './api/agentRuns';
+
+// ── Logic — memory writer (Phase 2) ─────────────────────────────────────────
+// Pure mappings from bus payloads to entity_memories rows.  Consumed by
+// the client-side MemoryWriteListener AND by the server-side
+// supabase/functions/match-worker/writeMatchMemories.ts (duplicated TS
+// because edge functions can't reach into src/).
+export {
+  ARCHITECT_TOUCHED_SALIENCE,
+  buildArchitectMemories,
+  buildMatchCompletionMemories,
+  buildSeasonEndedMemories,
+  LOPSIDED_SCORE_DELTA,
+  MATCH_RESULT_SALIENCE,
+  SEASON_CONCLUDED_SALIENCE,
+} from './logic/memoryWriter';
+export type { MatchCompletionContext } from './logic/memoryWriter';
+
+// ── UI — bus listener (Phase 2) ─────────────────────────────────────────────
+// Side-effect React component mounted once at the app root.  Subscribes
+// to match.completed / season.ended / architect.intervened and writes
+// the resulting memory rows.  Renders null.
+export { MemoryWriteListener } from './ui/MemoryWriteListener';

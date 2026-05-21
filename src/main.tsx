@@ -53,10 +53,14 @@ import { AuthProvider }     from './features/auth';
 // CupRoundAdvancerListener     — `match.completed` → fill bracket + insert next-round fixture
 // SeasonEnactmentListener      — `season.ended`    → apply winning focuses across every team
 // RefereeNarrativeListener     — `match.completed` → write the named-referee narrative
+// MemoryWriteListener          — `match.completed` / `season.ended` /
+//                                 `architect.intervened` → append structured
+//                                 memory rows to entity_memories (no LLM)
 import { WagerSettlementListener }  from './features/betting';
 import { CupRoundAdvancerListener } from './features/match';
 import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
+import { MemoryWriteListener }      from './features/agents';
 
 // ── Routes (code-split) ───────────────────────────────────────────────────────
 // Each page is loaded with React.lazy so Vite emits a separate chunk per
@@ -112,6 +116,7 @@ createRoot(document.getElementById('root')!).render(
         <CupRoundAdvancerListener />
         <SeasonEnactmentListener />
         <RefereeNarrativeListener />
+        <MemoryWriteListener />
         <AuthProvider>
           <BrowserRouter basename={import.meta.env.BASE_URL}>
             {/* Suspense boundary: lazy page chunks resolve asynchronously.
