@@ -18,19 +18,20 @@
 // PALETTE: mirrors Home — three brand tokens (dust / abyss / flare).
 // The page uses only the shared COLORS object — no new hex literals.
 
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
-import { LEAGUES, buildStandingsRows } from '../data/leagueData';
+import { LEAGUES } from '../data/leagueData';
 import type { League } from '../data/leagueData';
-import { computeStandings } from '../lib/matchResultsService';
+import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
 
 // ── Derived row type ─────────────────────────────────────────────────────────
-// computeStandings returns its own internal StandingsRow shape (gf/ga/gd
-// present, no teamLink) which differs from leagueData.StandingsRow.  Deriving
-// from ReturnType keeps this component in sync automatically if the service
-// type ever changes, and avoids duplicating the field list here.
-type ComputedStandingsRow = ReturnType<typeof computeStandings>[number];
+// fetchLeagueStandings returns the canonical StandingsRow shape sourced from
+// Supabase.  Stamping a 1-based position on each row keeps the rendered
+// leader strip identical to the previous synchronous path.
+type PositionedStandingsRow = LeagueStandingsRow & { position: number };
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // COLORS is the source of truth; we destructure into single-letter aliases
@@ -57,13 +58,58 @@ const CARD_DESCRIPTION_MAX_CHARS = 320;
 /**
  * Leagues index page.
  *
- * Renders a 2 × 2 grid of league cards.  Each card pulls its own
- * computed standings (zeroed pre-season → live numbers as fixtures
- * complete) so the top-3 list reflects current state without any
- * additional fetch — buildStandingsRows + computeStandings are pure
- * and synchronous.
+ * Renders a 2 × 2 grid of league cards.  Standings for every league are
+ * fetched in parallel from Supabase via `fetchLeagueStandings` on mount,
+ * then the top CARD_TOP_N rows of each league are passed down to its
+ * card.  Cards display placeholder rows during the fetch so card heights
+ * stay stable.
+ *
+ * The previous synchronous path (computeStandings + buildStandingsRows
+ * reading from localStorage) silently surfaced stale data on any browser
+ * that hadn't watched matches recently — the Supabase-backed worker
+ * never writes to that cache.  This page now mirrors LeagueDetail's
+ * async fetch so all standings surfaces share one source of truth.
  */
 export default function Leagues() {
+  const db = useSupabase();
+
+  // ── Per-league top-N standings state ──────────────────────────────────────
+  // Keyed by league id so each card looks up its own slice without
+  // re-scanning the array.  `null` (the initial value) means "fetch in
+  // flight" so cards can render the em-dash placeholder; once resolved,
+  // an empty array means "league has no fixtures yet".
+  const [standingsByLeague, setStandingsByLeague] = useState<
+    Record<string, PositionedStandingsRow[] | null>
+  >(() => Object.fromEntries(LEAGUES.map((l) => [l.id, null])));
+
+  useEffect(() => {
+    let cancelled = false;
+    // Fire all four league fetches in parallel — independent network
+    // round-trips, each ~1 RTT, so Promise.all keeps total latency at
+    // single-fetch cost rather than 4× serial.
+    Promise.all(
+      LEAGUES.map((league) =>
+        fetchLeagueStandings(db, league.id)
+          .then((rows) => ({
+            id: league.id,
+            rows: rows.map((row, idx) => ({ ...row, position: idx + 1 })),
+          }))
+          .catch((err) => {
+            console.warn(`[Leagues] standings fetch failed for ${league.id}:`, err);
+            return { id: league.id, rows: [] as PositionedStandingsRow[] };
+          }),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      setStandingsByLeague((prev) => {
+        const next = { ...prev };
+        for (const { id, rows } of results) next[id] = rows;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [db]);
+
   return (
     <div style={{
       background: ABYSS,
@@ -98,8 +144,12 @@ export default function Leagues() {
               marginTop: 24,
             }}
           >
-            {LEAGUES.map((league: any) => (
-              <LeagueCard key={league.id} league={league} />
+            {LEAGUES.map((league) => (
+              <LeagueCard
+                key={league.id}
+                league={league}
+                standings={standingsByLeague[league.id] ?? null}
+              />
             ))}
           </div>
         </Container>
@@ -120,6 +170,12 @@ export default function Leagues() {
 
 interface LeagueCardProps {
   league: League;
+  /**
+   * Full standings rows fetched from Supabase by the parent.  `null`
+   * means the fetch is still in flight — the card shows placeholder
+   * rows in that case.  An empty array means "no fixtures yet".
+   */
+  standings: PositionedStandingsRow[] | null;
 }
 
 /**
@@ -134,21 +190,19 @@ interface LeagueCardProps {
  * The card itself is a clickable region (`<Link>` wrapping the chrome)
  * so anywhere on the card navigates to the detail page — the footer
  * link is a redundant cue for keyboard / screen-reader users.
+ *
+ * Standings are passed in from the parent (Leagues) which fetched them
+ * in parallel via `fetchLeagueStandings`.  This card just slices to the
+ * top CARD_TOP_N and renders; placeholders cover the pre-fetch state.
  */
-function LeagueCard({ league }: LeagueCardProps) {
-  // Standings are computed synchronously from buildStandingsRows (zeroed
-  // base) + computeStandings (overlay real results).  The top CARD_TOP_N
-  // rows drive the card's "leaders" strip without any fetch.
-  // buildStandingsRows returns leagueData.StandingsRow[] which carries a
-  // teamLink field and no index signature.  computeStandings only needs
-  // { id, team, [key: string]: unknown }, so the cast is safe — no data
-  // is dropped, only the excess typed fields are widened.
-  const topRows = computeStandings(
-    league.id,
-    buildStandingsRows(league.id) as unknown as Parameters<typeof computeStandings>[1],
-  )
-    .slice(0, CARD_TOP_N)
-    .map((row, idx) => ({ ...row, position: idx + 1 }));
+function LeagueCard({ league, standings }: LeagueCardProps) {
+  // ── Top-N leader slice ────────────────────────────────────────────────────
+  // `standings === null` → fetch in flight; show placeholders.
+  // `standings === []`   → league has no completed fixtures yet; also show
+  //                        placeholders so card height stays stable.
+  // Otherwise slice the first CARD_TOP_N rows for the leaders strip.
+  const topRows: PositionedStandingsRow[] =
+    standings && standings.length > 0 ? standings.slice(0, CARD_TOP_N) : [];
 
   const excerpt = truncateAtWord(league.description ?? '', CARD_DESCRIPTION_MAX_CHARS);
 
@@ -265,9 +319,10 @@ function LeagueCard({ league }: LeagueCardProps) {
 }
 
 interface LeaderRowProps {
-  // position is stamped on by the .map() caller; all other fields come
-  // directly from computeStandings so the shape stays in sync automatically.
-  row: ComputedStandingsRow & { position: number };
+  // position is stamped on by the parent fetch effect; all other fields
+  // come directly from fetchLeagueStandings so the shape stays in sync
+  // automatically with the canonical Supabase-sourced standings row.
+  row: PositionedStandingsRow;
 }
 
 /**
