@@ -1,24 +1,30 @@
 // ── roadmap/ui/RoadmapCard.tsx ──────────────────────────────────────────────
-// A single item rendered inside a kanban column.
+// A single item rendered inside a kanban column.  Two sources, one card:
+//
+//   * `kind === 'supabase'` — curator-authored item with full admin
+//     chrome (move / advance / edit / delete) when the viewer is admin.
+//   * `kind === 'bd'`       — read-only mirror of a bd issue.  No
+//     mutation buttons regardless of admin state, since the dashboard
+//     never writes back to bd.  Source badge ("bd-xxx") is rendered.
 //
 // LAYOUT (top to bottom):
-//   1. Tiny header row — priority chip (P0..P3) + effort badge + pillar tag.
+//   1. Tiny header row — priority chip (P0..P3) + effort/type badge +
+//                        pillar / source-of-truth tag.
 //   2. Title — primary readable surface.
-//   3. Tag chips — free-form categorisation.
-//   4. Footer — "updated <ago>" micro-line + admin actions cluster.
-//
-// ADMIN ACTIONS (only rendered when `isAdmin` is true):
-//   * ▲ / ▼  — reprioritise within column (disabled at edges).
-//   * status-cycle button (e.g. "→ Planned") — advances one column right.
-//   * edit / delete — open the editor or confirm-delete inline.
-//
-// The card itself is non-interactive for anonymous viewers — clicking the
-// title is a no-op rather than a link, since there's no per-item detail
-// page (yet).  Admins can click "Edit" to open the modal.
+//   3. Notes/description preview.
+//   4. Tag chips (Supabase) or assignee chip (bd).
+//   5. Source micro-line (e.g. "src: notion", "bd-du4 · closed").
+//   6. Footer — "updated <ago>" + admin actions (Supabase only).
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { COLORS } from '../../../components/Layout';
-import { EFFORT_LABELS, PILLAR_LABELS, STATUS_LABELS, type RoadmapItem, type RoadmapStatus } from '../types';
+import {
+  EFFORT_LABELS,
+  PILLAR_LABELS,
+  STATUS_LABELS,
+  type BoardItem,
+  type RoadmapStatus,
+} from '../types';
 import { priorityBucket } from '../logic/priorityOrder';
 
 // ── Style constants ────────────────────────────────────────────────────────
@@ -48,9 +54,10 @@ const PRIORITY_COLOURS: Record<ReturnType<typeof priorityBucket>, string> = {
   P3: COLORS.dust50,
 };
 
-// ── Status progression for the "advance" button ────────────────────────────
+// ── Status progression for the "advance" button (Supabase only) ────────────
 // The advance button cycles one column to the right.  Shipped is terminal
-// (no next status); the button is hidden on shipped cards.
+// (no next status); the button is hidden on shipped cards.  bd cards never
+// show the advance button — bd state is canonical, the dashboard reflects.
 const NEXT_STATUS: Partial<Record<RoadmapStatus, RoadmapStatus>> = {
   idea: 'planned',
   planned: 'in_progress',
@@ -58,32 +65,35 @@ const NEXT_STATUS: Partial<Record<RoadmapStatus, RoadmapStatus>> = {
 };
 
 interface RoadmapCardProps {
-  /** The item to render. */
-  item: RoadmapItem;
-  /** Whether the viewer is an admin — controls visibility of write actions. */
+  /** The unified board item (Supabase or bd). */
+  item: BoardItem;
+  /** Whether the viewer is an admin — controls visibility of write actions on Supabase items. */
   isAdmin: boolean;
-  /** Disable the ▲ button (target is already at top of column). */
+  /** Disable the ▲ button (Supabase only, target already at top of column). */
   canMoveUp: boolean;
-  /** Disable the ▼ button (target is already at bottom of column). */
+  /** Disable the ▼ button (Supabase only, target already at bottom of column). */
   canMoveDown: boolean;
-  /** Move target one position up within its column.  Admin-only. */
+  /** Move target one position up within its column.  Supabase + admin only. */
   onMoveUp: () => void;
-  /** Move target one position down within its column.  Admin-only. */
+  /** Move target one position down within its column.  Supabase + admin only. */
   onMoveDown: () => void;
-  /** Move the target to its next-status column (idea→planned, etc.).  Admin-only. */
+  /** Move the target to its next-status column.  Supabase + admin only. */
   onAdvanceStatus: () => void;
-  /** Open the editor modal seeded with this item.  Admin-only. */
+  /** Open the editor modal seeded with this item.  Supabase + admin only. */
   onEdit: () => void;
-  /** Delete the item (with confirm).  Admin-only. */
+  /** Delete the item (with confirm).  Supabase + admin only. */
   onDelete: () => void;
 }
 
 /**
- * Render a single roadmap item as a kanban card.
+ * Render a single roadmap card.
  *
- * The card is read-only for non-admins (`isAdmin === false`); the action
- * cluster collapses to just the "updated <ago>" micro-line.  Admins see
- * the full set of move / advance / edit / delete controls.
+ * Branches on `item.kind`:
+ *   * `'supabase'` → renders priority / effort / pillar / tags / source
+ *     chips, plus the admin action cluster when `isAdmin` is true.
+ *   * `'bd'`       → renders priority / type / "bd" source chips, a
+ *     read-only assignee line, and the canonical bd id badge.  No
+ *     mutation buttons.
  *
  * @returns A card panel suitable for stacking inside a column.
  */
@@ -100,12 +110,22 @@ export function RoadmapCard({
 }: RoadmapCardProps) {
   const bucket = priorityBucket(item.priority);
   const nextStatus = NEXT_STATUS[item.status];
+  const showAdminActions = item.kind === 'supabase' && isAdmin;
 
+  // The card surface is identical across sources; only the inner chips
+  // differ.  Source badge sits on the right of the header row so the
+  // priority chip always anchors the left.
   return (
     <article
       style={{
         background: CARD_BG,
         border: `1px solid ${BORDER}`,
+        // bd cards get a subtle quantum-tinted left edge to read at a
+        // glance as "linked / mirrored" without overwhelming the
+        // dust/abyss palette.
+        borderLeft: item.kind === 'bd'
+          ? `2px solid ${COLORS.quantum}`
+          : `1px solid ${BORDER}`,
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
@@ -125,14 +145,40 @@ export function RoadmapCard({
         >
           {bucket}
         </span>
-        {item.effort && (
+
+        {/* Effort/issue-type badge — Supabase uses XS/S/M/L; bd uses its
+            issue_type (feature / task / bug).  Same visual slot either way. */}
+        {item.kind === 'supabase' && item.item.effort && (
           <span style={{ ...CHIP_FONT, color: COLORS.dust70, border: `1px solid ${BORDER}`, padding: '2px 6px' }}>
-            {EFFORT_LABELS[item.effort]}
+            {EFFORT_LABELS[item.item.effort]}
           </span>
         )}
-        {item.pillar && (
+        {item.kind === 'bd' && (
+          <span style={{ ...CHIP_FONT, color: COLORS.dust70, border: `1px solid ${BORDER}`, padding: '2px 6px' }}>
+            {item.issue.issue_type}
+          </span>
+        )}
+
+        {/* Pillar (Supabase only — bd has no pillar concept). */}
+        {item.kind === 'supabase' && item.item.pillar && (
           <span style={{ ...CHIP_FONT, color: COLORS.quantum, padding: '2px 0' }}>
-            {PILLAR_LABELS[item.pillar]}
+            {PILLAR_LABELS[item.item.pillar]}
+          </span>
+        )}
+
+        {/* Source-of-truth badge — pushed to the far right via flex grow. */}
+        {item.kind === 'bd' && (
+          <span
+            style={{
+              ...CHIP_FONT,
+              color: COLORS.quantum,
+              border: `1px solid ${COLORS.quantum}`,
+              padding: '2px 6px',
+              marginLeft: 'auto',
+            }}
+            title="Mirrored from .beads/issues.jsonl"
+          >
+            bd · {item.issue.id}
           </span>
         )}
       </header>
@@ -142,17 +188,13 @@ export function RoadmapCard({
         {item.title}
       </h3>
 
-      {/* ── Notes preview (first 120 chars, no markdown rendering) ──── */}
-      {item.notes && (
-        <p style={{ fontSize: 12, color: COLORS.dust70, margin: 0, lineHeight: 1.5 }}>
-          {item.notes.length > 120 ? `${item.notes.slice(0, 120)}…` : item.notes}
-        </p>
-      )}
+      {/* ── Description / notes preview ─────────────────────────────── */}
+      {renderPreview(item)}
 
-      {/* ── Tag chips ───────────────────────────────────────────────── */}
-      {item.tags.length > 0 && (
+      {/* ── Tag chips (Supabase) or assignee (bd) ───────────────────── */}
+      {item.kind === 'supabase' && item.item.tags.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {item.tags.map((tag) => (
+          {item.item.tags.map((tag) => (
             <span
               key={tag}
               style={{
@@ -168,13 +210,25 @@ export function RoadmapCard({
           ))}
         </div>
       )}
+      {item.kind === 'bd' && item.issue.assignee && (
+        <div style={{ ...CHIP_FONT, fontSize: 9, color: COLORS.dust50 }}>
+          @ {item.issue.assignee}
+        </div>
+      )}
 
       {/* ── Source / bd link micro-line ─────────────────────────────── */}
-      {(item.source || item.bd_issue_id) && (
+      {item.kind === 'supabase' && (item.item.source || item.item.bd_issue_id) && (
         <div style={{ ...CHIP_FONT, fontSize: 9, color: COLORS.dust50 }}>
-          {item.source && <span>src: {item.source}</span>}
-          {item.source && item.bd_issue_id && <span style={{ margin: '0 6px' }}>·</span>}
-          {item.bd_issue_id && <span>bd: {item.bd_issue_id}</span>}
+          {item.item.source && <span>src: {item.item.source}</span>}
+          {item.item.source && item.item.bd_issue_id && <span style={{ margin: '0 6px' }}>·</span>}
+          {item.item.bd_issue_id && <span>bd: {item.item.bd_issue_id}</span>}
+        </div>
+      )}
+      {item.kind === 'bd' && item.issue.close_reason && (
+        <div style={{ ...CHIP_FONT, fontSize: 9, color: COLORS.dust50, lineHeight: 1.4 }}>
+          ▣ {item.issue.close_reason.length > 140
+                ? `${item.issue.close_reason.slice(0, 140)}…`
+                : item.issue.close_reason}
         </div>
       )}
 
@@ -184,7 +238,7 @@ export function RoadmapCard({
           Updated {timeAgo(item.updated_at)}
         </span>
 
-        {isAdmin && (
+        {showAdminActions && (
           <div style={{ display: 'flex', gap: 4 }}>
             <CardButton onClick={onMoveUp} disabled={!canMoveUp} ariaLabel="Move up">▲</CardButton>
             <CardButton onClick={onMoveDown} disabled={!canMoveDown} ariaLabel="Move down">▼</CardButton>
@@ -202,6 +256,27 @@ export function RoadmapCard({
   );
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Render the description/notes preview for either source.  Supabase uses
+ * its `notes` column; bd uses the issue `description`.  Truncated at
+ * 140 chars to keep cards skim-friendly.
+ *
+ * @param item - The unified board item.
+ * @returns    A paragraph element, or `null` if there is nothing to show.
+ */
+function renderPreview(item: BoardItem): ReactNode {
+  const body = item.kind === 'supabase' ? item.item.notes : item.issue.description;
+  if (!body) return null;
+  const shown = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  return (
+    <p style={{ fontSize: 12, color: COLORS.dust70, margin: 0, lineHeight: 1.5 }}>
+      {shown}
+    </p>
+  );
+}
+
 // ── CardButton ─────────────────────────────────────────────────────────────
 
 interface CardButtonProps {
@@ -209,7 +284,7 @@ interface CardButtonProps {
   disabled?: boolean;
   ariaLabel: string;
   danger?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 /**
@@ -241,15 +316,13 @@ function CardButton({ onClick, disabled, ariaLabel, danger, children }: CardButt
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
 /**
  * Convert an ISO timestamp to a short "5m ago" / "3h ago" / "2d ago"
  * string.  Falls back to the ISO date for anything over 60 days so the
  * card always shows *something* legible.  Pure formatter — no Intl
  * because the locale-free output keeps the retro mono aesthetic.
  *
- * @param iso - ISO-8601 timestamp from Postgres.
+ * @param iso - ISO-8601 timestamp from Postgres or bd.
  * @returns   Short human-readable relative time.
  */
 function timeAgo(iso: string): string {

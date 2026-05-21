@@ -27,6 +27,10 @@ export type {
   RoadmapStatus,
   RoadmapEffort,
   RoadmapPillar,
+  BoardItem,
+  SupabaseBoardItem,
+  BdBoardItem,
+  BoardItemCommon,
 } from './types';
 
 export {
@@ -41,11 +45,19 @@ export {
 // ── Logic (pure TS, no React / no Supabase) ────────────────────────────────
 export {
   sortByPriority,
+  sortBoardItemsByPriority,
   groupByStatus,
+  groupBoardItemsByStatus,
   reprioritizeNeighbours,
   priorityBucket,
 } from './logic/priorityOrder';
 export type { PrioritySwap, PriorityBucket } from './logic/priorityOrder';
+
+// ── Logic — bd ↔ kanban translation ────────────────────────────────────────
+// Pure mappers from bd status / priority into the dashboard's vocabulary.
+// Exported so future tooling (e.g. an admin "import from bd" button) can
+// reuse the same translations without re-encoding the table.
+export { mapBdStatus, mapBdPriority } from './logic/bdMapping';
 
 // ── API (Supabase queries, injected client, Zod-validated) ─────────────────
 export {
@@ -56,6 +68,12 @@ export {
   swapPriority,
 } from './api/items';
 export type { CreateItemInput } from './api/items';
+
+// ── API — bd snapshot (static asset fetch, Zod-validated) ──────────────────
+// Read-only mirror of bd issues, generated at build time by
+// `scripts/build-bd-snapshot.mjs`.
+export { fetchBdSnapshot } from './api/bdSnapshot';
+export type { BdIssue, BdSnapshot } from './api/bdSnapshot';
 
 // ── UI (React components) ─────────────────────────────────────────────────
 // `RoadmapBoard` is the only component the page wrapper mounts directly;

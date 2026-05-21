@@ -200,6 +200,18 @@ export default tseslint.config(
     },
   },
 
+  // ── Build-time helper scripts ──────────────────────────────────────────────
+  // Anything under `scripts/` runs in Node before the bundler ever loads —
+  // typically wired to `predev` / `prebuild` in package.json (see
+  // `scripts/build-bd-snapshot.mjs`).  They need Node globals (console,
+  // process) but not browser ones.
+  {
+    files: ['scripts/**/*.{js,mjs,cjs,ts}'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+
   // ── Prettier compatibility ─────────────────────────────────────────────────
   // MUST be last — disables any ESLint rules that conflict with Prettier
   // formatting. Prettier owns formatting; ESLint owns correctness.
