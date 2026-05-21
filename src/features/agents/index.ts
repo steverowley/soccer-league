@@ -9,7 +9,8 @@
 // Surface by phase:
 //   Phase 0 — commentary corpus (`pickCommentary`, pool builders).
 //   Phase 1 — persona / memory / snippet types + retrieval + composer.
-//   Phase 2+ — memory writer, decision resolvers, enricher (TBD).
+//   Phase 2 — memory writer + bus listener.
+//   Phase 3 — persona factory (deterministic seeding for backfill).
 
 // ── Types ───────────────────────────────────────────────────────────────────
 // Shared shapes for commentary + voice corpus.  Decision-layer types
@@ -100,3 +101,15 @@ export type { MatchCompletionContext } from './logic/memoryWriter';
 // to match.completed / season.ended / architect.intervened and writes
 // the resulting memory rows.  Renders null.
 export { MemoryWriteListener } from './ui/MemoryWriteListener';
+
+// ── Logic — persona factory (Phase 3) ───────────────────────────────────────
+// Deterministic persona generator.  Same inputs always yield the same
+// PersonaInsert — the Phase 3 backfill script (scripts/seed-personas.ts)
+// and any new-entity creation flow share this single source of truth.
+export { archetypeForKind, createPersona } from './logic/personaFactory';
+export type {
+  CreatePersonaArgs,
+  FactoryEntityInput,
+  FactoryRelationshipInput,
+  FactoryTraitInput,
+} from './logic/personaFactory';
