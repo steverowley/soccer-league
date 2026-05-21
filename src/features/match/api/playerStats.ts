@@ -22,7 +22,7 @@
 //   rather than a true participation log.  Closing that gap needs either
 //   (a) the worker persisting all 22 starters with zero-stat rows or
 //   (b) a dedicated `match_lineups` table; both require a backfill of
-//   historical matches and are tracked as a separate beads issue.  The
+//   historical matches and are tracked in beads issue isl-pfm.  The
 //   UI copy on PlayerDetail's "Recent Stat Lines" section reflects this.
 //
 // LAYER BOUNDARY

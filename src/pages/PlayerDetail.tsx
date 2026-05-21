@@ -285,7 +285,7 @@ export default function PlayerDetail() {
             saves logged — never get a row, so this list reads as "matches
             where this player put a number on the board" rather than a
             full appearance log.  Backfilling true participation needs a
-            new `match_lineups` table (tracked in beads). */}
+            new `match_lineups` table (tracked in beads isl-pfm). */}
         <section aria-labelledby="matches-heading">
           <Container>
             <div style={{ padding: '40px 0' }}>
