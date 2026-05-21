@@ -30,6 +30,7 @@ const NAV_LINKS = [
   { label: 'News',    to: '/news'    },
   { label: 'Idols',   to: '/idols'   },
   { label: 'Voting',  to: '/voting'  },
+  { label: 'Roadmap', to: '/roadmap' },
 ];
 
 /**
