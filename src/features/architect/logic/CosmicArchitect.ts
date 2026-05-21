@@ -13,6 +13,7 @@ import type {
   RivalryThread,
 } from '../types';
 import { emptyLore } from './loreStore';
+import type { ShadowDistribution } from '../api/shadowDistribution';
 import { CLAUDE_MODEL } from '../../../constants.js';
 import { rnd, rndI } from '../../../shared/utils/random';
 
@@ -214,6 +215,24 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
    */
   idolRanks: Array<{ name: string; globalRank: number }> = [];
 
+  /**
+   * Pre-match shadow distribution snapshot loaded by
+   * `prepareArchitectForMatch()` from the `shadow_match_results` table.
+   *
+   * WHY HERE: Phase 11 introduced shadow timelines — alternate
+   * outcomes the canonical match might never produce.  The council
+   * reads the distribution before kickoff to decide whether the
+   * canonical story needs nudging (e.g. all 5 shadows say home wins
+   * 3-0, but the lore wants an upset — surface that tension).  The
+   * field is null when no shadows exist for the match (early-season,
+   * out-of-window, or fixture not yet enqueued).
+   *
+   * SYNCHRONOUS READ: Like idolRanks, this is consulted on the hot
+   * path inside `getContext()` and must never trigger I/O.  Hydrated
+   * once at kickoff; immutable for the duration of the match.
+   */
+  shadowDistribution: ShadowDistribution | null = null;
+
   constructor(
     apiKey: string,
     { homeTeam, awayTeam, homeManager, awayManager, stadium, weather }: {
@@ -255,6 +274,33 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
    */
   setIdolContext(ranks: Array<{ name: string; globalRank: number }>): void {
     this.idolRanks = ranks;
+  }
+
+  // ── Shadow distribution context (Phase 11.2) ──────────────────────────────
+
+  /**
+   * Inject the pre-match shadow-distribution summary so the council's
+   * deliberation paths can reference alternate-timeline outcomes
+   * without hitting the DB.  Called once from `prepareArchitectForMatch`
+   * after loading `shadow_match_results`.  Null is a no-op — the
+   * architect proceeds without shadow shading.
+   *
+   * @param dist  Aggregated shadow summary or null when none exist.
+   */
+  setShadowDistribution(dist: ShadowDistribution | null): void {
+    this.shadowDistribution = dist;
+  }
+
+  /**
+   * Synchronous accessor used by future council deliberation paths and
+   * by tests that want to verify the injection wired through.  Returns
+   * the snapshot exactly as injected — no defensive copy because the
+   * value is treated as immutable for the match duration.
+   *
+   * @returns  The injected shadow distribution, or null when none.
+   */
+  getShadowDistribution(): ShadowDistribution | null {
+    return this.shadowDistribution;
   }
 
   // ── Private API wrapper ──────────────────────────────────────────────────

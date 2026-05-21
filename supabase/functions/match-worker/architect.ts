@@ -64,6 +64,10 @@
 
 // @ts-ignore — Deno-only import resolved at deploy time.
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
+import {
+  loadShadowDistribution,
+  type ShadowDistribution,
+} from './shadowDistribution.ts';
 
 // ── Random helpers (local, intentionally tiny) ─────────────────────────────
 
@@ -565,6 +569,15 @@ export class CosmicArchitect {
   sealedFate: SealedFate | null = null;
 
   /**
+   * Pre-match shadow distribution snapshot loaded by
+   * `prepareArchitectForMatch()` from the `shadow_match_results` table
+   * (Phase 11.2).  Null when no shadows exist for the match.  Read
+   * synchronously by future council deliberation paths; never overwrite
+   * mid-match (synchronous reads would silently desync).
+   */
+  shadowDistribution: ShadowDistribution | null = null;
+
+  /**
    * Construct an Architect for a single match.
    *
    * Passing an empty `apiKey` puts the instance in fallback mode: omens
@@ -772,6 +785,28 @@ export class CosmicArchitect {
    * runs as today).  LLM / parse failures are warn-logged and leave the
    * three fields at their initial values.  Match completion is NEVER blocked.
    */
+  /**
+   * Inject the pre-match shadow-distribution summary.  Mirrors the src/
+   * setter — kept on the worker copy so council deliberation paths that
+   * run from this architect instance have synchronous access.  Null is a
+   * no-op (the council deliberates without shadow shading).
+   *
+   * @param dist  Summary loaded by `loadShadowDistribution`, or null.
+   */
+  setShadowDistribution(dist: ShadowDistribution | null): void {
+    this.shadowDistribution = dist;
+  }
+
+  /**
+   * Synchronous accessor for the injected shadow distribution.  Used by
+   * tests + future council prompts; never triggers I/O.
+   *
+   * @returns  The injected summary, or null when none was loaded.
+   */
+  getShadowDistribution(): ShadowDistribution | null {
+    return this.shadowDistribution;
+  }
+
   async seedPreMatchDecisions(): Promise<void> {
     if (!this.client) return;
 
@@ -1152,6 +1187,12 @@ export async function prepareArchitectForMatch(
     stadium: ArchitectStadium | null;
     weather: string;
     loreStore?: LoreStore;
+    /**
+     * Match UUID — when present, the helper loads the pre-computed shadow
+     * distribution for this match and injects it onto the architect via
+     * `setShadowDistribution()`.  Omitted → shadow shading is skipped.
+     */
+    matchId?: string;
   },
 ): Promise<PreparedArchitect> {
   const loreStore = opts.loreStore ?? new LoreStore(supabase);
@@ -1181,6 +1222,24 @@ export async function prepareArchitectForMatch(
     await architect.seedPreMatchDecisions();
   } catch (e) {
     console.warn('[prepareArchitectForMatch] seed failed; no edict/intentions/fate:', (e as Error)?.message ?? e);
+  }
+
+  // ── Phase 11.2 shadow distribution load ─────────────────────────────────
+  // Best-effort fetch of pre-computed shadow_match_results for this
+  // fixture, aggregated into a compact summary the council reads via
+  // architect.getShadowDistribution().  Failures (or no shadows in the
+  // table) leave the field at null and the architect proceeds without
+  // shadow shading — kickoff must never be blocked on this lookup.
+  if (opts.matchId) {
+    try {
+      const distribution = await loadShadowDistribution(supabase, opts.matchId);
+      architect.setShadowDistribution(distribution);
+    } catch (e) {
+      console.warn(
+        '[prepareArchitectForMatch] shadow distribution load failed:',
+        (e as Error)?.message ?? e,
+      );
+    }
   }
 
   return { architect, loreStore };
