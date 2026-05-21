@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intergalactic Soccer League</title>
     <script>
-      const path = window.location.pathname.replace(/\/soccer-league\/?$/, '');
-      if (path && path !== '/') {
-        sessionStorage.redirect = path + window.location.search;
+      const path = window.location.pathname.replace(/^\/soccer-league\/?/, '') || '/';
+      if (path !== '/') {
+        sessionStorage.redirect = '/' + path + window.location.search;
       }
       window.location.href = '/soccer-league/';
     </script>
