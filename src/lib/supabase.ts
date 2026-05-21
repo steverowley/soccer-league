@@ -31,13 +31,28 @@ export async function getSeasons() {
   return data ?? [];
 }
 
+/**
+ * Fetch the currently active season.
+ *
+ * The active season drives UI elements (hero stats, fixture listings, voting
+ * windows).  If no season has `is_active = true` in the database (common at
+ * startup or between seasons), returns `null` rather than throwing so callers
+ * can render graceful placeholders.
+ *
+ * @returns Active season row with year, current_round, total_rounds, or null.
+ */
 export async function getActiveSeason() {
   const { data, error } = await supabase
     .from('seasons')
     .select('*')
     .eq('is_active', true)
     .single();
-  if (error) throw error;
+  if (error) {
+    // No active season found (common at startup or between seasons).
+    // Return null so callers can render a placeholder without throwing.
+    console.warn('[getActiveSeason] no active season found:', error.message);
+    return null;
+  }
   return data;
 }
 
