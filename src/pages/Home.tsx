@@ -52,8 +52,8 @@ import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
-import { LEAGUES, buildStandingsRows } from '../data/leagueData';
-import { computeStandings } from '../lib/matchResultsService';
+import { LEAGUES } from '../data/leagueData';
+import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
 
 // ── Palette aliases ─────────────────────────────────────────────────────────
 // The hex constants live in components/Layout.jsx as the frozen COLORS
@@ -121,28 +121,38 @@ export default function Home() {
   const featuredLive = liveMatches[0] ?? null;
 
   // ── Featured standings ────────────────────────────────────────────────────
-  // Rocky Inner is the default featured league on Home.  computeStandings
-  // sorts by points DESC + GD tiebreak; we stamp a 1-based position on
-  // each row so the renderer can show the 3-tier pipe (dust top-3 /
-  // none middle / flare bottom-2).
+  // Rocky Inner is the default featured league on Home.  Standings are
+  // fetched from Supabase (completed matches in this league's competitions)
+  // and sorted by points DESC → GD DESC → GF DESC.  We stamp a 1-based
+  // position on each row so the renderer can show the 3-tier pipe
+  // (dust top-3 / none middle / flare bottom-2).
+  //
+  // Loaded asynchronously via fetchLeagueStandings — Home renders a
+  // placeholder strip while pending so we don't paint zeros that get
+  // replaced 200ms later.
   const featuredLeague = LEAGUES[0]!;
-  const standingsRows  = computeStandings(
-    featuredLeague.id,
-    buildStandingsRows(featuredLeague.id) as any,
-  ).map((row: any, idx: number) => ({
-    id: row.id,
-    position: idx + 1,
-    team: row.team,
-    club: row.team,
-    team_link: row.teamLink,
-    played: row.played,
-    wins: row.wins,
-    draws: row.draws,
-    loses: row.loses,
-    gd: row.gd,
-    points: row.points,
-    form: row.form,
-  }));
+  const [standingsRows, setStandingsRows] = useState<
+    Array<LeagueStandingsRow & { position: number; club: string; team_link: string }>
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLeagueStandings(db, featuredLeague.id)
+      .then((rows) => {
+        if (cancelled) return;
+        setStandingsRows(rows.map((row, idx) => ({
+          ...row,
+          position:  idx + 1,
+          // StandingsTable accepts both `team` and `club` for the label;
+          // keep the duplicated key so any consumer that reads `club`
+          // continues to work without prop edits.
+          club:      row.team,
+          team_link: row.teamLink,
+        })));
+      })
+      .catch((err) => { console.warn('[Home] standings fetch failed:', err); });
+    return () => { cancelled = true; };
+  }, [db, featuredLeague.id]);
 
   return (
     <div style={{
