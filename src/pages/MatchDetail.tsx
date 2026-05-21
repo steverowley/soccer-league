@@ -872,14 +872,16 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   // wall-clock latency to the slower of the two.  Skipped for cancelled and
   // pre-kickoff scheduled matches because the empty section won't render.
   //
-  // Merge-on-receive (not replace): a Realtime row can land before the initial
-  // fetch settles — the subscription effect mounts in parallel with this one.
-  // Replacing would clobber any rows the subscription already delivered, so we
-  // union by id and re-sort to guarantee both sources flow through the same
-  // filterEventsByElapsedMinute pipe on every tick.
+  // Reset-on-match-change: when the user navigates between /matches/:a and
+  // /matches/:b without the component unmounting (client-side routing), the
+  // `events` state from match A would otherwise leak into match B's feed —
+  // dedup-by-id won't catch them because the ids differ.  Clearing first
+  // guarantees a clean slate, so the fetched rows can be assigned directly
+  // (the Realtime stream still merges its own arrivals).
   useEffect(() => {
     if (!showSection || !match?.id) return undefined;
     let cancelled = false;
+    setEvents([]);
     setLoaded(false);
     setLoadError(null);
     Promise.all([
@@ -888,6 +890,8 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
     ])
       .then(([evRows, durSeconds]) => {
         if (cancelled) return;
+        // Merge against current state (not []) so a Realtime row that landed
+        // between the setEvents([]) above and this resolution is preserved.
         setEvents((prev) => mergeAndSortEvents(prev, evRows));
         setDuration(durSeconds);
         setLoaded(true);

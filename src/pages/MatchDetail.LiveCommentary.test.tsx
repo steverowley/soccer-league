@@ -411,6 +411,62 @@ describe('LiveCommentary — paced live viewer', () => {
     expect(mock.removeChannel).toHaveBeenCalledTimes(1);
   });
 
+  // ── Scenario 4: Cross-match navigation — no stale event leak ───────────────
+  // When React Router navigates between /matches/:a and /matches/:b without
+  // unmounting <MatchDetail>, the `events` state persists across the prop
+  // change.  The initial fetch effect must clear state on match.id change
+  // so rows from match A don't bleed into match B's feed (dedup-by-id can't
+  // help — the two matches' event ids never collide).  This test exercises
+  // exactly that swap and asserts B's feed contains only B's events.
+
+  it('Scenario 4: cross-match navigation — clears stale events when match.id changes', async () => {
+    const mock = makeQueryMock();
+    // 60 s after kickoff → elapsed minute 9 @ 600 s pacing.  Same kickoff
+    // metadata for both matches keeps the scheduling effect simple — only
+    // the event log differs.
+    vi.setSystemTime(new Date(KICKOFF_MS + 60_000));
+
+    // Match A: a single early event.
+    const matchAEvent = ev({
+      id: 'a-event', match_id: 'mA', minute: 3,
+      payload: { commentary: 'MATCH A EVENT' },
+    });
+    mock.queue.push('match_events', [matchAEvent]);
+    queueDurationChain(mock.queue);
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <SupabaseProvider client={mock.db}>
+          <LiveCommentary match={{ id: 'mA', status: 'in_progress', scheduled_at: KICKOFF_ISO }} />
+        </SupabaseProvider>
+      </MemoryRouter>,
+    );
+    await flushEffects();
+    expect(screen.getByText('MATCH A EVENT')).toBeInTheDocument();
+
+    // Now queue match B's fetch responses and swap the match prop — simulates
+    // client-side navigation from /matches/mA to /matches/mB.  Match B has a
+    // different early event; match A's event must NOT appear in the feed.
+    const matchBEvent = ev({
+      id: 'b-event', match_id: 'mB', minute: 4,
+      payload: { commentary: 'MATCH B EVENT' },
+    });
+    mock.queue.push('match_events', [matchBEvent]);
+    queueDurationChain(mock.queue);
+
+    rerender(
+      <MemoryRouter>
+        <SupabaseProvider client={mock.db}>
+          <LiveCommentary match={{ id: 'mB', status: 'in_progress', scheduled_at: KICKOFF_ISO }} />
+        </SupabaseProvider>
+      </MemoryRouter>,
+    );
+    await flushEffects();
+
+    expect(screen.getByText('MATCH B EVENT')).toBeInTheDocument();
+    expect(screen.queryByText('MATCH A EVENT')).not.toBeInTheDocument();
+  });
+
   it('renders nothing for cancelled matches even after kickoff time', async () => {
     const mock = makeQueryMock();
     vi.setSystemTime(new Date(KICKOFF_MS + 60_000));
