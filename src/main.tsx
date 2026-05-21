@@ -205,9 +205,11 @@ createRoot(document.getElementById('root')!).render(
               {/* /admin (Phase B).
                   Admin dashboard: season status, fast-forward controls,
                   fixture browser, and Architect intervention log.  Access
-                  is gated client-side by VITE_ADMIN_USER_IDS; non-admin
-                  visitors see an "Access Denied" surface.  The actual
-                  security boundary is Supabase RLS — this is a dev tool. */}
+                  is gated client-side by `profiles.is_admin` (migration
+                  0032); non-admin visitors and anonymous viewers both
+                  see an "Access Denied" surface.  The actual security
+                  boundary is the server-side admin_reset_season() RPC,
+                  which itself rejects non-admins with HTTP 403. */}
               <Route path="admin"               element={<Admin />} />
 
               {/* /players/:playerId (Phase C).

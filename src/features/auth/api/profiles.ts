@@ -46,6 +46,13 @@ type AnyDb = any;
  * Full profile row schema — what RLS returns for the owning user.
  * Matches the `profiles` table shape from migration 0001_profiles.sql.
  */
+// `is_admin` was added in migration 0032 (NOT NULL DEFAULT false) so every
+// row returned by `select *` carries the column.  RLS on `profiles` only
+// returns the caller's own row, so this flag is private — it never leaks
+// to other users via this schema or the `public_profiles` view (which
+// omits the column entirely).  Parsing it at the boundary means a future
+// rename of the column fails loud here instead of silently disabling the
+// `/admin` gate.
 const ProfileSchema = z.object({
   id: z.string().uuid(),
   username: z.string(),
@@ -54,6 +61,7 @@ const ProfileSchema = z.object({
   credits: z.number().int().min(0),
   last_seen_at: z.string().nullable(),
   created_at: z.string(),
+  is_admin: z.boolean(),
 });
 
 // ── Queries ─────────────────────────────────────────────────────────────────
