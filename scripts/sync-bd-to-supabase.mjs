@@ -129,34 +129,52 @@ async function main() {
   const issues = readIssues();
   const ids    = new Set(issues.map((i) => i.id));
 
+  // ── Empty-input safety ────────────────────────────────────────────────
+  // If the JSONL is missing/empty, an earlier version of this script
+  // would happily delete EVERY existing row as "tombstones," because no
+  // id in the table appears in the (empty) ids set.  In practice that
+  // case is almost always a checkout problem (wrong branch, missing
+  // file) rather than a real "the user emptied bd."  Treat zero parsed
+  // issues as a no-op + loud warning so a misconfigured push can never
+  // wipe the production mirror again.
+  //
+  // To genuinely clear the table, call `TRUNCATE public.bd_issues` from
+  // SQL — out-of-band, intentional, leaves no doubt.
+  if (issues.length === 0) {
+    console.warn(
+      '[bd-sync] parsed 0 issues from .beads/issues.jsonl — refusing to tombstone-delete.',
+    );
+    console.warn(
+      '[bd-sync] if you genuinely want to clear bd_issues, TRUNCATE the table manually.',
+    );
+    process.exit(0);
+  }
+
   const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
   // ── Upsert ─────────────────────────────────────────────────────────────
   // One round-trip — Supabase upserts in a single statement.  Conflict
-  // target is the primary key.  We don't pass `synced_at`; the default
-  // on the column refreshes on every INSERT but not on UPDATE, so we
-  // explicitly stamp it client-side instead so updates also bump.
+  // target is the primary key.  We don't rely on `synced_at`'s default
+  // (it only fires on INSERT), so we stamp it client-side so updates
+  // also bump.
   const now = new Date().toISOString();
   const upsertPayload = issues.map((row) => ({ ...row, synced_at: now }));
 
-  if (upsertPayload.length > 0) {
-    const { error: upsertErr } = await client
-      .from('bd_issues')
-      .upsert(upsertPayload, { onConflict: 'id' });
-    if (upsertErr) {
-      console.error('[bd-sync] upsert failed:', upsertErr.message);
-      process.exit(1);
-    }
+  const { error: upsertErr } = await client
+    .from('bd_issues')
+    .upsert(upsertPayload, { onConflict: 'id' });
+  if (upsertErr) {
+    console.error('[bd-sync] upsert failed:', upsertErr.message);
+    process.exit(1);
   }
 
   // ── Delete tombstones ──────────────────────────────────────────────────
   // Fetch the existing id set and delete anything that no longer appears
-  // in the JSONL.  This handles bd issues that were hard-deleted (rare
-  // but possible via `bd delete`).  We could `not.in.(…)` directly, but
-  // the list-then-delete path keeps the request URL bounded for large
-  // tables.
+  // in the JSONL.  This handles bd issues hard-deleted via `bd delete`.
+  // We list-then-delete (rather than a single `not.in.(…)`) to keep the
+  // request URL bounded for large tables.
 
   const { data: current, error: listErr } = await client
     .from('bd_issues')
@@ -169,6 +187,22 @@ async function main() {
   const tombstones = (current ?? [])
     .map((r) => r.id)
     .filter((id) => !ids.has(id));
+
+  // ── Bulk-delete cap ───────────────────────────────────────────────────
+  // Even with the empty-input guard above, a partially-corrupted JSONL
+  // (e.g. half the rows fail to parse) could mass-tombstone live work.
+  // Cap a single sync at deleting at most 25% of the existing table
+  // count; anything more requires manual intervention.
+  const cap = Math.max(5, Math.floor(((current ?? []).length) / 4));
+  if (tombstones.length > cap) {
+    console.error(
+      `[bd-sync] tombstone count ${tombstones.length} exceeds cap ${cap} (25% of ${(current ?? []).length}) — aborting.`,
+    );
+    console.error(
+      '[bd-sync] this usually means a partially-parsed JSONL.  Inspect .beads/issues.jsonl and retry.',
+    );
+    process.exit(1);
+  }
 
   if (tombstones.length > 0) {
     const { error: delErr } = await client

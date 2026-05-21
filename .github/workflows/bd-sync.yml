@@ -1,24 +1,29 @@
 name: bd-sync
 
 # ── Why ───────────────────────────────────────────────────────────────────
-# Mirrors `.beads/issues.jsonl` into the Supabase `bd_issues` table on
-# every push so the /roadmap board can render bd state live (via
-# Supabase Realtime) instead of waiting for a GitHub Pages rebuild.
+# Mirrors `.beads/issues.jsonl` into the Supabase `bd_issues` table so
+# the /roadmap board can render bd state live (via Supabase Realtime)
+# instead of waiting for a GitHub Pages rebuild.
 #
 # Trigger model:
-#   * push to ANY branch — covers the normal commit flow.  Branch
-#     filters are intentionally loose because the roadmap reflects bd's
-#     state regardless of which branch the human is on; whichever push
-#     happened last wins.
-#   * workflow_dispatch — manual resync from the Actions tab.
+#   * push to `main` ONLY — the production /roadmap reflects main's bd
+#     state, so feature branches shouldn't write to the shared table.
+#     (An earlier version triggered on every branch, which let a push
+#     of a branch missing the JSONL tombstone-delete every row.  Never
+#     again.)
+#   * workflow_dispatch — manual resync from the Actions tab.  Useful
+#     after fixing a bad state or rotating secrets.
 #
 # Secrets required (Settings → Secrets and variables → Actions):
 #   * SUPABASE_URL              — same project URL the app uses.
-#   * SUPABASE_SERVICE_ROLE_KEY — service-role JWT (NEVER commit;
-#                                 bypasses RLS, write access only.)
+#   * SUPABASE_SERVICE_ROLE_KEY — new-format `sb_secret_…` key (legacy
+#                                 JWT keys are rejected by projects with
+#                                 legacy keys disabled).  Bypasses RLS.
 
 on:
   push:
+    branches:
+      - main
     paths:
       - '.beads/issues.jsonl'
       - 'scripts/sync-bd-to-supabase.mjs'
