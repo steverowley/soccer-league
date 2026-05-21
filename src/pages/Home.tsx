@@ -262,7 +262,10 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
     ? Math.round((season.current_round / season.total_rounds) * 100)
     : '—';
   const matchesStr = `${String(liveMatchCount).padStart(2, '0')} / 16`;
-  const cycleStr = `${String(currentRound).padStart(3, '0')} / ${String(totalRounds).padStart(3, '0')}`;
+  // cycleStr must use actual numeric values if season exists; don't pad the '—' fallback.
+  const cycleStr = season && season.current_round !== null && season.total_rounds !== null
+    ? `${String(season.current_round).padStart(3, '0')} / ${String(season.total_rounds).padStart(3, '0')}`
+    : '— / —';
   return (
     <section style={{ padding: '0 0 0 0' }}>
       <Container>
