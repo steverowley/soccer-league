@@ -21,7 +21,7 @@
 //     historical context wins ties — a 4-week-old "P1" outranks a fresh
 //     "P1" even if they share the integer.
 
-import type { RoadmapItem, RoadmapStatus } from '../types';
+import type { BoardItem, RoadmapItem, RoadmapStatus } from '../types';
 
 // ── Sorting ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +65,53 @@ export function groupByStatus(
   for (const item of items) buckets[item.status].push(item);
   for (const status of Object.keys(buckets) as RoadmapStatus[]) {
     buckets[status] = sortByPriority(buckets[status]);
+  }
+  return buckets;
+}
+
+// ── Merged board-item grouping (bd + Supabase) ─────────────────────────────
+// Same shape as `groupByStatus` but for the unified `BoardItem` union —
+// used by the kanban board when rendering both sources in the same
+// columns.  Sort + tiebreak are identical to the Supabase-only path so
+// bd cards and Supabase cards interleave deterministically.
+
+/**
+ * Sort a list of board items (Supabase + bd, mixed) by priority asc, then
+ * by `created_at` asc as a stable tiebreak.  Returns a new array; the
+ * input is not mutated.
+ *
+ * @param items - Mixed items to sort.
+ * @returns     A new array sorted lowest-priority-number first.
+ */
+export function sortBoardItemsByPriority(items: readonly BoardItem[]): BoardItem[] {
+  return [...items].sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.created_at.localeCompare(b.created_at);
+  });
+}
+
+/**
+ * Group a mixed stream of board items into the four kanban buckets and
+ * sort each bucket by priority.  Used by `RoadmapBoard` once the bd
+ * snapshot has been mapped into `BdBoardItem`s and merged with the
+ * Supabase `SupabaseBoardItem`s.
+ *
+ * @param items - Mixed board items.
+ * @returns     Object keyed by status; every column is a sorted array
+ *              (possibly empty).
+ */
+export function groupBoardItemsByStatus(
+  items: readonly BoardItem[],
+): Record<RoadmapStatus, BoardItem[]> {
+  const buckets: Record<RoadmapStatus, BoardItem[]> = {
+    idea: [],
+    planned: [],
+    in_progress: [],
+    shipped: [],
+  };
+  for (const item of items) buckets[item.status].push(item);
+  for (const status of Object.keys(buckets) as RoadmapStatus[]) {
+    buckets[status] = sortBoardItemsByPriority(buckets[status]);
   }
   return buckets;
 }

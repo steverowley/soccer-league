@@ -1,26 +1,34 @@
 // ── roadmap/ui/RoadmapBoard.tsx ─────────────────────────────────────────────
-// Top-level kanban orchestrator.  Owns the items query state, the editor
-// modal state, and the mutation handlers; renders four `RoadmapColumn`s
-// horizontally on desktop (CSS grid) and stacked on mobile (single column
-// at <768 px via inline media query in a <style> block).
+// Top-level kanban orchestrator.  Owns two query streams and the editor
+// modal state; renders four `RoadmapColumn`s horizontally on desktop
+// (CSS grid) and stacked on mobile (single column at <640 px).
+//
+// DATA SOURCES (merged into one card stream):
+//   1. `roadmap_items` from Supabase — curator-authored ideas, full
+//      admin write chrome (create / edit / move / delete).
+//   2. `public/bd-snapshot.json` — read-only mirror of bd issues
+//      (`.beads/issues.jsonl`) regenerated on every dev/build run.
+//      Mapped through `bdMapping` into the kanban's status + priority
+//      vocabulary.
 //
 // DATA FLOW:
-//   load          — listItems(db) on mount and after every successful write.
-//   create        — handleCreate → createItem → refetch.
-//   update        — handleUpdate → updateItem → refetch.
-//   delete        — handleDelete → window.confirm → deleteItem → refetch.
-//   move up/down  — reprioritizeNeighbours (pure) → swapPriority → refetch.
-//   advance       — updateItem({ status: NEXT_STATUS[item.status] }) → refetch.
+//   load          — listItems(db) + fetchBdSnapshot() in parallel on mount.
+//   create        — Supabase only.  bd cards never mutate.
+//   update        — Supabase only.
+//   delete        — Supabase only.
+//   move up/down  — Supabase only.  Mixing bd into the swap targets
+//                   would write to a row that doesn't exist.
+//   advance       — Supabase only.
 //
-// We refetch the full list after each mutation rather than patching local
-// state in place.  The dataset is small (<500 rows), the wire-time is
-// trivial, and the trigger-driven `shipped_at` / `updated_at` columns
-// arrive via Postgres — local patching would have to duplicate that
-// logic and risk drifting from the DB.
+// REFRESH STRATEGY:
+//   Supabase items refetch after every successful write (via `bumpRefresh`).
+//   The bd snapshot is a build artefact — it only changes on
+//   deploy — so we load it once on mount and don't re-poll.
 //
-// ADMIN GUARD: the board renders for everyone, but every write-triggering
-// branch checks `isAdmin` first.  RLS is the real boundary; this is the
-// "don't even surface the button" layer of defence-in-depth.
+// ADMIN GUARD: the board renders for everyone, but every write branch
+// checks both `isAdmin` and `item.kind === 'supabase'`.  RLS + the bd
+// snapshot's read-only nature provide the real boundaries; UI gating is
+// the "don't even surface the button" layer of defence-in-depth.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSupabase } from '../../../shared/supabase/SupabaseProvider';
@@ -29,11 +37,13 @@ import { COLORS } from '../../../components/Layout';
 import {
   ROADMAP_STATUSES,
   STATUS_LABELS,
+  type BoardItem,
   type RoadmapItem,
+  type RoadmapItemUpdate,
   type RoadmapStatus,
 } from '../types';
 import {
-  groupByStatus,
+  groupBoardItemsByStatus,
   reprioritizeNeighbours,
 } from '../logic/priorityOrder';
 import {
@@ -44,12 +54,13 @@ import {
   updateItem,
   type CreateItemInput,
 } from '../api/items';
-import type { RoadmapItemUpdate } from '../types';
+import { fetchBdSnapshot, type BdIssue } from '../api/bdSnapshot';
+import { mapBdPriority, mapBdStatus } from '../logic/bdMapping';
 import { RoadmapColumn } from './RoadmapColumn';
 import { RoadmapCard } from './RoadmapCard';
 import { ItemEditorModal } from './ItemEditorModal';
 
-// ── Status progression for the "Advance" button ────────────────────────────
+// ── Status progression for the "Advance" button (Supabase only) ────────────
 // Local copy because the card-level component only knows its own NEXT_STATUS
 // for label rendering — the board owns the actual write.
 const NEXT_STATUS: Partial<Record<RoadmapStatus, RoadmapStatus>> = {
@@ -61,13 +72,58 @@ const NEXT_STATUS: Partial<Record<RoadmapStatus, RoadmapStatus>> = {
 /**
  * Discriminated union describing whether the modal is closed, open for a
  * new item in a specific column, or open for editing an existing item.
- * Using a tagged union over a pair of flags + a payload keeps the state
- * transitions explicit.
  */
 type EditorState =
   | { kind: 'closed' }
   | { kind: 'create'; status: RoadmapStatus }
   | { kind: 'edit'; item: RoadmapItem };
+
+// ── Adapters: source row → BoardItem ───────────────────────────────────────
+// Both sources have to land in the same `BoardItem` shape before the
+// merge.  These two helpers are the only place each source's row layout
+// is read — keeping the shape-juggling co-located makes the rest of the
+// board agnostic of where a card came from.
+
+/**
+ * Wrap a Supabase row in the discriminated `BoardItem.kind === 'supabase'`
+ * variant, hoisting the fields the column sorter needs to the top.
+ *
+ * @param item - Validated Supabase row.
+ * @returns    A `BoardItem` ready for `groupBoardItemsByStatus`.
+ */
+function fromSupabase(item: RoadmapItem): BoardItem {
+  return {
+    kind: 'supabase',
+    id: item.id,
+    title: item.title,
+    status: item.status,
+    priority: item.priority,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    item,
+  };
+}
+
+/**
+ * Map a trimmed bd issue into the `BoardItem.kind === 'bd'` variant.
+ * Status and priority pass through the mapping layer; everything else
+ * is verbatim from the snapshot.
+ *
+ * @param issue - Trimmed issue from `bd-snapshot.json`.
+ * @returns     A `BoardItem` ready for `groupBoardItemsByStatus`.
+ */
+function fromBd(issue: BdIssue): BoardItem {
+  return {
+    kind: 'bd',
+    id: issue.id,
+    title: issue.title,
+    status: mapBdStatus(issue.status),
+    priority: mapBdPriority(issue.priority),
+    created_at: issue.created_at,
+    updated_at: issue.updated_at,
+    issue,
+  };
+}
 
 /**
  * Render the full roadmap kanban board.
@@ -82,38 +138,50 @@ export function RoadmapBoard() {
   const { user, profile } = useAuth();
   const isAdmin = profile?.is_admin === true;
 
-  const [items, setItems]     = useState<RoadmapItem[]>([]);
-  const [loaded, setLoaded]   = useState(false);
-  const [editor, setEditor]   = useState<EditorState>({ kind: 'closed' });
+  const [supabaseItems, setSupabaseItems] = useState<RoadmapItem[]>([]);
+  const [bdIssues, setBdIssues]           = useState<BdIssue[]>([]);
+  const [bdSnapshotAt, setBdSnapshotAt]   = useState<string>('');
+  const [loaded, setLoaded]               = useState(false);
+  const [editor, setEditor]               = useState<EditorState>({ kind: 'closed' });
 
-  // Bumping this counter triggers the load effect — used to refetch after
-  // every successful mutation without duplicating fetch logic.
+  // Bumping this counter triggers the Supabase refetch — used to refresh
+  // after every successful mutation without duplicating fetch logic.
+  // We deliberately do NOT re-fetch the bd snapshot on bump; bd is a
+  // build artefact and won't change between user actions.
   const [refresh, setRefresh] = useState(0);
 
-  // ── Initial fetch + refetch on `refresh` bump ──────────────────────────
+  // ── Initial parallel fetch + Supabase refetch on `refresh` bump ────────
   useEffect(() => {
     let cancelled = false;
-    listItems(db).then((data) => {
+    Promise.all([listItems(db), fetchBdSnapshot()]).then(([sb, bd]) => {
       if (cancelled) return;
-      setItems(data);
+      setSupabaseItems(sb);
+      setBdIssues(bd.issues);
+      setBdSnapshotAt(bd.generated_at);
       setLoaded(true);
     });
     return () => { cancelled = true; };
   }, [db, refresh]);
 
-  // ── Group items by column ──────────────────────────────────────────────
-  // Memoised because grouping + per-column sort runs on every render
-  // otherwise.  Small dataset so it doesn't matter much in practice, but
-  // it keeps the React DevTools profile clean.
-  const grouped = useMemo(() => groupByStatus(items), [items]);
+  // ── Merge + group ──────────────────────────────────────────────────────
+  // The grouped object is recomputed only when either source changes, so
+  // typical re-renders (modal open/close, hover state) don't re-traverse
+  // the whole stream.
+  const grouped = useMemo(() => {
+    const merged: BoardItem[] = [
+      ...supabaseItems.map(fromSupabase),
+      ...bdIssues.map(fromBd),
+    ];
+    return groupBoardItemsByStatus(merged);
+  }, [supabaseItems, bdIssues]);
 
   /**
-   * Trigger a refetch.  The increment is opaque to consumers — they only
-   * see fresh `items` on the next render cycle.
+   * Trigger a Supabase refetch.  The increment is opaque to consumers —
+   * they only see fresh `items` on the next render cycle.
    */
   const bumpRefresh = useCallback(() => setRefresh((n) => n + 1), []);
 
-  // ── Mutation handlers ──────────────────────────────────────────────────
+  // ── Mutation handlers (Supabase only) ──────────────────────────────────
 
   /**
    * Persist a new item and close the editor on success.  RLS rejects
@@ -136,7 +204,8 @@ export function RoadmapBoard() {
   );
 
   /**
-   * Apply a field patch to an existing item.  Closes the editor on success.
+   * Apply a field patch to an existing Supabase item.  Closes the editor
+   * on success.
    */
   const handleUpdate = useCallback(
     async (id: string, patch: RoadmapItemUpdate) => {
@@ -151,9 +220,9 @@ export function RoadmapBoard() {
   );
 
   /**
-   * Confirm-and-delete an item.  `window.confirm` is intentional — the
-   * board is admin-only and the deletion is destructive enough that an
-   * inline "are you sure" affordance would be more cognitive load than
+   * Confirm-and-delete a Supabase item.  `window.confirm` is intentional —
+   * the board is admin-only and the deletion is destructive enough that
+   * an inline "are you sure" affordance would be more cognitive load than
    * a single native prompt.
    */
   const handleDelete = useCallback(
@@ -167,15 +236,19 @@ export function RoadmapBoard() {
   );
 
   /**
-   * Move an item one slot up or down within its column.  Pure helper
-   * computes the priority pair to write; we forward to `swapPriority`.
-   * No-op when the item is at the relevant edge.
+   * Move a Supabase item one slot up or down within its column.  The pure
+   * helper computes the priority pair to write; we forward to
+   * `swapPriority`.  The helper is fed only Supabase items from the
+   * column — bd items are excluded so the swap never targets a bd id
+   * that doesn't exist in the DB.
    */
   const handleMove = useCallback(
     async (item: RoadmapItem, direction: 'up' | 'down') => {
       if (!isAdmin) return;
-      const columnItems = grouped[item.status];
-      const swap = reprioritizeNeighbours(columnItems, item.id, direction);
+      // Filter the column to Supabase items only — bd cards are read-
+      // only and would corrupt the neighbour lookup if mixed in.
+      const columnSupabase = supabaseItems.filter((i) => i.status === item.status);
+      const swap = reprioritizeNeighbours(columnSupabase, item.id, direction);
       if (!swap) return;
       const ok = await swapPriority(
         db,
@@ -186,12 +259,12 @@ export function RoadmapBoard() {
       );
       if (ok) bumpRefresh();
     },
-    [db, isAdmin, grouped, bumpRefresh],
+    [db, isAdmin, supabaseItems, bumpRefresh],
   );
 
   /**
-   * Push an item one column to the right (idea → planned → in_progress →
-   * shipped).  No-op for items already on the rightmost column.
+   * Push a Supabase item one column to the right.  No-op on items already
+   * at the rightmost column.
    */
   const handleAdvance = useCallback(
     async (item: RoadmapItem) => {
@@ -220,8 +293,46 @@ export function RoadmapBoard() {
     );
   }
 
+  // bd / Supabase counts for the legend strip above the board — gives an
+  // at-a-glance signal of where the data came from and when bd was last
+  // snapshotted.
+  const bdCount = bdIssues.length;
+  const supabaseCount = supabaseItems.length;
+
   return (
     <>
+      {/* ── Legend strip ─────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 16,
+          marginBottom: 16,
+          fontFamily: 'Space Mono, monospace',
+          fontSize: 10,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: COLORS.dust50,
+        }}
+      >
+        <span>
+          <span style={{ color: COLORS.dust70 }}>{supabaseCount}</span>{' '}
+          curated · supabase
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            display: 'inline-block',
+            width: 8,
+            height: 12,
+            background: COLORS.quantum,
+          }} />
+          <span style={{ color: COLORS.dust70 }}>{bdCount}</span> mirrored · bd
+        </span>
+        {bdSnapshotAt && (
+          <span>snapshot · {bdSnapshotAt.slice(0, 16).replace('T', ' ')}</span>
+        )}
+      </div>
+
       <div className="roadmap-board-grid">
         {ROADMAP_STATUSES.map((status) => {
           const columnItems = grouped[status];
@@ -235,16 +346,36 @@ export function RoadmapBoard() {
             >
               {columnItems.map((item, idx) => (
                 <RoadmapCard
-                  key={item.id}
+                  key={`${item.kind}-${item.id}`}
                   item={item}
                   isAdmin={isAdmin}
                   canMoveUp={idx > 0}
                   canMoveDown={idx < columnItems.length - 1}
-                  onMoveUp={() => void handleMove(item, 'up')}
-                  onMoveDown={() => void handleMove(item, 'down')}
-                  onAdvanceStatus={() => void handleAdvance(item)}
-                  onEdit={() => setEditor({ kind: 'edit', item })}
-                  onDelete={() => void handleDelete(item)}
+                  onMoveUp={
+                    item.kind === 'supabase'
+                      ? () => void handleMove(item.item, 'up')
+                      : () => {}
+                  }
+                  onMoveDown={
+                    item.kind === 'supabase'
+                      ? () => void handleMove(item.item, 'down')
+                      : () => {}
+                  }
+                  onAdvanceStatus={
+                    item.kind === 'supabase'
+                      ? () => void handleAdvance(item.item)
+                      : () => {}
+                  }
+                  onEdit={
+                    item.kind === 'supabase'
+                      ? () => setEditor({ kind: 'edit', item: item.item })
+                      : () => {}
+                  }
+                  onDelete={
+                    item.kind === 'supabase'
+                      ? () => void handleDelete(item.item)
+                      : () => {}
+                  }
                 />
               ))}
             </RoadmapColumn>

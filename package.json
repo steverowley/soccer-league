@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "node scripts/build-bd-snapshot.mjs",
     "build": "vite build",
+    "prebuild": "node scripts/build-bd-snapshot.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

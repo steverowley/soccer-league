@@ -83,3 +83,57 @@ export const PILLAR_LABELS: Record<RoadmapPillar, string> = {
   'emergent-narrative': 'Emergent Narrative',
   modular: 'Modular',
 };
+
+// ── Unified board item (bd snapshot + Supabase merge) ──────────────────────
+// The roadmap board renders cards sourced from two places:
+//
+//   1. `roadmap_items` in Supabase  — curator-authored ideas with full
+//      admin chrome (create / edit / move / delete).
+//   2. `.beads/issues.jsonl` snapshot — read-only mirror of the bd issue
+//      tracker, fetched at runtime from `public/bd-snapshot.json`.
+//
+// A discriminated union with a `kind` tag lets the board iterate one flat
+// stream while the card component branches its rendering and the action
+// chrome.  Each variant carries enough on its own to fully render and
+// sort within its column — `priority`, `status`, `id`, `title` are
+// hoisted to the outer shape so the column-grouping logic doesn't need
+// to peek into the inner payload.
+
+import type { BdIssue } from './api/bdSnapshot';
+
+/** Base fields shared by every card on the board, regardless of source. */
+export interface BoardItemCommon {
+  /** Stable identifier — `roadmap_items.id` (uuid) or bd id (e.g. 'isl-du4'). */
+  id: string;
+  /** Display title — short single-line label. */
+  title: string;
+  /** Kanban column membership after status mapping. */
+  status: RoadmapStatus;
+  /** Sortable priority within column.  Lower = higher priority. */
+  priority: number;
+  /** ISO-8601 timestamp used to break priority ties (oldest first). */
+  created_at: string;
+  /** ISO-8601 timestamp surfaced as "updated <ago>" on the card. */
+  updated_at: string;
+}
+
+/** Supabase-sourced board item.  Admin chrome lights up for this variant. */
+export interface SupabaseBoardItem extends BoardItemCommon {
+  kind: 'supabase';
+  /** The full validated row.  Admin actions need the rest of the columns. */
+  item: RoadmapItem;
+}
+
+/** bd-sourced board item.  Read-only — no admin chrome, no DB write path. */
+export interface BdBoardItem extends BoardItemCommon {
+  kind: 'bd';
+  /** The trimmed bd issue.  Used to render the bd badge + close reason. */
+  issue: BdIssue;
+}
+
+/**
+ * Discriminated union of every card the board can render.  The `kind`
+ * tag drives card chrome, while the hoisted common fields drive sort and
+ * grouping.
+ */
+export type BoardItem = SupabaseBoardItem | BdBoardItem;
