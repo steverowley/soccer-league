@@ -69,11 +69,16 @@ export {
 } from './api/items';
 export type { CreateItemInput } from './api/items';
 
-// ── API — bd snapshot (static asset fetch, Zod-validated) ──────────────────
-// Read-only mirror of bd issues, generated at build time by
-// `scripts/build-bd-snapshot.mjs`.
-export { fetchBdSnapshot } from './api/bdSnapshot';
-export type { BdIssue, BdSnapshot } from './api/bdSnapshot';
+// ── API — bd issues (Supabase mirror + Realtime, Zod-validated) ────────────
+// Read-only mirror of bd issues populated by the bd-sync GitHub Action
+// (`scripts/sync-bd-to-supabase.mjs`).  The board subscribes via
+// Supabase Realtime so closing / creating bd issues shows up live.
+export {
+  listBdIssues,
+  getBdSyncedAt,
+  subscribeToBdIssues,
+} from './api/bdIssues';
+export type { BdIssue } from './api/bdIssues';
 
 // ── UI (React components) ─────────────────────────────────────────────────
 // `RoadmapBoard` is the only component the page wrapper mounts directly;

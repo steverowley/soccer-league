@@ -118,6 +118,57 @@ export type Database = {
         }
         Relationships: []
       }
+      bd_issues: {
+        Row: {
+          assignee: string | null
+          close_reason: string | null
+          closed_at: string | null
+          created_at: string
+          description: string | null
+          id: string
+          issue_type: string
+          notes: string | null
+          priority: number
+          started_at: string | null
+          status: string
+          synced_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee?: string | null
+          close_reason?: string | null
+          closed_at?: string | null
+          created_at: string
+          description?: string | null
+          id: string
+          issue_type?: string
+          notes?: string | null
+          priority: number
+          started_at?: string | null
+          status: string
+          synced_at?: string
+          title: string
+          updated_at: string
+        }
+        Update: {
+          assignee?: string | null
+          close_reason?: string | null
+          closed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          issue_type?: string
+          notes?: string | null
+          priority?: number
+          started_at?: string | null
+          status?: string
+          synced_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       claude_sessions: {
         Row: {
           account_uuid: string | null

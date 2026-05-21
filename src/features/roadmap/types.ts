@@ -89,8 +89,10 @@ export const PILLAR_LABELS: Record<RoadmapPillar, string> = {
 //
 //   1. `roadmap_items` in Supabase  — curator-authored ideas with full
 //      admin chrome (create / edit / move / delete).
-//   2. `.beads/issues.jsonl` snapshot — read-only mirror of the bd issue
-//      tracker, fetched at runtime from `public/bd-snapshot.json`.
+//   2. `bd_issues` in Supabase  — read-only mirror of the bd issue
+//      tracker, populated by `scripts/sync-bd-to-supabase.mjs` on every
+//      push and streamed to the UI via Supabase Realtime so the board
+//      updates live as bd state changes.
 //
 // A discriminated union with a `kind` tag lets the board iterate one flat
 // stream while the card component branches its rendering and the action
@@ -99,7 +101,7 @@ export const PILLAR_LABELS: Record<RoadmapPillar, string> = {
 // hoisted to the outer shape so the column-grouping logic doesn't need
 // to peek into the inner payload.
 
-import type { BdIssue } from './api/bdSnapshot';
+import type { BdIssue } from './api/bdIssues';
 import type { ClaudeSession } from './api/claudeSessions';
 
 /** Base fields shared by every card on the board, regardless of source. */
