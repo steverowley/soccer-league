@@ -5,6 +5,19 @@
 // store.  Each test that wants to verify an UPDATE inspects the store row
 // directly rather than asserting on the response payload — closer to what
 // real PostgREST callers care about.
+//
+// POST-MIGRATION 0041 NOTE
+// ────────────────────────
+// Both `fastForwardScheduledMatches` and `completeMatchManually` now route
+// their mutations through SECURITY DEFINER RPCs (`admin_fast_forward_matches`
+// / `admin_complete_match`) instead of direct table UPDATEs.  The fake DB
+// below grew an `rpc()` surface that mirrors the SQL function bodies just
+// enough to keep every behavioural assertion meaningful — score-range
+// guards, the cup-draw rule, optimistic-concurrency on `status='scheduled'`,
+// and the bulk fast-forward interval arithmetic.  Anything the production
+// RPC enforces (admin role check) is exercised by separate end-to-end
+// tests against the live Supabase project; the unit suite here covers the
+// client wrapper's input handling and bus-event contract.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fastForwardScheduledMatches, completeMatchManually } from './admin';
@@ -60,13 +73,132 @@ interface FakeStore {
   competitions: CompetitionRow[];
 }
 
+// ── Score range constants (mirror migration 0041) ──────────────────────────
+// The RPC enforces `home_score`/`away_score` ∈ [0, 99] via `RAISE EXCEPTION
+// … USING ERRCODE = '22023'`.  We replicate the same bounds in the fake so
+// over/under-range inputs that survive the client wrapper's guard still
+// fail with the same human-readable error string the production code
+// would emit.  Mechanical effect: matches `MIN_SCORE` / `MAX_SCORE` in
+// admin.ts so any future tightening only needs to change the production
+// constants — the fake follows by re-reading them on the next test run.
+
+/** Inclusive lower bound the RPC enforces on home/away scores. */
+const FAKE_MIN_SCORE = 0;
+/** Inclusive upper bound the RPC enforces on home/away scores. */
+const FAKE_MAX_SCORE = 99;
+
 /**
  * Build a fake Supabase client backed by `store`.  Implements the chain
  * surface this api file actually uses: from / select / update / eq / in /
- * not / await-thenable.  Anything outside that surface throws — the test
- * that triggers the mismatch will fail loudly.
+ * not / await-thenable, plus a top-level `rpc(name, args)` that mimics
+ * the SECURITY DEFINER functions added in migration 0041.  Anything
+ * outside that surface throws — the test that triggers the mismatch will
+ * fail loudly.
+ *
+ * @param store  Mutable in-memory tables shared across helpers and tests.
+ * @returns      A Supabase-client-shaped object covering only the chains
+ *               actually exercised in this file; missing methods throw on
+ *               first touch so coverage gaps are obvious.
  */
 function makeFakeDb(store: FakeStore): IslSupabaseClient {
+  /**
+   * Dispatch table for `db.rpc(name, args)`.  Each entry replicates the
+   * outward-visible behaviour of the SQL function declared in migration
+   * 0041 — return value shape, RAISE EXCEPTION messages, and side effects
+   * on the in-memory store.  We do NOT model the `is_admin` role gate
+   * here (the unit tests assume the caller has already passed UI gating);
+   * end-to-end RLS coverage lives in a separate Supabase integration suite.
+   */
+  const rpcHandlers: Record<
+    string,
+    (args: Record<string, unknown>) => { data: unknown; error: { message: string } | null }
+  > = {
+    // admin_fast_forward_matches(p_hours numeric) → integer.
+    // Mirrors the bulk UPDATE: every scheduled row with a non-null
+    // scheduled_at gets shifted backwards by `p_hours` * 3_600_000 ms.
+    // Returns ROW_COUNT (matchesShifted).
+    admin_fast_forward_matches: (args) => {
+      const hours = args.p_hours as number;
+      if (!Number.isFinite(hours) || hours <= 0) {
+        return { data: null, error: { message: 'admin_fast_forward_matches: hours must be > 0' } };
+      }
+      const offsetMs = hours * 3_600_000;
+      let shifted = 0;
+      for (const m of store.matches) {
+        if (m.status !== 'scheduled' || m.scheduled_at == null) continue;
+        const ts = Date.parse(m.scheduled_at);
+        if (!Number.isFinite(ts)) continue;
+        m.scheduled_at = new Date(ts - offsetMs).toISOString();
+        shifted += 1;
+      }
+      return { data: shifted, error: null };
+    },
+
+    // admin_complete_match(p_match_id uuid, p_home_score int, p_away_score int) → json.
+    // Replicates the migration body in order: score-range guard → match
+    // lookup → cup-draw guard → optimistic-concurrency UPDATE.  Returns
+    // a json object with the team / competition ids so the client wrapper
+    // can populate the bus event without an extra read.
+    admin_complete_match: (args) => {
+      const matchId   = args.p_match_id   as string;
+      const homeScore = args.p_home_score as number;
+      const awayScore = args.p_away_score as number;
+
+      // ── Score-range guards ────────────────────────────────────────────────
+      // Range-check both sides independently so an out-of-range away
+      // score isn't masked by an in-range home score (mirrors the two
+      // separate IF blocks in the SQL function).
+      if (!Number.isInteger(homeScore) || homeScore < FAKE_MIN_SCORE || homeScore > FAKE_MAX_SCORE) {
+        return { data: null, error: { message: `admin_complete_match: home_score must be in [${FAKE_MIN_SCORE}, ${FAKE_MAX_SCORE}]` } };
+      }
+      if (!Number.isInteger(awayScore) || awayScore < FAKE_MIN_SCORE || awayScore > FAKE_MAX_SCORE) {
+        return { data: null, error: { message: `admin_complete_match: away_score must be in [${FAKE_MIN_SCORE}, ${FAKE_MAX_SCORE}]` } };
+      }
+
+      // ── Match lookup ──────────────────────────────────────────────────────
+      const row = store.matches.find((m) => m.id === matchId);
+      if (!row) {
+        return { data: null, error: { message: `admin_complete_match: match ${matchId} not found` } };
+      }
+
+      // ── Cup-draw guard ────────────────────────────────────────────────────
+      // Knockouts need a decisive winner; a tied cup match would flip to
+      // completed without the bracket advancing, so we fail early.  League
+      // matches and matches with no competition_id flow through as drawable.
+      if (homeScore === awayScore && row.competition_id) {
+        const comp = store.competitions.find((c) => c.id === row.competition_id);
+        if (comp?.type === 'cup') {
+          return { data: null, error: { message: 'Cup matches cannot end in a draw — enter a tiebreak winner' } };
+        }
+      }
+
+      // ── Optimistic-concurrency UPDATE ─────────────────────────────────────
+      // Only writes when status is still `scheduled`.  Any other status
+      // (in_progress / completed / cancelled) means another writer beat
+      // us — surface the same "no longer scheduled" message the SQL
+      // function emits via SQLSTATE 40001.
+      if (row.status !== 'scheduled') {
+        return { data: null, error: { message: 'Match is no longer scheduled — refresh and try again' } };
+      }
+      row.status     = 'completed';
+      row.home_score = homeScore;
+      row.away_score = awayScore;
+      row.played_at  = new Date().toISOString();
+
+      return {
+        data: {
+          match_id:       matchId,
+          home_score:     homeScore,
+          away_score:     awayScore,
+          home_team_id:   row.home_team_id ?? null,
+          away_team_id:   row.away_team_id ?? null,
+          competition_id: row.competition_id ?? null,
+        },
+        error: null,
+      };
+    },
+  };
+
   function from(table: keyof FakeStore) {
     type Filter =
       | { kind: 'eq';  col: string; val: unknown }
@@ -124,7 +256,26 @@ function makeFakeDb(store: FakeStore): IslSupabaseClient {
     return builder;
   }
 
-  return { from } as unknown as IslSupabaseClient;
+  /**
+   * Top-level `rpc(name, args)` mirror.  Looks up the handler in the
+   * dispatch table above; an unregistered call throws so the test exposes
+   * the missing handler instead of returning `undefined` silently.
+   *
+   * @param name  SQL function name (e.g. 'admin_complete_match').
+   * @param args  Named-argument object exactly as the client wrapper passes
+   *              it to `db.rpc()`.  Mirrors PostgREST positional semantics.
+   * @returns     `{ data, error }` matching the supabase-js shape so the
+   *              production code's destructuring keeps working untouched.
+   */
+  function rpc(name: string, args: Record<string, unknown>) {
+    const handler = rpcHandlers[name];
+    if (!handler) {
+      throw new Error(`[fake-db] unregistered rpc call: ${name}`);
+    }
+    return Promise.resolve(handler(args));
+  }
+
+  return { from, rpc } as unknown as IslSupabaseClient;
 }
 
 // ── Common state ────────────────────────────────────────────────────────────

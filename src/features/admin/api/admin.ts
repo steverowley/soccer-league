@@ -1,18 +1,12 @@
 // ── features/admin/api/admin.ts ──────────────────────────────────────────────
 // Supabase queries + mutations powering the /admin testing tooling.
 //
-// WHAT THIS MODULE OWNS
-//   • `getActiveSeason`             — current season row + config.
-//   • `getAdminFixtures`            — paginated match rows for the fixture browser.
-//   • `getArchitectInterventions`   — recent architect_interventions rows.
-//   • `fastForwardScheduledMatches` — bumps the worker's effective clock.
-//   • `triggerSeasonEnactment`      — fires the enactment pipeline manually.
-//
-// WHAT IT DOES NOT DO
-//   • No business logic — the season-completion rule lives in
-//     features/match/logic/seasonLifecycle.ts.
-//   • No allowlist enforcement — the route + UI gate that.  Server-side
-//     enforcement still relies on RLS at the matches/seasons tables.
+// SERVER-SIDE GATING (migration 0042)
+//   Every mutating call below routes through a SECURITY DEFINER RPC whose
+//   first action is to RAISE EXCEPTION when the caller's `profiles.is_admin`
+//   is not true.  The AdminAccessGate component is a UX convenience — the
+//   DB is the real boundary.  A non-admin who calls these wrappers (or hits
+//   the RPCs directly via supabase-js) gets SQLSTATE 28000 / HTTP 403.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { bus, type IslEventBus } from '@shared/events/bus';
@@ -23,14 +17,6 @@ import { bus, type IslEventBus } from '@shared/events/bus';
 // without disabling type-checks on the rest of the file.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = any;
-
-// ── Constants ────────────────────────────────────────────────────────────────
-
-/**
- * Milliseconds in one hour.  Centralised so the fast-forward arithmetic
- * uses a named constant instead of an inline `3_600_000` magic number.
- */
-const MS_PER_HOUR = 3_600_000;
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -63,62 +49,45 @@ export interface TriggerEnactmentResult {
 /**
  * Shift every scheduled match's `scheduled_at` backward by `hours`.
  *
- * The match worker already polls for `status='scheduled' AND scheduled_at <=
- * now()`, so subtracting from `scheduled_at` is functionally identical to
- * advancing the worker's wall clock — without any worker-side changes.
+ * The match worker polls for `status='scheduled' AND scheduled_at <= now()`,
+ * so subtracting from `scheduled_at` is functionally identical to advancing
+ * the worker's wall clock — without any worker-side changes.
  *
- * Negative or zero `hours` is a no-op (safer than throwing): an admin who
- * accidentally types `-5` doesn't push fixtures into the future where they
- * disappear from the queue.
+ * IMPLEMENTATION (post-migration 0042)
+ *   Calls the `admin_fast_forward_matches(p_hours)` SECURITY DEFINER RPC.
+ *   The RPC re-checks `profiles.is_admin = true` (so a non-admin who hits
+ *   the endpoint directly gets SQLSTATE 28000), then runs a single bulk
+ *   UPDATE with native interval arithmetic — eliminating the per-row N+1
+ *   that the previous client-side implementation needed.
  *
- * @param db     Service-role client (RLS denies anon updates to matches).
+ * Negative or zero `hours` is treated as a no-op locally (the RPC would
+ * RAISE), keeping the toast-friendly result shape for the admin UI.
+ *
+ * @param db     Authenticated Supabase client.  Caller must be an admin —
+ *               the RPC enforces this, the UI does not.
  * @param hours  Positive number of hours to roll back.
- * @returns      The number of rows shifted plus the hours used.
+ * @returns      `{ matchesShifted, hoursShifted }` so the admin toast can
+ *               distinguish a successful zero-row shift ("nothing to do")
+ *               from a real workload.
  */
 export async function fastForwardScheduledMatches(
   db:    IslSupabaseClient,
   hours: number,
 ): Promise<FastForwardResult> {
+  // Local guard: keep the no-op semantics from the prior implementation so
+  // an admin typo (`0` or `-5`) reports "nothing shifted" instead of an
+  // SQLSTATE 22023 error toast.
   if (!Number.isFinite(hours) || hours <= 0) {
     return { matchesShifted: 0, hoursShifted: 0 };
   }
 
-  // ── Step 1: pull every scheduled row with a non-null scheduled_at ───────
-  // We need the existing values to compute new timestamps client-side —
-  // PostgREST has no `UPDATE … SET col = col - interval` shortcut without
-  // an SQL function.  At ~250 rows per season the round trip is cheap.
-  const { data: rows, error: readErr } = await (db as AnyDb)
-    .from('matches')
-    .select('id, scheduled_at')
-    .eq('status', 'scheduled')
-    .not('scheduled_at', 'is', null);
+  const { data, error } = await (db as AnyDb).rpc('admin_fast_forward_matches', {
+    p_hours: hours,
+  });
+  if (error) throw new Error(error.message);
 
-  if (readErr) {
-    console.warn('[fastForwardScheduledMatches] read failed:', readErr.message);
-    return { matchesShifted: 0, hoursShifted: hours };
-  }
-
-  const matches = (rows ?? []) as Array<{ id: string; scheduled_at: string }>;
-  if (matches.length === 0) return { matchesShifted: 0, hoursShifted: hours };
-
-  // ── Step 2: write each new value ───────────────────────────────────────
-  // Per-row UPDATEs not a bulk one because PostgREST cannot `UPDATE …
-  // FROM (VALUES …)` without an RPC.  At 250 fixtures × ~50 ms = 12.5 s
-  // worst case — acceptable for a hand-fired admin button.
-  const offsetMs = hours * MS_PER_HOUR;
-  let shifted = 0;
-  for (const m of matches) {
-    const ts = Date.parse(m.scheduled_at);
-    if (!Number.isFinite(ts)) continue;
-    const next = new Date(ts - offsetMs).toISOString();
-    const { error: writeErr } = await (db as AnyDb)
-      .from('matches')
-      .update({ scheduled_at: next })
-      .eq('id', m.id);
-    if (!writeErr) shifted++;
-  }
-
-  return { matchesShifted: shifted, hoursShifted: hours };
+  // The RPC returns the bulk UPDATE's ROW_COUNT as a single integer.
+  return { matchesShifted: (data as number) ?? 0, hoursShifted: hours };
 }
 
 // ── Manual enactment ─────────────────────────────────────────────────────────
@@ -437,23 +406,29 @@ export async function getSystemStats(db: IslSupabaseClient): Promise<SystemStats
 /**
  * Set the active season's lifecycle status.
  *
- * Side effects:
+ * Side effects (applied inside the RPC, not here):
  *   - `voting`    → stamps `election_opens_at`  with now().
  *   - `completed` → stamps `election_closes_at` with now().
  *
- * @param db        Any authenticated Supabase client (service-role for RLS bypass).
+ * IMPLEMENTATION (post-migration 0042)
+ *   Calls `admin_set_season_status(p_season_id, p_status)`.  The RPC
+ *   enforces `profiles.is_admin = true` server-side; a non-admin caller
+ *   sees SQLSTATE 28000 (HTTP 403) regardless of UI gating.
+ *
+ * @param db        Authenticated Supabase client.  Caller must be admin.
  * @param seasonId  UUID of the target season.
- * @param status    New status value.
+ * @param status    New status value.  Validated against the three legal
+ *                  transitions inside the RPC (anything else → SQLSTATE 22023).
  */
 export async function setSeasonStatus(
   db:       IslSupabaseClient,
   seasonId: string,
   status:   'active' | 'voting' | 'completed',
 ): Promise<void> {
-  const patch: Record<string, unknown> = { status };
-  if (status === 'voting')    patch.election_opens_at  = new Date().toISOString();
-  if (status === 'completed') patch.election_closes_at = new Date().toISOString();
-  const { error } = await (db as AnyDb).from('seasons').update(patch).eq('id', seasonId);
+  const { error } = await (db as AnyDb).rpc('admin_set_season_status', {
+    p_season_id: seasonId,
+    p_status:    status,
+  });
   if (error) throw new Error(error.message);
 }
 
@@ -484,19 +459,24 @@ export async function resetSeasonResults(db: IslSupabaseClient): Promise<{ match
  * undo — the admin must delete the row directly from the DB if they make a
  * mistake.
  *
- * @param db      Service-role client (anon INSERT is blocked by RLS).
- * @param kind    One of the five narrative kinds recognised by the Dispatch feed.
- * @param summary Human-readable narrative text.
+ * IMPLEMENTATION (post-migration 0042)
+ *   Calls `admin_inject_narrative(p_kind, p_summary)`.  Direct INSERT was
+ *   removed by migration 0030 (`narratives_auth_write` dropped); the RPC
+ *   is the only authenticated write path and enforces `is_admin = true`.
+ *
+ * @param db      Authenticated Supabase client.  Caller must be admin.
+ * @param kind    One of the narrative kinds recognised by the Dispatch feed.
+ *                Empty / null is rejected inside the RPC (SQLSTATE 22023).
+ * @param summary Human-readable narrative text.  Empty / null is rejected.
  */
 export async function injectNarrative(
   db:      IslSupabaseClient,
   kind:    string,
   summary: string,
 ): Promise<void> {
-  const { error } = await (db as AnyDb).from('narratives').insert({
-    kind,
-    summary,
-    source: 'admin',
+  const { error } = await (db as AnyDb).rpc('admin_inject_narrative', {
+    p_kind:    kind,
+    p_summary: summary,
   });
   if (error) throw new Error(error.message);
 }
@@ -516,30 +496,29 @@ export interface AddPlayerInput {
 /**
  * Insert a new player row into the `players` table.
  *
- * Derived stat columns (attacking, defending, mental, athletic, technical) are
- * seeded from `overallRating` so the match engine has a consistent starting
- * point.  The coaching staff can refine via the training facility afterwards.
+ * IMPLEMENTATION (post-migration 0042)
+ *   Calls `admin_add_player(...)`.  The RPC is the only authenticated write
+ *   path to `players` and enforces `is_admin = true` server-side.  Derived
+ *   stat columns (attacking, defending, mental, athletic, technical) are
+ *   seeded from `overallRating` inside the RPC body so the match engine has
+ *   a consistent starting point regardless of which client path created the
+ *   row.  Coaching can refine those five via the training facility later.
  *
- * @param db     Service-role client (RLS blocks anon INSERT on players).
- * @param input  Form-sourced player data.
+ * @param db     Authenticated Supabase client.  Caller must be admin.
+ * @param input  Form-sourced player data.  `overallRating` is range-checked
+ *               inside the RPC (1..99); jerseyNumber may be null.
  */
 export async function addPlayer(
   db:    IslSupabaseClient,
   input: AddPlayerInput,
 ): Promise<void> {
-  const { error } = await (db as AnyDb).from('players').insert({
-    team_id:        input.teamId,
-    name:           input.name,
-    position:       input.position,
-    overall_rating: input.overallRating,
-    starter:        input.starter,
-    jersey_number:  input.jerseyNumber,
-    // Minimal stat defaults — match engine derives from overall_rating
-    attacking:  input.overallRating,
-    defending:  input.overallRating,
-    mental:     input.overallRating,
-    athletic:   input.overallRating,
-    technical:  input.overallRating,
+  const { error } = await (db as AnyDb).rpc('admin_add_player', {
+    p_team_id:        input.teamId,
+    p_name:           input.name,
+    p_position:       input.position,
+    p_overall_rating: input.overallRating,
+    p_starter:        input.starter,
+    p_jersey_number:  input.jerseyNumber,
   });
   if (error) throw new Error(error.message);
 }
@@ -592,39 +571,40 @@ export interface CompleteMatchManuallyResult {
  * finishes — this function is therefore a parallel, manually-triggered
  * shortcut that produces the same downstream state.
  *
+ * IMPLEMENTATION (post-migration 0042)
+ *   The DB write is now routed through the `admin_complete_match` SECURITY
+ *   DEFINER RPC, which:
+ *     1. Verifies `profiles.is_admin = true` (SQLSTATE 28000 if not).
+ *     2. Re-runs the input range checks server-side (defence-in-depth so
+ *        the client wrapper isn't the only validator).
+ *     3. Looks up the match row and enforces the cup-draw guard inside the
+ *        same transaction as the UPDATE (no read/write race possible).
+ *     4. Applies the same `status='scheduled'` optimistic-concurrency guard
+ *        and surfaces a 40001 SQLSTATE when another writer beat us to it.
+ *     5. Returns the team ids + competition id alongside the input echo so
+ *        the bus emission below has the full payload without an extra read.
+ *
  * BUS PAYLOAD
- *   We fetch the match row before the update so we can populate the full
- *   {@link MatchCompletedPayload} (team ids + competition id) rather than a
- *   stripped-down `{ matchId }`.  The standard listeners destructure the
- *   richer fields (`homeTeamId`, `awayTeamId`, `competitionId`), so emitting
- *   a partial payload would silently break cup-advancement and other flows.
+ *   The RPC return value supplies `home_team_id`, `away_team_id`, and
+ *   `competition_id`.  We emit the full {@link MatchCompletedPayload} so
+ *   downstream listeners (cup advancement, referee narratives, memory
+ *   writes) destructure the same shape they get from the worker-side
+ *   emission path.
  *
  * EXACTLY-ONCE EMISSION
- *   The function emits exactly one bus event per successful invocation, only
- *   after the DB UPDATE returns without error.  A failed read or failed
- *   update throws before reaching the emit — no event is fired.  This keeps
- *   downstream listeners from settling wagers against a row whose update
- *   was rolled back.
+ *   We only emit the bus event after the RPC resolves successfully.  Any
+ *   RAISE EXCEPTION inside the function (validation, missing row, cup-draw,
+ *   stale row) surfaces as a thrown error and short-circuits the emit —
+ *   keeping the WagerSettlementListener and CupRoundAdvancerListener from
+ *   firing for a write that never committed.
  *
  * ERRORS
- *   - Throws when `matchId` is empty / non-string.
- *   - Throws when either score is non-integer or outside `[MIN_SCORE, MAX_SCORE]`.
- *   - Throws when the match row does not exist.
- *   - Throws `"Cup matches cannot end in a draw — enter a tiebreak winner"`
- *     when the match belongs to a single-elimination cup competition
- *     (`competitions.type='cup'`) and the scoreline is tied.  Knockout
- *     brackets require a decisive winner; `CupRoundAdvancerListener` would
- *     otherwise refuse to advance and the row would be `completed` while
- *     the bracket stays stuck.
- *   - Throws `"Match is no longer scheduled — refresh and try again"` when
- *     the optimistic-concurrency guard (`status='scheduled'`) misses,
- *     meaning the worker or another admin already moved the row.  No bus
- *     event is emitted in this case — preserves the exactly-once invariant
- *     for `WagerSettlementListener` + `CupRoundAdvancerListener`.
- *   - Throws when the UPDATE returns an error (RLS denial, network blip…).
+ *   - Throws synchronously when `matchId` is empty / non-string or scores
+ *     are out of range (cheap client guard, RPC has its own copy).
+ *   - Throws with the RPC's `message` for: missing match, cup-draw block,
+ *     stale row (status no longer 'scheduled'), and non-admin caller.
  *
- * @param db          Supabase client.  Needs UPDATE rights on `matches`
- *                    (admin RLS policy or service-role).
+ * @param db          Authenticated Supabase client.  Caller must be admin.
  * @param matchId     UUID of the target match.
  * @param homeScore   Final home score in `[MIN_SCORE, MAX_SCORE]`.
  * @param awayScore   Final away score in `[MIN_SCORE, MAX_SCORE]`.
@@ -639,9 +619,10 @@ export async function completeMatchManually(
   awayScore:    number,
   busOverride:  IslEventBus = bus,
 ): Promise<CompleteMatchManuallyResult> {
-  // ── Input validation ──────────────────────────────────────────────────────
-  // Cheap synchronous checks fire BEFORE any DB call — a malformed call
-  // shouldn't cost a network round-trip just to fail at the row level.
+  // ── Step 1: client-side input validation ──────────────────────────────────
+  // Cheap synchronous checks fail fast before round-tripping to PostgREST.
+  // The RPC re-runs identical checks server-side so a programmatic caller
+  // bypassing this wrapper still hits the same constraints.
   if (typeof matchId !== 'string' || matchId.length === 0) {
     throw new Error('completeMatchManually: matchId is required');
   }
@@ -656,90 +637,45 @@ export async function completeMatchManually(
     );
   }
 
-  // ── Step 1: fetch the row for the bus payload ────────────────────────────
-  // We need home_team_id, away_team_id, and competition_id to populate the
-  // full MatchCompletedPayload.  Using `.maybeSingle()` so a missing row
-  // surfaces as `data === null` rather than a PostgREST error.
-  const { data: matchRow, error: readErr } = await (db as AnyDb)
-    .from('matches')
-    .select('id, home_team_id, away_team_id, competition_id')
-    .eq('id', matchId)
-    .maybeSingle();
-
-  if (readErr) {
-    throw new Error(`completeMatchManually: read failed: ${readErr.message}`);
-  }
-  if (!matchRow) {
-    throw new Error(`completeMatchManually: match ${matchId} not found`);
-  }
-
-  // ── Step 2: cup-match draw guard ─────────────────────────────────────────
-  // `CupRoundAdvancerListener` refuses to advance the bracket on a tied
-  // scoreline (knockouts need a decisive winner).  If we allowed a draw
-  // through here, the match would flip to `completed` but the bracket would
-  // remain stuck — a silently broken cup.  Resolve the discriminator by
-  // looking up the competition's `type` column ('cup' = single-elimination).
-  if (homeScore === awayScore && matchRow.competition_id) {
-    const { data: comp, error: compErr } = await (db as AnyDb)
-      .from('competitions')
-      .select('type')
-      .eq('id', matchRow.competition_id)
-      .maybeSingle();
-    if (compErr) {
-      throw new Error(
-        `completeMatchManually: competition lookup failed: ${compErr.message}`,
-      );
-    }
-    if (comp?.type === 'cup') {
-      throw new Error(
-        'Cup matches cannot end in a draw — enter a tiebreak winner',
-      );
-    }
+  // ── Step 2: invoke the SECURITY DEFINER RPC ──────────────────────────────
+  // Atomic: gate-check → score validation → cup-draw guard → UPDATE with
+  // optimistic concurrency, all in one transaction.  The RPC's JSON return
+  // carries the bus-payload fields we need to emit without a second read.
+  const { data: rpcResult, error: rpcErr } = await (db as AnyDb).rpc(
+    'admin_complete_match',
+    {
+      p_match_id:   matchId,
+      p_home_score: homeScore,
+      p_away_score: awayScore,
+    },
+  );
+  if (rpcErr) {
+    // PostgREST surfaces the RAISE EXCEPTION message verbatim — pass it
+    // through so the admin UI's toast shows the same copy the RPC body
+    // chose ("Cup matches cannot end in a draw …", etc.).
+    throw new Error(rpcErr.message);
   }
 
-  // ── Step 3: persist the result with optimistic-concurrency guard ─────────
-  // played_at is stamped with the wall-clock so downstream readers that
-  // sort by played_at order this row exactly like a worker-simulated one.
-  //
-  // The extra `.eq('status', 'scheduled')` clause makes the UPDATE a no-op
-  // when the worker (or another admin) has already moved the row to
-  // `in_progress` / `completed`.  Without it, a stale Fixture Browser tab
-  // could overwrite a freshly-completed simulation and re-emit
-  // `match.completed`, double-settling wagers and double-advancing cups.
-  // We use `.select()` to make PostgREST return the affected rows; an empty
-  // array means the guard skipped the write and we throw before emitting.
-  const { data: updatedRows, error: updateErr } = await (db as AnyDb)
-    .from('matches')
-    .update({
-      status:     'completed',
-      home_score: homeScore,
-      away_score: awayScore,
-      played_at:  new Date().toISOString(),
-    })
-    .eq('id', matchId)
-    .eq('status', 'scheduled')
-    .select();
-
-  if (updateErr) {
-    throw new Error(`completeMatchManually: update failed: ${updateErr.message}`);
-  }
-  if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
-    throw new Error(
-      'Match is no longer scheduled — refresh and try again',
-    );
-  }
-
-  // ── Step 4: emit the bus event ───────────────────────────────────────────
-  // Reaches all four cross-feature listeners.  Synchronous — listeners run
+  // ── Step 3: emit the bus event ───────────────────────────────────────────
+  // Reaches all cross-feature listeners.  Synchronous — listeners run
   // inline on this microtask; their async DB work is handled inside the
   // listener bodies themselves and intentionally not awaited here.
+  //
+  // CAST: the RPC returns json (untyped from supabase-js's perspective);
+  // the field names mirror the SQL `json_build_object` call in migration 0042.
+  const payload = rpcResult as {
+    home_team_id:    string;
+    away_team_id:    string;
+    competition_id:  string | null;
+  };
+
   busOverride.emit('match.completed', {
     matchId,
-    homeTeamId:    matchRow.home_team_id,
-    awayTeamId:    matchRow.away_team_id,
+    homeTeamId:    payload.home_team_id,
+    awayTeamId:    payload.away_team_id,
     homeScore,
     awayScore,
-    competitionId: matchRow.competition_id ?? '',
+    competitionId: payload.competition_id ?? '',
   });
 
   return { matchId, homeScore, awayScore };

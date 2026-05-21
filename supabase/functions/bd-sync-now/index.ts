@@ -67,12 +67,69 @@ const JSONL_URL =
  */
 const MAX_TOMBSTONE_FRACTION = 0.25;
 
-/** CORS headers shared across all responses for browser-side invocation. */
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+/**
+ * Allowlist of origins permitted to invoke this function from a browser.
+ * Anything else gets the production origin echoed back as Allow-Origin so
+ * the browser CORS check fails and the cross-origin call is refused.
+ *
+ * MECHANICAL EFFECT
+ *   * Origin in the list → echo it verbatim so the browser accepts the
+ *     response and the admin UI works.
+ *   * Origin not in the list (or absent) → echo the canonical production
+ *     origin; a hostile cross-origin page comparing against its own
+ *     Origin header sees a mismatch and the browser blocks the response.
+ *
+ * EXTEND CAREFULLY
+ *   Adding a localhost port for a new dev tool is fine.  Adding a wildcard
+ *   (`*`) re-opens the original M1/L1 concern — don't do it.
+ */
+const ALLOWED_ORIGINS: ReadonlySet<string> = new Set([
+  // Production: the GitHub Pages deploy that hosts the public frontend.
+  // Source of truth: `.github/workflows/deploy.yml` BASE_URL config.
+  'https://steverowley.github.io',
+  // Local dev: the default Vite dev server port — covers `npm run dev`.
+  'http://localhost:5173',
+  // Local dev (preview): `npm run preview` defaults to 4173.
+  'http://localhost:4173',
+]);
+
+/** Canonical origin returned when the request's Origin doesn't match the allowlist. */
+const FALLBACK_ORIGIN = 'https://steverowley.github.io';
+
+/**
+ * Resolve the `Access-Control-Allow-Origin` value for a given request.
+ * Echoes the request's Origin when it's in the allowlist; otherwise falls
+ * back to the production origin (which will mismatch on the browser side
+ * and block the response — the desired CORS-deny behaviour).
+ *
+ * @param req  Inbound request whose Origin header (if any) will be inspected.
+ * @returns    The Allow-Origin string to send in the response headers.
+ */
+function resolveAllowOrigin(req: Request): string {
+  const origin = req.headers.get('Origin');
+  if (origin && ALLOWED_ORIGINS.has(origin)) return origin;
+  return FALLBACK_ORIGIN;
+}
+
+/**
+ * Build the CORS header set for a given request.  The Allow-Origin is
+ * computed via `resolveAllowOrigin`; `Vary: Origin` ensures intermediate
+ * caches don't conflate responses for different origins.
+ *
+ * @param req  Inbound request whose Origin should drive the headers.
+ * @returns    Header object to spread into every Response.
+ */
+function corsHeaders(req: Request): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin':  resolveAllowOrigin(req),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    // Vary: Origin signals caches that the response varies with Origin —
+    // without this a CDN could serve a cached cross-origin response from
+    // the allowed-origin reply.
+    'Vary':                         'Origin',
+  };
+}
 
 // ── Row shape (mirrors bd_issues + scripts/sync-bd-to-supabase.mjs) ─────────
 
@@ -136,16 +193,20 @@ function parseJsonl(raw: string): Record<string, unknown>[] {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build a JSON response with shared CORS headers attached.  Sugar so the
- * various early-return branches stay one-liners.
+ * Build a JSON response with per-request CORS headers attached.  Sugar so
+ * the various early-return branches stay one-liners.  The CORS headers
+ * depend on the request's Origin (see `corsHeaders` / `resolveAllowOrigin`),
+ * so the helper takes the request and feeds it through.
  *
+ * @param req     Inbound request — used to compute Allow-Origin.
  * @param status  HTTP status code.
  * @param body    Serialisable response payload.
+ * @returns       A Response object the Deno handler can return directly.
  */
-function json(status: number, body: unknown): Response {
+function json(req: Request, status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(req) },
   });
 }
 
@@ -156,43 +217,68 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // ── CORS preflight ─────────────────────────────────────────────────────
   // Browsers POSTing with custom headers issue an OPTIONS preflight; reply
   // with the allowed methods + headers so the actual call goes through.
+  // The Allow-Origin returned here is the request's Origin if it's in the
+  // allowlist, otherwise the canonical production origin (which causes the
+  // browser to block, the desired deny-by-default).
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response(null, { headers: corsHeaders(req) });
   }
   if (req.method !== 'POST') {
-    return json(405, { error: 'method_not_allowed' });
+    return json(req, 405, { error: 'method_not_allowed' });
   }
 
   // ── Env ────────────────────────────────────────────────────────────────
-  // Both keys are provided by Supabase at deploy time.  The function fails
-  // loudly if either is missing rather than silently writing nothing.
+  // Three secrets are needed:
+  //   * SUPABASE_URL              — REST endpoint, always set by the platform.
+  //   * SUPABASE_ANON_KEY         — apikey for the caller-identification
+  //                                 client below.  Anon role + a user JWT
+  //                                 in the Authorization header resolves to
+  //                                 the caller's identity under their own
+  //                                 RLS scope (no privilege escalation).
+  //   * SUPABASE_SERVICE_ROLE_KEY — apikey for the writer client further
+  //                                 down.  Bypasses RLS so the bd_issues
+  //                                 upsert and tombstone delete actually
+  //                                 land.  NEVER mixed with the caller's
+  //                                 JWT — those queries always use the
+  //                                 service-role client built in step 4.
+  // The function fails loudly if any of the three is missing rather than
+  // silently writing nothing or, worse, silently writing with the wrong
+  // role.
   // @ts-ignore — Deno global.
   const SUPABASE_URL          = Deno.env.get('SUPABASE_URL');
   // @ts-ignore — Deno global.
+  const SUPABASE_ANON_KEY     = Deno.env.get('SUPABASE_ANON_KEY');
+  // @ts-ignore — Deno global.
   const SUPABASE_SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    console.error('[bd-sync-now] missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-    return json(500, { error: 'server_misconfigured' });
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
+    console.error('[bd-sync-now] missing SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY');
+    return json(req, 500, { error: 'server_misconfigured' });
   }
 
   // ── Auth gate: confirm caller is admin ─────────────────────────────────
   // We construct an anon-role client with the caller's JWT attached so
-  // `auth.getUser()` resolves to the caller's identity.  We then look up
-  // their `profiles.is_admin` flag via the same client — RLS gives the
-  // caller read-access to their own profile row only, which is exactly
-  // the scope we need.  All actual writes below use the service-role
-  // client constructed separately.
+  // `auth.getUser()` resolves to the caller's identity AND every query
+  // through this client runs under standard RLS.  This matters in two
+  // ways:
+  //   1. The profile lookup is filtered by `auth.uid() = id` server-side,
+  //      so a malformed query that forgot the `.eq('id', ...)` clause
+  //      below would still only ever return the caller's own row.
+  //   2. Future maintainers adding new queries to this code path inherit
+  //      the same RLS shield — no service-role footgun.
+  // The cross-table writes ahead use a separate service-role client
+  // (constructed in step 4 below) so the bd_issues upsert and tombstone
+  // delete still bypass RLS as required.
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return json(401, { error: 'missing_authorization' });
+    return json(req, 401, { error: 'missing_authorization' });
   }
-  const callerClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
     auth:   { persistSession: false },
   });
   const { data: userData, error: userErr } = await callerClient.auth.getUser();
   if (userErr || !userData.user) {
-    return json(401, { error: 'invalid_jwt' });
+    return json(req, 401, { error: 'invalid_jwt' });
   }
   const { data: profile, error: profileErr } = await callerClient
     .from('profiles')
@@ -201,10 +287,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .maybeSingle();
   if (profileErr) {
     console.error('[bd-sync-now] profile lookup failed:', profileErr.message);
-    return json(500, { error: 'profile_lookup_failed' });
+    return json(req, 500, { error: 'profile_lookup_failed' });
   }
   if (profile?.is_admin !== true) {
-    return json(403, { error: 'not_admin' });
+    return json(req, 403, { error: 'not_admin' });
   }
 
   // ── Fetch + parse JSONL ────────────────────────────────────────────────
@@ -215,12 +301,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const res = await fetch(JSONL_URL, { headers: { 'User-Agent': 'bd-sync-now/1.0' } });
     if (!res.ok) {
       console.error(`[bd-sync-now] JSONL fetch HTTP ${res.status}`);
-      return json(502, { error: 'github_fetch_failed', status: res.status });
+      return json(req, 502, { error: 'github_fetch_failed', status: res.status });
     }
     jsonlBody = await res.text();
   } catch (err) {
     console.error('[bd-sync-now] JSONL fetch threw:', (err as Error).message);
-    return json(502, { error: 'github_fetch_threw' });
+    return json(req, 502, { error: 'github_fetch_threw' });
   }
 
   const issues = parseJsonl(jsonlBody);
@@ -232,7 +318,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // always indicates a broken fetch or a malformed JSONL, never a real
   // "user emptied bd" event.
   if (issues.length === 0) {
-    return json(200, {
+    return json(req, 200, {
       upserted: 0,
       deleted:  0,
       warning:  'parsed_zero_issues_skipped',
@@ -275,7 +361,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     existingCount = result.count;
   } catch (err) {
     console.error('[bd-sync-now] list failed:', (err as Error).message);
-    return json(500, { error: 'list_failed', detail: (err as Error).message });
+    return json(req, 500, { error: 'list_failed', detail: (err as Error).message });
   }
 
   const tombstones: string[] = [];
@@ -289,7 +375,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // the same mass-deletion shapes.
   const tombCap = Math.max(5, Math.floor(existingCount * MAX_TOMBSTONE_FRACTION));
   if (tombstones.length > tombCap) {
-    return json(409, {
+    return json(req, 409, {
       error:           'tombstone_cap_exceeded',
       attempted:       tombstones.length,
       cap:             tombCap,
@@ -306,7 +392,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .upsert(payload, { onConflict: 'id' });
   if (upsertErr) {
     console.error('[bd-sync-now] upsert failed:', upsertErr.message);
-    return json(500, { error: 'upsert_failed', detail: upsertErr.message });
+    return json(req, 500, { error: 'upsert_failed', detail: upsertErr.message });
   }
 
   // ── Tombstone delete ───────────────────────────────────────────────────
@@ -319,12 +405,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .in('id', tombstones);
     if (delErr) {
       console.error('[bd-sync-now] delete failed:', delErr.message);
-      return json(500, { error: 'delete_failed', detail: delErr.message });
+      return json(req, 500, { error: 'delete_failed', detail: delErr.message });
     }
     deleted = tombstones.length;
   }
 
-  return json(200, {
+  return json(req, 200, {
     upserted:  payload.length,
     deleted,
     synced_at: now,

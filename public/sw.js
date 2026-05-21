@@ -67,9 +67,39 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// ── Same-origin navigation helper ──────────────────────────────────────────
+// Defence-in-depth for the URL coming out of the encrypted push payload.
+// Today the payload is server-signed via VAPID and the URL is hardcoded
+// to `${PUBLIC_APP_URL}/matches/<uuid>` in match-notify-worker, so the
+// only way a malicious target could land here is via a future code path
+// that widens the payload schema.  Validating at the navigation boundary
+// means that future path doesn't have to remember to validate itself.
+//
+// MECHANICAL EFFECT
+//   * Same-origin URL → returned as a path+search+hash string the
+//     browser can navigate to in place.
+//   * Cross-origin / data: / javascript: / malformed URL → returned as
+//     the literal '/' so the user lands on the app home page instead.
+//
+// @param raw  String from `event.notification.data.url`.  May be absolute,
+//             relative, or missing.
+// @returns    A safe same-origin path string ready to feed into
+//             client.navigate() or self.clients.openWindow().
+function sameOriginPath(raw) {
+  try {
+    const parsed = new URL(raw, self.location.origin);
+    if (parsed.origin !== self.location.origin) return '/';
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch (_err) {
+    // URL constructor throws on malformed input — fail safe.
+    return '/';
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/';
+  const raw    = (event.notification.data && event.notification.data.url) || '/';
+  const target = sameOriginPath(raw);
 
   event.waitUntil(
     self.clients
@@ -77,9 +107,17 @@ self.addEventListener('notificationclick', (event) => {
       .then((clients) => {
         // ── Preferred: a tab already on the target URL ─────────────────
         // Simply focus it; no navigation needed, and any in-flight UI
-        // state on that tab is preserved.
+        // state on that tab is preserved.  We compare paths (not full
+        // URLs) since `target` is already same-origin-normalised by
+        // `sameOriginPath` above.
         for (const client of clients) {
-          if (client.url === target && 'focus' in client) {
+          let path = '';
+          try {
+            path = new URL(client.url).pathname + new URL(client.url).search + new URL(client.url).hash;
+          } catch {
+            continue;
+          }
+          if (path === target && 'focus' in client) {
             return client.focus();
           }
         }
@@ -105,7 +143,9 @@ self.addEventListener('notificationclick', (event) => {
           // Only reuse if the tab is already on an app surface where
           // navigating won't cost the user unsaved state.  Match
           // anchors are intentionally narrow — root, the matches list,
-          // and any other match detail page.
+          // and any other match detail page.  navigate() is fed the
+          // same-origin path computed above, so a hostile payload can
+          // never redirect the user off-site.
           const safeToNavigate =
             path === '/' ||
             path.endsWith('/') ||
@@ -117,6 +157,8 @@ self.addEventListener('notificationclick', (event) => {
         }
         // ── Last resort: open a new tab ────────────────────────────────
         if (self.clients.openWindow) {
+          // openWindow accepts paths relative to the worker's scope, so
+          // the same-origin path string lands the user inside the app.
           return self.clients.openWindow(target);
         }
         return undefined;
