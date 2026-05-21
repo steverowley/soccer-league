@@ -933,12 +933,32 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
       return undefined;
     }
 
+    // SELF-TERMINATING INTERVAL: this effect's deps never change as the
+    // wall clock advances, so without an internal `clearInterval` the
+    // setInterval would keep firing every second forever once the page
+    // sits past `endAtMs` — React would bail out of the duplicate
+    // setState updates but the timer itself would leak for the entire
+    // tab lifetime, burning CPU + battery on long-lived sessions.  The
+    // tick function self-clears the moment wall-clock crosses endAtMs,
+    // emits one final `setElapsedMinute(120)` to flip the section into
+    // its replay state, and then returns.
+    let interval: ReturnType<typeof setInterval> | null = null;
     const tick = (): void => {
+      if (Date.now() >= endAtMs) {
+        setElapsedMinute(120);
+        if (interval !== null) {
+          clearInterval(interval);
+          interval = null;
+        }
+        return;
+      }
       setElapsedMinute(computeElapsedGameMinute(kickoff, new Date(), duration));
     };
     tick();
-    const interval = setInterval(tick, LIVE_TICK_MS);
-    return () => clearInterval(interval);
+    interval = setInterval(tick, LIVE_TICK_MS);
+    return () => {
+      if (interval !== null) clearInterval(interval);
+    };
   }, [status, match?.scheduled_at, duration]);
 
   // ── Realtime subscription (whenever new events may still arrive) ──────────

@@ -132,10 +132,19 @@ export async function loadShadowDistribution(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<ShadowDistribution | null> {
+  // DETERMINISM: pair LIMIT with a stable ORDER BY.  Without the
+  // `.order(...)`, Postgres returns rows in undefined heap order — two
+  // calls on the same row set can yield different first-N subsets, and
+  // `aggregateShadowRows` would produce different averages between them.
+  // The module docstring promises "deterministic given the same row
+  // set"; the docstring is only honest when the truncation is too.
+  // `created_at` is monotonic (worker writes one row at a time) and
+  // present on every shadow_match_results row, so it's the right anchor.
   const { data, error } = await db
     .from('shadow_match_results')
     .select('home_goals, away_goals, outcome, perturbation')
     .eq('match_id', matchId)
+    .order('created_at', { ascending: true })
     .limit(MAX_SHADOW_ROWS);
 
   if (error) {

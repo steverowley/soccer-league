@@ -25,7 +25,7 @@
 //   the existing Profile.tsx aesthetic (FLARE colour for errors).  We never
 //   throw alerts or modal dialogs — the page should never block the user.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { COLORS } from '../../../components/Layout';
 import { useSupabase } from '../../../shared/supabase/SupabaseProvider';
 import {
@@ -103,6 +103,14 @@ export default function NotificationSettings() {
   const [error, setError] = useState<string | null>(null);
   const [busy,  setBusy]  = useState<boolean>(false);
 
+  // ── Hydration vs user-action race guard ──────────────────────────────────
+  // If the user clicks a toggle BEFORE this first-paint fetch resolves,
+  // we must NOT overwrite their just-saved choice with the pre-write
+  // DB snapshot.  `hydratedRef` flips to `true` the moment any user
+  // action writes to the DB (in `onTogglePref`), and the hydration
+  // effect below refuses to setPrefs() after that flag is set.
+  const hydratedRef = useRef(false);
+
   // ── First-paint hydration ────────────────────────────────────────────────
   // Runs once.  Reads the local PushManager state AND the DB prefs in
   // parallel — neither blocks the other so the worst-case latency is
@@ -116,6 +124,15 @@ export default function NotificationSettings() {
     ]).then(([currentEndpoint, prefsResult]) => {
       if (cancelled) return;
       setEndpoint(currentEndpoint);
+      // Race guard: a user click that wrote to the DB before this
+      // hydration resolved already mutated local state with the
+      // user's intent.  Overwriting it now with the PRE-WRITE DB
+      // snapshot would silently revert the toggle the user just
+      // clicked.  Skip the setPrefs in that case — the user's value
+      // is already correct on both sides (UI + DB) and any subsequent
+      // tab will hydrate against the now-post-write DB.
+      if (hydratedRef.current) return;
+      hydratedRef.current = true;
       if (prefsResult.data) setPrefs(prefsResult.data);
       else if (prefsResult.error) {
         // Don't surface a hard error here — a missing row is not a
@@ -202,6 +219,12 @@ export default function NotificationSettings() {
     setError(null);
     const previous = prefs;
     setPrefs({ ...prefs, [key]: next });
+    // Block any later first-paint hydration from clobbering this just-set
+    // user choice (see hydratedRef block above).  Even if the write
+    // below fails and we roll back, the user's INTENT is captured —
+    // letting the hydration snapshot win after a click is the worse
+    // failure mode (silently reverts a deliberate action).
+    hydratedRef.current = true;
     const { error: updateError } = await updateNotificationPreferences(db, { [key]: next });
     if (updateError) {
       setPrefs(previous);

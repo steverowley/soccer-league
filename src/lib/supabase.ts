@@ -520,8 +520,22 @@ export async function getManager(
     if (traitsRes.data) traits = traitsRes.data;
   }
 
+  // ── Normalise PostgREST's embedded `teams` shape ─────────────────────────
+  // PostgREST embeds a related row as either an OBJECT (the canonical
+  // one-to-one shape) or an ARRAY of length 0/1 (when the relationship
+  // is detected as ambiguous or has no enforced cardinality).
+  // `ManagerWithContext.teams` is typed as a singular object, so a
+  // runtime array would silently break `manager.teams?.name` accesses
+  // in ManagerDetail.  Flatten any array shape to the first element (or
+  // null) so the consumer always sees one canonical type.
+  const rawTeams = (managerRow as { teams?: unknown }).teams;
+  const teamsObject: ManagerWithContext['teams'] = Array.isArray(rawTeams)
+    ? ((rawTeams[0] as ManagerWithContext['teams']) ?? null)
+    : ((rawTeams as ManagerWithContext['teams']) ?? null);
+
   return {
     ...(managerRow as unknown as ManagerWithContext),
+    teams: teamsObject,
     entity,
     traits,
   };
