@@ -41,9 +41,29 @@
           }
         ],
         "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash .claude/hooks/log-session-start.sh",
+            "timeout": 8,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash .claude/hooks/log-session-end.sh",
+            "timeout": 8,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
       {
         "hooks": [
           {

@@ -100,6 +100,7 @@ export const PILLAR_LABELS: Record<RoadmapPillar, string> = {
 // to peek into the inner payload.
 
 import type { BdIssue } from './api/bdSnapshot';
+import type { ClaudeSession } from './api/claudeSessions';
 
 /** Base fields shared by every card on the board, regardless of source. */
 export interface BoardItemCommon {
@@ -132,8 +133,23 @@ export interface BdBoardItem extends BoardItemCommon {
 }
 
 /**
+ * Claude-session-sourced board item.  Always lands in the `in_progress`
+ * column.  Read-only — sessions are written by the cloud SessionStart /
+ * Stop hooks, never by the dashboard.  Renders a live "session" chip and
+ * a "started <ago>" footer so the user can see at a glance that Claude
+ * is actively working on the branch.
+ */
+export interface ClaudeSessionBoardItem extends BoardItemCommon {
+  kind: 'session';
+  /** The validated `claude_sessions` row.  Drives chrome + start time. */
+  session: ClaudeSession;
+}
+
+/**
  * Discriminated union of every card the board can render.  The `kind`
  * tag drives card chrome, while the hoisted common fields drive sort and
- * grouping.
+ * grouping.  A new variant here requires:
+ *   * a `from<Source>(...)` adapter in `RoadmapBoard.tsx`
+ *   * a render branch in `RoadmapCard.tsx`
  */
-export type BoardItem = SupabaseBoardItem | BdBoardItem;
+export type BoardItem = SupabaseBoardItem | BdBoardItem | ClaudeSessionBoardItem;
