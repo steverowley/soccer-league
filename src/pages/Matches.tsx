@@ -96,7 +96,28 @@ interface MatchRow {
 }
 
 /**
+ * Pacing-window length in seconds — mirrors the constant in lib/supabase.ts
+ * (which mirrors `season_config.match_duration_seconds`).  Duplicated here
+ * because the inline `fetchCompletedMatches` helper hasn't been lifted into
+ * the shared API layer yet (see the function header).  Same mechanical
+ * effect as the lib copy: a match's events take this many seconds to fully
+ * reveal on the viewer's wall clock, regardless of how fast the worker
+ * actually persisted them.
+ */
+const PACING_WINDOW_SECONDS = 600;
+
+/**
  * Fetch the most recently completed matches across every competition.
+ *
+ * COMPLETED MEANS "REPLAY-READY", NOT "DB ROW SAYS completed"
+ * ─────────────────────────────────────────────────────────
+ *   The worker flips status to `completed` ~10–60 s after kickoff but the
+ *   viewer paces events over PACING_WINDOW_SECONDS (600 s default).  A row
+ *   that's already `completed` in the DB but whose `scheduled_at + window`
+ *   hasn't passed yet should appear in the Live section (it's still being
+ *   revealed minute-by-minute), not Completed.  The `scheduled_at <
+ *   windowCutoff` predicate enforces that boundary so the same match never
+ *   shows up in both sections at once.
  *
  * Inlined here rather than added to `src/lib/supabase.ts` because the
  * Matches index is the only consumer today.  When a second consumer
@@ -104,6 +125,9 @@ interface MatchRow {
  * into the shared API layer.
  *
  * @param limit Maximum row count (default FETCH_COMPLETED_LIMIT).
+ * @returns     Completed match rows ordered by `played_at` DESC.  Excludes
+ *              matches still inside the pacing window.
+ * @throws      Re-throws the Supabase error if the query fails.
  */
 async function fetchCompletedMatches(limit = FETCH_COMPLETED_LIMIT): Promise<MatchRow[]> {
   const { createClient } = await import('@supabase/supabase-js');
@@ -114,6 +138,9 @@ async function fetchCompletedMatches(limit = FETCH_COMPLETED_LIMIT): Promise<Mat
   // In practice the JSX passed `db` here; we replicate by importing
   // the singleton directly since the function is module-scoped.
   const { supabase } = await import('../lib/supabase');
+  // windowCutoffIso = "now − pacing window" — matches whose kickoff is older
+  // than this are no longer being live-revealed and belong in Completed.
+  const windowCutoffIso = new Date(Date.now() - PACING_WINDOW_SECONDS * 1000).toISOString();
   const { data, error } = await supabase
     .from('matches')
     .select(`
@@ -123,6 +150,7 @@ async function fetchCompletedMatches(limit = FETCH_COMPLETED_LIMIT): Promise<Mat
       away_team:teams!matches_away_team_id_fkey (id, name, color, location)
     `)
     .eq('status', 'completed')
+    .lt('scheduled_at', windowCutoffIso)
     .order('played_at', { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) throw error;
