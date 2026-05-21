@@ -113,3 +113,25 @@ export type {
   FactoryRelationshipInput,
   FactoryTraitInput,
 } from './logic/personaFactory';
+
+// ── Logic — decision dispatcher + reflection-tier resolvers (Phase 6) ──────
+// Three-tier decision model (reflex / reflection / drama).  Phase 6 ships
+// the reflection tier — bookies slant odds by mood + grudges, journalists
+// pick stories by beat + sources, pundits pick subjects by specialty +
+// take history.  Resolvers are pure; the dispatcher is the typed routing
+// switch.
+export { runDecision } from './logic/decisions';
+export type {
+  DecisionInputs,
+  DecisionKind,
+  DecisionRequest,
+  DecisionResults,
+  JournalistStoryPickContext,
+  JournalistStoryPickResult,
+  OddsSlantContext,
+  OddsSlantResult,
+  PunditTakeContext,
+  PunditTakeResult,
+} from './logic/decisions';
+export type { JournalistStoryCandidate } from './logic/resolvers/journalistStoryPick';
+export type { PunditTakeCandidate } from './logic/resolvers/punditTake';
