@@ -19,6 +19,32 @@ export interface FanBoostInput {
   boostAmount: number;
 }
 
+/**
+ * Entity-graph referee assignment threaded through to createAIManager so
+ * the engine reads the correct officiating identity AND so the Phase 8
+ * card_severity reflex resolver can find the referee's persona/memories
+ * via `entity_id`.
+ *
+ * Built from `match_referee_v` by the worker before simulation: the
+ * view exposes the referee's name + display_name + the raw 1–10
+ * strictness trait, which the caller multiplies by 10 to land on the
+ * engine's 0–100 strictness scale (matching the src/ helper contract
+ * documented in src/features/match/logic/simulateFullMatch.ts).
+ */
+export interface RefereeOverride {
+  /** Display name shown in commentary lines (preferred over `name`). */
+  name: string;
+  /** Engine-scale strictness 0–100 (raw trait × 10). */
+  strictness: number;
+  /**
+   * Universal Agent System entity id.  When present, the engine forwards
+   * it through `aim.referee.entity_id` so the `card_severity` resolver
+   * can hydrate the referee's persona + per-player memory grudges.
+   * Null = legacy strictness-only path (no resolver lookup).
+   */
+  entity_id: string | null;
+}
+
 // ── Simulated match result types ───────────────────────────────────────────
 
 /**
@@ -107,15 +133,25 @@ function toSimulatedEvent(ev: Record<string, any>, subminute: number): Simulated
  *
  * @param home      Home team object as produced by normalizeTeamForEngine().
  * @param away      Away team object as produced by normalizeTeamForEngine().
- * @param fanBoost  Optional fan-support boost result. When boostedSide is
- *                  'home' or 'away', that team's players get +boostAmount
- *                  to each stat BEFORE AI manager creation.
- * @param architect Optional CosmicArchitect (see architect.ts).  When
- *                  provided, gameEngine threads `getRelationshipFor`,
- *                  `getFeaturedMortals`, and `getActiveRelationships` into
- *                  contest resolution + commentary, activating rivalry-based
- *                  card-bias multipliers and the weird-pool rate boost.
- * @returns         Events + final score + MVP — ready for DB persistence.
+ * @param fanBoost    Optional fan-support boost result. When boostedSide is
+ *                    'home' or 'away', that team's players get +boostAmount
+ *                    to each stat BEFORE AI manager creation.
+ * @param architect   Optional CosmicArchitect (see architect.ts).  When
+ *                    provided, gameEngine threads `getRelationshipFor`,
+ *                    `getFeaturedMortals`, and `getActiveRelationships` into
+ *                    contest resolution + commentary, activating rivalry-based
+ *                    card-bias multipliers and the weird-pool rate boost.
+ * @param reflexHooks Optional Phase 8 reflex-tier hooks — corpus + dispatcher
+ *                    for `shoot_or_pass` and `card_severity` decisions.
+ * @param refOverride Optional entity-graph referee assignment built from
+ *                    `match_referee_v`.  Threaded into createAIManager so
+ *                    the engine reads the correct officiating identity AND
+ *                    so `card_severity` can resolve the referee's persona
+ *                    via `entity_id`.  When omitted, gameEngine fabricates
+ *                    a random referee with `entity_id: null` — preserving
+ *                    determinism for callers (smoke tests) that don't yet
+ *                    plumb entity refs through.
+ * @returns           Events + final score + MVP — ready for DB persistence.
  */
 /**
  * Optional Phase 8 reflex-tier hooks.  Mirrors the src/ side's
@@ -144,6 +180,7 @@ export function simulateFullMatch(
   // deno-lint-ignore no-explicit-any
   architect: any | null = null,
   reflexHooks: AgentReflexHooks | null = null,
+  refOverride: RefereeOverride | null = null,
 ): SimulatedMatchResult {
   // ── Apply fan-support boost ────────────────────────────────────────────────
   // The team with more logged-in fans gets a small stat boost across every
@@ -157,8 +194,10 @@ export function simulateFullMatch(
 
   // ── Per-match state ────────────────────────────────────────────────────────
   // createAIManager seeds initial agent fatigue/morale and picks weather,
-  // referee, and other per-match setup.
-  const aim = createAIManager(boostedHome, boostedAway, null);
+  // referee, and other per-match setup.  When `refOverride` is supplied
+  // (post-isl-84e wiring) the engine uses the named referee + persona
+  // entity_id; null falls back to the legacy random fabricated referee.
+  const aim = createAIManager(boostedHome, boostedAway, refOverride);
 
   const score: [number, number] = [0, 0];
   let momentum: [number, number] = [...INITIAL_MOMENTUM];

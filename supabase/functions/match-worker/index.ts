@@ -267,6 +267,42 @@ async function processMatch(match: any): Promise<boolean> {
     const home = normalizeTeamForEngine(homeData);
     const away = normalizeTeamForEngine(awayData);
 
+    // ── Referee lookup (isl-84e) ───────────────────────────────────────────
+    // Read the assigned referee from `match_referee_v` so the engine knows
+    // the correct officiating identity AND so the Phase 8 `card_severity`
+    // reflex resolver can resolve the referee's persona via `entity_id`.
+    // The view returns `referee_strictness` on the raw 1–10 trait scale;
+    // we multiply by 10 to land on the engine's 0–100 strictness scale
+    // (matching the contract documented in simulateFullMatch.ts).
+    //
+    // Failure modes are all degrade-gracefully: a missing FK, a view
+    // query error, or a referee with no strictness trait → `null`
+    // refOverride, and gameEngine falls back to the legacy random
+    // fabricated referee with `entity_id: null`.
+    let refOverride: { name: string; strictness: number; entity_id: string | null } | null = null;
+    try {
+      const { data: refRow, error: refErr } = await supabase
+        .from('match_referee_v')
+        .select('referee_id, referee_name, referee_display_name, referee_strictness')
+        .eq('match_id', match.id)
+        .maybeSingle();
+      if (refErr) {
+        console.warn(`[match-worker] match_referee_v query failed: ${refErr.message}`);
+      } else if (refRow && refRow.referee_id) {
+        const name = (refRow.referee_display_name as string | null) ?? (refRow.referee_name as string);
+        const rawStrictness = (refRow.referee_strictness as number | null) ?? 5;
+        refOverride = {
+          name,
+          // Trait scale 1–10 → engine scale 0–100.
+          strictness: rawStrictness * 10,
+          entity_id: refRow.referee_id as string,
+        };
+        console.log(`[match-worker] Referee: ${name} (strictness ${refOverride.strictness}/100, entity ${refOverride.entity_id})`);
+      }
+    } catch (err) {
+      console.warn('[match-worker] referee lookup threw:', (err as Error)?.message ?? err);
+    }
+
     // ── Pre-match context ───────────────────────────────────────────────────
     // Fan boost + Architect lifecycle are both hydrated here in parallel and
     // threaded into simulateFullMatch.  Both falling back to no-ops (no
@@ -337,8 +373,12 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn('[match-worker] getPreMatchOmen threw:', (err as Error)?.message ?? err);
     }
 
-    // Simulate the full 90 minutes
-    const result = simulateFullMatch(home, away, fanBoost, architect);
+    // Simulate the full 90 minutes.  `refOverride` is the isl-84e wiring —
+    // passes the assigned referee's identity (incl. entity_id) into
+    // createAIManager so the Phase 8 card_severity resolver can find
+    // the referee persona.  `null` (no referee assigned to this match)
+    // falls back to a random fabricated official with `entity_id: null`.
+    const result = simulateFullMatch(home, away, fanBoost, architect, null, refOverride);
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
