@@ -176,6 +176,76 @@ export async function transitionSeasonStatus(
   return Array.isArray(data) && data.length > 0;
 }
 
+// ── Listing for the seasonal-archive surface (issue isl-aaj) ────────────────
+
+/**
+ * One row of the seasonal-archive list.  Subset of the `seasons` table
+ * the archive page reads — `id` / `name` / `year` to render the card,
+ * `status` to chip-mark "active" vs "completed", and the two timestamps
+ * so the card can display a date range under the title.
+ */
+export interface SeasonSummary {
+  id:           string;
+  name:         string;
+  year:         number;
+  status:       string;
+  started_at:   string | null;
+  ended_at:     string | null;
+  start_date:   string | null;
+  end_date:     string | null;
+  is_active:    boolean;
+}
+
+/**
+ * Fetch every row from `seasons`, newest first.  Used by the
+ * `/seasons` index page (isl-aaj seasonal archive) to surface
+ * historical seasons — the table is small (one row per season,
+ * tens of rows even for long-lived leagues) so we don't paginate.
+ *
+ * Ordering: `year DESC, started_at DESC` so the most recent season
+ * always sits at the top of the page regardless of whether
+ * `started_at` is null on legacy rows.
+ *
+ * @param db  Injected Supabase client.
+ * @returns   Validated SeasonSummary rows newest-first, or [] on error.
+ */
+export async function listAllSeasons(
+  db: IslSupabaseClient,
+): Promise<SeasonSummary[]> {
+  const { data, error } = await db
+    .from('seasons')
+    .select('id, name, year, status, started_at, ended_at, start_date, end_date, is_active')
+    .order('year',       { ascending: false })
+    .order('started_at', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.warn('[listAllSeasons] failed:', error.message);
+    return [];
+  }
+  return (data ?? []) as SeasonSummary[];
+}
+
+/**
+ * Fetch a single season row by id for the archive detail page.
+ *
+ * @param db        Injected Supabase client.
+ * @param seasonId  UUID of the season to fetch.
+ * @returns         The summary row, or null on miss / error.
+ */
+export async function getSeasonSummary(
+  db:       IslSupabaseClient,
+  seasonId: string,
+): Promise<SeasonSummary | null> {
+  const { data, error } = await db
+    .from('seasons')
+    .select('id, name, year, status, started_at, ended_at, start_date, end_date, is_active')
+    .eq('id', seasonId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as SeasonSummary;
+}
+
 // ── Convenience: "what season does this match belong to?" ────────────────────
 
 /**
