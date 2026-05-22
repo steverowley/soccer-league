@@ -111,6 +111,9 @@ const Login        = lazy(() => import('./pages/Login'));
 const Profile      = lazy(() => import('./pages/Profile'));
 const Wagers       = lazy(() => import('./pages/Wagers'));
 const Admin        = lazy(() => import('./pages/Admin'));
+const About        = lazy(() => import('./pages/About'));
+const Privacy      = lazy(() => import('./pages/Privacy'));
+const Terms        = lazy(() => import('./pages/Terms'));
 const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
 // EntityDetail (Phase 10 of the Universal Agent System): inspects any
 // entity's persona + recent snippets + recent memories.  Read-only.
@@ -297,6 +300,12 @@ createRoot(document.getElementById('root')!).render(
                   Admin-gated client-side; service-role RLS gates the
                   underlying shadow_match_results table at the DB. */}
               <Route path="admin/what-if"       element={<WhatIf />} />
+
+              {/* Legal / marketing — static prose pages required for public
+                  launch (GDPR + ToS). Linked from the global Footer. */}
+              <Route path="about"               element={<About />} />
+              <Route path="privacy"             element={<Privacy />} />
+              <Route path="terms"               element={<Terms />} />
             </Routes>
             </Suspense>
           </BrowserRouter>
