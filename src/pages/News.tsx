@@ -91,7 +91,48 @@ const NARRATIVE_KINDS = [
     border:   HAIRLINE,
     pip:      DUST,
   },
+  // ── Kinds wired in by #374 ────────────────────────────────────────────────
+  // Pre-#374 these existed in the narratives table (some heavily — cosmic_omen
+  // alone was the single most common kind in production) but the News page
+  // had no chip for them, so they rendered as undifferentiated grey cards
+  // and weren't filterable at all. Adding per-kind borders + pips so each
+  // narrative reads as the voice it is.
+  {
+    key:      'cosmic_omen',
+    label:    'Cosmic Omens',
+    subtitle: 'Pre-Match Edicts',
+    // Quantum at lower alpha — adjacent to architect_whisper but not as loud.
+    border:   'rgba(154, 92, 244, 0.55)',
+    pip:      'rgba(154, 92, 244, 0.85)',
+  },
+  {
+    key:      'balance_whisper',
+    label:    'Balance Whispers',
+    subtitle: 'The Second Voice',
+    // Slate-blue accent matches the in-match Balance card colour (cosmicVoices.ts).
+    border:   '#64748b',
+    pip:      '#64748b',
+  },
+  {
+    key:      'chaos_whisper',
+    label:    'Chaos Whispers',
+    subtitle: 'The Third Voice',
+    // Amber accent matches the in-match Chaos card colour (cosmicVoices.ts).
+    border:   '#f59e0b',
+    pip:      '#f59e0b',
+  },
+  {
+    key:      'daybreak',
+    label:    'Daybreak Digest',
+    // Pinned to the top of each day's feed (see DAYBREAK_KIND handling below).
+    subtitle: 'Galactic Daily',
+    border:   COLORS.dust,
+    pip:      COLORS.dust,
+  },
 ];
+
+/** Kind key for the daily digest — pinned above the rest of the feed. */
+const DAYBREAK_KIND = 'daybreak';
 
 // KIND_BY_KEY — lookup map built once at module load.  Saves a
 // per-render Array.find() call inside NarrativeCard (the feed can show
@@ -163,6 +204,16 @@ export default function News() {
   const canLoadMore = loaded && !loadError &&
     rows.length === limit && limit < MAX_FEED_ROWS;
 
+  // ── Daybreak pinning ───────────────────────────────────────────────────────
+  // The Daybreak Digest is the cosmos's daily summary — it should sit at the
+  // top of each day's feed regardless of insert time, so the reader sees it
+  // before scrolling into the per-event noise. We split rows into two
+  // sections (pinned + rest) ONLY when no specific kind filter is active —
+  // filtering to just one kind keeps the normal chronological view.
+  const showPinned = filter === FILTER_ALL;
+  const pinnedRows = showPinned ? rows.filter((n: any) => n.kind === DAYBREAK_KIND) : [];
+  const otherRows  = showPinned ? rows.filter((n: any) => n.kind !== DAYBREAK_KIND) : rows;
+
   return (
     <div style={{
       background: ABYSS,
@@ -218,11 +269,27 @@ export default function News() {
           )}
           {loaded && !loadError && rows.length > 0 && (
             <>
+              {/* Pinned daybreak digest(s) — see DAYBREAK_KIND. Only shown
+                  when no kind filter is active; filtering to a single kind
+                  keeps the chronological view. */}
+              {pinnedRows.length > 0 && (
+                <ul style={{
+                  listStyle: 'none', padding: 0, margin: '24px 0 16px',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                  borderBottom: `1px solid ${HAIRLINE}`, paddingBottom: 16,
+                }}>
+                  {pinnedRows.map((n: any) => (
+                    <li key={n.id}>
+                      <NarrativeCard narrative={n} />
+                    </li>
+                  ))}
+                </ul>
+              )}
               <ul style={{
-                listStyle: 'none', padding: 0, margin: '24px 0 0',
+                listStyle: 'none', padding: 0, margin: pinnedRows.length > 0 ? 0 : '24px 0 0',
                 display: 'flex', flexDirection: 'column', gap: 12,
               }}>
-                {rows.map((n: any) => (
+                {otherRows.map((n: any) => (
                   <li key={n.id}>
                     <NarrativeCard narrative={n} />
                   </li>
