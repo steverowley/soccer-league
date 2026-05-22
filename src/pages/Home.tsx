@@ -92,7 +92,10 @@ const HERO_BODY     =
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Home() {
+  usePageTitle(null);
   const db = useSupabase();
 
   // ── Live + upcoming match state ───────────────────────────────────────────

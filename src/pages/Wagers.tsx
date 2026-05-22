@@ -64,7 +64,10 @@ const FETCH_LIMIT = 200;
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Wagers() {
+  usePageTitle('Your Wagers');
   const db = useSupabase();
   const { user, profile, loading } = useAuth();
 

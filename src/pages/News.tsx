@@ -118,7 +118,10 @@ const MAX_FEED_ROWS = 200;
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function News() {
+  usePageTitle('Galaxy Dispatch');
   const db = useSupabase();
   const [filter, setFilter] = useState(FILTER_ALL);
   const [limit,  setLimit]  = useState(PAGE_SIZE);

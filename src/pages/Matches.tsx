@@ -170,7 +170,10 @@ async function fetchCompletedMatches(limit = FETCH_COMPLETED_LIMIT): Promise<Mat
  * (the page doesn't block) — partial loads paint the available
  * sections immediately so the masthead never looks blank.
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Matches() {
+  usePageTitle('Matches');
   void useSupabase(); // keep DI contract; singleton used inside fetchCompletedMatches
   const [filter, setFilter] = useState<string>(FILTER_ALL);
 

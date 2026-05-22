@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Static routes only. Per-team / per-player / per-match URLs are too
+       volatile and numerous to enumerate here; crawlers discover them via
+       internal links. Update this list when adding a new top-level route. -->
+  <url><loc>https://steverowley.github.io/soccer-league/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/leagues</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/teams</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/matches</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/news</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/idols</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/leaderboards</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/voting</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/training</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/seasons</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://steverowley.github.io/soccer-league/login</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+</urlset>

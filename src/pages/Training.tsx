@@ -79,7 +79,10 @@ const BUMP_TOAST_MS = 2500;
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Training() {
+  usePageTitle('Training Facility');
   const db = useSupabase();
   const { user, profile } = useAuth();
   const teamId = profile?.favourite_team_id ?? null;

@@ -40,7 +40,10 @@ import {
  * current `?tab=…` value.  Adding a new tab is a one-line change in
  * `ADMIN_TABS` plus a new branch in the panel switch below.
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Admin() {
+  usePageTitle('Admin');
   const db = useSupabase();
 
   // ── Tab state (URL-synced) ────────────────────────────────────────────────

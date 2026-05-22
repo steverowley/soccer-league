@@ -56,7 +56,10 @@ const MIN_USERNAME_LENGTH = 3;
  * Already-signed-in users are redirected to /profile via
  * <Navigate /> on render (cheaper than an effect).
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Login() {
+  usePageTitle('Sign In');
   const { user, signIn, signUp, loading } = useAuth();
   const navigate = useNavigate();
 

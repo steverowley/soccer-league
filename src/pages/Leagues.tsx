@@ -70,7 +70,10 @@ const CARD_DESCRIPTION_MAX_CHARS = 320;
  * never writes to that cache.  This page now mirrors LeagueDetail's
  * async fetch so all standings surfaces share one source of truth.
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Leagues() {
+  usePageTitle('Leagues');
   const db = useSupabase();
 
   // ── Per-league top-N standings state ──────────────────────────────────────
