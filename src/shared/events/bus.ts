@@ -159,7 +159,12 @@ export interface IslEventBus {
 
 // ── Concrete implementation ───────────────────────────────────────────────────
 
-class EventBus implements IslEventBus {
+/**
+ * Concrete bus implementation. The app uses the `bus` singleton below; tests
+ * that need isolation between cases construct their own `new EventBus()` so
+ * one test's listeners can't leak into another's emit.
+ */
+export class EventBus implements IslEventBus {
   /** Backing store: event name → array of registered listeners. */
   private readonly listeners: ListenerMap = {};
 
@@ -191,8 +196,15 @@ class EventBus implements IslEventBus {
     if (!arr) return;
     // Iterate over a shallow copy so that a listener unsubscribing itself
     // mid-emit does not skip the next listener in the original array.
+    // Each call is isolated: a throwing listener must not prevent the rest
+    // from running (otherwise one bad listener nukes settlement, cup advance,
+    // narratives, etc. for every match).
     for (const listener of [...arr]) {
-      listener(payload);
+      try {
+        listener(payload);
+      } catch (error) {
+        console.error('[bus] listener error', { event, error });
+      }
     }
   }
 
