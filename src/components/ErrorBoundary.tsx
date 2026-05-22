@@ -1,5 +1,6 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
 import { C } from '../constants';
+import { captureException } from '../shared/observability/sentry';
 
 interface Props {
   children: ReactNode;
@@ -25,6 +26,12 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ISL] Unhandled render error:', error, info.componentStack);
+    // Forward to Sentry (no-op when no DSN). Tag scope so we can filter
+    // ErrorBoundary catches apart from event-bus catches and other sources.
+    captureException(error, {
+      tags: { source: 'react-error-boundary' },
+      extra: { componentStack: info.componentStack ?? null },
+    });
   }
 
   override render(): ReactNode {

@@ -1,3 +1,5 @@
+import { captureException } from '../observability/sentry';
+
 // ── Typed in-app event bus ───────────────────────────────────────────────────
 // WHY: Features must never import each other directly — that would couple the
 // betting feature to the match feature, the finance feature to auth, etc.
@@ -204,6 +206,12 @@ export class EventBus implements IslEventBus {
         listener(payload);
       } catch (error) {
         console.error('[bus] listener error', { event, error });
+        // Forward to Sentry (no-op when no DSN). Tag the event name so
+        // dashboards can split errors by 'match.completed' / 'wager.placed'
+        // / etc. — invaluable for narrowing which listener actually threw.
+        captureException(error, {
+          tags: { source: 'event-bus', event: String(event) },
+        });
       }
     }
   }

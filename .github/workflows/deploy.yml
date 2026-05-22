@@ -90,6 +90,12 @@ jobs:
           # the pair. Empty value silently disables push enrolment in the
           # NotificationSettings UI (renders the 'no-vapid-key' branch).
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          # Sentry DSN for browser error reporting (no-op when unset).
+          # Public DSN is safe to ship in the bundle — see #369. Sample-rate
+          # stays at 0 (errors only, no performance tracing) until we have
+          # real traffic to budget against.
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENVIRONMENT: pr-preview
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -121,6 +127,9 @@ jobs:
           # Same VAPID public key as the build job above — both stages
           # rebuild the bundle, so both need the env var available.
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          # Production deploy reports as `production` environment in Sentry.
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENVIRONMENT: production
 
       # Pages must be enabled out-of-band before this step succeeds:
       #   Settings → Pages → Build and deployment → Source: GitHub Actions
