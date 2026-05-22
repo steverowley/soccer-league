@@ -1322,9 +1322,17 @@ function prettifyEventType(key: string): string {
 function toPitchEvent(
   row: MatchEventRow,
   ctx: { homeShort: string | null; awayShort: string | null },
-): { id: string; type: string; team?: 'home' | 'away'; playerId?: string } {
+): { id: string; type: string; team?: 'home' | 'away'; playerId?: string; architectFlag?: string } {
   // payload is JSON; cast at the boundary and read defensively.
-  const payload = (row.payload ?? {}) as { team?: unknown; player?: unknown };
+  const payload = (row.payload ?? {}) as {
+    team?:                unknown;
+    player?:              unknown;
+    architectAnnulled?:   unknown;
+    architectForced?:     unknown;
+    architectConjured?:   unknown;
+    architectStolen?:     unknown;
+    architectEcho?:       unknown;
+  };
   const rawTeam = typeof payload.team === 'string' ? payload.team : null;
   let team: 'home' | 'away' | undefined;
   if (rawTeam) {
@@ -1333,12 +1341,34 @@ function toPitchEvent(
   }
   const playerId =
     typeof payload.player === 'string' ? payload.player : undefined;
-  const out: { id: string; type: string; team?: 'home' | 'away'; playerId?: string } = {
+
+  // ── Architect flair flags (isl-u8u) ─────────────────────────────────
+  // Engine writes any of five boolean flags directly into the payload;
+  // we collapse to a single string label PitchView uses to fire its
+  // halo + flicker + ball trail.  Priority order ('forced' → 'echo')
+  // matches the engine's narrative emphasis if two ever fire on the
+  // same event (which the engine doesn't currently produce but we
+  // want a deterministic resolution if it ever did).
+  let architectFlag: string | undefined;
+  if      (payload.architectForced   === true) architectFlag = 'forced';
+  else if (payload.architectAnnulled === true) architectFlag = 'annulled';
+  else if (payload.architectConjured === true) architectFlag = 'conjured';
+  else if (payload.architectStolen   === true) architectFlag = 'stolen';
+  else if (payload.architectEcho     === true) architectFlag = 'echo';
+
+  const out: {
+    id: string;
+    type: string;
+    team?: 'home' | 'away';
+    playerId?: string;
+    architectFlag?: string;
+  } = {
     id:   row.id,
     type: row.type,
   };
-  if (team)     out.team     = team;
-  if (playerId) out.playerId = playerId;
+  if (team)          out.team          = team;
+  if (playerId)      out.playerId      = playerId;
+  if (architectFlag) out.architectFlag = architectFlag;
   return out;
 }
 

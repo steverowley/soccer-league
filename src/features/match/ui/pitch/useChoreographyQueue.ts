@@ -73,6 +73,14 @@ export interface PitchEventInput {
   team?:   'home' | 'away';
   /** Optional player id so the choreographer can key motion to one dot. */
   playerId?: string;
+  /**
+   * Optional Architect-intervention label (isl-u8u).  When present,
+   * PitchView fires a brief halo + pitch flicker + ball-trail flair
+   * synced with the choreography keyframe.  Free-text — typical
+   * values are 'annulled' / 'forced' / 'conjured' / 'stolen' / 'echo'
+   * mirroring the boolean flags on the engine's MatchEvent shape.
+   */
+  architectFlag?: string;
 }
 
 /**
