@@ -195,4 +195,7 @@ export {
   getLeagueFixtureCountsForSeason,
   transitionSeasonStatus,
   getSeasonIdForMatch,
+  listAllSeasons,
+  getSeasonSummary,
 } from './api/seasons';
+export type { SeasonSummary } from './api/seasons';

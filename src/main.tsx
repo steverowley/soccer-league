@@ -127,6 +127,11 @@ const EntityDetail = lazy(() => import('./pages/EntityDetail'));
 // admin-only at the DB layer regardless of client-side gating.
 const WhatIf = lazy(() => import('./pages/WhatIf'));
 const Roadmap      = lazy(() => import('./pages/Roadmap'));
+// Seasonal archive (issue isl-aaj) — index + detail page for browsing
+// every completed season's lifecycle metadata.  Reusing existing data
+// only; no new tables.
+const Seasons      = lazy(() => import('./pages/Seasons'));
+const SeasonDetail = lazy(() => import('./pages/SeasonDetail'));
 
 // Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
 // 404.html redirects to the root and stores the original path in sessionStorage.
@@ -283,6 +288,14 @@ createRoot(document.getElementById('root')!).render(
                   Links from Idols.tsx and MatchDetail.tsx both point here;
                   before this route those URLs 404'd. */}
               <Route path="players/:playerId"   element={<PlayerDetail />} />
+
+              {/* /seasons + /seasons/:seasonId (isl-aaj).
+                  Archive index lists every season newest-first; detail
+                  page surfaces the lifecycle metadata for one season.
+                  Unknown ids render an "Unknown Season" inline error
+                  preserving the URL, same as TeamDetail / PlayerDetail. */}
+              <Route path="seasons"             element={<Seasons />} />
+              <Route path="seasons/:seasonId"   element={<SeasonDetail />} />
 
               {/* /managers/:managerId (bd isl-aai) — Manager profile.
                   Reads managers row joined to teams + entity + traits
