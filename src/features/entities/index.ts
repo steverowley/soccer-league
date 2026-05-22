@@ -122,6 +122,20 @@ export type {
   RelationshipGraph,
 } from './logic/relationshipGraph';
 
+// ── Logic — subgraph extractor (issue isl-6ub) ─────────────────────────────
+// Pure BFS walker that turns an indexed RelationshipGraph into the bounded
+// `{ nodeIds, edges }` slice the SVG renderer hands to d3-force.  Deterministic
+// across calls so identical inputs don't thrash the layout simulation.
+export {
+  DEFAULT_MAX_HOPS as SUBGRAPH_DEFAULT_MAX_HOPS,
+  DEFAULT_MAX_NEIGHBOURS as SUBGRAPH_DEFAULT_MAX_NEIGHBOURS,
+  extractSubgraph,
+} from './logic/subgraph';
+export type {
+  SubgraphOpts,
+  Subgraph,
+} from './logic/subgraph';
+
 // ── Logic — referee selection + narratives (Phase 5a) ──────────────────────
 // Pure deterministic referee picker (mirrors the SQL backfill in 0015) and
 // post-match narrative pattern detection / template assembly.  Zero I/O,
