@@ -54,13 +54,33 @@ interface AuthContextValue {
   loading: boolean;
   /** Sign in with email + password. Returns an error string on failure. */
   signIn: (email: string, password: string) => Promise<string | null>;
-  /** Create a new account. Returns an error string on failure. */
-  signUp: (email: string, password: string, username: string) => Promise<string | null>;
+  /** Create a new account. See SignUpResult for the success-vs-pending distinction. */
+  signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
   /** Sign out and clear all auth state. */
   signOut: () => Promise<void>;
   /** Force-refresh the profile from the DB (e.g. after a credit change). */
   refreshProfile: () => Promise<void>;
+  /**
+   * Request a password-reset email. Returns an error string on failure,
+   * null on success. Always returns null when the email doesn't exist —
+   * Supabase intentionally doesn't disclose user enumeration via this
+   * endpoint, and we don't either.
+   */
+  requestPasswordReset: (email: string) => Promise<string | null>;
 }
+
+/**
+ * Result of a signUp() call. The PRE-fix bug shipped only `error: string|null`,
+ * which collapsed two very different states:
+ *   - success-with-session  (confirmation disabled → navigate to /)
+ *   - success-without-session (confirmation enabled → "check inbox")
+ * Returning a discriminated union forces callers to handle both paths
+ * explicitly, killing the silent-signup UX bug.
+ */
+export type SignUpResult =
+  | { kind: 'error';            error: string }
+  | { kind: 'session';          /* signed in immediately */ }
+  | { kind: 'confirmation_required'; email: string };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -206,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, username: string): Promise<string | null> => {
+    async (email: string, password: string, username: string): Promise<SignUpResult> => {
       // Pass username in signUp metadata so the `handle_new_user` DB trigger
       // can write it atomically when it creates the profile row. This avoids
       // a second UPDATE round-trip that would fail under email-confirmation
@@ -216,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // (GitHub Pages) rather than whatever localhost the Supabase project's
       // "Site URL" is set to. import.meta.env.BASE_URL is '/soccer-league/'
       // in production builds and '/' locally.
-      const { error } = await db.auth.signUp({
+      const { data, error } = await db.auth.signUp({
         email,
         password,
         options: {
@@ -224,6 +244,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: { username: username.trim() },
         },
       });
+      if (error) return { kind: 'error', error: error.message };
+
+      // Supabase returns `session: null` when email confirmation is enabled
+      // and the user just needs to click a link. We MUST tell the caller so
+      // they can show "check your inbox" instead of silently navigating to
+      // a still-anonymous home page (the pre-fix bug).
+      if (data.session) return { kind: 'session' };
+      return { kind: 'confirmation_required', email };
+    },
+    [db],
+  );
+
+  const requestPasswordReset = useCallback(
+    async (email: string): Promise<string | null> => {
+      // redirectTo lands the user on /reset-password with a recovery JWT in
+      // the URL fragment; the page parses that and lets them set a new pw.
+      const { error } = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
+      });
+      // Don't surface "user not found" — Supabase intentionally returns no
+      // error for unknown emails to avoid user enumeration via this surface.
       if (error) return error.message;
       return null;
     },
@@ -254,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signOut: signOutFn,
         refreshProfile,
+        requestPasswordReset,
       }}
     >
       {children}
