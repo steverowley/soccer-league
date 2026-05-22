@@ -5,7 +5,7 @@
 
 ## Vision (anchor — always keep in mind)
 
-A Blaseball-inspired **social experiment browser game**. Users watch AI-simulated intergalactic soccer matches in a fictional solar-system league, bet Intergalactic Credits on outcomes, and at season's end collectively vote with their winnings to shape their club's future. The game's soul is **hidden mechanics, emergent storylines, and fan-driven narratives**. Underlying stats and rules are **never explained** — the world is treated like real life.
+A Blaseball-inspired **social experience browser game**. Users watch AI-simulated intergalactic soccer matches in a fictional solar-system league, bet Intergalactic Credits on outcomes, and at season's end collectively vote with their winnings to shape their club's future. The game's soul is **hidden mechanics, emergent storylines, and fan-driven narratives**. Underlying stats and rules are **never explained** — the world is treated like real life.
 
 **North-star player experience**:
 1. Sign up, get 200 Intergalactic Credits, pick a favourite club and player.
@@ -16,11 +16,11 @@ A Blaseball-inspired **social experiment browser game**. Users watch AI-simulate
 
 **Core design pillars** (use these to break ties during execution):
 - **Emergent storytelling over exposed mechanics** — the LLM layer (commentary, Architect, entities) must always deepen narrative, never reveal numbers.
-- **Fan-driven collective agency** — every feature should feed into the shared social experiment. Individual-only experiences are lower priority.
+- **Fan-driven collective agency** — every feature should feed into the shared social experience. Individual-only experiences are lower priority.
 - **The Architect is the soul** — the chaos director is not a feature, it's the game's identity. Everything new should give the Architect new levers to pull.
 - **Modular now, easy rewrites later** — the Notion doc will change; the codebase must bend with it cheaply. Features are isolated, logic is pure and tested, DB changes are reviewable migrations.
 - **Retro-minimalist design** — the Figma design system is the source of truth for look & feel.
-- **Long-term social experiment** — years of cumulative lore. Persistence and history matter more than short-term polish.
+- **Long-term social experience** — years of cumulative lore. Persistence and history matter more than short-term polish.
 
 **Explicit non-goals** (for now):
 - Mobile-native apps (browser only).
@@ -126,7 +126,7 @@ docs: document betting API endpoint
 ## Game Design Document
 
 ### Goal
-Create a soccer simulation browser game inspired by Blaseball — a social experiment with many hidden and unexplained mechanics.
+Create a soccer simulation browser game inspired by Blaseball — a social experience with many hidden and unexplained mechanics.
 
 ### Player Interaction
 - **Betting**: Bet tokens on match outcomes; odds are generated from team skill and probability.

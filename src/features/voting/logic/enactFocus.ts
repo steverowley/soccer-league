@@ -1,7 +1,7 @@
 // ── voting/logic/enactFocus.ts ───────────────────────────────────────────────
 // WHY: Voting tallies have been wired since Phase 4, but the winning focus was
 // never applied. This module is the engine that converts a vote result into
-// concrete roster/stat/facility mutations — closing the social experiment loop.
+// concrete roster/stat/facility mutations — closing the social experience loop.
 //
 // DESIGN: Pure functions only — no Supabase, no React. Takes existing player
 // rows + a seeded RNG function; returns a typed `FocusEnactmentSpec` describing
