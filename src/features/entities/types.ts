@@ -38,7 +38,13 @@ export type EntityKind =
   | 'planet'
   | 'colony'
   | 'political_body'
-  | 'bookie';
+  | 'bookie'
+  // Shadow entity for the `teams` table — created by migration 0048
+  // (teams_sync_entity trigger) so the relationship graph can render
+  // team-to-team rivalries + player→team affiliations.  Click resolution
+  // walks the entity's meta.team_id slug, not the entity uuid (see
+  // entityRoute.ts).
+  | 'team';
 
 /**
  * Core entity row — matches the `entities` table from 0002_entities.sql.

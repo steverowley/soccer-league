@@ -103,6 +103,30 @@ const DRAMA_KINDS = [
   'feud_declaration',
 ] as const;
 
+/**
+ * Cooloff window between a drama narrative landing in the news feed
+ * and its structural consequence actually mutating the world
+ * (isl-hr0).  24h matches the user's original "fans see the news a
+ * day before the world shifts" spec.  Lower this number to test the
+ * applier loop in a tight loop; raise it to give pundits more time
+ * to react before the consequence lands.
+ *
+ * MECHANICAL EFFECT: every drama narrative queues a row in
+ * drama_consequences with mature_at = now() + this value.  The next
+ * drama-tick run picks up matured rows BEFORE generating new
+ * narratives, so a tick that fires exactly 24h after a queued
+ * drama processes it before queuing a new one.
+ */
+const DRAMA_COOLOFF_HOURS = 24;
+
+/**
+ * Maximum queued consequences to drain per drama-tick invocation.
+ * Caps the worst-case tick cost when a long-quiet period bursts
+ * with matured rows.  At cron cadence 30 min, draining 20 per tick
+ * keeps even a 10-deep backlog at <5 minutes wall-clock to clear.
+ */
+const DRAMA_DRAIN_BATCH_SIZE = 20;
+
 // ── Environment ────────────────────────────────────────────────────────────
 
 // @ts-ignore — Deno global type.
@@ -398,6 +422,87 @@ function extractUsage(response: any): {
  *
  * @returns  `{ emitted, kind?, entity? }` JSON Response.
  */
+/**
+ * Drain matured drama_consequences rows before generating new
+ * narratives (isl-hr0).  Each row that's hit its mature_at is
+ * dispatched to applyDramaConsequence; the resulting outcome is
+ * stamped into applied_at + applied_reason + applied_meta so the
+ * row never re-fires.  Caps work at DRAMA_DRAIN_BATCH_SIZE per
+ * tick to bound the worst-case latency of a long-quiet period
+ * suddenly maturing a queue.
+ *
+ * @param db  Service-role Supabase client.
+ * @returns   Number of consequences actually applied (for logging
+ *            in the response payload).
+ */
+async function drainMaturedConsequences(
+  db: ReturnType<typeof createClient>,
+): Promise<number> {
+  // SELECT matured rows ordered oldest-first so a backlog drains in
+  // FIFO order.  applied_at IS NULL is the "pending" filter; the
+  // partial index idx_drama_consequences_pending makes this read
+  // index-only even at large queue sizes.
+  const { data: maturedRows, error: matureErr } = await db
+    .from('drama_consequences')
+    .select('id, narrative_id, kind, entity_id, narrative_text')
+    .is('applied_at', null)
+    .lte('mature_at', new Date().toISOString())
+    .order('mature_at', { ascending: true })
+    .limit(DRAMA_DRAIN_BATCH_SIZE);
+
+  if (matureErr) {
+    console.warn('[drama-tick] drain query failed:', matureErr.message);
+    return 0;
+  }
+  const rows = (maturedRows ?? []) as Array<{
+    id: string;
+    narrative_id: string;
+    kind: string;
+    entity_id: string;
+    narrative_text: string;
+  }>;
+  if (rows.length === 0) return 0;
+
+  let applied = 0;
+  for (const row of rows) {
+    let outcome: Awaited<ReturnType<typeof applyDramaConsequence>> = {
+      applied: false,
+      reason:  'not_attempted',
+    };
+    try {
+      outcome = await applyDramaConsequence(
+        // deno-lint-ignore no-explicit-any
+        db as any,
+        row.kind,
+        row.entity_id,
+        row.narrative_text,
+      );
+    } catch (err) {
+      // A thrown applier must not block the rest of the batch.  Stamp
+      // applied_at anyway so the queue moves forward; the reason
+      // captures the failure mode for post-hoc diagnosis.
+      console.warn(`[drama-tick] applier threw for ${row.id}:`, err);
+      outcome = { applied: false, reason: 'applier_threw' };
+    }
+    const { error: stampErr } = await db
+      .from('drama_consequences')
+      .update({
+        applied_at:     new Date().toISOString(),
+        applied_reason: outcome.reason,
+        applied_meta:   outcome.meta ?? null,
+      })
+      .eq('id', row.id);
+    if (stampErr) {
+      console.warn(`[drama-tick] applied_at stamp failed for ${row.id}:`, stampErr.message);
+    }
+    if (outcome.applied) applied++;
+    console.log(
+      `[drama-tick] consequence ${outcome.applied ? 'applied' : 'skipped'}: ${row.kind} (${row.id}) → ${outcome.reason}`,
+    );
+  }
+  return applied;
+}
+
 async function handler(): Promise<Response> {
   const supabaseUrl = requireEnv('SUPABASE_URL');
   const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
@@ -407,6 +512,16 @@ async function handler(): Promise<Response> {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const anthropic = new Anthropic({ apiKey: anthropicKey });
+
+  // ── Drain matured cooloff queue FIRST (isl-hr0) ───────────────────────
+  // Every tick processes ready-to-fire consequences before generating
+  // new narratives.  This keeps the queue moving even when no new
+  // dramas land, and means a single matured row never waits >1 tick
+  // beyond its mature_at.
+  const drainedCount = await drainMaturedConsequences(db);
+  if (drainedCount > 0) {
+    console.log(`[drama-tick] drained ${drainedCount} matured consequence(s) before tick`);
+  }
 
   // Daily cap check.
   const todayCount = await dramaToday(db);
@@ -469,57 +584,55 @@ async function handler(): Promise<Response> {
 
   // Insert the narrative.  Source = 'scheduled' matches the existing
   // architect-galaxy-tick convention so the News page treats it as a
-  // first-class scheduled item.
-  const { error: insertErr } = await db.from('narratives').insert({
-    kind: draft.kind,
-    summary: draft.text,
-    entities_involved: [candidate.entity_id],
-    source: 'scheduled',
-  });
+  // first-class scheduled item.  `.select('id')` returns the new
+  // row's UUID so we can FK the cooloff queue row to it below.
+  const { data: insertedNarrative, error: insertErr } = await db
+    .from('narratives')
+    .insert({
+      kind: draft.kind,
+      summary: draft.text,
+      entities_involved: [candidate.entity_id],
+      source: 'scheduled',
+    })
+    .select('id')
+    .single();
 
-  if (insertErr) {
-    console.warn('[drama-tick] narrative insert failed:', insertErr.message);
+  if (insertErr || !insertedNarrative) {
+    console.warn('[drama-tick] narrative insert failed:', insertErr?.message);
     return new Response(
       JSON.stringify({ emitted: 0, reason: 'insert_failed' }),
       { headers: { 'content-type': 'application/json' } },
     );
   }
 
-  // ── Structural consequence dispatch (Phase 9.1) ────────────────────────
-  // Narrative landed.  For the three structural drama kinds (transfer_demand,
-  // manager_resignation, political_decree), call the matching applier so
-  // the world actually changes around the announcement.  Best-effort: a
-  // failed mutation never reverts the narrative — fans already saw it; the
-  // operator can backfill the structural change manually if it matters.
+  // ── Cooloff-queue enqueue (isl-hr0) ────────────────────────────────────
+  // Don't apply the structural consequence immediately.  Instead, queue
+  // it with mature_at = now() + DRAMA_COOLOFF_HOURS so fans see the
+  // news a day before the world bends.  The applier loop at the top of
+  // the NEXT drama-tick run picks the row up once mature_at has passed.
   //
-  // Narrative-only kinds (retirement_announcement, feud_declaration) flow
-  // through the dispatcher as no-ops — keeping the call site uniform and
-  // making the log line consistent for all dramas.
-  let consequence: Awaited<ReturnType<typeof applyDramaConsequence>> = {
-    applied: false,
-    reason: 'not_attempted',
-  };
-  try {
-    consequence = await applyDramaConsequence(
-      db,
-      draft.kind,
-      candidate.entity_id,
-      draft.text,
-    );
-    if (consequence.applied) {
-      console.log(
-        `[drama-tick] consequence applied: ${draft.kind} → ${consequence.reason}`,
-        consequence.meta ?? {},
-      );
-    } else {
-      console.log(
-        `[drama-tick] consequence skipped: ${draft.kind} → ${consequence.reason}`,
-        consequence.meta ?? {},
-      );
-    }
-  } catch (err) {
-    // Defensive: a thrown error here must not break the function's response.
-    console.warn('[drama-tick] applyDramaConsequence threw:', err);
+  // Narrative-only kinds (retirement_announcement, feud_declaration)
+  // still enqueue — applyDramaConsequence is a no-op for those, but
+  // logging the no-op result keeps the consequence trail uniform across
+  // all drama kinds and lets future analytics count every drama beat.
+  const matureAt = new Date(Date.now() + DRAMA_COOLOFF_HOURS * 60 * 60 * 1000);
+  const { error: queueErr } = await db
+    .from('drama_consequences')
+    .insert({
+      narrative_id:   (insertedNarrative as { id: string }).id,
+      kind:           draft.kind,
+      entity_id:      candidate.entity_id,
+      narrative_text: draft.text,
+      mature_at:      matureAt.toISOString(),
+    });
+  if (queueErr) {
+    // Best-effort: a queue-insert failure must not block the response.
+    // The narrative is already public — losing the structural follow-up
+    // is annoying but not catastrophic, and a future drama-tick can
+    // re-queue manually via admin tooling.
+    console.warn('[drama-tick] drama_consequences insert failed:', queueErr.message);
+  } else {
+    console.log(`[drama-tick] consequence queued: ${draft.kind} matures at ${matureAt.toISOString()}`);
   }
 
   return new Response(
@@ -528,8 +641,11 @@ async function handler(): Promise<Response> {
       kind: draft.kind,
       entity: candidate.display_name ?? candidate.name,
       consequence: {
-        applied: consequence.applied,
-        reason: consequence.reason,
+        // v1 reported applied/reason at narrative insert time.  With
+        // the cooloff queue (isl-hr0) the application is deferred, so
+        // this field now reports the queue state.
+        queued:    !queueErr,
+        mature_at: matureAt.toISOString(),
       },
     }),
     { headers: { 'content-type': 'application/json' } },

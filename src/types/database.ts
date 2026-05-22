@@ -1869,6 +1869,7 @@ export type Database = {
           capacity: string | null
           color: string | null
           description: string | null
+          entity_id: string | null
           home_ground: string | null
           id: string
           league_id: string | null
@@ -1881,6 +1882,7 @@ export type Database = {
           capacity?: string | null
           color?: string | null
           description?: string | null
+          entity_id?: string | null
           home_ground?: string | null
           id: string
           league_id?: string | null
@@ -1893,6 +1895,7 @@ export type Database = {
           capacity?: string | null
           color?: string | null
           description?: string | null
+          entity_id?: string | null
           home_ground?: string | null
           id?: string
           league_id?: string | null
@@ -1902,6 +1905,13 @@ export type Database = {
           tagline?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "teams_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "teams_league_id_fkey"
             columns: ["league_id"]

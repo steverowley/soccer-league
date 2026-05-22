@@ -24,7 +24,7 @@ function makeEntity(over: Partial<Entity> & { id: string; kind: EntityKind }): E
 }
 
 describe('entityRoute', () => {
-  it('routes every kind through /entities/:id (current universal policy)', () => {
+  it('routes non-team kinds through /entities/:id (universal policy)', () => {
     const kinds: EntityKind[] = [
       'player', 'manager', 'coach', 'physio', 'doctor',
       'scout', 'owner', 'analyst', 'referee', 'pundit',
@@ -45,5 +45,31 @@ describe('entityRoute', () => {
       display_name: 'Also Should Not',
     });
     expect(entityRoute(e)).toBe('/entities/00000000-0000-0000-0000-000000000001');
+  });
+
+  // ── Team-kind dispatch (isl-3ov) ────────────────────────────────────
+  // Shadow team entities route to /teams/:slug (not /entities/:uuid)
+  // because the canonical team detail page already exists and is
+  // richer than the entity voice page would be for a club.  The slug
+  // lives in meta.team_id, written by the teams_sync_entity trigger.
+  it('routes team kind to /teams/:team_id using meta.team_id slug', () => {
+    const e = makeEntity({
+      id:   'team-uuid-1',
+      kind: 'team',
+      meta: { team_id: 'mercury-runners-fc', league_id: 'rocky-inner' },
+    });
+    expect(entityRoute(e)).toBe('/teams/mercury-runners-fc');
+  });
+
+  it('falls back to /entities/:id when a team shadow row lacks meta.team_id', () => {
+    // Defensive: the trigger always writes the slug, but a manually-
+    // inserted row or a future migration that drops the meta field
+    // would land here.  We DON'T want to emit a broken /teams/undefined.
+    const e = makeEntity({
+      id:   'team-uuid-orphan',
+      kind: 'team',
+      meta: {}, // no team_id
+    });
+    expect(entityRoute(e)).toBe('/entities/team-uuid-orphan');
   });
 });

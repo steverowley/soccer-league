@@ -18,6 +18,7 @@
 //     association   → TERRA NOVA    (governing body — neutral authority)
 //     bookie        → FLARE         (the only red-coded kind — risk/markets)
 //     political_body→ FLARE         (authority that can disrupt the league)
+//     team          → ASTRO         (clubs — secondary-focus identity tier)
 //     planet        → DUST 70       (places — quieter than people)
 //     colony        → DUST 50       (places — quietest tier)
 //     <everything else (coach/physio/doctor/scout/owner/analyst)>
@@ -53,6 +54,14 @@ export function kindColor(kind: string): string {
     case 'association':    return COLORS.terraNova;
     case 'bookie':         return COLORS.flare;
     case 'political_body': return COLORS.flare;
+
+    // ── Clubs (shadow team entities, isl-3ov) ───────────────────────────
+    // Astro orange picks up the secondary-focus / momentum hue so a
+    // team node reads as "another active node in the universe" — a
+    // distinct identity from the pundit/commentator quantum tier and
+    // the bookie/political flare tier.  Click resolution lives in
+    // entityRoute → /teams/:team_id.
+    case 'team':           return COLORS.astro;
 
     // ── Places (muted) ──────────────────────────────────────────────────
     case 'planet':         return COLORS.dust70;
