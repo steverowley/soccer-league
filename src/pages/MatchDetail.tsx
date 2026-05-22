@@ -187,7 +187,15 @@ export default function MatchDetail() {
               {liveOrScheduled ? (
                 <div className="match-detail-pitch-grid">
                   <div className="match-detail-pitch-col">
-                    <PitchView />
+                    {/* Pitch view consumes the same match_events stream
+                        the commentary feed does, via its own isolated
+                        fetch + Realtime subscription (isl-lfo).  Two
+                        subscriptions per match page is acceptable —
+                        Supabase Realtime multiplexes channels and the
+                        pitch should never block on the commentary's
+                        render path.  A future lift could consolidate
+                        them into a shared parent. */}
+                    <MatchPitchPanel matchId={match.id} />
                   </div>
                   <div className="match-detail-commentary-col">
                     <LiveCommentary match={match} />
@@ -1255,4 +1263,129 @@ function prettifyEventType(key: string): string {
   return key
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c: string) => c.toUpperCase());
+}
+
+// ── MatchPitchPanel (issue isl-lfo) ─────────────────────────────────────────
+// Thin wrapper that owns its own match_events fetch + Realtime
+// subscription and feeds the result to <PitchView>.  Lives here rather
+// than as a generic component because the lift only makes sense in the
+// context of a MatchDetail layout — the same data path inside
+// LiveCommentary remains untouched.
+//
+// WHY A SECOND SUBSCRIPTION
+//   The cleaner refactor would lift LiveCommentary's state into a
+//   shared parent (`MatchLiveSection`) that renders both children, but
+//   LiveCommentary owns ~150 lines of intricate elapsed-minute logic
+//   that's working in production.  A second isolated subscription
+//   trades a small extra WebSocket channel for zero risk to the
+//   commentary feed.  Supabase Realtime multiplexes channels so the
+//   cost is minor; a future consolidation can land in its own commit.
+
+/**
+ * Map a raw `match_events` row into the shape the choreographer hook
+ * expects.  Surfaces a `team` hint from `payload.team` (the engine
+ * writes 'home' / 'away' short names there — we narrow to 'home' or
+ * 'away' so the choreographer can pick the right attacking direction)
+ * and the player name from `payload.player` (stable across rows).
+ *
+ * Unknown payload shapes degrade to no hints — the choreographer
+ * defaults to home-side attacking, which is the least surprising fall-
+ * back when we genuinely don't know who has the ball.
+ *
+ * @param row  Raw `match_events` row.
+ * @param ctx  Home / away short_name strings used to resolve `payload.team`.
+ * @returns    Shape ready to pass to `useChoreographyQueue`.
+ */
+function toPitchEvent(
+  row: MatchEventRow,
+  ctx: { homeShort: string | null; awayShort: string | null },
+): { id: string; type: string; team?: 'home' | 'away'; playerId?: string } {
+  // payload is JSON; cast at the boundary and read defensively.
+  const payload = (row.payload ?? {}) as { team?: unknown; player?: unknown };
+  const rawTeam = typeof payload.team === 'string' ? payload.team : null;
+  let team: 'home' | 'away' | undefined;
+  if (rawTeam) {
+    if (rawTeam === ctx.homeShort)      team = 'home';
+    else if (rawTeam === ctx.awayShort) team = 'away';
+  }
+  const playerId =
+    typeof payload.player === 'string' ? payload.player : undefined;
+  const out: { id: string; type: string; team?: 'home' | 'away'; playerId?: string } = {
+    id:   row.id,
+    type: row.type,
+  };
+  if (team)     out.team     = team;
+  if (playerId) out.playerId = playerId;
+  return out;
+}
+
+/**
+ * Standalone panel that fetches + subscribes to a single match's
+ * events and renders the choreographed <PitchView>.
+ *
+ * Lifecycle mirrors LiveCommentary's pattern (initial fetch + Realtime
+ * subscription) but doesn't share state — see the WHY block above for
+ * the trade-off rationale.
+ *
+ * @param props.matchId  UUID of the match whose events drive the pitch.
+ * @returns              Pitch panel subtree.  Renders the rest state
+ *                       while events haven't arrived yet, then animates
+ *                       per-event as new rows land.
+ */
+function MatchPitchPanel({ matchId }: { matchId: string }) {
+  const db = useSupabase();
+  const [events, setEvents] = useState<MatchEventRow[]>([]);
+  const [meta,   setMeta]   = useState<{ homeShort: string | null; awayShort: string | null }>({
+    homeShort: null,
+    awayShort: null,
+  });
+
+  // ── Initial fetch ─────────────────────────────────────────────────────
+  // Two queries in parallel: the match row (for team short_names so we
+  // can resolve `payload.team`) and the full event log.  Errors are
+  // logged + swallowed — the rest-state PitchView is a usable fallback
+  // and there's no need to surface a separate error chrome here.
+  useEffect(() => {
+    let cancelled = false;
+    setEvents([]);
+    Promise.all([
+      getMatch(matchId),
+      getMatchEvents(db, matchId),
+    ])
+      .then(([m, evRows]) => {
+        if (cancelled) return;
+        setEvents(evRows);
+        setMeta({
+          homeShort: (m as { home_team?: { short_name?: string | null } } | null)?.home_team?.short_name ?? null,
+          awayShort: (m as { away_team?: { short_name?: string | null } } | null)?.away_team?.short_name ?? null,
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[MatchPitchPanel] fetch failed:', err);
+      });
+    return () => { cancelled = true; };
+  }, [db, matchId]);
+
+  // ── Realtime subscription ──────────────────────────────────────────────
+  // Same channel the commentary feed subscribes to.  Supabase multiplexes
+  // identical filters so the extra channel is a negligible cost; the
+  // subscription unmounts cleanly when the panel hides (cancelled /
+  // completed matches don't render this component).
+  useEffect(() => {
+    return subscribeToMatchEvents(db, matchId, (row) => {
+      setEvents((prev) => [...prev, row]);
+    });
+  }, [db, matchId]);
+
+  // ── Map to choreographer input ─────────────────────────────────────────
+  // useMemo so identical event lists produce stable array references —
+  // the hook's `seenRef` doesn't re-process them but a fresh array
+  // would still wake the effect on every parent render.
+  const pitchEvents = useMemo(
+    () => events.map((e) => toPitchEvent(e, meta)),
+    [events, meta],
+  );
+
+  return <PitchView events={pitchEvents} />;
 }
