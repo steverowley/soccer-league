@@ -75,6 +75,16 @@ const PLAYER_RADIUS = 1.5;
 const BALL_RADIUS = 1.0;
 
 /**
+ * Container width (in CSS pixels) below which the in-dot jersey-number
+ * labels are hidden (isl-7rh mobile polish).  720px is the spec's
+ * threshold — at narrower widths the SVG dots shrink below ~10px in
+ * CSS units and the 1.6 user-unit jersey label becomes illegible.
+ * Hiding instead of crowding the dot reads as "graceful degradation"
+ * — the GK ring and dot colour still convey identity.
+ */
+const JERSEY_LABEL_MIN_WIDTH_PX = 720;
+
+/**
  * Total duration of an Architect-flair burst in milliseconds (isl-u8u).
  * Sub-700ms so the burst overlaps the per-event choreography window
  * (~600ms CSS transition) without extending past it — the user reads
@@ -200,6 +210,29 @@ export function PitchView({
   awayTeamName,
   awayScore,
 }: PitchViewProps = {}) {
+  // ── Container-width tracking (isl-7rh mobile polish) ────────────────
+  // Measures the wrapper div via ResizeObserver so we can drop the
+  // in-dot jersey labels below JERSEY_LABEL_MIN_WIDTH_PX.  At narrow
+  // viewports the SVG dots shrink along with their parent, and the
+  // 1.6 user-unit jersey text becomes illegible — hiding the labels
+  // reads as "graceful degradation" rather than "crowded dot".
+  // Falls back to "labels on" when ResizeObserver isn't available
+  // (jsdom, older Safaris) so test runs aren't pinned to the wrong
+  // branch.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(JERSEY_LABEL_MIN_WIDTH_PX);
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width ?? JERSEY_LABEL_MIN_WIDTH_PX;
+      setContainerWidth(Math.round(next));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const showJerseyLabels = containerWidth >= JERSEY_LABEL_MIN_WIDTH_PX;
+
   // ── Motion gates (isl-7rh polish) ─────────────────────────────────────
   // Aggregates three signals into a single boolean handed to the hook
   // and used to suppress CSS transitions:
@@ -376,10 +409,12 @@ export function PitchView({
 
   return (
     <div
+      ref={wrapperRef}
       // CSS aspect-ratio keeps the wrapper's height proportional to its
       // width, so the surface fills whatever column the parent gives it
       // without distortion.  100:64 matches the SVG viewBox exactly so
-      // the surface paints edge-to-edge.
+      // the surface paints edge-to-edge.  The ref feeds the
+      // ResizeObserver above so jersey labels can hide at narrow widths.
       style={{
         position:    'relative',
         width:       '100%',
@@ -475,7 +510,12 @@ export function PitchView({
                       : undefined,
                   }}
                 />
-                {sidePlayer?.jersey_number != null && (
+                {/* Jersey labels gated by `showJerseyLabels` (isl-7rh
+                    mobile polish) — below ~720px container width they
+                    crowd the shrinking dot illegibly, so we drop them
+                    entirely.  The GK ring + dot colour remain so
+                    identity isn't lost. */}
+                {showJerseyLabels && sidePlayer?.jersey_number != null && (
                   <text
                     x={cx}
                     y={cy + 0.6}
