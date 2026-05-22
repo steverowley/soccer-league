@@ -46,6 +46,7 @@ import {
   getMatchDurationSeconds,
   subscribeToMatchEvents,
   DEFAULT_MATCH_DURATION_SECONDS,
+  PitchView,
   type MatchEventRow,
 } from '../features/match';
 
@@ -164,19 +165,59 @@ export default function MatchDetail() {
         </section>
       )}
 
-      {/* Section III — Live commentary (Phase A).
+      {/* Section III — Live commentary (Phase A) + static pitch (isl-5b6).
           Renders nothing for scheduled / cancelled matches (no event log
           exists to show).  For in_progress, ticks once per second and
           reveals events as wall-clock crosses each minute boundary; for
           completed, dumps the full pre-simulated log so the user can
-          replay the match's narrative arc end-to-end. */}
-      {match && !loadError && (
-        <section style={{ padding: '0 0 48px' }}>
-          <Container>
-            <LiveCommentary match={match} />
-          </Container>
-        </section>
-      )}
+          replay the match's narrative arc end-to-end.
+
+          Layout:
+            • Live / scheduled matches → 2-column grid: pitch ~60% +
+              commentary ~40% on desktop, stacked on mobile (<768px).
+              Pitch shows the 4-4-2 rest state via <PitchView />.
+            • Completed / cancelled matches → unchanged single-column
+              commentary layout (no pitch — the match is over). */}
+      {match && !loadError && (() => {
+        const liveOrScheduled =
+          match.status === 'in_progress' || match.status === 'scheduled' || match.status === 'live';
+        return (
+          <section style={{ padding: '0 0 48px' }}>
+            <Container>
+              {liveOrScheduled ? (
+                <div className="match-detail-pitch-grid">
+                  <div className="match-detail-pitch-col">
+                    <PitchView />
+                  </div>
+                  <div className="match-detail-commentary-col">
+                    <LiveCommentary match={match} />
+                  </div>
+                </div>
+              ) : (
+                <LiveCommentary match={match} />
+              )}
+              {/* Responsive grid styles for live/scheduled matches only.
+                  At desktop the pitch takes ~60% of the row and the
+                  commentary ~40%; at <768px the grid collapses to a
+                  single stacked column so neither side is squeezed
+                  below readability on phone widths. */}
+              <style>{`
+                .match-detail-pitch-grid {
+                  display: grid;
+                  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+                  gap: 24px;
+                  align-items: start;
+                }
+                @media (max-width: 768px) {
+                  .match-detail-pitch-grid {
+                    grid-template-columns: 1fr;
+                  }
+                }
+              `}</style>
+            </Container>
+          </section>
+        );
+      })()}
 
       {match && !loadError && (
         <section style={{ padding: '0 0 80px' }}>
