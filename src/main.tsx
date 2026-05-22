@@ -120,6 +120,7 @@ const About        = lazy(() => import('./pages/About'));
 const Privacy      = lazy(() => import('./pages/Privacy'));
 const Terms        = lazy(() => import('./pages/Terms'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Welcome      = lazy(() => import('./pages/Welcome'));
 const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
 // EntityDetail (Phase 10 of the Universal Agent System): inspects any
 // entity's persona + recent snippets + recent memories.  Read-only.
@@ -316,6 +317,11 @@ createRoot(document.getElementById('root')!).render(
               {/* Password recovery — see ResetPassword.tsx for the two-phase
                   flow (request-email phase, then update-password phase). */}
               <Route path="reset-password"      element={<ResetPassword />} />
+
+              {/* Post-signup onboarding wizard — Login.tsx redirects new
+                  users here after a successful sign-in when
+                  favourite_team_id is still null. See Welcome.tsx. */}
+              <Route path="welcome"             element={<Welcome />} />
             </Routes>
             </Suspense>
           </BrowserRouter>

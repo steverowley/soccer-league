@@ -166,6 +166,8 @@ export default function Login() {
       if (mode === MODE_LOGIN) {
         const err = await signIn(email, password);
         if (err) { setError(err); return; }
+        // Returning logins go straight home — they already picked allegiance
+        // long ago, so the welcome wizard would self-redirect to / anyway.
         navigate('/', { replace: true });
         return;
       }
@@ -182,8 +184,11 @@ export default function Login() {
         setPendingConfirmEmail(result.email);
         return;
       }
-      // result.kind === 'session' — signed in immediately
-      navigate('/', { replace: true });
+      // result.kind === 'session' — signed in immediately. Send first-time
+      // users to /welcome so they pick favourite club + player. Welcome.tsx
+      // self-redirects users with favourite_team_id already set, so the
+      // wizard is one-shot.
+      navigate('/welcome', { replace: true });
     } catch (err) {
       console.warn('[Login] submit threw:', err);
       setError('Unexpected error. Try again.');
