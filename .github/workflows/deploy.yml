@@ -49,8 +49,16 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # `src/lib/supabase.ts` instantiates the client at module load with
+      # `createClient(VITE_SUPABASE_URL, …)`, so any test that imports a page
+      # transitively crashes without these. Same hardcoded values the build
+      # job uses — both are public publishable credentials. Removing this
+      # boilerplate is tracked in #387 (dissolve src/lib/supabase.ts singleton).
       - name: Test
         run: npm run test
+        env:
+          VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
 
       - name: Lint (informational — not yet gating)
         run: npm run lint
