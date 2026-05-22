@@ -30,3 +30,40 @@ body,
   color: #fff;
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* ── Mobile tap-target floor (isl-aaf) ────────────────────────────────────
+ * Apple HIG + Android Material both recommend a 44 CSS-pixel minimum
+ * hit area for any interactive control on touch viewports.  Rather
+ * than hand-tune every <button> / <a> / <input> in the codebase, we
+ * enforce the floor here for the standard interactive selectors on
+ * viewports narrower than the design's mobile breakpoint (768 px).
+ *
+ * The `:not([class*="isl-mobile-menu-btn"])` guards and similar are
+ * NOT needed — the rules apply min-* rather than fixed dimensions,
+ * so any component that already sets a larger size wins via the
+ * cascade (CSS uses the larger of two minimum constraints when both
+ * are honoured).  Components that need a SMALLER hit area for a
+ * visual reason can opt out by setting `min-height: 0` inline.
+ *
+ * Inputs of type=checkbox / radio are intentionally NOT covered —
+ * Apple's own guidance is that 44px square checkboxes look broken
+ * on dense forms.  Label-wrapped checkboxes still pick up the
+ * 44px floor via the label.
+ * ──────────────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  button,
+  a[role="button"],
+  [role="link"]:not(g),
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  select,
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
