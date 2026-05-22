@@ -24,7 +24,7 @@
 //   distinct from the ball without dominating.  Ball: 1.0 unit radius
 //   so the eye is drawn to it as the centre of action.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { COLORS } from '../../../../components/Layout';
 import {
@@ -73,6 +73,14 @@ const PLAYER_RADIUS = 1.5;
 
 /** SVG-unit radius for the ball.  Smaller than players so the eye reads it as discrete. */
 const BALL_RADIUS = 1.0;
+
+/**
+ * Total duration of an Architect-flair burst in milliseconds (isl-u8u).
+ * Sub-700ms so the burst overlaps the per-event choreography window
+ * (~600ms CSS transition) without extending past it — the user reads
+ * the flair as "happening DURING" the event, not "after".
+ */
+const ARCHITECT_FLAIR_MS = 600;
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -200,6 +208,86 @@ export function PitchView({
   });
   const state = choreography.state;
 
+  // ── Architect flair state (isl-u8u) ───────────────────────────────────
+  // `flair` holds the most-recently-fired Architect intervention.  The
+  // halo + flicker + ball-trail render against this snapshot for
+  // ARCHITECT_FLAIR_MS milliseconds, then auto-clear.  We keep the
+  // PREVIOUS ball position in a ref so the trail can paint a line
+  // segment from the old spot to the current one without setState
+  // churn between every tick.
+  const [flair, setFlair] = useState<{
+    /** Optional player whose dot should glow. */
+    playerId?: string;
+    /** Origin of the trail line — typically the ball position at
+        the moment the flair fired. */
+    fromBall: { x: number; y: number };
+    /** Destination of the trail line — typically the next ball
+        position the choreographer wrote. */
+    toBall:   { x: number; y: number };
+    /** Token for the auto-clear scheduler — clearing one fires
+        cancels any in-flight teardown when a second flair lands
+        on top. */
+    token:    number;
+  } | null>(null);
+
+  /** Ref to the LAST seen ball position; used to seed `fromBall`. */
+  const prevBallRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
+
+  /** Monotonic counter so the auto-clear setTimeout only fires when
+      it matches the active flair (a second flair arriving inside
+      the 600ms window invalidates the older clear). */
+  const flairTokenRef = useRef<number>(0);
+
+  // Watch every new event for an architect flag.  When one fires,
+  // capture the ball positions before/after and schedule the auto-
+  // clear.  Skipping the effect entirely under motionPaused honours
+  // the same accessibility + visibility gates as the rest of the
+  // surface — a reduced-motion user gets no Architect flicker.
+  useEffect(() => {
+    if (motionPaused) return;
+    if (!events || events.length === 0) return;
+    const last = events[events.length - 1];
+    if (!last || !last.architectFlag) return;
+    const token = ++flairTokenRef.current;
+    setFlair({
+      ...(last.playerId ? { playerId: last.playerId } : {}),
+      fromBall: prevBallRef.current,
+      toBall:   { x: state.ball.x, y: state.ball.y },
+      token,
+    });
+    const handle = setTimeout(() => {
+      // Only clear when we're STILL the active flair — a newer one
+      // would have a higher token.  This guards against blanking a
+      // freshly-fired second flair when the first one's setTimeout
+      // resolves late.
+      setFlair((prev) => (prev && prev.token === token ? null : prev));
+    }, ARCHITECT_FLAIR_MS);
+    return () => clearTimeout(handle);
+  }, [events, motionPaused, state.ball.x, state.ball.y]);
+
+  // Capture each post-render ball position into prevBallRef so the
+  // next flair's `fromBall` reflects the actual previous spot.
+  useEffect(() => {
+    prevBallRef.current = { x: state.ball.x, y: state.ball.y };
+  }, [state.ball.x, state.ball.y]);
+
+  /**
+   * Manual flair trigger for the debug overlay's "fire architect
+   * flair" button (isl-u8u).  Reuses the same setFlair path so the
+   * visual behaviour is identical to a real Architect event.
+   */
+  const fireDebugFlair = useCallback(() => {
+    const token = ++flairTokenRef.current;
+    setFlair({
+      fromBall: prevBallRef.current,
+      toBall:   { x: state.ball.x, y: state.ball.y },
+      token,
+    });
+    setTimeout(() => {
+      setFlair((prev) => (prev && prev.token === token ? null : prev));
+    }, ARCHITECT_FLAIR_MS);
+  }, [state.ball.x, state.ball.y]);
+
   /**
    * CSS transition string applied to every player + ball circle.
    * Suppressed (`'none'`) when reduced motion / paused / tab hidden
@@ -248,8 +336,15 @@ export function PitchView({
     >
       {/* ── Surface layer ─────────────────────────────────────────────── */}
       {/* Absolute positioning so the dot layer above can stack on the
-          same coord space without flex / grid gap math intruding. */}
-      <div style={{ position: 'absolute', inset: 0 }}>
+          same coord space without flex / grid gap math intruding.
+          The `isl-pitch-flicker` class is toggled when an Architect
+          flair is active — its CSS keyframes briefly drop the
+          surface to 0.3 opacity then snap back, reading as a
+          "reality-glitch" moment (isl-u8u). */}
+      <div
+        style={{ position: 'absolute', inset: 0 }}
+        className={flair ? 'isl-pitch-flicker' : undefined}
+      >
         <PitchSurface />
       </div>
 
@@ -275,19 +370,51 @@ export function PitchView({
               CSS transition on cx/cy delegates motion to the GPU — no
               rAF loop needed (isl-lfo).  The transition string is
               swapped to `'none'` under reduced-motion / tab-hidden so
-              accessibility + battery-life concerns are honoured (isl-7rh). */}
-          {state.players.map((p) => (
-            <circle
-              key={p.id}
-              cx={p.x * PITCH_VIEWBOX_WIDTH}
-              cy={p.y * PITCH_VIEWBOX_HEIGHT}
-              r={PLAYER_RADIUS}
-              fill={p.side === 'home' ? COLORS.dust : COLORS.quantum}
-              stroke={COLORS.abyss}
-              strokeWidth={0.3}
-              style={{ transition: dotTransition }}
+              accessibility + battery-life concerns are honoured (isl-7rh).
+              An active Architect flair (isl-u8u) adds a quantum
+              drop-shadow halo to the involved player dot — purely
+              visual, no layout impact. */}
+          {state.players.map((p) => {
+            const isFlared = flair && flair.playerId === p.id;
+            return (
+              <circle
+                key={p.id}
+                cx={p.x * PITCH_VIEWBOX_WIDTH}
+                cy={p.y * PITCH_VIEWBOX_HEIGHT}
+                r={PLAYER_RADIUS}
+                fill={p.side === 'home' ? COLORS.dust : COLORS.quantum}
+                stroke={COLORS.abyss}
+                strokeWidth={0.3}
+                style={{
+                  transition: dotTransition,
+                  // Drop-shadow filter renders as a soft glow — quantum
+                  // colour echoes the focus-tier palette so the eye
+                  // immediately reads "the cosmos touched this dot".
+                  filter: isFlared
+                    ? `drop-shadow(0 0 1.5px ${COLORS.quantum}) drop-shadow(0 0 3px ${COLORS.quantum})`
+                    : undefined,
+                }}
+              />
+            );
+          })}
+
+          {/* Architect ball trail (isl-u8u): a quantum-coloured line
+              segment from the previous ball position to the current
+              one, fading out via the `isl-architect-trail` CSS
+              animation.  Rendered BELOW the ball circle so the ball
+              itself remains the visually loudest mark. */}
+          {flair && (
+            <line
+              x1={flair.fromBall.x * PITCH_VIEWBOX_WIDTH}
+              y1={flair.fromBall.y * PITCH_VIEWBOX_HEIGHT}
+              x2={flair.toBall.x   * PITCH_VIEWBOX_WIDTH}
+              y2={flair.toBall.y   * PITCH_VIEWBOX_HEIGHT}
+              stroke={COLORS.quantum}
+              strokeWidth={1.2}
+              strokeLinecap="round"
+              className="isl-architect-trail"
             />
-          ))}
+          )}
 
           {/* Ball: astro orange so it's the visually loudest dot on the
               surface and the eye immediately catches its position.
@@ -316,8 +443,35 @@ export function PitchView({
           queueDepth={choreography.queueDepth}
           elapsedMinute={currentMinute ?? 0}
           events={events ?? []}
+          onFireArchitectFlair={fireDebugFlair}
         />
       )}
+
+      {/* ── Architect flair keyframe CSS (isl-u8u) ──────────────────────
+          Two animations live here so the flair is contained inside
+          the component:
+            • isl-pitch-flicker — drops the surface to 0.3 opacity for
+              ~80ms then snaps back, reading as a "reality glitch".
+            • isl-architect-trail — fades the ball-trail line from
+              full opacity to 0 over ARCHITECT_FLAIR_MS so it
+              dissolves rather than vanishing mid-paint.  Both
+              animations are play-once via `forwards` / `infinite:false`. */}
+      <style>{`
+        @keyframes isl-pitch-flicker-kf {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.3; }
+        }
+        .isl-pitch-flicker {
+          animation: isl-pitch-flicker-kf 80ms ease-out 1;
+        }
+        @keyframes isl-architect-trail-kf {
+          0%   { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        .isl-architect-trail {
+          animation: isl-architect-trail-kf ${ARCHITECT_FLAIR_MS}ms ease-out 1 forwards;
+        }
+      `}</style>
     </div>
   );
 }

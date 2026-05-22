@@ -50,6 +50,13 @@ export interface PitchDebugOverlayProps {
   elapsedMinute: number;
   /** Full visible event list — the overlay shows the tail. */
   events:       readonly PitchEventInput[];
+  /**
+   * Optional callback to fire a manual Architect flair (isl-u8u).
+   * When supplied, the overlay renders a small "Fire architect
+   * flair" button so a maintainer can verify the halo + flicker +
+   * ball trail without waiting for a real intervention.
+   */
+  onFireArchitectFlair?: () => void;
 }
 
 // ── Style tokens ─────────────────────────────────────────────────────────────
@@ -103,6 +110,7 @@ export function PitchDebugOverlay({
   queueDepth,
   elapsedMinute,
   events,
+  onFireArchitectFlair,
 }: PitchDebugOverlayProps) {
   // Take the last N events without mutating the input.  Memoised so
   // we don't reslice on every parent re-render when the list is
@@ -144,6 +152,35 @@ export function PitchDebugOverlay({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* ── Manual flair trigger (isl-u8u) ─────────────────────────────
+          Override pointer-events back to `auto` on the button so the
+          dev can click it — the panel-level `pointer-events: none`
+          (set in PANEL_STYLE above) blocks every other interaction
+          but this button is the one explicit affordance. */}
+      {onFireArchitectFlair && (
+        <button
+          type="button"
+          onClick={onFireArchitectFlair}
+          style={{
+            marginTop:     8,
+            width:         '100%',
+            padding:       '4px 6px',
+            background:    'transparent',
+            border:        `1px solid ${COLORS.quantum}`,
+            color:         COLORS.quantum,
+            fontFamily:    'Space Mono, monospace',
+            fontSize:      9,
+            fontWeight:    700,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            cursor:        'pointer',
+            pointerEvents: 'auto',
+          }}
+        >
+          ◇ Fire Architect Flair
+        </button>
       )}
     </div>
   );
