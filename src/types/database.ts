@@ -951,6 +951,79 @@ export type Database = {
           },
         ]
       }
+      match_lineups: {
+        Row: {
+          jersey_number: number | null
+          match_id: string
+          minutes_played: number
+          player_id: string
+          position: string
+          starter: boolean
+          team_id: string
+        }
+        Insert: {
+          jersey_number?: number | null
+          match_id: string
+          minutes_played?: number
+          player_id: string
+          position: string
+          starter?: boolean
+          team_id: string
+        }
+        Update: {
+          jersey_number?: number | null
+          match_id?: string
+          minutes_played?: number
+          player_id?: string
+          position?: string
+          starter?: boolean
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_lineups_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "match_referee_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "match_lineups_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_lineups_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player_idol_movers"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "match_lineups_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player_idol_score"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "match_lineups_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_lineups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_notification_sends: {
         Row: {
           match_id: string
@@ -1589,6 +1662,7 @@ export type Database = {
           created_at: string
           decree_type: string
           id: string
+          payload: Json
           player_id: string | null
           season_id: string
           sequence_order: number
@@ -1599,6 +1673,7 @@ export type Database = {
           created_at?: string
           decree_type: string
           id?: string
+          payload?: Json
           player_id?: string | null
           season_id: string
           sequence_order?: number
@@ -1609,6 +1684,7 @@ export type Database = {
           created_at?: string
           decree_type?: string
           id?: string
+          payload?: Json
           player_id?: string | null
           season_id?: string
           sequence_order?: number
@@ -2269,4 +2345,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

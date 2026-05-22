@@ -2,28 +2,15 @@
 // Supabase queries powering the per-player surfaces on /players/:playerId.
 //
 // WHAT THIS MODULE OWNS
-//   • `getPlayerRecentMatches` — the player's last N STAT-LINE appearances
-//     joined to the match row + opponent team, transformed into the
-//     narrative-shaped `PlayerRecentMatch` (result W/D/L, opponent name,
-//     home/away) the detail page renders.
+//   • `getPlayerRecentMatches` — the player's last N appearances, sourced
+//     from `match_lineups` (one row per starter, isl-pfm) and LEFT JOINED
+//     to `match_player_stats` for the contribution columns.  Transformed
+//     into the narrative-shaped `PlayerRecentMatch` (result W/D/L,
+//     opponent name, home/away) the detail page renders.
 //   • `getNarrativesMentioningPlayer` — narratives where the player's
 //     `entity_id` appears in `entities_involved` (JSONB array contains).
 //     Falls back to an empty list when the player has no linked entity
 //     (legacy rows that pre-date the universal-agent migration).
-//
-// KNOWN LIMITATION — STAT-ONLY APPEARANCES
-//   `match_player_stats` is the only source of per-match data we have
-//   today, and the match-worker (`supabase/functions/match-worker/
-//   index.ts:407-422`) intentionally only inserts rows for players who
-//   accrued at least one goal / assist / yellow / red during the match.
-//   Quiet shifts — defenders with a clean sheet, keepers with no logged
-//   saves, fringe forwards who never touched a stat counter — produce no
-//   row, so this surface lists "matches with a recorded contribution"
-//   rather than a true participation log.  Closing that gap needs either
-//   (a) the worker persisting all 22 starters with zero-stat rows or
-//   (b) a dedicated `match_lineups` table; both require a backfill of
-//   historical matches and are tracked in beads issue isl-pfm.  The
-//   UI copy on PlayerDetail's "Recent Stat Lines" section reflects this.
 //
 // LAYER BOUNDARY
 //   • No React, no direct Supabase singleton — every function takes an
@@ -71,17 +58,35 @@ const MatchInnerSchema = z.object({
   away_team:      TeamMiniSchema,
 });
 
-/** Raw row returned by the recent-matches SELECT (before transform). */
-const PlayerMatchRowSchema = z.object({
-  match_id:       z.string(),
-  team_id:        z.string(),
+/**
+ * One nested `match_player_stats` row joined off a lineup row.  The
+ * outer select sources the lineup from `match_lineups`, then LEFT
+ * JOINs `match_player_stats` filtered by the same player_id so the
+ * contribution columns come in alongside.  When the player took no
+ * contribution stats, the nested array is empty and we render zeros.
+ */
+const NestedStatRowSchema = z.object({
   goals:          z.number(),
   assists:        z.number(),
-  minutes_played: z.number(),
   rating:         z.number().nullable(),
   yellow_cards:   z.number(),
   red_cards:      z.number(),
+}).nullable();
+
+/**
+ * Raw row returned by the recent-matches SELECT (before transform).
+ * Sourced from `match_lineups` (isl-pfm) so every starter has a row
+ * even when they took no contribution stats.  The `match_player_stats`
+ * row LEFT-JOINS in via the player_id filter for goals/assists/cards.
+ */
+const PlayerMatchRowSchema = z.object({
+  match_id:       z.string(),
+  team_id:        z.string(),
+  minutes_played: z.number(),
   matches:        MatchInnerSchema,
+  // PostgREST returns nested 1:N joins as arrays — at most one row
+  // here because match_player_stats's PK is (match_id, player_id).
+  match_player_stats: z.array(NestedStatRowSchema).optional().nullable(),
 });
 
 /** Narrative row returned by `getNarrativesMentioningPlayer`. */
@@ -137,36 +142,32 @@ export interface NarrativeMention {
 // ── Recent matches ───────────────────────────────────────────────────────────
 
 /**
- * Fetch the player's `limit` most recent STAT-LINE appearances.
+ * Fetch the player's `limit` most recent appearances.
  *
- * SELECT match_player_stats rows for this player, joining the parent
- * `matches` row (for scoreline + date) and both teams (for the opponent
- * name).  Sorted by the JOINED `matches.played_at` descending on the
- * server, then trimmed to `limit` rows.  We still do an in-memory pass
- * for the `played_at ?? scheduled_at` fallback used by the UI date,
- * but the server-side ORDER + LIMIT guarantees we never silently
- * truncate a high-volume player's most-recent rows to PostgREST's
- * `max-rows` cap (default 1000) before sorting.
+ * SOURCE — match_lineups (isl-pfm): one row per starter regardless of
+ * whether the player accrued a stat that match.  A LEFT JOIN to
+ * `match_player_stats` filtered by the same player_id pulls in
+ * contribution columns (goals / assists / cards / rating); when the
+ * player took no contributions in that match, the nested array is
+ * empty and the row reads as zeros.
+ *
+ * Sorted by the JOINED `matches.played_at` descending on the server,
+ * then trimmed to `limit` rows.  We still do an in-memory pass for
+ * the `played_at ?? scheduled_at` fallback used by the UI date, but
+ * the server-side ORDER + LIMIT guarantees we never silently truncate
+ * a high-volume player's most-recent rows to PostgREST's `max-rows`
+ * cap (default 1000) before sorting.
  *
  * Malformed rows (the relational join silently dropped one side) are
  * filtered out and logged; the function returns at most `limit` valid
  * rows rather than blowing up.
  *
- * IMPORTANT — STAT-ONLY APPEARANCES
- *   See the module-header "KNOWN LIMITATION" block: `match_player_stats`
- *   only contains rows for players who scored, assisted, or were carded
- *   in a match.  A defender with 30 clean sheets will show zero rows
- *   here; an out-of-form striker with no goals across a season the same.
- *   Callers (the PlayerDetail "Recent Stat Lines" section) MUST surface
- *   that caveat in the UI rather than imply "this is every game played".
- *
  * @param db        Injected Supabase client.
  * @param playerId  UUID of the player to fetch matches for.
  * @param limit     Max rows to return (default 10).
  * @returns         Transformed PlayerRecentMatch rows, newest first.
- *                  Empty array on error or for a player with no recorded
- *                  stat-line appearances (NOT necessarily "no games
- *                  played" — see limitation above).
+ *                  Empty array on error or for a player who has never
+ *                  appeared in a completed match.
  */
 export async function getPlayerRecentMatches(
   db:       IslSupabaseClient,
@@ -184,17 +185,23 @@ export async function getPlayerRecentMatches(
   const dbFetchLimit = Math.max(limit * 2, limit + 5);
 
   const { data, error } = await db
-    .from('match_player_stats')
+    .from('match_lineups')
     .select(`
-      match_id, team_id, goals, assists, minutes_played, rating, yellow_cards, red_cards,
+      match_id, team_id, minutes_played,
       matches:matches!inner(
         id, competition_id, scheduled_at, played_at, status,
         home_team_id, away_team_id, home_score, away_score,
         home_team:teams!matches_home_team_id_fkey(id, name),
         away_team:teams!matches_away_team_id_fkey(id, name)
-      )
+      ),
+      match_player_stats!left(goals, assists, rating, yellow_cards, red_cards)
     `)
     .eq('player_id', playerId)
+    // Filter the joined stats rows by the same player_id so a match
+    // where THIS player took no contributions still returns the lineup
+    // row (with an empty nested array) instead of joining another
+    // player's contribution row.
+    .eq('match_player_stats.player_id', playerId)
     .order('played_at', {
       // Anchor on the parent `matches.played_at` so the join can sort
       // newest-first at the DB layer rather than relying on PostgREST's
@@ -219,6 +226,10 @@ export async function getPlayerRecentMatches(
     }
     const r = parsed.data;
     const m = r.matches;
+    // Pull the nested stat row (may be missing entirely for a quiet
+    // appearance).  Default everything to zero so the UI renders a
+    // tidy "appeared, took no stats" row instead of nulls.
+    const stat = (r.match_player_stats?.[0]) ?? null;
     const isHome   = r.team_id === m.home_team_id;
     const opponent = isHome ? m.away_team : m.home_team;
     const myScore  = isHome ? m.home_score : m.away_score;
@@ -239,12 +250,12 @@ export async function getPlayerRecentMatches(
       opponent,
       isHome,
       result,
-      goals:         r.goals,
-      assists:       r.assists,
+      goals:         stat?.goals        ?? 0,
+      assists:       stat?.assists      ?? 0,
       minutes:       r.minutes_played,
-      rating:        r.rating,
-      yellowCards:   r.yellow_cards,
-      redCards:      r.red_cards,
+      rating:        stat?.rating       ?? null,
+      yellowCards:   stat?.yellow_cards ?? 0,
+      redCards:      stat?.red_cards    ?? 0,
     });
   }
 

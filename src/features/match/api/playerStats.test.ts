@@ -96,7 +96,13 @@ function makeQueryMock() {
 // Small helpers so each `it()` reads at the level "player scored in this
 // match" instead of "here's a 200-byte object literal".
 
-/** Build a match_player_stats row with a fully-populated joined match. */
+/**
+ * Build a match_lineups row with a fully-populated joined match and
+ * a nested match_player_stats array (post-isl-pfm shape).  The
+ * nested array carries at most one row — the LEFT-JOIN filtered by
+ * `player_id` returns either the player's contribution row or an
+ * empty array when they took no stats that match.
+ */
 function buildPlayerMatchRow(opts: {
   matchId:     string;
   competitionId?: string;
@@ -121,15 +127,22 @@ function buildPlayerMatchRow(opts: {
   const awayScore  = opts.isHome ? opts.oppScore     : opts.playerScore;
   const opponent   = { id: opts.opponentId, name: opts.opponentName };
   const playerTeam = { id: opts.playerTeamId, name: `Player Team ${opts.playerTeamId}` };
+  // Decide whether to surface a nested stats row.  When every
+  // contribution field defaults to zero (and rating is null), the
+  // production query's LEFT JOIN would return an empty array — but
+  // older tests that explicitly pass values expect them surfaced.
+  // Default to "always include one row" to preserve the test contract.
+  const statRow = {
+    goals:        opts.goals       ?? 0,
+    assists:      opts.assists     ?? 0,
+    rating:       opts.rating      ?? null,
+    yellow_cards: opts.yellowCards ?? 0,
+    red_cards:    opts.redCards    ?? 0,
+  };
   return {
-    match_id:       opts.matchId,
-    team_id:        opts.playerTeamId,
-    goals:          opts.goals       ?? 0,
-    assists:        opts.assists     ?? 0,
-    minutes_played: opts.minutes     ?? 90,
-    rating:         opts.rating      ?? null,
-    yellow_cards:   opts.yellowCards ?? 0,
-    red_cards:      opts.redCards    ?? 0,
+    match_id:           opts.matchId,
+    team_id:            opts.playerTeamId,
+    minutes_played:     opts.minutes ?? 90,
     matches: {
       id:             opts.matchId,
       competition_id: opts.competitionId ?? 'comp-1',
@@ -143,6 +156,9 @@ function buildPlayerMatchRow(opts: {
       home_team:      opts.isHome ? playerTeam : opponent,
       away_team:      opts.isHome ? opponent   : playerTeam,
     },
+    // Nested LEFT-JOINed match_player_stats row.  Tests can pass
+    // omitted scoring fields to land on the zero-contribution path.
+    match_player_stats: [statRow],
   };
 }
 
@@ -168,7 +184,7 @@ describe('getPlayerRecentMatches', () => {
       minutes:      90,
       rating:       8.5,
     });
-    mock.queue.push('match_player_stats', [row]);
+    mock.queue.push('match_lineups', [row]);
 
      
     const result = await getPlayerRecentMatches(mock.db as any, 'p1');
@@ -205,7 +221,7 @@ describe('getPlayerRecentMatches', () => {
       oppScore:     3,
       playedAt:     '2026-04-08T18:00:00Z',
     });
-    mock.queue.push('match_player_stats', [row]);
+    mock.queue.push('match_lineups', [row]);
 
      
     const [first] = await getPlayerRecentMatches(mock.db as any, 'p1');
@@ -236,7 +252,7 @@ describe('getPlayerRecentMatches', () => {
       playedAt:     null,
       scheduledAt:  '2026-04-15T18:00:00Z',
     });
-    mock.queue.push('match_player_stats', [drawRow, unsimRow]);
+    mock.queue.push('match_lineups', [drawRow, unsimRow]);
 
      
     const result = await getPlayerRecentMatches(mock.db as any, 'p1');
@@ -266,7 +282,7 @@ describe('getPlayerRecentMatches', () => {
       matchId: 'm-mid', playerTeamId: 't1', opponentId: 't4', opponentName: 'C',
       isHome: false, playerScore: 2, oppScore: 1, playedAt: '2026-02-01T00:00:00Z',
     });
-    mock.queue.push('match_player_stats', [a, b, c]);
+    mock.queue.push('match_lineups', [a, b, c]);
 
      
     const result = await getPlayerRecentMatches(mock.db as any, 'p1', 2);
@@ -276,14 +292,14 @@ describe('getPlayerRecentMatches', () => {
   });
 
   it('returns empty array when the player has no appearances', async () => {
-    mock.queue.push('match_player_stats', []);
+    mock.queue.push('match_lineups', []);
      
     const result = await getPlayerRecentMatches(mock.db as any, 'no-such-player');
     expect(result).toEqual([]);
   });
 
   it('returns empty array on query error (unknown / RLS-blocked player)', async () => {
-    mock.queue.push('match_player_stats', null, { message: 'permission denied' });
+    mock.queue.push('match_lineups', null, { message: 'permission denied' });
      
     const result = await getPlayerRecentMatches(mock.db as any, 'p1');
     expect(result).toEqual([]);
@@ -296,10 +312,14 @@ describe('getPlayerRecentMatches', () => {
     });
     // Malformed rows the boundary should reject:
     //   - matches join is null (the inner join silently dropped)
-    //   - goals is a string instead of number (drift caught by Zod)
+    //   - minutes_played is a string instead of number (drift caught
+    //     by Zod at the top level — note: goals/assists moved into a
+    //     nested match_player_stats[] after isl-pfm, so the runtime
+    //     contract there is now "either a valid row or an empty
+    //     array", not "a wrong-typed field gets rejected").
     const missingJoin = { ...valid, matches: null, match_id: 'm-bad-1' };
-    const wrongType   = { ...valid, goals: 'three' as unknown as number, match_id: 'm-bad-2' };
-    mock.queue.push('match_player_stats', [valid, missingJoin, wrongType]);
+    const wrongType   = { ...valid, minutes_played: 'ninety' as unknown as number, match_id: 'm-bad-2' };
+    mock.queue.push('match_lineups', [valid, missingJoin, wrongType]);
 
      
     const result = await getPlayerRecentMatches(mock.db as any, 'p1');

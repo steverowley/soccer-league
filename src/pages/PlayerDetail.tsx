@@ -286,22 +286,17 @@ export default function PlayerDetail() {
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── IV. Recent Stat Lines ────────────────────────────────────── */}
-        {/* Sourced from `match_player_stats`, which the match-worker fills
-            only for players who registered a stat (goal, assist, or card).
-            Quiet shifts — defenders holding a clean sheet, keepers with no
-            saves logged — never get a row, so this list reads as "matches
-            where this player put a number on the board" rather than a
-            full appearance log.  Backfilling true participation needs a
-            new `match_lineups` table (tracked in beads isl-pfm). */}
+        {/* ── IV. Recent Matches ────────────────────────────────────────
+            Sourced from `match_lineups` (one row per starter) with a
+            LEFT JOIN to `match_player_stats` for the contribution
+            columns — see getPlayerRecentMatches in playerStats.ts.
+            A defender with 30 clean sheets shows 30 rows; the
+            contribution columns just read as zeros for quiet shifts
+            (isl-pfm). */}
         <section aria-labelledby="matches-heading">
           <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="matches-heading" kicker="IV" title="Recent Stat Lines" />
-
-              <p style={{ ...LABEL_STYLE, color: DUST_50, marginTop: -8, marginBottom: 16 }}>
-                Matches where this player recorded a goal, assist, or card.
-              </p>
+              <SectionLabel id="matches-heading" kicker="IV" title="Recent Matches" />
 
               {!matchesDone ? (
                 <Skeleton height={120} />
@@ -309,7 +304,7 @@ export default function PlayerDetail() {
                 <RecentMatchesTable rows={recentMatches} />
               ) : (
                 <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
-                  No stat-line appearances yet &mdash; quiet shifts on the pitch don&apos;t show here.
+                  No recorded appearances yet.
                 </p>
               )}
             </div>

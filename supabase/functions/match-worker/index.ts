@@ -303,6 +303,76 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn('[match-worker] referee lookup threw:', (err as Error)?.message ?? err);
     }
 
+    // ── Political-decree aggregation (isl-azz) ─────────────────────────────
+    // Read every political_decree row for THIS match's season and
+    // aggregate the three documented payload axes:
+    //   • cadence_mult  → recorded but not yet applied (would mutate
+    //                     season_config.match_duration_seconds; deferred
+    //                     to a follow-up that owns the global pacing
+    //                     knob).
+    //   • ref_strictness_delta → SUMMED across all decrees; ADDED to
+    //                     the looked-up referee's strictness then
+    //                     clamped to the engine's 0..100 scale.  This
+    //                     is the only effect we apply in v1 because
+    //                     it slots cleanly into the existing
+    //                     refOverride object isl-84e wired.
+    //   • ticket_multiplier   → recorded but not yet applied (would
+    //                     modulate team_finances ticket revenue; lives
+    //                     in a different code path and stays in this
+    //                     PR's deferred list).
+    //
+    // Failure modes degrade silently — a query error or a malformed
+    // payload row leaves the existing refOverride untouched so the
+    // worker never blocks on the decrees subsystem.
+    try {
+      // Find the season id this match belongs to via its competition.
+      const seasonId =
+        match.competition_id != null
+          ? (async () => {
+              const { data: comp } = await supabase
+                .from('competitions')
+                .select('season_id')
+                .eq('id', match.competition_id)
+                .maybeSingle();
+              return (comp as { season_id?: string } | null)?.season_id ?? null;
+            })()
+          : Promise.resolve(null);
+      const resolvedSeasonId = await seasonId;
+      if (resolvedSeasonId) {
+        const { data: decrees, error: decreeErr } = await supabase
+          .from('season_decrees')
+          .select('payload')
+          .eq('season_id', resolvedSeasonId)
+          .eq('decree_type', 'political_decree');
+        if (decreeErr) {
+          console.warn(`[match-worker] season_decrees query failed: ${decreeErr.message}`);
+        } else if (Array.isArray(decrees) && decrees.length > 0) {
+          let totalRefDelta = 0;
+          for (const row of decrees) {
+            const p = (row as { payload?: unknown }).payload as
+              | { ref_strictness_delta?: unknown }
+              | null
+              | undefined;
+            const d =
+              typeof p?.ref_strictness_delta === 'number' ? p.ref_strictness_delta : 0;
+            totalRefDelta += d;
+          }
+          if (totalRefDelta !== 0 && refOverride) {
+            const before = refOverride.strictness;
+            // Clamp to the engine's 0..100 strictness scale so a
+            // pile of decrees can't push the value off the cliff.
+            refOverride.strictness = Math.max(0, Math.min(100, before + totalRefDelta));
+            console.log(
+              `[match-worker] political_decree: ref strictness ${before} → ${refOverride.strictness} ` +
+              `(Σ delta ${totalRefDelta} across ${decrees.length} decree(s))`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[match-worker] political_decree aggregation threw:', (err as Error)?.message ?? err);
+    }
+
     // ── Pre-match context ───────────────────────────────────────────────────
     // Fan boost + Architect lifecycle are both hydrated here in parallel and
     // threaded into simulateFullMatch.  Both falling back to no-ops (no
@@ -467,6 +537,43 @@ async function processMatch(match: any): Promise<boolean> {
         .insert(statRows);
       if (statsError) throw new Error(`Insert match_player_stats failed: ${statsError.message}`);
       console.log(`[match-worker] Persisted ${statRows.length} player-stat rows`);
+    }
+
+    // ── Persist participation rows (isl-pfm) ───────────────────────────────
+    // match_lineups carries one row per starter regardless of whether
+    // they accrued a stat — gives the player_detail page true match
+    // history (a defender with 30 clean sheets shows 30 lineups).
+    // Worker writes both sides' starters at the same point in the
+    // pipeline; match_player_stats stays contribution-only.
+    //
+    // ON CONFLICT DO NOTHING via the (match_id, player_id) PK so a
+    // worker retry (rare but possible) doesn't double-insert.
+    const lineupRows = [...(homeData.players ?? []), ...(awayData.players ?? [])]
+      .filter((p): p is typeof p & { id: string; team_id: string } =>
+        Boolean(p?.id && p?.team_id && p?.starter),
+      )
+      .map((p) => ({
+        match_id:       match.id,
+        player_id:      p.id,
+        team_id:        p.team_id,
+        position:       (p.position as string | null) ?? 'MF',
+        jersey_number:  (p.jersey_number as number | null) ?? null,
+        starter:        true,
+        minutes_played: 90,
+      }));
+    if (lineupRows.length > 0) {
+      const { error: lineupErr } = await supabase
+        .from('match_lineups')
+        .upsert(lineupRows, { onConflict: 'match_id,player_id', ignoreDuplicates: true });
+      if (lineupErr) {
+        // Best-effort: log + continue.  The match is still successfully
+        // simulated even when the participation rows fail to land — the
+        // historical backfill in migration 0047 covers existing matches
+        // and a future re-run of this insert will re-fill missing rows.
+        console.warn(`[match-worker] match_lineups insert failed: ${lineupErr.message}`);
+      } else {
+        console.log(`[match-worker] Persisted ${lineupRows.length} lineup rows`);
+      }
     }
 
     // ── Update match to completed ──────────────────────────────────────────

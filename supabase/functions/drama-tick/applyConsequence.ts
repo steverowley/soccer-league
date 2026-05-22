@@ -26,15 +26,52 @@
 /**
  * Decree type used for drama-tier political_decree consequences.
  *
- * MECHANICAL EFFECT: 'proclamation' is one of the 5 values allowed by the
- * season_decrees.decree_type CHECK constraint (see migration 0021).  Per
- * its documentation it carries NO mechanical effect — it lives as a
- * permanent lore row on the Election Night page and the news feed.  A
- * future migration can introduce a 'political_decree' type with simulator
- * hooks (cadence shift, ticket multiplier, ref-strictness modifier, etc.);
- * for v1 the lore-only commitment is enough to make the decree feel real.
+ * MECHANICAL EFFECT: migration 0046 extended the season_decrees
+ * CHECK constraint to admit 'political_decree' alongside the
+ * pre-existing lore types.  Rows of this type carry a structured
+ * `payload` JSONB that the match-worker reads pre-match to bend
+ * three simulator inputs:
+ *   • cadence_mult         — multiplier on match_duration_seconds
+ *   • ref_strictness_delta — added to base referee strictness
+ *   • ticket_multiplier    — multiplier on team_finances ticket revenue
+ * See `derivePoliticalDecreePayload` below for how a given drama
+ * narrative is deterministically mapped to a payload.
  */
-const POLITICAL_DECREE_DECREE_TYPE = 'proclamation';
+const POLITICAL_DECREE_DECREE_TYPE = 'political_decree';
+
+// ── Political-decree payload bounds ─────────────────────────────────────────
+// The payload values are intentionally modest — strong enough to feel
+// distinct in the match-worker's read but bounded so a single
+// political decree never warps the season beyond recognition.  Adjust
+// these if playtesting reveals the effects are too subtle or too
+// dominant.
+
+/**
+ * Min / max multiplier on `match_duration_seconds`.  0.6 = the match
+ * paces ~40% faster (read: a "rapid-fire week"); 1.4 = ~40% slower
+ * ("ceremonial week").  Centred on 1.0 so a neutral-leaning decree
+ * is essentially a no-op.
+ */
+const POLITICAL_CADENCE_MIN = 0.6;
+const POLITICAL_CADENCE_MAX = 1.4;
+
+/**
+ * Min / max integer added to the base referee strictness (0..100).
+ * ±10 ≈ one tactical-style band on the engine's strictness scale,
+ * enough to bend card-issue rates without invalidating the
+ * underlying ref-pool diversity.
+ */
+const POLITICAL_REF_DELTA_MIN = -10;
+const POLITICAL_REF_DELTA_MAX = 10;
+
+/**
+ * Min / max multiplier on team_finances ticket revenue.  0.8 = a
+ * crowd boycott (~20% gate loss); 1.2 = a celebratory uplift.
+ * Symmetric so decrees that hurt and decrees that bless balance
+ * over a long season.
+ */
+const POLITICAL_TICKET_MIN = 0.8;
+const POLITICAL_TICKET_MAX = 1.2;
 
 // ── Shared result type ─────────────────────────────────────────────────────
 
@@ -333,6 +370,95 @@ export async function applyManagerResignation(
   };
 }
 
+// ── political_decree payload derivation (isl-azz) ──────────────────────────
+
+/**
+ * Shape of a political_decree's structured payload.  Persisted to
+ * `season_decrees.payload` and consumed by the match-worker before
+ * each simulation to bend three simulator inputs (cadence, referee
+ * strictness, ticket revenue).
+ *
+ * All keys optional — the worker treats a missing key as a no-op
+ * for that effect.  Multipliers default to 1.0 (identity), the
+ * delta defaults to 0 (identity).
+ */
+export interface PoliticalDecreePayload {
+  /** Multiplier on `match_duration_seconds`.  Clamped to the bounds above. */
+  cadence_mult?:         number;
+  /** Integer added to base referee strictness (then clamped 0..100). */
+  ref_strictness_delta?: number;
+  /** Multiplier on team_finances ticket revenue.  Clamped to the bounds above. */
+  ticket_multiplier?:    number;
+}
+
+/**
+ * Deterministic FNV-1a hash of an arbitrary string to a 32-bit
+ * unsigned integer.  Used here to fingerprint a drama narrative so
+ * the same political_decree narrative always produces the same
+ * payload (testability + recovery flows).
+ */
+function fnv1aHash(s: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    hash ^= s.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Map a [0..1) ratio into a [min..max] range with the chosen number
+ * of decimal places.  Centralised so the three payload axes share
+ * the same rounding contract — handy when comparing recorded
+ * payloads across decrees.
+ *
+ * @param ratio    Value in [0..1).
+ * @param min      Lower bound (inclusive).
+ * @param max      Upper bound (inclusive).
+ * @param decimals Decimal places for rounding (2 for multipliers).
+ * @returns        Rounded number in [min..max].
+ */
+function scale(ratio: number, min: number, max: number, decimals = 2): number {
+  const raw = min + ratio * (max - min);
+  const k   = Math.pow(10, decimals);
+  return Math.round(raw * k) / k;
+}
+
+/**
+ * Derive a structured payload from a political-decree narrative.
+ *
+ * Strategy: hash the narrative text into three independent ratios
+ * (one per axis) using different shift amounts so the three effects
+ * don't correlate.  Then scale each ratio into its target range.
+ *
+ * Why a hash-derived payload (rather than an LLM call): keeps the
+ * drama-tick function pure + cheap + idempotent.  The same narrative
+ * always lands the same effect, so a re-applied decree (recovery
+ * after a failed insert, test harness replays) reproduces exactly.
+ *
+ * @param narrativeText  The drama narrative — typically a short
+ *                       sentence written by the Architect.
+ * @returns              Validated PoliticalDecreePayload — every
+ *                       key set, every value inside its documented
+ *                       bound.
+ */
+export function derivePoliticalDecreePayload(
+  narrativeText: string,
+): PoliticalDecreePayload {
+  const h = fnv1aHash(narrativeText);
+  // Three independent ratios from disjoint bit windows so the axes
+  // vary independently.  >>> 0 keeps each window an unsigned int;
+  // / 0xffffffff normalises to a tight [0..1) ratio.
+  const r1 = ((h         >>> 0) / 0xffffffff);
+  const r2 = (((h >>> 11) >>> 0) / 0x001fffff);
+  const r3 = (((h >>> 21) >>> 0) / 0x000007ff);
+  return {
+    cadence_mult:         scale(r1, POLITICAL_CADENCE_MIN, POLITICAL_CADENCE_MAX, 2),
+    ref_strictness_delta: Math.round(scale(r2, POLITICAL_REF_DELTA_MIN, POLITICAL_REF_DELTA_MAX, 0)),
+    ticket_multiplier:    scale(r3, POLITICAL_TICKET_MIN,  POLITICAL_TICKET_MAX,  2),
+  };
+}
+
 // ── political_decree → season decree row ───────────────────────────────────
 
 /**
@@ -384,13 +510,22 @@ export async function applyPoliticalDecree(
   const nextOrder =
     ((orderQ.data as { sequence_order: number } | null)?.sequence_order ?? -1) + 1;
 
-  // STEP 3: insert.  No player_id / team_id targets — political decrees
-  // address the league as a whole at this layer.
+  // STEP 3: derive the structured payload from the narrative text.
+  // Deterministic — same narrative produces same effect — so a re-
+  // applied decree (recovery after a failed insert, test replays)
+  // reproduces exactly.  See derivePoliticalDecreePayload above.
+  const payload = derivePoliticalDecreePayload(narrativeText);
+
+  // STEP 4: insert.  No player_id / team_id targets — political decrees
+  // address the league as a whole at this layer.  decree_type is now
+  // 'political_decree' (per migration 0046) so the worker reader can
+  // filter by type rather than parse payload presence.
   const { error: insertErr } = await db.from('season_decrees').insert({
     season_id: seasonId,
     decree_type: POLITICAL_DECREE_DECREE_TYPE,
     text: narrativeText,
     sequence_order: nextOrder,
+    payload,
   });
 
   if (insertErr) {
@@ -404,7 +539,7 @@ export async function applyPoliticalDecree(
   return {
     applied: true,
     reason: 'decreed',
-    meta: { entityId, seasonId, sequenceOrder: nextOrder },
+    meta: { entityId, seasonId, sequenceOrder: nextOrder, payload },
   };
 }
 
