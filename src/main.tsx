@@ -62,6 +62,12 @@ import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 import { MemoryWriteListener }      from './features/agents';
 
+// QuickCaptureFAB (issue isl-aal): admin-only floating "+" button that
+// opens a one-line idea-capture modal anywhere in the app.  Mounted once
+// at the app root inside <BrowserRouter> so it has access to useAuth().
+// Renders null for non-admins so it's safe to mount unconditionally.
+import { QuickCaptureFAB }          from './features/roadmap';
+
 // ── Service worker bootstrap ─────────────────────────────────────────────────
 // Registers `public/sw.js` once on app load if the browser supports
 // service workers.  Idempotent — re-registration with the same script URL
@@ -297,6 +303,13 @@ createRoot(document.getElementById('root')!).render(
               <Route path="admin/what-if"       element={<WhatIf />} />
             </Routes>
             </Suspense>
+            {/* Quick-capture FAB sits inside the router (so it can use
+                useAuth via the AuthProvider context above) but OUTSIDE
+                the Routes/Suspense pair so it stays mounted across
+                navigations — no flicker between page chunks, no need
+                to wait for the next route's lazy chunk to load before
+                the user can capture an idea. */}
+            <QuickCaptureFAB />
           </BrowserRouter>
         </AuthProvider>
       </SupabaseProvider>

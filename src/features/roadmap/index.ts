@@ -90,3 +90,10 @@ export type { BdIssue } from './api/bdIssues';
 // `RoadmapColumn` / `RoadmapCard` / `ItemEditorModal` are internal to the
 // feature and not re-exported to keep the public surface small.
 export { RoadmapBoard } from './ui/RoadmapBoard';
+
+// ── UI — Quick Capture FAB (issue isl-aal) ─────────────────────────────────
+// Admin-only floating action button mounted once at the app root.  Opens
+// a one-line capture modal that inserts a row into the Ideas column
+// without navigating away from the current page.  Renders null for
+// non-admins so it's safe to mount unconditionally.
+export { QuickCaptureFAB } from './ui/QuickCaptureFAB';
