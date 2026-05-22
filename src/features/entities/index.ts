@@ -164,3 +164,16 @@ export type {
 // Mount once at the app root inside <SupabaseProvider>.  Subscribes to
 // match.completed and writes one referee-narrative row per fixture.
 export { RefereeNarrativeListener } from './ui/RefereeNarrativeListener';
+
+// ── UI — relationship graph layout hook (issue isl-mcs) ────────────────────
+// d3-force wrapper that positions the subgraph for the SVG renderer (isl-pfq).
+// Tunable physics constants live in `./ui/relationshipGraph/forceConfig.ts`.
+export { useForceLayout } from './ui/relationshipGraph/useForceLayout';
+export type {
+  NodeInput,
+  EdgeInput,
+  PositionedNode,
+  PositionedEdge,
+  UseForceLayoutInput,
+  UseForceLayoutOutput,
+} from './ui/relationshipGraph/useForceLayout';
