@@ -41,16 +41,28 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 // ── Real-engine shadow draw (Phase 11.1) ────────────────────────────────────
-// Pull the match-worker's pure simulator + normaliser via a relative
-// import.  Deno serves edge functions out of supabase/functions/* and
-// can resolve sibling-folder paths at deploy time.  Reusing the worker
-// copy avoids a triple-duplication of the engine.
+// Pull the match-worker's pure simulator + normaliser via LOCAL copies
+// in this function's directory.  Earlier revisions imported from
+// `../match-worker/...` directly, but Supabase's edge-function deploy
+// pipeline rejects relative imports that traverse outside the function
+// directory — see isl-hhz.  The fix mirrors the pattern already used
+// by `corpus-enricher/voiceGuard.ts`: the canonical copy lives under
+// `supabase/functions/match-worker/`, and this directory carries a
+// KEEP-IN-SYNC duplicate of every file the shadow worker needs.  The
+// banner at the top of each duplicate spells out the diff invariant
+// (the only allowed delta is the banner block itself); edits MUST be
+// applied to BOTH places in lockstep.
+//
+// When the duplication starts hurting, lift the shared engine into
+// `supabase/functions/_shared/match-engine/` and have both workers
+// import from there.  Until then, the diff check in the banner is the
+// drift guard.
 //
 // SimulationResult shape is intentionally not imported as a type — the
 // worker doesn't ship a typed surface here and `any` is already the
 // house style for this file's deno-lint exemption.
-import { simulateFullMatch } from '../match-worker/simulateFullMatch.ts';
-import { normalizeTeamForEngine } from '../match-worker/normalizeTeam.ts';
+import { simulateFullMatch } from './simulateFullMatch.ts';
+import { normalizeTeamForEngine } from './normalizeTeam.ts';
 
 // ── Tuning constants ────────────────────────────────────────────────────────
 
