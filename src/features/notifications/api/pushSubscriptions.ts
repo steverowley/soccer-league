@@ -251,10 +251,22 @@ export async function deletePushSubscription(
  *
  * Fields are optional: passing `{ notify_all_matches: true }` flips just
  * that toggle and leaves `notify_favourite_team` untouched.  RLS scopes
- * the UPDATE to the owning user.
+ * the UPDATE to the owning user; migration 0041 additionally locks out
+ * is_admin / credits column writes from the client.
+ *
+ * KEY ALLOWLIST (defence-in-depth)
+ * ─────────────────────────────────
+ * TypeScript types are erased at runtime, so a caller could in principle
+ * sneak extra keys (e.g. `is_admin`) into `prefs`.  Migration 0041 already
+ * blocks those at the RLS layer, but this wrapper filters down to the two
+ * declared notification keys before reaching PostgREST so the dangerous
+ * keys never even leave the browser.  The two layers compose: RLS catches
+ * direct supabase-js bypass paths, the allowlist catches buggy callers.
  *
  * @param db     Injected Supabase client.
  * @param prefs  Partial preferences shape; absent fields are not written.
+ *               Any keys outside `notify_favourite_team` and
+ *               `notify_all_matches` are silently dropped.
  * @returns      The merged preferences after the update, or null + error.
  */
 export async function updateNotificationPreferences(
@@ -266,16 +278,29 @@ export async function updateNotificationPreferences(
     return { data: null, error: 'Not authenticated' };
   }
 
+  // ── Allowlist filter ─────────────────────────────────────────────────────
+  // Build a fresh object that only carries the two known boolean keys.
+  // `in`-check (rather than truthy-check) lets the caller explicitly set a
+  // field to `false`, which we still want to forward.  The boolean coercion
+  // (`!!value`) defends against a caller passing e.g. `1` or `'true'`.
+  const safe: { notify_favourite_team?: boolean; notify_all_matches?: boolean } = {};
+  if ('notify_favourite_team' in prefs) {
+    safe.notify_favourite_team = !!prefs.notify_favourite_team;
+  }
+  if ('notify_all_matches' in prefs) {
+    safe.notify_all_matches = !!prefs.notify_all_matches;
+  }
+
   // Refuse the empty payload — Postgres tolerates it, but it would
   // silently no-op and the caller would not be able to tell apart a
   // success from a logic bug that filtered every field out.
-  if (Object.keys(prefs).length === 0) {
+  if (Object.keys(safe).length === 0) {
     return { data: null, error: 'No preferences supplied' };
   }
 
   const { data, error } = await (db as AnyDb) // CAST:notifications
     .from('profiles')
-    .update(prefs)
+    .update(safe)
     .eq('id', authData.user.id)
     .select('notify_favourite_team, notify_all_matches')
     .single();

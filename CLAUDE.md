@@ -430,6 +430,18 @@ The app works on mobile via responsive CSS but hasn't been polished for touch. T
 
 ---
 
+## Security audit cadence (edge function npm: imports)
+
+Deno edge functions in `supabase/functions/**` pull npm packages via `npm:<pkg>@<ver>` URLs (e.g. `npm:web-push@3.6.7` in `match-notify-worker/index.ts`). These bypass `package.json` and therefore are NOT covered by `npm audit` on the project root. Audit them manually:
+
+1. **On any edge-function PR that bumps an npm: pin** — run `npm view <pkg> versions` to confirm you're on the latest patch in the same major; check `npm audit` after temporarily adding the package to a scratch `package.json` to surface transitive CVEs.
+2. **Quarterly** — sweep every `npm:` import in `supabase/functions/**` and confirm pinned versions are current. Notes to keep in the issue: package name + version, latest available, advisories checked, transitive deps inspected.
+3. **On the next bump of `web-push`** — verify `asn1.js`, `http_ece`, `https-proxy-agent`, `jws`, `minimist` (transitive deps) still have no open advisories.
+
+Last audited: 2026-05-21. `web-push@3.6.7` and its transitive deps clean per npm audit.
+
+---
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 
