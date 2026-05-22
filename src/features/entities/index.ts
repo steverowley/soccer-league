@@ -40,6 +40,17 @@ export type {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export { getRecentNarratives, getRecentNarrativesByKinds } from './api/entities';
 
+// ── API — relationship graph fetch (issue isl-szm) ─────────────────────────
+// Three Zod-validated helpers that feed the relationship-graph viewer:
+// `getEntity` for the seed row, `getEntityRelationships` for the union of
+// outgoing + incoming edges, and `getEntitiesByIds` for bulk node-metadata
+// hydration after the subgraph extractor selects which ids to render.
+export {
+  getEntity,
+  getEntityRelationships,
+  getEntitiesByIds,
+} from './api/relationships';
+
 // ── API — referees (Phase 5a) ──────────────────────────────────────────────
 // Wraps the IEOB referee corps and the per-match assignment surface.
 // `match_referee_v` view + assign_match_referee RPC are introduced in
@@ -111,6 +122,20 @@ export type {
   RelationshipGraph,
 } from './logic/relationshipGraph';
 
+// ── Logic — subgraph extractor (issue isl-6ub) ─────────────────────────────
+// Pure BFS walker that turns an indexed RelationshipGraph into the bounded
+// `{ nodeIds, edges }` slice the SVG renderer hands to d3-force.  Deterministic
+// across calls so identical inputs don't thrash the layout simulation.
+export {
+  DEFAULT_MAX_HOPS as SUBGRAPH_DEFAULT_MAX_HOPS,
+  DEFAULT_MAX_NEIGHBOURS as SUBGRAPH_DEFAULT_MAX_NEIGHBOURS,
+  extractSubgraph,
+} from './logic/subgraph';
+export type {
+  SubgraphOpts,
+  Subgraph,
+} from './logic/subgraph';
+
 // ── Logic — referee selection + narratives (Phase 5a) ──────────────────────
 // Pure deterministic referee picker (mirrors the SQL backfill in 0015) and
 // post-match narrative pattern detection / template assembly.  Zero I/O,
@@ -139,3 +164,16 @@ export type {
 // Mount once at the app root inside <SupabaseProvider>.  Subscribes to
 // match.completed and writes one referee-narrative row per fixture.
 export { RefereeNarrativeListener } from './ui/RefereeNarrativeListener';
+
+// ── UI — relationship graph layout hook (issue isl-mcs) ────────────────────
+// d3-force wrapper that positions the subgraph for the SVG renderer (isl-pfq).
+// Tunable physics constants live in `./ui/relationshipGraph/forceConfig.ts`.
+export { useForceLayout } from './ui/relationshipGraph/useForceLayout';
+export type {
+  NodeInput,
+  EdgeInput,
+  PositionedNode,
+  PositionedEdge,
+  UseForceLayoutInput,
+  UseForceLayoutOutput,
+} from './ui/relationshipGraph/useForceLayout';
