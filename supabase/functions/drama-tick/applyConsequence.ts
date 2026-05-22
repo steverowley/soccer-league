@@ -136,19 +136,85 @@ export async function applyTransferDemand(
 // ── manager_resignation → manager swap ─────────────────────────────────────
 
 /**
+ * Hard-coded name pools used by `generateManagerName` to mint a fresh
+ * persona when a resignation vacates a team.  Two parallel lists keep
+ * the variation space at 100 unique first-last combinations — enough
+ * that successive resignations rarely collide while staying small
+ * enough to be hand-tuned for the league's space-opera aesthetic
+ * (Mars derbies, asteroid-belt squads).  Replace with a Markov-chain
+ * generator if/when the pool feels exhausted.
+ */
+const FRESH_MANAGER_FIRSTS: ReadonlyArray<string> = [
+  'Arundel', 'Voren', 'Cassidy', 'Mira', 'Lex',
+  'Thorne',  'Beck',  'Halan',   'Yara', 'Nox',
+];
+const FRESH_MANAGER_LASTS: ReadonlyArray<string> = [
+  'Brava',     'Calverley', 'Drake',   'Ehrlich',  'Fortis',
+  'Gilan',     'Holloway',  'Ivani',   'Joren',    'Karras',
+];
+
+/**
+ * Hash a string to a 32-bit unsigned integer via FNV-1a.  Used to
+ * deterministically derive a fresh manager name from the resigning
+ * manager's entity id + the team id — so re-running the consequence
+ * applier on the same row always produces the same replacement
+ * (handy for testing + recovery flows).
+ */
+function hashString(s: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    hash ^= s.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Mint a deterministic "First Last" name from a seed string.  The
+ * seed combines the resigning entity id + the vacated team id so two
+ * different resignations on the same team produce different
+ * successors (and the same resignation re-applied produces the same
+ * name).
+ *
+ * @param seed  Concatenation of the resigning entity_id + team_id.
+ * @returns     A two-word name suitable for managers.name + entities.name.
+ */
+function generateManagerName(seed: string): string {
+  const h = hashString(seed);
+  const first = FRESH_MANAGER_FIRSTS[h % FRESH_MANAGER_FIRSTS.length]!;
+  // Right-shift by 7 so the second index isn't perfectly correlated
+  // with the first — keeps the variation high across short seeds.
+  const last  = FRESH_MANAGER_LASTS[(h >>> 7) % FRESH_MANAGER_LASTS.length]!;
+  return `${first} ${last}`;
+}
+
+/**
  * Apply a manager_resignation consequence by detaching the resigning
- * manager from their team.  v1 sets managers.team_id = NULL; the team is
- * temporarily managerless until a future "appoint replacement" step (or
- * a manual admin action) fills the seat.
+ * manager AND spinning up a fresh replacement (isl-cdj).  When the
+ * resigning manager has no `team_id`, the consequence falls back to
+ * a pure detach — there's no seat to fill.
  *
  * STEPS
  *   1. Resolve the manager row by entity_id.
- *   2. Capture the team_id for logging.
- *   3. UPDATE managers SET team_id = NULL.
+ *   2. Capture team_id; detach via UPDATE managers SET team_id=NULL.
+ *   3. (when team_id was non-null) Generate a deterministic name from
+ *      the entity_id + team_id seed.  INSERT a new entities row
+ *      (kind='manager').  INSERT a new managers row linked via
+ *      entity_id.  Both inserts use best-effort error handling: a
+ *      partial failure leaves the team managerless but the
+ *      resignation itself is still considered applied (matches the
+ *      existing "graceful degradation" contract on enactment).
  *
  * @param db        Service-role Supabase client.
  * @param entityId  Entity ID of the drama subject.
- * @returns         Outcome summary.
+ * @returns         Outcome summary.  `reason` may be:
+ *                  • 'manager_not_found'           — entity has no manager
+ *                  • 'update_failed'                — detach UPDATE errored
+ *                  • 'resigned'                     — detached, no team to refill
+ *                  • 'resigned_and_replaced'        — full happy path
+ *                  • 'resigned_no_replacement'      — detached but new manager
+ *                                                     insert failed; team is
+ *                                                     temporarily managerless
  */
 export async function applyManagerResignation(
   db: any,
@@ -164,24 +230,106 @@ export async function applyManagerResignation(
     return { applied: false, reason: 'manager_not_found', meta: { entityId } };
   }
   const manager = managerQ.data as { id: string; team_id: string | null };
+  const formerTeamId = manager.team_id;
 
-  const { error: updateErr } = await db
+  // STEP 1: detach the resigning manager.  Independent of the
+  // replacement step so a failed replacement still leaves the
+  // resignation committed (better than rolling back the whole drama
+  // beat).
+  const { error: detachErr } = await db
     .from('managers')
     .update({ team_id: null })
     .eq('id', manager.id);
 
-  if (updateErr) {
+  if (detachErr) {
     return {
       applied: false,
       reason: 'update_failed',
-      meta: { entityId, message: updateErr.message },
+      meta: { entityId, message: detachErr.message },
+    };
+  }
+
+  // STEP 2: no team to fill?  Done.  This covers the rare case where
+  // the resigning manager was already detached by an earlier drama
+  // beat — the resignation still completes successfully.
+  if (!formerTeamId) {
+    return {
+      applied: true,
+      reason: 'resigned',
+      meta: { entityId, formerTeam: null },
+    };
+  }
+
+  // STEP 3: mint a fresh manager.  Two best-effort inserts: entity
+  // first (so the manager row can link via entity_id), then the
+  // manager row.  Each failure short-circuits to a partial-success
+  // result so the caller sees what actually happened.
+  const newName = generateManagerName(`${entityId}:${formerTeamId}`);
+
+  // entities row — kind='manager' with the canonical meta shape used
+  // elsewhere (mirrors createManagerEntity from src/features/entities).
+  const { data: entityRow, error: entityErr } = await db
+    .from('entities')
+    .insert({
+      kind:         'manager',
+      name:         newName,
+      display_name: newName,
+      meta:         { team_id: formerTeamId, nationality: null },
+    })
+    .select('id')
+    .single();
+
+  if (entityErr || !entityRow) {
+    return {
+      applied: true,
+      reason:  'resigned_no_replacement',
+      meta:    {
+        entityId,
+        formerTeam:       formerTeamId,
+        replacementError: entityErr?.message ?? 'entity insert returned no row',
+      },
+    };
+  }
+  const newEntityId = (entityRow as { id: string }).id;
+
+  // managers row — links to the entity + the freshly-vacated team.
+  // `style` and `nationality` left null; the persona enricher will
+  // fill in flavour on its next pass.
+  const { data: newManagerRow, error: managerErr } = await db
+    .from('managers')
+    .insert({
+      name:      newName,
+      team_id:   formerTeamId,
+      entity_id: newEntityId,
+    })
+    .select('id')
+    .single();
+
+  if (managerErr || !newManagerRow) {
+    // Entity exists but no manager — partial state.  Log the cause so
+    // an admin can repair manually if the next drama tick doesn't.
+    return {
+      applied: true,
+      reason:  'resigned_no_replacement',
+      meta:    {
+        entityId,
+        formerTeam:        formerTeamId,
+        replacementEntity: newEntityId,
+        replacementError:  managerErr?.message ?? 'manager insert returned no row',
+      },
     };
   }
 
   return {
     applied: true,
-    reason: 'resigned',
-    meta: { entityId, formerTeam: manager.team_id },
+    reason:  'resigned_and_replaced',
+    meta:    {
+      entityId,
+      formerTeam:         formerTeamId,
+      replacementManager: (newManagerRow as { id: string }).id,
+      replacementEntity:  newEntityId,
+      replacementName:    newName,
+    },
   };
 }
 
