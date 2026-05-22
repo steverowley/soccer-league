@@ -246,10 +246,36 @@ describe('subscribeToBdIssues', () => {
     subscribeToBdIssues(db, onChange);
 
     expect(subscribed).toBe(true);
-    expect(recordedOn[0]).toEqual({ channelName: 'bd_issues:board' });
+    // Channel names are prefix `bd_issues:board:` + a per-call unique
+    // suffix so two simultaneously-mounted subscribers (e.g. /roadmap +
+    // /admin?tab=roadmap) get distinct channels rather than colliding
+    // on a single shared name.  Match the prefix; the suffix varies.
+    expect(recordedOn[0]).toMatchObject({
+      channelName: expect.stringMatching(/^bd_issues:board:/) as unknown as string,
+    });
     expect(recordedOn[1]).toMatchObject({
       event: 'postgres_changes',
       filter: { event: '*', schema: 'public', table: 'bd_issues' },
     });
+  });
+
+  it('uses a unique channel name per subscription so two boards can coexist', () => {
+    const recordedNames: string[] = [];
+    const channel = {
+      on() { return this; },
+      subscribe() { return this; },
+    };
+    const db = {
+      channel(name: string) {
+        recordedNames.push(name);
+        return channel;
+      },
+    } as unknown as IslSupabaseClient;
+
+    subscribeToBdIssues(db, vi.fn());
+    subscribeToBdIssues(db, vi.fn());
+
+    expect(recordedNames).toHaveLength(2);
+    expect(recordedNames[0]).not.toEqual(recordedNames[1]);
   });
 });

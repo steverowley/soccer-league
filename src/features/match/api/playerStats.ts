@@ -141,10 +141,12 @@ export interface NarrativeMention {
  *
  * SELECT match_player_stats rows for this player, joining the parent
  * `matches` row (for scoreline + date) and both teams (for the opponent
- * name).  Sorted by `played_at` descending in memory after the fetch —
- * Supabase doesn't expose a clean cross-table ORDER BY syntax that
- * matches all 2.x server versions we run, and the row count per player
- * is small (≤ 50 / season) so an in-memory sort is fine.
+ * name).  Sorted by the JOINED `matches.played_at` descending on the
+ * server, then trimmed to `limit` rows.  We still do an in-memory pass
+ * for the `played_at ?? scheduled_at` fallback used by the UI date,
+ * but the server-side ORDER + LIMIT guarantees we never silently
+ * truncate a high-volume player's most-recent rows to PostgREST's
+ * `max-rows` cap (default 1000) before sorting.
  *
  * Malformed rows (the relational join silently dropped one side) are
  * filtered out and logged; the function returns at most `limit` valid
@@ -171,6 +173,16 @@ export async function getPlayerRecentMatches(
   playerId: string,
   limit:    number = 10,
 ): Promise<PlayerRecentMatch[]> {
+  // SAFETY MARGIN: Some matches use `played_at`, others fall back to
+  // `scheduled_at` (the row was created from a fixture but never
+  // completed).  Server-side ORDER BY only lets us anchor on ONE column
+  // — we pick `played_at desc` (NULLS LAST) since that's the canonical
+  // chronological field.  Rows still in `scheduled` state sink to the
+  // bottom and the in-memory tie-break below adjudicates the rest using
+  // `played_at ?? scheduled_at`.  We over-fetch by 2× so the in-memory
+  // re-sort doesn't lose newest rows to the join's secondary ordering.
+  const dbFetchLimit = Math.max(limit * 2, limit + 5);
+
   const { data, error } = await db
     .from('match_player_stats')
     .select(`
@@ -182,7 +194,16 @@ export async function getPlayerRecentMatches(
         away_team:teams!matches_away_team_id_fkey(id, name)
       )
     `)
-    .eq('player_id', playerId);
+    .eq('player_id', playerId)
+    .order('played_at', {
+      // Anchor on the parent `matches.played_at` so the join can sort
+      // newest-first at the DB layer rather than relying on PostgREST's
+      // arbitrary default ordering when the `max-rows` cap clips us.
+      referencedTable: 'matches',
+      ascending: false,
+      nullsFirst: false,
+    })
+    .limit(dbFetchLimit);
 
   if (error) {
     console.warn('[getPlayerRecentMatches] failed:', error.message);

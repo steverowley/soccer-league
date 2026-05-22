@@ -239,33 +239,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
-  // ── Upsert via service role ────────────────────────────────────────────
+  // ── Service-role client ────────────────────────────────────────────────
   // Separate client from the caller's so the writes happen with full
-  // bypass-RLS privileges regardless of the caller's role.  `synced_at`
-  // is stamped client-side because the column default only fires on
-  // INSERT (we want updates to bump it too, for the legend strip).
+  // bypass-RLS privileges regardless of the caller's role.
   const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { persistSession: false },
   });
   const now = new Date().toISOString();
   const payload = issues.map((row) => ({ ...row, synced_at: now }));
 
-  const { error: upsertErr } = await serviceClient
-    .from('bd_issues')
-    .upsert(payload, { onConflict: 'id' });
-  if (upsertErr) {
-    console.error('[bd-sync-now] upsert failed:', upsertErr.message);
-    return json(500, { error: 'upsert_failed', detail: upsertErr.message });
-  }
-
-  // ── Tombstone delete ───────────────────────────────────────────────────
-  // Walk every id in the mirror via paginated `.range()` reads, diff
-  // against the JSONL set, then delete the difference.  Pagination is
-  // essential: PostgREST caps a single `.select()` at the `max-rows`
-  // setting (1000 by default), so a non-paginated read would silently
-  // miss every row past the cap and the mirror would drift permanently
-  // once `bd_issues` exceeds it.  The 25 % cap (identical to the CI
-  // sync) prevents a partially-parsed JSONL from mass-deleting live rows.
+  // ── Pre-flight tombstone-cap check ─────────────────────────────────────
+  // Inspect what the sync WOULD do BEFORE committing any writes.  This
+  // is the safe-abort behaviour the admin button advertises: an
+  // accidentally-partial JSONL (truncated GitHub fetch, mid-stream gzip
+  // error) is detected up-front and rejected with a 409, leaving the
+  // mirror unchanged.  Running the upsert first would leave the mirror
+  // half-applied (new `synced_at` on the truncated subset, stale rows
+  // un-tombstoned) — exactly the state the cap was built to prevent.
+  //
+  // Pagination is essential: PostgREST caps a single `.select()` at the
+  // `max-rows` setting (1000 by default), so a non-paginated read
+  // would silently miss every row past the cap and the mirror would
+  // drift permanently once `bd_issues` exceeds it.
   let existingIds: Set<string>;
   let existingCount: number;
   try {
@@ -288,11 +283,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!ids.has(id)) tombstones.push(id);
   }
 
-  // ── Tombstone cap ──────────────────────────────────────────────────────
-  // Floor at 5 so a tiny mirror can still tombstone a handful of rows;
-  // otherwise scale linearly with the existing count.  Matches
-  // `scripts/sync-bd-to-supabase.mjs` so both sync paths refuse the same
-  // mass-deletion shapes.
+  // Tombstone cap — floor at 5 so a tiny mirror can still tombstone a
+  // handful of rows; otherwise scale linearly with the existing count.
+  // Matches `scripts/sync-bd-to-supabase.mjs` so both sync paths refuse
+  // the same mass-deletion shapes.
   const tombCap = Math.max(5, Math.floor(existingCount * MAX_TOMBSTONE_FRACTION));
   if (tombstones.length > tombCap) {
     return json(409, {
@@ -304,6 +298,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
+  // ── Upsert via service role ────────────────────────────────────────────
+  // `synced_at` is stamped client-side because the column default only
+  // fires on INSERT (we want updates to bump it too, for the legend strip).
+  const { error: upsertErr } = await serviceClient
+    .from('bd_issues')
+    .upsert(payload, { onConflict: 'id' });
+  if (upsertErr) {
+    console.error('[bd-sync-now] upsert failed:', upsertErr.message);
+    return json(500, { error: 'upsert_failed', detail: upsertErr.message });
+  }
+
+  // ── Tombstone delete ───────────────────────────────────────────────────
+  // Cap already passed above; safe to delete the diff.
   let deleted = 0;
   if (tombstones.length > 0) {
     const { error: delErr } = await serviceClient

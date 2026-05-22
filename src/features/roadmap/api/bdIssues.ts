@@ -137,6 +137,15 @@ export async function getBdSyncedAt(db: IslSupabaseClient): Promise<string> {
  * is simpler and the table is small enough that a full refetch per
  * change is negligible.
  *
+ * CHANNEL NAMING: Supabase JS keys channels by name on a single client
+ * instance — two subscribers using the same literal name would share one
+ * channel, and either's unmount cleanup would tear down the channel for
+ * both.  RoadmapBoard now mounts from BOTH `/roadmap` and
+ * `/admin?tab=roadmap` (via RoadmapPanel), so two mounted boards in the
+ * same browser session would silently lose Realtime updates on the
+ * first unmount.  We append a per-call unique suffix so each subscriber
+ * gets its own channel; collision is impossible.
+ *
  * @param db       - Injected Supabase client.
  * @param onChange - Called with the raw payload on every event.  The UI
  *                   ignores the payload and refetches via `listBdIssues`.
@@ -147,8 +156,16 @@ export function subscribeToBdIssues(
   db: IslSupabaseClient,
   onChange: (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void,
 ): RealtimeChannel {
+  // Per-subscription unique channel name — see channel-naming note above.
+  // crypto.randomUUID is available in every browser the app targets and
+  // in Node 19+ used by Vitest; falls back to a timestamp+random hybrid
+  // for the unlikely case it isn't.
+  const uniqueSuffix =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return db
-    .channel('bd_issues:board')
+    .channel(`bd_issues:board:${uniqueSuffix}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'bd_issues' },

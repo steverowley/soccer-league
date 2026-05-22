@@ -123,6 +123,46 @@ export function checkPushSupport(): PushSupport {
   return { supported: true };
 }
 
+// ── VAPID-key equality helper ────────────────────────────────────────────────
+
+/**
+ * Byte-wise compare a PushSubscription's stored applicationServerKey
+ * against the current VAPID public key we'd subscribe with.  Used by
+ * `enablePush` to detect post-rotation mismatches before calling
+ * `pushManager.subscribe()` (which throws InvalidStateError on a key
+ * change rather than silently re-subscribing).
+ *
+ * Both inputs are normalised to a Uint8Array view first — the browser
+ * exposes the stored key as an ArrayBuffer (or null on older Safari),
+ * and our newly-decoded VAPID key is already a Uint8Array.
+ *
+ * @param storedRaw  Existing key from `existing.options.applicationServerKey`,
+ *                   or `null` if the browser doesn't expose it.
+ * @param current    Freshly-decoded current VAPID public key.
+ * @returns          `true` when the byte sequences are identical, OR
+ *                   when `storedRaw` is null (we can't tell — assume
+ *                   match to avoid forced re-enrolment on browsers that
+ *                   hide the field).  `false` only when both are
+ *                   readable and they differ.
+ */
+function keysMatch(
+  storedRaw: ArrayBuffer | null,
+  current:   Uint8Array,
+): boolean {
+  // Null stored key means the browser refuses to expose it (older
+  // Safari).  Treat as "matches" so we don't force re-enrolment every
+  // time on those browsers; the worst case is the same
+  // InvalidStateError users already had before this guard, which is no
+  // regression.
+  if (storedRaw === null) return true;
+  const stored = new Uint8Array(storedRaw);
+  if (stored.byteLength !== current.byteLength) return false;
+  for (let i = 0; i < stored.byteLength; i += 1) {
+    if (stored[i] !== current[i]) return false;
+  }
+  return true;
+}
+
 // ── Service worker registration ──────────────────────────────────────────────
 
 /**
@@ -190,7 +230,21 @@ export async function enablePush(db: IslSupabaseClient): Promise<EnablePushOutco
   } catch (err) {
     return { status: 'error', error: String(err) };
   }
-  if (permission === 'denied')  return { status: 'denied' };
+  if (permission === 'denied') {
+    // The user previously enabled push and then flipped browser permission
+    // to 'denied' in OS/browser settings.  The local PushSubscription is
+    // now orphaned and the DB row would leave the cron worker pushing to
+    // a dead endpoint indefinitely.  Tear it down here so the system
+    // converges on "no subscription, no DB row" instead of leaking state.
+    // Failures during cleanup are non-fatal — the cron worker eventually
+    // evicts the row on the first 404/410 from the push service.
+    try {
+      await disablePush(db);
+    } catch (cleanupErr) {
+      console.warn('[push] denied-state cleanup failed:', cleanupErr);
+    }
+    return { status: 'denied' };
+  }
   if (permission !== 'granted') return { status: 'dismissed' };
 
   // ── 2. Service worker ────────────────────────────────────────────────────
@@ -209,9 +263,48 @@ export async function enablePush(db: IslSupabaseClient): Promise<EnablePushOutco
   // Our `urlBase64ToUint8Array` only ever produces a plain ArrayBuffer-backed
   // view, so the cast is safe — but TS can't infer that from the public
   // Uint8Array type alone.
+  //
+  // VAPID ROTATION SAFETY: PushManager.subscribe() rejects with
+  // `InvalidStateError` when a subscription already exists under a
+  // *different* applicationServerKey (Push API spec §5.1.1.4).  Any
+  // VAPID key rotation would therefore strand previously-enrolled users
+  // — re-clicking Enable would loop on the same InvalidStateError
+  // forever.  Detect the mismatch up-front: read the existing
+  // subscription (if any), compare its applicationServerKey to the
+  // current VAPID, and unsubscribe locally + delete the server row
+  // before calling subscribe() with the new key.  Endpoint URL is the
+  // server-side identifier — we delete by the OLD endpoint so the cron
+  // worker stops pushing the orphaned row.
+  const vapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  try {
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      const existingKey = existing.options?.applicationServerKey ?? null;
+      if (!keysMatch(existingKey, vapidKey)) {
+        // Key rotated since the last subscribe; tear down the stale
+        // browser + DB state so the new subscribe() call below succeeds.
+        const oldEndpoint = existing.endpoint;
+        try {
+          await existing.unsubscribe();
+        } catch (unsubErr) {
+          console.warn('[push] stale subscription unsubscribe failed:', unsubErr);
+        }
+        try {
+          await deletePushSubscription(db, oldEndpoint);
+        } catch (delErr) {
+          console.warn('[push] stale subscription delete failed:', delErr);
+        }
+      }
+    }
+  } catch (err) {
+    // Reading getSubscription should never throw, but if it does we'd
+    // rather proceed to subscribe() and let that error surface than
+    // block enrolment entirely.
+    console.warn('[push] getSubscription pre-check failed:', err);
+  }
+
   let subscription: PushSubscription;
   try {
-    const vapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: vapidKey.buffer as ArrayBuffer,

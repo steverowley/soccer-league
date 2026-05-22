@@ -75,14 +75,47 @@ self.addEventListener('notificationclick', (event) => {
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
+        // ── Preferred: a tab already on the target URL ─────────────────
+        // Simply focus it; no navigation needed, and any in-flight UI
+        // state on that tab is preserved.
         for (const client of clients) {
-          // Reuse an existing tab whenever possible — opening yet another
-          // tab is the most common notification UX complaint.
-          if ('focus' in client) {
+          if (client.url === target && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        // ── Fallback: an app tab on the same origin we can navigate ────
+        // We intentionally DO NOT navigate a tab whose URL is on a
+        // different origin (extension popups, devtools panes, the
+        // browser's `chrome://` views surface here on some platforms).
+        // We also avoid yanking the user away from an arbitrary same-
+        // origin tab they may be using productively (composing in
+        // /profile, watching another match): we prefer to open a new
+        // tab unless the existing tab is on a safe "anchor" surface
+        // (the app root or another /matches/:id page).  This is the
+        // smallest behaviour change that still satisfies "reuse a tab
+        // when there's an obvious one to reuse".
+        for (const client of clients) {
+          if (!('focus' in client)) continue;
+          let path = '';
+          try {
+            path = new URL(client.url).pathname;
+          } catch {
+            continue;
+          }
+          // Only reuse if the tab is already on an app surface where
+          // navigating won't cost the user unsaved state.  Match
+          // anchors are intentionally narrow — root, the matches list,
+          // and any other match detail page.
+          const safeToNavigate =
+            path === '/' ||
+            path.endsWith('/') ||
+            path.includes('/matches');
+          if (safeToNavigate) {
             client.navigate(target).catch(() => {});
             return client.focus();
           }
         }
+        // ── Last resort: open a new tab ────────────────────────────────
         if (self.clients.openWindow) {
           return self.clients.openWindow(target);
         }

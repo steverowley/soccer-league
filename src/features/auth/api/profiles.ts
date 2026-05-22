@@ -63,11 +63,16 @@ const ProfileSchema = z.object({
   created_at: z.string(),
   is_admin: z.boolean(),
   // The two opt-in toggles added by migration 0039.  Both default to
-  // false server-side; parsing them here means a missing column on the
-  // remote (e.g. migration not yet applied) fails loud rather than
-  // silently disabling the push-notification UI.
-  notify_favourite_team: z.boolean(),
-  notify_all_matches: z.boolean(),
+  // false server-side; using `.optional().default(false)` here means a
+  // missing column on the remote (e.g. migration 0039 not yet applied
+  // at the time of frontend deploy) is treated as "user hasn't opted
+  // in" rather than producing a parse failure that would silently lock
+  // every authed user out of the entire profile-gated UI.  The
+  // push-notification UI is itself feature-gated on browser support, so
+  // a transient false here is a tolerable failure mode while migrations
+  // are catching up.
+  notify_favourite_team: z.boolean().optional().default(false),
+  notify_all_matches: z.boolean().optional().default(false),
 });
 
 // ── Queries ─────────────────────────────────────────────────────────────────
