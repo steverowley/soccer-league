@@ -125,7 +125,41 @@ function makeFakeDb(store: FakeStore): IslSupabaseClient {
     return builder;
   }
 
-  return { from } as unknown as IslSupabaseClient;
+  // ── rpc() shim ────────────────────────────────────────────────────────────
+  // Real placement + settlement now go through Postgres SECURITY DEFINER RPCs
+  // (migration 0053). The tests still exercise the orchestration layer in
+  // wagers.ts — so the fake mirrors the RPC's effects in-memory, exactly the
+  // same way the SQL function would mutate the wager row and bump credits.
+  // Only the two RPCs that wagers.ts calls are implemented.
+  async function rpc(name: string, args: Record<string, unknown>) {
+    if (name === 'settle_wager') {
+      const wagerId = args.p_wager_id as string;
+      const status  = args.p_status  as 'won' | 'lost' | 'void';
+      const payout  = (args.p_payout as number) || 0;
+
+      const wager = store.wagers.find((w) => w.id === wagerId);
+      if (!wager) return { data: null, error: { message: 'wager not found' } };
+      // Idempotency: already-settled wager returns false (matches RPC).
+      if (wager.status !== 'open') return { data: false, error: null };
+
+      wager.status = status;
+      wager.payout = payout > 0 ? payout : null;
+
+      if (status === 'won' && payout > 0) {
+        const profile = store.profiles.find((p) => p.id === wager.user_id);
+        if (profile) profile.credits += payout;
+      }
+      return { data: true, error: null };
+    }
+    if (name === 'place_wager') {
+      // place_wager isn't covered by this test file, but the shim returns a
+      // best-effort row for any future test that adds coverage.
+      return { data: null, error: { message: 'place_wager not stubbed in tests' } };
+    }
+    return { data: null, error: { message: `unknown rpc ${name}` } };
+  }
+
+  return { from, rpc } as unknown as IslSupabaseClient;
 }
 
 // ── Common fixtures ─────────────────────────────────────────────────────────

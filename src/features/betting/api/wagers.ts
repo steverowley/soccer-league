@@ -7,23 +7,24 @@
 // generated types — we cast to `any` (marked CAST:wagers) until types are
 // regenerated after the next `supabase gen types` run.
 //
-// CREDIT MUTATION STRATEGY
-// ─────────────────────────
-// All credit changes (deduct on bet, credit on win) use a read-modify-write
-// pattern: read current balance → compute new value → write back. This is safe
-// at current traffic levels. When the simulator moves server-side, replace with
-// a single Supabase RPC wrapping the wager insert + credit deduct in one
-// transaction for true atomicity.
+// CREDIT MUTATION STRATEGY — ATOMIC RPCs (migration 0053)
+// ──────────────────────────────────────────────────────────
+// `placeWager` and `settleMatchWagers` previously did non-atomic
+// read-modify-write on `profiles.credits` (a TOCTOU race that allowed
+// double-spending under concurrent bets). Both paths now call SECURITY
+// DEFINER RPCs that wrap the whole transaction with `SELECT … FOR UPDATE`
+// row locking:
+//   - place_wager(match_id, team_choice, stake, odds)
+//   - settle_wager(wager_id, status, payout)  — idempotent
 //
-// SETTLEMENT FLOW:
+// SETTLEMENT FLOW (unchanged shape, atomic implementation):
 //   1. Match completes → `match.completed` event fires on the in-app bus.
 //   2. WagerSettlementListener calls `settleMatchWagers()` with the final score.
-//   3. For each open wager on that match:
-//      a. Determine outcome via `resolveWager()` (pure logic, no Supabase).
-//      b. Update wager row (status + payout).
-//      c. Credit the winner's profile balance (read-modify-write).
-//   4. Updates are sequential; individual failures are logged but don't abort
-//      the batch — partial settlement beats no settlement.
+//   3. For each open wager: determine outcome via `resolveWager()` (pure
+//      logic, no Supabase), then call `settle_wager` RPC which locks the
+//      wager row, updates status + payout, and credits the winner in one
+//      transaction. The RPC is idempotent — a second call on the same
+//      already-settled wager is a no-op (returns false).
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Wager, TeamChoice } from '../types';
@@ -36,15 +37,18 @@ type AnyDb = any;
 // ── Wager placement ────────────────────────────────────────────────────────
 
 /**
- * Place a new wager. Inserts a wager row and deducts the stake from the
- * user's credit balance in two sequential operations.
+ * Place a new wager via the atomic `place_wager` Postgres RPC (migration
+ * 0053). The RPC validates credits, locks the profile row with FOR UPDATE,
+ * inserts the wager, and decrements credits in a single transaction —
+ * preventing the TOCTOU double-spend that the previous read-modify-write
+ * implementation allowed under concurrent bets.
  *
- * IMPORTANT: The caller must verify `canAffordBet()` before calling this.
- * The DB CHECK constraint on `profiles.credits >= 0` provides a safety net,
- * but the caller should fail fast to avoid a confusing Supabase error.
+ * The `userId` argument is no longer trusted — the RPC reads `auth.uid()`
+ * from the caller's JWT. It's kept in the signature for backwards
+ * compatibility with existing call sites (and gets ignored).
  *
  * @param db           Injected Supabase client.
- * @param userId       The betting user's UUID.
+ * @param userId       Deprecated/ignored — RPC uses auth.uid().
  * @param matchId      The match UUID to bet on.
  * @param teamChoice   'home', 'draw', or 'away'.
  * @param stake        Credits to wager (>= MIN_BET).
@@ -53,45 +57,25 @@ type AnyDb = any;
  */
 export async function placeWager(
   db: IslSupabaseClient,
-  userId: string,
+  _userId: string,
   matchId: string,
   teamChoice: TeamChoice,
   stake: number,
   oddsSnapshot: number,
 ): Promise<Wager | null> {
-  // 1. Insert the wager row.
-  const { data: wager, error: wagerErr } = await (db as AnyDb) // CAST:wagers
-    .from('wagers')
-    .insert({
-      user_id: userId,
-      match_id: matchId,
-      team_choice: teamChoice,
-      stake,
-      odds_snapshot: oddsSnapshot,
-    })
-    .select()
-    .single();
+  const { data, error } = await (db as AnyDb).rpc('place_wager', {
+    p_match_id: matchId,
+    p_team_choice: teamChoice,
+    p_stake: stake,
+    p_odds: oddsSnapshot,
+  });
 
-  if (wagerErr) {
-    console.warn('[placeWager] insert failed:', wagerErr.message);
+  if (error) {
+    console.warn('[placeWager] RPC failed:', error.message);
     return null;
   }
 
-  // 2. Deduct stake from the user's credit balance (read-modify-write).
-  const { data: profile } = await (db as AnyDb) // CAST:profiles
-    .from('profiles')
-    .select('credits')
-    .eq('id', userId)
-    .single();
-
-  if (profile) {
-    await (db as AnyDb)
-      .from('profiles')
-      .update({ credits: (profile as { credits: number }).credits - stake })
-      .eq('id', userId);
-  }
-
-  return wager as Wager;
+  return data as Wager;
 }
 
 // ── Wager queries ───────────────────────────────────────────────────────────
@@ -232,32 +216,24 @@ export async function settleMatchWagers(
       wager.odds_snapshot,
     );
 
-    // Update the wager row with resolved status and payout.
-    const { error: updateErr } = await (db as AnyDb) // CAST:wagers
-      .from('wagers')
-      .update({ status, payout: payout || null })
-      .eq('id', wager.id);
+    // Settle via the atomic `settle_wager` RPC (migration 0053). The RPC
+    // locks the wager row, updates status + payout, and credits the winner
+    // in one transaction. Returns false if the wager was already settled
+    // (idempotent) — we still count it as "handled" so the worker doesn't
+    // loop on the same wager forever.
+    const { data: applied, error: rpcErr } = await (db as AnyDb).rpc('settle_wager', {
+      p_wager_id: wager.id,
+      p_status: status,
+      p_payout: payout || 0,
+    });
 
-    if (updateErr) {
-      console.warn(`[settleMatchWagers] update failed for wager ${wager.id}:`, updateErr.message);
+    if (rpcErr) {
+      console.warn(`[settleMatchWagers] RPC failed for wager ${wager.id}:`, rpcErr.message);
       continue;
     }
-
-    // Credit the winner's profile balance (read-modify-write).
-    // Only fires for won wagers — lost wagers have payout=0 and no credit change.
-    if (status === 'won' && payout > 0) {
-      const { data: profile } = await (db as AnyDb) // CAST:profiles
-        .from('profiles')
-        .select('credits')
-        .eq('id', wager.user_id)
-        .single();
-
-      if (profile) {
-        await (db as AnyDb)
-          .from('profiles')
-          .update({ credits: (profile as { credits: number }).credits + payout })
-          .eq('id', wager.user_id);
-      }
+    if (applied === false) {
+      // Wager was already settled by a concurrent run. Skip counting it.
+      continue;
     }
 
     settled++;
