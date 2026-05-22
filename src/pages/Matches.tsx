@@ -27,6 +27,10 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
+// Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
+// shared broadcast hook so the per-row chip cost stays at one
+// Realtime channel total regardless of how many live matches render.
+import { MiniPitch } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives LIVE indicators across this page; FLARE is
@@ -506,7 +510,10 @@ const MatchRowItem = memo(function MatchRowItem({ match, status }: MatchRowItemP
       >
         {/* Day + time cell.  Day on top, time below — keeps the row
             height compact while still giving the reader a glance-
-            readable timestamp. */}
+            readable timestamp.  For live rows (isl-a8i) we render a
+            tiny pitch chip BELOW the timestamp so the user can scan
+            multiple live matches at once and see their cursor of
+            action without opening each detail page. */}
         <div style={{
           fontSize: 11,
           letterSpacing: '0.14em',
@@ -521,6 +528,15 @@ const MatchRowItem = memo(function MatchRowItem({ match, status }: MatchRowItemP
             </>
           ) : (
             <div style={{ color: DUST_50 }}>TBC</div>
+          )}
+          {status === 'live' && (
+            <div style={{ marginTop: 8 }} onClick={(e) => e.preventDefault()}>
+              {/* preventDefault stops a click on the chip from
+                  triggering the outer <Link> — the chip is purely
+                  decorative; the rest of the row remains the
+                  navigation target. */}
+              <MiniPitch matchId={match.id} widthPx={100} />
+            </div>
           )}
         </div>
 

@@ -34,6 +34,12 @@ import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracke
 import { prepareArchitectForMatch, type CosmicArchitect, type LoreStore } from './architect.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
+// Phase 8 reflex-tier hooks duplicated into the worker (isl-5kx) so
+// in-match shoot_or_pass + card_severity decisions can consult each
+// agent's persona + memory substrate.  Worker-side mirror of
+// src/features/agents/{api/prepareCorpusForMatch,logic/decisions,
+// logic/resolvers/{shootOrPass,cardSeverity}}.
+import { prepareCorpusForMatch, runDecision } from './agentReflex.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -443,12 +449,48 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn('[match-worker] getPreMatchOmen threw:', (err as Error)?.message ?? err);
     }
 
+    // ── Phase 8 reflex-hooks hydration (isl-5kx) ─────────────────────────
+    // Collect every involved entity_id (players + referee + both
+    // managers) and batch-fetch their personas + recent memories into
+    // an in-memory corpus.  The engine's shoot_or_pass / card_severity
+    // resolvers consult this corpus synchronously during the match —
+    // a Supabase round-trip per decision would tank simulation speed
+    // (thousands of in-match calls).  Failure modes degrade silently:
+    // missing personas fall back to neutral 0.5 Big-Five values; the
+    // resolvers remain well-behaved.
+    const involvedEntityIds: string[] = [];
+    for (const p of home.players ?? []) {
+      if (p?.entity_id) involvedEntityIds.push(p.entity_id);
+    }
+    for (const p of away.players ?? []) {
+      if (p?.entity_id) involvedEntityIds.push(p.entity_id);
+    }
+    if (refOverride?.entity_id) involvedEntityIds.push(refOverride.entity_id);
+    if (home.manager?.entity_id) involvedEntityIds.push(home.manager.entity_id);
+    if (away.manager?.entity_id) involvedEntityIds.push(away.manager.entity_id);
+
+    let reflexHooks: { agentCorpus: unknown; runDecision: typeof runDecision } | null = null;
+    try {
+      const agentCorpus = await prepareCorpusForMatch(supabase, involvedEntityIds);
+      reflexHooks = { agentCorpus, runDecision };
+      console.log(
+        `[match-worker] reflex corpus hydrated: ${agentCorpus.personas.size} personas, ` +
+        `${[...agentCorpus.memories.values()].reduce((n, rows) => n + rows.length, 0)} memories ` +
+        `(over ${involvedEntityIds.length} involved entities)`,
+      );
+    } catch (err) {
+      console.warn('[match-worker] reflex corpus hydration threw:', (err as Error)?.message ?? err);
+    }
+
     // Simulate the full 90 minutes.  `refOverride` is the isl-84e wiring —
     // passes the assigned referee's identity (incl. entity_id) into
     // createAIManager so the Phase 8 card_severity resolver can find
     // the referee persona.  `null` (no referee assigned to this match)
     // falls back to a random fabricated official with `entity_id: null`.
-    const result = simulateFullMatch(home, away, fanBoost, architect, null, refOverride);
+    // `reflexHooks` (isl-5kx) supplies the in-match shoot_or_pass +
+    // card_severity dispatcher; null falls back to legacy stat-driven
+    // decisions inside gameEngine.
+    const result = simulateFullMatch(home, away, fanBoost, architect, reflexHooks, refOverride);
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
