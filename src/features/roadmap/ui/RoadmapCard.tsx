@@ -117,6 +117,12 @@ export function RoadmapCard({
   // priority chip always anchors the left.
   return (
     <article
+      // Addressable target for the Architect-roulette button (isl-aak) —
+      // the picker writes the chosen card's id into this attribute via
+      // a querySelector lookup on click so the imperative scroll-into-
+      // view + highlight pulse can find a card without React state
+      // surgery on every render.
+      data-roadmap-card-id={`${item.kind}-${item.id}`}
       style={{
         background: CARD_BG,
         border: `1px solid ${BORDER}`,
