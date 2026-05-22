@@ -1,3 +1,22 @@
+<pre>
+        .       *        .          *          .       *        .
+   *                                                                *
+                                                                     
+                ██╗███████╗██╗                                       
+                ██║██╔════╝██║                .    *    .            
+                ██║███████╗██║                     ___               
+                ██║╚════██║██║                 _.-'   '-._     *     
+       *        ██║███████║███████╗          .'   (o)   '.          .
+                ╚═╝╚══════╝╚══════╝         (   ___|___   )          
+                                              '._       _.'    *    
+                                                 '-...-'             
+   .                                                              .  
+              I N T E R G A L A C T I C  ·  S O C C E R  ·  L E A G U E
+                      " watch the cosmos play football "             
+                                                                     
+        *       .         *        .         *         .       *    
+</pre>
+
 # Intergalactic Soccer League
 
 A Blaseball-inspired social experience browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
