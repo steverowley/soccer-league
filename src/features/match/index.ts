@@ -84,6 +84,42 @@ export type {
   SimulatedEvent,
 } from './logic/simulateFullMatch';
 
+// ── Pitch view primitives (issue isl-doe) ─────────────────────────────────
+// Pure-logic foundation for the 2D top-down pitch view.  Formation slot
+// tables, engine-event → movement-archetype mapping, and the PitchState
+// shape with an idle-drift convergence step.  No UI, no DB — every other
+// pitch-view issue (2/6 onward) sits on top of these primitives.
+export {
+  FORMATIONS,
+  getFormationSlots,
+  isFormationKey,
+} from './logic/pitch/formations';
+export type {
+  FormationKey,
+  PitchPoint,
+  Side as PitchSide,
+} from './logic/pitch/formations';
+
+export {
+  ARCHETYPES,
+  eventToArchetype,
+  listMappedEventTypes,
+} from './logic/pitch/archetypes';
+export type { Archetype } from './logic/pitch/archetypes';
+
+export {
+  IDLE_DRIFT_EPSILON,
+  IDLE_DRIFT_RATE,
+  idleDriftStep,
+  initPitchState,
+} from './logic/pitch/pitchState';
+export type {
+  BallDot,
+  PitchPhase,
+  PitchState,
+  PlayerDot,
+} from './logic/pitch/pitchState';
+
 // ── League standings (Supabase-backed) ────────────────────────────────────
 // Replaces the legacy localStorage-based `computeStandings` in
 // `src/lib/matchResultsService.ts`.  Reads completed `matches` rows joined
