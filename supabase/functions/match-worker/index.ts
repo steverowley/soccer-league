@@ -539,6 +539,43 @@ async function processMatch(match: any): Promise<boolean> {
       console.log(`[match-worker] Persisted ${statRows.length} player-stat rows`);
     }
 
+    // ── Persist participation rows (isl-pfm) ───────────────────────────────
+    // match_lineups carries one row per starter regardless of whether
+    // they accrued a stat — gives the player_detail page true match
+    // history (a defender with 30 clean sheets shows 30 lineups).
+    // Worker writes both sides' starters at the same point in the
+    // pipeline; match_player_stats stays contribution-only.
+    //
+    // ON CONFLICT DO NOTHING via the (match_id, player_id) PK so a
+    // worker retry (rare but possible) doesn't double-insert.
+    const lineupRows = [...(homeData.players ?? []), ...(awayData.players ?? [])]
+      .filter((p): p is typeof p & { id: string; team_id: string } =>
+        Boolean(p?.id && p?.team_id && p?.starter),
+      )
+      .map((p) => ({
+        match_id:       match.id,
+        player_id:      p.id,
+        team_id:        p.team_id,
+        position:       (p.position as string | null) ?? 'MF',
+        jersey_number:  (p.jersey_number as number | null) ?? null,
+        starter:        true,
+        minutes_played: 90,
+      }));
+    if (lineupRows.length > 0) {
+      const { error: lineupErr } = await supabase
+        .from('match_lineups')
+        .upsert(lineupRows, { onConflict: 'match_id,player_id', ignoreDuplicates: true });
+      if (lineupErr) {
+        // Best-effort: log + continue.  The match is still successfully
+        // simulated even when the participation rows fail to land — the
+        // historical backfill in migration 0047 covers existing matches
+        // and a future re-run of this insert will re-fill missing rows.
+        console.warn(`[match-worker] match_lineups insert failed: ${lineupErr.message}`);
+      } else {
+        console.log(`[match-worker] Persisted ${lineupRows.length} lineup rows`);
+      }
+    }
+
     // ── Update match to completed ──────────────────────────────────────────
     // The matches table only has columns for status / scores / timestamps —
     // there is intentionally no `mvp_player_name` column.  The MVP is captured
