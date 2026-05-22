@@ -10,3 +10,7 @@ supabase/.temp/
 # Agent worktrees created by Claude Code's isolation mode.
 # Each in-flight sub-agent gets its own checkout under this dir.
 .claude/worktrees/
+
+# Beads tool artifacts (tool removed in #357 but state can regenerate locally)
+.beads/
+public/bd-snapshot.json
