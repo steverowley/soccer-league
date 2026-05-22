@@ -142,6 +142,16 @@ export type {
 export { PitchDebugOverlay } from './ui/pitch/PitchDebugOverlay';
 export type { PitchDebugOverlayProps } from './ui/pitch/PitchDebugOverlay';
 
+// ── Mini-pitch chip + shared broadcast hook (issue isl-a8i) ───────────────
+// MiniPitch is a tiny pitch preview for the Matches list page that
+// shows a live match's ball position in ~100px width.  It subscribes
+// via useMatchEventLatest, which opens ONE shared Realtime channel
+// regardless of how many MiniPitch chips mount on the page — see
+// the isl-a8i acceptance criterion.
+export { MiniPitch } from './ui/pitch/MiniPitch';
+export type { MiniPitchProps } from './ui/pitch/MiniPitch';
+export { useMatchEventLatest } from './ui/pitch/useMatchEventsBroadcast';
+
 // ── League standings (Supabase-backed) ────────────────────────────────────
 // Replaces the legacy localStorage-based `computeStandings` in
 // `src/lib/matchResultsService.ts`.  Reads completed `matches` rows joined
