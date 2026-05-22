@@ -2,427 +2,84 @@
 
 A Blaseball-inspired social experiment browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
 
-![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.0-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.2-teal) ![Anthropic](https://img.shields.io/badge/Claude-Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.99-green)
+![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.0-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.2-teal) ![Claude](https://img.shields.io/badge/Claude-Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.99-green)
 
-## Overview
+---
 
-32 planetary teams compete across 4 regional leagues — from the Rocky Inner League to the Kuiper Belt. Fans sign up, pick a favourite club, and earn Intergalactic Credits by betting on match outcomes. At season's end, fans pool their credits to vote on their club's direction for next season.
+## 🚧 Not ready to play yet
 
-Matches run as full 90-minute simulations with live AI commentary from three distinct voices (Captain Vox, Nexus-7, Zara Bloom), plus a Lovecraftian Cosmic Architect who warps reality mid-match. The underlying mechanics are never explained — the world is treated like real life.
+The ISL is still under construction. **Please don't try to clone or run this repo locally** — the game is meant to be experienced as a shared, persistent world with other fans, not as a single-player sandbox on your laptop. Half the magic is that the Cosmic Architect's lore accumulates across every match, every season, for everyone.
 
-## Features
+**When the league opens, it will live on its own website.** A link will be posted here once the gates are open. Until then, this repo is the construction site — feel free to peek, but the show isn't running yet.
 
-### Website
-Multi-page app with client-side routing and live Supabase data fetching. All pages share a unified design system with consistent page heroes, section navigation arrows, and reusable card components.
+---
 
-- **Home** (`/`) — Hero section with:
-  - **Live Games** — MatchCard components displaying all active matches (status='active') with momentum bars and pulsing when matches are in progress; section hidden when no live matches
-  - **Upcoming Games** — next 6 scheduled fixtures (status='upcoming') as MatchCard components with bet sliders
-  - League standings carousel and Galaxy Dispatch (real-time Architect narratives feed)
-- **News** (`/news`) — Paginated Galaxy Dispatch feed with Architect narratives and wager narratives; kind filter strip (news, political_shift, geological_event, architect_whisper, economic_tremor, wager_narrative) with accent colors per kind; public route (no auth required)
-- **Leagues** (`/leagues`, `/leagues/:leagueId`) — All four regional leagues with live standings tables; per-league carousel navigation with arrow controls
-- **Teams** (`/teams`, `/teams/:teamId`) — 32 teams grouped by league, with squad rosters and stats; per-league carousel for browsing
-- **Players** (`/players`, `/players/:playerId`) — All 512 players with jersey number sorting and profile pages
-- **Matches** (`/matches`, `/matches/:matchId`) — Match schedule as MatchCard components (in_progress / scheduled / completed variants), live simulator, and per-fixture WagerWidget
-- **Cups** (`/cup/celestial`, `/cup/solar-shield`) — Single-elimination tournament brackets for the Celestial Cup (top 3 per league) and Solar Shield (4th–6th per league); displays full bracket with winner paths, TBD slots, and auto-advances matches when both teams advance from previous rounds
-- **Authenticated routes**:
-  - **Profile** (`/profile`) — Fan number, fan since date, IC credit balance, team/player preference, personal BetHistory, total winnings
-  - **Voting** (`/voting`) — End-of-season focus voting with Major/Minor tier options; post-season shows enacted focuses and their roster/stat effects
-  - **Training** (`/training`) — Clicker minigame to collectively boost player stats
-  - **Architect Log** (`/architect-log`, dev-only) — Intervention audit table with JSON snapshots
-- Shared header/footer with authenticated account menu (login state, IC balance, dropdown nav)
+## What is this?
 
+**32 planetary clubs.** Four regional leagues — Rocky Inner, Gas/Ice Giant, Asteroid Belt, Kuiper Belt — from Mercury Runners FC to Scattered Disc FC Rangers.
 
-### Match Simulator
-- Full 90-minute matches with stoppage time, powered by live Supabase roster data
-- 13+ event types: goals, free kicks, penalties, VAR reviews, cards, injuries, confrontations
-- Planetary weather systems (Mars dust storms, Europa magnetic storms, zero-gravity quirks)
-- Tension curves, narrative residue, and momentum tracking
-- Manager AI that makes tactical decisions mid-match in response to game state
-- Player psychology: 8 personality types with per-player confidence, fatigue, and morale
-- **Fan support boost** — teams with more present fans (logged-in profiles within 5 minutes) receive a +2 stat bump across all five player categories at kickoff, affecting all subsequent contests and tactical outcomes
+**704 players, 32 managers, every match a story.** Matches play out as full 90-minute simulations with weather, momentum, injuries, VAR, and three commentators arguing in real time over what just happened.
 
-### The Cosmic Architect
-- Lovecraftian cosmic entity that shapes every match through four interference layers:
-  - **Cosmic Edicts** — polarity/magnitude modifiers on match probability
-  - **Intentions** — 12 directed-outcome types wired into player selection
-  - **Sealed Fate** — prophecy-driven forced outcomes (goals, red cards, wonder saves)
-  - **Interference Flags** — 10 reality-rewrite flags (gravityFlipped, voidCreature, eldritchPortal, etc.)
-- Persistent lore accumulates across matches — rivalries, player arcs, season storylines
-  - **Database-backed**: The `architect_lore` DB table is the single source of truth. Pre-match `prepareArchitectForMatch()` is the canonical lifecycle: it constructs the Architect and hydrates all lore via `LoreStore.hydrate()` in one DB round-trip (~100ms) before match kickoff. Every in-match `getContext()` call then reads from memory synchronously (never blocks commentary during goal bursts).
-  - **Post-match persistence**: `LoreStore.persistAll()` is called fire-and-forget after match completion to batch-upsert fully-updated lore to the DB; all browser sessions see the same shared narrative.
-  - **Synchronous guarantee**: `getContext()` can fire 5–10 times in <500ms during goal bursts (parallel commentator prompts), so lore hydration is exclusively a kickoff boundary concern, never on the hot path.
-- All AI voices speak with narrative coherence via injected Architect context
-- Affected characters react with confusion and disbelief; they have zero knowledge of any cosmic cause
+**A Lovecraftian entity is loose in the universe.** The Cosmic Architect rewrites probability, seals fates, and occasionally tears holes in reality. Nobody in-world knows it exists. The fans only see the shape of its decisions in the news.
 
-### AI Commentary
-Three distinct voices powered by Claude Haiku, running in parallel for minimal latency:
-- **Captain Vox** — bombastic veteran narrator with cosmic metaphors
-- **Nexus-7** — clinical AI analyst, data-driven and precise
-- **Zara Bloom** — ex-striker colour analyst, tactically sharp
+**You get 200 Intergalactic Credits when you sign up.** You bet them on matches, win or lose, and at season's end you and every other fan of your club pool what's left to vote on the club's future — sign a star, promote youth, upgrade the stadium, overhaul the tactics. The vote actually reshapes the team for next season.
 
-Plus player inner thoughts, manager reactions, and referee justifications generated live. Commentary latency ~500ms at TURBO speed via parallel streaming dispatch.
+**Nothing is explained.** No stat screens, no probability tables, no rulebooks. The world is treated like real life — you learn the league by watching it.
 
-**Cosmic Voices** — Two unnamed stochastic interrupters (Balance and Chaos) that inject unsettling commentary into match feeds independently:
-- **Balance** (slate-blue accent) — obsessed with symmetry, equilibrium, and cosmic debt
-- **Chaos** (amber accent) — seeks novelty, revels in disruption, hungers for wonder
-- **Design**: Fully synchronous `CosmicVoiceEngine` with independent internal state (`equilibriumDebt`, `noveltyHunger`) and template banks per voice × category. Voices interrupt after each event's mortal commentary via `maybeInterrupt()`, appearing unlabelled and unnamed in the feed. Players intuit identity from cadence over many matches.
+---
 
-**Simulation speeds**: SLOW / NORMAL / FAST / TURBO / DRAMATIC (real-time pacing with staggered voice waves)
+## What you'll find when it opens
 
-### Betting System
-- Three-way odds (home/draw/away) calculated from team ratings
-- Minimum bet: 10 Intergalactic Credits
-- Wager settlement auto-fires after match completion
-- Kickoff-timer gate prevents bets after the match starts
-- Wager ledger with status pills (WON/LOST/OPEN/VOID) and net-profit column
-- **Wager Volume Strip** — Live visualization of market sentiment (home/draw/away bet distribution) displayed on match detail pages, updated in real-time after each wager placement. Self-hides while loading and shows "Too few wagers" state if below signaling threshold.
-- **Phase 4 Bettor Narratives** — Settlement listener generates anonymized cosmic-voice narratives from wager patterns (mass loss, upset victories, clean sweeps) and writes them to the Galaxy Dispatch feed as `wager_narrative` kind entries. Voices are assigned stochastically based on pattern type, creating an additional layer of narrative texture in the public news feed.
+- **A live league** — 28 fixtures per team per season, plus the Celestial Cup (top 3 per league, single-elimination) and the Solar Shield (4th–6th per league).
+- **Three commentators** — Captain Vox (bombastic veteran), Nexus-7 (clinical AI analyst), Zara Bloom (ex-striker tactician), all running in parallel via Claude.
+- **Two cosmic voices** — Balance and Chaos. Unnamed, uncredited. They interrupt the broadcast when something feels off. You'll learn to recognise them.
+- **The Galaxy Dispatch** — a news feed of architect whispers, political shifts, geological events, economic tremors, and wager narratives. The world reacts to itself.
+- **A training facility** — between matches, fans can click together to help individual players develop. Collective effort, geometric XP curve.
+- **Idols** — a league-wide leaderboard of player adoration. The top 10 face double-weight votes when the cosmos chooses who to incinerate at season's end. Love is dangerous.
+- **Cup brackets, league tables, squad pages, manager profiles** — every entity in the universe (players, managers, referees, journalists, pundits, bookies) has a page and a relationship graph.
 
-### Focus Voting
-- End-of-season: fans spend credits to vote on club focus (signings, youth, training, upgrades)
-- 2 focuses per season: 1 major (10 credits), 1 minor (5 credits)
-- **Enacted at season end**: The winning focus is automatically applied, mutating the team's roster, stats, and facilities
-- **9 focus types** (4 major + 5 minor):
-  - **Major**: `sign_star_player` (new bench player), `youth_academy` (promote young player), `tactical_overhaul` (boost midfielder stats), `stadium_upgrade` (ticket revenue boost)
-  - **Minor**: `preseason_camp` (universal stat lift), `scout_network` (sign new player), `fan_engagement` (revenue boost), `sports_science` (athletic/technical boost), `mental_coaching` (mental stat boost)
-- **Deterministic mutations**: Seeded RNG from `${seasonId}:${teamId}:${focusKey}` ensures reproducible outcomes; all stats clamped 1–99
-- **Post-enactment UI**: VotingPage shows "What the Cosmos Decided" panel listing all enacted focuses and their effects; voting is disabled after enactment
-- Running tally visible to all fans during voting period
-- Enacted focuses logged to `focus_enacted` table (with `architect_interventions` audit trail)
-- **Permadeath election system** — Top-10 idol-ranked players (by pure idol_score, no tie-breaking) face a 2× vote-weight surge during election phases, creating high-risk "love-is-dangerous" mechanics. Rank computation uses standard SQL RANK() semantics (no alphabetical tie-breaking) to ensure consistent cosmic favoritism across voting rounds.
+---
 
-### Cup Tournament Logic
-- **Single-elimination brackets** for Celestial Cup (top 3 from each league) and Solar Shield (4th–6th from each league)
-- **Bracket draw engine** (`cupDraw.ts`) generates tournament seeds using standard interleaving: 1v8, 4v5, 2v7, 3v6 for size-8 brackets, ensuring top seeds can only meet in the final
-- **Flexible bracket sizes** handle odd team counts (3, 5, 7, 9, 11, etc.) with automatic bye placement at leaf level
-- **Round advancement** with `from_round`/`from_slot` references allowing matches to be resolved in any order
-- **Bracket storage** persisted as JSON in `competitions.bracket` JSONB column for efficient querying and mutation
+## Project info
 
-### Training Minigame
-- Clicker-style facility: fans collectively boost players between matches
-- Geometric XP curve (BASE_XP_COST=100, CURVE_MULTIPLIER=1.5) with round-robin stat distribution
-- Rate limited: 1.5s cooldown + 500-click rolling session cap
-- Append-only audit trail in `player_training_log`
+This is a TypeScript + React app talking to a Supabase backend, with a Node worker that simulates matches server-side and an edge function that ticks the galaxy forward every two hours.
 
-### Entity System
-- Unified `entities` + `entity_traits` + `entity_relationships` tables — every player, manager, referee, pundit, journalist, media company, association, and bookie is a first-class entity
-- Pure TypeScript factories (`entityFactory.ts`) produce insert rows with meta shapes matching seed migrations exactly
-- Graph utilities (`relationshipGraph.ts`) for Architect narrative queries — directed/undirected adjacency, kind/strength filters, BFS path-finding (default max 4 hops), degree aggregates
-- Re-runnable backfill script (`scripts/migrate-to-entities.ts`) with `--dry-run` and `--verbose` flags for linking new `players`/`managers` rows to entities post-migration
+- **Frontend** — React 18 + Vite 6, React Router 7, Tailwind 4, strict TypeScript everywhere
+- **Backend** — Supabase (PostgreSQL with row-level security), 45 timestamped migrations
+- **AI** — Anthropic SDK with Claude Haiku 4.5 for live commentary, manager dialogue, player thoughts, and Architect proclamations
+- **Simulation** — A pure 90-minute match engine (13+ event types, planetary weather, 8 personality archetypes, manager AI mid-match), wrapped by a server-side worker that pre-computes events and persists them
+- **Hosting** — currently deployed via GitHub Pages on push; this will move to a proper domain when the league opens
+- **Tests** — Vitest (668+ tests), ESLint, Prettier, `tsc --noEmit` all gating CI
+- **Issues** — tracked in-repo via [Beads](https://github.com/steveyegge/beads) (`bd ready`)
 
-### Website
-- League standings, team/player profiles, match schedule
-- Player detail pages with aggregated season statistics
-- Full squad pages organised by jersey number
-- Auth with 200 Intergalactic Credits on signup
+The four core ideas the codebase is organised around:
+
+1. **Emergent storytelling over exposed mechanics.** The LLM layer always deepens narrative, never reveals numbers.
+2. **Fan-driven collective agency.** Every feature feeds the shared social experiment.
+3. **The Architect is the soul.** It's the game's identity, not a feature. Every new lever extends it.
+4. **Modular now, easy rewrites later.** Feature folders with hard boundaries, pure logic, event-bus side effects, generated types.
+
+For the full design and engineering charter, see [`CLAUDE.md`](./CLAUDE.md). For contribution workflow (branches, commits, beads), see [`CONTRIBUTING.md`](./CONTRIBUTING.md). For the public roadmap, see [`ROADMAP.md`](./ROADMAP.md).
+
+---
 
 ## Leagues
 
-| League | Teams |
-|--------|-------|
-| Rocky Inner League | Mercury, Venus, Earth, Mars teams (8 clubs) |
-| Gas/Ice Giant League | Jupiter, Saturn, Uranus, Neptune teams (8 clubs) |
+| League | Region |
+|---|---|
+| Rocky Inner League | Mercury, Venus, Earth, Mars (8 clubs) |
+| Gas/Ice Giant League | Jupiter, Saturn, Uranus, Neptune (8 clubs) |
 | Asteroid Belt League | Ceres, Vesta, Pallas, Hygiea and belt colonies (8 clubs) |
-| Kuiper Belt League | Pluto, Eris, Haumea, Makemake, Sedna and outer reaches (8 clubs) |
+| Kuiper Belt League | Pluto, Eris, Haumea, Makemake, Sedna and the outer reaches (8 clubs) |
 
-Top 3 per league qualify for the **Celestial Cup** (Champions League equivalent); 4th–6th qualify for the **Solar Shield** (Europa League equivalent).
-
-### Cup Competitions
-- **Single-elimination brackets** with standard interleaving seeding (1v8, 4v5, 2v7, 3v6 structure so top seeds can only meet in the Final)
-- Bracket draws auto-seed based on final league standings
-- Byes are auto-advanced at the leaf level; later round slots carry `from_round`/`from_slot` references for advancing matches
-- Bracket state stored as JSON in `competitions.bracket` JSONB column for efficient retrieval and manipulation
-
-## Documentation
-
-This project maintains two primary documentation sources:
-
-- **[CLAUDE.md](./CLAUDE.md)** — Project context, vision, engineering principles, game design document, and implementation roadmap. **Start here** when joining the project or planning new work.
-- **[AGENTS.md](./AGENTS.md)** — Agent workflow instructions, including beads issue tracker (`bd`) commands, shell command best practices, and session completion protocol.
-
-## Issue Tracking with Beads
-
-This project uses **Beads** (`bd`), a git-native issue tracking system designed for AI-assisted development workflows. Issues live in your repo at `.beads/issues.jsonl` (version-controlled) rather than on an external web platform — no context switching required.
-
-### Quick Start
-
-```bash
-bd list                # View all issues
-bd ready               # Find unassigned work available to claim
-bd create "Title"      # Create a new issue
-bd show <id>           # View issue details
-bd update <id> --claim # Claim and start work
-bd update <id> --status done  # Mark work complete
-bd close <id>          # Close an issue
-bd dolt push           # Sync issues to remote (before pushing code)
-```
-
-### Workflow
-
-1. **Find work:** `bd ready` shows available issues
-2. **Claim it:** `bd update <id> --claim` to start work
-3. **Push your changes:** Commit code normally, then `bd dolt push` before `git push`
-4. **Close when done:** `bd close <id>` marks the issue complete
-
-**Learn more:** Run `bd quickstart` for an interactive tutorial, or see `.beads/README.md` for full documentation.
+Top 3 per league qualify for the **Celestial Cup**. 4th–6th qualify for the **Solar Shield**. Single-elimination, standard interleaving seeds, top seeds only meet in the final.
 
 ---
 
-## Developer Setup & Workflows
+## Status
 
-## Getting Started
+**Construction site.** All core systems are wired (match sim, betting, voting, training, cups, architect lore, fan boost, Galaxy Dispatch, entity graph). What's left before public launch is operational polish — admin tooling, mobile refinement, performance audit, and the hosting move to a real domain.
 
-### Prerequisites
-- Node.js 20+
-- [Anthropic API key](https://console.anthropic.com/) for AI commentary
-- [Supabase](https://supabase.com/) project for league and match data
+When the league opens, a link will appear at the top of this README.
 
-### Installation
-
-```bash
-git clone https://github.com/steverowley/soccer-league.git
-cd soccer-league
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173` in your browser.
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-The Anthropic API key is entered at runtime via the in-app key icon and stored in `localStorage` — it never touches the server.
-
-### Database Setup
-
-Run the SQL files in order in the Supabase SQL Editor:
-
-1. `supabase/schema.sql` — creates all tables with row-level security
-2. `supabase/seed.sql` — populates 32 teams, 512 players, 32 managers, seasons, and competitions
-
-## Available Scripts
-
-### Development & Build
-
-| Command | Description |
-|---|---|
-| `npm run dev` | Start local dev server on `http://localhost:5173` |
-| `npm run build` | Build for production |
-| `npm run preview` | Preview production build locally |
-
-### Testing
-
-| Command | Description |
-|---|---|
-| `npm run test` | Run Vitest unit tests (single run) |
-| `npm run test:watch` | Run Vitest in watch mode (recommended during development) |
-| `npm run test:coverage` | Run tests with coverage report |
-
-### Code Quality & CI Gate
-
-| Command | Description |
-|---|---|
-| `npm run typecheck` | TypeScript strict type checking (`tsc --noEmit`) |
-| `npm run lint` | ESLint checks (strict, flat config) |
-| `npm run lint:fix` | ESLint with automatic fixes |
-| `npm run format` | Format code with Prettier |
-| `npm run format:check` | Verify Prettier formatting without changes |
-| **`npm run check`** | **Full CI gate** — runs typecheck + lint + test in sequence; all three must pass for CI/PR approval |
-
-**Note:** All PRs require `npm run check` to pass before merging. Run this locally before pushing to catch issues early.
-
-## Code Quality Standards
-
-All code adheres to strict engineering practices enforced by automated tools and CI gates:
-
-### TypeScript (`strict: true`)
-- **Strict mode enabled** — all new code must be fully typed
-- **Type-safe Supabase client** — regenerated on every migration via `npx supabase gen types`
-- **Shared types in `src/types/database.ts`** — auto-generated from Supabase schema
-- **Feature-specific domain types** — co-located in each feature's `types.ts` module
-- Run `npm run typecheck` to verify zero type errors before committing
-
-### Linting & Formatting
-- **ESLint 9** (flat config) — enforces feature boundary rules (prevents deep cross-feature imports)
-- **Prettier** — unified code formatting (no style debates in review)
-- **Pre-commit hooks** — linting and formatting run automatically (configured via `.husky/`)
-- Run `npm run lint` and `npm run format` locally; CI will reject poorly formatted code
-
-### Testing
-- **Vitest** — unit tests co-located next to logic modules (`*.logic.ts` → `*.logic.test.ts`)
-- **80%+ coverage target** for `logic/` and `api/` modules; UI tests are smoke tests
-- **Structural types** — Zod schemas at Supabase boundaries ensure runtime validation
-- Run `npm run test:watch` during development for instant feedback
-
-### CI Gate (`npm run check`)
-Before any commit reaches `dev` or `main`, all three must pass:
-1. `npm run typecheck` — zero TypeScript errors
-2. `npm run lint` — zero ESLint violations  
-3. `npm run test` — all unit tests pass
-
-This gate is **non-negotiable** — PRs cannot merge without a green check.
-
----
-
-## Project Structure
-
-```
-soccer-league/
-├── src/
-│   ├── App.jsx                  # Match simulator loop and root component
-│   ├── gameEngine.js            # Core simulation: events, contests, player logic (legacy JS, pending migration)
-│   ├── simulateHelpers.js       # Chaos, sequences, late-game logic
-│   ├── constants.js             # Enums, personalities, weather, formations
-│   ├── lib/
-│   │   └── supabase.ts          # Typed TypeScript helpers for Supabase (15 query/mutation functions with injected client DI)
-│   ├── features/                # Feature modules
-│   │   ├── architect/           # Cosmic narrator and match interference
-│   │   │   ├── logic/
-│   │   │   │   ├── CosmicArchitect.ts       # Fully typed AI entity managing match edicts, intentions, and fate (migrated from agents.js)
-│   │   │   │   ├── CosmicArchitect.match.test.ts # Integration test: synchronous getContext() and lore hydration
-│   │   │   │   ├── prepareArchitect.ts      # Canonical pre-match lifecycle: construct → hydrate lore → return primed Architect
-│   │   │   │   ├── edicts.ts                # Edict system for match probability modifiers
-│   │   │   │   └── loreStore.ts             # Persistent narrative context across matches (DB-backed, synchronous reads)
-│   │   │   ├── api/
-│   │   │   │   ├── interventions.ts         # API layer for architect interventions
-│   │   │   │   └── lore.ts                  # API layer for narrative queries
-│   │   │   ├── ui/
-│   │   │   │   ├── ArchitectLogPage.tsx     # Dev-only intervention audit log (mounted at /architect-log)
-│   │   │   │   └── NewsFeedPage.tsx         # Paginated Galaxy Dispatch feed with kind filter strip and purple glow
-│   │   │   ├── types.ts                     # Architect domain types
-│   │   │   └── index.ts                     # Feature exports
-│   │   ├── auth/                # Authentication and user profiles
-│   │   ├── betting/             # Wager system and odds engine
-│   │   ├── design-system/       # Component library and theme tokens (ISL shield logo, Space Mono fonts, color tokens)
-│   │   ├── entities/            # Player, team, season data models
-│   │   ├── finance/             # Fan boost and ticket revenue
-│   │   ├── match/               # Match simulator types and logic
-│   │   │   ├── types.ts         # Shared TypeScript interfaces (players, teams, events, feed items, architect contract, agent system)
-│   │   │   ├── api/
-│   │   │   │   └── cupSeeder.ts         # Cup tournament seeding & advancement logic (standings read, qualifier splits, bracket draw, R1 match insertion, round advancement)
-│   │   │   ├── logic/
-│   │   │   │   ├── AgentSystem.ts       # AI commentary orchestrator with three distinct voices (migrated from agents.js)
-│   │   │   │   ├── cupDraw.ts          # Single-elimination bracket draw engine with standard interleaving seeding
-│   │   │   │   └── cupDraw.test.ts     # 75 tests for bracket logic covering 8/12/16-team draws and odd counts
-│   │   │   └── ui/
-│   │   │       ├── CupBracket.tsx       # Bracket renderer with column-per-round layout, winner paths, and TBD slots
-│   │   │       └── CupRoundAdvancerListener.tsx # Event listener that drives bracket progression on match completion
-│   │   ├── training/            # Player development clicker
-│   │   └── voting/              # End-of-season focus voting
-│   ├── shared/                  # Cross-feature infrastructure
-│   │   ├── events/bus.ts        # Typed event bus (match.completed, wager.placed, …)
-│   │   ├── supabase/            # Singleton client + React DI context (useSupabase hook)
-│   │   └── utils/               # Shared utilities
-│   ├── pages/
-│   │   ├── Home.jsx             # Landing page with standings and Galaxy Dispatch
-│   │   ├── NewsFeed.jsx         # Public route wrapper for Galaxy Dispatch news feed
-│   │   ├── Leagues.jsx / LeagueDetail.jsx
-│   │   ├── Teams.jsx / TeamDetail.jsx
-│   │   ├── Players.jsx / PlayerDetail.jsx
-│   │   ├── Matches.jsx / MatchDetail.jsx
-│   │   ├── Cup.jsx              # Cup tournament bracket display (mounted at /cup/celestial and /cup/solar-shield)
-│   │   ├── Profile.jsx          # Account summary, preferences, BetHistory
-│   │   ├── Voting.jsx           # Focus voting interface
-│   │   ├── Training.jsx         # Training clicker minigame
-│   │   ├── ArchitectLog.jsx     # Dev-only intervention audit
-│   │   └── Login.jsx            # Supabase magic link auth
-│   ├── components/              # UI components (layout, match simulator, design system)
-│   └── types/database.ts        # Typed Supabase schema (auto-generated)
-├── supabase/
-│   ├── migrations/              # Timestamped schema migrations (numbered 0000–0022)
-│   ├── schema.sql               # Database schema snapshot (generated)
-│   └── seed.sql                 # Seed data (teams, players, managers, seasons)
-├── .beads/
-│   └── issues.jsonl             # Git-native issue tracking (version-controlled)
-├── tsconfig.json                # TypeScript strict mode config
-├── eslint.config.js             # Flat ESLint config with feature boundary rules
-├── vitest.config.ts             # Unit test runner with jsdom
-└── .github/workflows/deploy.yml # GitHub Pages deployment CI
-```
-
-## Architecture
-
-### Database Client Dependency Injection
-All 11 pages use a typed `useSupabase()` hook from `shared/supabase/` that injects the Supabase client as a dependency. This ensures:
-- **Testability**: Pages can be tested with a mock client (IslSupabaseClient interface)
-- **Decoupling**: Pages don't import the singleton; they receive it from context
-- **Type safety**: All helpers in `lib/supabase.ts` are strictly typed with `db: IslSupabaseClient` as the first parameter
-
-### Supabase Helpers (`src/lib/supabase.ts`)
-20+ TypeScript helper functions for common queries/mutations:
-- `getPlayersForTeam(db, teamId)` — efficient team roster fetches (prevents 512-player over-fetch)
-- `getLeagueStandings()`, `getTeamDetail()`, `getMatchSchedule()`, etc.
-- `saveNarrative()` — writes narrative rows (architect, wager_narrative, etc.) to the `narratives` table
-- Each function accepts `db` from context, enabling easy mocking in tests
-- **Dual-file strategy**: `supabase.ts` (typed, React pages) shadows `supabase.js` (legacy, App.jsx) via Vite's `resolve.extensions` prioritization (`.ts` before `.js`). This prevents accidental imports of the untyped version while maintaining backward compatibility with the match simulator's explicit `.js` imports.
-
-### Match Type System (`features/match/types.ts`)
-Centralized TypeScript interfaces for match simulator and AI commentary:
-- **Entity types**: `MatchPlayer`, `MatchTeam`, `MatchReferee`, `MatchManager` — structural contracts for game objects
-- **Agent types**: `PlayerAgent` (with confidence, fatigue, emotion, personality, form) — tracks psychological state during matches
-- **Event system**: `MatchEvent` with Architect interference flags (`architectForced`, `architectConjured`, `architectStolen`, etc.) — all event types share consistent shape
-- **Feed items**: `FeedItem` discriminated union — `PlayByPlayItem`, `CommentatorItem`, `PlayerThoughtItem`, `ManagerItem`, `RefereeItem`, `ArchitectProclamationItem` with streaming support
-- **Architect contract**: `IArchitect` interface — allows AgentSystem to depend on an abstraction rather than concrete CosmicArchitect, enabling structural (duck) typing and loose coupling between features
-- **Context types**: `AgentMatchContext`, `ArchitectMatchContext` — initialization parameters injected into systems at match start
-
-This eliminates type drift between game engine (`App.jsx`, `gameEngine.js`) and AI commentary (`AgentSystem`) by defining each shared shape once.
-
-### AI Commentary & Architect System (`features/architect/` & `features/match/logic/AgentSystem.ts`)
-Migrated from legacy `agents.js` to strict TypeScript with clean feature separation:
-- **CosmicArchitect.ts** (374+ lines) — The Lovecraftian entity managing all four interference layers (Cosmic Edicts, Intentions, Sealed Fate, Interference Flags). Loaded with context-aware prompt injection, Claude API calls via streaming, and persistence via Supabase `narratives` table. Exports `FIRST_VOICE_ENTITY_ID` (Fate) for Phase 5.1 lore hydration. `getContext()` is guaranteed synchronous (never blocks on Supabase) — lore is always resident in memory from match start.
-- **AgentSystem.ts** — Orchestrates three distinct AI voices (Captain Vox, Nexus-7, Zara Bloom) running in parallel streams. Manages player inner thoughts, manager reactions, and referee justifications. Integrates `CosmicVoiceEngine.maybeInterrupt()` after each event's mortal commentary. Latency ~500ms at TURBO speed via staggered voice dispatch. Calls `arch.getContext()` 5–10 times per goal burst (parallel prompts).
-- **CosmicVoiceEngine** (`features/match/logic/cosmicVoices.ts`) — Stochastic unnamed voice interrupter with two entities (Balance & Chaos). Independent internal state (`equilibriumDebt`, `noveltyHunger`, `interestLevel`) per voice, template banks (8+ entries × 5 categories per voice), and pure synchronous design (no I/O). Exports `BALANCE_ENTITY_ID` / `CHAOS_ENTITY_ID` for Phase 5.1 DB lore hydration. Also used by the Phase 4 WagerSettlementListener for bettor-narrative voice assignment.
-- **Edicts & LoreStore** — Supporting systems for probability modifiers and cross-match narrative accumulation. Lore is database-backed, hydrated before match start, and persisted post-match for session coherence.
-- **API layer** (`architect/api/`) — Thin modules for reading narratives and interventions from Supabase, enabling future front-end feeds (Galaxy Dispatch narrative UI, intervention audit).
-- **Bettor Narratives (Phase 4)** — WagerSettlementListener (in `betting/ui/`) runs after wager settlement completes, detects patterns (mass loss, upset victory, clean sweep), assigns narrative voices stochastically, and writes anonymized cosmic-voice entries to the `narratives` table as `wager_narrative` kind. Pattern detection is pure logic in `betting/logic/bettorNarratives.ts`; I/O is isolated in `betting/api/narrativeWriter.ts`.
-- **Type safety**: All systems depend on `IArchitect` interface (duck typing) rather than concrete implementations, enabling loose coupling and testability. `CosmicVoiceItem` interface in `match/types.ts` extends `FeedItem` union.
-
-### Design System (`features/design-system/` & `src/index.css`)
-Unified visual language and component library aligned to the Figma design specification:
-- **Color tokens** (`src/index.css` CSS variables) — ISL brand palette with thematic names: Void (#050308), Abyss (#1a1625), Quantum Purple (#8B5AFF), Architect Purple variants, Nexus-7 Blue (#4FC3F7), Lunar Dust (#d4cfbe), Sage Green. All colors are CSS custom properties for easy theming.
-- **Self-hosted fonts** — Space Mono (Regular/Bold/Italic/BoldItalic) served from `public/fonts/`, eliminating Google Fonts dependency for improved performance and privacy.
-- **Logo & branding** — ISL shield crest (ISL letterform + soccer ball planet) as `public/isl-logo.svg`, replacing generic placeholder.
-- **Form system** (`index.css`) — Centralized classes for all input forms across the app:
-  - `.form-group` — vertical flex wrapper with consistent spacing
-  - `.isl-label`, `.isl-input`, `.isl-select` — design-system-aligned form elements used in Login, Signup, Profile, Wager, and Training pages
-  - `.form-error` — red error message styling with monospace font
-  - All form components now use design tokens exclusively (no inline styles)
-- **Styled components**:
-  - `.btn` (primary/secondary/tertiary variants) — 56px height with inline-flex alignment and Lunar Dust glow on hover/active
-  - `.nav-link.active` — Lunar Dust text-shadow glow effect instead of color change
-  - `.card` — full-opacity dust border for better contrast
-  - Headings (h1–h3) — Title Case (not ALL CAPS) with cosmic sizing
-  - Footer — logo-left + secondary-nav-right layout matching design spec
-- **Auth tabs** (`.auth-tab*` in `index.css`) — Tab switcher for Login/Signup forms with bottom-border indicators and uppercase labels
-- **Feature component styling** (`index.css`):
-  - `.wager-widget*` — bet form, odds display, and status indicators (~100 lines)
-  - `.betting-widget*, .bet-history*` — bet placement and wager ledger with shimmer skeleton loading (~150 lines)
-  - `.voting-page*, .focus-card*` — focus voting interface with spend controls (~100 lines)
-  - `.training-page*, .clicker-widget*` — XP clicker and progress stats (~80 lines)
-  - `.account-menu*` — user dropdown menu styling (~40 lines)
-- **Account menu** — replaced 100+ lines of inline styles with `.account-menu-*` CSS classes; maintains dropdown animation and IC balance display
-- **Component library** — Reusable React components in `features/design-system/components/` (Button, Card, Input, Badge, etc.) with prop-driven theming.
-- **Unified page layouts** — All pages share consistent `.page-hero` (100px desktop / 70px mobile, centered H1) and `.section-nav` (◄ SECTION NAME ► arrow headings) styling. Detail pages use `.page-top` utility (same vertical start as `.page-hero` without text-align: center) for left-aligned headers. Voting and Training pages now have page-hero sections matching all other routes.
-- **MatchCard component** (`src/components/ui/MatchCard.jsx`) — Shared card component replacing duplicated variants across Home and Matches pages; supports in_progress / scheduled / completed statuses with momentum bars, tag badges, bet sliders, and live commentary feeds.
-
-## Tech Stack
-
-- **React 18** + **Vite 6** — frontend framework and build tool
-- **React Router DOM 7** — client-side routing
-- **Tailwind CSS 4** — styling
-- **Supabase** — PostgreSQL database with row-level security
-- **Anthropic SDK** (Claude Haiku 4.5) — AI commentary and Architect
-- **TypeScript** (`strict: true`) — all new code is strictly typed
-- **Vitest** — unit tests co-located with logic modules (80%+ coverage target)
-- **GitHub Pages** — hosting via GitHub Actions
-
-## Deployment
-
-Deploys automatically to GitHub Pages on push to `main`/`master`. Supabase credentials are injected as environment variables in the GitHub Actions build step — if you fork this project, update `.github/workflows/deploy.yml` with your own credentials.
+In the meantime: don't clone it, don't run it locally — just wait for the gates. It'll be worth it.
