@@ -42,10 +42,10 @@ const MODE_SIGNUP = 'signup';
 type Mode = typeof MODE_LOGIN | typeof MODE_SIGNUP;
 
 // ── Field constraints ─────────────────────────────────────────────────────
-// Mirror the Supabase Auth defaults — these are the validation rules
-// the API will enforce server-side anyway, but surfacing them client-side
-// keeps the user from submitting a doomed form.
-const MIN_PASSWORD_LENGTH = 6;
+// Stricter than the Supabase Auth default (6). The server-side floor is also
+// raised to match in #365's PR body; together with HaveIBeenPwned (operator
+// toggle), this closes the weak-password vector flagged by the security audit.
+const MIN_PASSWORD_LENGTH = 10;
 const MIN_USERNAME_LENGTH = 3;
 
 /**
@@ -73,6 +73,10 @@ export default function Login() {
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(false);
   const [error,        setError]        = useState<string | null>(null);
   const [busy,         setBusy]         = useState<boolean>(false);
+  // Post-signup "check your inbox" state. When set, the form is replaced
+  // with a confirmation prompt so the user knows the next step instead of
+  // being silently dropped at / (the pre-#365 bug).
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
 
   // Reset transient form state on mode swap so values entered in one
   // mode don't bleed into the other (e.g. a half-typed signup password
@@ -98,6 +102,35 @@ export default function Login() {
   }
   if (user) {
     return <Navigate to="/profile" replace />;
+  }
+
+  // ── Post-signup "check your inbox" panel ──────────────────────────────
+  // When email confirmation is enabled in Supabase Auth, signUp returns
+  // success with no session. Render an explicit panel so the user knows
+  // the email is on its way and not just "the form quietly succeeded".
+  if (pendingConfirmEmail) {
+    return (
+      <Shell>
+        <div style={{ border: `1px solid ${HAIRLINE}`, padding: 32, maxWidth: 480, marginTop: 24 }}>
+          <h2 style={{ fontSize: 14, letterSpacing: '0.18em', textTransform: 'uppercase', margin: '0 0 16px' }}>
+            Check your inbox
+          </h2>
+          <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
+            We sent a confirmation link to{' '}
+            <strong style={{ color: DUST }}>{pendingConfirmEmail}</strong>.
+            Click the link to verify your account and complete sign-up. The
+            link is single-use and expires in 24 hours.
+          </p>
+          <p style={{ color: DUST_50, fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+            Wrong email?{' '}
+            <button onClick={() => setPendingConfirmEmail(null)} style={{
+              background: 'none', border: 'none', color: DUST, textDecoration: 'underline',
+              cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0,
+            }}>Try again</button>.
+          </p>
+        </div>
+      </Shell>
+    );
   }
 
   /**
@@ -130,26 +163,26 @@ export default function Login() {
 
     setBusy(true);
     try {
-      const result = mode === MODE_LOGIN
-        ? await signIn(email, password)
-        : await signUp(email, password, username);
-
-      if (result) {
-        setError(result);
-        return;
-      }
-
-      // Signup with email-confirmation enabled returns no error AND no
-      // session.  Surface a friendly nudge instead of a blank navigate.
-      if (mode === MODE_SIGNUP) {
-        setError(null);
-        setBusy(false);
-        // Use replace so the user can't back-button into the half-
-        // signed-up state.
+      if (mode === MODE_LOGIN) {
+        const err = await signIn(email, password);
+        if (err) { setError(err); return; }
         navigate('/', { replace: true });
         return;
       }
 
+      // Signup branch — handle the discriminated SignUpResult from
+      // AuthProvider so the user sees the correct next step instead of
+      // being silently dropped at / (the pre-#365 bug).
+      const result = await signUp(email, password, username);
+      if (result.kind === 'error') {
+        setError(result.error);
+        return;
+      }
+      if (result.kind === 'confirmation_required') {
+        setPendingConfirmEmail(result.email);
+        return;
+      }
+      // result.kind === 'session' — signed in immediately
       navigate('/', { replace: true });
     } catch (err) {
       console.warn('[Login] submit threw:', err);
@@ -296,6 +329,16 @@ export default function Login() {
               margin: 0,
             }}>
               200 starting credits granted on first sign-in.
+            </p>
+          )}
+
+          {/* Forgot-password link — login mode only. Routes to the two-phase
+              ResetPassword page (request email → set new password). */}
+          {mode === MODE_LOGIN && (
+            <p style={{ fontSize: 12, color: DUST_50, margin: 0 }}>
+              <a href="/reset-password" style={{ color: DUST, textDecoration: 'underline' }}>
+                Forgot password?
+              </a>
             </p>
           )}
         </form>
