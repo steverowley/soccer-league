@@ -7,6 +7,7 @@
 import { createAIManager, calcMVP, genEvent } from './gameEngine.js';
 import type { EngineTeam, SimulationResult } from './gameEngine.types.ts';
 import { applyFanBoostToTeam } from './applyFanBoost.ts';
+import { CosmicVoiceEngine } from './cosmicVoices.ts';
 
 // ── Input types ────────────────────────────────────────────────────────────
 
@@ -204,6 +205,14 @@ export function simulateFullMatch(
   const playerStats: Record<string, any> = {};
   const events: SimulatedEvent[] = [];
 
+  // ── Cosmic voices (#371) ──────────────────────────────────────────────────
+  // One engine per match. Drifts Balance + Chaos interest levels per event;
+  // returns 0-2 voice items per call. Items get persisted alongside engine
+  // events as `balance_whisper` / `chaos_whisper` rows in match_events,
+  // letting the live commentary surface in-match cosmic interruptions
+  // (previously only emitted client-side, not by the production worker).
+  const voiceEngine = new CosmicVoiceEngine();
+
   // Active XI = starters at kickoff. No subs simulated in this iteration.
   const activePlayers = {
     home: home.players.filter((p) => p.starter).map((p) => p.name),
@@ -336,6 +345,28 @@ export function simulateFullMatch(
     if (ev.isGoal) {
       if (ev.team === home.shortName) score[0]++;
       else score[1]++;
+    }
+
+    // ── Cosmic voices may speak in reaction to this event ──────────────────
+    // Called AFTER the score update so Balance sees the just-updated state
+    // (matters for "equaliser → BALANCE_LEVEL_SCORE" branch). Each returned
+    // item gets its own subminute slot so the live UI reveals them
+    // immediately after the engine event they reacted to.
+    const voiceItems = voiceEngine.maybeInterrupt(ev as Record<string, any>, min, score[0], score[1]);
+    for (const item of voiceItems) {
+      withinMinuteCount += 1;
+      const voiceSub = Math.min(withinMinuteCount, SUBMINUTE_CAP) / SUBMINUTE_DIVISOR;
+      events.push({
+        minute: item.minute,
+        subminute: voiceSub,
+        type: item.voice === 'balance' ? 'balance_whisper' : 'chaos_whisper',
+        payload: {
+          text:       item.text,
+          voiceIndex: item.voiceIndex,
+          color:      item.color,
+          entityId:   item.entityId,
+        },
+      });
     }
 
     // Momentum: clamp [0, 100]. The engine's deltas can be any signed integer,
