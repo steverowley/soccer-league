@@ -120,6 +120,16 @@ export type {
   PlayerDot,
 } from './logic/pitch/pitchState';
 
+// ── UI — pitch view (issue isl-5b6) ────────────────────────────────────────
+// Static SVG composition of the pitch surface + 22 dots + ball in the
+// 4-4-2 rest state.  The MatchDetail page renders this in a 2-column
+// layout beside the LiveCommentary feed for in_progress / scheduled
+// matches; completed matches keep the current commentary-only layout.
+// Animation lands in the next pitch-view issue (3/6, isl-lfo).
+export { PitchView } from './ui/pitch/PitchView';
+export type { PitchViewProps } from './ui/pitch/PitchView';
+export { PitchSurface } from './ui/pitch/PitchSurface';
+
 // ── League standings (Supabase-backed) ────────────────────────────────────
 // Replaces the legacy localStorage-based `computeStandings` in
 // `src/lib/matchResultsService.ts`.  Reads completed `matches` rows joined
