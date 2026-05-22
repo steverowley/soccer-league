@@ -37,6 +37,13 @@ describe('kindColor', () => {
     expect(kindColor('political_body')).toBe(COLORS.flare);
   });
 
+  // ── Team (isl-3ov) ───────────────────────────────────────────────────
+  // Clubs use the astro hue to read as their own identity tier —
+  // distinct from quantum (commentary) and flare (risk).
+  it('returns ASTRO for the team kind (shadow team entities)', () => {
+    expect(kindColor('team')).toBe(COLORS.astro);
+  });
+
   // ── Places ────────────────────────────────────────────────────────────
   it('returns muted DUST tints for places', () => {
     expect(kindColor('planet')).toBe(COLORS.dust70);

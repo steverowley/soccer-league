@@ -40,9 +40,26 @@ import type { Entity } from '../../types';
  *                for `navigate()`, `<Link to=...>`, or `window.location`.
  */
 export function entityRoute(entity: Entity): string {
+  // ── Team kind dispatch (isl-3ov) ────────────────────────────────────
+  // Team entities are shadow rows minted by the teams_sync_entity
+  // trigger (migration 0048).  Clicking one in the relationship
+  // graph should land the user on the canonical /teams/:teamId page,
+  // not the agnostic /entities/:uuid page — the team detail surface
+  // already exists and is richer than the entity voice page would
+  // be for a club.  meta.team_id carries the slug (e.g.
+  // 'mercury-runners-fc') the trigger writes alongside league_id.
+  if (entity.kind === 'team') {
+    const meta = entity.meta as { team_id?: unknown } | null | undefined;
+    if (meta && typeof meta.team_id === 'string') {
+      return `/teams/${meta.team_id}`;
+    }
+    // Fall through to the universal route if the shadow row is
+    // missing its slug — defensive, shouldn't happen in practice.
+  }
+
   // Universal route — see DESIGN DECISION in the module header for why
-  // we don't dispatch on `entity.kind` yet.  Returning a plain string
-  // (no template wrapping) makes it easy to grep for `/entities/` when
-  // auditing all navigation sites in the app.
+  // we don't dispatch on `entity.kind` yet for non-team kinds.
+  // Returning a plain string (no template wrapping) makes it easy to
+  // grep for `/entities/` when auditing all navigation sites in the app.
   return `/entities/${entity.id}`;
 }

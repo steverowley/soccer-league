@@ -25,6 +25,7 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getTeam } from '../lib/supabase';
+import { RelationshipGraph } from '../features/entities';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -192,6 +193,28 @@ export default function TeamDetail() {
           {!loadError && managers.length > 0 && <ManagerCard manager={managers[0]} />}
         </Container>
       </section>
+
+      {/* Section IV — Web of Influence (issue isl-3ov).
+          Renders the relationship-graph widget seeded from the team's
+          shadow entity (created by the teams_sync_entity trigger,
+          migration 0048).  Surfaces player→team, manager→team, and
+          (future) team→team rivalry edges.  Hidden when the team
+          hasn't been linked to its shadow entity yet — pre-migration
+          rows or a malformed admin insert. */}
+      {liveTeam?.entity_id && (
+        <section style={{ padding: '0 16px 80px' }}>
+          <Container>
+            <SectionHeader
+              kicker="IV"
+              label="Connections"
+              title="Web of Influence"
+            />
+            <div style={{ marginTop: 24 }}>
+              <RelationshipGraph entityId={liveTeam.entity_id} />
+            </div>
+          </Container>
+        </section>
+      )}
 
       <Footer />
     </div>
