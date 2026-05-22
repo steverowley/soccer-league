@@ -119,7 +119,10 @@ export {
 export type {
   FindPathOptions,
   RelationshipFilter,
-  RelationshipGraph,
+  // Re-exported under the more specific public name `IndexedRelationshipGraph`
+  // so it doesn't collide with the `<RelationshipGraph>` component export
+  // below.  The internal module name stays unchanged.
+  RelationshipGraph as IndexedRelationshipGraph,
 } from './logic/relationshipGraph';
 
 // ── Logic — subgraph extractor (issue isl-6ub) ─────────────────────────────
@@ -177,3 +180,12 @@ export type {
   UseForceLayoutInput,
   UseForceLayoutOutput,
 } from './ui/relationshipGraph/useForceLayout';
+
+// ── UI — drop-in relationship graph widget (issue isl-pfq) ─────────────────
+// Composes the fetch helpers, subgraph extractor, and layout hook into a
+// self-contained component for any entity detail page.  Click/keyboard
+// activation routes through `entityRoute()` to /entities/:id.
+export { RelationshipGraph } from './ui/relationshipGraph/RelationshipGraph';
+export type { RelationshipGraphProps } from './ui/relationshipGraph/RelationshipGraph';
+export { kindColor }   from './ui/relationshipGraph/kindColor';
+export { entityRoute } from './ui/relationshipGraph/entityRoute';
