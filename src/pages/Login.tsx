@@ -63,12 +63,16 @@ export default function Login() {
   const { user, signIn, signUp, loading } = useAuth();
   const navigate = useNavigate();
 
-  const [mode,     setMode]     = useState<Mode>(MODE_LOGIN);
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [error,    setError]    = useState<string | null>(null);
-  const [busy,     setBusy]     = useState<boolean>(false);
+  const [mode,         setMode]         = useState<Mode>(MODE_LOGIN);
+  const [email,        setEmail]        = useState('');
+  const [password,     setPassword]     = useState('');
+  const [username,     setUsername]     = useState('');
+  // Signup-only: required-by-ToS self-attestation that the user is 18+.
+  // The game simulates betting; even with no real money, an 18+ gate is
+  // industry standard and matches Apple/Google policy for webview wrappers.
+  const [ageConfirmed, setAgeConfirmed] = useState<boolean>(false);
+  const [error,        setError]        = useState<string | null>(null);
+  const [busy,         setBusy]         = useState<boolean>(false);
 
   // Reset transient form state on mode swap so values entered in one
   // mode don't bleed into the other (e.g. a half-typed signup password
@@ -117,6 +121,10 @@ export default function Login() {
     }
     if (mode === MODE_SIGNUP && username.length < MIN_USERNAME_LENGTH) {
       setError(`Username must be at least ${MIN_USERNAME_LENGTH} characters.`);
+      return;
+    }
+    if (mode === MODE_SIGNUP && !ageConfirmed) {
+      setError('You must confirm you are at least 18 years old to sign up.');
       return;
     }
 
@@ -212,6 +220,36 @@ export default function Login() {
             onChange={(v) => setPassword(v)}
             hint={mode === MODE_SIGNUP ? `At least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
           />
+
+          {/* 18+ age attestation — required for signup per Terms of Service.
+              Renders as a single checkbox row above the submit button. */}
+          {mode === MODE_SIGNUP && (
+            <label style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              fontSize: 12,
+              color: DUST_70,
+              cursor: 'pointer',
+              lineHeight: 1.5,
+            }}>
+              <input
+                type="checkbox"
+                checked={ageConfirmed}
+                onChange={(e) => setAgeConfirmed(e.target.checked)}
+                style={{ marginTop: 3, accentColor: QUANTUM }}
+              />
+              <span>
+                I am at least 18 years old and accept the{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: DUST, textDecoration: 'underline' }}>
+                  Terms
+                </a>{' '}and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: DUST, textDecoration: 'underline' }}>
+                  Privacy Policy
+                </a>.
+              </span>
+            </label>
+          )}
 
           {error && (
             <p role="alert" style={{

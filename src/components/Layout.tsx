@@ -170,7 +170,9 @@ export function SectionHeader({
 }
 
 /**
- * Site-wide footer. Single hairline + tracked small-caps band.
+ * Site-wide footer. Hairline-bordered band carrying brand, tagline, version,
+ * and legal links. Legal links (about / privacy / terms) live here rather
+ * than in the header so the main nav stays focused on gameplay surfaces.
  */
 export function Footer() {
   return (
@@ -183,12 +185,36 @@ export function Footer() {
       textTransform: 'uppercase',
       color: COLORS.dust50,
     }}>
-      <span>Intergalactic Soccer League</span>
-      <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
-      <span>Charted from Earth Orbit</span>
-      <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
-      <span>v 0.7.0</span>
+      {/* Row 1: brand / tagline / version */}
+      <div>
+        <span>Intergalactic Soccer League</span>
+        <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
+        <span>Charted from Earth Orbit</span>
+        <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
+        <span>v 0.7.0</span>
+      </div>
+      {/* Row 2: legal links — slightly smaller, looser tracking. */}
+      <div style={{ marginTop: 12, fontSize: 10, letterSpacing: '0.14em' }}>
+        <FooterLink to="/about">About</FooterLink>
+        <span style={{ margin: '0 10px', opacity: 0.5 }}>•</span>
+        <FooterLink to="/privacy">Privacy</FooterLink>
+        <span style={{ margin: '0 10px', opacity: 0.5 }}>•</span>
+        <FooterLink to="/terms">Terms</FooterLink>
+      </div>
     </footer>
+  );
+}
+
+/** Footer-only link: inherits the small-caps treatment, gets an underline on hover. */
+function FooterLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link to={to} style={{
+      color: COLORS.dust50,
+      textDecoration: 'none',
+      borderBottom: `1px solid transparent`,
+    }}>
+      {children}
+    </Link>
   );
 }
 
