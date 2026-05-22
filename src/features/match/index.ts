@@ -120,15 +120,27 @@ export type {
   PlayerDot,
 } from './logic/pitch/pitchState';
 
-// ── UI — pitch view (issue isl-5b6) ────────────────────────────────────────
-// Static SVG composition of the pitch surface + 22 dots + ball in the
-// 4-4-2 rest state.  The MatchDetail page renders this in a 2-column
-// layout beside the LiveCommentary feed for in_progress / scheduled
-// matches; completed matches keep the current commentary-only layout.
-// Animation lands in the next pitch-view issue (3/6, isl-lfo).
+// ── UI — pitch view (issues isl-5b6 + isl-lfo) ─────────────────────────────
+// Static SVG composition of the pitch surface + 22 dots + ball.  The
+// MatchDetail page renders this in a 2-column layout beside the
+// LiveCommentary feed for in_progress / scheduled matches; completed
+// matches keep the current commentary-only layout.  When the `events`
+// prop is supplied, the useChoreographyQueue hook (isl-lfo) drives
+// per-second dot motion in lockstep with the commentary feed.
 export { PitchView } from './ui/pitch/PitchView';
 export type { PitchViewProps } from './ui/pitch/PitchView';
 export { PitchSurface } from './ui/pitch/PitchSurface';
+export {
+  LIVE_TICK_MS as PITCH_LIVE_TICK_MS,
+  useChoreographyQueue,
+} from './ui/pitch/useChoreographyQueue';
+export type {
+  PitchEventInput,
+  UseChoreographyQueueInput,
+  UseChoreographyQueueOutput,
+} from './ui/pitch/useChoreographyQueue';
+export { PitchDebugOverlay } from './ui/pitch/PitchDebugOverlay';
+export type { PitchDebugOverlayProps } from './ui/pitch/PitchDebugOverlay';
 
 // ── League standings (Supabase-backed) ────────────────────────────────────
 // Replaces the legacy localStorage-based `computeStandings` in

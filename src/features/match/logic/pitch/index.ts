@@ -37,3 +37,17 @@ export type {
   PitchState,
   PlayerDot,
 } from './pitchState';
+
+// ── Choreographer (issue isl-lfo) ───────────────────────────────────────
+// Pure archetype → keyframe reducer + deterministic RNG helpers.  The
+// hook layer (ui/pitch/useChoreographyQueue.ts) consumes these.
+export {
+  ARCHETYPE_BUDGET_MS,
+  choreographArchetype,
+  eventSeed,
+  mulberry32,
+} from './choreographer';
+export type {
+  ChoreographyPayload,
+  Keyframe,
+} from './choreographer';
