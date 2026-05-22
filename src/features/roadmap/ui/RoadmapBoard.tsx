@@ -50,6 +50,7 @@ import {
   groupBoardItemsByStatus,
   reprioritizeNeighbours,
 } from '../logic/priorityOrder';
+import { pickArchitectIdea } from '../logic/architectRoulette';
 import {
   createItem,
   deleteItem,
@@ -400,6 +401,54 @@ export function RoadmapBoard() {
     [db, isAdmin, bumpRefresh],
   );
 
+  // ── Architect Roulette (isl-aak) ────────────────────────────────────────
+  // The "Let the Cosmic Architect pick the next idea" button:
+  //   1. Weighted-pick an item from the Ideas column via the pure helper.
+  //   2. Find its rendered <article> via the data-roadmap-card-id
+  //      attribute the card wears.
+  //   3. scrollIntoView + a brief CSS animation pulse so the picked
+  //      card visually catches the eye.
+  //
+  // Declared BEFORE the conditional `!loaded` early-return below so the
+  // hook order stays stable across renders (React's rules-of-hooks).
+  /**
+   * Trigger the weighted pick and scroll the chosen card into view.
+   * No-op when the ideas column is empty (defensive — the button is
+   * hidden in that case anyway).  Uses `document.querySelector` for
+   * the one-time imperative scroll rather than threading a ref per
+   * card through the column tree — the data attribute approach is
+   * cheap, contained, and survives unrelated re-renders.
+   */
+  const handleArchitectRoulette = useCallback(() => {
+    const merged: BoardItem[] = [
+      ...supabaseItems.map(fromSupabase),
+      ...bdIssues.map(fromBd),
+      ...sessions.map(fromSession),
+    ];
+    const picked = pickArchitectIdea(merged);
+    if (!picked) return;
+
+    // Compose the selector key — must match the format the card writes
+    // out in its data-roadmap-card-id attribute.
+    const selector = `[data-roadmap-card-id="${picked.kind}-${picked.id}"]`;
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el) return;
+
+    // Scroll the picked card to roughly the centre of the viewport so
+    // it's not buried under the sticky header.
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Trigger the highlight animation by toggling a class.  Removing
+    // and re-adding via a reflow lets a fast double-click on the button
+    // re-trigger the animation on the same card without waiting for
+    // the previous instance to finish.
+    el.classList.remove('roadmap-architect-pulse');
+    // Force a reflow so the browser registers the class removal before
+    // we add it back — otherwise the second click is a no-op visually.
+    void el.offsetWidth;
+    el.classList.add('roadmap-architect-pulse');
+  }, [supabaseItems, bdIssues, sessions]);
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   if (!loaded) {
@@ -423,6 +472,11 @@ export function RoadmapBoard() {
   const bdCount       = bdIssues.length;
   const supabaseCount = supabaseItems.length;
   const sessionCount  = sessions.length;
+
+  // Ideas-column size drives the visibility of the Architect-roulette
+  // button — kept here next to the legend-strip counts for symmetry
+  // even though the handler is declared above the early return.
+  const ideaCount = grouped.idea.length;
 
   return (
     <>
@@ -473,6 +527,35 @@ export function RoadmapBoard() {
         )}
         {bdSyncedAt && (
           <span>synced · {bdSyncedAt.slice(0, 16).replace('T', ' ')}</span>
+        )}
+
+        {/* ── Architect Roulette (isl-aak) ─────────────────────────────
+            Tiny chaos-director affordance that picks a random card from
+            the Ideas column weighted by inverse priority.  Only shown
+            when at least one idea exists so the button never lands on
+            an empty distribution. */}
+        {ideaCount > 0 && (
+          <button
+            type="button"
+            onClick={handleArchitectRoulette}
+            title="Let the Cosmic Architect pick the next idea"
+            aria-label="Let the Cosmic Architect pick the next idea"
+            style={{
+              marginLeft: 'auto',
+              padding: '4px 10px',
+              border: `1px solid ${COLORS.quantum}`,
+              background: 'transparent',
+              color: COLORS.quantum,
+              fontFamily: 'Space Mono, monospace',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+            }}
+          >
+            ◇ Architect&apos;s Pick
+          </button>
         )}
       </div>
 
@@ -559,6 +642,12 @@ export function RoadmapBoard() {
       )}
 
       {/* ── Inline responsive grid styles ─────────────────────────────── */}
+      {/* The .roadmap-architect-pulse animation is the visual response
+          to a successful Architect-roulette pick — a 1.4s glow + border
+          flash that fades out so the card returns to its normal chrome.
+          Box-shadow uses COLORS.quantum (#9A5CF4) at half opacity so the
+          pulse blends with the existing left-edge bd accent rather than
+          fighting it. */}
       <style>{`
         .roadmap-board-grid {
           display: grid;
@@ -570,6 +659,14 @@ export function RoadmapBoard() {
         }
         @media (max-width: 640px) {
           .roadmap-board-grid { grid-template-columns: 1fr; }
+        }
+        .roadmap-architect-pulse {
+          animation: roadmap-architect-pulse 1.4s ease-out 1;
+        }
+        @keyframes roadmap-architect-pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(154, 92, 244, 0); }
+          25%  { box-shadow: 0 0 0 4px rgba(154, 92, 244, 0.55); }
+          100% { box-shadow: 0 0 0 0 rgba(154, 92, 244, 0); }
         }
       `}</style>
     </>

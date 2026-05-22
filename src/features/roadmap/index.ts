@@ -59,6 +59,11 @@ export type { PrioritySwap, PriorityBucket } from './logic/priorityOrder';
 // reuse the same translations without re-encoding the table.
 export { mapBdStatus, mapBdPriority } from './logic/bdMapping';
 
+// ── Logic — Architect Roulette (issue isl-aak) ─────────────────────────────
+// Weighted-random pick from the Ideas column for the chaos-director-themed
+// "let the cosmos decide" button on the roadmap board.
+export { pickArchitectIdea } from './logic/architectRoulette';
+
 // ── API (Supabase queries, injected client, Zod-validated) ─────────────────
 export {
   listItems,
