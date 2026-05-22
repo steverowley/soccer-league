@@ -71,7 +71,10 @@ const PODIUM_THRESHOLD = 3;
  *
  * @returns JSX element.
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Leaderboards(): JSX.Element {
+  usePageTitle('Leaderboards');
   const db = useSupabase();
 
   const [wagers, setWagers] = useState<WagerLeaderboardEntry[]>([]);

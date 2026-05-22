@@ -86,7 +86,10 @@ const ALL_TEAMS: TeamWithLeagueMeta[] = (() => {
  * Filter state lives here and is passed down to LeagueFilter — no global
  * state needed since only this page owns the filter.
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Teams() {
+  usePageTitle('Teams');
   const [filter, setFilter] = useState<string>(FILTER_ALL);
 
   // When filter === FILTER_ALL show the full pre-built flat list; otherwise

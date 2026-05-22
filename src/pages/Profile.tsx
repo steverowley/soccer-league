@@ -65,7 +65,10 @@ const NO_PLAYER = '';
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Profile() {
+  usePageTitle('Profile');
   const db = useSupabase();
   const navigate = useNavigate();
   const { user, profile, loading, refreshProfile, signOut } = useAuth();

@@ -72,7 +72,10 @@ const DEFAULT_VOTE = MIN_VOTE;
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Voting() {
+  usePageTitle('Season Voting');
   const db = useSupabase();
   const { user, profile, refreshProfile } = useAuth();
 

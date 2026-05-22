@@ -61,7 +61,10 @@ const LEADERBOARD_RANK_TOP_N = 3;
  *
  * @returns {JSX.Element}
  */
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+
 export default function Idols() {
+  usePageTitle('Idols');
   const db = useSupabase();
 
   const [board,     setBoard]     = useState<any>({ global: [], byTeam: {} });

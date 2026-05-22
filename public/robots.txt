@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /wagers
+Disallow: /reset-password
+
+Sitemap: https://steverowley.github.io/soccer-league/sitemap.xml
