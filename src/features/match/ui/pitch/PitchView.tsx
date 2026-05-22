@@ -96,11 +96,45 @@ const ARCHITECT_FLAIR_MS = 600;
  * lockstep with the commentary feed.  When omitted, the component
  * paints the static 4-4-2 rest state — same as the isl-5b6 baseline.
  */
+/**
+ * Minimal player descriptor the pitch view needs to render one dot.
+ * Real callers (MatchPitchPanel) hydrate from the players table; the
+ * `id` field is what the choreographer keys motion off so it must be
+ * stable across re-renders.
+ *
+ * `jersey_number` is optional — surfaced as a small label inside the
+ * dot when the viewport is wide enough to read at the default radius.
+ */
+export interface PitchPlayerInput {
+  id:            string;
+  name:          string;
+  /** Two-letter position abbreviation (GK / DF / MF / FW). */
+  position:      string;
+  /** Optional jersey number rendered inside the dot when room allows. */
+  jersey_number?: number | null;
+}
+
 export interface PitchViewProps {
   /** Home team formation key.  Defaults to 4-4-2. */
   homeFormation?: FormationKey;
   /** Away team formation key.  Defaults to 4-4-2. */
   awayFormation?: FormationKey;
+  /**
+   * 11 home-side player descriptors in slot order (GK first).  When
+   * omitted, synthetic positional ids fall back to the pre-isl-6da
+   * rest-state behaviour so the component still renders meaningfully
+   * during loading / standalone use.
+   */
+  homePlayers?:   readonly PitchPlayerInput[];
+  /** 11 away-side player descriptors in slot order (GK first). */
+  awayPlayers?:   readonly PitchPlayerInput[];
+  /**
+   * Team brand colour for each side — drives the dot fill.  Falls
+   * back to the canonical dust (home) / quantum (away) palette when
+   * either side's colour is missing, matching the isl-5b6 baseline.
+   */
+  homeTeamColor?: string | null;
+  awayTeamColor?: string | null;
   /**
    * Visible match-event stream — when present each new event drives a
    * choreography keyframe via the useChoreographyQueue hook.  Empty /
@@ -154,6 +188,10 @@ export interface PitchViewProps {
 export function PitchView({
   homeFormation = DEFAULT_FORMATION,
   awayFormation = DEFAULT_FORMATION,
+  homePlayers,
+  awayPlayers,
+  homeTeamColor,
+  awayTeamColor,
   events,
   paused,
   currentMinute,
@@ -184,13 +222,30 @@ export function PitchView({
   }, []);
   const motionPaused = (paused ?? false) || reducedMotion || tabHidden;
 
-  // ── Synthetic positional ids ──────────────────────────────────────────
-  // Real-player wiring lands in 4/6 (isl-6da); for now we use stable
-  // positional ids ("home-0".."home-10").  The choreographer keys
-  // motion off these ids so swapping to real player ids later is just
-  // a string substitution at the call site.
-  const homeIds = Array.from({ length: 11 }, (_, i) => `home-${i}`);
-  const awayIds = Array.from({ length: 11 }, (_, i) => `away-${i}`);
+  // ── Player id resolution (isl-6da) ────────────────────────────────────
+  // Real player ids when the caller supplied them; otherwise fall back
+  // to synthetic positional labels ("home-0".."home-10") so the rest-
+  // state preview + standalone use cases still paint dots.  The
+  // choreographer keys motion off whichever id flavour lands here.
+  // If a caller supplied fewer than 11 players for either side we pad
+  // with synthetic ids — better than refusing to render at all when a
+  // partial-squad team would otherwise leave a half-empty pitch.
+  const homeIds: string[] = Array.from({ length: 11 }, (_, i) =>
+    homePlayers?.[i]?.id ?? `home-${i}`,
+  );
+  const awayIds: string[] = Array.from({ length: 11 }, (_, i) =>
+    awayPlayers?.[i]?.id ?? `away-${i}`,
+  );
+
+  // Build lookup maps so the renderer can pull jersey numbers + names
+  // by dot id without searching the supplied player array on every
+  // render.  Slot index → player; absent slots stay undefined.
+  const homePlayerBySlot = new Map<number, PitchPlayerInput | undefined>();
+  const awayPlayerBySlot = new Map<number, PitchPlayerInput | undefined>();
+  for (let i = 0; i < 11; i++) {
+    homePlayerBySlot.set(i, homePlayers?.[i]);
+    awayPlayerBySlot.set(i, awayPlayers?.[i]);
+  }
 
   // ── Animated state via the choreography hook (isl-lfo) ────────────────
   // When events are provided, the hook drives per-tick motion in
@@ -363,38 +418,86 @@ export function PitchView({
           preserveAspectRatio="xMidYMid meet"
           style={{ display: 'block' }}
         >
-          {/* Players: dust-faint outline + per-side fill so home / away
-              can be told apart at a glance.  Home = dust (the canonical
-              "subject" colour), Away = quantum (focus colour) — matches
-              the relationship-graph kind-colour convention.
-              CSS transition on cx/cy delegates motion to the GPU — no
-              rAF loop needed (isl-lfo).  The transition string is
-              swapped to `'none'` under reduced-motion / tab-hidden so
-              accessibility + battery-life concerns are honoured (isl-7rh).
-              An active Architect flair (isl-u8u) adds a quantum
-              drop-shadow halo to the involved player dot — purely
-              visual, no layout impact. */}
+          {/* Players (isl-6da):
+                • Fill inherits the team's brand colour when supplied;
+                  falls back to dust (home) / quantum (away) so the
+                  rest-state preview still reads cleanly when no
+                  match row is attached.
+                • Goalkeepers (slotIndex 0) get a thin quantum ring
+                  so the eye picks out the keeper at a glance — even
+                  at narrow viewport widths where the dot itself is
+                  small.
+                • Jersey numbers render as a tiny mono label inside
+                  the dot when the player carries one.  The label
+                  uses an SVG <text> with `pointer-events: none` so
+                  it never intercepts the choreographer's hover/click
+                  paths (none today, but kept consistent with the
+                  relationship-graph node convention).
+                • An active Architect flair (isl-u8u) layers a
+                  quantum drop-shadow halo on the involved dot. */}
           {state.players.map((p) => {
             const isFlared = flair && flair.playerId === p.id;
+            const isKeeper = p.slotIndex === 0;
+            const sidePlayer =
+              p.side === 'home' ? homePlayerBySlot.get(p.slotIndex) : awayPlayerBySlot.get(p.slotIndex);
+            const fallbackFill = p.side === 'home' ? COLORS.dust : COLORS.quantum;
+            const fill =
+              (p.side === 'home' ? homeTeamColor : awayTeamColor) ?? fallbackFill;
+            const cx = p.x * PITCH_VIEWBOX_WIDTH;
+            const cy = p.y * PITCH_VIEWBOX_HEIGHT;
             return (
-              <circle
-                key={p.id}
-                cx={p.x * PITCH_VIEWBOX_WIDTH}
-                cy={p.y * PITCH_VIEWBOX_HEIGHT}
-                r={PLAYER_RADIUS}
-                fill={p.side === 'home' ? COLORS.dust : COLORS.quantum}
-                stroke={COLORS.abyss}
-                strokeWidth={0.3}
-                style={{
-                  transition: dotTransition,
-                  // Drop-shadow filter renders as a soft glow — quantum
-                  // colour echoes the focus-tier palette so the eye
-                  // immediately reads "the cosmos touched this dot".
-                  filter: isFlared
-                    ? `drop-shadow(0 0 1.5px ${COLORS.quantum}) drop-shadow(0 0 3px ${COLORS.quantum})`
-                    : undefined,
-                }}
-              />
+              <g key={p.id} style={{ transition: dotTransition }}>
+                {/* GK ring — rendered FIRST so the dot fill paints
+                    over its inner edge cleanly.  1.4× radius, thin
+                    quantum stroke; no animation cost. */}
+                {isKeeper && (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={PLAYER_RADIUS * 1.4}
+                    fill="none"
+                    stroke={COLORS.quantum}
+                    strokeWidth={0.4}
+                    style={{ transition: dotTransition }}
+                  />
+                )}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={PLAYER_RADIUS}
+                  fill={fill}
+                  stroke={COLORS.abyss}
+                  strokeWidth={0.3}
+                  style={{
+                    transition: dotTransition,
+                    filter: isFlared
+                      ? `drop-shadow(0 0 1.5px ${COLORS.quantum}) drop-shadow(0 0 3px ${COLORS.quantum})`
+                      : undefined,
+                  }}
+                />
+                {sidePlayer?.jersey_number != null && (
+                  <text
+                    x={cx}
+                    y={cy + 0.6}
+                    textAnchor="middle"
+                    style={{
+                      // 1.6 SVG units ≈ 8 px at typical viewport
+                      // widths — small enough not to dominate the
+                      // dot but readable on desktop.  Tabular-nums
+                      // so two-digit jerseys align cleanly.
+                      fontFamily:    'Space Mono, monospace',
+                      fontSize:      1.6,
+                      fontWeight:    700,
+                      fill:          COLORS.abyss,
+                      pointerEvents: 'none',
+                      fontVariantNumeric: 'tabular-nums',
+                      transition:    dotTransition,
+                    }}
+                  >
+                    {sidePlayer.jersey_number}
+                  </text>
+                )}
+              </g>
             );
           })}
 

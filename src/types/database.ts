@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       agent_runs: {
@@ -82,6 +57,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
       }
       architect_interventions: {
         Row: {
@@ -823,6 +816,7 @@ export type Database = {
           id: string
           name: string
           nationality: string | null
+          preferred_formation: string
           style: string | null
           team_id: string | null
         }
@@ -832,6 +826,7 @@ export type Database = {
           id?: string
           name: string
           nationality?: string | null
+          preferred_formation?: string
           style?: string | null
           team_id?: string | null
         }
@@ -841,6 +836,7 @@ export type Database = {
           id?: string
           name?: string
           nationality?: string | null
+          preferred_formation?: string
           style?: string | null
           team_id?: string | null
         }
@@ -952,6 +948,60 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "matches"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_notification_sends: {
+        Row: {
+          match_id: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          match_id: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          match_id?: string
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_notification_sends_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "match_referee_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "match_notification_sends_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_notification_sends_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_notification_sends_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_notification_sends_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "wager_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1334,6 +1384,8 @@ export type Database = {
           id: string
           is_admin: boolean
           last_seen_at: string | null
+          notify_all_matches: boolean
+          notify_favourite_team: boolean
           username: string
         }
         Insert: {
@@ -1344,6 +1396,8 @@ export type Database = {
           id: string
           is_admin?: boolean
           last_seen_at?: string | null
+          notify_all_matches?: boolean
+          notify_favourite_team?: boolean
           username: string
         }
         Update: {
@@ -1354,6 +1408,8 @@ export type Database = {
           id?: string
           is_admin?: boolean
           last_seen_at?: string | null
+          notify_all_matches?: boolean
+          notify_favourite_team?: boolean
           username?: string
         }
         Relationships: [
@@ -1384,6 +1440,61 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth_key: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_used_at: string
+          p256dh_key: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_used_at?: string
+          p256dh_key: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_used_at?: string
+          p256dh_key?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "wager_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1978,7 +2089,31 @@ export type Database = {
       }
     }
     Functions: {
+      admin_add_player: {
+        Args: {
+          p_jersey_number: number
+          p_name: string
+          p_overall_rating: number
+          p_position: string
+          p_starter: boolean
+          p_team_id: string
+        }
+        Returns: string
+      }
+      admin_complete_match: {
+        Args: { p_away_score: number; p_home_score: number; p_match_id: string }
+        Returns: Json
+      }
+      admin_fast_forward_matches: { Args: { p_hours: number }; Returns: number }
+      admin_inject_narrative: {
+        Args: { p_kind: string; p_summary: string }
+        Returns: undefined
+      }
       admin_reset_season: { Args: never; Returns: Json }
+      admin_set_season_status: {
+        Args: { p_season_id: string; p_status: string }
+        Returns: undefined
+      }
       assign_match_referee: {
         Args: { p_match_id: string; p_referee_id: string }
         Returns: undefined
@@ -2130,10 +2265,8 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
 } as const
+

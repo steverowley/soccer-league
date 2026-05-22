@@ -240,6 +240,32 @@ export async function getUpcomingMatches(limit = 6) {
   return data ?? [];
 }
 
+/**
+ * Fetch a single match with the related rows the detail page renders.
+ *
+ * Selects (one round-trip):
+ *   • The match row itself + the parent competition (id/name/type/format).
+ *   • Both teams via the disambiguated `home_team:` / `away_team:` joins,
+ *     each carrying the FULL team row plus the team's manager (id, name,
+ *     preferred_formation, style) and the team's player roster
+ *     (id, name, position, starter, jersey_number, overall_rating).
+ *     The manager + player joins are what the Pitch View needs to
+ *     render the real tactical shape per team (isl-6da) — adding
+ *     them here keeps the page on a single round-trip; the join
+ *     payload is well under 100 KB for a full 22-man squad and the
+ *     match's own row is the dominant cost.
+ *   • Per-player match stats joined to the player row so the Stats
+ *     section can render names + outcome stats together.
+ *
+ * Throws on error — the caller (MatchDetail) renders an inline
+ * "Unknown Match" surface that preserves the URL.
+ *
+ * @param matchId  UUID of the match to fetch.
+ * @returns        The joined match row.  Caller narrows with the
+ *                 component-side `Match` typing — this helper stays
+ *                 loosely typed because the joined nested shape is
+ *                 too wide to type-import without churn.
+ */
 export async function getMatch(matchId: string) {
   const { data, error } = await supabase
     .from('matches')
@@ -247,8 +273,16 @@ export async function getMatch(matchId: string) {
       `
       *,
       competitions (id, name, type, format),
-      home_team:teams!matches_home_team_id_fkey (*),
-      away_team:teams!matches_away_team_id_fkey (*),
+      home_team:teams!matches_home_team_id_fkey (
+        *,
+        managers (id, name, preferred_formation, style),
+        players (id, name, position, starter, jersey_number, overall_rating)
+      ),
+      away_team:teams!matches_away_team_id_fkey (
+        *,
+        managers (id, name, preferred_formation, style),
+        players (id, name, position, starter, jersey_number, overall_rating)
+      ),
       match_player_stats (
         *,
         players (id, name, position, overall_rating)

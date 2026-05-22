@@ -1373,6 +1373,71 @@ function toPitchEvent(
 }
 
 /**
+ * One player row from getMatch's nested `teams.players` join — the
+ * fields PitchView needs to render a dot with team colours, GK ring,
+ * and jersey number (isl-6da).  Kept narrow on purpose so the loose
+ * `getMatch` return type (Json-nested) narrows cleanly at this seam.
+ */
+interface MatchPlayerRow {
+  id:            string;
+  name:          string;
+  position:      string;
+  starter:       boolean;
+  jersey_number: number | null;
+  overall_rating: number | null;
+}
+
+/**
+ * Supported formation keys as strings, mirroring the FormationKey
+ * union from `@features/match/logic/pitch/formations.ts`.  The
+ * manager column is checked at the DB layer (migration 0045) so
+ * any value that lands here is already in this set — but we narrow
+ * with a runtime guard before passing to FormationKey-typed code
+ * so a future drift fails loud at the boundary, not silently in
+ * the renderer.
+ */
+const SUPPORTED_FORMATIONS = ['4-4-2', '3-4-3', '4-5-1', '5-4-1'] as const;
+type SupportedFormation = (typeof SUPPORTED_FORMATIONS)[number];
+
+/**
+ * Narrow a free-text formation column value to a SupportedFormation.
+ * Falls back to '4-4-2' on miss so a malformed DB row or a future
+ * formation added before this list is updated still paints.
+ */
+function narrowFormation(raw: unknown): SupportedFormation {
+  return typeof raw === 'string' && (SUPPORTED_FORMATIONS as readonly string[]).includes(raw)
+    ? (raw as SupportedFormation)
+    : '4-4-2';
+}
+
+/**
+ * Pick the starting XI from a team's full roster in slot order
+ * (GK first).  Mirrors the engine's selection rule from
+ * `src/gameEngine.js` ≈ line 258: `ORDER BY starter DESC,
+ * overall_rating DESC, id ASC` so the commentary feed and the
+ * pitch view always name the same 11 players.
+ *
+ * Returns at most 11 rows.  Teams with fewer than 11 players
+ * (legacy fixtures, a fresh expansion squad) return whatever
+ * they have — PitchView pads the rest with synthetic ids so the
+ * surface stays full.
+ *
+ * @param players  Full roster array from getMatch.
+ * @returns        Up to 11 players ordered for the formation slots.
+ */
+function pickStartingXI(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
+  // Stable sort: clone first because Array.prototype.sort mutates.
+  const sorted = [...players].sort((a, b) => {
+    if (a.starter !== b.starter) return a.starter ? -1 : 1;
+    const ra = a.overall_rating ?? 0;
+    const rb = b.overall_rating ?? 0;
+    if (ra !== rb) return rb - ra;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  return sorted.slice(0, 11);
+}
+
+/**
  * Standalone panel that fetches + subscribes to a single match's
  * events and renders the choreographed <PitchView>.
  *
@@ -1405,16 +1470,39 @@ function MatchPitchPanel({
 }) {
   const db = useSupabase();
   const [events, setEvents] = useState<MatchEventRow[]>([]);
-  const [meta,   setMeta]   = useState<{ homeShort: string | null; awayShort: string | null }>({
-    homeShort: null,
-    awayShort: null,
+  /**
+   * Cached match metadata used to drive both the choreographer
+   * (homeShort / awayShort resolve `payload.team` strings) and the
+   * isl-6da rendering (formation + colour + starting XI per side).
+   * Centralising into one state slot avoids three useState ping-
+   * pongs after the initial fetch lands.
+   */
+  const [meta, setMeta] = useState<{
+    homeShort:     string | null;
+    awayShort:     string | null;
+    homeFormation: SupportedFormation;
+    awayFormation: SupportedFormation;
+    homeColor:     string | null;
+    awayColor:     string | null;
+    homePlayers:   MatchPlayerRow[];
+    awayPlayers:   MatchPlayerRow[];
+  }>({
+    homeShort:     null,
+    awayShort:     null,
+    homeFormation: '4-4-2',
+    awayFormation: '4-4-2',
+    homeColor:     null,
+    awayColor:     null,
+    homePlayers:   [],
+    awayPlayers:   [],
   });
 
   // ── Initial fetch ─────────────────────────────────────────────────────
-  // Two queries in parallel: the match row (for team short_names so we
-  // can resolve `payload.team`) and the full event log.  Errors are
-  // logged + swallowed — the rest-state PitchView is a usable fallback
-  // and there's no need to surface a separate error chrome here.
+  // Two queries in parallel: the match row (for team short_names + the
+  // manager formation + roster + colour each PitchView dot needs) and
+  // the full event log.  Errors are logged + swallowed — the rest-
+  // state PitchView is a usable fallback and there's no need to
+  // surface a separate error chrome here.
   useEffect(() => {
     let cancelled = false;
     setEvents([]);
@@ -1425,9 +1513,48 @@ function MatchPitchPanel({
       .then(([m, evRows]) => {
         if (cancelled) return;
         setEvents(evRows);
+
+        // Narrow the loose getMatch return into the per-side shape
+        // PitchView consumes.  Each branch is independently optional
+        // so a half-joined row (e.g. RLS strips one column) still
+        // produces a renderable rest state instead of throwing.
+        const matchRow = (m ?? {}) as {
+          home_team?: {
+            short_name?: string | null;
+            color?:      string | null;
+            managers?:   Array<{ preferred_formation?: string | null }> | null;
+            players?:    MatchPlayerRow[] | null;
+          } | null;
+          away_team?: {
+            short_name?: string | null;
+            color?:      string | null;
+            managers?:   Array<{ preferred_formation?: string | null }> | null;
+            players?:    MatchPlayerRow[] | null;
+          } | null;
+        };
+        const homeTeam = matchRow.home_team ?? null;
+        const awayTeam = matchRow.away_team ?? null;
+
+        // Manager formation: pick the first manager row's formation
+        // (a team has at most one manager today; the join returns an
+        // array because PostgREST embeds 1:N relations that way).
+        const homeFormation = narrowFormation(homeTeam?.managers?.[0]?.preferred_formation);
+        const awayFormation = narrowFormation(awayTeam?.managers?.[0]?.preferred_formation);
+
+        // Starting XI: deterministic engine-aligned ordering so the
+        // commentary and pitch reference the same 11 players.
+        const homePlayers = pickStartingXI(homeTeam?.players ?? []);
+        const awayPlayers = pickStartingXI(awayTeam?.players ?? []);
+
         setMeta({
-          homeShort: (m as { home_team?: { short_name?: string | null } } | null)?.home_team?.short_name ?? null,
-          awayShort: (m as { away_team?: { short_name?: string | null } } | null)?.away_team?.short_name ?? null,
+          homeShort:     homeTeam?.short_name ?? null,
+          awayShort:     awayTeam?.short_name ?? null,
+          homeFormation,
+          awayFormation,
+          homeColor:     homeTeam?.color ?? null,
+          awayColor:     awayTeam?.color ?? null,
+          homePlayers,
+          awayPlayers,
         });
       })
       .catch((err) => {
@@ -1460,6 +1587,21 @@ function MatchPitchPanel({
   return (
     <PitchView
       events={pitchEvents}
+      // Real tactical shape per team (isl-6da).  meta.homeFormation
+      // / awayFormation are seeded from the resolved match.managers
+      // rows; if the join missed they fall back to '4-4-2' via
+      // narrowFormation, so the prop is always a valid FormationKey.
+      homeFormation={meta.homeFormation}
+      awayFormation={meta.awayFormation}
+      // Starting XI for each side, slot-ordered.  Empty arrays are
+      // tolerated downstream — PitchView synthesises ids when fewer
+      // than 11 players are supplied.
+      homePlayers={meta.homePlayers}
+      awayPlayers={meta.awayPlayers}
+      // Team brand colour drives the dot fill; null falls back to
+      // the canonical dust / quantum palette inside PitchView.
+      homeTeamColor={meta.homeColor}
+      awayTeamColor={meta.awayColor}
       {...(homeTeamName !== undefined && { homeTeamName })}
       {...(awayTeamName !== undefined && { awayTeamName })}
       {...(homeScore    !== undefined && { homeScore })}
