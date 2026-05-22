@@ -321,7 +321,39 @@ interface InterventionRow {
 // ── Deno runtime handler ────────────────────────────────────────────────────
 
 // @ts-ignore — `Deno` is only present at deploy time.
+// ── Shared-secret auth (see migration 0052) ──
+// Without this gate, anyone on the internet could POST and burn Anthropic
+// tokens on every invocation. The cron job (updated in 0052) sends
+// `Authorization: Bearer <vault.worker_shared_secret>`. Fails closed when
+// the env var is unset.
+
+// @ts-ignore — Deno-only API.
+const WORKER_SHARED_SECRET = Deno.env.get('WORKER_SHARED_SECRET') || '';
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const aa = enc.encode(a);
+  const bb = enc.encode(b);
+  if (aa.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i += 1) diff |= aa[i]! ^ bb[i]!;
+  return diff === 0;
+}
+
+function isAuthorized(req: Request): boolean {
+  if (!WORKER_SHARED_SECRET) {
+    console.warn('[architect-galaxy-tick] WORKER_SHARED_SECRET unset — rejecting all calls');
+    return false;
+  }
+  const header = req.headers.get('Authorization') ?? '';
+  if (!header.startsWith('Bearer ')) return false;
+  return timingSafeEqual(header.slice('Bearer '.length).trim(), WORKER_SHARED_SECRET);
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
+  if (!isAuthorized(req)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
   if (req.method !== 'POST' && req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
   }
