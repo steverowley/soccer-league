@@ -29,7 +29,6 @@ import {
   FixtureBrowser,
   ArchitectInterventionLog,
   TestingPanel,
-  RoadmapPanel,
   type AdminTab,
 } from '../features/admin/ui';
 
@@ -85,7 +84,6 @@ export default function Admin() {
             {activeTab === 'overview'  && <OverviewPanel              db={db} />}
             {activeTab === 'season'    && <SeasonControlsPanel        db={db} />}
             {activeTab === 'fixtures'  && <FixtureBrowser             db={db} />}
-            {activeTab === 'roadmap'   && <RoadmapPanel                       />}
             {activeTab === 'testing'   && <TestingPanel               db={db} />}
             {activeTab === 'architect' && <ArchitectInterventionLog   db={db} />}
           </div>

@@ -62,12 +62,6 @@ import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 import { MemoryWriteListener }      from './features/agents';
 
-// QuickCaptureFAB (issue isl-aal): admin-only floating "+" button that
-// opens a one-line idea-capture modal anywhere in the app.  Mounted once
-// at the app root inside <BrowserRouter> so it has access to useAuth().
-// Renders null for non-admins so it's safe to mount unconditionally.
-import { QuickCaptureFAB }          from './features/roadmap';
-
 // ── Service worker bootstrap ─────────────────────────────────────────────────
 // Registers `public/sw.js` once on app load if the browser supports
 // service workers.  Idempotent — re-registration with the same script URL
@@ -126,7 +120,6 @@ const EntityDetail = lazy(() => import('./pages/EntityDetail'));
 // distributions Phase 11 fills in.  Service-role RLS keeps the data
 // admin-only at the DB layer regardless of client-side gating.
 const WhatIf = lazy(() => import('./pages/WhatIf'));
-const Roadmap      = lazy(() => import('./pages/Roadmap'));
 // Seasonal archive (issue isl-aaj) — index + detail page for browsing
 // every completed season's lifecycle metadata.  Reusing existing data
 // only; no new tables.
@@ -270,16 +263,6 @@ createRoot(document.getElementById('root')!).render(
                   which itself rejects non-admins with HTTP 403. */}
               <Route path="admin"               element={<Admin />} />
 
-              {/* /roadmap (Phase B+).
-                  Curator-tended project management dashboard backed by
-                  the `roadmap_items` table (migration 0034).  Public-read
-                  so players can see what's coming; admin-only write via
-                  RLS keyed on `profiles.is_admin`.  Kanban layout with
-                  four columns: Ideas / Planned / In Progress / Shipped.
-                  Replaces ad-hoc tracking in Notion + chat threads, and
-                  cross-links to `bd` issues via the `bd_issue_id` field. */}
-              <Route path="roadmap"             element={<Roadmap />} />
-
               {/* /players/:playerId (Phase C).
                   Player profile page — name, team, position, bio, season
                   outcome stats (goals/assists/cards), and idol standing.
@@ -316,13 +299,6 @@ createRoot(document.getElementById('root')!).render(
               <Route path="admin/what-if"       element={<WhatIf />} />
             </Routes>
             </Suspense>
-            {/* Quick-capture FAB sits inside the router (so it can use
-                useAuth via the AuthProvider context above) but OUTSIDE
-                the Routes/Suspense pair so it stays mounted across
-                navigations — no flicker between page chunks, no need
-                to wait for the next route's lazy chunk to load before
-                the user can capture an idea. */}
-            <QuickCaptureFAB />
           </BrowserRouter>
         </AuthProvider>
       </SupabaseProvider>

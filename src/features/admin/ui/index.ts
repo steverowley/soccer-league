@@ -21,7 +21,6 @@ export { SeasonControlsPanel }          from './SeasonControlsPanel';
 export { FixtureBrowser }               from './FixtureBrowser';
 export { TestingPanel }                 from './TestingPanel';
 export { ArchitectInterventionLog }     from './ArchitectInterventionLog';
-export { RoadmapPanel }                 from './RoadmapPanel';
 
 // ── Shell pieces (consumed by pages/Admin.tsx) ───────────────────────────────
 export { AdminPageHero }                from './AdminPageHero';

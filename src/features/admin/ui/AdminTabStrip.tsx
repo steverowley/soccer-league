@@ -25,11 +25,10 @@ import {
  *   - overview   → OverviewPanel        (at-a-glance system stats)
  *   - season     → SeasonControlsPanel  (status + voting + enactment)
  *   - fixtures   → FixtureBrowser       (match table + manual completion)
- *   - roadmap    → RoadmapPanel         (bd-mirrored kanban board)
  *   - testing    → TestingPanel         (danger zone + injectors)
  *   - architect  → ArchitectInterventionLog
  */
-export type AdminTab = 'overview' | 'season' | 'fixtures' | 'roadmap' | 'testing' | 'architect';
+export type AdminTab = 'overview' | 'season' | 'fixtures' | 'testing' | 'architect';
 
 /**
  * Ordered tab descriptors driving the visual strip.  Order matches the
@@ -40,7 +39,6 @@ export const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: 'overview',  label: 'Overview'  },
   { id: 'season',    label: 'Season'    },
   { id: 'fixtures',  label: 'Fixtures'  },
-  { id: 'roadmap',   label: 'Roadmap'   },
   { id: 'testing',   label: 'Testing'   },
   { id: 'architect', label: 'Architect' },
 ];

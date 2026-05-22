@@ -37,12 +37,9 @@ import globals from 'globals';
 export default tseslint.config(
   // ── Global ignores ─────────────────────────────────────────────────────────
   // Files that should NEVER be linted: build output, deps, Deno Edge
-  // Functions (their own tooling), and the ISL Logo image.  We lint a
-  // narrow whitelist of Deno-free helpers inside edge functions (e.g.
-  // `bd-sync-now/pagination.ts`) by switching the ignore from a broad
-  // `supabase/functions/**` to per-function entry-point + sibling patterns
-  // — every Deno-only file still ignored, but plain TS shared with
-  // Vitest tests is now linted under the project baseline.
+  // Functions (their own tooling), and the ISL Logo image.  Edge function
+  // entry points use Deno-only globals + remote ESM imports that confuse
+  // the Node-targeted tsconfig.
   {
     ignores: [
       'dist/**',
@@ -224,9 +221,8 @@ export default tseslint.config(
 
   // ── Build-time helper scripts ──────────────────────────────────────────────
   // Anything under `scripts/` runs in Node before the bundler ever loads —
-  // typically wired to `predev` / `prebuild` in package.json (see
-  // `scripts/build-bd-snapshot.mjs`).  They need Node globals (console,
-  // process) but not browser ones.
+  // typically wired to `predev` / `prebuild` in package.json.  They need
+  // Node globals (console, process) but not browser ones.
   {
     files: ['scripts/**/*.{js,mjs,cjs,ts}'],
     languageOptions: {
