@@ -1,19 +1,3 @@
-<pre>
-══════════════════════════════════════════════════════════════════════════════
-   THE  INTERGALACTIC  SOCCER  LEAGUE    ·    EST. MMXXXVII    ·    VOL. I
-══════════════════════════════════════════════════════════════════════════════
-
-
-             S O C C E R ,
-             C H A R T E D   A C R O S S
-             T H E   S T A R S
-
-
-──────────────────────────────────────────────────────────────────────────────
-   RA 14ʰ 04ᵐ 12ˢ    ·    EPOCH MMXXXVII    ·    DEC −27° 19′    ·    LIVE
-──────────────────────────────────────────────────────────────────────────────
-</pre>
-
 # Intergalactic Soccer League
 
 A Blaseball-inspired social experience browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
