@@ -1,6 +1,6 @@
 # Intergalactic Soccer League
 
-A Blaseball-inspired social experiment browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
+A Blaseball-inspired social experience browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
 
 ![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.0-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.2-teal) ![Claude](https://img.shields.io/badge/Claude-Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.99-green)
 
@@ -55,7 +55,7 @@ This is a TypeScript + React app talking to a Supabase backend, with a Node work
 The four core ideas the codebase is organised around:
 
 1. **Emergent storytelling over exposed mechanics.** The LLM layer always deepens narrative, never reveals numbers.
-2. **Fan-driven collective agency.** Every feature feeds the shared social experiment.
+2. **Fan-driven collective agency.** Every feature feeds the shared social experience.
 3. **The Architect is the soul.** It's the game's identity, not a feature. Every new lever extends it.
 4. **Modular now, easy rewrites later.** Feature folders with hard boundaries, pure logic, event-bus side effects, generated types.
 

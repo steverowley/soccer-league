@@ -1,5 +1,5 @@
 // ── voting/api/enactment.ts ──────────────────────────────────────────────────
-// WHY: Closes the social experiment loop. The winning focus per team per season
+// WHY: Closes the social experience loop. The winning focus per team per season
 // is determined by `pickWinner()` (already exists) but was never applied to
 // the DB. This module queries the tally, calls `enactFocus()` for every team,
 // applies each mutation, writes `focus_enacted` audit rows, and logs an

@@ -2,7 +2,7 @@
 // WHY: Rate-limits the training clicker so fans can't farm infinite XP in a
 // tight loop. The cooldown also creates *temporal* engagement: a player
 // who visits daily accumulates more than one who binges once a week,
-// reinforcing the habit-forming loop the social experiment depends on.
+// reinforcing the habit-forming loop the social experience depends on.
 //
 // DESIGN CHOICES:
 //   - Cooldown is per-user, NOT per-player. A fan can click Team A's striker

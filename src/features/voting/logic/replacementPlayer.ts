@@ -25,7 +25,7 @@
 //     also a debut.
 //   • Stats are deliberately modest (60–72 overall) — rookies, not
 //     superstars.  Fans must watch them grow over many seasons; the slow
-//     burn IS the social experiment.
+//     burn IS the social experience.
 //   • Personality is drawn from the canonical PERS enum so the new
 //     player slots straight into the engine's agent system.
 //

@@ -1,7 +1,7 @@
 // ── tally.test.ts ───────────────────────────────────────────────────────────
 // WHY: Unit tests for vote tallying and winner determination. These ensure
 // the collective voting mechanic works correctly — getting this wrong would
-// enact the wrong focus and break the social experiment's trust.
+// enact the wrong focus and break the social experience's trust.
 
 import { describe, it, expect } from 'vitest';
 import { pickWinner, determineTeamFocuses, computeVotePercentages } from './tally';
