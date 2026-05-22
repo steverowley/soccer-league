@@ -40,6 +40,17 @@ export type {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export { getRecentNarratives, getRecentNarrativesByKinds } from './api/entities';
 
+// ── API — relationship graph fetch (issue isl-szm) ─────────────────────────
+// Three Zod-validated helpers that feed the relationship-graph viewer:
+// `getEntity` for the seed row, `getEntityRelationships` for the union of
+// outgoing + incoming edges, and `getEntitiesByIds` for bulk node-metadata
+// hydration after the subgraph extractor selects which ids to render.
+export {
+  getEntity,
+  getEntityRelationships,
+  getEntitiesByIds,
+} from './api/relationships';
+
 // ── API — referees (Phase 5a) ──────────────────────────────────────────────
 // Wraps the IEOB referee corps and the per-match assignment surface.
 // `match_referee_v` view + assign_match_referee RPC are introduced in
