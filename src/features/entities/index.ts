@@ -187,5 +187,6 @@ export type {
 // activation routes through `entityRoute()` to /entities/:id.
 export { RelationshipGraph } from './ui/relationshipGraph/RelationshipGraph';
 export type { RelationshipGraphProps } from './ui/relationshipGraph/RelationshipGraph';
-export { kindColor }   from './ui/relationshipGraph/kindColor';
-export { entityRoute } from './ui/relationshipGraph/entityRoute';
+export { kindColor }       from './ui/relationshipGraph/kindColor';
+export { entityRoute }     from './ui/relationshipGraph/entityRoute';
+export { useReducedMotion } from './ui/relationshipGraph/useReducedMotion';

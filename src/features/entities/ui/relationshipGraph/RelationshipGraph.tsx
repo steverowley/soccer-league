@@ -67,6 +67,7 @@ import type { Entity, EntityRelationship } from '../../types';
 
 import { entityRoute } from './entityRoute';
 import { kindColor } from './kindColor';
+import { useReducedMotion } from './useReducedMotion';
 import {
   useForceLayout,
   type EdgeInput,
@@ -95,6 +96,26 @@ const EDGE_STROKE_MAX = 3;
 
 /** Opacity applied to non-highlighted nodes/edges when something is focused. */
 const DIM_OPACITY = 0.35;
+
+/**
+ * Visually-hidden style for the aria-live announcement (sr-only pattern).
+ * Renders the live region into the accessibility tree but keeps it
+ * fully off-screen visually — screen readers pick it up, sighted users
+ * don't see a stray paragraph at the top of the graph.  Avoids the
+ * `display: none` trap, which would hide the region from assistive
+ * tech as well.
+ */
+const SR_ONLY_STYLE: CSSProperties = {
+  position:   'absolute',
+  width:      1,
+  height:     1,
+  padding:    0,
+  margin:     -1,
+  overflow:   'hidden',
+  clip:       'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border:     0,
+};
 
 // ── Public props ─────────────────────────────────────────────────────────────
 
@@ -321,13 +342,36 @@ export function RelationshipGraph({
     }));
   }, [subgraph.edges]);
 
+  // ── Motion + visibility gating (isl-7hp polish) ────────────────────
+  // `reducedMotion` honours the OS-level `prefers-reduced-motion`
+  // preference — when set, we keep the simulation paused so the user
+  // sees a static layout instead of the d3-force settle animation.
+  // `tabHidden` mirrors document.visibilityState so the per-frame
+  // physics loop halts when the tab loses focus, preventing wasted
+  // CPU on background tabs.
+  const reducedMotion = useReducedMotion();
+  const [tabHidden,    setTabHidden]    = useState<boolean>(() =>
+    typeof document !== 'undefined' && document.visibilityState === 'hidden',
+  );
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVis = () => setTabHidden(document.visibilityState === 'hidden');
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   // ── Layout ──────────────────────────────────────────────────────────
+  // `paused` aggregates the two motion-gate signals.  d3-force still
+  // settles in the background when the page becomes visible again
+  // (alpha resumes from its mid-flight value), so the user lands on a
+  // graph that finishes its layout silently rather than re-running it.
   const height = DEFAULT_HEIGHT;
   const layout = useForceLayout({
     nodes:  layoutNodes,
     edges:  layoutEdges,
     width,
     height,
+    paused: reducedMotion || tabHidden,
   });
 
   // ── Hover/focus state ───────────────────────────────────────────────
@@ -404,15 +448,59 @@ export function RelationshipGraph({
     activateNode(nodeId);
   };
 
+  // ── Screen-reader announcement (isl-7hp polish) ─────────────────────
+  // Visually hidden live region — screen readers announce the count
+  // once the layout has settled.  `polite` so the announcement queues
+  // behind any in-flight speech rather than interrupting; `atomic` so
+  // the whole sentence is read together each time it updates.
+  const seedName = seed.display_name ?? seed.name;
+  const connectionCount = layout.nodes.length - 1;
+  const announcement = `Showing ${connectionCount} ${connectionCount === 1 ? 'connection' : 'connections'} for ${seedName}.`;
+
+  // ── Per-node a11y description map (isl-7hp polish) ──────────────────
+  // For each non-seed node we surface "NAME, KIND, relationship to
+  // seed: KIND, strength: N" via aria-label so screen-reader users
+  // hear the same context sighted users get from hover.  We pick the
+  // FIRST edge linking the node to the seed (the subgraph extractor
+  // already sorted by |strength| desc, so first wins on parallel
+  // edges).  Non-adjacent nodes (second-hop satellites) get just
+  // "NAME, KIND" — no direct relationship label.
+  const seedAdjacency = new Map<string, { kind: string; strength: number }>();
+  for (const edge of edges) {
+    if (edge.from_id === seed.id && !seedAdjacency.has(edge.to_id)) {
+      seedAdjacency.set(edge.to_id, { kind: edge.kind, strength: edge.strength });
+    } else if (edge.to_id === seed.id && !seedAdjacency.has(edge.from_id)) {
+      seedAdjacency.set(edge.from_id, { kind: edge.kind, strength: edge.strength });
+    }
+  }
+
   return (
     <div ref={wrapperRef} className={className} style={wrapperStyle}>
+      {/* ── aria-live announcement ──────────────────────────────────────
+          Off-screen but still in the accessibility tree.  Updates as
+          the connection count changes (e.g. when the user navigates
+          to a different entity via a node click). */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={SR_ONLY_STYLE}
+      >
+        {announcement}
+      </div>
+
       <svg
         role="img"
-        aria-label={`Relationship graph for ${seed.display_name ?? seed.name}, ${layout.nodes.length - 1} connections`}
+        aria-label={`Relationship graph for ${seedName}, ${connectionCount} connections`}
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ display: 'block' }}
+        // `touch-action: none` so pinch + double-tap on the SVG area
+        // don't accidentally trigger the browser's page zoom (most
+        // common pain point on mobile Safari).  Pan / tap still work —
+        // the property only suppresses the gesture handler the
+        // browser would otherwise own.
+        style={{ display: 'block', touchAction: 'none' }}
       >
         {/* ── Edges ──────────────────────────────────────────────────── */}
         {layout.edges.map((edge) => (
@@ -430,6 +518,7 @@ export function RelationshipGraph({
             node={node}
             isSeed={node.id === seed.id}
             focusId={focusId}
+            relationshipToSeed={seedAdjacency.get(node.id) ?? null}
             onHoverChange={setFocusId}
             onActivate={handleNodeClick}
             onKeyDown={handleNodeKey}
@@ -510,6 +599,7 @@ function NodeMark({
   node,
   isSeed,
   focusId,
+  relationshipToSeed,
   onHoverChange,
   onActivate,
   onKeyDown,
@@ -517,12 +607,31 @@ function NodeMark({
   node: PositionedNode;
   isSeed: boolean;
   focusId: string | null;
+  /**
+   * The first-hop relationship from the seed to this node, if one
+   * exists.  Composed into the per-node aria-label so screen readers
+   * hear "NAME, KIND, relationship to seed: KIND, strength: N" in
+   * the same single utterance hover surfaces visually.  Null for
+   * the seed itself and for second-hop satellites.
+   */
+  relationshipToSeed: { kind: string; strength: number } | null;
   onHoverChange: (id: string | null) => void;
   onActivate:   (ev: MouseEvent<SVGGElement>, id: string) => void;
   onKeyDown:    (ev: KeyboardEvent<SVGGElement>, id: string) => void;
 }) {
   const kindStr = typeof node.kind === 'string' ? node.kind : 'unknown';
   const name    = typeof node.name === 'string' ? node.name : '…';
+
+  /**
+   * Compose the full aria-label string per the isl-7hp spec.  Seed
+   * nodes don't get an aria-label (they aren't focusable links — the
+   * user is already on that entity's page).
+   */
+  const ariaLabel = isSeed
+    ? undefined
+    : relationshipToSeed
+      ? `${name}, ${kindStr}, relationship to seed: ${relationshipToSeed.kind}, strength: ${relationshipToSeed.strength}`
+      : `${name}, ${kindStr}`;
 
   // Dim non-focused, non-seed nodes when something is focused.  The seed
   // stays at full opacity so the visual anchor never drops out.
@@ -543,7 +652,7 @@ function NodeMark({
       opacity={opacity}
       tabIndex={isSeed ? -1 : 0}
       role={isSeed ? undefined : 'link'}
-      aria-label={isSeed ? undefined : name}
+      aria-label={ariaLabel}
       style={{ cursor: isSeed ? 'default' : 'pointer', outline: 'none' }}
       onMouseEnter={() => onHoverChange(node.id)}
       onMouseLeave={() => onHoverChange(null)}
