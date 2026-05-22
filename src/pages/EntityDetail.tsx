@@ -53,6 +53,7 @@ import {
   listMemoriesForEntity,
   listSnippetsForEntity,
 } from '../features/agents';
+import { RelationshipGraph } from '../features/entities';
 import type {
   MemoryRow,
   PersonaRow,
@@ -361,6 +362,20 @@ export default function EntityDetail() {
                 </ul>
               )}
             </section>
+
+            {/* ── VI. Web of Influence ────────────────────────────────────
+                Drop-in relationship-graph widget (issue isl-uwq).  Renders
+                this entity's directly-connected web — pundits quoted by
+                journalists, referees in feuds with managers, etc.  The
+                component handles its own loading / empty / error states
+                and routes click-throughs to /entities/:id, so the next
+                entity is a single click away. */}
+            {entityId && (
+              <section style={{ margin: '24px 0' }}>
+                <h2 style={{ color: COLORS.dust, fontSize: 16, marginBottom: 12 }}>Web of influence</h2>
+                <RelationshipGraph entityId={entityId} />
+              </section>
+            )}
           </section>
         </Container>
       </main>

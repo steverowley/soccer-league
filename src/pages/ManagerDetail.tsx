@@ -37,6 +37,7 @@ import Header from '../components/Header';
 import { COLORS, Container, BackLink, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getManager, type ManagerWithContext } from '../lib/supabase';
+import { RelationshipGraph } from '../features/entities';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const { dust: DUST, abyss: ABYSS, flare: FLARE, hairline: HAIRLINE } = COLORS;
@@ -179,6 +180,11 @@ export default function ManagerDetail(): JSX.Element {
           <ManagerHero manager={manager} />
           <TacticalBio manager={manager} />
           <LoreTraits manager={manager} />
+          {/* Web of Influence (issue isl-uwq).  Drops in the relationship-
+              graph widget when the manager has an entity row (older
+              seeds may have entity_id = NULL).  The widget owns its
+              own loading/empty/error surfaces. */}
+          {manager.entity_id && <ManagerConnections entityId={manager.entity_id} />}
         </>
       )}
       <Footer />
@@ -283,6 +289,33 @@ function TacticalBio({ manager }: { manager: ManagerWithContext }): JSX.Element 
         }}>
           {styleLabel}
         </p>
+      </Container>
+    </section>
+  );
+}
+
+// ── Web of Influence (issue isl-uwq) ────────────────────────────────────────
+
+/**
+ * Drop-in `<RelationshipGraph>` section showing the manager's connections
+ * to players, rivals, journalists, association bodies, etc.  Rendered only
+ * when the manager has an entity row (older seeds may have entity_id null).
+ * The widget handles its own loading / empty / error surfaces.
+ *
+ * @param entityId  The manager's `entities.id` UUID.
+ */
+function ManagerConnections({ entityId }: { entityId: string }): JSX.Element {
+  return (
+    <section style={{ padding: '24px 0' }}>
+      <Container>
+        <SectionHeader
+          kicker="III"
+          label="Connections"
+          title="Web of Influence"
+        />
+        <div style={{ marginTop: 16 }}>
+          <RelationshipGraph entityId={entityId} />
+        </div>
       </Container>
     </section>
   );
