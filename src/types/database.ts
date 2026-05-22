@@ -1589,6 +1589,7 @@ export type Database = {
           created_at: string
           decree_type: string
           id: string
+          payload: Json
           player_id: string | null
           season_id: string
           sequence_order: number
@@ -1599,6 +1600,7 @@ export type Database = {
           created_at?: string
           decree_type: string
           id?: string
+          payload?: Json
           player_id?: string | null
           season_id: string
           sequence_order?: number
@@ -1609,6 +1611,7 @@ export type Database = {
           created_at?: string
           decree_type?: string
           id?: string
+          payload?: Json
           player_id?: string | null
           season_id?: string
           sequence_order?: number
