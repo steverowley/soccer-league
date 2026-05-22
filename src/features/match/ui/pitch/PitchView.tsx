@@ -24,11 +24,19 @@
 //   distinct from the ball without dominating.  Ball: 1.0 unit radius
 //   so the eye is drawn to it as the centre of action.
 
+import { useEffect, useState } from 'react';
+
 import { COLORS } from '../../../../components/Layout';
 import {
   initPitchState,
   type FormationKey,
 } from '../../logic/pitch';
+// useReducedMotion lives on the entities feature barrel — it's a
+// purely accessibility-themed media-query hook and intentionally
+// shared across features rather than duplicated.  The cross-feature
+// import is barrel-only (no deep path) so ESLint's
+// no-restricted-imports doesn't flag it.
+import { useReducedMotion } from '@features/entities';
 
 import { PitchSurface, PITCH_VIEWBOX_HEIGHT, PITCH_VIEWBOX_WIDTH } from './PitchSurface';
 import {
@@ -104,6 +112,16 @@ export interface PitchViewProps {
    * it because the choreographer is event-driven, not minute-driven.
    */
   currentMinute?: number;
+  /**
+   * Home team display name + score so the SVG aria-label can read
+   * out the natural-language scoreline for screen readers (isl-7rh).
+   * Omitting either falls back to a generic "Match pitch view"
+   * label.
+   */
+  homeTeamName?: string;
+  homeScore?:    number;
+  awayTeamName?: string;
+  awayScore?:    number;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -131,7 +149,33 @@ export function PitchView({
   events,
   paused,
   currentMinute,
+  homeTeamName,
+  homeScore,
+  awayTeamName,
+  awayScore,
 }: PitchViewProps = {}) {
+  // ── Motion gates (isl-7rh polish) ─────────────────────────────────────
+  // Aggregates three signals into a single boolean handed to the hook
+  // and used to suppress CSS transitions:
+  //   • Explicit `paused` prop (caller's choice).
+  //   • OS-level `prefers-reduced-motion: reduce` preference.
+  //   • Document visibility — when the tab is hidden we stop draining
+  //     the queue so a background match page burns zero CPU.
+  // The CSS transition is also stripped under any of these gates so a
+  // reduced-motion user lands on a static snapshot instead of a
+  // ghost-trail interpolation.
+  const reducedMotion = useReducedMotion();
+  const [tabHidden, setTabHidden] = useState<boolean>(() =>
+    typeof document !== 'undefined' && document.visibilityState === 'hidden',
+  );
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVis = () => setTabHidden(document.visibilityState === 'hidden');
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+  const motionPaused = (paused ?? false) || reducedMotion || tabHidden;
+
   // ── Synthetic positional ids ──────────────────────────────────────────
   // Real-player wiring lands in 4/6 (isl-6da); for now we use stable
   // positional ids ("home-0".."home-10").  The choreographer keys
@@ -152,9 +196,33 @@ export function PitchView({
     homePlayerIds: homeIds,
     awayPlayerIds: awayIds,
     events:        events ?? [],
-    paused:        paused ?? false,
+    paused:        motionPaused,
   });
   const state = choreography.state;
+
+  /**
+   * CSS transition string applied to every player + ball circle.
+   * Suppressed (`'none'`) when reduced motion / paused / tab hidden
+   * so the GPU doesn't interpolate between snapshots — the dot just
+   * jumps to its new position instantly.
+   */
+  const dotTransition = motionPaused
+    ? 'none'
+    : 'cx 600ms cubic-bezier(0.4, 0, 0.2, 1), cy 600ms cubic-bezier(0.4, 0, 0.2, 1)';
+
+  /**
+   * Natural-language description of the current pitch state for
+   * screen readers.  Falls back to a generic label when the parent
+   * doesn't supply score / team names — better than emitting a
+   * half-built sentence like "Match pitch view: 0".
+   */
+  const svgAriaLabel =
+    homeTeamName != null && awayTeamName != null && homeScore != null && awayScore != null
+      ? `Match pitch view. ${homeTeamName} ${homeScore}, ${awayTeamName} ${awayScore}. ` +
+        (events && events.length > 0
+          ? `Last event: ${events[events.length - 1]!.type.replace(/_/g, ' ')}.`
+          : 'No events yet.')
+      : 'Match pitch view.';
 
   // Build the static rest-state once for the first paint (before the
   // hook has ticked).  initPitchState is referenced lazily — the hook
@@ -188,6 +256,12 @@ export function PitchView({
       {/* ── Dot + ball layer ──────────────────────────────────────────── */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         <svg
+          // role="img" + aria-label expose a natural-language scoreline
+          // + last-event summary for screen readers (isl-7rh).  Sighted
+          // users get the same info from the commentary feed next door,
+          // so the label here is the SR-only restatement.
+          role="img"
+          aria-label={svgAriaLabel}
           viewBox={`0 0 ${PITCH_VIEWBOX_WIDTH} ${PITCH_VIEWBOX_HEIGHT}`}
           width="100%"
           height="100%"
@@ -199,7 +273,9 @@ export function PitchView({
               "subject" colour), Away = quantum (focus colour) — matches
               the relationship-graph kind-colour convention.
               CSS transition on cx/cy delegates motion to the GPU — no
-              rAF loop needed (isl-lfo). */}
+              rAF loop needed (isl-lfo).  The transition string is
+              swapped to `'none'` under reduced-motion / tab-hidden so
+              accessibility + battery-life concerns are honoured (isl-7rh). */}
           {state.players.map((p) => (
             <circle
               key={p.id}
@@ -209,7 +285,7 @@ export function PitchView({
               fill={p.side === 'home' ? COLORS.dust : COLORS.quantum}
               stroke={COLORS.abyss}
               strokeWidth={0.3}
-              style={{ transition: 'cx 600ms cubic-bezier(0.4, 0, 0.2, 1), cy 600ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+              style={{ transition: dotTransition }}
             />
           ))}
 
@@ -224,7 +300,7 @@ export function PitchView({
             fill={COLORS.astro}
             stroke={COLORS.abyss}
             strokeWidth={0.2}
-            style={{ transition: 'cx 600ms cubic-bezier(0.4, 0, 0.2, 1), cy 600ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+            style={{ transition: dotTransition }}
           />
         </svg>
       </div>

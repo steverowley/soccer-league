@@ -194,8 +194,31 @@ export default function MatchDetail() {
                         Supabase Realtime multiplexes channels and the
                         pitch should never block on the commentary's
                         render path.  A future lift could consolidate
-                        them into a shared parent. */}
-                    <MatchPitchPanel matchId={match.id} />
+                        them into a shared parent.
+                        Team names + scores are passed through so the
+                        SVG's aria-label can read out the scoreline for
+                        screen readers (isl-7rh polish). */}
+                    {(() => {
+                      // Pull team names + scores defensively from the
+                      // (loosely typed) match row so the aria-label
+                      // gets real values whenever they're available.
+                      // Conditional spread keeps strict-optional-prop
+                      // types happy by NOT setting a key when the
+                      // value would be undefined.
+                      const homeName = (match.home_team as { name?: string } | null | undefined)?.name;
+                      const awayName = (match.away_team as { name?: string } | null | undefined)?.name;
+                      const hs = typeof match.home_score === 'number' ? match.home_score : undefined;
+                      const as = typeof match.away_score === 'number' ? match.away_score : undefined;
+                      return (
+                        <MatchPitchPanel
+                          matchId={match.id}
+                          {...(homeName != null && { homeTeamName: homeName })}
+                          {...(awayName != null && { awayTeamName: awayName })}
+                          {...(hs != null && { homeScore: hs })}
+                          {...(as != null && { awayScore: as })}
+                        />
+                      );
+                    })()}
                   </div>
                   <div className="match-detail-commentary-col">
                     <LiveCommentary match={match} />
@@ -1327,12 +1350,29 @@ function toPitchEvent(
  * subscription) but doesn't share state — see the WHY block above for
  * the trade-off rationale.
  *
- * @param props.matchId  UUID of the match whose events drive the pitch.
- * @returns              Pitch panel subtree.  Renders the rest state
- *                       while events haven't arrived yet, then animates
- *                       per-event as new rows land.
+ * @param props.matchId       UUID of the match whose events drive the pitch.
+ * @param props.homeTeamName  Optional home team display name — surfaced
+ *                            in the SVG aria-label (isl-7rh).
+ * @param props.awayTeamName  Optional away team display name.
+ * @param props.homeScore     Current home score for the aria-label.
+ * @param props.awayScore     Current away score for the aria-label.
+ * @returns                   Pitch panel subtree.  Renders the rest
+ *                            state while events haven't arrived yet,
+ *                            then animates per-event as new rows land.
  */
-function MatchPitchPanel({ matchId }: { matchId: string }) {
+function MatchPitchPanel({
+  matchId,
+  homeTeamName,
+  awayTeamName,
+  homeScore,
+  awayScore,
+}: {
+  matchId: string;
+  homeTeamName?: string;
+  awayTeamName?: string;
+  homeScore?:    number;
+  awayScore?:    number;
+}) {
   const db = useSupabase();
   const [events, setEvents] = useState<MatchEventRow[]>([]);
   const [meta,   setMeta]   = useState<{ homeShort: string | null; awayShort: string | null }>({
@@ -1387,5 +1427,13 @@ function MatchPitchPanel({ matchId }: { matchId: string }) {
     [events, meta],
   );
 
-  return <PitchView events={pitchEvents} />;
+  return (
+    <PitchView
+      events={pitchEvents}
+      {...(homeTeamName !== undefined && { homeTeamName })}
+      {...(awayTeamName !== undefined && { awayTeamName })}
+      {...(homeScore    !== undefined && { homeScore })}
+      {...(awayScore    !== undefined && { awayScore })}
+    />
+  );
 }
