@@ -43,6 +43,7 @@ import {
   type PlayerRecentMatch,
   type NarrativeMention,
 } from '../features/match';
+import { RelationshipGraph } from '../features/entities';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const {
@@ -84,6 +85,13 @@ interface PlayerFields {
   personality:   string | null;
   is_active:     boolean;
   team_id:       string | null;
+  /**
+   * Universal Agent System entity row id (FK to `entities.id`).  Used by
+   * the relationship-graph section to seed the subgraph extractor.  Older
+   * players (pre-migration 0002) may have a null entity_id; the section
+   * is hidden in that case.
+   */
+  entity_id:     string | null;
   /** Joined from teams table by getPlayer. */
   teams:         { id: string; name: string; color?: string | null } | null;
 }
@@ -313,7 +321,7 @@ export default function PlayerDetail() {
         {/* ── V. Narrative Mentions ────────────────────────────────────── */}
         <section aria-labelledby="narratives-heading">
           <Container>
-            <div style={{ padding: '40px 0 80px' }}>
+            <div style={{ padding: '40px 0' }}>
               <SectionLabel id="narratives-heading" kicker="V" title="Narrative Mentions" />
 
               {!narrativesDone ? (
@@ -328,6 +336,33 @@ export default function PlayerDetail() {
             </div>
           </Container>
         </section>
+
+        {/* ── VI. Web of Influence (issue isl-uwq) ──────────────────────
+            Drop-in <RelationshipGraph> hub showing the player's
+            connections to managers, rivals, mentors, journalists, etc.
+            Hidden when the player row has no entity_id link (legacy
+            seeds before migration 0002 added the FK).  Section sits
+            between Narrative Mentions and the footer so the read flow
+            ends on the broader web of connections rather than the
+            narrower per-mention feed above. */}
+        {player?.entity_id && (
+          <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+        )}
+        {player?.entity_id && (
+          <section aria-labelledby="connections-heading">
+            <Container>
+              <div style={{ padding: '40px 0 80px' }}>
+                <SectionLabel id="connections-heading" kicker="VI" title="Web of Influence" />
+                <RelationshipGraph entityId={player.entity_id} />
+              </div>
+            </Container>
+          </section>
+        )}
+
+        {/* Maintain the previous bottom padding when there's no
+            relationship-graph section so the footer doesn't kiss the
+            narratives feed. */}
+        {!player?.entity_id && <div style={{ padding: '0 0 40px' }} />}
       </main>
       <Footer />
     </>
