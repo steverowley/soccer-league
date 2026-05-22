@@ -16,7 +16,56 @@ permissions:
   actions: write
 
 jobs:
+  # ── quality ──────────────────────────────────────────────────────────────────
+  # Gating check for every PR. Runs the same `tsc --noEmit` and `vitest` that
+  # CLAUDE.md's engineering principles already require locally — historically
+  # this only ran on developer machines, so a PR could break the type surface
+  # or the test suite and still merge. Two failure modes were possible:
+  #   • broken types land on main → next contributor wastes a session debugging
+  #     unrelated pages that suddenly fail to compile
+  #   • broken tests land on main → silent regressions of game-critical logic
+  #     (settlement, cup advance, narratives) that only surface in production
+  # Adding this job + listing "quality" in branch protection closes both.
+  #
+  # Lint runs as an informational step (continue-on-error) because the repo
+  # carries ~230 pre-existing eslint errors. Once those are cleaned up the
+  # `continue-on-error` flag can be dropped and lint joins the gate.
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Use `npm ci` (not `npm install`) so the lockfile is the source of
+      # truth — prevents drift between developer machines and CI.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # `src/lib/supabase.ts` instantiates the client at module load with
+      # `createClient(VITE_SUPABASE_URL, …)`, so any test that imports a page
+      # transitively crashes without these. Same hardcoded values the build
+      # job uses — both are public publishable credentials. Removing this
+      # boilerplate is tracked in #387 (dissolve src/lib/supabase.ts singleton).
+      - name: Test
+        run: npm run test
+        env:
+          VITE_SUPABASE_URL: https://ddtpbipkqamuxnvupddc.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP
+
+      - name: Lint (informational — not yet gating)
+        run: npm run lint
+        continue-on-error: true
+
   build:
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
