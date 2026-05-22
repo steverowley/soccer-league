@@ -34,6 +34,11 @@ import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './index.css';
 
 import ErrorBoundary from './components/ErrorBoundary';
+// Initialise Sentry as early as possible — before React mounts — so render
+// errors caught by the outermost ErrorBoundary have a configured client to
+// report against. No-op when VITE_SENTRY_DSN is unset (dev / preview).
+import { initSentry } from './shared/observability/sentry';
+initSentry();
 
 // ── Providers ────────────────────────────────────────────────────────────────
 // SupabaseProvider must be outermost (AuthProvider depends on it via
