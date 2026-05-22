@@ -446,9 +446,11 @@ Last audited: 2026-05-21. `web-push@3.6.7` and its transitive deps clean per npm
 
 Use GitHub Issues for anything that needs to be remembered across sessions. Trivial in-the-moment fixes can be done inline and mentioned in the PR description; anything bigger gets an issue.
 
+**Active roadmap lives in GitHub Milestone labels M0–M4.** See `ROADMAP.md` for the index, or filter directly: `is:issue is:open label:M0-launch-blockers`.
+
 ### Quick reference (MCP tools)
 
-- `mcp__github__list_issues` — find open work (`state: 'open'`, optionally filter by label)
+- `mcp__github__list_issues` — find open work (filter by label, e.g. `M0-launch-blockers` + `P0`)
 - `mcp__github__issue_read` — full body + comments for one issue
 - `mcp__github__issue_write` — create / update / close
 - `mcp__github__add_issue_comment` — leave a note
@@ -456,11 +458,12 @@ Use GitHub Issues for anything that needs to be remembered across sessions. Triv
 ### Labels
 
 - Priority: `P0` (critical) · `P1` (high) · `P2` (medium) · `P3` (low/backlog)
-- Type: `bug` · `feature` · `chore` · `docs`
+- Type: `feature` · `fix` · `refactor` · `chore` · `docs`
+- Milestone: `M0-launch-blockers` · `M1-architect-wakes-up` · `M2-product-foundation` · `M3-architectural-cleanup` · `M4-depth-community`
 
 ### Session-start ritual
 
-1. `mcp__github__list_issues --state=open` to see what's tracked
+1. `mcp__github__list_issues --state=open` — usually filtered to the current milestone (start with `label:M0-launch-blockers`, advance to M1/M2/... as M0 closes out)
 2. Read CLAUDE.md for context (this file)
 3. Check current branch + git status
 
