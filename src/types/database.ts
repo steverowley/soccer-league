@@ -136,57 +136,6 @@ export type Database = {
         }
         Relationships: []
       }
-      bd_issues: {
-        Row: {
-          assignee: string | null
-          close_reason: string | null
-          closed_at: string | null
-          created_at: string
-          description: string | null
-          id: string
-          issue_type: string
-          notes: string | null
-          priority: number
-          started_at: string | null
-          status: string
-          synced_at: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          assignee?: string | null
-          close_reason?: string | null
-          closed_at?: string | null
-          created_at: string
-          description?: string | null
-          id: string
-          issue_type?: string
-          notes?: string | null
-          priority: number
-          started_at?: string | null
-          status: string
-          synced_at?: string
-          title: string
-          updated_at: string
-        }
-        Update: {
-          assignee?: string | null
-          close_reason?: string | null
-          closed_at?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          issue_type?: string
-          notes?: string | null
-          priority?: number
-          started_at?: string | null
-          status?: string
-          synced_at?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       claude_sessions: {
         Row: {
           account_uuid: string | null
@@ -312,6 +261,53 @@ export type Database = {
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drama_consequences: {
+        Row: {
+          applied_at: string | null
+          applied_meta: Json | null
+          applied_reason: string | null
+          created_at: string
+          entity_id: string
+          id: string
+          kind: string
+          mature_at: string
+          narrative_id: string
+          narrative_text: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_meta?: Json | null
+          applied_reason?: string | null
+          created_at?: string
+          entity_id: string
+          id?: string
+          kind: string
+          mature_at: string
+          narrative_id: string
+          narrative_text: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_meta?: Json | null
+          applied_reason?: string | null
+          created_at?: string
+          entity_id?: string
+          id?: string
+          kind?: string
+          mature_at?: string
+          narrative_id?: string
+          narrative_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drama_consequences_narrative_id_fkey"
+            columns: ["narrative_id"]
+            isOneToOne: false
+            referencedRelation: "narratives"
             referencedColumns: ["id"]
           },
         ]
@@ -1570,57 +1566,6 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
-      }
-      roadmap_items: {
-        Row: {
-          bd_issue_id: string | null
-          created_at: string
-          created_by: string | null
-          effort: string | null
-          id: string
-          notes: string | null
-          pillar: string | null
-          priority: number
-          shipped_at: string | null
-          source: string | null
-          status: string
-          tags: string[]
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          bd_issue_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          effort?: string | null
-          id?: string
-          notes?: string | null
-          pillar?: string | null
-          priority?: number
-          shipped_at?: string | null
-          source?: string | null
-          status?: string
-          tags?: string[]
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          bd_issue_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          effort?: string | null
-          id?: string
-          notes?: string | null
-          pillar?: string | null
-          priority?: number
-          shipped_at?: string | null
-          source?: string | null
-          status?: string
-          tags?: string[]
-          title?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       season_config: {
         Row: {

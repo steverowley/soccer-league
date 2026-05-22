@@ -12,36 +12,7 @@
         "matcher": "Edit|Write"
       }
     ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "command": "bash .claude/scripts/ensure-bd.sh && bd prime",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ],
     "SessionStart": [
-      {
-        "hooks": [
-          {
-            "command": "bash .claude/scripts/ensure-bd.sh && bd prime && echo '' && echo '## Available Work (bd ready)' && bd ready 2>&1 || true",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash .claude/scripts/ensure-bd.sh && bd prime",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
       {
         "hooks": [
           {
@@ -67,7 +38,7 @@
       {
         "hooks": [
           {
-            "prompt": "STRICT GATE — default to doing nothing. Run: git diff HEAD --name-only 2>/dev/null || git status --short. From the resulting paths, IGNORE everything matching any of: README.md, CLAUDE.md, AGENTS.md, .beads/**, .claude/**, .github/**, *.json, *.lock, *.yaml, *.yml, *.md (any markdown), package.json, pnpm-lock.yaml. If zero paths remain after that filter, OR all remaining paths are outside src/ and supabase/, EXIT WITHOUT EDITING. Only proceed when actual changes under src/** or supabase/** materially alter user-visible behavior, public APIs, or the repository structure. When in doubt, do nothing — a no-op session is better than an off-topic README PR. Never edit README to document tooling, hooks, settings, agents, or issue-tracker setup. If a real source change does warrant an update, make it minimal and surgical.",
+            "prompt": "STRICT GATE — default to doing nothing. Run: git diff HEAD --name-only 2>/dev/null || git status --short. From the resulting paths, IGNORE everything matching any of: README.md, CLAUDE.md, AGENTS.md, .claude/**, .github/**, *.json, *.lock, *.yaml, *.yml, *.md (any markdown), package.json, pnpm-lock.yaml. If zero paths remain after that filter, OR all remaining paths are outside src/ and supabase/, EXIT WITHOUT EDITING. Only proceed when actual changes under src/** or supabase/** materially alter user-visible behavior, public APIs, or the repository structure. When in doubt, do nothing — a no-op session is better than an off-topic README PR. Never edit README to document tooling, hooks, settings, agents, or issue-tracker setup. If a real source change does warrant an update, make it minimal and surgical.",
             "statusMessage": "Checking if README needs updating...",
             "timeout": 60,
             "type": "agent"

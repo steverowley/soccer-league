@@ -80,20 +80,12 @@
     "src/**/*",
     "vite.config.ts",
     "vitest.config.ts",
-    "eslint.config.js",
-    // Pure helpers + their Vitest tests that live alongside an edge
-    // function.  We only include the explicitly Deno-free files so the
-    // surrounding Deno entry points (`Deno.serve`, remote ESM imports)
-    // stay out of the frontend typecheck.
-    "supabase/functions/bd-sync-now/pagination.ts",
-    "supabase/functions/bd-sync-now/pagination.test.ts"
+    "eslint.config.js"
   ],
   // Supabase Edge Functions run on Deno, not Node, and have their own
   // tsconfig inside supabase/functions/. Exclude the Deno entry points
   // (anything that uses `Deno.serve` or remote ESM imports) so the
   // frontend typecheck doesn't try to compile Deno-flavoured code.
-  // Pure helpers (e.g. `bd-sync-now/pagination.ts`) are whitelisted in
-  // `include` above so the typecheck still covers them.
   "exclude": [
     "node_modules",
     "dist",

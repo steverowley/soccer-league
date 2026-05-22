@@ -42,7 +42,7 @@ export default defineConfig({
     // `supabase/functions/**` glob covers pure helpers inside edge
     // functions (the edge-function entry points themselves can't run
     // here because of `Deno.serve` + remote ESM imports, but pure
-    // siblings — e.g. `bd-sync-now/pagination.ts` — are testable).
+    // siblings are testable).
     include: [
       'src/**/*.{test,spec}.{ts,tsx}',
       'scripts/**/*.{test,spec}.{ts,tsx}',
