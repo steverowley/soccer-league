@@ -128,6 +128,46 @@ const MAX_OUTPUT_TOKENS = 512;
  */
 const MAX_FOCUS_REACTIONS_PER_TICK = 3;
 
+// ── Mid-week roster intrusions (#376) ────────────────────────────────────────
+// The Architect should ACT outside Election Night, not just speak. Each tick
+// rolls for an unsolicited mutation on a randomly-chosen player. The team is
+// rate-limited so no single club is mutated more than once a week.
+//
+// MUTATION POOL (v1): trait_shift only. We pick one of the five stat columns
+// (attacking / defending / mental / athletic / technical) and nudge it by
+// ±MID_WEEK_TRAIT_DELTA, clamped to [1, 99]. The player remains on the team
+// (no incinerate / swap-team in v1 — those have larger blast radius and
+// deserve their own scope).
+//
+// VISIBILITY: every successful intrusion writes both an architect_interventions
+// row (audit) and a cosmic_disturbance narrative (public-facing).
+
+/**
+ * Probability of a mid-week intrusion per cron tick. At 2-hour cadence
+ * (~12 ticks/day) and 0.04 per tick: ~0.48 attempts/day → ~3.4/week, then
+ * the team rate limit (1/team/week, 32 teams) clamps the realised rate
+ * to roughly 1-3 mutations per week. Lower = quieter; higher = more
+ * chaotic.
+ */
+const MID_WEEK_INTRUSION_PROB = 0.04;
+
+/**
+ * Minimum days since a team's last architect_interventions row before
+ * that team is eligible for another mid-week mutation. 7 days mirrors
+ * the audit's "max 1/team/week" requirement; keeps intrusions feeling
+ * cursed rather than mechanical.
+ */
+const MID_WEEK_INTRUSION_TEAM_COOLOFF_DAYS = 7;
+
+/**
+ * Magnitude of the stat nudge applied by a trait_shift intrusion. ±3
+ * is small enough to stay invisible in any single match outcome (well
+ * inside the engine's roll variance) but compounds visibly across a
+ * season — exactly the "cosmos has its thumb on the scale" feel the
+ * audit asked for.
+ */
+const MID_WEEK_TRAIT_DELTA = 3;
+
 // ── Voices in the Void (Phase 6a) ────────────────────────────────────────────
 //
 // Between matches the cosmic voices (Balance, Chaos) should still speak —
@@ -723,6 +763,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
       allInserted.push(...(ins.data ?? []));
     }
 
+    // ── Mid-week roster intrusion (#376) ────────────────────────────────
+    // Rolls MID_WEEK_INTRUSION_PROB per tick. On hit, picks a random
+    // player whose team hasn't been mutated in the last 7 days, nudges
+    // one stat column by ±MID_WEEK_TRAIT_DELTA, and emits:
+    //   - architect_interventions row (audit, old_value/new_value snapshot)
+    //   - cosmic_disturbance narrative (public-facing)
+    //
+    // Designed to fail-soft: any DB error logs and skips so a transient
+    // hiccup doesn't crash the entire tick.
+    if (Math.random() < MID_WEEK_INTRUSION_PROB) {
+      try {
+        const result = await runMidWeekIntrusion(db);
+        if (result) allInserted.push(result);
+      } catch (err) {
+        console.warn('[galaxy-tick] mid-week intrusion threw:', err);
+      }
+    }
+
     // ── Daybreak Digest (Phase 6b) ──────────────────────────────────────
     // Once per UTC day during the daybreak window (06–10 UTC) the cron
     // synthesises a single morning-anchor narrative summarising overnight
@@ -942,6 +1000,132 @@ Write one Architect whisper. Plain text only.`;
     console.warn('[generateArchitectWhisper] failed:', err);
     return null;
   }
+}
+
+/**
+ * Stat columns eligible for trait_shift intrusions. Mirrors the engine's
+ * five canonical attributes (gameEngine.js consumes the same names via
+ * normalizeTeamForEngine in src/lib/supabase.ts).
+ */
+const TRAIT_COLUMNS = ['attacking', 'defending', 'mental', 'athletic', 'technical'] as const;
+type TraitColumn = typeof TRAIT_COLUMNS[number];
+
+/**
+ * Run a single mid-week roster intrusion (#376).
+ *
+ * Flow:
+ *   1. Query distinct team_ids that have an architect_interventions row
+ *      newer than MID_WEEK_INTRUSION_TEAM_COOLOFF_DAYS — those teams are
+ *      ineligible this week.
+ *   2. Pick a random player whose team is NOT in the ineligible set.
+ *      Service-role context bypasses RLS so the SELECT sees every team.
+ *   3. Pick a random trait column and a random ±delta direction.
+ *   4. Clamp the new value to [1, 99] (matches the engine's stat range
+ *      enforced by migration 0000 CHECK constraints).
+ *   5. Apply the UPDATE, then write the audit row + cosmic_disturbance
+ *      narrative in best-effort order — any failure logs and exits.
+ *
+ * @param db  Service-role Supabase client (passed in by the handler).
+ * @returns   The inserted narrative row if everything succeeded, or null
+ *            on any guard failure (no eligible team, DB error, etc).
+ */
+async function runMidWeekIntrusion(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+): Promise<Record<string, unknown> | null> {
+  // ── 1. Find teams that are off-cooldown ──────────────────────────────
+  // architect_interventions stores target_table='players' and meta.team_id
+  // for our rows. We pull every recent intervention and exclude those
+  // teams via a Set on the client side — at the scale of 32 teams this
+  // is cheaper than a fancy SQL anti-join.
+  const cooloffIso = new Date(
+    Date.now() - MID_WEEK_INTRUSION_TEAM_COOLOFF_DAYS * 86_400_000,
+  ).toISOString();
+  const recentQ = await db
+    .from('architect_interventions')
+    .select('meta')
+    .gte('created_at', cooloffIso)
+    .like('reason', '%mid-week intrusion%');
+  if (recentQ.error) {
+    console.warn('[mid-week intrusion] recent interventions fetch failed:', recentQ.error.message);
+    return null;
+  }
+  const ineligibleTeams = new Set<string>(
+    (recentQ.data ?? [])
+      .map((r: { meta?: { team_id?: string } }) => r.meta?.team_id)
+      .filter((id: unknown): id is string => typeof id === 'string'),
+  );
+
+  // ── 2. Pick a player on an eligible team ─────────────────────────────
+  // We don't have a clean random-row primitive in PostgREST; pulling a
+  // reasonable batch and picking in JS keeps the query simple.
+  const playersQ = await db
+    .from('players')
+    .select('id, name, team_id, attacking, defending, mental, athletic, technical')
+    .limit(200);
+  if (playersQ.error) {
+    console.warn('[mid-week intrusion] players fetch failed:', playersQ.error.message);
+    return null;
+  }
+  const eligible = (playersQ.data ?? []).filter(
+    (p: { team_id?: string }) => p.team_id && !ineligibleTeams.has(p.team_id),
+  );
+  if (eligible.length === 0) {
+    console.log('[mid-week intrusion] no eligible players (all teams in cooloff)');
+    return null;
+  }
+  const player = eligible[Math.floor(Math.random() * eligible.length)];
+
+  // ── 3. Pick a trait + direction ──────────────────────────────────────
+  const column: TraitColumn = TRAIT_COLUMNS[Math.floor(Math.random() * TRAIT_COLUMNS.length)]!;
+  const sign   = Math.random() < 0.5 ? -1 : 1;
+  const oldVal = Number(player[column] ?? 50);
+  // Clamp to [1, 99] — matches the engine's stat range. Without clamping
+  // a string of negative shifts could push a player into uselessness or
+  // a string of positives could break the contest probability curves.
+  const newVal = Math.max(1, Math.min(99, oldVal + sign * MID_WEEK_TRAIT_DELTA));
+  if (newVal === oldVal) {
+    // Edge case: already clamped to a boundary in the same direction.
+    // Skip rather than write a no-op audit row.
+    return null;
+  }
+
+  // ── 4. Apply the mutation ────────────────────────────────────────────
+  const updateQ = await db
+    .from('players')
+    .update({ [column]: newVal })
+    .eq('id', player.id);
+  if (updateQ.error) {
+    console.warn('[mid-week intrusion] player update failed:', updateQ.error.message);
+    return null;
+  }
+
+  // ── 5. Write the audit row ───────────────────────────────────────────
+  const reason = `The cosmos turned its attention to ${player.name}. A mid-week intrusion adjusted their ${column} by ${sign > 0 ? '+' : ''}${sign * MID_WEEK_TRAIT_DELTA}.`;
+  await db.from('architect_interventions').insert({
+    target_table: 'players',
+    target_id:    player.id,
+    field:        column,
+    old_value:    oldVal,
+    new_value:    newVal,
+    reason,
+    meta:         { team_id: player.team_id, kind: 'mid_week_trait_shift', source: 'architect-galaxy-tick' },
+  });
+
+  // ── 6. Public-facing narrative ───────────────────────────────────────
+  const direction = sign > 0 ? 'sharpened' : 'dulled';
+  const summary = `The cosmos turned its attention to ${player.name}. Something has been ${direction}. Nobody saw it happen.`;
+  const narQ = await db.from('narratives').insert({
+    kind:              'cosmic_disturbance',
+    summary,
+    entities_involved: player.team_id ? [player.team_id] : [],
+    source:            'scheduled',
+  }).select().single();
+  if (narQ.error) {
+    console.warn('[mid-week intrusion] narrative insert failed:', narQ.error.message);
+    return null;
+  }
+  return narQ.data;
 }
 
 /**
