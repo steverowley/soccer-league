@@ -209,6 +209,12 @@ export default function Profile() {
     <Shell {...(profile?.username ? { username: profile.username } : {})}>
       <AccountSummary user={user} profile={profile} />
 
+      {/* Streak milestone badges (#380). Shown when longest_streak has
+          crossed any threshold; each unlocked threshold renders as a
+          small chip. Hidden entirely when the user has no milestones
+          yet — a brand-new account shouldn't see an empty trophy case. */}
+      <StreakBadges longestStreak={profile?.longest_streak ?? 0} />
+
       <div style={{ marginTop: 48 }}>
         <SectionHeader
           kicker="II"
@@ -437,6 +443,63 @@ function Shell({ children, username }: { children: React.ReactNode; username?: s
  * @param {object} props.user     Supabase Auth user.
  * @param {object} props.profile  ISL profile row.
  */
+/**
+ * Milestone-badge thresholds for the streak display (#380).
+ *
+ * Each entry unlocks once `longest_streak` reaches or exceeds the day
+ * count. Labels are deliberately understated — no trumpet emojis or
+ * "🔥 streak masters" copy — so the chip strip reads as in-voice
+ * lore rather than gamification. Adding new milestones requires no
+ * migration; the UI computes badges off the column directly.
+ */
+const STREAK_MILESTONES: ReadonlyArray<{ days: number; label: string }> = [
+  // 3-day: a fan has committed to checking in across a long weekend.
+  { days: 3,   label: '3-day attendance' },
+  // 7-day: a full week of devotion.
+  { days: 7,   label: '7-day vigil' },
+  // 30-day: month-long. Most fans peel off well before this.
+  { days: 30,  label: 'Month watcher' },
+  // 100-day: long-haul. The cosmos has noticed.
+  { days: 100, label: 'Cosmic regular' },
+  // 365-day: a full ISL year of consecutive attendance.
+  { days: 365, label: 'Orbital faithful' },
+];
+
+/**
+ * Render a strip of milestone badges based on longest_streak. Returns
+ * null when no thresholds have been crossed so a brand-new account
+ * doesn't see an empty trophy case.
+ *
+ * Mechanical effect: pure presentational — no clicks, no tooltips.
+ * The chip strip is one row on desktop, wraps on narrow viewports.
+ */
+function StreakBadges({ longestStreak }: { longestStreak: number }) {
+  const earned = STREAK_MILESTONES.filter((m) => longestStreak >= m.days);
+  if (earned.length === 0) return null;
+  return (
+    <div style={{
+      marginTop: 24,
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+    }}>
+      {earned.map((m) => (
+        <span key={m.days} style={{
+          border: `1px solid ${HAIRLINE}`,
+          padding: '6px 12px',
+          fontSize: 11,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: DUST_70,
+        }}>
+          <span aria-hidden="true" style={{ color: QUANTUM }}>◆</span>{' '}
+          {m.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function AccountSummary({ user, profile }: { user: any; profile: any }) {
   const username = profile?.username ?? '—';
   const email    = user?.email ?? '—';
@@ -465,6 +528,22 @@ function AccountSummary({ user, profile }: { user: any; profile: any }) {
         accent={QUANTUM}
       />
       {created && <SummaryCell label="Member Since" value={created} />}
+      {/* Login streak surface (#380). Hidden when the user has never
+          logged in since migration 0056 (login_streak === 0) — showing
+          "0 day streak" to a brand-new account is a discouragement
+          signal. Once they hit day 1 the cell appears. */}
+      {(profile?.login_streak ?? 0) > 0 && (
+        <SummaryCell
+          label="Login Streak"
+          value={`${profile.login_streak} day${profile.login_streak === 1 ? '' : 's'}`}
+        />
+      )}
+      {(profile?.longest_streak ?? 0) > (profile?.login_streak ?? 0) && (
+        <SummaryCell
+          label="Longest Streak"
+          value={`${profile.longest_streak} day${profile.longest_streak === 1 ? '' : 's'}`}
+        />
+      )}
     </div>
   );
 }

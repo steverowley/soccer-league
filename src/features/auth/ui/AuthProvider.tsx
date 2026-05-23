@@ -32,6 +32,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js';
 import { useSupabase } from '@shared/supabase/SupabaseProvider';
 import { getOwnProfile, touchLastSeen } from '../api/profiles';
+import { bumpLoginStreak } from '../api/loginStreak';
 import type { Profile } from '../types';
 
 // ── Context shape ───────────────────────────────────────────────────────────
@@ -161,11 +162,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 2. Listen for auth state changes (login, logout, token refresh).
     const {
       data: { subscription },
-    } = db.auth.onAuthStateChange((_event, s) => {
+    } = db.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchProfile();
+        // Bump the login streak on SIGNED_IN events only (not on
+        // TOKEN_REFRESHED — that fires every hour and would mask the
+        // RPC's own UTC-day idempotency with no benefit). Fire-and-forget
+        // RPC; we refetch the profile afterwards so the cached row
+        // reflects the new streak immediately on /profile.
+        if (event === 'SIGNED_IN') {
+          void bumpLoginStreak(db).then(() => fetchProfile());
+        } else {
+          fetchProfile();
+        }
       } else {
         setProfile(null);
       }
