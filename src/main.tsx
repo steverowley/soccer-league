@@ -29,11 +29,12 @@
 
 import { lazy, StrictMode, Suspense, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
 import './index.css';
 
 import ErrorBoundary from './components/ErrorBoundary';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
 // Initialise Sentry as early as possible — before React mounts — so render
 // errors caught by the outermost ErrorBoundary have a configured client to
 // report against. No-op when VITE_SENTRY_DSN is unset (dev / preview).
@@ -159,6 +160,25 @@ function RedirectHandler() {
   return null;
 }
 
+/**
+ * Wraps the route tree in a RouteErrorBoundary keyed on the current
+ * pathname. The key forces React to remount the boundary whenever the
+ * user navigates — so a boundary that caught an error on /idols
+ * automatically resets when the user clicks back to /. Without the key,
+ * the boundary would persist its error state across routes and the
+ * "this page misfired" panel would stick after navigation.
+ *
+ * Combined with the existing outer ErrorBoundary in main.tsx this gives
+ * us two layers of defence: an outer full-page treatment for provider /
+ * listener / router crashes, and this inner per-route treatment for
+ * crashes inside a single page's render.
+ */
+function KeyedRouteBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  // Key on pathname only — query / hash changes shouldn't remount.
+  return <RouteErrorBoundary key={location.pathname}>{children}</RouteErrorBoundary>;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Error boundary outside everything so render errors anywhere in the
@@ -184,6 +204,13 @@ createRoot(document.getElementById('root')!).render(
                 null is the correct trade-off here. */}
             <Suspense fallback={null}>
             <RedirectHandler />
+            {/* Per-route error boundary (#383). Wraps the entire Routes
+                element with a pathname-keyed boundary so a render error
+                on one page renders an inline "this page misfired" panel
+                inside the page content area while Header / Footer / bus
+                listeners keep running — instead of blanking the whole
+                app via the outer ErrorBoundary. */}
+            <KeyedRouteBoundary>
             <Routes>
               {/* / → Home.  Other routes will be added as each page is
                   rebuilt; until then they 404 — intentional during the
@@ -332,6 +359,7 @@ createRoot(document.getElementById('root')!).render(
                   favourite_team_id is still null. See Welcome.tsx. */}
               <Route path="welcome"             element={<Welcome />} />
             </Routes>
+            </KeyedRouteBoundary>
             </Suspense>
           </BrowserRouter>
         </AuthProvider>
