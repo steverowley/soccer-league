@@ -119,6 +119,15 @@ const CLAUDE_MODEL = 'claude-sonnet-4-6';
 /** Max output tokens per entity call. Narratives are 2–4 sentences each. */
 const MAX_OUTPUT_TOKENS = 512;
 
+/**
+ * Max focus_enacted rows the Architect reacts to per cron tick (#377).
+ * The tick runs every 2 hours; 3 per tick is enough to drain a typical
+ * season-close backlog (one major + one minor per team = 64 rows for 32
+ * clubs) inside ~2 days without flooding the news feed in any single
+ * window. Lower = slower drain; higher = noisier news on enactment day.
+ */
+const MAX_FOCUS_REACTIONS_PER_TICK = 3;
+
 // ── Voices in the Void (Phase 6a) ────────────────────────────────────────────
 //
 // Between matches the cosmic voices (Balance, Chaos) should still speak —
@@ -661,6 +670,59 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
+    // ── Architect reacts to focus enactments (#377) ─────────────────────
+    // Pre-#377, fans voted to enact season-end focuses (sign a star, build
+    // youth, etc.) and the focus_enacted rows landed in the DB with no
+    // in-voice response from the Architect. The Galaxy Dispatch went
+    // silent on the cosmos's view of those decisions.
+    //
+    // This branch polls focus_enacted for rows with
+    // architect_reacted_at IS NULL (the unreacted set is kept tiny by a
+    // partial index added in 0054), and emits up to
+    // MAX_FOCUS_REACTIONS_PER_TICK architect_whispers per cron run.
+    // After successful insert the row is stamped so the next tick won't
+    // re-react.
+    //
+    // The reaction is one ominous sentence by design — the Architect
+    // doesn't explain, only observes. Falls back to a deterministic
+    // template if the LLM call fails so we never silently drop a tick.
+    const unreactedQ = await db
+      .from('focus_enacted')
+      .select('id, team_id, focus_key, focus_label, tier, season_id')
+      .is('architect_reacted_at', null)
+      .order('enacted_at', { ascending: true })
+      .limit(MAX_FOCUS_REACTIONS_PER_TICK);
+    const unreacted: Array<{ id: string; team_id: string; focus_key: string; focus_label: string; tier: string; season_id: string }> = unreactedQ.data ?? [];
+
+    for (const row of unreacted) {
+      const summary = await generateFocusReaction(anthropic, row);
+      if (!summary) {
+        // generation failed: leave architect_reacted_at NULL so we retry
+        // on the next tick. Single skipped enactment is acceptable.
+        continue;
+      }
+      const ins = await db.from('narratives').insert({
+        kind:              'architect_whisper',
+        summary,
+        entities_involved: [row.team_id],
+        source:            'scheduled',
+      }).select();
+      if (ins.error) {
+        console.warn('[galaxy-tick] focus reaction insert failed:', ins.error.message);
+        continue;
+      }
+      // Stamp the row so we don't re-react. If the stamp fails, next tick
+      // will duplicate — acceptable noise; the alternative (stamping
+      // before insert) would silently drop reactions on insert failure.
+      const stamp = await db.from('focus_enacted')
+        .update({ architect_reacted_at: new Date().toISOString() })
+        .eq('id', row.id);
+      if (stamp.error) {
+        console.warn(`[galaxy-tick] focus_enacted stamp failed for ${row.id}:`, stamp.error.message);
+      }
+      allInserted.push(...(ins.data ?? []));
+    }
+
     // ── Daybreak Digest (Phase 6b) ──────────────────────────────────────
     // Once per UTC day during the daybreak window (06–10 UTC) the cron
     // synthesises a single morning-anchor narrative summarising overnight
@@ -878,6 +940,68 @@ Write one Architect whisper. Plain text only.`;
     return text.trim() || null;
   } catch (err) {
     console.warn('[generateArchitectWhisper] failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Generate a one-sentence Architect reaction to a focus_enacted row (#377).
+ *
+ * The cosmos has just observed the fans' collective choice — sign a star,
+ * boost youth, build the stadium, etc. — and responds in voice. By design
+ * the reaction:
+ *   - is one to two sentences, cryptic, never explains
+ *   - references the team and the focus_label by name so fans recognise
+ *     the trigger
+ *   - never reveals stat changes or numeric outcomes (hidden-mechanics rule)
+ *
+ * On LLM failure returns null so the caller can leave the row unstamped
+ * and retry on the next tick. This is preferred over a template fallback
+ * because the reactions are MEANT to feel hand-written; a bland template
+ * would weaken the voice across the season.
+ *
+ * @param anthropic Anthropic SDK client (already configured with API key).
+ * @param row       One focus_enacted row — `{ team_id, focus_key, focus_label, tier }`.
+ * @returns         The single-sentence whisper, or null on any error.
+ */
+async function generateFocusReaction(
+  // deno-lint-ignore no-explicit-any
+  anthropic: any,
+  row: { team_id: string; focus_key: string; focus_label: string; tier: string },
+): Promise<string | null> {
+  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who reacts to fan decisions in cryptic, unsettling fragments.
+
+RULES:
+1. NEVER reveal stats, numbers, percentages, or game mechanics.
+2. 1–2 sentences. Cryptic. Knowing. Sometimes ominous, sometimes amused.
+3. Reference the team name and the focus label by name so the fan recognises the trigger.
+4. NEVER explain the mechanical effect of the choice — only the cosmos's reaction to the choice itself.
+5. Output ONLY the narrative text. No JSON, no labels.
+
+EXAMPLE TONE:
+"They begged for a star. The cosmos delivered. They have not asked what the star was made of."
+"${`Pluto FC Wanderers`} chose youth. The cosmos files this under 'choices that age poorly'."
+"A new stadium for ${`Mars Athletic`}. The cosmos already knows which match will be played in its rubble."`;
+
+  const user = `A fanbase has just voted to enact a ${row.tier} focus for their club.
+
+TEAM: ${row.team_id}
+FOCUS: ${row.focus_label} (key: ${row.focus_key})
+
+Write one Architect whisper reacting to this choice. Plain text only.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model:      CLAUDE_MODEL,
+      max_tokens: 220,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    // deno-lint-ignore no-explicit-any
+    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
+    return text.trim() || null;
+  } catch (err) {
+    console.warn('[generateFocusReaction] failed:', err);
     return null;
   }
 }
