@@ -50,6 +50,7 @@ import {
   PitchView,
   type MatchEventRow,
 } from '../features/match';
+import TeachingStrip from '../components/TeachingStrip';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives LIVE indicators; FLARE is retained for both
@@ -171,6 +172,30 @@ export default function MatchDetail() {
           )}
 
           {match && !loadError && <MatchHero match={match} />}
+
+          {/* First-match teaching strip — "Meet the booth" (#379).
+              One-time dismissible strip that introduces the three
+              commentator voices + the two cosmic voices. Vision says
+              "hide the mechanics", but the *cast* should still be
+              introduced — fans need to know who Vox / Nexus-7 / Zara
+              are before they can hear them in the live feed below.
+              Persistence: localStorage; never blocks the page. */}
+          {match && !loadError && (
+            <TeachingStrip
+              accent
+              storageKey="match_meet_the_booth"
+              title="Meet the booth"
+              body={<>
+                <strong style={{ color: COLORS.dust }}>Vox</strong> calls
+                the play-by-play. <strong style={{ color: COLORS.dust }}>Nexus-7</strong>{' '}
+                breaks down what just happened. <strong style={{ color: COLORS.dust }}>Zara</strong>{' '}
+                watches for the unusual. The cosmos itself —{' '}
+                <strong style={{ color: COLORS.dust }}>Balance</strong> and{' '}
+                <strong style={{ color: COLORS.dust }}>Chaos</strong> — speaks only when
+                the match deserves it.
+              </>}
+            />
+          )}
         </Container>
       </section>
 
@@ -187,6 +212,21 @@ export default function MatchDetail() {
               label="The Bookie"
               title="Place A Wager"
               subtitle="Stake at least 10 credits on any of the three outcomes. Odds lock in at the moment you place — the bookie's later re-pricing won't claw your potential payout back."
+            />
+            {/* First-time betting intro strip (#379). Brief reminder
+                that stakes lock at placement and the minimum bet is
+                10 IC — the wager widget itself enforces both, but
+                a teaching strip up-front saves a first-time user from
+                wondering why their 5-IC bet failed. */}
+            <TeachingStrip
+              storageKey="match_betting_intro"
+              title="How betting works"
+              body={<>
+                Pick an outcome (home, draw, or away) and stake at least
+                10 IC. The odds you see in the picker lock the moment you
+                place — the bookie's later re-pricing won't claw your
+                potential payout back. You can bet on multiple matches.
+              </>}
             />
             <div style={{ marginTop: 24 }}>
               <WagerWidget match={match} />
