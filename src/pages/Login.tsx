@@ -47,6 +47,26 @@ type Mode = typeof MODE_LOGIN | typeof MODE_SIGNUP;
 // toggle), this closes the weak-password vector flagged by the security audit.
 const MIN_PASSWORD_LENGTH = 10;
 const MIN_USERNAME_LENGTH = 3;
+/**
+ * Server-side cap from migration 0057. Surfaced client-side so users
+ * see the limit before submitting a name the trigger would reject.
+ */
+const MAX_USERNAME_LENGTH = 32;
+/**
+ * Mirror of the reserved-word list in migration 0057's trigger
+ * (enforce_username_policy). Kept in lockstep manually — when the
+ * server-side list grows, copy the additions here so the UI rejects
+ * the same names without a round-trip. Names compared lower-case +
+ * trimmed.
+ */
+const RESERVED_USERNAMES = new Set<string>([
+  'architect', 'cosmic', 'cosmos', 'balance', 'chaos', 'fate',
+  'first voice', 'second voice', 'third voice',
+  'vox', 'nexus-7', 'nexus7', 'zara',
+  'admin', 'administrator', 'system', 'official', 'mod', 'moderator',
+  'support', 'staff', 'isl', 'isl-official', 'root',
+  'deleted', 'deleted user', '[deleted]',
+]);
 
 /**
  * Login + signup page.
@@ -154,6 +174,18 @@ export default function Login() {
     }
     if (mode === MODE_SIGNUP && username.length < MIN_USERNAME_LENGTH) {
       setError(`Username must be at least ${MIN_USERNAME_LENGTH} characters.`);
+      return;
+    }
+    if (mode === MODE_SIGNUP && username.length > MAX_USERNAME_LENGTH) {
+      setError(`Username must be ${MAX_USERNAME_LENGTH} characters or fewer.`);
+      return;
+    }
+    // Reserved-name check (#401). Mirror of the server-side trigger so
+    // we reject before the round-trip. Server still enforces the same
+    // list; a determined attacker bypassing the client gets the same
+    // 23514 from Postgres.
+    if (mode === MODE_SIGNUP && RESERVED_USERNAMES.has(username.trim().toLowerCase())) {
+      setError(`"${username}" is reserved — pick another.`);
       return;
     }
     if (mode === MODE_SIGNUP && !ageConfirmed) {
