@@ -39,11 +39,6 @@ import {
   type StoredBracketMatch,
 } from '../logic/cupDraw';
 
-// TYPE ESCAPE HATCH — `competitions.bracket` is a new column not yet in the
-// generated `database.ts`. Re-cast once `generate_typescript_types` is rerun.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Well-known UUIDs of the 4 league competitions seeded in migration 0009. */
@@ -150,7 +145,7 @@ async function getLeagueStandings(
   db: IslSupabaseClient,
   competitionId: string,
 ): Promise<StandingRow[]> {
-  const { data, error } = await (db as AnyDb) // CAST:cupSeeder
+  const { data, error } = await db
     .from('matches')
     .select(
       'home_team_id, away_team_id, home_score, away_score,' +
@@ -169,7 +164,10 @@ async function getLeagueStandings(
     home_team: { id: string; name: string } | null;
     away_team: { id: string; name: string } | null;
   };
-  const rows = (data ?? []) as Joined[];
+  // The typed PostgREST parser can't resolve the aliased FK joins
+  // (`home_team:teams!...`) back to a generated shape; runtime returns
+  // the Joined shape, so narrow via unknown.
+  const rows = (data ?? []) as unknown as Joined[];
 
   const teamNames = new Map<string, string>();
   for (const r of rows) {
@@ -226,7 +224,7 @@ async function insertCupMatch(
   roundName: string,
   scheduledAtIso: string,
 ): Promise<string | null> {
-  const { data, error } = await (db as AnyDb) // CAST:cupSeeder
+  const { data, error } = await db
     .from('matches')
     .insert({
       competition_id: competitionId,
@@ -243,7 +241,7 @@ async function insertCupMatch(
     // ON CONFLICT: row already exists. Look it up so the bracket JSON can
     // still record its match_db_id for advanceCupRound's lookups.
     if (error.code === '23505') {
-      const { data: existing } = await (db as AnyDb) // CAST:cupSeeder
+      const { data: existing } = await db
         .from('matches')
         .select('id')
         .eq('competition_id', competitionId)
@@ -273,7 +271,7 @@ async function insertCompetitionTeams(
     team_id:        t.team_id,
     seeding:        t.seed,
   }));
-  const { error } = await (db as AnyDb) // CAST:cupSeeder
+  const { error } = await db
     .from('competition_teams')
     .upsert(rows, { onConflict: 'competition_id,team_id' });
   if (error) {
@@ -294,7 +292,7 @@ async function writeBracket(
 ): Promise<void> {
   const update: Record<string, unknown> = { bracket };
   if (setActive) update['status'] = 'active';
-  const { error } = await (db as AnyDb) // CAST:cupSeeder
+  const { error } = await db
     .from('competitions')
     .update(update)
     .eq('id', competitionId);
@@ -311,7 +309,7 @@ async function readBracket(
   db: IslSupabaseClient,
   competitionId: string,
 ): Promise<StoredBracket | null> {
-  const { data, error } = await (db as AnyDb) // CAST:cupSeeder
+  const { data, error } = await db
     .from('competitions')
     .select('bracket')
     .eq('id', competitionId)

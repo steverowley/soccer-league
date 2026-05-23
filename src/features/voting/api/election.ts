@@ -9,16 +9,10 @@
 //   incinerations     — permadeath audit log (0013)
 //   players           — is_active / incineration_date columns (0013)
 //   focus_tally       — voting results view (0006)
-//
-// ALL CASTS marked CAST:election for grep-and-remove after database.ts regen.
 // ──────────────────────────────────────────────────────────────────────────────
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { FocusTallyEntry }   from '../types';
-
-// TYPE ESCAPE HATCH — tables added in 0013 not yet in generated database.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Shape interfaces ───────────────────────────────────────────────────────────
 // Manually typed until database.ts is regenerated after 0013 is applied.
@@ -74,7 +68,7 @@ export interface IncinerationRecord {
  * @param db  Injected Supabase client.
  */
 export async function getActiveSeasonWithPhase(db: IslSupabaseClient): Promise<SeasonWithPhase | null> {
-  const { data, error } = await (db as AnyDb) // CAST:election
+  const { data, error } = await db
     .from('seasons')
     .select('*')
     .eq('is_active', true)
@@ -98,7 +92,7 @@ export async function getSeasonDecrees(
   db: IslSupabaseClient,
   seasonId: string,
 ): Promise<SeasonDecree[]> {
-  const { data, error } = await (db as AnyDb) // CAST:election
+  const { data, error } = await db
     .from('season_decrees')
     .select('*')
     .eq('season_id', seasonId)
@@ -120,7 +114,7 @@ export async function getSeasonDecrees(
  * @param db  Injected Supabase client.
  */
 export async function getAllIncinerations(db: IslSupabaseClient): Promise<IncinerationRecord[]> {
-  const { data, error } = await (db as AnyDb) // CAST:election
+  const { data, error } = await db
     .from('incinerations')
     .select(`
       *,
@@ -154,7 +148,7 @@ export async function getSeasonFocusTally(
   db: IslSupabaseClient,
   seasonId: string,
 ): Promise<FocusTallyEntry[]> {
-  const { data, error } = await (db as AnyDb) // CAST:election
+  const { data, error } = await db
     .from('focus_tally')
     .select('*')
     .eq('season_id', seasonId)
@@ -190,7 +184,7 @@ export async function advanceSeasonPhase(
   seasonId: string,
   newStatus: SeasonWithPhase['status'],
 ): Promise<void> {
-  const { error } = await (db as AnyDb) // CAST:election
+  const { error } = await db
     .from('seasons')
     .update({ status: newStatus })
     .eq('id', seasonId);
@@ -208,7 +202,7 @@ export async function insertSeasonDecrees(
   db: IslSupabaseClient,
   decrees: Omit<SeasonDecree, 'id' | 'created_at'>[],
 ): Promise<void> {
-  const { error } = await (db as AnyDb) // CAST:election
+  const { error } = await db
     .from('season_decrees')
     .insert(decrees);
   if (error) throw error;
@@ -249,11 +243,11 @@ export async function incinerate(
   idolRank: number | null,
   decreeText: string,
 ): Promise<string> {
-  const { data, error } = await (db as AnyDb).rpc('incinerate_player', { // CAST:election
+  const { data, error } = await db.rpc('incinerate_player', {
     p_player_id:   playerId,
     p_season_id:   seasonId,
     p_team_id:     teamId,
-    p_idol_rank:   idolRank,
+    p_idol_rank:   idolRank as number,
     p_decree_text: decreeText,
   });
   if (error) throw error;

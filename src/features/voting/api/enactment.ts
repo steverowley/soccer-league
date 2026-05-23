@@ -20,11 +20,9 @@
 //   - team_finances  (ticket_revenue / balance delta)
 //   - architect_interventions (narrative audit row)
 //   - focus_enacted  (result record)
-//
-// All tables that are not yet in generated database.ts use `AnyDb` cast
-// (marked CAST:enactment). Re-cast once database.ts is regenerated.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { Json } from '@/types/database';
 import { createPlayerEntity } from '@features/entities';
 import { createPersona, upsertPersona } from '@features/agents';
 import { getTeamTally } from './focuses';
@@ -35,10 +33,6 @@ import {
   type FocusEnactmentSpec,
   type EnactmentMutation,
 } from '../logic/enactFocus';
-
-// TYPE ESCAPE HATCH — tables not yet in generated database.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Team list helper ──────────────────────────────────────────────────────────
 
@@ -55,7 +49,7 @@ async function getTeamIdsForSeason(
   db: IslSupabaseClient,
   seasonId: string,
 ): Promise<string[]> {
-  const { data, error } = await (db as AnyDb) // CAST:enactment
+  const { data, error } = await db
     .from('focus_options')
     .select('team_id')
     .eq('season_id', seasonId);
@@ -91,7 +85,7 @@ async function fetchTeamPlayers(
   athletic: number; technical: number; starter: boolean;
   jersey_number?: number;
 }>> {
-  const { data, error } = await (db as AnyDb) // CAST:enactment
+  const { data, error } = await db
     .from('players')
     .select('id, team_id, name, position, age, overall_rating, attacking, defending, mental, athletic, technical, starter, jersey_number')
     .eq('team_id', teamId);
@@ -100,7 +94,46 @@ async function fetchTeamPlayers(
     console.warn(`[fetchTeamPlayers] failed for ${teamId}:`, error.message);
     return [];
   }
-  return data ?? [];
+  // The generated row type marks several columns nullable that the
+  // enactment logic assumes are populated (team_id, position, the five
+  // stat columns). Filter out partial rows defensively and coerce the
+  // shape — a player without stats can't be enacted on anyway.
+  // `jersey_number` is the only key that's truly optional downstream;
+  // omit the key entirely under exactOptionalPropertyTypes rather than
+  // setting it to `undefined`.
+  type EnactablePlayer = {
+    id: string; team_id: string; name: string;
+    position: 'GK' | 'DF' | 'MF' | 'FW';
+    age: number | null; overall_rating: number | null;
+    attacking: number; defending: number; mental: number;
+    athletic: number; technical: number; starter: boolean;
+    jersey_number?: number;
+  };
+  return (data ?? [])
+    .filter((p) =>
+      p.team_id  !== null && p.position  !== null &&
+      p.attacking !== null && p.defending !== null && p.mental    !== null &&
+      p.athletic  !== null && p.technical !== null,
+    )
+    .map((p): EnactablePlayer => {
+      const base: EnactablePlayer = {
+        id:             p.id,
+        team_id:        p.team_id as string,
+        name:           p.name,
+        position:       p.position as 'GK' | 'DF' | 'MF' | 'FW',
+        age:            p.age,
+        overall_rating: p.overall_rating,
+        attacking:      p.attacking as number,
+        defending:      p.defending as number,
+        mental:         p.mental    as number,
+        athletic:       p.athletic  as number,
+        technical:      p.technical as number,
+        starter:        p.starter,
+      };
+      return p.jersey_number != null
+        ? { ...base, jersey_number: p.jersey_number }
+        : base;
+    });
 }
 
 // ── Mutation applicators ──────────────────────────────────────────────────────
@@ -124,7 +157,7 @@ async function applyMutation(
       // Read current value first so we can clamp the result before writing.
       // This avoids a DB CHECK constraint violation if the current stat is
       // near the boundary (1 or 99) and the delta would push it out of range.
-      const { data: row } = await (db as AnyDb) // CAST:enactment
+      const { data: row } = await db
         .from('players')
         .select(mutation.stat)
         .eq('id', mutation.player_id)
@@ -134,7 +167,7 @@ async function applyMutation(
       const current = (row as Record<string, number>)[mutation.stat] ?? 50;
       const next    = Math.max(1, Math.min(99, current + mutation.delta));
 
-      const { error } = await (db as AnyDb) // CAST:enactment
+      const { error } = await db
         .from('players')
         .update({ [mutation.stat]: next })
         .eq('id', mutation.player_id);
@@ -153,7 +186,7 @@ async function applyMutation(
 
       if (Object.keys(mutation.stat_bumps).length > 0) {
         // Fetch current stats for clamping.
-        const { data: row } = await (db as AnyDb) // CAST:enactment
+        const { data: row } = await db
           .from('players')
           .select('attacking, defending, mental, athletic, technical')
           .eq('id', mutation.player_id)
@@ -166,7 +199,7 @@ async function applyMutation(
         }
       }
 
-      const { error } = await (db as AnyDb) // CAST:enactment
+      const { error } = await db
         .from('players')
         .update(update)
         .eq('id', mutation.player_id);
@@ -199,7 +232,7 @@ async function applyMutation(
     case 'insert_player': {
       // STEP 1: player row.  Use .select() so we get the DB-assigned id back
       // without a follow-up read — the entity row needs that id to link.
-      const { data: playerRow, error: playerErr } = await (db as AnyDb) // CAST:enactment
+      const { data: playerRow, error: playerErr } = await db
         .from('players')
         .insert(mutation.player)
         .select('id, name, team_id, position')
@@ -226,9 +259,12 @@ async function applyMutation(
         position: newPlayer.position,
         nationality: null,
       });
-      const { data: entityRow, error: entityErr } = await (db as AnyDb) // CAST:enactment
+      // `entityPayload.meta` is typed as Record<string, unknown> but the
+      // generated column type is the recursive `Json` — they're structurally
+      // identical at runtime, narrow with a Json cast at the boundary.
+      const { data: entityRow, error: entityErr } = await db
         .from('entities')
-        .insert(entityPayload)
+        .insert({ ...entityPayload, meta: entityPayload.meta as Json })
         .select('id, kind, name, display_name, meta')
         .single();
 
@@ -251,7 +287,7 @@ async function applyMutation(
       // STEP 3: link player → entity so future relationship traversals
       // (the Architect's 1-hop reads, the entity-detail page lookup) find
       // each other without a name-match fallback.
-      const { error: linkErr } = await (db as AnyDb) // CAST:enactment
+      const { error: linkErr } = await db
         .from('players')
         .update({ entity_id: newEntity.id })
         .eq('id', newPlayer.id);
@@ -279,7 +315,7 @@ async function applyMutation(
       // Using `rpc('increment_team_finances', ...)` would be cleaner, but the
       // RPC doesn't exist yet. Instead: read → add → write. Acceptable because
       // enactment runs once at season-end, never concurrently with itself.
-      const { data: existing } = await (db as AnyDb) // CAST:enactment
+      const { data: existing } = await db
         .from('team_finances')
         .select('ticket_revenue, balance')
         .eq('team_id', mutation.team_id)
@@ -289,7 +325,7 @@ async function applyMutation(
       const prevRevenue = (existing as { ticket_revenue?: number } | null)?.ticket_revenue ?? 0;
       const prevBalance = (existing as { balance?: number }         | null)?.balance       ?? 0;
 
-      const { error } = await (db as AnyDb) // CAST:enactment
+      const { error } = await db
         .from('team_finances')
         .upsert(
           {
@@ -332,7 +368,7 @@ async function logEnactmentIntervention(
   seasonId: string,
   tier: string,
 ): Promise<string | null> {
-  const { data, error } = await (db as AnyDb) // CAST:enactment
+  const { data, error } = await db
     .from('architect_interventions')
     .insert({
       target_table: 'focus_enacted',
@@ -400,7 +436,7 @@ async function enactOneTeamFocus(
 
   // Write the audit row.  UNIQUE constraint on (team_id, season_id, tier) makes
   // this idempotent — safe to re-run without duplicating the enactment.
-  const { error } = await (db as AnyDb) // CAST:enactment
+  const { error } = await db
     .from('focus_enacted')
     .upsert(
       {
@@ -549,7 +585,7 @@ export async function getEnactedFocuses(
   seasonId: string,
   teamId?: string,
 ): Promise<EnactedFocusRow[]> {
-  let query = (db as AnyDb) // CAST:enactment
+  let query = db
     .from('focus_enacted')
     .select('*')
     .eq('season_id', seasonId)

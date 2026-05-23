@@ -2,20 +2,22 @@
 // WHY: Supabase queries for the voting feature — option generation, vote
 // casting, and tally reading. All queries take an injected Supabase client.
 //
-// Tables used (created by 0006_voting.sql, not yet in database.ts):
+// Tables used (created by 0006_voting.sql):
 //   - focus_options (read/write)
 //   - focus_votes (read/write)
 //   - focus_tally (read — SQL view)
-//
-// All casts marked CAST:voting for grep-and-remove after database.ts regen.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { FocusOption, FocusVote, FocusTallyEntry } from '../types';
 import { ALL_FOCUS_TEMPLATES } from '../logic/focusTemplates';
 
-// TYPE ESCAPE HATCH — tables not yet in generated database.ts.
+// The optimistic `decrement_credits` RPC fallback below is a pre-existing
+// dev-era convenience that was never deployed as a SQL function; the
+// generated types correctly omit it. We cast just that one RPC call so the
+// existing read-modify-write fallback path still compiles. Production
+// vote-cost debits run via that fallback path today.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
+type RpcAny = any;
 
 // ── Option generation ───────────────────────────────────────────────────────
 
@@ -46,7 +48,7 @@ export async function generateFocusOptions(
     tier: t.tier,
   }));
 
-  const { data, error } = await (db as AnyDb) // CAST:voting
+  const { data, error } = await db
     .from('focus_options')
     .upsert(rows, { onConflict: 'team_id,season_id,option_key' })
     .select();
@@ -73,7 +75,7 @@ export async function getTeamFocusOptions(
   teamId: string,
   seasonId: string,
 ): Promise<FocusOption[]> {
-  const { data, error } = await (db as AnyDb) // CAST:voting
+  const { data, error } = await db
     .from('focus_options')
     .select('*')
     .eq('team_id', teamId)
@@ -110,7 +112,7 @@ export async function castVote(
   creditsSpent: number,
 ): Promise<FocusVote | null> {
   // 1. Insert the vote.
-  const { data: vote, error: voteErr } = await (db as AnyDb) // CAST:voting
+  const { data: vote, error: voteErr } = await db
     .from('focus_votes')
     .insert({
       user_id: userId,
@@ -126,21 +128,26 @@ export async function castVote(
   }
 
   // 2. Deduct credits from the user's profile.
-  // Try atomic RPC first, fall back to read-modify-write.
-  const { error: rpcErr } = await (db as AnyDb)
-    .rpc('decrement_credits', { user_id: userId, amount: creditsSpent });
+  // Try atomic RPC first, fall back to read-modify-write. The
+  // `decrement_credits` RPC isn't declared in the generated types
+  // (it predates the typegen and was never deployed as a SQL function);
+  // the call always errors, which hits the RMW fallback below.
+  const { error: rpcErr } = await (db.rpc as RpcAny)(
+    'decrement_credits',
+    { user_id: userId, amount: creditsSpent },
+  );
 
   if (rpcErr) {
-    const { data: profile } = await (db as AnyDb) // CAST:profiles
+    const { data: profile } = await db
       .from('profiles')
       .select('credits')
       .eq('id', userId)
       .single();
 
     if (profile) {
-      await (db as AnyDb)
+      await db
         .from('profiles')
-        .update({ credits: (profile as { credits: number }).credits - creditsSpent })
+        .update({ credits: profile.credits - creditsSpent })
         .eq('id', userId);
     }
   }
@@ -164,7 +171,7 @@ export async function getTeamTally(
   teamId: string,
   seasonId: string,
 ): Promise<FocusTallyEntry[]> {
-  const { data, error } = await (db as AnyDb) // CAST:voting
+  const { data, error } = await db
     .from('focus_tally')
     .select('*')
     .eq('team_id', teamId)
