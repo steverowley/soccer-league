@@ -285,6 +285,13 @@ function AccountMenu() {
         >
           <MenuLink to="/profile" onClick={() => setOpen(false)}>Profile</MenuLink>
           <MenuLink to="/wagers"  onClick={() => setOpen(false)}>Wagers</MenuLink>
+          {/* Admin link (#385) — only visible to users with profiles.is_admin
+              set. Pre-#385 admins had to remember /admin existed and type
+              the URL; the link removes that friction. Non-admins see no
+              link, so this isn't a UI surface for non-privileged users. */}
+          {profile?.is_admin === true && (
+            <MenuLink to="/admin" onClick={() => setOpen(false)}>Admin</MenuLink>
+          )}
           <MenuButton onClick={onSignOut}>Sign Out</MenuButton>
         </div>
       )}
