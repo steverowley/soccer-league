@@ -56,14 +56,22 @@ import { AuthProvider }     from './features/auth';
 //
 // WagerSettlementListener      — `match.completed` → settle open wagers
 // CupRoundAdvancerListener     — `match.completed` → fill bracket + insert next-round fixture
-// SeasonEnactmentListener      — `season.ended`    → apply winning focuses across every team
 // RefereeNarrativeListener     — `match.completed` → write the named-referee narrative
 // MemoryWriteListener          — `match.completed` / `season.ended` /
 //                                 `architect.intervened` → append structured
 //                                 memory rows to entity_memories (no LLM)
+//
+// Removed in #372:
+//   SeasonEnactmentListener   — used to react to `season.ended` and run
+//                                enactSeasonFocuses in every open browser
+//                                tab. The per-browser race that produced
+//                                (player stat mutations are NOT idempotent
+//                                even though focus_enacted INSERTs are) is
+//                                gone. Enactment now runs only via the
+//                                admin-triggered triggerSeasonEnactment +
+//                                triggerElectionNight paths.
 import { WagerSettlementListener }  from './features/betting';
 import { CupRoundAdvancerListener } from './features/match';
-import { SeasonEnactmentListener }  from './features/voting';
 import { RefereeNarrativeListener } from './features/entities';
 import { MemoryWriteListener }      from './features/agents';
 
@@ -161,7 +169,8 @@ createRoot(document.getElementById('root')!).render(
             entire session, including the moment auth state changes. */}
         <WagerSettlementListener />
         <CupRoundAdvancerListener />
-        <SeasonEnactmentListener />
+        {/* SeasonEnactmentListener removed in #372 — enactment now runs only
+            via the admin-triggered path (no per-browser race). */}
         <RefereeNarrativeListener />
         <MemoryWriteListener />
         <AuthProvider>

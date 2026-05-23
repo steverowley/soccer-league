@@ -145,7 +145,9 @@ export type { ArrivalContext } from './logic/arrivalNarrative';
 // ── UI (React components) ──────────────────────────────────────────────────
 // VotingPage + FocusCard were removed in the 2026-05 nuke and will be
 // rebuilt against the new design language.
-// SeasonEnactmentListener stays — it's a side-effect-only component;
-// mount it once near the application root to wire the season.ended →
-// enactment pipeline.
-export { SeasonEnactmentListener } from './ui/SeasonEnactmentListener';
+//
+// SeasonEnactmentListener removed in #372 — used to mount a `season.ended`
+// bus listener in every browser tab, which produced a 100-way race for
+// `enactSeasonFocuses` (player stat mutations are NOT idempotent).
+// Enactment now runs only via the admin-triggered `triggerSeasonEnactment`
+// + `triggerElectionNight` paths exposed by the admin feature.
