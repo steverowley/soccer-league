@@ -2,11 +2,6 @@
 // WHY: Supabase queries for the wager lifecycle — placement, history, and
 // settlement. All queries take an injected Supabase client; no direct imports.
 //
-// The `wagers` table is created by migration 0004_betting.sql (applied).
-// database.ts predates that migration so the `wagers` table is absent from
-// generated types — we cast to `any` (marked CAST:wagers) until types are
-// regenerated after the next `supabase gen types` run.
-//
 // CREDIT MUTATION STRATEGY — ATOMIC RPCs (migration 0053)
 // ──────────────────────────────────────────────────────────
 // `placeWager` and `settleMatchWagers` previously did non-atomic
@@ -29,10 +24,6 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Wager, TeamChoice } from '../types';
 import { determineOutcome, resolveWager } from '../logic/settlement';
-
-// TYPE ESCAPE HATCH — see profiles.ts for the pattern explanation.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Wager placement ────────────────────────────────────────────────────────
 
@@ -63,7 +54,12 @@ export async function placeWager(
   stake: number,
   oddsSnapshot: number,
 ): Promise<Wager | null> {
-  const { data, error } = await (db as AnyDb).rpc('place_wager', {
+  // Typed RPC call against the regenerated database.ts (place_wager landed
+  // in migration 0053 and is now in the schema export). The RPC returns a
+  // single row matching the `wagers` table shape; we re-assert as `Wager`
+  // below since the generated `Returns` is structurally identical but uses
+  // string literals where our `TeamChoice` domain type is narrower.
+  const { data, error } = await db.rpc('place_wager', {
     p_match_id: matchId,
     p_team_choice: teamChoice,
     p_stake: stake,
@@ -94,7 +90,7 @@ export async function getUserWagers(
   userId: string,
   limit = 50,
 ): Promise<Wager[]> {
-  const { data, error } = await (db as AnyDb) // CAST:wagers
+  const { data, error } = await db
     .from('wagers')
     .select('*')
     .eq('user_id', userId)
@@ -128,7 +124,7 @@ export async function getUserWagerForMatch(
   userId:   string,
   matchId:  string,
 ): Promise<Wager | null> {
-  const { data, error } = await (db as AnyDb) // CAST:wagers
+  const { data, error } = await db
     .from('wagers')
     .select('*')
     .eq('user_id',  userId)
@@ -160,7 +156,7 @@ async function getOpenWagersForMatch(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<Wager[]> {
-  const { data, error } = await (db as AnyDb) // CAST:wagers
+  const { data, error } = await db
     .from('wagers')
     .select('*')
     .eq('match_id', matchId)
@@ -221,7 +217,7 @@ export async function settleMatchWagers(
     // in one transaction. Returns false if the wager was already settled
     // (idempotent) — we still count it as "handled" so the worker doesn't
     // loop on the same wager forever.
-    const { data: applied, error: rpcErr } = await (db as AnyDb).rpc('settle_wager', {
+    const { data: applied, error: rpcErr } = await db.rpc('settle_wager', {
       p_wager_id: wager.id,
       p_status: status,
       p_payout: payout || 0,

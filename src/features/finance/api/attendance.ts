@@ -15,10 +15,6 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { calculateTicketRevenue } from '../logic/ticketPricing';
 
-// TYPE ESCAPE HATCH — tables not yet in generated database.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Fan presence window ─────────────────────────────────────────────────────
 
 /**
@@ -48,7 +44,7 @@ export async function countPresentFans(
   db: IslSupabaseClient,
   teamId: string,
 ): Promise<number> {
-  const { count, error } = await (db as AnyDb) // CAST:profiles
+  const { count, error } = await db
     .from('profiles')
     .select('*', { count: 'exact', head: true })
     .eq('favourite_team_id', teamId)
@@ -123,7 +119,7 @@ export async function recordMatchAttendance(
     { match_id: matchId, team_id: awayTeamId, fan_count: awayFans, ticket_revenue: awayRevenue },
   ];
 
-  const { error: attendErr } = await (db as AnyDb) // CAST:match_attendance
+  const { error: attendErr } = await db
     .from('match_attendance')
     .upsert(attendanceRows, { onConflict: 'match_id,team_id' });
 
@@ -166,7 +162,7 @@ async function updateTeamFinances(
   if (revenue <= 0) return;
 
   // Try to read existing row.
-  const { data: existing } = await (db as AnyDb) // CAST:team_finances
+  const { data: existing } = await db
     .from('team_finances')
     .select('ticket_revenue, balance')
     .eq('team_id', teamId)
@@ -175,19 +171,18 @@ async function updateTeamFinances(
 
   if (existing) {
     // Increment existing values.
-    const ex = existing as { ticket_revenue: number; balance: number };
-    await (db as AnyDb)
+    await db
       .from('team_finances')
       .update({
-        ticket_revenue: ex.ticket_revenue + revenue,
-        balance: ex.balance + revenue,
+        ticket_revenue: existing.ticket_revenue + revenue,
+        balance: existing.balance + revenue,
         updated_at: new Date().toISOString(),
       })
       .eq('team_id', teamId)
       .eq('season_id', seasonId);
   } else {
     // Create new row for this team+season.
-    await (db as AnyDb)
+    await db
       .from('team_finances')
       .insert({
         team_id: teamId,

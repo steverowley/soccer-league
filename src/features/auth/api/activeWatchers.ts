@@ -22,12 +22,6 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 
-// TYPE ESCAPE HATCH — `active_watchers_v` isn't yet in the generated DB
-// types (single-column view, low value to regenerate the full types file
-// for).  Aligned with the CAST:* pattern used across other api/ modules.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 /**
  * Fetch the count of fans active in the last 5 minutes.
  *
@@ -41,7 +35,7 @@ type AnyDb = any;
  */
 export async function getActiveWatcherCount(db: IslSupabaseClient): Promise<number> {
   try {
-    const { data, error } = await (db as AnyDb) // CAST:active_watchers_v
+    const { data, error } = await db
       .from('active_watchers_v')
       .select('watcher_count')
       .single();

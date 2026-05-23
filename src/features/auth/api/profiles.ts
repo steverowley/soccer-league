@@ -26,16 +26,6 @@ import { z } from 'zod';
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Profile, UpdateProfileInput } from '../types';
 
-// TYPE ESCAPE HATCH: The `profiles` and `public_profiles` tables/views are
-// created by migration 0001_profiles.sql, which hasn't been applied to the
-// Supabase project yet — so the generated database.ts doesn't include them.
-// We cast `db` to `any` for `.from('profiles')` calls until the types are
-// regenerated. Each cast site is marked with `// CAST:profiles` so we can
-// grep and remove them after regeneration.
-//
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Zod schemas ─────────────────────────────────────────────────────────────
 // These validate the raw rows coming from Supabase BEFORE they're returned
 // to the caller. If the DB schema drifts (e.g. a column is renamed in a
@@ -104,7 +94,7 @@ export async function getOwnProfile(
     return { data: null, error: 'Not authenticated' };
   }
 
-  const { data, error } = await (db as AnyDb) // CAST:profiles
+  const { data, error } = await db
     .from('profiles')
     .select('*')
     .eq('id', authData.user.id)
@@ -147,7 +137,7 @@ export async function updateProfile(
     return { data: null, error: 'Not authenticated' };
   }
 
-  const { data, error } = await (db as AnyDb) // CAST:profiles
+  const { data, error } = await db
     .from('profiles')
     .update(input)
     .eq('id', authData.user.id)
@@ -188,7 +178,7 @@ export async function touchLastSeen(db: IslSupabaseClient): Promise<void> {
   const { data: authData } = await db.auth.getUser();
   if (!authData.user) return;
 
-  const { error } = await (db as AnyDb) // CAST:profiles
+  const { error } = await db
     .from('profiles')
     .update({ last_seen_at: new Date().toISOString() })
     .eq('id', authData.user.id);

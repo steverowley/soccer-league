@@ -9,23 +9,15 @@
 //      so malformed requests are caught in pure code.
 //   3. All queries take an injected Supabase client — never imports.
 //
-// Tables used (created by 0008_architect_interventions.sql, not yet in
-// database.ts):
+// Tables used (created by 0008_architect_interventions.sql):
 //   - architect_interventions (read/write — append-only audit)
 //
 // Also reads the `narratives` table from 0002_entities.sql (via the
 // entities feature's public API — no deep imports).
-//
-// All casts marked CAST:architect for grep-and-remove after database.ts regen.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { ArchitectInterventionRow } from '../types';
 import type { InvalidEdictError } from '../logic/edicts';
-
-// TYPE ESCAPE HATCH — architect_interventions not yet in generated
-// database.ts. See profiles.ts for the pattern explanation.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Result shapes ───────────────────────────────────────────────────────────
 
@@ -60,7 +52,7 @@ export async function getRecentInterventions(
   db: IslSupabaseClient,
   limit: number = 100,
 ): Promise<ArchitectInterventionRow[]> {
-  const { data, error } = await (db as AnyDb) // CAST:architect
+  const { data, error } = await db
     .from('architect_interventions')
     .select('*')
     .order('created_at', { ascending: false })

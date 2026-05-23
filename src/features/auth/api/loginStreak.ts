@@ -23,11 +23,6 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 
-// TYPE ESCAPE HATCH — the RPC isn't in the generated DB types file yet.
-// Same pattern as elsewhere (CAST:* convention).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 /**
  * Bump the calling user's login streak.
  *
@@ -47,7 +42,7 @@ type AnyDb = any;
  */
 export async function bumpLoginStreak(db: IslSupabaseClient): Promise<number> {
   try {
-    const { data, error } = await (db as AnyDb).rpc('bump_login_streak');
+    const { data, error } = await db.rpc('bump_login_streak');
     if (error) {
       console.warn('[bumpLoginStreak] RPC failed:', error.message);
       return 0;

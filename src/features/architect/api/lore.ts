@@ -2,20 +2,14 @@
 // WHY: Supabase queries for the architect_lore table. The LoreStore (Phase 5.1)
 // calls these to hydrate lore before a match and persist mutations after.
 //
-// All queries take an injected Supabase client; no direct imports. The
-// `architect_lore` table is created by migration 0003_architect_lore.sql,
-// which hasn't been applied yet — so database.ts doesn't include it. We cast
-// to `any` (marked CAST:architect_lore) until types are regenerated.
+// All queries take an injected Supabase client; no direct imports.
 //
 // NOTE: These functions are low-level DB wrappers. Business logic (converting
 // between the flat lore object and DB rows) lives in logic/loreStore.ts.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { Json } from '@/types/database';
 import type { ArchitectLoreRow } from '../types';
-
-// TYPE ESCAPE HATCH — see profiles.ts for the pattern explanation.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 /**
  * Load all lore rows from the architect_lore table. The table is small
@@ -30,7 +24,7 @@ type AnyDb = any;
 export async function loadAllLore(
   db: IslSupabaseClient,
 ): Promise<ArchitectLoreRow[]> {
-  const { data, error } = await (db as AnyDb) // CAST:architect_lore
+  const { data, error } = await db
     .from('architect_lore')
     .select('*');
 
@@ -60,13 +54,16 @@ export async function upsertLoreRow(
   key: string,
   payload: Record<string, unknown>,
 ): Promise<ArchitectLoreRow | null> {
-  const { data, error } = await (db as AnyDb) // CAST:architect_lore
+  const { data, error } = await db
     .from('architect_lore')
     .upsert(
       {
         scope,
         key,
-        payload,
+        // `Record<string, unknown>` widens to the recursive `Json` type
+        // generated for the column; the cast is a structural narrow,
+        // not an escape hatch.
+        payload: payload as Json,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'scope,key' },
@@ -96,14 +93,16 @@ export async function batchUpsertLore(
   if (rows.length === 0) return 0;
 
   const now = new Date().toISOString();
+  // Same `Json` cast rationale as upsertLoreRow above — the callers'
+  // record shape is structurally JSON-safe but TS can't prove that.
   const records = rows.map((r) => ({
     scope: r.scope,
     key: r.key,
-    payload: r.payload,
+    payload: r.payload as Json,
     updated_at: now,
   }));
 
-  const { data, error } = await (db as AnyDb) // CAST:architect_lore
+  const { data, error } = await db
     .from('architect_lore')
     .upsert(records, { onConflict: 'scope,key' })
     .select();

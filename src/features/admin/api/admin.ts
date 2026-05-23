@@ -11,13 +11,6 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { bus, type IslEventBus } from '@shared/events/bus';
 
-// TYPE ESCAPE HATCH — same pattern as betting/api/oddsRepo.ts (CAST:*).
-// The `seasons.status` column from migration 0014 isn't yet in
-// src/types/database.ts; the cast removes it from the strict typing path
-// without disabling type-checks on the rest of the file.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Public types ─────────────────────────────────────────────────────────────
 
 /**
@@ -81,7 +74,7 @@ export async function fastForwardScheduledMatches(
     return { matchesShifted: 0, hoursShifted: 0 };
   }
 
-  const { data, error } = await (db as AnyDb).rpc('admin_fast_forward_matches', {
+  const { data, error } = await db.rpc('admin_fast_forward_matches', {
     p_hours: hours,
   });
   if (error) throw new Error(error.message);
@@ -223,7 +216,7 @@ export async function getActiveSeason(
   // PostgREST expresses a left join by suffixing the FK relationship with
   // `!left`.  The config columns land in a nested object under `season_config`;
   // we spread them to flatten the shape for callers.
-  const { data, error } = await (db as AnyDb)
+  const { data, error } = await db
     .from('seasons')
     .select(`
       id, name, year, status, started_at, ended_at,
@@ -243,8 +236,11 @@ export async function getActiveSeason(
   }
   if (!data) return null;
 
-  // Flatten the nested season_config object so callers work with a flat row.
-  const cfg = data.season_config ?? {};
+  // Flatten the nested season_config object so callers work with a flat
+  // row. PostgREST left-joins return the nested object as null when no
+  // matching config row exists; treat that as "all knobs unset" rather
+  // than crashing.
+  const cfg = data.season_config;
   return {
     id:                  data.id,
     name:                data.name,
@@ -254,9 +250,9 @@ export async function getActiveSeason(
     ended_at:            data.ended_at,
     election_opens_at:   data.election_opens_at,
     election_closes_at:  data.election_closes_at,
-    match_duration_seconds: cfg.match_duration_seconds ?? null,
-    match_cadence_minutes:  cfg.match_cadence_minutes  ?? null,
-    min_bet:                cfg.min_bet                ?? null,
+    match_duration_seconds: cfg?.match_duration_seconds ?? null,
+    match_cadence_minutes:  cfg?.match_cadence_minutes  ?? null,
+    min_bet:                cfg?.min_bet                ?? null,
   };
 }
 
@@ -308,7 +304,7 @@ export async function getAdminFixtures(
   // ── Build base query ──────────────────────────────────────────────────────
   // home_team and away_team arrive as nested objects from PostgREST's FK
   // resolution; we flatten them to strings in the mapping step below.
-  let query = (db as AnyDb)
+  let query = db
     .from('matches')
     .select(`
       id, status, round, scheduled_at, played_at, home_score, away_score,
@@ -400,7 +396,7 @@ const INTERVENTION_FETCH_LIMIT = 50;
 export async function getArchitectInterventions(
   db: IslSupabaseClient,
 ): Promise<ArchitectIntervention[]> {
-  const { data, error } = await (db as AnyDb)
+  const { data, error } = await db
     .from('architect_interventions')
     .select('id, target_table, target_id, field, reason, old_value, new_value, created_at')
     .order('created_at', { ascending: false })
@@ -434,10 +430,10 @@ export interface SystemStats {
  */
 export async function getSystemStats(db: IslSupabaseClient): Promise<SystemStats> {
   const [usersRes, creditsRes, wagersRes, matchesRes] = await Promise.all([
-    (db as AnyDb).from('profiles').select('id', { count: 'exact', head: true }),
-    (db as AnyDb).from('profiles').select('credits'),
-    (db as AnyDb).from('wagers').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-    (db as AnyDb).from('matches').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+    db.from('profiles').select('id', { count: 'exact', head: true }),
+    db.from('profiles').select('credits'),
+    db.from('wagers').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    db.from('matches').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
   ]);
   const credits = (creditsRes.data ?? []).reduce(
     (sum: number, r: { credits: number }) => sum + (r.credits ?? 0),
@@ -475,7 +471,7 @@ export async function setSeasonStatus(
   seasonId: string,
   status:   'active' | 'voting' | 'completed',
 ): Promise<void> {
-  const { error } = await (db as AnyDb).rpc('admin_set_season_status', {
+  const { error } = await db.rpc('admin_set_season_status', {
     p_season_id: seasonId,
     p_status:    status,
   });
@@ -495,7 +491,7 @@ export async function setSeasonStatus(
  *            gated by the admin UI; anon callers hit RLS before reaching it).
  */
 export async function resetSeasonResults(db: IslSupabaseClient): Promise<{ matchesReset: number }> {
-  const { data, error } = await (db as AnyDb).rpc('admin_reset_season');
+  const { data, error } = await db.rpc('admin_reset_season');
   if (error) throw new Error(error.message);
   return { matchesReset: (data as { matches_reset: number }).matches_reset ?? 0 };
 }
@@ -524,7 +520,7 @@ export async function injectNarrative(
   kind:    string,
   summary: string,
 ): Promise<void> {
-  const { error } = await (db as AnyDb).rpc('admin_inject_narrative', {
+  const { error } = await db.rpc('admin_inject_narrative', {
     p_kind:    kind,
     p_summary: summary,
   });
@@ -562,13 +558,18 @@ export async function addPlayer(
   db:    IslSupabaseClient,
   input: AddPlayerInput,
 ): Promise<void> {
-  const { error } = await (db as AnyDb).rpc('admin_add_player', {
+  // The RPC's `p_jersey_number INTEGER` accepts NULL at the Postgres
+  // level (Supabase typegen forces it non-null in the generated `Args`
+  // shape, which doesn't reflect SQL nullability). Cast the args literal
+  // so a null jersey reaches the RPC as SQL NULL instead of being
+  // silently coerced to 0.
+  const { error } = await db.rpc('admin_add_player', {
     p_team_id:        input.teamId,
     p_name:           input.name,
     p_position:       input.position,
     p_overall_rating: input.overallRating,
     p_starter:        input.starter,
-    p_jersey_number:  input.jerseyNumber,
+    p_jersey_number:  input.jerseyNumber as number,
   });
   if (error) throw new Error(error.message);
 }
@@ -691,7 +692,7 @@ export async function completeMatchManually(
   // Atomic: gate-check → score validation → cup-draw guard → UPDATE with
   // optimistic concurrency, all in one transaction.  The RPC's JSON return
   // carries the bus-payload fields we need to emit without a second read.
-  const { data: rpcResult, error: rpcErr } = await (db as AnyDb).rpc(
+  const { data: rpcResult, error: rpcErr } = await db.rpc(
     'admin_complete_match',
     {
       p_match_id:   matchId,
@@ -711,9 +712,10 @@ export async function completeMatchManually(
   // inline on this microtask; their async DB work is handled inside the
   // listener bodies themselves and intentionally not awaited here.
   //
-  // CAST: the RPC returns json (untyped from supabase-js's perspective);
-  // the field names mirror the SQL `json_build_object` call in migration 0042.
-  const payload = rpcResult as {
+  // The RPC declares Returns: Json so the generated type is untyped at the
+  // field level; we narrow to the shape that the `json_build_object` call
+  // in migration 0042 emits.
+  const payload = rpcResult as unknown as {
     home_team_id:    string;
     away_team_id:    string;
     competition_id:  string | null;
@@ -745,7 +747,7 @@ export async function completeMatchManually(
 export async function getTeamList(
   db: IslSupabaseClient,
 ): Promise<Array<{ id: string; name: string; league: string }>> {
-  const { data, error } = await (db as AnyDb)
+  const { data, error } = await db
     .from('teams')
     .select('id, name, league:leagues!teams_league_id_fkey(name)')
     .order('name');
