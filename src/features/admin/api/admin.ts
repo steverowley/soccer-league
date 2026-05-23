@@ -122,6 +122,56 @@ export async function triggerSeasonEnactment(
   return { enacted: result.enacted, skipped: result.skipped };
 }
 
+/**
+ * Result returned by triggerElectionNight — counts for the admin UI.
+ *
+ * `incinerated` is the realised count from idol-weighted permadeath; the
+ * intended count is computed inside runElectionNight from the active
+ * roster and not exposed here. `decrees` is the total written, including
+ * arrival narratives for the replacement players.
+ */
+export interface TriggerElectionNightResult {
+  /** Number of players actually incinerated this election. */
+  incinerated: number;
+  /** Number of decree rows written (focus + incineration + arrival). */
+  decrees:     number;
+}
+
+/**
+ * Run the full Election Night ritual for a season (#372).
+ *
+ * Previously `runElectionNight` was exported from the voting barrel but
+ * had no caller — Election Night was dark code. The fan-facing experience
+ * was identical regardless of whether the cosmos had executed its idol-
+ * weighted incinerations, written its decrees, or filed its arrivals.
+ * This admin path is the single legitimate entry point.
+ *
+ * Idempotency: caller MUST guard via `seasons.status` before invoking —
+ * runElectionNight is NOT itself idempotent. The Admin UI's "Close Season"
+ * action checks status='voting' before calling. Subsequent calls on a
+ * season already at status='completed' are a programming error.
+ *
+ * @param db          Service-role / admin Supabase client.
+ * @param seasonId    UUID of the season being closed.
+ * @param seasonName  Human-readable label (e.g. "Season 4 — 2603").
+ * @returns           Realised counts for the admin UI's toast.
+ */
+export async function triggerElectionNight(
+  db:         IslSupabaseClient,
+  seasonId:   string,
+  seasonName: string,
+): Promise<TriggerElectionNightResult> {
+  // Lazy import for the same reason as triggerSeasonEnactment above —
+  // the orchestrator pulls in heavy enactment + decree logic that the
+  // public app shouldn't pay for in its initial bundle.
+  const { runElectionNight } = await import('@features/voting');
+  const result = await runElectionNight(db, seasonId, seasonName);
+  return {
+    incinerated: result.incinerationsCount ?? 0,
+    decrees:     result.decreesWritten     ?? 0,
+  };
+}
+
 // ── Read queries ──────────────────────────────────────────────────────────────
 
 /**
