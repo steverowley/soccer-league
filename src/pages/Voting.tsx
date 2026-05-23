@@ -73,6 +73,32 @@ const DEFAULT_VOTE = MIN_VOTE;
  * @returns {JSX.Element}
  */
 import { usePageTitle } from '../shared/hooks/usePageTitle';
+import { useReducedMotion } from '../shared/hooks/useReducedMotion';
+
+/**
+ * Freshness window for triggering the Election Night ritual reveal (#373).
+ *
+ * If the most recent enacted focus row is within this many milliseconds of
+ * `now`, the panel renders with a paced reveal so users hit the page during
+ * the season-close window see the cosmos's decisions unfold dramatically.
+ * Outside the window the panel collapses back to the static "Last Cycle"
+ * view — replays after the moment has passed feel performative, not
+ * ritualistic.
+ *
+ * 24h gives every fan at least one full day to encounter the ritual fresh.
+ */
+const ELECTION_NIGHT_RITUAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Delay between consecutive row reveals during the Election Night ritual.
+ *
+ * 2200ms is slow enough to read each decree before the next lands and to
+ * carry the "cosmos pronouncing one decision at a time" framing — but fast
+ * enough that a fan with two enactments (major + minor) finishes the
+ * sequence in ~4.5 seconds. Honoured only when `prefers-reduced-motion`
+ * is NOT set; reduced-motion users see all rows instantly.
+ */
+const ELECTION_NIGHT_STAGGER_MS = 2200;
 
 export default function Voting() {
   usePageTitle('Season Voting');
@@ -231,17 +257,14 @@ export default function Voting() {
             </p>
           )}
 
-          {/* Section III — Cosmos Decided (last enacted, when present). */}
+          {/* Section III — Cosmos Decided panel.
+              When the most recent enactment landed within the last 24 h we
+              render the Election Night ritual variant (paced reveal). After
+              the window closes the section collapses back to the static
+              "Last Cycle" panel — replays after the moment has passed feel
+              performative. */}
           {user && teamId && loaded && !loadError && enactedHistory.length > 0 && (
-            <div style={{ marginTop: 32 }}>
-              <SectionHeader
-                kicker="I"
-                label="Last Cycle"
-                title="What The Cosmos Decided"
-                subtitle="The two focuses enacted on your club following last season's vote. The simulation has already absorbed these mutations."
-              />
-              <EnactedPanel rows={enactedHistory.slice(0, 2)} />
-            </div>
+            <CosmosDecidedSection rows={enactedHistory.slice(0, 2)} />
           )}
 
           {/* Section IV — Vote sections (major + minor) */}
@@ -589,6 +612,160 @@ function OptionCard({ option, tally, tierTotal, credits, busy, onVote  }: any) {
         </span>
       </div>
     </article>
+  );
+}
+
+/**
+ * Section III wrapper — decides between the Election Night ritual reveal
+ * and the static "Last Cycle" panel based on enactment freshness (#373).
+ *
+ * Freshness rule: if the newest enacted row is within
+ * ELECTION_NIGHT_RITUAL_WINDOW_MS of now, the ritual variant shows;
+ * otherwise the static variant. Reduced-motion users get the static
+ * variant regardless so they never sit through animated suppression.
+ *
+ * @param {{ rows: Array<object> }} props  Up to two enacted focus rows.
+ */
+function CosmosDecidedSection({ rows }: { rows: any[] }) {
+  const reduced = useReducedMotion();
+
+  // Newest enactment row by enacted_at — drives the freshness check.
+  // `enacted_at` is the server-stamped column on focus_enacted; the
+  // orchestrator writes it inside the same transaction as the mutation
+  // so it is always populated.
+  const newestEnactedAt = rows.reduce<number>((max, r) => {
+    const ts = r?.enacted_at ? new Date(r.enacted_at).getTime() : 0;
+    return ts > max ? ts : max;
+  }, 0);
+  const isFresh = newestEnactedAt > 0 && (Date.now() - newestEnactedAt) < ELECTION_NIGHT_RITUAL_WINDOW_MS;
+
+  // Reduced-motion users skip straight to the static variant — the
+  // ritual's value is the choreography; suppressing motion would leave
+  // them watching a paused panel for several seconds.
+  const useRitual = isFresh && !reduced;
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <SectionHeader
+        kicker="I"
+        label={useRitual ? 'Election Night' : 'Last Cycle'}
+        title={useRitual ? 'The Cosmos Pronounces' : 'What The Cosmos Decided'}
+        subtitle={useRitual
+          ? 'The cosmos enacts its decisions one at a time. Stay with each before the next arrives.'
+          : "The two focuses enacted on your club following last season's vote. The simulation has already absorbed these mutations."
+        }
+      />
+      {useRitual
+        ? <ElectionNightPanel rows={rows} />
+        : <EnactedPanel rows={rows} />
+      }
+    </div>
+  );
+}
+
+/**
+ * Election Night ritual reveal (#373). Renders the same enacted-focus
+ * cards as EnactedPanel but with a paced stagger — each card appears
+ * ELECTION_NIGHT_STAGGER_MS after the previous, building anticipation
+ * for the next pronouncement.
+ *
+ * UX:
+ *   - "Skip" button is visible until every row has revealed.
+ *   - Once all rows have revealed, the panel is visually identical to
+ *     the static EnactedPanel (no lingering animation chrome).
+ *   - Caller is responsible for choosing between this and EnactedPanel
+ *     via the freshness gate in CosmosDecidedSection above.
+ *
+ * @param {{ rows: Array<object> }} props
+ */
+function ElectionNightPanel({ rows }: { rows: any[] }) {
+  // `visibleCount` reveals rows[0..visibleCount-1]. setTimeout adds one
+  // every ELECTION_NIGHT_STAGGER_MS until all rows are visible. The Skip
+  // button reveals all at once.
+  const [visibleCount, setVisibleCount] = useState<number>(1);
+
+  useEffect(() => {
+    if (visibleCount >= rows.length) return undefined;
+    const t = window.setTimeout(() => setVisibleCount((n) => n + 1), ELECTION_NIGHT_STAGGER_MS);
+    return () => window.clearTimeout(t);
+  }, [visibleCount, rows.length]);
+
+  const complete = visibleCount >= rows.length;
+
+  return (
+    <>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: 16,
+        marginTop: 24,
+      }}>
+        {rows.slice(0, visibleCount).map((row: any) => (
+          <article key={row.id ?? `${row.team_id}-${row.tier}`} style={{
+            border: `1px solid ${HAIRLINE}`,
+            padding: 24,
+            // Subtle fade-in via opacity transition; React mounts a fresh
+            // element each tick so the transition fires on mount.
+            animation: 'fadeIn 600ms ease-out',
+          }}>
+            <span style={{
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: DUST_70,
+            }}>
+              {row.tier} focus
+            </span>
+            <h4 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              margin: '8px 0 12px',
+            }}>
+              {row.option_label ?? row.option_key ?? 'Decision'}
+            </h4>
+            {row.summary && (
+              <p style={{
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: DUST,
+                margin: 0,
+              }}>
+                {row.summary}
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
+
+      {/* Skip-to-end affordance — visible only during the reveal, removed
+          once all rows have appeared so the panel reads as a static
+          surface afterwards. */}
+      {!complete && (
+        <div style={{ marginTop: 16, textAlign: 'right' }}>
+          <button
+            onClick={() => setVisibleCount(rows.length)}
+            style={{
+              background: 'none',
+              border: `1px solid ${HAIRLINE}`,
+              color: DUST_50,
+              padding: '6px 12px',
+              fontFamily: 'inherit',
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+            }}
+          >
+            Skip animation
+          </button>
+        </div>
+      )}
+
+      {/* Keyframes — inline so the panel is fully self-contained without
+          editing the global stylesheet. */}
+      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }`}</style>
+    </>
   );
 }
 
