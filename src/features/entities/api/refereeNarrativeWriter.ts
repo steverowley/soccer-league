@@ -36,10 +36,6 @@ import {
   type RefereeMatchSnapshot,
 } from '../logic/refereeNarratives';
 
-// TYPE ESCAPE HATCH — match_referee_v / narratives not in generated database.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Narrative-source convention ──────────────────────────────────────────────
 //
 // Mirrors the convention established by the bettor-narrative writer:
@@ -88,7 +84,7 @@ async function fetchRefereeSnapshot(
   // ── Referee context ─────────────────────────────────────────────────────
   // match_referee_v already coalesces strictness to 5 when the trait is
   // missing, so we don't need a fallback here for that field.
-  const refQuery = await (db as AnyDb) // CAST:referee_writer
+  const refQuery = await db
     .from('match_referee_v')
     .select('referee_name, referee_display_name, referee_strictness, referee_id')
     .eq('match_id', matchId)
@@ -114,7 +110,7 @@ async function fetchRefereeSnapshot(
   // Sum yellow_cards and red_cards across every match_player_stats row for
   // the match.  Rows for both teams are stored together; no team filter
   // needed because we want the combined total for narrative purposes.
-  const cardsQuery = await (db as AnyDb) // CAST:referee_writer
+  const cardsQuery = await db
     .from('match_player_stats')
     .select('yellow_cards, red_cards')
     .eq('match_id', matchId);
@@ -175,7 +171,7 @@ export async function writeRefereeNarrativeForMatch(
   // dedupe logic) can correlate the line with the match.  We do NOT include
   // the referee entity ID here — when journalists become attributed
   // authors in Phase 5b they'll go in entities_involved instead.
-  const { error: insertErr } = await (db as AnyDb) // CAST:referee_writer
+  const { error: insertErr } = await db
     .from('narratives')
     .insert({
       kind:              NARRATIVE_KIND_REFEREE,

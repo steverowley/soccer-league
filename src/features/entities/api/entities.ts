@@ -2,18 +2,9 @@
 // WHY: Supabase queries for the unified entity model. The Architect's context
 // hydration (Phase 5.1) and the news feed (Phase 8) read from these queries.
 // All queries take an injected Supabase client; no direct imports.
-//
-// NOTE: The `entities`, `entity_traits`, `entity_relationships`, and
-// `narratives` tables are created by migration 0002_entities.sql, which
-// hasn't been applied yet — so database.ts doesn't include them. We cast
-// to `any` (marked CAST:entities) until types are regenerated.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Narrative } from '../types';
-
-// TYPE ESCAPE HATCH — see profiles.ts for the pattern explanation.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Narrative queries ───────────────────────────────────────────────────────
 
@@ -41,7 +32,7 @@ export async function getRecentNarratives(
   source?: string,
   kind?: string,
 ): Promise<Narrative[]> {
-  let query = (db as AnyDb) // CAST:entities
+  let query = db
     .from('narratives')
     .select('*')
     .order('created_at', { ascending: false })
@@ -88,7 +79,7 @@ export async function getRecentNarrativesByKinds(
   limit = 6,
 ): Promise<Narrative[]> {
   if (kinds.length === 0) return [];
-  const { data, error } = await (db as AnyDb) // CAST:entities
+  const { data, error } = await db
     .from('narratives')
     .select('*')
     .in('kind', kinds)

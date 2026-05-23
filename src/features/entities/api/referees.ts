@@ -8,15 +8,9 @@
 //   entity_traits (trait_key='strictness')  — seeded in 0002_entities.sql
 //   matches.referee_id                      — added in 0015_match_referee.sql
 //   match_referee_v                         — convenience view in 0015
-//
-// CASTS marked CAST:referees for grep-and-remove after database.ts regen.
 // ──────────────────────────────────────────────────────────────────────────────
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
-
-// TYPE ESCAPE HATCH — entities/match_referee_v not yet in generated database.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Public shapes ─────────────────────────────────────────────────────────────
 
@@ -69,7 +63,7 @@ export interface MatchReferee {
 export async function getRefereesWithStrictness(
   db: IslSupabaseClient,
 ): Promise<RefereeWithStrictness[]> {
-  const { data, error } = await (db as AnyDb) // CAST:referees
+  const { data, error } = await db
     .from('entities')
     .select(`
       id,
@@ -124,7 +118,7 @@ export async function getMatchReferee(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<MatchReferee | null> {
-  const { data, error } = await (db as AnyDb) // CAST:referees
+  const { data, error } = await db
     .from('match_referee_v')
     .select('*')
     .eq('match_id', matchId)
@@ -163,7 +157,7 @@ export async function assignMatchReferee(
   matchId: string,
   refereeId: string,
 ): Promise<void> {
-  const { error } = await (db as AnyDb).rpc('assign_match_referee', { // CAST:referees
+  const { error } = await db.rpc('assign_match_referee', {
     p_match_id:   matchId,
     p_referee_id: refereeId,
   });
