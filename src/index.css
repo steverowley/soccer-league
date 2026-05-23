@@ -67,3 +67,72 @@ body,
     min-width: 44px;
   }
 }
+
+/* ── A11y: visible focus rings (#384) ─────────────────────────────────────
+ * Pre-#384 the codebase relied on inline-style `style={{ textDecoration:
+ * 'none', outline: 0 }}` patterns on <Link> + <button>, which left
+ * keyboard users with NO visible focus indicator. The audit measured
+ * zero `:focus-visible` selectors across the codebase.
+ *
+ * `:focus-visible` is the canonical pseudo-class for "focus that
+ * deserves a ring" — it fires on keyboard navigation, never on a click,
+ * so the ring never appears as a flash of cosmetic noise during normal
+ * mouse use.
+ *
+ * Ring colour: Quantum Purple (#9A5CF4) — the design system's canonical
+ * focus / attention hue. Outline offset of 2px sits the ring just
+ * outside the element so it never overlaps the design.
+ * ──────────────────────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid #9a5cf4;
+  outline-offset: 2px;
+}
+
+/* ── A11y: skip-to-content link (#384) ────────────────────────────────────
+ * Keyboard / screen-reader users need a way to bypass the header nav on
+ * every page. The link is hidden off-screen until focused, then jumps
+ * to viewport with the same Quantum-Purple focus ring as everything
+ * else.
+ *
+ * Pages MUST render an element with id="main-content" — typically the
+ * <Container> immediately under <Header />. See Layout.tsx for the
+ * canonical placement.
+ * ──────────────────────────────────────────────────────────────────────── */
+.isl-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: #111;
+  color: #e3e0d5;
+  border: 1px solid #9a5cf4;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.isl-skip-link:focus,
+.isl-skip-link:focus-visible {
+  left: 16px;
+}
+
+/* ── A11y: reduced motion honoured globally (#384) ────────────────────────
+ * Belt-and-braces fallback: any animation/transition we forget to
+ * suppress in a hook still gets honoured at the CSS layer. The 0.01ms
+ * trick zeroes out transitions without flagging `animation: none`
+ * across every selector individually.
+ *
+ * Hook-aware components (useReducedMotion) get the stronger "skip the
+ * animation entirely" treatment. This rule is the safety net.
+ * ──────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
