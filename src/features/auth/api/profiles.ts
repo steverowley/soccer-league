@@ -73,6 +73,16 @@ const ProfileSchema = z.object({
   // are catching up.
   notify_favourite_team: z.boolean().optional().default(false),
   notify_all_matches: z.boolean().optional().default(false),
+  // Streak fields added by migration 0056. All three default-coerce
+  // when the column isn't present on the remote yet (same migration-
+  // lag tolerance as the notify_* booleans above) — a frontend
+  // deployed before the migration runs against a stale schema sees
+  // login_streak: 0 / longest_streak: 0 / last_streak_day: null,
+  // which renders correctly: hidden streak card, no badges, no UI
+  // breakage.
+  login_streak:    z.number().int().min(0).optional().default(0),
+  longest_streak:  z.number().int().min(0).optional().default(0),
+  last_streak_day: z.string().nullable().optional().default(null),
 });
 
 // ── Queries ─────────────────────────────────────────────────────────────────

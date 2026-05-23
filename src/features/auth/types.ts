@@ -46,6 +46,23 @@ export interface Profile {
    */
   is_admin: boolean;
   /**
+   * Consecutive-UTC-day login count (#380, migration 0056). Bumped by the
+   * bump_login_streak() RPC on SIGNED_IN events. Resets to 1 when the user
+   * skips a day. 0 for accounts created before the migration.
+   */
+  login_streak: number;
+  /**
+   * Best-ever value of login_streak. Never decreases. Drives the milestone
+   * badge display on /profile so a fan who once hit 30 days keeps the
+   * 30-day badge even after a break.
+   */
+  longest_streak: number;
+  /**
+   * UTC date (ISO YYYY-MM-DD or null) of the most recent streak bump.
+   * NULL for accounts that have never signed in since migration 0056.
+   */
+  last_streak_day: string | null;
+  /**
    * Opt-in flag (migration 0039) for match-start push notifications keyed on
    * the user's `favourite_team_id`.  When true AND a favourite team is set,
    * the match-notify-worker cron pushes a "kicks off in 1 minute" alert
