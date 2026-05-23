@@ -32,6 +32,7 @@ import { normalizeTeamForEngine } from './normalizeTeam.ts';
 import { simulateFullMatch } from './simulateFullMatch.ts';
 import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket, writeMatchCompletionMemories } from './postMatchEffects.ts';
 import { prepareArchitectForMatch, type CosmicArchitect, type LoreStore } from './architect.ts';
+import { generateInterferences } from './architectInterference.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 // Phase 8 reflex-tier hooks duplicated into the worker (isl-5kx) so
@@ -509,6 +510,68 @@ async function processMatch(match: any): Promise<boolean> {
         type: 'mvp',
         payload: { player: result.mvp },
       });
+    }
+
+    // ── Architect interferences (#370) ─────────────────────────────────────
+    // Close the audit's "headline mechanic is dark code" finding: ask the
+    // Cosmic Architect to react to up to 3 dramatic moments in the just-
+    // simulated match. Each successful call produces a synthetic
+    // architect_interference event for the live commentary feed AND an
+    // architect_interventions audit row.
+    //
+    // Runs POST-simulation rather than in the per-minute loop so the
+    // worker doesn't add ~14s of in-line LLM latency per match. The
+    // narrative-first scope (no engine-side mutation) is deliberate —
+    // future slice wires the chosen interferenceType into a per-event
+    // resolver that the engine reads during simulation.
+    //
+    // Fails soft: any LLM error logs and skips that slot; the rest of
+    // the match proceeds unchanged.
+    try {
+      const interferences = await generateInterferences(
+        ANTHROPIC_API_KEY,
+        result.events,
+        result.finalScore,
+        home.name ?? home.shortName ?? 'Home',
+        away.name ?? away.shortName ?? 'Away',
+      );
+      for (const inter of interferences) {
+        result.events.push({
+          minute:    inter.minute,
+          subminute: inter.subminute,
+          type:      'architect_interference',
+          payload:   {
+            interferenceType: inter.interferenceType,
+            proclamation:     inter.proclamation,
+            targetPlayer:     inter.targetPlayer,
+            targetTeam:       inter.targetTeam,
+            magnitude:        inter.magnitude,
+          },
+        });
+        // Audit row — mirrors the shape mid-week intrusions use in
+        // architect-galaxy-tick so a single dashboard query surfaces all
+        // Architect actions (in-match + out-of-match).
+        await supabase.from('architect_interventions').insert({
+          target_table: 'matches',
+          target_id:    match.id,
+          field:        inter.interferenceType,
+          old_value:    { minute: inter.minute },
+          new_value:    { proclamation: inter.proclamation, magnitude: inter.magnitude },
+          reason:       `In-match Architect interference at minute ${inter.minute}: ${inter.interferenceType}.`,
+          meta:         {
+            match_id:      match.id,
+            kind:          'in_match_interference',
+            source:        'match-worker',
+            target_player: inter.targetPlayer,
+            target_team:   inter.targetTeam,
+          },
+        });
+      }
+      if (interferences.length > 0) {
+        console.log(`[match-worker] Architect emitted ${interferences.length} interference(s) for match ${match.id}`);
+      }
+    } catch (err) {
+      console.warn('[match-worker] generateInterferences threw (non-fatal):', err);
     }
 
     // ── Persist events (batch-insert) ──────────────────────────────────────
