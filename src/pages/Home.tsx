@@ -195,7 +195,12 @@ export default function Home() {
             gap: 32,
             marginTop: 32,
           }}>
-            <LiveMatchPanel match={featuredLive} />
+            {/* When a live match exists, the LiveMatchPanel renders it.
+                Otherwise we surface the next upcoming match in the same
+                slot with a "next kickoff" countdown — pre-#385 the slot
+                rendered "The void is silent.", which left the headline
+                CTA on Home feeling like a dead end during quiet hours. */}
+            <LiveMatchPanel match={featuredLive} fallbackUpcoming={upcomingMatches[0] ?? null} />
             <UpcomingPanel matches={upcomingMatches} />
           </div>
         </Container>
@@ -258,7 +263,15 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
   // Matchday/round tracking happens via match completion counts.
   const year = season?.year ?? '—';
   const seasonLabel = season ? `SEASON ${year}` : 'SEASON —';
-  const matchesStr = `${String(liveMatchCount).padStart(2, '0')} / 16`;
+  // Hero stat — live matches in progress.
+  //
+  // Pre-#385 was hard-coded `/ 16` (the count of fixtures in a single
+  // league round). That denominator is wrong any time the universe isn't
+  // running exactly one round in flight — it implies "16 possible live
+  // matches" when there may be 0 or 32. Drop the denominator entirely;
+  // a single tabular number reads cleaner and never lies about the
+  // theoretical maximum.
+  const matchesStr = String(liveMatchCount).padStart(2, '0');
   return (
     <section style={{ padding: '0 0 0 0' }}>
       <Container>
@@ -419,19 +432,70 @@ function HeroStat({ label, value }: { label: string; value: string }) {
 /**
  * Featured live-match card.
  *
- * Four rows: meta + bordered LIVE chip, three-column score row with
- * brand-coloured shield placeholders, two stacked commentary blocks,
- * and a dust-filled CTA.  Returns a placeholder when no live match is
- * in progress (the section's purpose is to surface "is anything
- * happening" — a missing card answers no).
+ * Three render branches:
+ *   1. A live match in progress → the canonical live card (four rows,
+ *      shield + score + commentary + CTA).
+ *   2. No live match BUT we have an upcoming match → "Next Up" fallback
+ *      (added in #385). Shows the matchup + a kickoff countdown so the
+ *      slot pulls the reader forward instead of dead-ending on "the
+ *      void is silent."
+ *   3. No live + no upcoming → minimal placeholder; the dispatch is
+ *      genuinely empty (very early in a season or post-final).
  *
- * @param {{ match: object | null }} props
+ * @param props.match              The featured live match or null.
+ * @param props.fallbackUpcoming   Next scheduled match used when `match`
+ *                                 is null. Pass null to render branch 3.
  */
-function LiveMatchPanel({ match }: { match: any | null }) {
+function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallbackUpcoming?: any | null }) {
   if (!match) {
+    // Branch 2: live slot empty but we know what's coming next.
+    if (fallbackUpcoming) {
+      const homeName = fallbackUpcoming.home_team?.name ?? fallbackUpcoming.home_team_id ?? 'Home';
+      const awayName = fallbackUpcoming.away_team?.name ?? fallbackUpcoming.away_team_id ?? 'Away';
+      const ko       = fallbackUpcoming.scheduled_at ? new Date(fallbackUpcoming.scheduled_at) : null;
+      return (
+        <div style={{
+          border: `1px solid ${HAIRLINE}`,
+          minHeight: 280,
+          padding: 32,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          gap: 16,
+        }}>
+          <span style={{
+            fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase',
+            color: DUST_50, fontWeight: 700,
+          }}>
+            NEXT UP
+          </span>
+          <h3 style={{
+            fontSize: 22, fontWeight: 700, margin: 0,
+            color: DUST, textTransform: 'uppercase',
+          }}>
+            {homeName} vs {awayName}
+          </h3>
+          {ko && (
+            <p style={{ color: DUST_50, fontSize: 13, margin: 0 }}>
+              Kickoff {ko.toLocaleString()}
+            </p>
+          )}
+          <Link to={`/matches/${fallbackUpcoming.id}`} style={{
+            color: DUST, textDecoration: 'none',
+            border: `1px solid ${QUANTUM}`, background: QUANTUM,
+            fontSize: 12, fontWeight: 700, letterSpacing: '0.14em',
+            textTransform: 'uppercase', padding: '10px 18px',
+            marginTop: 'auto',
+          }}>
+            Watch the build-up →
+          </Link>
+        </div>
+      );
+    }
+    // Branch 3: genuinely empty dispatch.
     return (
       <div style={{
-        ...(undefined as any),
         border: `1px solid ${HAIRLINE}`,
         minHeight: 280,
         display: 'flex',
@@ -440,7 +504,7 @@ function LiveMatchPanel({ match }: { match: any | null }) {
         padding: 24,
       }}>
         <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
-          No match in progress. The void is silent.
+          No match in progress. The cosmos rests.
         </p>
       </div>
     );
