@@ -25,6 +25,7 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getTeam } from '../lib/supabase';
+import { getTeamSupporterCount } from '../features/auth';
 import { RelationshipGraph } from '../features/entities';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 
@@ -94,6 +95,10 @@ export default function TeamDetail() {
   // state in that case.
   const [liveTeam, setLiveTeam] = useState<any>(null);
   const [loadError, setLoadError] = useState<any>(null);
+  // Supporter count from team_supporter_count_v (#382). 0 = no supporters
+  // yet OR fetch error — the badge surface treats both the same. See
+  // src/features/auth/api/teamSupporters.ts for the view rationale.
+  const [supporterCount, setSupporterCount] = useState<number>(0);
 
   useEffect(() => {
     if (!staticTeam || !teamId) return undefined;
@@ -108,6 +113,11 @@ export default function TeamDetail() {
         console.warn('[TeamDetail] getTeam failed:', err);
         setLoadError(err);
       });
+    // Supporter count is fire-and-forget — the badge degrades gracefully
+    // to 0 on any failure, so we don't gate the rest of the page on it.
+    getTeamSupporterCount(db, teamId).then((n) => {
+      if (!cancelled) setSupporterCount(n);
+    });
     return () => { cancelled = true; };
   }, [db, teamId, staticTeam]);
 
@@ -128,6 +138,30 @@ export default function TeamDetail() {
 
       {/* Section I — Hero. */}
       <ClubHero team={staticTeam} league={league} />
+
+      {/* Supporter count badge (#382). Pre-#382, TeamDetail rendered no
+          signal that other humans had chosen this club. The badge is a
+          single line below the hero — minimal, never blocks page paint
+          (the count fetches independently of the hero data). Hidden
+          when the count is 0 so a brand-new team doesn't render
+          "0 supporters" as a discouragement signal. */}
+      {supporterCount > 0 && (
+        <section style={{ padding: '8px 16px 0' }}>
+          <Container>
+            <p style={{
+              fontSize: 11,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: 'rgba(227, 224, 213, 0.50)',
+              margin: 0,
+            }}>
+              <span aria-hidden="true">●</span>{' '}
+              <strong style={{ color: COLORS.dust70 }}>{supporterCount}</strong>{' '}
+              {supporterCount === 1 ? 'fan supports' : 'fans support'} this club
+            </p>
+          </Container>
+        </section>
+      )}
 
       {/* Section II — Squad. */}
       <section style={{ padding: '48px 16px 48px' }}>

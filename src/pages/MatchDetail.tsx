@@ -39,6 +39,7 @@ import { COLORS, Container, SectionHeader, Footer, BackLink, TeamCrest } from '.
 import WagerWidget from '../components/WagerWidget';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getMatch } from '../lib/supabase';
+import { getActiveWatcherCount } from '../features/auth';
 import {
   computeElapsedGameMinute,
   filterEventsByElapsedMinute,
@@ -88,6 +89,13 @@ export default function MatchDetail() {
   const [match,     setMatch]     = useState<any>(null);
   const [loadError, setLoadError] = useState<any>(null);
   const [loaded,    setLoaded]    = useState<boolean>(false);
+  // Cosmos-wide watcher count for the live presence badge (#382). 0 ≡
+  // no watchers OR fetch error — both rendered the same (no badge).
+  // Refreshed on a 60-second interval so the badge stays roughly in
+  // sync with the 5-min server-side presence window without hammering
+  // the DB. 60s is the smallest interval that won't compete with the
+  // 90s heartbeat in AuthProvider.
+  const [watcherCount, setWatcherCount] = useState<number>(0);
 
   useEffect(() => {
     if (!matchId) return undefined;
@@ -108,6 +116,28 @@ export default function MatchDetail() {
       });
     return () => { cancelled = true; };
   }, [db, matchId]);
+
+  // Live presence count — fetch immediately + on 60s interval. The
+  // count is cosmos-wide today rather than per-match because the
+  // `active_watchers_v` view aggregates against last_seen_at; a true
+  // per-match watcher count would need a separate aggregate that
+  // tracks who's looking at THIS match URL. Acceptable shortcut for
+  // v1 — the audit's framing is "the game feels alive", which a
+  // cosmos number already conveys.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      getActiveWatcherCount(db).then((n) => {
+        if (!cancelled) setWatcherCount(n);
+      });
+    };
+    tick();
+    /** Interval in ms between live-presence polls. 60s sits inside the
+        5-min server window so the badge never goes stale. */
+    const PRESENCE_POLL_MS = 60_000;
+    const id = window.setInterval(tick, PRESENCE_POLL_MS);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [db]);
 
   if (loaded && !match && !loadError) return <UnknownMatch matchId={matchId} />;
 
@@ -184,6 +214,25 @@ export default function MatchDetail() {
         return (
           <section style={{ padding: '0 0 48px' }}>
             <Container>
+              {/* Live presence badge (#382) — only rendered when the
+                  match is in_progress (the badge is meaningful only
+                  while a match is actually being watched live). Counts
+                  cosmos-wide active users rather than per-match; per-
+                  match presence would need a separate aggregate, which
+                  the audit explicitly deferred. */}
+              {match.status === 'in_progress' && watcherCount > 0 && (
+                <p style={{
+                  fontSize: 11,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  color: COLORS.dust50,
+                  margin: '0 0 16px',
+                }}>
+                  <span aria-hidden="true" style={{ color: COLORS.quantum }}>●</span>{' '}
+                  <strong style={{ color: COLORS.dust70 }}>{watcherCount}</strong>{' '}
+                  {watcherCount === 1 ? 'fan' : 'fans'} watching now
+                </p>
+              )}
               {liveOrScheduled ? (
                 <div className="match-detail-pitch-grid">
                   <div className="match-detail-pitch-col">

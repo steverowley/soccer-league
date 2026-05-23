@@ -44,6 +44,8 @@ export {
   updateProfile,
   touchLastSeen,
 } from './api/profiles';
+export { getActiveWatcherCount } from './api/activeWatchers';
+export { getTeamSupporterCount } from './api/teamSupporters';
 
 // ── UI (React components) ───────────────────────────────────────────────────
 // AuthProvider stays — it's the React context that makes auth state
