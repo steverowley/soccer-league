@@ -115,20 +115,34 @@ export async function fetchLeagueStandings(
   leagueId: string,
 ): Promise<StandingsRow[]> {
   // ── Step 1: load every completed league fixture in this league ───────────
-  // PostgREST returns the nested competitions object inline, letting us
-  // filter by league_id without a separate competition fetch.  We sort by
-  // played_at DESC so the form-window accumulation below sees results
-  // newest-first (matches how the legacy localStorage path ordered them).
+  // Filters pushed into the PostgREST query (#391). Pre-#391 this loaded
+  // EVERY completed match across EVERY league + competition type, then
+  // .filter()d client-side — O(total-completed-matches) per page render
+  // even though the table only needs O(matches-in-this-league) rows.
+  //
+  // `competitions!inner(...)` forces an inner join so non-league
+  // competitions (cups) and orphan matches drop server-side. The
+  // chained .eq() on the nested column resolves through PostgREST's
+  // embedded-resource filter syntax.
+  //
+  // played_at DESC sort survives so the form-window accumulation below
+  // still sees results newest-first.
   const { data: matchRows, error: matchErr } = await (db as any)
     .from('matches')
-    .select('home_team_id, away_team_id, home_score, away_score, played_at, competitions(league_id, type)')
+    .select('home_team_id, away_team_id, home_score, away_score, played_at, competitions!inner(league_id, type)')
     .eq('status', 'completed')
+    .eq('competitions.league_id', leagueId)
+    .eq('competitions.type', 'league')
     .order('played_at', { ascending: false, nullsFirst: false });
 
   if (matchErr) {
     console.warn(`[fetchLeagueStandings] match fetch failed: ${matchErr.message}`);
     return [];
   }
+  // Defensive client-side filter retained as a belt-and-braces guard:
+  // PostgREST embedded-filter syntax is occasionally surprising on view
+  // joins / orphan rows, and the predicate is O(rows) so the cost is
+  // trivial compared to the round-trip we just saved.
   const rows = ((matchRows ?? []) as MatchRow[]).filter(
     (m) => m.competitions?.league_id === leagueId && m.competitions?.type === 'league',
   );
