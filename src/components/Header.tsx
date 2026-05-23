@@ -56,6 +56,15 @@ export default function Header() {
   };
 
   return (
+    <>
+    {/*
+     * Skip-to-content link (#384). Rendered before <header> so it's the
+     * first focusable element in the page; hidden off-screen until
+     * focused (see .isl-skip-link in index.css). Targets the anchor we
+     * inject at the bottom of <Header /> so keyboard users land at the
+     * start of the page's main content, past the nav.
+     */}
+    <a className="isl-skip-link" href="#main-content">Skip to content</a>
     <header style={{ background: ABYSS }}>
       <div
         style={{
@@ -164,6 +173,11 @@ export default function Header() {
         }
       `}</style>
     </header>
+    {/* Skip-link target. tabIndex=-1 lets keyboard focus land here when
+        the user activates the skip link without trapping the anchor in
+        normal tab order. */}
+    <span id="main-content" tabIndex={-1} aria-hidden="true" />
+    </>
   );
 }
 
