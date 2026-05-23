@@ -149,11 +149,38 @@ describe('sign_star_player', () => {
     expect(mut.player.overall_rating).toBeGreaterThan(1);
   });
 
-  it('signing age is between 22 and 29', () => {
+  it('signing age is between 18 and 34 (union of all #375 variants)', () => {
+    // Pre-#375 was tightly 22-29 (classic only). The variant pool added
+    // prodigy (18-21) and veteran (29-34); widen the assertion to the
+    // union so any variant pick remains valid.
     const spec = enactFocus('sign_star_player', TEAM, SEASON, makeSquad(), rng())!;
     const mut = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'insert_player' }>;
-    expect(mut.player.age).toBeGreaterThanOrEqual(22);
-    expect(mut.player.age).toBeLessThanOrEqual(29);
+    expect(mut.player.age).toBeGreaterThanOrEqual(18);
+    expect(mut.player.age).toBeLessThanOrEqual(34);
+  });
+
+  it('produces variety across distinct seeds (#375)', () => {
+    // Run sign_star_player against 50 different seeds and confirm a
+    // healthy distribution of resulting ages. This is a smoke signal
+    // that the variant picker is actually rolling, not just returning
+    // the same variant every time.
+    //
+    // NOTE: the seed must vary per iteration — calling the test's
+    // shared `rng()` helper would re-seed the same string each time
+    // and produce identical output every iteration. Building a fresh
+    // seededRng per iteration with a unique seed exercises the picker.
+    const ages = new Set<number>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:variety-${i}`);
+      const spec = enactFocus('sign_star_player', TEAM, SEASON, makeSquad(), localRng)!;
+      const mut = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'insert_player' }>;
+      ages.add(mut.player.age!);
+    }
+    // With 50 seeds and 4 variants spanning ages 18-34, the realised
+    // set should comfortably exceed 8 distinct ages. The previous
+    // classic-only path could produce only 7 (range 22-28); >= 8
+    // proves variants other than classic are firing.
+    expect(ages.size).toBeGreaterThanOrEqual(8);
   });
 });
 
@@ -206,15 +233,25 @@ describe('youth_academy', () => {
 // ── tactical_overhaul ─────────────────────────────────────────────────────────
 
 describe('tactical_overhaul', () => {
-  it('produces one mental bump per starter', () => {
+  it('produces one +4 bump per starter on a single tactical stat', () => {
+    // Pre-#375 the only variant bumped mental; the #375 variants
+    // (disciplined / frenzied / cerebral) each bump exactly ONE of
+    // mental / athletic / technical. The invariant we assert now is:
+    // every starter gets +4 on the SAME stat from a known stat set.
     const squad = makeSquad();
     const starters = squad.filter((p) => p.starter);
     const spec = enactFocus('tactical_overhaul', TEAM, SEASON, squad, rng())!;
     expect(spec.mutations).toHaveLength(starters.length);
+
+    const VALID_STATS = ['mental', 'athletic', 'technical'] as const;
+    const firstBump = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
+    expect(VALID_STATS).toContain(firstBump.stat as typeof VALID_STATS[number]);
+    const targetStat = firstBump.stat;
+
     for (const mut of spec.mutations) {
       expect(mut.kind).toBe('player_stat_bump');
       const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
-      expect(bump.stat).toBe('mental');
+      expect(bump.stat).toBe(targetStat);
       expect(bump.delta).toBe(4);
     }
   });

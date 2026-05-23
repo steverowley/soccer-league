@@ -227,6 +227,60 @@ function pickSigningPosition(
   return 'FW';
 }
 
+// ── Variant selection (#375) ────────────────────────────────────────────────
+// Each focus that supports variants composes 2-N `FocusVariant`s. The
+// seeded RNG picks one at enactment time, so identical (team_id, season_id,
+// focus_key) inputs always yield the same variant — reproducibility matters
+// for tests AND for not surprising fans on enactment day.
+//
+// Weights are arbitrary positive numbers (need not sum to 100). The picker
+// rolls in [0, totalWeight) and walks the list; the last variant is a
+// guard against floating-point edge cases.
+
+/**
+ * A single named outcome for a focus that supports variants.
+ *
+ * `weight` controls relative frequency vs sibling variants. Variants with
+ * downsides should usually carry slightly higher weights so the cosmos
+ * doesn't always reward fans — predictably positive enactments would
+ * weaken the "what the star was made of" tension the audit asked for.
+ *
+ * `apply()` is a closure that captures the focus's inputs and returns
+ * the full FocusEnactmentSpec. Variants that share most logic can share
+ * a private builder; variants that diverge structurally (different
+ * mutation kinds entirely) should build their own.
+ */
+interface FocusVariant {
+  /** Stable string id for logging/analytics — not user-visible. */
+  key:    string;
+  /** Relative pick weight. Variants with weight 0 are skipped entirely. */
+  weight: number;
+  /** Build the full focus spec. Called at most once per enactment. */
+  apply:  () => FocusEnactmentSpec;
+}
+
+/**
+ * Select a variant from the list using the seeded RNG.
+ *
+ * Walks the cumulative weight; the last variant catches floating-point
+ * rounding so a weight roll exactly at `totalWeight` never falls through
+ * to return undefined.
+ *
+ * @param variants  Non-empty list of weighted variants.
+ * @param rng       Seeded RNG (typically the focus's enactment RNG).
+ * @returns         One variant. Picks the last if weights are all zero.
+ */
+function pickVariant(variants: FocusVariant[], rng: () => number): FocusVariant {
+  const total = variants.reduce((sum, v) => sum + v.weight, 0);
+  if (total <= 0) return variants[variants.length - 1]!;
+  let roll = rng() * total;
+  for (const v of variants) {
+    roll -= v.weight;
+    if (roll <= 0) return v;
+  }
+  return variants[variants.length - 1]!;
+}
+
 // ── Focus handlers ────────────────────────────────────────────────────────────
 
 /**
@@ -234,8 +288,19 @@ function pickSigningPosition(
  * Stats are seeded from the RNG and scaled slightly above team average —
  * a signing should improve the team, not just fill numbers.
  *
- * Generates stats 8–14 points above team average, clamped at 99.
- * Jersey number: next available above the current highest.
+ * VARIANTS (#375):
+ *   - classic           — prime-age all-rounder, slight boost across all stats
+ *                          (original pre-#375 behaviour, kept as a baseline)
+ *   - prodigy           — 18-21 years old, high athletic + technical, lower
+ *                          mental; volatile potential
+ *   - veteran           — 29-34 years old, high mental + technical, lower
+ *                          athletic; reliable on paper, ages fast
+ *   - architect_touched — average age, anomalously balanced bump across all
+ *                          five stats; rare; the cosmos didn't just deliver
+ *                          a player, it delivered something
+ *
+ * Generates stats 8–14 points above team average (classic + variants),
+ * clamped at 99. Jersey number: next available above the current highest.
  */
 function enactSignStarPlayer(
   teamId: string,
@@ -248,41 +313,146 @@ function enactSignStarPlayer(
   const avgMen    = meanStat(starters, 'mental');
   const avgAtl    = meanStat(starters, 'athletic');
   const avgTech   = meanStat(starters, 'technical');
+  const teamAvg   = (avgAtk + avgDef + avgMen + avgAtl + avgTech) / 5;
 
-  // Star quality: 8–14 above team average, seeded.
-  const boost = () => Math.round(8 + rng() * 6);
   const position = pickSigningPosition(starters, rng);
+  const nextJersey = Math.max(...players.map((p) => (p as unknown as { jersey_number?: number }).jersey_number ?? 0), 0) + 1;
 
-  // Position-specific stat weighting: FW → attacking heavy, DF → defending, etc.
-  const posBoost: Record<string, Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>>> = {
-    FW: { attacking: boost() + 4, defending: -4, mental: boost(), athletic: boost(), technical: boost() },
-    DF: { attacking: -4, defending: boost() + 4, mental: boost(), athletic: boost(), technical: boost() },
-    MF: { attacking: boost(), defending: boost(), mental: boost() + 2, athletic: boost(), technical: boost() + 2 },
-    GK: { attacking: -30, defending: boost() + 10, mental: boost(), athletic: boost(), technical: boost() },
+  /**
+   * Build the per-variant new-player row + reason string. Each variant
+   * picks an age range, an attribute bias, and a reason that frames the
+   * arrival narratively. Shared scaffolding (position, jersey, team_id)
+   * is identical across variants.
+   *
+   * @param ageMin       Lower bound (inclusive) for the player's starting age.
+   * @param ageMax       Upper bound (inclusive) for the player's starting age.
+   * @param boostFn      How big the per-stat boost is. Variants tune this.
+   * @param posBoostFn   Returns the position-specific stat shape; identical
+   *                     across variants but allows future variants to skew.
+   * @returns            (newPlayer, reason) tuple.
+   */
+  const buildSigning = (
+    ageMin: number,
+    ageMax: number,
+    boostFn: () => number,
+    posBoostFn: () => Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>>,
+    reason: string,
+  ): FocusEnactmentSpec => {
+    const pb = posBoostFn();
+    const newPlayer: NewPlayerData = {
+      team_id:       teamId,
+      name:          generatePlayerName(rng),
+      position,
+      age:           Math.round(ageMin + rng() * (ageMax - ageMin)),
+      overall_rating: clampStat(Math.round(teamAvg) + Math.round(boostFn())),
+      attacking:     clampStat(avgAtk  + (pb.attacking  ?? 0)),
+      defending:     clampStat(avgDef  + (pb.defending  ?? 0)),
+      mental:        clampStat(avgMen  + (pb.mental     ?? 0)),
+      athletic:      clampStat(avgAtl  + (pb.athletic   ?? 0)),
+      technical:     clampStat(avgTech + (pb.technical  ?? 0)),
+      starter:       true,
+      jersey_number: nextJersey,
+    };
+    return {
+      focus_key:   'sign_star_player',
+      focus_label: 'Sign a Star Player',
+      reason,
+      mutations:   [{ kind: 'insert_player', player: newPlayer }],
+    };
   };
-  const pb = posBoost[position] ?? {};
 
-  const newPlayer: NewPlayerData = {
-    team_id:       teamId,
-    name:          generatePlayerName(rng),
-    position,
-    age:           Math.round(22 + rng() * 7), // 22–28 — prime signing age
-    overall_rating: clampStat(Math.round((avgAtk + avgDef + avgMen + avgAtl + avgTech) / 5) + 8),
-    attacking:     clampStat(avgAtk  + (pb.attacking  ?? 0)),
-    defending:     clampStat(avgDef  + (pb.defending  ?? 0)),
-    mental:        clampStat(avgMen  + (pb.mental     ?? 0)),
-    athletic:      clampStat(avgAtl  + (pb.athletic   ?? 0)),
-    technical:     clampStat(avgTech + (pb.technical  ?? 0)),
-    starter:       true,
-    jersey_number: Math.max(...players.map((p) => (p as unknown as { jersey_number?: number }).jersey_number ?? 0), 0) + 1,
+  /** Per-position stat shape used by the classic + veteran variants. */
+  const standardPosBoost = (boost: () => number): Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>> => {
+    const tableFor: Record<string, Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>>> = {
+      FW: { attacking: boost() + 4, defending: -4, mental: boost(), athletic: boost(), technical: boost() },
+      DF: { attacking: -4, defending: boost() + 4, mental: boost(), athletic: boost(), technical: boost() },
+      MF: { attacking: boost(), defending: boost(), mental: boost() + 2, athletic: boost(), technical: boost() + 2 },
+      GK: { attacking: -30, defending: boost() + 10, mental: boost(), athletic: boost(), technical: boost() },
+    };
+    return tableFor[position] ?? {};
   };
 
-  return {
-    focus_key:  'sign_star_player',
-    focus_label: 'Sign a Star Player',
-    reason: `A new signing arrives — destiny carries them to the squad. The cosmos prepared this arrival long before the vote was cast.`,
-    mutations: [{ kind: 'insert_player', player: newPlayer }],
-  };
+  // Variant pool (#375). Weights chosen so the cosmos doesn't lean too hard
+  // on either extreme: classic is the everyday case, prodigy + veteran share
+  // the middle, architect_touched is rare so its appearance carries weight.
+  const variants: FocusVariant[] = [
+    {
+      key:    'classic',
+      weight: 35,
+      apply:  () => buildSigning(
+        22, 28,
+        () => 8 + rng() * 6,
+        () => standardPosBoost(() => Math.round(8 + rng() * 6)),
+        `A new signing arrives — destiny carries them to the squad. The cosmos prepared this arrival long before the vote was cast.`,
+      ),
+    },
+    {
+      key:    'prodigy',
+      weight: 25,
+      apply:  () => buildSigning(
+        18, 21,
+        () => 5 + rng() * 4, // overall slightly lower than classic — they grow into it
+        () => {
+          // Prodigies skew athletic + technical, lag on mental until they age.
+          const lift = Math.round(10 + rng() * 4);
+          const dip  = Math.round(-2 - rng() * 3);
+          const tab: Record<string, Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>>> = {
+            FW: { attacking: lift + 2, defending: -6, mental: dip, athletic: lift + 4, technical: lift },
+            DF: { attacking: -6, defending: lift, mental: dip, athletic: lift + 4, technical: lift },
+            MF: { attacking: lift, defending: 0, mental: dip, athletic: lift + 2, technical: lift + 2 },
+            GK: { attacking: -30, defending: lift + 6, mental: dip, athletic: lift + 4, technical: lift },
+          };
+          return tab[position] ?? {};
+        },
+        `A child barely past their stellar baptism arrives in the kit. The cosmos warns: this one is fast, this one is sharp, and this one does not yet know who they are.`,
+      ),
+    },
+    {
+      key:    'veteran',
+      weight: 25,
+      apply:  () => buildSigning(
+        29, 34,
+        () => 9 + rng() * 5, // a touch higher than classic on day one
+        () => {
+          // Veterans skew mental + technical, lag athletic.
+          const lift = Math.round(10 + rng() * 4);
+          const dip  = Math.round(-3 - rng() * 3);
+          const tab: Record<string, Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>>> = {
+            FW: { attacking: lift + 2, defending: -4, mental: lift + 2, athletic: dip, technical: lift + 2 },
+            DF: { attacking: -4, defending: lift + 4, mental: lift + 2, athletic: dip, technical: lift },
+            MF: { attacking: lift, defending: lift, mental: lift + 4, athletic: dip, technical: lift + 4 },
+            GK: { attacking: -30, defending: lift + 8, mental: lift + 4, athletic: dip, technical: lift + 2 },
+          };
+          return tab[position] ?? {};
+        },
+        `A veteran answers a call they had stopped listening for. They are slower than they were. They know things the rest of the squad does not.`,
+      ),
+    },
+    {
+      key:    'architect_touched',
+      weight: 15,
+      apply:  () => buildSigning(
+        24, 29,
+        () => 9 + rng() * 4,
+        () => {
+          // Architect-touched: anomalously balanced — every stat lifts the
+          // same amount, no position lean. The cosmos handed them a player
+          // shaped like a thumb on a scale.
+          const uniform = Math.round(8 + rng() * 4);
+          return {
+            attacking:  uniform,
+            defending:  uniform,
+            mental:     uniform,
+            athletic:   uniform,
+            technical:  uniform,
+          };
+        },
+        `Something arrives that wasn't there before. They wear the kit as if it had always been theirs. Their stats are too even. Nobody asks where they came from.`,
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
@@ -344,24 +514,82 @@ function enactYouthAcademy(
 
 /**
  * Tactical overhaul: the coaching staff is reorganised around a new
- * philosophy. Boosts mental by +4 across all starters — mental represents
- * composure, decision-making, and tactical understanding.
+ * philosophy. Always lifts ONE stat by +4 across all starters; the
+ * variant chooses which stat — mental (disciplined), athletic (frenzied),
+ * or technical (cerebral).
+ *
+ * VARIANTS (#375):
+ *   - disciplined  (mental +4)    — the historical default; sharper
+ *                                    decision-making, composure under pressure.
+ *   - frenzied     (athletic +4)  — pressing pace, intense ball-side
+ *                                    coverage. Same +4 magnitude but
+ *                                    a different match feel.
+ *   - cerebral     (technical +4) — possession-based reset; ball
+ *                                    retention prized over verticality.
  */
-function enactTacticalOverhaul(players: PlayerRow[]): FocusEnactmentSpec {
+function enactTacticalOverhaul(
+  players: PlayerRow[],
+  rng: () => number,
+): FocusEnactmentSpec {
   const starters = players.filter((p) => p.starter);
-  const mutations: EnactmentMutation[] = starters.map((p) => ({
-    kind:      'player_stat_bump',
-    player_id: p.id,
-    stat:      'mental',
-    delta:     4,
-  }));
 
-  return {
-    focus_key:  'tactical_overhaul',
-    focus_label: 'Tactical Overhaul',
-    reason: `The old patterns are dissolved. The squad emerges from the tactical purge with sharper minds, though the transition unsettles their rest.`,
-    mutations,
+  /**
+   * Build the spec for a given target stat + reason. Identical across
+   * variants except which stat column is bumped.
+   *
+   * @param stat   One of mental / athletic / technical.
+   * @param reason Variant-specific in-world explanation.
+   */
+  const buildOverhaul = (
+    stat: 'mental' | 'athletic' | 'technical',
+    reason: string,
+  ): FocusEnactmentSpec => {
+    const mutations: EnactmentMutation[] = starters.map((p) => ({
+      kind:      'player_stat_bump',
+      player_id: p.id,
+      stat,
+      delta:     4,
+    }));
+    return {
+      focus_key:   'tactical_overhaul',
+      focus_label: 'Tactical Overhaul',
+      reason,
+      mutations,
+    };
   };
+
+  // Weights equal across the three philosophies — no a-priori reason
+  // the cosmos should prefer one tactical style over another. If
+  // analytics later show fans rebel against `frenzied`, drop its
+  // weight; the variant key is stable.
+  const variants: FocusVariant[] = [
+    {
+      key:    'disciplined',
+      weight: 33,
+      apply:  () => buildOverhaul(
+        'mental',
+        `The old patterns are dissolved. The squad emerges from the tactical purge with sharper minds, though the transition unsettles their rest.`,
+      ),
+    },
+    {
+      key:    'frenzied',
+      weight: 33,
+      apply:  () => buildOverhaul(
+        'athletic',
+        `The new philosophy is pace and pressure. Lungs burn in training; ball-side coverage tightens. The squad runs harder than it has ever run.`,
+      ),
+    },
+    {
+      key:    'cerebral',
+      weight: 33,
+      apply:  () => buildOverhaul(
+        'technical',
+        `The coaching staff insists on the ball. Touches per possession climb in training. The squad emerges patient — almost slow — but their feet have grown careful.`,
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
@@ -534,7 +762,7 @@ export function enactFocus(
   switch (focusKey) {
     case 'sign_star_player': return enactSignStarPlayer(teamId, players, rng);
     case 'youth_academy':    return enactYouthAcademy(players, rng);
-    case 'tactical_overhaul':return enactTacticalOverhaul(players);
+    case 'tactical_overhaul':return enactTacticalOverhaul(players, rng);
     case 'stadium_upgrade':  return enactStadiumUpgrade(teamId, seasonId);
     case 'preseason_camp':   return enactPreseasonCamp(players);
     case 'scout_network':    return enactScoutNetwork(players, rng);
