@@ -39,10 +39,6 @@ import {
 } from '../logic/bettorNarratives';
 import { determineOutcome } from '../logic/settlement';
 
-// TYPE ESCAPE HATCH — narratives table not yet in generated database.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 // ── Narrative-source convention ───────────────────────────────────────────────
 //
 // The `source` column on `narratives` doubles as a routing tag for the news
@@ -114,7 +110,7 @@ export async function writeWagerNarrativeForMatch(
   // excludes still-open wagers (race condition guard — settlement might not
   // have flushed every row yet) and includes 'void' so the batch builder can
   // see and discard them deterministically.
-  const { data: settledWagers, error } = await (db as AnyDb) // CAST:wagers
+  const { data: settledWagers, error } = await db
     .from('wagers')
     .select('status, stake, payout, odds_snapshot')
     .eq('match_id', matchId)
@@ -151,7 +147,7 @@ export async function writeWagerNarrativeForMatch(
   // ── 4. Write narrative row ────────────────────────────────────────────────
   // entities_involved is an empty array — bettor narratives reference no named
   // entities.  The `source` tag carries the voice index for UI accent routing.
-  const { error: insertErr } = await (db as AnyDb) // CAST:narratives
+  const { error: insertErr } = await db
     .from('narratives')
     .insert({
       kind:              NARRATIVE_KIND_WAGER,

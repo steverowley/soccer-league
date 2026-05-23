@@ -33,10 +33,6 @@ import {
   type WagerVolumeSummary,
 } from '../logic/wagerVolume';
 
-// TYPE ESCAPE HATCH — see other api/* modules for the pattern explanation.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 /**
  * Empty summary returned on error or when no wagers exist for a match.
  * Keeps the call-site type stable so callers don't have to null-check.
@@ -66,7 +62,7 @@ export async function getWagerVolumeForMatch(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<WagerVolumeSummary> {
-  const { data, error } = await (db as AnyDb) // CAST:wager_volume_v
+  const { data, error } = await db
     .from('wager_volume_v')
     .select('team_choice, total_stake, bet_count')
     .eq('match_id', matchId);
@@ -81,15 +77,14 @@ export async function getWagerVolumeForMatch(
   // rows where the discriminant is null or unknown rather than treating
   // them as 'home'.  Defensive — should never happen given the CHECK
   // constraint on wagers.team_choice.
-  const rows: WagerVolumeViewRow[] = (data ?? [])
-    .filter((r: { team_choice: string | null }) =>
-      r.team_choice != null && VALID_TEAM_CHOICES.has(r.team_choice),
-    )
-    .map((r: { team_choice: string; total_stake: number | null; bet_count: number | null }) => ({
+  const rows: WagerVolumeViewRow[] = (data ?? []).flatMap((r) => {
+    if (r.team_choice == null || !VALID_TEAM_CHOICES.has(r.team_choice)) return [];
+    return [{
       team_choice: r.team_choice as 'home' | 'draw' | 'away',
       total_stake: r.total_stake ?? 0,
       bet_count:   r.bet_count   ?? 0,
-    }));
+    }];
+  });
 
   return summariseFromViewRows(rows);
 }

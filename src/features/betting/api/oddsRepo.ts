@@ -3,18 +3,9 @@
 // computed decimal odds for matches. The odds are computed by the pure logic
 // in logic/odds.ts and stored here so the UI can display them and wagers
 // can snapshot them at placement time.
-//
-// The `match_odds` table is created by migration 0004_betting.sql (applied).
-// database.ts predates that migration so `match_odds` is absent from generated
-// types — cast to `any` (marked CAST:match_odds) until the next
-// `supabase gen types` run regenerates src/types/database.ts.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { MatchOdds } from '../types';
-
-// TYPE ESCAPE HATCH — see profiles.ts for the pattern explanation.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 /**
  * Fetch computed odds for a single match. Returns null if odds haven't
@@ -29,7 +20,7 @@ export async function getMatchOdds(
   db: IslSupabaseClient,
   matchId: string,
 ): Promise<MatchOdds | null> {
-  const { data, error } = await (db as AnyDb) // CAST:match_odds
+  const { data, error } = await db
     .from('match_odds')
     .select('*')
     .eq('match_id', matchId)
@@ -58,7 +49,7 @@ export async function saveMatchOdds(
   drawOdds: number,
   awayOdds: number,
 ): Promise<MatchOdds | null> {
-  const { data, error } = await (db as AnyDb) // CAST:match_odds
+  const { data, error } = await db
     .from('match_odds')
     .upsert(
       {

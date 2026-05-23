@@ -5,21 +5,13 @@
 //
 // All queries take an injected Supabase client so tests can inject fakes.
 //
-// Tables used (created by 0007_training.sql, not yet in database.ts):
+// Tables used (created by 0007_training.sql):
 //   - player_training_log (read/write — append-only log)
-//
-// All casts marked CAST:training for grep-and-remove after database.ts regen.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { TrainingStat } from '../types';
 import { applyClick, XP_PER_CLICK } from '../logic/xpCurve';
 import { evaluateClick } from '../logic/cooldown';
-
-// TYPE ESCAPE HATCH — player_training_log is not yet in generated
-// database.ts. All uses are marked with CAST:training so we can grep and
-// remove them once the typed client is regenerated.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Read: lifetime XP for a player ──────────────────────────────────────────
 
@@ -39,7 +31,7 @@ export async function getPlayerLifetimeXp(
   db: IslSupabaseClient,
   playerId: string,
 ): Promise<number> {
-  const { data, error } = await (db as AnyDb) // CAST:training
+  const { data, error } = await db
     .from('player_training_log')
     .select('xp_added')
     .eq('player_id', playerId);
@@ -75,7 +67,7 @@ async function getRecentClickTimestamps(
   userId: string,
   limit: number = 500,
 ): Promise<number[]> {
-  const { data, error } = await (db as AnyDb) // CAST:training
+  const { data, error } = await db
     .from('player_training_log')
     .select('created_at')
     .eq('user_id', userId)
@@ -175,7 +167,7 @@ export async function recordClick(
   const clickResult = applyClick(lifetimeXp, XP_PER_CLICK);
 
   // 4. Insert the row. Append-only; we never update training log rows.
-  const { error } = await (db as AnyDb) // CAST:training
+  const { error } = await db
     .from('player_training_log')
     .insert({
       user_id: userId,

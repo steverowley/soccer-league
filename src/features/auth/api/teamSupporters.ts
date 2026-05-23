@@ -20,11 +20,6 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 
-// TYPE ESCAPE HATCH — view is too small to be worth regenerating the
-// generated DB types file. Same pattern as activeWatchers.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
 /**
  * Fetch the supporter count for a single team.
  *
@@ -43,7 +38,7 @@ export async function getTeamSupporterCount(
   teamId: string,
 ): Promise<number> {
   try {
-    const { data, error } = await (db as AnyDb)  // CAST:team_supporter_count_v
+    const { data, error } = await db
       .from('team_supporter_count_v')
       .select('supporter_count')
       .eq('team_id', teamId)

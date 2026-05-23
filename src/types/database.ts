@@ -554,6 +554,7 @@ export type Database = {
       }
       focus_enacted: {
         Row: {
+          architect_reacted_at: string | null
           enacted_at: string
           focus_key: string
           focus_label: string
@@ -564,6 +565,7 @@ export type Database = {
           tier: string
         }
         Insert: {
+          architect_reacted_at?: string | null
           enacted_at?: string
           focus_key: string
           focus_label: string
@@ -574,6 +576,7 @@ export type Database = {
           tier: string
         }
         Update: {
+          architect_reacted_at?: string | null
           enacted_at?: string
           focus_key?: string
           focus_label?: string
@@ -1453,6 +1456,9 @@ export type Database = {
           id: string
           is_admin: boolean
           last_seen_at: string | null
+          last_streak_day: string | null
+          login_streak: number
+          longest_streak: number
           notify_all_matches: boolean
           notify_favourite_team: boolean
           username: string
@@ -1465,6 +1471,9 @@ export type Database = {
           id: string
           is_admin?: boolean
           last_seen_at?: string | null
+          last_streak_day?: string | null
+          login_streak?: number
+          longest_streak?: number
           notify_all_matches?: boolean
           notify_favourite_team?: boolean
           username: string
@@ -1477,6 +1486,9 @@ export type Database = {
           id?: string
           is_admin?: boolean
           last_seen_at?: string | null
+          last_streak_day?: string | null
+          login_streak?: number
+          longest_streak?: number
           notify_all_matches?: boolean
           notify_favourite_team?: boolean
           username?: string
@@ -2072,6 +2084,21 @@ export type Database = {
           },
         ]
       }
+      team_supporter_count_v: {
+        Row: {
+          supporter_count: number | null
+          team_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_favourite_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wager_leaderboard: {
         Row: {
           favourite_team_id: string | null
@@ -2158,6 +2185,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      bump_login_streak: { Args: never; Returns: number }
       incinerate_player: {
         Args: {
           p_decree_text: string
@@ -2167,6 +2195,35 @@ export type Database = {
           p_team_id: string
         }
         Returns: string
+      }
+      place_wager: {
+        Args: {
+          p_match_id: string
+          p_odds: number
+          p_stake: number
+          p_team_choice: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          match_id: string
+          odds_snapshot: number
+          payout: number | null
+          stake: number
+          status: string
+          team_choice: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "wagers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      settle_wager: {
+        Args: { p_payout: number; p_status: string; p_wager_id: string }
+        Returns: boolean
       }
     }
     Enums: {

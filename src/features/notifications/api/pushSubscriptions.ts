@@ -13,13 +13,6 @@
 //   Returns `{ data, error }` matching Supabase's own convention.  We do
 //   not throw on Supabase errors — UI decides how to surface them
 //   (toast, inline message, redirect).
-//
-// CAST ESCAPE HATCH
-//   The new table + columns aren't in the generated `database.ts` yet
-//   (migration 0039 hasn't been applied at the time this file is being
-//   written).  Each affected `.from(...)` is cast to `any` with a
-//   `// CAST:notifications` marker so we can grep + clean up after the
-//   regen lands.
 
 import { z } from 'zod';
 import type { IslSupabaseClient } from '@shared/supabase/client';
@@ -28,13 +21,6 @@ import type {
   NotificationPreferences,
   PushSubscriptionRow,
 } from '../types';
-
-// ── Type escape hatch ─────────────────────────────────────────────────────────
-// Identical pattern to `auth/api/profiles.ts` (CAST:profiles).  Drop these
-// casts once `npx supabase gen types` is re-run against migration 0039.
-//
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 // Boundary validation: every row read from the DB is parsed here BEFORE it
@@ -87,7 +73,7 @@ export async function listOwnPushSubscriptions(
     return { data: [], error: 'Not authenticated' };
   }
 
-  const { data, error } = await (db as AnyDb) // CAST:notifications
+  const { data, error } = await db
     .from('push_subscriptions')
     .select('*')
     .eq('user_id', authData.user.id)
@@ -128,7 +114,7 @@ export async function getNotificationPreferences(
     return { data: null, error: 'Not authenticated' };
   }
 
-  const { data, error } = await (db as AnyDb) // CAST:notifications
+  const { data, error } = await db
     .from('profiles')
     .select('notify_favourite_team, notify_all_matches')
     .eq('id', authData.user.id)
@@ -192,7 +178,7 @@ export async function upsertPushSubscription(
     last_used_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (db as AnyDb) // CAST:notifications
+  const { data, error } = await db
     .from('push_subscriptions')
     .upsert(row, { onConflict: 'user_id,endpoint' })
     .select()
@@ -234,7 +220,7 @@ export async function deletePushSubscription(
     return { error: 'Not authenticated' };
   }
 
-  const { error } = await (db as AnyDb) // CAST:notifications
+  const { error } = await db
     .from('push_subscriptions')
     .delete()
     .eq('user_id', authData.user.id)
@@ -298,7 +284,7 @@ export async function updateNotificationPreferences(
     return { data: null, error: 'No preferences supplied' };
   }
 
-  const { data, error } = await (db as AnyDb) // CAST:notifications
+  const { data, error } = await db
     .from('profiles')
     .update(safe)
     .eq('id', authData.user.id)
