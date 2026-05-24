@@ -35,6 +35,15 @@ import './index.css';
 
 import ErrorBoundary from './components/ErrorBoundary';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
+// Global UI primitives (#383) — ToastProvider owns the queue, ToastViewport
+// renders it, RouteSuspenseFallback replaces the previous null Suspense
+// fallback so cold chunk-loads show structural cues instead of a blank
+// viewport.
+import {
+  ToastProvider,
+  ToastViewport,
+  RouteSuspenseFallback,
+} from './shared/ui';
 // Initialise Sentry as early as possible — before React mounts — so render
 // errors caught by the outermost ErrorBoundary have a configured client to
 // report against. No-op when VITE_SENTRY_DSN is unset (dev / preview).
@@ -193,16 +202,20 @@ createRoot(document.getElementById('root')!).render(
             via the admin-triggered path (no per-browser race). */}
         <RefereeNarrativeListener />
         <MemoryWriteListener />
+        {/* ToastProvider sits inside Supabase + listeners (so listener
+            errors can surface as toasts later if we want) but outside the
+            Router so route changes don't drop in-flight toasts mid-life.
+            Single mount point for the entire app — feature code calls
+            useToast() to push, never instantiates its own queue. */}
+        <ToastProvider>
         <AuthProvider>
           <BrowserRouter basename={import.meta.env.BASE_URL}>
             {/* Suspense boundary: lazy page chunks resolve asynchronously.
-                The null fallback renders nothing while the chunk loads —
-                the Header is outside the Suspense so it always paints,
-                giving the user an immediate non-blank viewport on cold
-                navigations.  A spinner would flash too briefly to be
-                useful on fast connections and would distract on slow ones;
-                null is the correct trade-off here. */}
-            <Suspense fallback={null}>
+                The fallback shows a Skeleton-based content shape (kicker +
+                heading + body lines) so cold chunk-loads paint structure
+                instead of a blank viewport (#383). The Header is outside
+                the Suspense so it always paints. */}
+            <Suspense fallback={<RouteSuspenseFallback />}>
             <RedirectHandler />
             {/* Per-route error boundary (#383). Wraps the entire Routes
                 element with a pathname-keyed boundary so a render error
@@ -363,6 +376,11 @@ createRoot(document.getElementById('root')!).render(
             </Suspense>
           </BrowserRouter>
         </AuthProvider>
+        {/* Sibling of the Router so the viewport sits above page content
+            regardless of route. A single mount point — every feature
+            calls useToast() to push into the same queue. */}
+        <ToastViewport />
+        </ToastProvider>
       </SupabaseProvider>
     </ErrorBoundary>
   </StrictMode>,
