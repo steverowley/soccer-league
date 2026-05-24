@@ -19,8 +19,12 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(SUPABAS
 //   → features/match/api/seasons.ts
 // Slice 4: `getTeams`, `getTeam`, `getPlayersForTeam`
 //   → features/match/api/teams.ts
-// Slice 5 (this PR): `getPlayer`, `getManager` + `ManagerWithContext`
+// Slice 5: `getPlayer`, `getManager` + `ManagerWithContext`
 //   → features/match/api/{players,managers}.ts
+// Slice 6 (this PR): `getIdolBoard`, `getPlayerIdolRank`,
+//                    `getTopIdolsForArchitect` + IdolRow / IdolBoardResult
+//                    / TopIdolForArchitect types
+//   → features/match/api/idols.ts
 //
 // Slice 3 also deleted as dead code: normalizeTeam, normalizeLeague,
 // getSeasons, getLeagues, getCompetitionsForSeason, getCompetition,
@@ -248,81 +252,6 @@ export async function saveMatchPlayerStats(stats: MatchPlayerStat[]) {
   if (error) throw error;
 }
 
-interface IdolRow {
-  id: string;
-  name: string;
-  team_id: string;
-  global_rank: number;
-  team_rank: number;
-  favourite_count: number;
-  training_count_14d: number;
-}
-
-interface IdolBoardResult {
-  global: IdolRow[];
-  byTeam: Record<string, IdolRow[]>;
-}
-
-export async function getIdolBoard(
-  db: SupabaseClient<Database>,
-  { globalLimit = 20, teamLimit = 5 } = {},
-): Promise<IdolBoardResult> {
-  const { data: topRows, error: topErr } = await db
-    .from('player_idol_score')
-    .select('*')
-    .order('global_rank', { ascending: true })
-    .limit(globalLimit);
-  if (topErr) throw topErr;
-
-  const { data: teamRows, error: teamErr } = await db
-    .from('player_idol_score')
-    .select('*')
-    .lte('team_rank', teamLimit)
-    .order('team_id', { ascending: true })
-    .order('team_rank', { ascending: true });
-  if (teamErr) throw teamErr;
-
-  const byTeam = (teamRows ?? []).reduce(
-    (acc: Record<string, unknown[]>, row: Record<string, unknown>) => {
-      const teamId = row.team_id as string;
-      if (!acc[teamId]) acc[teamId] = [];
-      acc[teamId].push(row);
-      return acc;
-    },
-    {},
-  ) as Record<string, IdolRow[]>;
-
-  return { global: ((topRows as unknown) ?? []) as IdolRow[], byTeam };
-}
-
-export async function getPlayerIdolRank(db: SupabaseClient<Database>, playerId: string): Promise<IdolRow | null> {
-  const { data, error } = await db
-    .from('player_idol_score')
-    .select('*')
-    .eq('player_id', playerId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as IdolRow | null) ?? null;
-}
-
-interface TopIdolForArchitect {
-  name: string;
-  globalRank: number;
-}
-
-export async function getTopIdolsForArchitect(db: SupabaseClient<Database>, limit = 10): Promise<TopIdolForArchitect[]> {
-  try {
-    const { data, error } = await db
-      .from('player_idol_score')
-      .select('name, global_rank')
-      .order('global_rank', { ascending: true })
-      .limit(limit);
-    if (error) return [];
-    return ((data as unknown ?? []) as Array<Record<string, unknown>>).map((r) => ({ name: r.name as string, globalRank: r.global_rank as number }));
-  } catch {
-    return [];
-  }
-}
 
 // ── db-injected helpers used by Profile and Training pages ──────────────────
 // These take an explicit SupabaseClient first argument (dependency injection

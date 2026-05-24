@@ -30,7 +30,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getIdolBoard } from '../lib/supabase';
+import { getIdolBoard } from '../features/match';
 import { getWagerLeaderboard } from '@features/betting';
 import type { WagerLeaderboardEntry } from '@features/betting';
 

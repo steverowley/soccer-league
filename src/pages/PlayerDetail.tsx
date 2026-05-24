@@ -36,8 +36,7 @@ import { useParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getPlayer } from '../features/match';
-import { getPlayerIdolRank } from '../lib/supabase';
+import { getPlayer, getPlayerIdolRank } from '../features/match';
 import {
   getPlayerRecentMatches,
   getNarrativesMentioningPlayer,
