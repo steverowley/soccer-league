@@ -234,7 +234,19 @@ describe('subscribeToMatchEvents', () => {
     // Pull the registered callback and invoke it as Realtime would.
     const stub = mock.channelStubs[0]!;
     const handler = stub.on.mock.calls[0]![2];
-    const fakeEvent = { id: 'e1', minute: 5, subminute: 0, type: 'shot' };
+    // Fixture now includes every column the match_events schema
+    // requires — the api boundary (#386 slice 2) Zod-validates the
+    // Realtime payload before forwarding to onInsert, so a partial
+    // fixture would be silently dropped.
+    const fakeEvent = {
+      id:          'e1',
+      match_id:    'm1',
+      minute:      5,
+      subminute:   0,
+      type:        'shot',
+      payload:     {},
+      created_at:  '2026-05-24T12:00:00Z',
+    };
     handler({ new: fakeEvent });
 
     expect(onInsert).toHaveBeenCalledWith(fakeEvent);
