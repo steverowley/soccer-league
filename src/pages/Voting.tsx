@@ -31,6 +31,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { canAffordVote, MIN_BET } from '../features/auth';
 import { getTeamFocusOptions, getTeamTally, castVote, getEnactedFocuses } from '../features/voting';
@@ -116,7 +117,12 @@ export default function Voting() {
   // success so the spinner / disabled state lifts as soon as the
   // optimistic write returns.
   const [voteInFlight, setVoteInFlight] = useState<any>(null);
-  const [voteError,    setVoteError]    = useState<any>(null);
+  // Vote errors now surface through the global toast (#383) rather than
+  // an inline italic-flare paragraph — consistent UX with the rest of
+  // the app and announced to assistive tech via the toast's aria-live
+  // region. The local state slot is gone; `toast.error(...)` is the
+  // single call site.
+  const toast = useToast();
 
   // Trigger to re-fetch the tally after a successful vote.  Plain
   // incrementing number keeps the useEffect dep array simple.
@@ -192,22 +198,25 @@ export default function Voting() {
   const onVote = async (optionId: string, credits: number) => {
     if (!user || !profile) return;
     if (!canAffordVote(profile.credits, credits)) {
-      setVoteError(`Need at least ${credits} credits.`);
+      toast.error(`Need at least ${credits} credits.`);
       return;
     }
     setVoteInFlight(optionId);
-    setVoteError(null);
     try {
       const result = await castVote(db, user.id, optionId, credits);
       if (!result) {
-        setVoteError('Vote did not register. Try again.');
+        toast.error('Vote did not register. Try again.');
       } else {
+        // Confirmation toast so screen-reader users know the vote
+        // landed — sighted users also see the tally bump but the
+        // toast is the explicit "success" cue.
+        toast.success('Vote cast.');
         await refreshProfile?.();
         setRefreshKey((k) => k + 1);
       }
     } catch (err) {
       console.warn('[Voting] castVote threw:', err);
-      setVoteError('Vote did not register. Try again.');
+      toast.error('Vote did not register. Try again.');
     } finally {
       setVoteInFlight(null);
     }
@@ -302,13 +311,9 @@ export default function Voting() {
                 voteInFlight={voteInFlight}
                 onVote={onVote}
               />
-              {voteError && (
-                <p style={{
-                  color: FLARE, fontSize: 13, fontStyle: 'italic', marginTop: -32,
-                }}>
-                  {voteError}
-                </p>
-              )}
+              {/* Vote-error inline paragraph removed — errors now route
+                  through the global toast (#383) so the announcement is
+                  consistent app-wide and screen-reader friendly. */}
             </div>
           )}
         </Container>
