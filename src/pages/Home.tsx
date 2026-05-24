@@ -52,10 +52,10 @@ import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { Card, Chip, EmptyState } from '../shared/ui';
 import { useAuth } from '../features/auth';
-import { getActiveSeason } from '../lib/supabase';
 import { LEAGUES } from '../data/leagueData';
 import {
   fetchLeagueStandings,
+  getActiveSeason,
   getLiveMatches,
   getUpcomingMatches,
   type LeagueStandingsRow,
@@ -121,7 +121,7 @@ export default function Home() {
     Promise.all([
       getLiveMatches(db),
       getUpcomingMatches(db, 3),
-      (getActiveSeason() as any),
+      getActiveSeason(db),
     ])
       .then(([live, upcoming, season]) => {
         if (cancelled) return;

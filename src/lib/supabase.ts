@@ -7,145 +7,21 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase: SupabaseClient<Database> = createClient<Database>(SUPABASE_URL, SUPABASE_ANON);
 
-export function normalizeTeam(team: Database['public']['Tables']['teams']['Row']) {
-  return {
-    ...team,
-    homeGround: team.home_ground,
-    leagueId: team.league_id,
-  };
-}
 
-export function normalizeLeague(league: Database['public']['Tables']['leagues']['Row']) {
-  return {
-    ...league,
-    shortName: league.short_name,
-  };
-}
-
-export async function getSeasons() {
-  const { data, error } = await supabase
-    .from('seasons')
-    .select('*')
-    .order('year', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
-}
-
-/**
- * Fetch the currently active season.
- *
- * The active season drives UI elements (hero stats, fixture listings, voting
- * windows).  If no season has `is_active = true` in the database (common at
- * startup or between seasons), returns `null` rather than throwing so callers
- * can render graceful placeholders.
- *
- * @returns Active season row with year, current_round, total_rounds, or null.
- */
-export async function getActiveSeason() {
-  const { data, error } = await supabase
-    .from('seasons')
-    .select('*')
-    .eq('is_active', true)
-    .single();
-  if (error) {
-    // No active season found (common at startup or between seasons).
-    // Return null so callers can render a placeholder without throwing.
-    console.warn('[getActiveSeason] no active season found:', error.message);
-    return null;
-  }
-  return data;
-}
-
-export async function getLeagues() {
-  const { data, error } = await supabase
-    .from('leagues')
-    .select('*')
-    .order('name');
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getCompetitionsForSeason(seasonId: string) {
-  const { data, error } = await supabase
-    .from('competitions')
-    .select(
-      `
-      *,
-      leagues (id, name, short_name),
-      competition_teams (
-        group_name,
-        seeding,
-        teams (id, name, color, location)
-      )
-    `,
-    )
-    .eq('season_id', seasonId)
-    .order('type');
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getCompetition(competitionId: string) {
-  const { data, error } = await supabase
-    .from('competitions')
-    .select(
-      `
-      *,
-      seasons (id, name, year),
-      leagues (id, name, short_name),
-      competition_teams (
-        group_name,
-        seeding,
-        teams (*)
-      )
-    `,
-    )
-    .eq('id', competitionId)
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function getMatchesForCompetition(competitionId: string) {
-  const { data, error } = await supabase
-    .from('matches')
-    .select(
-      `
-      *,
-      home_team:teams!matches_home_team_id_fkey (id, name, color),
-      away_team:teams!matches_away_team_id_fkey (id, name, color)
-    `,
-    )
-    .eq('competition_id', competitionId)
-    .order('played_at', { nullsFirst: true });
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getMatchesWithTeamDetail(competitionId: string) {
-  const { data, error } = await supabase
-    .from('matches')
-    .select(
-      `
-      *,
-      home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
-      away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
-    `,
-    )
-    .eq('competition_id', competitionId)
-    .order('round', { nullsFirst: true })
-    .order('played_at', { nullsFirst: true });
-  if (error) throw error;
-  return data ?? [];
-}
-
-
-// `getMatch` (slice 1) + `getLiveMatches` / `getUpcomingMatches` /
-// `LIVE_WINDOW_SECONDS` (slice 2) were extracted into
-// `features/match/api/matches.ts` and now live behind the typed-client
-// DI pattern. Consumers (Home, Matches, Welcome, MatchDetail) import
-// from `@features/match` (or `../features/match`) and pass the typed
-// Supabase client via `useSupabase()`.
+// #387 EXTRACTIONS SO FAR
+// ────────────────────────
+// Slice 1: `getMatch`
+//   → features/match/api/matches.ts
+// Slice 2: `getLiveMatches`, `getUpcomingMatches`,
+//          LIVE_WINDOW_SECONDS pacing constant
+//   → features/match/api/matches.ts
+// Slice 3 (this PR): `getActiveSeason`
+//   → features/match/api/seasons.ts
+//
+// This slice also deleted as dead code: normalizeTeam, normalizeLeague,
+// getSeasons, getLeagues, getCompetitionsForSeason, getCompetition,
+// getMatchesForCompetition, getMatchesWithTeamDetail. Verified via
+// grep across src/ — no consumers in the live tree.
 
 export async function getTeams(leagueId: string | null = null, withPlayers = false) {
   const playerSelect = withPlayers

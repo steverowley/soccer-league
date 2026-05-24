@@ -20,6 +20,7 @@
 //   so the queries below are fully typed end-to-end — no AnyDb casts.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { Database } from '@/types/database';
 import type {
   LeagueFixtureCounts,
   SeasonStatus,
@@ -279,4 +280,34 @@ export async function getSeasonIdForMatch(
 
   if (compErr || !compRow) return null;
   return compRow.season_id;
+}
+
+// ── Active season fetch (formerly src/lib/supabase.ts) ──────────────────
+
+/**
+ * Fetch the currently active season row (`is_active = true`). Migrated
+ * out of `src/lib/supabase.ts` in #387 slice 3.
+ *
+ * Returns `null` when no season is active — common at startup or in the
+ * inter-season gap. Callers (Home, Voting) render a placeholder rather
+ * than throwing. Errors are warn-logged and absorbed into the same
+ * null-return path so the page never reads a transient Supabase blip
+ * as "league is over".
+ *
+ * @param db  Injected Supabase client (via `useSupabase()`).
+ * @returns   The active season row, or null on no-row / error.
+ */
+export async function getActiveSeason(
+  db: IslSupabaseClient,
+): Promise<Database['public']['Tables']['seasons']['Row'] | null> {
+  const { data, error } = await db
+    .from('seasons')
+    .select('*')
+    .eq('is_active', true)
+    .single();
+  if (error) {
+    console.warn('[getActiveSeason] no active season found:', error.message);
+    return null;
+  }
+  return data;
 }

@@ -229,5 +229,6 @@ export {
   getSeasonIdForMatch,
   listAllSeasons,
   getSeasonSummary,
+  getActiveSeason,
 } from './api/seasons';
 export type { SeasonSummary } from './api/seasons';
