@@ -38,9 +38,9 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink, TeamCrest } from '../components/Layout';
 import WagerWidget from '../components/WagerWidget';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getMatch } from '../lib/supabase';
 import { getActiveWatcherCount } from '../features/auth';
 import {
+  getMatch,
   computeElapsedGameMinute,
   filterEventsByElapsedMinute,
   getMatchEvents,
@@ -103,7 +103,7 @@ export default function MatchDetail() {
     let cancelled = false;
     setLoadError(null);
     setLoaded(false);
-    getMatch(matchId)
+    getMatch(db, matchId)
       .then((data: any) => {
         if (cancelled) return;
         setMatch(data);
@@ -1596,7 +1596,7 @@ function MatchPitchPanel({
     let cancelled = false;
     setEvents([]);
     Promise.all([
-      getMatch(matchId),
+      getMatch(db, matchId),
       getMatchEvents(db, matchId),
     ])
       .then(([m, evRows]) => {
