@@ -160,12 +160,15 @@ export { useMatchEventLatest } from './ui/pitch/useMatchEventsBroadcast';
 export { fetchLeagueStandings } from './api/standings';
 export type { StandingsRow as LeagueStandingsRow } from './api/standings';
 
-// ── Match-detail fetch ─────────────────────────────────────────────────────
-// `getMatch` was originally in `src/lib/supabase.ts` as a singleton-
-// consuming function; #387 slice 1 extracted it into the feature with
-// the standard `db` injection. MatchDetail is the only consumer today;
-// future call sites should import from this barrel.
-export { getMatch } from './api/matches';
+// ── Match-detail fetch + list reads ───────────────────────────────────────
+// Originally in `src/lib/supabase.ts` as singleton-consuming functions;
+// #387 slices 1 + 2 moved them behind the typed-client DI pattern.
+// Future call sites should import from this barrel.
+export {
+  getMatch,
+  getLiveMatches,
+  getUpcomingMatches,
+} from './api/matches';
 
 // ── Live match — data layer only ───────────────────────────────────────────
 // MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
