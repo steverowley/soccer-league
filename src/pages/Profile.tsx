@@ -23,6 +23,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../lib/supabase';
@@ -71,7 +72,16 @@ export default function Profile() {
   usePageTitle('Profile');
   const db = useSupabase();
   const navigate = useNavigate();
-  const { user, profile, loading, refreshProfile, signOut } = useAuth();
+  const { user, profile, loading, refreshProfile, signOut, deleteAccount } = useAuth();
+  const toast = useToast();
+  // GDPR delete-account modal (#415). Two state slots:
+  //   - deleteOpen  — modal visibility
+  //   - deleteTyped — the user's current typing in the confirmation field;
+  //                   must equal profile.username exactly before the
+  //                   destructive button is enabled.
+  const [deleteOpen,  setDeleteOpen]  = useState(false);
+  const [deleteTyped, setDeleteTyped] = useState('');
+  const [deleteBusy,  setDeleteBusy]  = useState(false);
 
   const [teams,   setTeams]   = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
@@ -194,6 +204,37 @@ export default function Profile() {
 
   const onSignOut = async () => {
     await signOut();
+    navigate('/', { replace: true });
+  };
+
+  /**
+   * Open the typed-confirmation modal for permanent account deletion.
+   * Clears any prior typed value so reopening starts fresh.
+   */
+  const onOpenDelete = () => {
+    setDeleteTyped('');
+    setDeleteOpen(true);
+  };
+
+  /**
+   * Final confirmation step — invoke the account-delete edge function
+   * via AuthProvider.deleteAccount, then redirect home on success.
+   * The typed field must already match the username (the modal's
+   * destructive button is disabled otherwise), but we re-verify here
+   * as defence-in-depth.
+   */
+  const onConfirmDelete = async () => {
+    if (!profile?.username || deleteTyped !== profile.username) return;
+    setDeleteBusy(true);
+    const { ok, error } = await deleteAccount();
+    setDeleteBusy(false);
+    if (!ok) {
+      toast.error(error ?? "Couldn't delete your account.");
+      return;
+    }
+    toast.success('Account deleted. The cosmos forgets.');
+    // signOut already cleared local state inside deleteAccount; redirect
+    // out so the next render doesn't try to read a now-deleted profile.
     navigate('/', { replace: true });
   };
 
@@ -389,7 +430,258 @@ export default function Profile() {
           <PrimaryButton to="/">Back To Home</PrimaryButton>
         </div>
       </div>
+
+      {/* ── Danger zone (#415, GDPR Art. 17) ────────────────────────────
+          Final section on the page so the destructive action sits last
+          on the cognitive map — well past the everyday Save / Sign Out
+          affordances. The button only OPENS the modal; the real
+          deletion requires typing the username verbatim. */}
+      <DangerZone
+        username={profile?.username ?? null}
+        onOpen={onOpenDelete}
+      />
+
+      {/* Modal portal lives inside Shell so the page background bleeds
+          through correctly. We rely on the `deleteOpen` state slot
+          rather than CSS visibility so a closed modal doesn't carry
+          any DOM weight. */}
+      {deleteOpen && profile?.username && (
+        <DeleteAccountModal
+          username={profile.username}
+          typed={deleteTyped}
+          onTypedChange={setDeleteTyped}
+          busy={deleteBusy}
+          onCancel={() => setDeleteOpen(false)}
+          onConfirm={onConfirmDelete}
+        />
+      )}
     </Shell>
+  );
+}
+
+// ── DangerZone section ─────────────────────────────────────────────────────
+
+/**
+ * Final-row section on /profile carrying the GDPR account-delete CTA.
+ *
+ * Rendered as a separate component so the destructive copy doesn't
+ * crowd the regular controls block above. The button is FLARE-bordered
+ * (the design-system "error only" tone) to signal irreversibility
+ * even before the modal opens.
+ *
+ * Hidden entirely when no username is loaded yet — the modal can't
+ * confirm without one, so showing the trigger would be misleading.
+ *
+ * @param username  The user's current username (null while loading).
+ * @param onOpen    Callback invoked when the user clicks the trigger.
+ */
+function DangerZone({ username, onOpen }: { username: string | null; onOpen: () => void }) {
+  if (!username) return null;
+  return (
+    <div style={{ marginTop: 64 }}>
+      <SectionHeader
+        kicker="VI"
+        label="Danger Zone"
+        title="Permanent Erasure"
+        subtitle="Delete your account and anonymise your wager & vote history. This cannot be undone — your username, allegiance, and credit balance are gone immediately; leaderboard rows survive as anonymous entries."
+      />
+      <div style={{ marginTop: 24 }}>
+        <button
+          type="button"
+          onClick={onOpen}
+          style={{
+            display:        'inline-flex',
+            alignItems:     'center',
+            fontSize:       13,
+            fontWeight:     700,
+            textTransform:  'uppercase',
+            letterSpacing:  '0.12em',
+            color:          FLARE,
+            background:     'transparent',
+            border:         `1px solid ${FLARE}`,
+            padding:        '14px 28px',
+            cursor:         'pointer',
+            fontFamily:     'Space Mono, monospace',
+            minHeight:      44,
+          }}
+        >
+          Delete My Account
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── DeleteAccountModal ────────────────────────────────────────────────────
+
+/**
+ * Typed-confirmation modal — the user must enter their EXACT username
+ * before the destructive button is enabled. Matches the GitHub /
+ * Stripe / Vercel pattern for "I really mean it" gates.
+ *
+ * The modal is a fixed full-viewport overlay with a card-shaped inner
+ * panel. Focus is intentionally not trapped (the page has only the
+ * input + two buttons in the modal), and `Escape` is wired to cancel.
+ *
+ * @param username       The user's actual username — the gate target.
+ * @param typed          Current value of the confirmation field.
+ * @param onTypedChange  Setter for `typed` (controlled input).
+ * @param busy           Render the confirm button as busy (request in-flight).
+ * @param onCancel       Close the modal without deleting.
+ * @param onConfirm      Trigger the delete. Caller verifies typed === username.
+ */
+function DeleteAccountModal({
+  username, typed, onTypedChange, busy, onCancel, onConfirm,
+}: {
+  username:       string;
+  typed:          string;
+  onTypedChange:  (next: string) => void;
+  busy:           boolean;
+  onCancel:       () => void;
+  onConfirm:      () => void;
+}) {
+  // Match check is exact (case-sensitive). The button is disabled until
+  // it passes — the visual disabled state is the gate; the form can't
+  // submit any other way.
+  const confirmEnabled = typed === username && !busy;
+
+  // Escape closes the modal. Wired on the overlay rather than document
+  // so it only fires while the modal is mounted; React tears the
+  // listener down with the component.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') onCancel();
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-modal-title"
+      onKeyDown={onKeyDown}
+      style={{
+        position:       'fixed',
+        inset:          0,
+        background:     'rgba(0, 0, 0, 0.72)',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        zIndex:         900,
+        padding:        16,
+      }}
+    >
+      <div
+        style={{
+          background:     ABYSS,
+          border:         `1px solid ${FLARE}`,
+          maxWidth:       480,
+          width:          '100%',
+          padding:        '28px 24px',
+          fontFamily:     'Space Mono, monospace',
+        }}
+      >
+        <h2
+          id="delete-modal-title"
+          style={{
+            fontSize:      18,
+            fontWeight:    700,
+            color:         FLARE,
+            margin:        0,
+            marginBottom:  12,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          Delete your account?
+        </h2>
+        <p style={{
+          fontSize:     13,
+          lineHeight:   1.5,
+          color:        DUST_70,
+          margin:       0,
+          marginBottom: 18,
+        }}>
+          This permanently removes your profile, credit balance, and
+          favourite team. Your past wagers and votes are kept as
+          anonymous rows so the leaderboards remain consistent — no
+          record of your identity remains.
+        </p>
+        <label
+          htmlFor="delete-confirm-input"
+          style={{
+            display:        'block',
+            fontSize:       11,
+            fontWeight:     700,
+            color:          DUST_50,
+            textTransform:  'uppercase',
+            letterSpacing:  '0.12em',
+            marginBottom:   6,
+          }}
+        >
+          Type your username (<span style={{ color: DUST }}>{username}</span>) to confirm
+        </label>
+        <input
+          id="delete-confirm-input"
+          type="text"
+          value={typed}
+          onChange={(e) => onTypedChange(e.target.value)}
+          autoFocus
+          autoComplete="off"
+          style={{
+            display:        'block',
+            width:          '100%',
+            boxSizing:      'border-box',
+            fontFamily:     'inherit',
+            fontSize:       14,
+            color:          DUST,
+            background:     'transparent',
+            border:         `1px solid ${HAIRLINE}`,
+            padding:        '10px 12px',
+            marginBottom:   18,
+          }}
+        />
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            style={{
+              fontSize:       13,
+              fontWeight:     700,
+              textTransform:  'uppercase',
+              letterSpacing:  '0.12em',
+              color:          DUST,
+              background:     'transparent',
+              border:         `1px solid ${DUST_50}`,
+              padding:        '10px 20px',
+              cursor:         busy ? 'not-allowed' : 'pointer',
+              fontFamily:     'inherit',
+              minHeight:      40,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!confirmEnabled}
+            style={{
+              fontSize:       13,
+              fontWeight:     700,
+              textTransform:  'uppercase',
+              letterSpacing:  '0.12em',
+              color:          confirmEnabled ? ABYSS : DUST_50,
+              background:     confirmEnabled ? FLARE : 'transparent',
+              border:         `1px solid ${FLARE}`,
+              padding:        '10px 20px',
+              cursor:         confirmEnabled ? 'pointer' : 'not-allowed',
+              fontFamily:     'inherit',
+              minHeight:      40,
+            }}
+          >
+            {busy ? 'Erasing…' : 'Delete forever'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
