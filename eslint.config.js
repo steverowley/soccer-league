@@ -152,6 +152,18 @@ export default tseslint.config(
               message:
                 'Use the @features/* alias and import from the feature barrel, not a deep relative path.',
             },
+            // The `src/lib/supabase` DI escape hatch was dissolved in #387.
+            // Block re-introduction so a future drift back to a singleton
+            // import dies in CI rather than landing in main.
+            {
+              group: [
+                '**/lib/supabase',
+                'src/lib/supabase',
+                '@/lib/supabase',
+              ],
+              message:
+                'src/lib/supabase.ts was deleted in #387. Use the typed-client DI pattern: useSupabase() in React, function-arg `db: IslSupabaseClient` elsewhere. Per-feature reads/writes live in features/*/api/.',
+            },
           ],
         },
       ],
