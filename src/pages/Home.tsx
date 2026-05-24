@@ -52,9 +52,14 @@ import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { Card, Chip, EmptyState } from '../shared/ui';
 import { useAuth } from '../features/auth';
-import { getLiveMatches, getUpcomingMatches, getActiveSeason } from '../lib/supabase';
+import { getActiveSeason } from '../lib/supabase';
 import { LEAGUES } from '../data/leagueData';
-import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
+import {
+  fetchLeagueStandings,
+  getLiveMatches,
+  getUpcomingMatches,
+  type LeagueStandingsRow,
+} from '../features/match';
 
 // ── Palette aliases ─────────────────────────────────────────────────────────
 // The hex constants live in components/Layout.jsx as the frozen COLORS
@@ -114,8 +119,8 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      (getLiveMatches() as any),
-      (getUpcomingMatches(3) as any),
+      getLiveMatches(db),
+      getUpcomingMatches(db, 3),
       (getActiveSeason() as any),
     ])
       .then(([live, upcoming, season]) => {

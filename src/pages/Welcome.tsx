@@ -36,7 +36,8 @@ import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '../features/auth/api/profiles';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
-import { getPlayersForTeam, getUpcomingMatches } from '../lib/supabase';
+import { getPlayersForTeam } from '../lib/supabase';
+import { getUpcomingMatches } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
@@ -236,13 +237,14 @@ function StarterBetStep({ teamId, playerId, onDone }: {
   playerId: string | null;
   onDone: () => void;
 }) {
+  const db = useSupabase();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [nextMatch, setNextMatch] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    (getUpcomingMatches(25) as Promise<unknown>)
+    getUpcomingMatches(db, 25)
       .then((rows) => {
         if (cancelled) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,7 +255,7 @@ function StarterBetStep({ teamId, playerId, onDone }: {
       })
       .catch((err) => { console.warn('[Welcome] upcoming fetch failed:', err); setLoading(false); });
     return () => { cancelled = true; };
-  }, [teamId]);
+  }, [db, teamId]);
 
   // Suppress unused-var warning for playerId — captured here for analytics
   // when the post-bet narrative wires through in a follow-up.

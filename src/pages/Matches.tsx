@@ -26,7 +26,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getLiveMatches, getUpcomingMatches } from '../lib/supabase';
+import { getLiveMatches, getUpcomingMatches } from '../features/match';
 // Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
 // shared broadcast hook so the per-row chip cost stays at one
 // Realtime channel total regardless of how many live matches render.
@@ -174,7 +174,10 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Matches() {
   usePageTitle('Matches');
-  void useSupabase(); // keep DI contract; singleton used inside fetchCompletedMatches
+  // Pulled from the provider context so getLiveMatches / getUpcomingMatches
+  // (post-#387-slice-2) receive a properly-DI'd client; fetchCompletedMatches
+  // is still on the lib singleton until its own slice lands.
+  const db = useSupabase();
   const [filter, setFilter] = useState<string>(FILTER_ALL);
 
   const [live,      setLive]      = useState<MatchRow[]>([]);
@@ -187,8 +190,8 @@ export default function Matches() {
     let cancelled = false;
     setLoadError(null);
     Promise.all([
-      getLiveMatches(),
-      getUpcomingMatches(FETCH_UPCOMING_LIMIT),
+      getLiveMatches(db),
+      getUpcomingMatches(db, FETCH_UPCOMING_LIMIT),
       fetchCompletedMatches(FETCH_COMPLETED_LIMIT),
     ])
       .then(([l, u, c]) => {
