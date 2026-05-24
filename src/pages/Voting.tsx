@@ -35,7 +35,7 @@ import { useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { canAffordVote, MIN_BET } from '../features/auth';
 import { getTeamFocusOptions, getTeamTally, castVote, getEnactedFocuses } from '../features/voting';
-import { getActiveSeason } from '../lib/supabase';
+import { getActiveSeason } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives the Cast Vote submit button.  FLARE is
@@ -141,7 +141,7 @@ export default function Voting() {
     setLoaded(false);
     (async () => {
       try {
-        const s = await getActiveSeason();
+        const s = await getActiveSeason(db);
         if (cancelled || !s) return;
         const [opts, t, history] = await Promise.all([
           getTeamFocusOptions(db, teamId, s.id),
