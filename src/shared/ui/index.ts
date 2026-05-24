@@ -3,12 +3,13 @@
 // rather than from the individual files so the public surface stays small
 // and ergonomic.
 //
-// First inhabitants (#383):
-//   - ToastProvider / useToast / ToastViewport — global toast surface.
-//   - Skeleton / RouteSuspenseFallback         — loading placeholders.
+// Inhabitants so far:
+//   - ToastProvider / useToast / ToastViewport — global toast surface (#383)
+//   - Skeleton / RouteSuspenseFallback         — loading placeholders (#383)
+//   - Card                                     — canonical content card (#378)
 //
 // Design-primitive consolidation (#378) will land further additions here
-// (Card, Panel, Chip, etc.) as features migrate off inline styles.
+// (Panel, Chip, EmptyState, …) as features migrate off inline styles.
 
 export {
   ToastProvider,
@@ -22,3 +23,8 @@ export {
   Skeleton,
   RouteSuspenseFallback,
 } from './Skeleton';
+
+export {
+  Card,
+  type CardTone,
+} from './Card';

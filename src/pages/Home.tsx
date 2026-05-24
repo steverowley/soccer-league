@@ -50,6 +50,7 @@ import {
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { Card } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { getLiveMatches, getUpcomingMatches, getActiveSeason } from '../lib/supabase';
 import { LEAGUES } from '../data/leagueData';
@@ -494,19 +495,22 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
       );
     }
     // Branch 3: genuinely empty dispatch.
+    // First Home consumer of <Card> (#378) — proves the abstraction
+    // before broader migration. Layout (centered flex content) lives in
+    // the style override since the primitive is layout-agnostic.
     return (
-      <div style={{
-        border: `1px solid ${HAIRLINE}`,
-        minHeight: 280,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-      }}>
+      <Card
+        style={{
+          minHeight:      280,
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+        }}
+      >
         <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
           No match in progress. The cosmos rests.
         </p>
-      </div>
+      </Card>
     );
   }
 
