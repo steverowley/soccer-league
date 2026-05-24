@@ -186,6 +186,18 @@ export type {
   ManagerWithContext,
 } from './api/managers';
 
+// ── Idol leaderboard reads (#387 slice 6) ─────────────────────────────────
+export {
+  getIdolBoard,
+  getPlayerIdolRank,
+  getTopIdolsForArchitect,
+} from './api/idols';
+export type {
+  IdolRow,
+  IdolBoardResult,
+  TopIdolForArchitect,
+} from './api/idols';
+
 // ── Live match — data layer only ───────────────────────────────────────────
 // MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
 // pure elapsed-minute helpers and the Supabase + Realtime client stay

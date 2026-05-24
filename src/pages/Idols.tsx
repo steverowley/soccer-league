@@ -24,7 +24,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getIdolBoard } from '../lib/supabase';
+import { getIdolBoard } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
