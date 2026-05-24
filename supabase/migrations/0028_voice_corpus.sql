@@ -1,4 +1,18 @@
--- ── 0035_voice_corpus.sql ───────────────────────────────────────────────────
+-- ── 0028_voice_corpus.sql ───────────────────────────────────────────────────
+-- HISTORY: originally landed as 0035a_voice_corpus.sql. Renamed to
+-- 0028_voice_corpus.sql in #440 because the Supabase CLI's preview-branch
+-- migration runner only accepts `^[0-9]+_` filenames; the `a` suffix made
+-- the file silently invisible to every preview build, leaving the four
+-- substrate tables uncreated and causing every subsequent migration that
+-- referenced them to fail the preview check. The file's tables only
+-- depend on `entities` and `narratives` (both from 0002), so any slot
+-- ≥ 0003 was valid — 0028 was a free integer between 0027 and 0029.
+--
+-- Idempotency note: every CREATE TABLE / CREATE INDEX is already
+-- IF NOT EXISTS; the CREATE POLICY blocks below were wrapped with
+-- DROP POLICY IF EXISTS in the same rename PR so a re-application on a
+-- DB that already has the tables can't trip on duplicate-name errors.
+--
 -- WHY: Phase 1 of the Universal Agent System (bd epic isl-bqx, child isl-bqx.2).
 --
 -- Every entity in the league (players, refs, bookies, journalists, pundits,
@@ -286,29 +300,41 @@ ALTER TABLE entity_memories  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entity_snippets  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_runs       ENABLE ROW LEVEL SECURITY;
 
--- Public-read policies.
+-- Public-read policies. DROP-IF-EXISTS + CREATE makes the policy block
+-- idempotent in case this file is re-run against a DB that has already
+-- applied a prior version (Postgres' CREATE POLICY has no IF NOT EXISTS).
+DROP POLICY IF EXISTS entity_persona_public_read   ON entity_persona;
 CREATE POLICY entity_persona_public_read   ON entity_persona  FOR SELECT USING (true);
+DROP POLICY IF EXISTS entity_memories_public_read  ON entity_memories;
 CREATE POLICY entity_memories_public_read  ON entity_memories FOR SELECT USING (true);
+DROP POLICY IF EXISTS entity_snippets_public_read  ON entity_snippets;
 CREATE POLICY entity_snippets_public_read  ON entity_snippets FOR SELECT USING (true);
 
 -- entity_memories: authenticated INSERT (browser listener) + service ALL.
+DROP POLICY IF EXISTS entity_memories_auth_insert ON entity_memories;
 CREATE POLICY entity_memories_auth_insert ON entity_memories
   FOR INSERT WITH CHECK (auth.role() IN ('authenticated','service_role'));
+DROP POLICY IF EXISTS entity_memories_service_update ON entity_memories;
 CREATE POLICY entity_memories_service_update ON entity_memories
   FOR UPDATE USING (auth.role() = 'service_role')
              WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS entity_memories_service_delete ON entity_memories;
 CREATE POLICY entity_memories_service_delete ON entity_memories
   FOR DELETE USING (auth.role() = 'service_role');
 
 -- entity_persona + entity_snippets: service-role only mutations.
+DROP POLICY IF EXISTS entity_persona_service_write ON entity_persona;
 CREATE POLICY entity_persona_service_write ON entity_persona
   FOR ALL USING (auth.role() = 'service_role')
           WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS entity_snippets_service_write ON entity_snippets;
 CREATE POLICY entity_snippets_service_write ON entity_snippets
   FOR ALL USING (auth.role() = 'service_role')
           WITH CHECK (auth.role() = 'service_role');
 
 -- agent_runs: service-role only, including reads.
+DROP POLICY IF EXISTS agent_runs_service_read  ON agent_runs;
 CREATE POLICY agent_runs_service_read  ON agent_runs FOR SELECT USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS agent_runs_service_write ON agent_runs;
 CREATE POLICY agent_runs_service_write ON agent_runs
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
