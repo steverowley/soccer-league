@@ -26,7 +26,7 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
-import { getTeams, getPlayersForTeam } from '../lib/supabase';
+import { getTeams, getPlayersForTeam } from '../features/match';
 // Match-start push notifications surface — self-contained card that
 // owns its own state (subscription endpoint + opt-in toggles).  Mounted
 // between Allegiance and Controls so the page reads top-to-bottom as
@@ -121,11 +121,11 @@ export default function Profile() {
   // stable across the session.
   useEffect(() => {
     let cancelled = false;
-    getTeams()
+    getTeams(db)
       .then((rows) => { if (!cancelled) setTeams(rows ?? []); })
       .catch((err) => { console.warn('[Profile] getTeams failed:', err); });
     return () => { cancelled = true; };
-  }, []);
+  }, [db]);
 
   // Refetch the roster every time the active teamId changes (including
   // the initial hydration).  Empty teamId → empty roster so the player

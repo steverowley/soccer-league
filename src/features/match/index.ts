@@ -170,6 +170,13 @@ export {
   getUpcomingMatches,
 } from './api/matches';
 
+// ── Teams + roster reads (#387 slice 4) ───────────────────────────────────
+export {
+  getTeams,
+  getTeam,
+  getPlayersForTeam,
+} from './api/teams';
+
 // ── Live match — data layer only ───────────────────────────────────────────
 // MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
 // pure elapsed-minute helpers and the Supabase + Realtime client stay

@@ -38,7 +38,7 @@ import {
   getPlayerLifetimeXp,
   recordClick,
 } from '../features/training';
-import { getPlayersForTeam } from '../lib/supabase';
+import { getPlayersForTeam } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives the click button.  TERRA_NOVA (confirmation)

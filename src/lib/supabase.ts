@@ -15,43 +15,16 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(SUPABAS
 // Slice 2: `getLiveMatches`, `getUpcomingMatches`,
 //          LIVE_WINDOW_SECONDS pacing constant
 //   → features/match/api/matches.ts
-// Slice 3 (this PR): `getActiveSeason`
+// Slice 3: `getActiveSeason`
 //   → features/match/api/seasons.ts
+// Slice 4 (this PR): `getTeams`, `getTeam`, `getPlayersForTeam`
+//   → features/match/api/teams.ts
 //
 // This slice also deleted as dead code: normalizeTeam, normalizeLeague,
 // getSeasons, getLeagues, getCompetitionsForSeason, getCompetition,
 // getMatchesForCompetition, getMatchesWithTeamDetail. Verified via
 // grep across src/ — no consumers in the live tree.
 
-export async function getTeams(leagueId: string | null = null, withPlayers = false) {
-  const playerSelect = withPlayers
-    ? ', players(id, name, position, nationality, age, overall_rating, personality, starter)'
-    : '';
-  let query = supabase
-    .from('teams')
-    .select(`*, leagues(id, name, short_name)${playerSelect}`);
-  if (leagueId) query = query.eq('league_id', leagueId);
-  const { data, error } = await query.order('name');
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getTeam(teamId: string) {
-  const { data, error } = await supabase
-    .from('teams')
-    .select(
-      `
-      *,
-      leagues (id, name, short_name),
-      players (*),
-      managers (*)
-    `,
-    )
-    .eq('id', teamId)
-    .single();
-  if (error) throw error;
-  return data;
-}
 
 interface EnginePlayer {
   name: string;
@@ -526,18 +499,3 @@ export async function getTeamsWithDb(
   return (data ?? []) as Array<Record<string, unknown>>;
 }
 
-/** Players for a single team — used by the Profile allegiance picker and
- *  the Training roster.  Returns the fields the pickers consume. */
-export async function getPlayersForTeam(
-  db: SupabaseClient<Database>,
-  teamId: string,
-): Promise<Array<Record<string, unknown>>> {
-  const { data, error } = await db
-    .from('players')
-    .select('id, name, position, jersey_number, starter')
-    .eq('team_id', teamId)
-    .order('starter', { ascending: false })
-    .order('jersey_number', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as Array<Record<string, unknown>>;
-}
