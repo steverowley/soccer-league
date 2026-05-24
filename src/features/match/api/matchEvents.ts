@@ -22,6 +22,14 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Database } from '@/types/database';
+// #386 slice 2: drift-catch the match_events rows + the LiveMatchRow
+// nested-join shape at the api boundary. Malformed rows warn-log and
+// drop instead of half-rendering the viewer header.
+import {
+  parseLiveMatchRow,
+  parseMatchEventRow,
+  parseMatchEventRows,
+} from './matchEvents.schema';
 
 // ── Shared row types (re-narrowed from generated database.ts) ────────────────
 
@@ -106,7 +114,10 @@ export async function getLiveMatch(
     console.warn('[getLiveMatch] failed:', error.message);
     return null;
   }
-  return data as unknown as LiveMatchRow;
+  // Zod-validate the joined shape. A future rename of e.g. `teams.location`
+  // would compile-pass but fail here, surfacing the drift as a null return
+  // + warn-log rather than a half-painted scoreline.
+  return parseLiveMatchRow(data, 'getLiveMatch') as LiveMatchRow | null;
 }
 
 // ── Event log fetch ───────────────────────────────────────────────────────────
@@ -140,7 +151,11 @@ export async function getMatchEvents(
     console.warn('[getMatchEvents] failed:', error.message);
     return [];
   }
-  return data ?? [];
+  // Zod-validate each row before handing the array to the viewer's
+  // filter pipeline. Malformed rows (drift, partial migration window,
+  // worker-side bug) are dropped with a warn-log so the rest of the
+  // event log still renders.
+  return parseMatchEventRows((data ?? []) as unknown[], 'getMatchEvents') as MatchEventRow[];
 }
 
 // ── Realtime subscription ────────────────────────────────────────────────────
@@ -194,8 +209,13 @@ export function subscribeToMatchEvents(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (payload: any) => {
         // Realtime delivers the inserted row in payload.new with the same
-        // column shape as the table's Row type.
-        if (payload?.new) onInsert(payload.new as MatchEventRow);
+        // column shape as the table's Row type. Run it through the Zod
+        // parser so a future shape regression in the broadcast wire
+        // doesn't poison the viewer's event list — bad rows warn-log and
+        // are silently dropped at the subscription edge.
+        if (!payload?.new) return;
+        const validated = parseMatchEventRow(payload.new, 'subscribeToMatchEvents');
+        if (validated) onInsert(validated as MatchEventRow);
       },
     )
     .subscribe();
