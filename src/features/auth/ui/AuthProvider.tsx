@@ -68,6 +68,25 @@ interface AuthContextValue {
    * endpoint, and we don't either.
    */
   requestPasswordReset: (email: string) => Promise<string | null>;
+  /**
+   * GDPR Article 17 — permanently delete the calling user's account.
+   *
+   * Two-phase tear-down handled by the `account-delete` edge function:
+   *   1. RPC `request_account_deletion()` writes the audit row + returns
+   *      pre-tear-down counts.
+   *   2. The edge function's service-role client invokes
+   *      `auth.admin.deleteUser` which CASCADEs the profile and SETs
+   *      NULL on wagers / focus_votes user_id (per migration 0059).
+   *
+   * On success: local auth state is cleared, the user is signed out,
+   * and the caller can navigate away. The caller should NOT show the
+   * "Deletion request received" message until the returned `ok` is
+   * `true` — until then the user's data is still recoverable.
+   *
+   * @returns { ok, error }. `error` is a human-readable message when
+   *          `ok` is false; the caller surfaces it via toast.
+   */
+  deleteAccount: () => Promise<{ ok: boolean; error: string | null }>;
 }
 
 /**
@@ -292,6 +311,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchProfile();
   }, [fetchProfile]);
 
+  /**
+   * Invoke the `account-delete` edge function with the user's JWT, then
+   * clear local auth state on success. The edge function handles both
+   * tear-down phases (audit row write + auth.users delete); from the
+   * client's perspective this is one round-trip.
+   *
+   * Failure modes (per the function's response contract):
+   *   - 401 / SQLSTATE 28000 → no auth on the request
+   *   - 400 / SQLSTATE P0002 → profile already gone (e.g. double-call)
+   *   - 500                  → audit row written but auth delete failed
+   *                            (admin tooling will reconcile)
+   *
+   * In every error case we leave local state untouched so the user can
+   * retry; only a clean 200 triggers signOut + state clear.
+   */
+  const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error: string | null }> => {
+    // Pull the current session token. db.functions.invoke would lift it
+    // from the client headers automatically, but we want to fail fast
+    // with a clearer message if the user happens to be logged out at
+    // call time (e.g. session expired in another tab).
+    const { data: { session: s } } = await db.auth.getSession();
+    if (!s?.access_token) {
+      return { ok: false, error: 'Not authenticated' };
+    }
+
+    const { data, error } = await db.functions.invoke('account-delete', {
+      // No body — the edge function reads auth.uid() from the JWT.
+      body: {},
+      headers: { Authorization: `Bearer ${s.access_token}` },
+    });
+    if (error) return { ok: false, error: error.message };
+
+    // The function returns { ok, anonymised? , error? } as JSON. Surface
+    // the function-level error verbatim so the toast shows the same copy
+    // the operator would see in logs.
+    const payload = data as { ok?: boolean; error?: string } | null;
+    if (!payload?.ok) {
+      return { ok: false, error: payload?.error ?? 'unexpected response' };
+    }
+
+    // Auth user is gone server-side — clear local state and let the
+    // caller redirect. Signing out clears the stored JWT so the next
+    // page load doesn't try to restore a now-invalid session.
+    await db.auth.signOut();
+    setUser(null);
+    setSession(null);
+    setProfile(null);
+    return { ok: true, error: null };
+  }, [db]);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -306,6 +375,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut: signOutFn,
         refreshProfile,
         requestPasswordReset,
+        deleteAccount,
       }}
     >
       {children}
