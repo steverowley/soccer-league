@@ -10,6 +10,15 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { FocusOption, FocusVote, FocusTallyEntry } from '../types';
 import { ALL_FOCUS_TEMPLATES } from '../logic/focusTemplates';
+// #386 slice 3: boundary-validate every row read from focus_options,
+// focus_votes (insert return), and the focus_tally view. Drift catches
+// column rename / type drift at the api edge instead of half-rendering
+// the voting UI.
+import {
+  parseFocusOptionRows,
+  parseFocusTallyRows,
+  parseFocusVoteRow,
+} from './focuses.schema';
 
 // The optimistic `decrement_credits` RPC fallback below is a pre-existing
 // dev-era convenience that was never deployed as a SQL function; the
@@ -87,7 +96,7 @@ export async function getTeamFocusOptions(
     console.warn('[getTeamFocusOptions] failed:', error.message);
     return [];
   }
-  return (data ?? []) as FocusOption[];
+  return parseFocusOptionRows((data ?? []) as unknown[], 'getTeamFocusOptions') as FocusOption[];
 }
 
 // ── Vote casting ────────────────────────────────────────────────────────────
@@ -152,7 +161,7 @@ export async function castVote(
     }
   }
 
-  return vote as FocusVote;
+  return parseFocusVoteRow(vote, 'castVote') as FocusVote | null;
 }
 
 // ── Tally queries ───────────────────────────────────────────────────────────
@@ -183,5 +192,5 @@ export async function getTeamTally(
     console.warn('[getTeamTally] failed:', error.message);
     return [];
   }
-  return (data ?? []) as FocusTallyEntry[];
+  return parseFocusTallyRows((data ?? []) as unknown[], 'getTeamTally') as FocusTallyEntry[];
 }
