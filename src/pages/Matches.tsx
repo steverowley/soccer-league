@@ -26,6 +26,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import type { IslSupabaseClient } from '../shared/supabase/client';
 import { getLiveMatches, getUpcomingMatches } from '../features/match';
 // Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
 // shared broadcast hook so the per-row chip cost stays at one
@@ -123,29 +124,25 @@ const PACING_WINDOW_SECONDS = 600;
  *   windowCutoff` predicate enforces that boundary so the same match never
  *   shows up in both sections at once.
  *
- * Inlined here rather than added to `src/lib/supabase.ts` because the
- * Matches index is the only consumer today.  When a second consumer
+ * Inlined here rather than under `features/match/api/` because the
+ * Matches index is the only consumer today. When a second consumer
  * appears (TeamDetail's "recent results" strip?) this will be lifted
  * into the shared API layer.
  *
+ * @param db    Injected Supabase client (via `useSupabase()`).
  * @param limit Maximum row count (default FETCH_COMPLETED_LIMIT).
  * @returns     Completed match rows ordered by `played_at` DESC.  Excludes
  *              matches still inside the pacing window.
  * @throws      Re-throws the Supabase error if the query fails.
  */
-async function fetchCompletedMatches(limit = FETCH_COMPLETED_LIMIT): Promise<MatchRow[]> {
-  const { createClient } = await import('@supabase/supabase-js');
-  void createClient; // unused — we import supabase singleton instead
-  // Use the singleton from lib/supabase via dynamic re-import to avoid
-  // adding a direct supabase import (DI principle: use useSupabase in
-  // React context, but this is an async helper outside React).
-  // In practice the JSX passed `db` here; we replicate by importing
-  // the singleton directly since the function is module-scoped.
-  const { supabase } = await import('../lib/supabase');
+async function fetchCompletedMatches(
+  db: IslSupabaseClient,
+  limit = FETCH_COMPLETED_LIMIT,
+): Promise<MatchRow[]> {
   // windowCutoffIso = "now − pacing window" — matches whose kickoff is older
   // than this are no longer being live-revealed and belong in Completed.
   const windowCutoffIso = new Date(Date.now() - PACING_WINDOW_SECONDS * 1000).toISOString();
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('matches')
     .select(`
       *,
@@ -192,7 +189,7 @@ export default function Matches() {
     Promise.all([
       getLiveMatches(db),
       getUpcomingMatches(db, FETCH_UPCOMING_LIMIT),
-      fetchCompletedMatches(FETCH_COMPLETED_LIMIT),
+      fetchCompletedMatches(db, FETCH_COMPLETED_LIMIT),
     ])
       .then(([l, u, c]) => {
         if (cancelled) return;
