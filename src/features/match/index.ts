@@ -177,6 +177,15 @@ export {
   getPlayersForTeam,
 } from './api/teams';
 
+// ── Player + manager detail reads (#387 slice 5) ──────────────────────────
+export { getPlayer } from './api/players';
+export {
+  getManager,
+} from './api/managers';
+export type {
+  ManagerWithContext,
+} from './api/managers';
+
 // ── Live match — data layer only ───────────────────────────────────────────
 // MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
 // pure elapsed-minute helpers and the Supabase + Realtime client stay

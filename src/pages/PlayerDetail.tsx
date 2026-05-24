@@ -36,7 +36,8 @@ import { useParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getPlayer, getPlayerIdolRank } from '../lib/supabase';
+import { getPlayer } from '../features/match';
+import { getPlayerIdolRank } from '../lib/supabase';
 import {
   getPlayerRecentMatches,
   getNarrativesMentioningPlayer,
@@ -152,7 +153,7 @@ export default function PlayerDetail() {
     let cancelled = false;
 
     // Player data (including season stats aggregate)
-    getPlayer(playerId)
+    getPlayer(db, playerId)
       .then((p) => {
         if (cancelled) return;
         setPlayer(p as unknown as PlayerWithStats);
