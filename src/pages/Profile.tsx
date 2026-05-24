@@ -102,8 +102,10 @@ export default function Profile() {
   const [teamId,    setTeamId]    = useState(NO_PLAYER);
   const [playerId,  setPlayerId]  = useState(NO_PLAYER);
 
-  const [saveError, setSaveError] = useState<any>(null);
-  const [saveOk,    setSaveOk]    = useState<boolean>(false);
+  // Save success/error feedback routes through the global toast (#383)
+  // instead of the previous inline italic-paragraph state. The local
+  // saveError / saveOk slots are gone; we call toast.success() /
+  // toast.error() at the relevant points in onSave.
   const [busy,      setBusy]      = useState<boolean>(false);
 
   // Mirror profile → local state once the auth provider finishes
@@ -179,8 +181,6 @@ export default function Profile() {
    */
   const onSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaveError(null);
-    setSaveOk(false);
     setBusy(true);
     try {
       const input = {
@@ -189,14 +189,14 @@ export default function Profile() {
       };
       const { error } = await updateProfile(db, input);
       if (error) {
-        setSaveError(error);
+        toast.error(error);
         return;
       }
       await refreshProfile?.();
-      setSaveOk(true);
+      toast.success('Allegiance saved.');
     } catch (err) {
       console.warn('[Profile] updateProfile threw:', err);
-      setSaveError('Save did not register. Try again.');
+      toast.error('Save did not register. Try again.');
     } finally {
       setBusy(false);
     }
@@ -243,7 +243,8 @@ export default function Profile() {
   const onTeamChange = (next: string) => {
     setTeamId(next);
     setPlayerId(NO_PLAYER);
-    setSaveOk(false);
+    // No setSaveOk reset needed — the previous inline "Saved." paragraph
+    // is gone; the toast surface auto-dismisses on its own timer.
   };
 
   return (
@@ -303,7 +304,7 @@ export default function Profile() {
             <select
               id="favourite-player"
               value={playerId}
-              onChange={(e) => { setPlayerId(e.target.value); setSaveOk(false); }}
+              onChange={(e) => setPlayerId(e.target.value)}
               disabled={!teamId}
               style={selectStyle}
             >
@@ -316,22 +317,11 @@ export default function Profile() {
             </select>
           </Field>
 
-          {saveError && (
-            <p role="alert" style={{
-        ...(undefined as any),
-              color: FLARE, fontSize: 13, fontStyle: 'italic', margin: 0,
-            }}>
-              {saveError}
-            </p>
-          )}
-          {saveOk && (
-            <p style={{
-        ...(undefined as any),
-              color: DUST_70, fontSize: 13, fontStyle: 'italic', margin: 0,
-            }}>
-              Saved.  The cosmos has acknowledged your allegiance.
-            </p>
-          )}
+          {/* Save success/error feedback now lives in the global toast
+              surface (#383) — see toast.error / toast.success calls
+              inside onSave. The previous inline italic paragraphs are
+              gone; the toast auto-dismisses, announces via aria-live,
+              and matches the app-wide error UX. */}
 
           <button
             type="submit"
