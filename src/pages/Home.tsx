@@ -50,7 +50,7 @@ import {
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { Card } from '../shared/ui';
+import { Card, Chip } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { getLiveMatches, getUpcomingMatches, getActiveSeason } from '../lib/supabase';
 import { LEAGUES } from '../data/leagueData';
@@ -544,32 +544,27 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
           {competition}
           {round && <> <span style={{ color: DUST_50 }}>•</span> {round}</>}
         </span>
-        <span style={{
-        ...(undefined as any),
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          border: `1px solid ${HAIRLINE}`,
-          padding: '4px 12px',
-        }}>
+        {/* LIVE pill — migrated to the shared <Chip> primitive (#378
+            slice 2). The pulse dot stays as children so its
+            Quantum-coloured glow remains intact. */}
+        <Chip>
           {/* Live pulse dot — Quantum Purple (focus colour, NOT
-              Solar Flare).  Solar Flare would mis-signal "this match
-              has gone wrong"; the LIVE chip is an attention cue, not
-              an error cue. */}
+              Solar Flare). Flare would mis-signal "this match has
+              gone wrong"; the LIVE chip is an attention cue, not an
+              error cue. */}
           <span style={{
-        ...(undefined as any),
-            width: 8,
-            height: 8,
+            width:        8,
+            height:       8,
             borderRadius: '50%',
-            background: QUANTUM,
-            boxShadow: `0 0 6px ${QUANTUM}`,
-            display: 'inline-block',
+            background:   QUANTUM,
+            boxShadow:    `0 0 6px ${QUANTUM}`,
+            display:      'inline-block',
           }} />
           <span>
             Live
             {minute !== null && <> <span style={{ color: DUST_50 }}>•</span> {minute}&apos;</>}
           </span>
-        </span>
+        </Chip>
       </div>
 
       {/* Row 2 — three-column score row with shield placeholders. */}
