@@ -24,7 +24,7 @@ import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getTeam } from '../lib/supabase';
+import { getTeam } from '../features/match';
 import { getTeamSupporterCount } from '../features/auth';
 import { RelationshipGraph } from '../features/entities';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
@@ -104,7 +104,7 @@ export default function TeamDetail() {
     if (!staticTeam || !teamId) return undefined;
     let cancelled = false;
     setLoadError(null);
-    getTeam(teamId)
+    getTeam(db, teamId)
       .then((data: any) => { if (!cancelled) setLiveTeam(data); })
       .catch((err) => {
         if (cancelled) return;

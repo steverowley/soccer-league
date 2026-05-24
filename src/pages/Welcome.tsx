@@ -36,8 +36,7 @@ import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '../features/auth/api/profiles';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
-import { getPlayersForTeam } from '../lib/supabase';
-import { getUpcomingMatches } from '../features/match';
+import { getPlayersForTeam, getUpcomingMatches } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
