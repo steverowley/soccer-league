@@ -17,10 +17,12 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(SUPABAS
 //   → features/match/api/matches.ts
 // Slice 3: `getActiveSeason`
 //   → features/match/api/seasons.ts
-// Slice 4 (this PR): `getTeams`, `getTeam`, `getPlayersForTeam`
+// Slice 4: `getTeams`, `getTeam`, `getPlayersForTeam`
 //   → features/match/api/teams.ts
+// Slice 5 (this PR): `getPlayer`, `getManager` + `ManagerWithContext`
+//   → features/match/api/{players,managers}.ts
 //
-// This slice also deleted as dead code: normalizeTeam, normalizeLeague,
+// Slice 3 also deleted as dead code: normalizeTeam, normalizeLeague,
 // getSeasons, getLeagues, getCompetitionsForSeason, getCompetition,
 // getMatchesForCompetition, getMatchesWithTeamDetail. Verified via
 // grep across src/ — no consumers in the live tree.
@@ -116,165 +118,6 @@ export async function getTeamForEngine(teamId: string): Promise<EngineTeam> {
   return normalizeTeamForEngine(data as Parameters<typeof normalizeTeamForEngine>[0]);
 }
 
-interface SeasonStats {
-  goals: number;
-  assists: number;
-  yellow_cards: number;
-  red_cards: number;
-  minutes_played: number;
-  matches_played: number;
-  avg_rating: number | null;
-}
-
-type PlayerWithStats = {
-  seasonStats: SeasonStats;
-  [key: string]: unknown;
-};
-
-export async function getPlayer(playerId: string): Promise<PlayerWithStats> {
-  const [playerResult, statsResult] = await Promise.all([
-    supabase.from('players').select('*, teams(id, name)').eq('id', playerId).single(),
-    supabase
-      .from('match_player_stats')
-      .select('goals, assists, yellow_cards, red_cards, minutes_played, rating')
-      .eq('player_id', playerId),
-  ]);
-
-  if (playerResult.error) throw playerResult.error;
-  if (statsResult.error) throw statsResult.error;
-
-  const statRows = statsResult.data ?? [];
-  const agg = statRows.reduce(
-    (acc: { goals: number; assists: number; yellow_cards: number; red_cards: number; minutes_played: number; matches_played: number; _rsum: number; _rcnt: number }, row: { goals?: number | null; assists?: number | null; yellow_cards?: number | null; red_cards?: number | null; minutes_played?: number | null; rating?: number | null }) => ({
-      goals: acc.goals + (row.goals ?? 0),
-      assists: acc.assists + (row.assists ?? 0),
-      yellow_cards: acc.yellow_cards + (row.yellow_cards ?? 0),
-      red_cards: acc.red_cards + (row.red_cards ?? 0),
-      minutes_played: acc.minutes_played + (row.minutes_played ?? 0),
-      matches_played: acc.matches_played + 1,
-      _rsum: acc._rsum + (row.rating ?? 0),
-      _rcnt: acc._rcnt + (row.rating != null ? 1 : 0),
-    }),
-    {
-      goals: 0,
-      assists: 0,
-      yellow_cards: 0,
-      red_cards: 0,
-      minutes_played: 0,
-      matches_played: 0,
-      _rsum: 0,
-      _rcnt: 0,
-    },
-  );
-
-  const avg_rating = agg._rcnt > 0 ? +(agg._rsum / agg._rcnt).toFixed(1) : null;
-
-  return {
-    ...playerResult.data,
-    seasonStats: {
-      goals: agg.goals,
-      assists: agg.assists,
-      yellow_cards: agg.yellow_cards,
-      red_cards: agg.red_cards,
-      minutes_played: agg.minutes_played,
-      matches_played: agg.matches_played,
-      avg_rating,
-    },
-  } as PlayerWithStats;
-}
-
-// ── Manager fetch ────────────────────────────────────────────────────────────
-// Powers the /managers/:managerId detail page (bd isl-aai).  Returns the
-// manager row joined to its current team + the entity row + entity_traits
-// so the page can render bio fields without a chain of follow-up queries.
-
-/**
- * Manager row + adjacent context the detail page renders.
- *
- * `teams` is the join from `managers.team_id` (null when the manager
- * is detached — e.g. after a drama-tier resignation).  `entity` and
- * `traits` come from the Universal Agent System entity graph so the
- * page can read JSON-shaped flavour (tactical preferences, voice
- * fragments) without exposing raw engine stats.
- */
-export interface ManagerWithContext {
-  id: string;
-  name: string;
-  nationality: string | null;
-  style: string | null;
-  team_id: string | null;
-  entity_id: string | null;
-  teams: { id: string; name: string; color: string | null } | null;
-  entity: { id: string; display_name: string | null; meta: Json | null } | null;
-  traits: Array<{ trait_key: string; trait_value: Json }>;
-}
-
-/**
- * Fetch a manager + the join to teams + their entity row + traits.
- *
- * Best-effort: returns null when the manager id doesn't exist or the
- * primary query errors so callers can render the standard "Unknown
- * Manager" surface rather than getting a thrown error.  Entity / trait
- * lookup failures degrade silently — the page still renders with
- * `entity: null` / `traits: []` and the bio just omits those fields.
- *
- * @param db         Injected Supabase client.
- * @param managerId  Manager UUID.
- * @returns          Manager bundle or null.
- */
-export async function getManager(
-  db: SupabaseClient<Database>,
-  managerId: string,
-): Promise<ManagerWithContext | null> {
-  const { data: managerRow, error: managerErr } = await db
-    .from('managers')
-    .select('id, name, nationality, style, team_id, entity_id, teams(id, name, color)')
-    .eq('id', managerId)
-    .maybeSingle();
-
-  if (managerErr || !managerRow) {
-    if (managerErr) console.warn('[getManager] manager fetch failed:', managerErr.message);
-    return null;
-  }
-
-  // Entity + traits — best-effort.  Empty results render gracefully.
-  let entity: ManagerWithContext['entity'] = null;
-  let traits: ManagerWithContext['traits'] = [];
-
-  if (managerRow.entity_id) {
-    const [entityRes, traitsRes] = await Promise.all([
-      db.from('entities')
-        .select('id, display_name, meta')
-        .eq('id', managerRow.entity_id)
-        .maybeSingle(),
-      db.from('entity_traits')
-        .select('trait_key, trait_value')
-        .eq('entity_id', managerRow.entity_id),
-    ]);
-    if (entityRes.data) entity = entityRes.data;
-    if (traitsRes.data) traits = traitsRes.data;
-  }
-
-  // ── Normalise PostgREST's embedded `teams` shape ─────────────────────────
-  // PostgREST embeds a related row as either an OBJECT (the canonical
-  // one-to-one shape) or an ARRAY of length 0/1 (when the relationship
-  // is detected as ambiguous or has no enforced cardinality).
-  // `ManagerWithContext.teams` is typed as a singular object, so a
-  // runtime array would silently break `manager.teams?.name` accesses
-  // in ManagerDetail.  Flatten any array shape to the first element (or
-  // null) so the consumer always sees one canonical type.
-  const rawTeams = (managerRow as { teams?: unknown }).teams;
-  const teamsObject: ManagerWithContext['teams'] = Array.isArray(rawTeams)
-    ? ((rawTeams[0] as ManagerWithContext['teams']) ?? null)
-    : ((rawTeams as ManagerWithContext['teams']) ?? null);
-
-  return {
-    ...(managerRow as unknown as ManagerWithContext),
-    teams: teamsObject,
-    entity,
-    traits,
-  };
-}
 
 interface StandingsRow {
   team: { id: string; name: string; color: string | null };

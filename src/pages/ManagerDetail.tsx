@@ -36,7 +36,7 @@ import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getManager, type ManagerWithContext } from '../lib/supabase';
+import { getManager, type ManagerWithContext } from '../features/match';
 import { RelationshipGraph } from '../features/entities';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
