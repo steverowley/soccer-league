@@ -24,6 +24,10 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Wager, TeamChoice } from '../types';
 import { determineOutcome, resolveWager } from '../logic/settlement';
+// #386 slice 1: boundary-validate every wager row before returning it
+// to consumers. Drift in the table shape now surfaces as a warn-log +
+// dropped row, not a runtime `undefined`.
+import { parseWagerRow, parseWagerRows } from './wagers.schema';
 
 // ── Wager placement ────────────────────────────────────────────────────────
 
@@ -71,7 +75,10 @@ export async function placeWager(
     return null;
   }
 
-  return data as Wager;
+  // RPC return is structurally a wagers row; validate at the boundary
+  // so a future RPC-shape change is caught here rather than rendering
+  // a partial card in MatchDetail.
+  return parseWagerRow(data, 'placeWager') as Wager | null;
 }
 
 // ── Wager queries ───────────────────────────────────────────────────────────
@@ -101,7 +108,7 @@ export async function getUserWagers(
     console.warn('[getUserWagers] failed:', error.message);
     return [];
   }
-  return (data ?? []) as Wager[];
+  return parseWagerRows((data ?? []) as unknown[], 'getUserWagers') as Wager[];
 }
 
 /**
@@ -141,7 +148,7 @@ export async function getUserWagerForMatch(
     console.warn('[getUserWagerForMatch] failed:', error.message);
     return null;
   }
-  return (data ?? null) as Wager | null;
+  return parseWagerRow(data, 'getUserWagerForMatch') as Wager | null;
 }
 
 /**
@@ -166,7 +173,7 @@ async function getOpenWagersForMatch(
     console.warn('[getOpenWagersForMatch] failed:', error.message);
     return [];
   }
-  return (data ?? []) as Wager[];
+  return parseWagerRows((data ?? []) as unknown[], 'getOpenWagersForMatch') as Wager[];
 }
 
 // ── Settlement ──────────────────────────────────────────────────────────────
