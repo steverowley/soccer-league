@@ -10,8 +10,10 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { TrainingStat } from '../types';
-import { applyClick, XP_PER_CLICK } from '../logic/xpCurve';
+import { applyClick, bumpsEarned, XP_PER_CLICK } from '../logic/xpCurve';
 import { evaluateClick } from '../logic/cooldown';
+import { crossesMilestone } from '../logic/milestones';
+import { writeTrainingMilestoneNarrative } from './narrativeWriter';
 
 // ── Read: lifetime XP for a player ──────────────────────────────────────────
 
@@ -179,6 +181,19 @@ export async function recordClick(
   if (error) {
     console.warn('[recordClick] insert failed:', error.message);
     return { success: false, reason: 'db_error' };
+  }
+
+  // 5. Milestone emit (#395 slice 1). If this click pushed the player
+  // across one of the 5 / 10 / 20 cumulative-bump thresholds, write a
+  // single news-feed narrative. Best-effort — the writer warn-logs and
+  // absorbs any DB error so a missing narrative never blocks the
+  // optimistic click loop.
+  const previousBumps = bumpsEarned(lifetimeXp);
+  const milestone = crossesMilestone(previousBumps, clickResult.totalBumps);
+  if (milestone !== null) {
+    // Fire-and-forget; intentionally not awaited so the UI doesn't
+    // wait on the narrative round-trip before unblocking the next click.
+    void writeTrainingMilestoneNarrative(db, playerId, milestone);
   }
 
   return {
