@@ -7,9 +7,10 @@
 //   - ToastProvider / useToast / ToastViewport — global toast surface (#383)
 //   - Skeleton / RouteSuspenseFallback         — loading placeholders (#383)
 //   - Card                                     — canonical content card (#378)
+//   - Chip                                     — bordered small-caps pill (#378)
 //
 // Design-primitive consolidation (#378) will land further additions here
-// (Panel, Chip, EmptyState, …) as features migrate off inline styles.
+// (Panel, EmptyState, …) as features migrate off inline styles.
 
 export {
   ToastProvider,
@@ -28,3 +29,8 @@ export {
   Card,
   type CardTone,
 } from './Card';
+
+export {
+  Chip,
+  type ChipTone,
+} from './Chip';
