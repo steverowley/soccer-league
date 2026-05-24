@@ -50,7 +50,7 @@ import {
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { Card, Chip } from '../shared/ui';
+import { Card, Chip, EmptyState } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { getLiveMatches, getUpcomingMatches, getActiveSeason } from '../lib/supabase';
 import { LEAGUES } from '../data/leagueData';
@@ -495,11 +495,13 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
       );
     }
     // Branch 3: genuinely empty dispatch.
-    // First Home consumer of <Card> (#378) — proves the abstraction
-    // before broader migration. Layout (centered flex content) lives in
-    // the style override since the primitive is layout-agnostic.
+    // Card chrome + EmptyState body — the canonical empty-surface pair
+    // for #378. The Card carries the bordered/min-height container; the
+    // EmptyState carries the typography. Replaces an inline <p> with
+    // hand-rolled italic-dust styling.
     return (
       <Card
+        padding={0}
         style={{
           minHeight:      280,
           display:        'flex',
@@ -507,9 +509,7 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
           justifyContent: 'center',
         }}
       >
-        <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
-          No match in progress. The cosmos rests.
-        </p>
+        <EmptyState>No match in progress. The cosmos rests.</EmptyState>
       </Card>
     );
   }
