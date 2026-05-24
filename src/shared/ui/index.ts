@@ -8,9 +8,10 @@
 //   - Skeleton / RouteSuspenseFallback         — loading placeholders (#383)
 //   - Card                                     — canonical content card (#378)
 //   - Chip                                     — bordered small-caps pill (#378)
+//   - EmptyState                               — "nothing here" surface (#378)
 //
 // Design-primitive consolidation (#378) will land further additions here
-// (Panel, EmptyState, …) as features migrate off inline styles.
+// (Panel, KeyValue, …) as features migrate off inline styles.
 
 export {
   ToastProvider,
@@ -34,3 +35,7 @@ export {
   Chip,
   type ChipTone,
 } from './Chip';
+
+export {
+  EmptyState,
+} from './EmptyState';
