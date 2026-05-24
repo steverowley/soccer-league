@@ -23,6 +23,7 @@ import { Link, Navigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { EmptyState } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { getUserWagers, netCreditChange } from '../features/betting';
 
@@ -214,12 +215,11 @@ export default function Wagers() {
           <EmptyHistory />
         )}
         {!loadError && loaded && wagers.length > 0 && visibleWagers.length === 0 && (
-          <p style={{
-        ...(undefined as any),
-            color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-          }}>
-            No wagers in this filter.  Try a different status chip.
-          </p>
+          <div style={{ marginTop: 24 }}>
+            <EmptyState centred={false}>
+              No wagers in this filter. Try a different status chip.
+            </EmptyState>
+          </div>
         )}
         {!loadError && loaded && visibleWagers.length > 0 && (
           <WagersTable wagers={visibleWagers} matchMap={matchMap} />
