@@ -263,5 +263,70 @@ describe('simulateFullMatch', () => {
       const totalGoals = goalCounts.reduce((a, b) => a + b, 0);
       expect(totalGoals).toBe(0);
     });
+
+    // ── #428 slice 4: annul_goal post-pass wiring ──────────────────────────
+    //
+    // These tests verify the post-loop pass:
+    //   - An empty `annulGoals` array is a no-op (byte-identical run).
+    //   - A guaranteed-firing annul on the home team's first goal
+    //     downgrades the goal and re-derives finalScore so it reflects
+    //     one fewer home goal vs. the baseline.
+
+    it('empty annulGoals array → byte-identical to legacy', () => {
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(201));
+      const [h1, a1] = freshTeams();
+      const baseline = simulateFullMatch(h1, a1);
+
+      vi.restoreAllMocks();
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(201));
+      const [h2, a2] = freshTeams();
+      const withEmptyAnnul = simulateFullMatch(
+        h2, a2, null, null, null,
+        { ctx: { curses: [], blesses: [] }, annulGoals: [], random: () => 0.5 },
+      );
+
+      expect(withEmptyAnnul.finalScore).toEqual(baseline.finalScore);
+      expect(withEmptyAnnul.events.length).toBe(baseline.events.length);
+    });
+
+    it('annul-the-home-team at magnitude 10 → home goals down by at least one (if any scored)', () => {
+      // First run baseline to know the home shortName and confirm
+      // home scored on this seed.
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(201));
+      const [hBase, aBase] = freshTeams();
+      const baseline = simulateFullMatch(hBase, aBase);
+      const baselineHomeGoals = baseline.finalScore[0];
+
+      vi.restoreAllMocks();
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(201));
+      const [home, away] = freshTeams();
+
+      // Single 100%-firing annul targeted at the home team from minute 1.
+      // The resolver will consume the FIRST home goal at/after minute 1.
+      const annulled = simulateFullMatch(
+        home, away, null, null, null,
+        {
+          ctx: { curses: [], blesses: [] },
+          annulGoals: [{ team: home.shortName, minute: 1, magnitude: 10 }],
+          random: () => 0,           // fire on the threshold roll
+        },
+      );
+
+      if (baselineHomeGoals > 0) {
+        expect(annulled.finalScore[0]).toBe(baselineHomeGoals - 1);
+        // The annulled event should carry the marker somewhere in the
+        // stream.
+        const marked = annulled.events.filter(
+          ev => ev.payload['interferenceApplied'] === 'annul_goal',
+        );
+        expect(marked.length).toBe(1);
+        expect(marked[0]?.payload['isGoal']).toBe(false);
+        expect(marked[0]?.type).toBe('shot');
+      } else {
+        // Vacuous seed — no home goal to annul.  Still expect the score
+        // to match baseline (annul intent fizzled cleanly).
+        expect(annulled.finalScore[0]).toBe(0);
+      }
+    });
   });
 });

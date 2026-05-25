@@ -42,7 +42,9 @@ import { applyFanBoostToTeam } from '../../finance/logic/applyFanBoost';
 // so the Architect's collected interference intents finally have a
 // mechanical effect on the match outcome (not just narrative).
 import {
+  applyAnnulGoals,
   resolveInterference,
+  type AnnulGoalIntent,
   type InterferenceContext,
 } from './interferenceResolver';
 
@@ -223,21 +225,42 @@ export interface AgentReflexHooks {
 }
 
 /**
- * Optional Architect curse / bless interferences to apply to the
- * simulated event stream. When omitted, simulateFullMatch's behaviour
- * is identical to before (#428 slice 2).
+ * Optional Architect interferences to apply to the simulated event
+ * stream. When omitted entirely, simulateFullMatch's behaviour is
+ * identical to before (#428 slice 2).
  *
- * The caller maps `architect.activeCurses` / `architect.activeBlesses`
- * into the InterferenceContext shape, then passes a deterministic RNG
- * for reproducibility (seeded LCG in tests, Math.random in prod).
+ * Two distinct interference flavours live here, applied at different
+ * phases of the simulator:
+ *
+ *   curses / blesses  — persistent per-player effects. Applied INLINE
+ *                       in the per-minute loop via resolveInterference
+ *                       so the score / playerStats blocks downstream
+ *                       see the resolved isGoal value.
+ *
+ *   annulGoals        — one-shot retrospective intents. Applied as a
+ *                       POST-PASS after the loop finishes, via
+ *                       applyAnnulGoals (#428 slice 4 wiring). After
+ *                       the post-pass, finalScore is re-derived from
+ *                       the mutated events stream so the annulled
+ *                       goals are removed from the scoreline.
+ *
+ * The caller maps `architect.activeCurses` / `activeBlesses` /
+ * `pickedAnnulIntents` into these fields, then passes a deterministic
+ * RNG for reproducibility (seeded LCG in tests, Math.random in prod).
  */
 export interface InterferenceWiring {
   /** Active curse + bless effects keyed by player name. */
   ctx: InterferenceContext;
   /**
-   * Injected RNG ∈ [0, 1). Called at most once per event that involves
-   * a cursed or blessed player; pure pass-through otherwise. Defaults
-   * to Math.random when the caller omits it.
+   * Optional one-shot annul-goal intents (#428 slice 4). Each intent
+   * consumes at most one matching goal in the post-simulation pass.
+   * Omit / pass [] to disable the annul mechanic.
+   */
+  annulGoals?: AnnulGoalIntent[];
+  /**
+   * Injected RNG ∈ [0, 1). Called at most once per applicable
+   * event/intent; pure pass-through otherwise. Defaults to
+   * Math.random when the caller omits it.
    */
   random?: () => number;
 }
@@ -389,6 +412,37 @@ export function simulateFullMatch(
     lastEventType = ev.type;
   }
 
+  // ── Architect annul_goal post-pass (#428 slice 4) ─────────────────────────
+  // After the loop has produced the full event stream, run any one-shot
+  // annul_goal intents the Architect picked.  Each fires with probability
+  // magnitude*0.1; on fire, the FIRST matching goal at/after the intent's
+  // minute is rewritten in place (type:'goal'→'shot', isGoal:false,
+  // interferenceApplied:'annul_goal').
+  //
+  // We then re-derive `finalScore` from the post-pass events list so the
+  // scoreline reflects the annulled goals.  PlayerStats is intentionally
+  // NOT recomputed in this slice — playerStats reflects engine-output
+  // (the goal happened from the engine's POV) and MVP narrative reads
+  // accordingly.  A follow-up slice can sweep playerStats post-annul if
+  // the asymmetry shows up in UX.
+  let finalEvents = events;
+  let finalScore: [number, number] = score;
+  if (interferences?.annulGoals && interferences.annulGoals.length > 0) {
+    const random = interferences.random ?? Math.random;
+    finalEvents = applyAnnulGoals(events, interferences.annulGoals, random);
+
+    // Re-derive the scoreline from the resolved stream so annulled goals
+    // are removed.  Same team-shortName comparison the inline loop uses.
+    const rederived: [number, number] = [0, 0];
+    for (const ev of finalEvents) {
+      if (ev.payload['isGoal'] !== true) continue;
+      const team = ev.payload['team'];
+      if (team === home.shortName)      rederived[0]++;
+      else if (team === away.shortName) rederived[1]++;
+    }
+    finalScore = rederived;
+  }
+
   // ── Final-time derivations ─────────────────────────────────────────────────
   // calcMVP returns the full enriched player object (EnginePlayer + team +
   // teamColor + stats) or null when no player scored enough MVP points.
@@ -398,8 +452,8 @@ export function simulateFullMatch(
   const mvp = mvpResult?.name ?? '—';
 
   return {
-    events,
-    finalScore: score,
+    events: finalEvents,
+    finalScore,
     mvp,
     playerStats,
   };
