@@ -8,9 +8,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAnnulGoals,
+  applyForceRedCards,
   resolveInterference,
   resolveInterferenceStream,
   type AnnulGoalIntent,
+  type ForceRedCardIntent,
   type InterferenceContext,
   type InterferenceEffect,
 } from './interferenceResolver';
@@ -276,6 +278,123 @@ describe('applyAnnulGoals', () => {
     ];
     const out = applyAnnulGoals(events, intents, constantRng(0));
     expect(out[0]).toBe(events[0]);
+  });
+});
+
+// ── #428 slice 5: force_red_card one-shot stream pass ────────────────────
+
+describe('applyForceRedCards', () => {
+  /**
+   * Build a card-able event (default 'foul') by `player` at `minute`.
+   */
+  function foulBy(
+    player: string,
+    minute = 30,
+    type: string = 'foul',
+  ): SimulatedEvent {
+    return {
+      minute,
+      subminute: 0,
+      type,
+      payload:   { player, team: 'HOME' },
+    };
+  }
+
+  it('no-op when intents array is empty (returns input by reference)', () => {
+    const events = [foulBy('Twin Vex')];
+    expect(applyForceRedCards(events, [], constantRng(0))).toBe(events);
+  });
+
+  it('promotes the first card-able event by the target player at/after minute', () => {
+    const events: SimulatedEvent[] = [
+      foulBy('Twin Vex',    10),                  // before intent — skipped
+      foulBy('Other Player',40),                  // wrong player — skipped
+      foulBy('Twin Vex',    50),                  // matches → promoted
+      foulBy('Twin Vex',    70),                  // intent already consumed
+    ];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 40, magnitude: 10 },
+    ];
+    const out = applyForceRedCards(events, intents, constantRng(0));
+    expect(out[2]?.payload['cardType']).toBe('red');
+    expect(out[2]?.payload['interferenceApplied']).toBe('force_red_card');
+    expect(out[2]?.payload['interferenceMagnitude']).toBe(10);
+    expect(out[3]).toBe(events[3]);              // unchanged
+  });
+
+  it('matches the target player case-insensitively', () => {
+    const events = [foulBy('Twin Vex', 30)];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'TWIN VEX', minute: 0, magnitude: 10 },
+    ];
+    const out = applyForceRedCards(events, intents, constantRng(0));
+    expect(out[0]?.payload['cardType']).toBe('red');
+  });
+
+  it('only fires on the whitelisted card-able event types (foul / tackle / dive)', () => {
+    const events: SimulatedEvent[] = [
+      foulBy('Twin Vex', 30, 'shot'),             // shot not card-able
+      foulBy('Twin Vex', 31, 'tackle'),           // tackle IS card-able
+    ];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 0, magnitude: 10 },
+    ];
+    const out = applyForceRedCards(events, intents, constantRng(0));
+    expect(out[0]).toBe(events[0]);              // shot untouched
+    expect(out[1]?.payload['cardType']).toBe('red');
+  });
+
+  it('fizzles silently when the target never has a card-able event', () => {
+    const events = [foulBy('Different Player', 30)];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 0, magnitude: 10 },
+    ];
+    // No mutation, no thrown error — intent simply doesn't land.
+    expect(applyForceRedCards(events, intents, constantRng(0))).toEqual(events);
+  });
+
+  it('skips events that already carry a red card', () => {
+    const alreadyRed: SimulatedEvent = {
+      minute: 30, subminute: 0, type: 'foul',
+      payload: { player: 'Twin Vex', cardType: 'red' },
+    };
+    const followUpFoul = foulBy('Twin Vex', 35);
+    const events = [alreadyRed, followUpFoul];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 0, magnitude: 10 },
+    ];
+    const out = applyForceRedCards(events, intents, constantRng(0));
+    // alreadyRed event passes through unchanged; the follow-up foul
+    // is what gets promoted.
+    expect(out[0]).toBe(events[0]);
+    expect(out[1]?.payload['cardType']).toBe('red');
+    expect(out[1]?.payload['interferenceApplied']).toBe('force_red_card');
+  });
+
+  it('does not fire when the probability roll misses the threshold', () => {
+    const events = [foulBy('Twin Vex', 30)];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 0, magnitude: 5 },  // 50%
+    ];
+    // 0.7 > 0.5 → no fire
+    const out = applyForceRedCards(events, intents, constantRng(0.7));
+    expect(out[0]).toBe(events[0]);
+  });
+
+  it('two intents consume two distinct card-able events, in input order', () => {
+    const events: SimulatedEvent[] = [
+      foulBy('Twin Vex', 20),
+      foulBy('Twin Vex', 40, 'tackle'),
+      foulBy('Twin Vex', 60),
+    ];
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 0,  magnitude: 10 },  // takes 20'
+      { playerName: 'Twin Vex', minute: 30, magnitude: 10 },  // takes 40'
+    ];
+    const out = applyForceRedCards(events, intents, constantRng(0));
+    expect(out[0]?.payload['cardType']).toBe('red');
+    expect(out[1]?.payload['cardType']).toBe('red');
+    expect(out[2]?.payload['cardType']).toBeUndefined();      // untouched
   });
 });
 
