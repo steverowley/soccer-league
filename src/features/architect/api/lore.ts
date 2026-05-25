@@ -10,6 +10,11 @@
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Json } from '@/types/database';
 import type { ArchitectLoreRow } from '../types';
+// #386 slice 5: boundary-validate every architect_lore row before
+// the LoreStore consumes it. Drift now degrades gracefully (fewer
+// lore entries hydrated) instead of poisoning the in-memory store
+// that getContext() reads synchronously during goal bursts.
+import { parseArchitectLoreRow, parseArchitectLoreRows } from './lore.schema';
 
 /**
  * Load all lore rows from the architect_lore table. The table is small
@@ -32,7 +37,7 @@ export async function loadAllLore(
     console.warn('[loadAllLore] failed:', error.message);
     return [];
   }
-  return (data ?? []) as ArchitectLoreRow[];
+  return parseArchitectLoreRows((data ?? []) as unknown[], 'loadAllLore') as ArchitectLoreRow[];
 }
 
 /**
@@ -75,7 +80,7 @@ export async function upsertLoreRow(
     console.warn(`[upsertLoreRow] failed for ${scope}/${key}:`, error.message);
     return null;
   }
-  return data as ArchitectLoreRow;
+  return parseArchitectLoreRow(data, `upsertLoreRow:${scope}/${key}`) as ArchitectLoreRow | null;
 }
 
 /**
@@ -111,5 +116,5 @@ export async function batchUpsertLore(
     console.warn('[batchUpsertLore] failed:', error.message);
     return 0;
   }
-  return (data as ArchitectLoreRow[]).length;
+  return parseArchitectLoreRows((data ?? []) as unknown[], 'batchUpsertLore').length;
 }
