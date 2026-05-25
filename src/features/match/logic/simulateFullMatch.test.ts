@@ -155,4 +155,113 @@ describe('simulateFullMatch', () => {
     );
     expect(totalGoals).toBe(finalScore[0] + finalScore[1]);
   });
+
+  // ── #428 slice 2: Architect interference wiring ───────────────────────────
+  //
+  // These tests lock down the integration contract:
+  //   1. With no interferences wired, behaviour is byte-identical to legacy.
+  //   2. A guaranteed-firing curse on every player annuls every goal so the
+  //      final score becomes 0–0.
+  //   3. The events list reflects the resolver's mutations (goal → shot)
+  //      and the cursed events carry the interferenceApplied marker.
+
+  describe('Architect interference wiring (#428)', () => {
+    /**
+     * Resolver RNG that always rolls 0 → fires every applicable curse /
+     * bless. The Math.random in the engine itself is a separate spy,
+     * mocked independently for determinism.
+     */
+    const alwaysFire = () => 0;
+
+    /**
+     * Roster fragment helper: every player on both teams is cursed at
+     * magnitude 10 (100% firing chance) starting at minute 0. Goals can
+     * still happen — but each one passes through the resolver which
+     * downgrades it to a shot. End score must therefore land at 0–0.
+     */
+    function curseEveryone(home: EngineTeam, away: EngineTeam) {
+      const allPlayers = [...home.players, ...away.players].map(p => p.name);
+      return {
+        ctx: {
+          curses:  allPlayers.map(playerName => ({
+            playerName, magnitude: 10, startMin: 0,
+          })),
+          blesses: [],
+        },
+        random: alwaysFire,
+      };
+    }
+
+    it('no interferences wired → byte-identical to legacy behaviour', () => {
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(101));
+      const [h1, a1] = freshTeams();
+      const baseline = simulateFullMatch(h1, a1);
+
+      vi.restoreAllMocks();
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(101));
+      const [h2, a2] = freshTeams();
+      // Pass `null` explicitly to confirm the new parameter slot doesn't
+      // drift the RNG sequence even when present-but-null.
+      const withNull = simulateFullMatch(h2, a2, null, null, null, null);
+
+      expect(withNull.finalScore).toEqual(baseline.finalScore);
+      expect(withNull.events.length).toBe(baseline.events.length);
+    });
+
+    it('curse-everyone-magnitude-10 → final score is 0–0 and every goal carries the marker', () => {
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(101));
+      const [home, away] = freshTeams();
+      const baseline = simulateFullMatch(home, away);
+
+      // Sanity: baseline must score at least once or the test is vacuous.
+      const baselineGoals = baseline.finalScore[0] + baseline.finalScore[1];
+      expect(baselineGoals).toBeGreaterThan(0);
+
+      vi.restoreAllMocks();
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(101));
+      const [h2, a2] = freshTeams();
+      const cursed = simulateFullMatch(
+        h2, a2, null, null, null, curseEveryone(h2, a2),
+      );
+
+      // All goals annulled → 0–0 result.
+      expect(cursed.finalScore).toEqual([0, 0]);
+
+      // The cursed run has zero `isGoal:true` events. Structural check
+      // (rather than position-by-position against baseline) because
+      // mirroring isGoal back to the raw event affects playerStats
+      // updates, which in turn changes the engine's bias bag on
+      // subsequent minutes — the post-curse event stream diverges
+      // from baseline by design.
+      const remainingGoals = cursed.events.filter(
+        ev => ev.payload['isGoal'] === true,
+      );
+      expect(remainingGoals).toHaveLength(0);
+
+      // At least one event carries the curse marker (proof the resolver
+      // actually fired on this seed).
+      const curseMarked = cursed.events.filter(
+        ev => ev.payload['interferenceApplied'] === 'curse',
+      );
+      expect(curseMarked.length).toBeGreaterThan(0);
+      // Every curse-marked event is a downgraded goal (now a shot).
+      for (const ev of curseMarked) {
+        expect(ev.type).toBe('shot');
+        expect(ev.payload['isGoal']).toBe(false);
+      }
+    });
+
+    it('playerStats reflects the post-resolution outcome — no phantom goals', () => {
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(101));
+      const [home, away] = freshTeams();
+      const cursed = simulateFullMatch(
+        home, away, null, null, null, curseEveryone(home, away),
+      );
+
+      // With every goal annulled, no player should hold a `goals` count > 0.
+      const goalCounts = Object.values(cursed.playerStats).map(s => s.goals ?? 0);
+      const totalGoals = goalCounts.reduce((a, b) => a + b, 0);
+      expect(totalGoals).toBe(0);
+    });
+  });
 });

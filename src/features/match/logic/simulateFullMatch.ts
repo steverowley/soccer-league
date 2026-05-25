@@ -37,6 +37,14 @@ import type {
   EnginePlayer, EngineTeam, MatchEvent, PlayerStatsMap,
 } from '../../../gameEngine.types';
 import { applyFanBoostToTeam } from '../../finance/logic/applyFanBoost';
+// #428 slice 2: post-resolve every generated event through the curse /
+// bless interference resolver before pushing it onto the events list,
+// so the Architect's collected interference intents finally have a
+// mechanical effect on the match outcome (not just narrative).
+import {
+  resolveInterference,
+  type InterferenceContext,
+} from './interferenceResolver';
 
 // ── Public input types ───────────────────────────────────────────────────────
 
@@ -214,12 +222,37 @@ export interface AgentReflexHooks {
   runDecision: (req: any) => any;
 }
 
+/**
+ * Optional Architect curse / bless interferences to apply to the
+ * simulated event stream. When omitted, simulateFullMatch's behaviour
+ * is identical to before (#428 slice 2).
+ *
+ * The caller maps `architect.activeCurses` / `architect.activeBlesses`
+ * into the InterferenceContext shape, then passes a deterministic RNG
+ * for reproducibility (seeded LCG in tests, Math.random in prod).
+ */
+export interface InterferenceWiring {
+  /** Active curse + bless effects keyed by player name. */
+  ctx: InterferenceContext;
+  /**
+   * Injected RNG ∈ [0, 1). Called at most once per event that involves
+   * a cursed or blessed player; pure pass-through otherwise. Defaults
+   * to Math.random when the caller omits it.
+   */
+  random?: () => number;
+}
+
 export function simulateFullMatch(
   home: EngineTeam,
   away: EngineTeam,
   refOverride: RefereeOverride | null = null,
   fanBoost: FanBoostInput | null = null,
   reflexHooks: AgentReflexHooks | null = null,
+  // #428 slice 2: opt-in Architect interference post-pass. Callers
+  // that don't pass anything get the legacy behaviour — same event
+  // stream, same final score, byte-identical for the 200-seeded
+  // smoke test.
+  interferences: InterferenceWiring | null = null,
 ): SimulatedMatchResult {
   // ── Apply fan-support boost (Phase 6+) ─────────────────────────────────
   // The team with more logged-in fans gets a small stat bump across every
@@ -286,7 +319,33 @@ export function simulateFullMatch(
       withinMinute += 0.05;
     }
 
-    events.push(toSimulatedEvent(ev, withinMinute));
+    // ── Architect interference post-pass (#428 slice 2) ────────────────────
+    // When the caller wires curses / blesses, every generated event walks
+    // through resolveInterference BEFORE we run the score / stats /
+    // momentum side-effects.  The resolver may rewrite the event (curse
+    // annuls a goal → 'shot' + isGoal:false; bless upgrades a miss →
+    // 'goal' + isGoal:true) — we mirror those two fields back onto the
+    // raw MatchEvent so the existing side-effect blocks below pick up
+    // the mutation without further changes.
+    //
+    // When no interferences are wired, the inner branch is skipped and
+    // behaviour is byte-identical to the legacy path.
+    let simulated = toSimulatedEvent(ev, withinMinute);
+    if (interferences) {
+      const random   = interferences.random ?? Math.random;
+      const resolved = resolveInterference(simulated, interferences.ctx, random);
+      if (resolved !== simulated) {
+        simulated = resolved;
+        // Mirror the resolver's mutation back to the raw MatchEvent so
+        // the score / stats blocks below read the resolved state.
+        // Only `type` and `isGoal` flip in slice 1's curse/bless
+        // mechanic — later slices (force_red_card, annul_goal,
+        // goalkeeper_swap) will widen this mirror.
+        ev.type   = resolved.type;
+        ev.isGoal = resolved.payload['isGoal'] === true;
+      }
+    }
+    events.push(simulated);
 
     // ── Apply event side-effects ────────────────────────────────────────────
     // Score: increment home/away based on the team that scored.
