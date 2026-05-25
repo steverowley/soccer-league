@@ -68,14 +68,19 @@ export interface InterferenceContext {
  * filter on this to know "the Architect touched this minute".
  *
  * The flavours mirror the effect kinds:
- *   curse       — a success (goal) was downgraded to a miss/shot.
- *   bless       — a miss/shot was upgraded to a goal.
- *   annul_goal  — a goal was rewound by a one-shot Architect intent
- *                 (#428 slice 3) rather than a persistent curse.
- *                 Distinct from `curse` so post-match summaries can
- *                 narrate the two flavours differently.
+ *   curse           — a success (goal) was downgraded to a miss/shot.
+ *   bless           — a miss/shot was upgraded to a goal.
+ *   annul_goal      — a goal was rewound by a one-shot Architect
+ *                     intent (#428 slice 3) rather than a persistent
+ *                     curse. Distinct from `curse` so post-match
+ *                     summaries can narrate the two flavours
+ *                     differently.
+ *   force_red_card  — a foul / tackle was promoted to a red-card
+ *                     dismissal (#428 slice 5). Distinct from a
+ *                     regular red so post-match summaries can call
+ *                     out the Architect's hand.
  */
-export type InterferenceMark = 'curse' | 'bless' | 'annul_goal';
+export type InterferenceMark = 'curse' | 'bless' | 'annul_goal' | 'force_red_card';
 
 // ── One-shot intents ──────────────────────────────────────────────────────
 
@@ -100,6 +105,24 @@ export interface AnnulGoalIntent {
   team:      string;
   minute:    number;
   magnitude: number;
+}
+
+/**
+ * A single force_red_card intent emitted by the Architect for a
+ * single match. Unlike curse / bless, force_red_card is one-shot:
+ * the resolver finds the first card-able event by the target
+ * player and rewrites it as a red-card dismissal.
+ *
+ *   playerName  Case-insensitive match against payload.player.
+ *   minute      The minute the Architect specified. The resolver
+ *               only fires on events at or AFTER this minute.
+ *   magnitude   Probability of firing (magnitude * 0.1 per point).
+ *               10 → 100% fires.
+ */
+export interface ForceRedCardIntent {
+  playerName: string;
+  minute:     number;
+  magnitude:  number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -326,6 +349,102 @@ export function applyAnnulGoals(
           ...ev.payload,
           isGoal:                false,
           interferenceApplied:   'annul_goal' satisfies InterferenceMark,
+          interferenceMagnitude: intent.magnitude,
+        },
+      };
+      consumedIdx.add(i);
+      break;     // single-shot per intent
+    }
+  }
+
+  return out;
+}
+
+// ── force_red_card: one-shot stream pass (#428 slice 5) ───────────────────
+
+/**
+ * Card-able event types that the force_red_card resolver will
+ * upgrade. We restrict to foul / tackle / dive because those are
+ * the only event kinds where a red card makes physical sense
+ * (a missed shot or a goal becoming a red card would be absurd).
+ *
+ * Conservative on purpose — if the Architect's target player never
+ * gets in a card-able situation, the intent fizzles rather than
+ * fabricating a red card out of nowhere. Better than a phantom
+ * dismissal.
+ */
+const CARDABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'foul',
+  'tackle',
+  'dive',
+]);
+
+/**
+ * Apply one or more force_red_card intents to an event stream.
+ *
+ * MECHANIC
+ *   For each intent (processed in input order), the resolver rolls
+ *   `magnitude * 0.1`; on fire, walks the stream finding the FIRST
+ *   card-able event by the target player at or after intent.minute
+ *   that hasn't already been consumed. That event is rewritten to
+ *   carry a red card:
+ *     payload.cardType: 'red' (overwrites yellow if present)
+ *     payload.interferenceApplied: 'force_red_card'
+ *     payload.interferenceMagnitude: <intent magnitude>
+ *
+ *   Type / isGoal stay unchanged — a foul stays a foul, just with
+ *   a card flag. The engine's downstream stats accumulator reads
+ *   `cardType === 'red'` and updates redCard accordingly.
+ *
+ * FIZZLE BEHAVIOUR
+ *   If the target player never has a card-able event in the
+ *   remaining match, the intent silently fizzles. We intentionally
+ *   do NOT inject a synthetic red-card event — fabricating one
+ *   would require manufacturing a foul context (defender, location,
+ *   commentary) that the engine alone is qualified to produce.
+ *
+ * @param events   The full event stream from a simulated match.
+ * @param intents  Force-red-card intents from the Architect,
+ *                 processed in input order.
+ * @param random   Injected RNG ∈ [0, 1). Tests pass a seeded LCG;
+ *                 production passes Math.random.
+ * @returns        A new event stream with promoted red cards.
+ */
+export function applyForceRedCards(
+  events:  SimulatedEvent[],
+  intents: ForceRedCardIntent[],
+  random:  () => number,
+): SimulatedEvent[] {
+  if (intents.length === 0) return events;
+
+  const out: SimulatedEvent[] = events.slice();
+  const consumedIdx = new Set<number>();
+
+  for (const intent of intents) {
+    if (random() >= intent.magnitude * FIRE_PROBABILITY_PER_MAGNITUDE_POINT) {
+      continue;
+    }
+
+    const target = intent.playerName.toLowerCase();
+    for (let i = 0; i < out.length; i++) {
+      if (consumedIdx.has(i)) continue;
+      const ev = out[i];
+      if (!ev) continue;
+      if (ev.minute < intent.minute) continue;
+      if (!CARDABLE_EVENT_TYPES.has(ev.type)) continue;
+      const player = ev.payload['player'];
+      if (typeof player !== 'string' || player.toLowerCase() !== target) continue;
+      // Already a red card from the engine — leave it alone; the
+      // intent has nothing to add. (Pursue the next card-able event
+      // instead.)
+      if (ev.payload['cardType'] === 'red') continue;
+
+      out[i] = {
+        ...ev,
+        payload: {
+          ...ev.payload,
+          cardType:              'red',
+          interferenceApplied:   'force_red_card' satisfies InterferenceMark,
           interferenceMagnitude: intent.magnitude,
         },
       };
