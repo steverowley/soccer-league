@@ -67,11 +67,40 @@ export interface InterferenceContext {
  * an event. Consumers (newsfeed writer, post-match summary) can
  * filter on this to know "the Architect touched this minute".
  *
- * The two flavours mirror the two effect kinds:
- *   curse — a success (goal) was downgraded to a miss/shot.
- *   bless — a miss/shot was upgraded to a goal.
+ * The flavours mirror the effect kinds:
+ *   curse       — a success (goal) was downgraded to a miss/shot.
+ *   bless       — a miss/shot was upgraded to a goal.
+ *   annul_goal  — a goal was rewound by a one-shot Architect intent
+ *                 (#428 slice 3) rather than a persistent curse.
+ *                 Distinct from `curse` so post-match summaries can
+ *                 narrate the two flavours differently.
  */
-export type InterferenceMark = 'curse' | 'bless';
+export type InterferenceMark = 'curse' | 'bless' | 'annul_goal';
+
+// ── One-shot intents ──────────────────────────────────────────────────────
+
+/**
+ * A single annul_goal intent emitted by the Architect for a single
+ * match. Unlike curse / bless, annul_goal is RETROSPECTIVE — the
+ * Architect picks a specific (team, minute) and the resolver finds
+ * the first matching goal and rewinds it.
+ *
+ *   team       Which side scored the goal to annul ('home' | 'away').
+ *              Matched against the event's payload.team field via the
+ *              caller-supplied team-shortName map (the resolver itself
+ *              stays pure — it just compares strings).
+ *   minute     The minute the Architect specified. The resolver looks
+ *              for a goal at or AFTER this minute (so a late-arriving
+ *              intent can still consume a goal in the next few
+ *              minutes; the Architect's minute pick is approximate).
+ *   magnitude  Probability of firing, same scale as curse/bless
+ *              (magnitude * 0.1 per point). 10 → 100% fires.
+ */
+export interface AnnulGoalIntent {
+  team:      string;
+  minute:    number;
+  magnitude: number;
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -223,4 +252,87 @@ export function resolveInterferenceStream(
   random: () => number,
 ): SimulatedEvent[] {
   return events.map(ev => resolveInterference(ev, ctx, random));
+}
+
+// ── annul_goal: one-shot stream pass (#428 slice 3) ───────────────────────
+
+/**
+ * Apply one or more annul_goal intents to an entire event stream.
+ *
+ * MECHANIC
+ *   For each intent (processed in input order — the Architect's
+ *   decision sequence is preserved), the resolver walks the event
+ *   stream and finds the FIRST goal at or after the intent's minute
+ *   whose team matches the intent's team. With probability
+ *   `magnitude * 0.1`, that goal is rewound:
+ *     type: 'goal' → 'shot'
+ *     payload.isGoal: false
+ *     payload.interferenceApplied: 'annul_goal'
+ *     payload.interferenceMagnitude: <intent magnitude>
+ *
+ *   A goal already consumed by a previous intent (or already
+ *   annulled by an earlier resolver pass via the curse mechanic)
+ *   is skipped — each intent consumes at most one goal, and each
+ *   goal can only be annulled once.
+ *
+ * ORDER GUARANTEE
+ *   The returned array has the same length and the same per-index
+ *   identity for non-annulled events. Annulled events are new
+ *   objects (we never mutate the inputs).
+ *
+ * @param events   The full event stream from a simulated match.
+ * @param intents  Annul intents from the Architect, processed in
+ *                 input order.
+ * @param random   Injected RNG ∈ [0, 1). Tests pass a seeded LCG;
+ *                 production passes Math.random.
+ * @returns        A new event stream with annulled goals downgraded.
+ */
+export function applyAnnulGoals(
+  events:  SimulatedEvent[],
+  intents: AnnulGoalIntent[],
+  random:  () => number,
+): SimulatedEvent[] {
+  if (intents.length === 0) return events;
+
+  // Work on a shallow copy so we can replace elements in place
+  // without mutating the caller's array. The events themselves
+  // remain untouched — annulled ones become NEW objects.
+  const out: SimulatedEvent[] = events.slice();
+
+  // Track which indices have been annulled so a second intent
+  // doesn't double-consume the same goal.
+  const consumedIdx = new Set<number>();
+
+  for (const intent of intents) {
+    // Skip non-firing rolls early — no point scanning the stream.
+    if (random() >= intent.magnitude * FIRE_PROBABILITY_PER_MAGNITUDE_POINT) {
+      continue;
+    }
+
+    // Find the first matching goal at or after intent.minute that
+    // hasn't been consumed.
+    for (let i = 0; i < out.length; i++) {
+      if (consumedIdx.has(i)) continue;
+      const ev = out[i];
+      if (!ev) continue;
+      if (ev.minute < intent.minute) continue;
+      if (ev.payload['isGoal'] !== true) continue;
+      if (ev.payload['team'] !== intent.team) continue;
+
+      out[i] = {
+        ...ev,
+        type: 'shot',
+        payload: {
+          ...ev.payload,
+          isGoal:                false,
+          interferenceApplied:   'annul_goal' satisfies InterferenceMark,
+          interferenceMagnitude: intent.magnitude,
+        },
+      };
+      consumedIdx.add(i);
+      break;     // single-shot per intent
+    }
+  }
+
+  return out;
 }

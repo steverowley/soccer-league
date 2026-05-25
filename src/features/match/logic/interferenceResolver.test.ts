@@ -7,8 +7,10 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  applyAnnulGoals,
   resolveInterference,
   resolveInterferenceStream,
+  type AnnulGoalIntent,
   type InterferenceContext,
   type InterferenceEffect,
 } from './interferenceResolver';
@@ -181,6 +183,99 @@ describe('resolveInterference — curse precedence', () => {
     // first and short-circuits.
     const out = resolveInterference(ev, ctx, constantRng(0));
     expect(out.payload['interferenceApplied']).toBe('curse');
+  });
+});
+
+// ── #428 slice 3: annul_goal one-shot stream pass ────────────────────────
+
+describe('applyAnnulGoals', () => {
+  /**
+   * Build a goal event with the team/minute/player baked in. Tests
+   * stay focused on the annul mechanic rather than payload setup.
+   */
+  function goalAt(team: string, minute: number, player = 'Scorer'): SimulatedEvent {
+    return {
+      minute,
+      subminute: 0,
+      type:      'goal',
+      payload:   { team, player, isGoal: true },
+    };
+  }
+
+  it('no-op when intents array is empty (returns input by reference)', () => {
+    const events = [goalAt('HOME', 30)];
+    const out = applyAnnulGoals(events, [], constantRng(0));
+    expect(out).toBe(events);
+  });
+
+  it('annuls the first matching goal at or after intent.minute', () => {
+    const events: SimulatedEvent[] = [
+      goalAt('HOME', 10),    // earlier than intent — skipped
+      goalAt('AWAY', 40),    // wrong team — skipped
+      goalAt('HOME', 50),    // matches → annulled
+      goalAt('HOME', 70),    // matches but intent already consumed
+    ];
+    const intents: AnnulGoalIntent[] = [
+      { team: 'HOME', minute: 40, magnitude: 10 },
+    ];
+
+    const out = applyAnnulGoals(events, intents, constantRng(0));
+    expect(out).toHaveLength(4);
+    expect(out[0]).toBe(events[0]);                        // unchanged
+    expect(out[1]).toBe(events[1]);                        // unchanged
+    expect(out[2]?.payload['interferenceApplied']).toBe('annul_goal');
+    expect(out[2]?.payload['isGoal']).toBe(false);
+    expect(out[2]?.type).toBe('shot');
+    expect(out[3]).toBe(events[3]);                        // not consumed
+  });
+
+  it('does not fire when the probability roll lands over the threshold', () => {
+    const events = [goalAt('HOME', 30)];
+    const intents: AnnulGoalIntent[] = [
+      { team: 'HOME', minute: 25, magnitude: 5 },         // 50% threshold
+    ];
+    // 0.6 > 0.5 → no fire
+    const out = applyAnnulGoals(events, intents, constantRng(0.6));
+    expect(out[0]).toBe(events[0]);
+  });
+
+  it('two intents consume two distinct goals, in input order', () => {
+    const events: SimulatedEvent[] = [
+      goalAt('HOME', 20),
+      goalAt('HOME', 40),
+      goalAt('HOME', 60),
+    ];
+    const intents: AnnulGoalIntent[] = [
+      { team: 'HOME', minute: 0,  magnitude: 10 },        // takes 20'
+      { team: 'HOME', minute: 30, magnitude: 10 },        // takes 40'
+    ];
+    const out = applyAnnulGoals(events, intents, constantRng(0));
+    expect(out[0]?.payload['interferenceApplied']).toBe('annul_goal');
+    expect(out[1]?.payload['interferenceApplied']).toBe('annul_goal');
+    expect(out[2]?.payload['isGoal']).toBe(true);          // untouched
+  });
+
+  it('a magnitude-0 intent never fires', () => {
+    const events = [goalAt('HOME', 30)];
+    const intents: AnnulGoalIntent[] = [
+      { team: 'HOME', minute: 0, magnitude: 0 },
+    ];
+    // RNG=0 would force-fire if magnitude were > 0; with mag=0 the
+    // threshold is 0, and `random() >= 0` is true → no fire.
+    const out = applyAnnulGoals(events, intents, constantRng(0));
+    expect(out[0]).toBe(events[0]);
+  });
+
+  it('skips non-goal events even when team/minute would match', () => {
+    const events: SimulatedEvent[] = [
+      { minute: 30, subminute: 0, type: 'shot',
+        payload: { team: 'HOME', player: 'Scorer', isGoal: false } },
+    ];
+    const intents: AnnulGoalIntent[] = [
+      { team: 'HOME', minute: 0, magnitude: 10 },
+    ];
+    const out = applyAnnulGoals(events, intents, constantRng(0));
+    expect(out[0]).toBe(events[0]);
   });
 });
 
