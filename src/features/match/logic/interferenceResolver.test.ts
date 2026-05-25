@@ -1,0 +1,207 @@
+// ── interferenceResolver.test.ts ─────────────────────────────────────────
+// Tests for the pure curse/bless post-pass (#428 slice 1).
+//
+// All tests inject a deterministic RNG so probability rolls are
+// reproducible — the resolver itself stays pure and the test reads
+// like a state-machine spec.
+
+import { describe, expect, it } from 'vitest';
+import {
+  resolveInterference,
+  resolveInterferenceStream,
+  type InterferenceContext,
+  type InterferenceEffect,
+} from './interferenceResolver';
+import type { SimulatedEvent } from './simulateFullMatch';
+
+/**
+ * Factory for a baseline goal event by `player` at `minute`. Keeps
+ * the test bodies focused on the curse/bless behaviour rather than
+ * payload boilerplate.
+ */
+function goalBy(player: string, minute = 30): SimulatedEvent {
+  return {
+    minute,
+    subminute: 0,
+    type:      'goal',
+    payload:   { player, isGoal: true, team: 'HOME' },
+  };
+}
+
+/**
+ * Factory for a missed-shot event. `isGoal:false` mirrors what
+ * gameEngine emits when a shot is off-target / saved / blocked.
+ */
+function shotBy(player: string, minute = 30): SimulatedEvent {
+  return {
+    minute,
+    subminute: 0,
+    type:      'shot',
+    payload:   { player, isGoal: false, team: 'HOME' },
+  };
+}
+
+const noEffects: InterferenceContext = { curses: [], blesses: [] };
+
+/**
+ * RNG that always returns `value`. Useful for forcing the firing
+ * branch (value < magnitude * 0.1) or the no-fire branch (value
+ * above the threshold).
+ */
+const constantRng = (value: number) => () => value;
+
+describe('resolveInterference — passthrough', () => {
+  it('returns the event unchanged when no effects are active', () => {
+    const ev = goalBy('Kael Vorn');
+    const out = resolveInterference(ev, noEffects, constantRng(0));
+    expect(out).toBe(ev);
+  });
+
+  it('returns the event unchanged when the event has no player', () => {
+    const ev: SimulatedEvent = {
+      minute: 30, subminute: 0, type: 'kickoff', payload: {},
+    };
+    const ctx: InterferenceContext = {
+      curses:  [{ playerName: 'Anyone', magnitude: 10, startMin: 1 }],
+      blesses: [],
+    };
+    expect(resolveInterference(ev, ctx, constantRng(0))).toBe(ev);
+  });
+
+  it('returns the event unchanged when the cursed name does not match', () => {
+    const ev = goalBy('Kael Vorn');
+    const ctx: InterferenceContext = {
+      curses:  [{ playerName: 'Different Player', magnitude: 10, startMin: 1 }],
+      blesses: [],
+    };
+    // RNG=0 would force-fire if names matched.
+    expect(resolveInterference(ev, ctx, constantRng(0))).toBe(ev);
+  });
+});
+
+describe('resolveInterference — curse_player', () => {
+  const curse: InterferenceEffect = {
+    playerName: 'Kael Vorn',
+    magnitude:  5,            // 50% firing chance
+    startMin:   10,
+  };
+  const ctx: InterferenceContext = { curses: [curse], blesses: [] };
+
+  it('annuls a goal when the RNG roll lands under magnitude * 0.1', () => {
+    const ev = goalBy('Kael Vorn', 30);
+    // 0.4 < 0.5 → fires
+    const out = resolveInterference(ev, ctx, constantRng(0.4));
+    expect(out.type).toBe('shot');
+    expect(out.payload['isGoal']).toBe(false);
+    expect(out.payload['interferenceApplied']).toBe('curse');
+    expect(out.payload['interferenceMagnitude']).toBe(5);
+  });
+
+  it('leaves the goal intact when the roll lands over the threshold', () => {
+    const ev = goalBy('Kael Vorn', 30);
+    // 0.6 > 0.5 → does not fire
+    const out = resolveInterference(ev, ctx, constantRng(0.6));
+    expect(out).toBe(ev);
+  });
+
+  it('matches names case-insensitively', () => {
+    const ev = goalBy('kael vorn', 30);
+    const out = resolveInterference(ev, ctx, constantRng(0));
+    expect(out.payload['interferenceApplied']).toBe('curse');
+  });
+
+  it('does not fire on events earlier than startMin', () => {
+    const ev = goalBy('Kael Vorn', 5);       // before startMin=10
+    const out = resolveInterference(ev, ctx, constantRng(0));
+    expect(out).toBe(ev);
+  });
+
+  it('does not fire on non-goal events (e.g. saved shots)', () => {
+    const ev = shotBy('Kael Vorn', 30);
+    const out = resolveInterference(ev, ctx, constantRng(0));
+    expect(out).toBe(ev);
+  });
+
+  it('uses the strongest matching effect when multiple curses target one player', () => {
+    const stacked: InterferenceContext = {
+      curses: [
+        { playerName: 'Kael Vorn', magnitude: 2, startMin: 1 },  // weak
+        { playerName: 'Kael Vorn', magnitude: 9, startMin: 5 },  // strongest
+      ],
+      blesses: [],
+    };
+    const ev = goalBy('Kael Vorn', 30);
+    // 0.85 < 0.9 → fires only if magnitude=9 is the one selected.
+    const out = resolveInterference(ev, stacked, constantRng(0.85));
+    expect(out.payload['interferenceApplied']).toBe('curse');
+    expect(out.payload['interferenceMagnitude']).toBe(9);
+  });
+});
+
+describe('resolveInterference — bless_player', () => {
+  const bless: InterferenceEffect = {
+    playerName: 'Aiya Tek',
+    magnitude:  7,            // 70% firing chance
+    startMin:   1,
+  };
+  const ctx: InterferenceContext = { curses: [], blesses: [bless] };
+
+  it('upgrades a missed shot to a goal when the roll fires', () => {
+    const ev = shotBy('Aiya Tek', 30);
+    // 0.5 < 0.7 → fires
+    const out = resolveInterference(ev, ctx, constantRng(0.5));
+    expect(out.type).toBe('goal');
+    expect(out.payload['isGoal']).toBe(true);
+    expect(out.payload['interferenceApplied']).toBe('bless');
+    expect(out.payload['interferenceMagnitude']).toBe(7);
+  });
+
+  it('does not upgrade when the roll misses the threshold', () => {
+    const ev = shotBy('Aiya Tek', 30);
+    // 0.8 > 0.7 → no fire
+    const out = resolveInterference(ev, ctx, constantRng(0.8));
+    expect(out).toBe(ev);
+  });
+
+  it('does not target events that are already goals', () => {
+    const ev = goalBy('Aiya Tek', 30);  // already isGoal=true
+    const out = resolveInterference(ev, ctx, constantRng(0));
+    expect(out).toBe(ev);
+  });
+});
+
+describe('resolveInterference — curse precedence', () => {
+  it('a player who is both cursed and blessed gets cursed (the harder outcome)', () => {
+    const ctx: InterferenceContext = {
+      curses:  [{ playerName: 'Twice Touched', magnitude: 8, startMin: 1 }],
+      blesses: [{ playerName: 'Twice Touched', magnitude: 8, startMin: 1 }],
+    };
+    const ev = goalBy('Twice Touched', 30);
+    // RNG=0 fires both branches if checked — but curse is evaluated
+    // first and short-circuits.
+    const out = resolveInterference(ev, ctx, constantRng(0));
+    expect(out.payload['interferenceApplied']).toBe('curse');
+  });
+});
+
+describe('resolveInterferenceStream', () => {
+  it('preserves order and only mutates the matching events', () => {
+    const ctx: InterferenceContext = {
+      curses:  [{ playerName: 'Cursed One', magnitude: 10, startMin: 1 }],
+      blesses: [],
+    };
+    const events: SimulatedEvent[] = [
+      goalBy('Other Player', 10),
+      goalBy('Cursed One',  20),
+      shotBy('Cursed One',  30),
+      goalBy('Cursed One',  40),
+    ];
+    // RNG always returns 0 so every curse roll fires.
+    const out = resolveInterferenceStream(events, ctx, constantRng(0));
+    expect(out).toHaveLength(4);
+    expect(out[0]).toBe(events[0]);                      // unaffected
+    expect(out[1]?.payload['interferenceApplied']).toBe('curse');
+    expect(out[2]).toBe(events[2]);                      // not a goal, unaffected
+    expect(out[3]?.payload['interferenceApplied']).toBe('curse');
+  });
+});
