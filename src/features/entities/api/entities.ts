@@ -5,6 +5,11 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { Narrative } from '../types';
+// #386 slice 4: drift-validate every narrative row at the api edge.
+// The Architect's in-memory lore store + the news feed both project
+// from these rows; a malformed entry now drops with a warn-log
+// rather than poisoning either consumer.
+import { parseNarrativeRows } from './entities.schema';
 
 // ── Narrative queries ───────────────────────────────────────────────────────
 
@@ -50,7 +55,7 @@ export async function getRecentNarratives(
     console.warn('[getRecentNarratives] failed:', error.message);
     return [];
   }
-  return (data ?? []) as Narrative[];
+  return parseNarrativeRows((data ?? []) as unknown[], 'getRecentNarratives') as Narrative[];
 }
 
 /**
@@ -89,5 +94,5 @@ export async function getRecentNarrativesByKinds(
     console.warn('[getRecentNarrativesByKinds] failed:', error.message);
     return [];
   }
-  return (data ?? []) as Narrative[];
+  return parseNarrativeRows((data ?? []) as unknown[], 'getRecentNarrativesByKinds') as Narrative[];
 }
