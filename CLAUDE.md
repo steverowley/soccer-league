@@ -258,29 +258,29 @@ Each club has:
 
 ## Current Implementation Status
 
-> **Last audited: 2026-05-19.** The codebase is production-ready. All core systems are fully operational.
+> **Last audited: 2026-05-27.** Numeric claims below reflect a fresh sweep against the codebase on that date. Next sweep due 2026-08-27 (90-day reminder).
 
 ### ✅ COMPLETED — All Core Systems
 
 #### Infrastructure & Tooling
 - TypeScript everywhere (`strict: true`), all `.js`/`.jsx` migrated to `.ts`/`.tsx`
 - Feature-based folder layout (`src/features/{auth,betting,match,architect,entities,voting,training,finance,admin}`)
-- Vitest (668 tests, all passing), ESLint, Prettier, `tsc --noEmit` all green in CI
-- Supabase migrations directory (`supabase/migrations/` 0000–0022, no hand-edited schema.sql)
-- Generated typed Supabase client (`src/types/database.ts`, 37 tables)
+- Vitest (1105 tests, all passing), ESLint, Prettier, `tsc --noEmit` all green in CI
+- Supabase migrations directory (`supabase/migrations/` 0000–0059, no hand-edited schema.sql)
+- Generated typed Supabase client (`src/types/database.ts`, 39 tables + 9 views + 8 RPC functions)
 - Event bus (`src/shared/events/bus.ts`) wiring cross-feature side effects
 - GitHub Pages deployment via Actions
 
 #### Match Simulation
-- `src/gameEngine.js` (2748 LOC) — minute-by-minute, 13+ event types, personality-driven contests, weather, momentum, tension curves, multi-step sequences (penalties, free kicks, sieges, counters, VAR, confrontations)
+- `src/gameEngine.js` (2576 LOC) — minute-by-minute, 13+ event types, personality-driven contests, weather, momentum, tension curves, multi-step sequences (penalties, free kicks, sieges, counters, VAR, confrontations)
 - `src/gameEngine.d.ts` — full TypeScript declarations for the JS engine
 - `src/features/match/logic/simulateFullMatch.ts` — pure 90-minute orchestrator wrapping genEvent()
-- `scripts/match-worker.ts` — server-side worker polling every 30s, pre-computes all match events and persists to `match_events`
+- `supabase/functions/match-worker/index.ts` — Deno edge function scheduled by pg_cron (every minute); claims due matches via optimistic lock, simulates full 90 minutes, batch-inserts events into `match_events`. (Replaces the historical `scripts/match-worker.ts` polling worker.)
 - 8 personality archetypes, 3 commentator voices (Vox / Nexus-7 / Zara), planetary weather system
 - `src/gameEngine.smoke.test.ts` — 200 randomised full matches via seeded LCG
 
 #### Cosmic Architect Narrative Layer
-- `src/features/architect/logic/CosmicArchitect.ts` (1087 LOC) — 4 interference layers: Cosmic Edicts, Intentions (12 types), Sealed Fate, Interference Flags (10 reality-rewrites)
+- `src/features/architect/logic/CosmicArchitect.ts` (1133 LOC) — 4 interference layers: Cosmic Edicts, Intentions (12 types), Sealed Fate, Interference Flags (10 reality-rewrites)
 - Persistent lore in `architect_lore` DB table; `prepareArchitectForMatch()` hydrates before kickoff; `LoreStore.persistAll()` writes fire-and-forget post-match
 - `getContext()` is synchronous — never blocks during goal bursts (5–10 calls in <500ms)
 - Cosmic Voice interrupts: Balance + Chaos commentators
@@ -355,32 +355,49 @@ Each club has:
 
 ---
 
-## Database Schema (37 tables, migrations 0000–0022)
+## Database Schema (39 tables + 9 views + 8 RPC functions, migrations 0000–0059)
 
 ### Core
-`teams`, `leagues`, `managers`, `players`, `entities`, `entity_traits`, `entity_relationships`
+`teams`, `leagues`, `managers`, `players`, `entities`, `entity_traits`, `entity_relationships`, `entity_memories`, `entity_persona`, `entity_snippets`
 
 ### Match & Competition
-`matches`, `match_events`, `match_player_stats`, `match_attendance`, `match_odds`, `competitions`, `competition_teams`
+`matches`, `match_events`, `match_player_stats`, `match_lineups`, `match_attendance`, `match_odds`, `match_notification_sends`, `competitions`, `competition_teams`
 
 ### Season
 `seasons`, `season_config`
 
 ### Narrative & Lore
-`architect_lore`, `architect_interventions`, `narratives`, `season_decrees`
+`architect_lore`, `architect_interventions`, `narratives`, `season_decrees`, `shadow_match_results`, `drama_consequences`
 
 ### Voting
-`focus_options`, `focus_votes`, `focus_enacted`, `focus_tally`, `incinerations`
+`focus_options`, `focus_votes`, `focus_enacted`, `incinerations`
 
 ### Betting & Finance
-`wagers`, `team_finances`, `wager_leaderboard` (view), `wager_volume_v` (view)
+`wagers`, `team_finances`
 
 ### User
-`profiles`, `public_profiles` (view), `player_training_log`, `player_idol_score` (view), `player_idol_movers` (view)
+`profiles`, `player_training_log`, `push_subscriptions`
+
+### Ops / config
+`agent_runs`, `app_config`, `claude_sessions`
+
+### Views (9)
+`focus_tally`, `active_watchers_v`, `match_referee_v`, `player_idol_score`, `player_idol_movers`, `public_profiles`, `team_supporter_count_v`, `wager_leaderboard`, `wager_volume_v`
+
+### RPC functions (8)
+`admin_add_player`, `admin_complete_match`, `admin_inject_narrative`, `admin_set_season_status`, `assign_match_referee`, `berger_round_robin_fixtures`, `incinerate_player`, `place_wager` (+ `settle_wager`, `account_deletions` audit-purge — see migrations 0050+)
 
 ---
 
-## Remaining Work (Priority Order)
+## Remaining Work
+
+Roadmap milestones moved to GitHub Issues. See `ROADMAP.md` for the index, or filter directly with the M0–M4 labels:
+
+- **M0 launch-blockers** — `label:M0-launch-blockers`
+- **M1 architect-wakes-up** — `label:M1-architect-wakes-up`
+- **M2 product-foundation** — `label:M2-product-foundation`
+- **M3 architectural-cleanup** — `label:M3-architectural-cleanup`
+- **M4 depth-community** — `label:M4-depth-community`
 
 ### ✅ Phase A: Live Match Event Streaming — SHIPPED
 - `subscribeToMatchEvents()` in `src/features/match/api/matchEvents.ts:173` opens a `postgres_changes` channel filtered by `match_id`.
@@ -388,23 +405,15 @@ Each club has:
 - Pacing anchor is `matches.scheduled_at` (there is no `simulated_at` column).
 - Component-level tests cover normal paced replay, mid-simulation join (incl. duplicate Realtime delivery), and early completion (worker flips `status=completed` mid-pacing without skipping the timeline) — see `src/pages/MatchDetail.LiveCommentary.test.tsx`.
 
-### 🟡 Phase B: Admin Dashboard (Medium Priority, Medium Effort — ~1 week)
-Operations tool for managing seasons, triggering match simulation, reviewing architect interventions.
-- `/admin` route with season state controls (start voting, enact, roll season)
-- Fixture browser + manual match completion
-- Architect intervention log viewer
-- Files to create: `src/pages/AdminDashboard.tsx`, `src/features/admin/ui/`
+### ✅ Phase B: Admin Dashboard — SHIPPED
+`/admin` route landed in `src/pages/Admin.tsx` (composes the panels under `src/features/admin/ui/`). Covers season-state controls, fixture browser, architect intervention log viewer, and a system-stats card. Admin actions go through SECURITY DEFINER RPCs (`admin_*` functions) so RLS stays intact for non-admin users.
 
-### 🟡 Phase C: Player Detail Pages (Medium Priority, Medium Effort — ~1 week)
-`/players/:id` links exist throughout the app but 404 today. Player detail page showing career stats, training XP, idol rank, match history, and narrative mentions.
-- Fetch player from `players` table + entity row + `player_idol_score`
-- Match history from `match_player_stats`
-- Recent narratives mentioning this player
-- Files to create: `src/pages/PlayerDetail.tsx`, `src/features/match/api/playerStats.ts`
+### ✅ Phase C: Player Detail Pages — SHIPPED
+`/players/:id` route landed in `src/pages/PlayerDetail.tsx` (956 LOC). Fetches player + entity row + idol rank + match history + recent narratives + training XP timeline.
 
 ### 🟢 Phase D: Performance Optimisation (Low Priority — profile first)
 - `React.memo` on `MatchCard`, `WagerWidget`, `StandingsTable`
-- Code-split routes via `React.lazy`
+- Code-split routes via `React.lazy` (partially in flight — see RouteSuspenseFallback)
 - Only do this once there is real traffic to profile against
 
 ### 🟢 Phase E: Mobile Polish (Low Priority, Low Effort — ~3 days)
