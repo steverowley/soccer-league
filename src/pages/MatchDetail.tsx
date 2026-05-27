@@ -224,7 +224,7 @@ export default function MatchDetail() {
               body={<>
                 Pick an outcome (home, draw, or away) and stake at least
                 10 IC. The odds you see in the picker lock the moment you
-                place — the bookie's later re-pricing won't claw your
+                place — the bookie&apos;s later re-pricing won&apos;t claw your
                 potential payout back. You can bet on multiple matches.
               </>}
             />

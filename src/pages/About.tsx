@@ -40,7 +40,7 @@ export default function About() {
             survive.
           </P>
           <P>
-            At season's end, fans of each club pool their credits and vote on two focuses
+            At season&apos;s end, fans of each club pool their credits and vote on two focuses
             — one major, one minor — that actually reshape the team for next season.
             The cosmos enacts what you collectively choose, then writes journalist
             takes about whether it worked.

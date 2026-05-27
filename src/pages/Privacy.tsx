@@ -49,7 +49,7 @@ export default function Privacy() {
             personal messages.
           </P>
 
-          <H2>What we don't collect</H2>
+          <H2>What we don&apos;t collect</H2>
           <P>
             Real names, addresses, phone numbers, payment information, location, or
             anything else not listed above.
@@ -57,8 +57,8 @@ export default function Privacy() {
 
           <H2>How we use it</H2>
           <P>
-            Only to run the game and to debug it when it breaks. We don't sell your
-            data, we don't run advertising, and we don't share account-level data with
+            Only to run the game and to debug it when it breaks. We don&apos;t sell your
+            data, we don&apos;t run advertising, and we don&apos;t share account-level data with
             third parties.
           </P>
 

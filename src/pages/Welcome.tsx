@@ -201,7 +201,7 @@ function PickPlayerStep({ teamId, onPick, onSkip }: {
 
       {players.length === 0 ? (
         <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: '24px 0' }}>
-          Loading your club's roster…
+          Loading your club&apos;s roster…
         </p>
       ) : (
         <div style={{
@@ -269,7 +269,7 @@ function StarterBetStep({ teamId, playerId, onDone }: {
 
         {!loading && !nextMatch && (
           <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-            No fixtures yet for your club. Browse the schedule and place a bet whenever you're ready — your 200 credits are sitting safe in your account.
+            No fixtures yet for your club. Browse the schedule and place a bet whenever you&apos;re ready — your 200 credits are sitting safe in your account.
           </p>
         )}
 
