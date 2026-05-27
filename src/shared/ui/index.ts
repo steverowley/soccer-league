@@ -9,9 +9,13 @@
 //   - Card                                     — canonical content card (#378)
 //   - Chip                                     — bordered small-caps pill (#378)
 //   - EmptyState                               — "nothing here" surface (#378)
+//   - Kicker                                   — uppercase mono label (#378)
+//   - Pip                                      — filled-circle indicator (#378)
+//   - StatPair                                 — label-above-value cell (#378)
+//   - KeyValue                                 — horizontal label : value (#378)
 //
 // Design-primitive consolidation (#378) will land further additions here
-// (Panel, KeyValue, …) as features migrate off inline styles.
+// (Panel, SectionPanel, …) as features migrate off inline styles.
 
 export {
   ToastProvider,
@@ -39,3 +43,19 @@ export {
 export {
   EmptyState,
 } from './EmptyState';
+
+export {
+  Kicker,
+} from './Kicker';
+
+export {
+  Pip,
+} from './Pip';
+
+export {
+  StatPair,
+} from './StatPair';
+
+export {
+  KeyValue,
+} from './KeyValue';
