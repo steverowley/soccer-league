@@ -638,8 +638,26 @@ function enactPreseasonCamp(players: PlayerRow[]): FocusEnactmentSpec {
 
 /**
  * Scout network: a hidden gem from the bench earns a pathway to first-team
- * action. Promotes the highest-rated bench player and bumps technical +2,
- * mental +1. If no bench players exist, produces an empty mutation set.
+ * action.  Variants differ on which bench archetype the scouts surface
+ * AND on the stat bumps the promotion carries.
+ *
+ * VARIANTS (#424):
+ *   - pure_skill    — Highest-rated bench player (the pre-#424 baseline).
+ *                     Bumps: technical +2, mental +1.  The classic
+ *                     "overlooked technician finally seen" story.
+ *   - youth_find    — Youngest bench player (regardless of rating).
+ *                     Bumps: athletic +2, technical +1.  The scouts
+ *                     uncovered raw pace; the player can grow into
+ *                     the rest.
+ *   - veteran_steal — Oldest bench player.  Bumps: mental +3.  A wily
+ *                     journeyman, undervalued for their age — the
+ *                     squad inherits a vault of game knowledge.
+ *
+ * Weights tilt slightly toward pure_skill (40) because that's the
+ * on-tin "scout network" narrative; youth_find (35) and veteran_steal
+ * (25) cover the cosmos's preference for surprise.  If no bench
+ * players exist, every variant collapses to the same empty-mutations
+ * outcome (the scouts found nothing).
  */
 function enactScoutNetwork(
   players: PlayerRow[],
@@ -655,26 +673,91 @@ function enactScoutNetwork(
     };
   }
 
-  // Highest-rated bench player; random tiebreak via rng.
-  const sorted = [...bench].sort((a, b) => {
+  // ── Pre-sorted target lists ────────────────────────────────────────
+  // Each variant picks its target from one of these lists.  Building
+  // them up front keeps the variant `.apply()` bodies focused on the
+  // bumps + reason text rather than re-sorting on every call.
+  //
+  //   sortedHighestRated — pure_skill picks index 0 (best-rated).
+  //   sortedYoungest     — youth_find  picks index 0 (lowest age).
+  //   sortedOldest       — veteran_steal picks index 0 (highest age).
+  const sortedHighestRated = [...bench].sort((a, b) => {
     const diff = (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
     if (diff !== 0) return diff;
     return rng() - 0.5;
   });
-  const chosen = sorted[0]!;
+  const sortedYoungest = [...bench].sort((a, b) => {
+    const diff = (a.age ?? 99) - (b.age ?? 99);
+    if (diff !== 0) return diff;
+    return (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
+  });
+  const sortedOldest = [...bench].sort((a, b) => {
+    const diff = (b.age ?? 0) - (a.age ?? 0);
+    if (diff !== 0) return diff;
+    return (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
+  });
 
-  return {
+  /**
+   * Build the per-variant promotion spec.  Identical shape across
+   * variants — only the chosen player + stat_bumps + reason vary.
+   *
+   * @param chosen      The bench player being promoted.
+   * @param stat_bumps  Per-stat delta map applied alongside the
+   *                    promotion.  Variant-specific.
+   * @param reason      Variant-specific in-world explanation.
+   */
+  const buildPromotion = (
+    chosen:     PlayerRow,
+    stat_bumps: Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>>,
+    reason:     string,
+  ): FocusEnactmentSpec => ({
     focus_key:   'scout_network',
     focus_label: 'Expand Scout Network',
-    reason: `A hidden gem is uncovered. ${chosen.name} — overlooked, underestimated — now steps into the light. The scout network reaches deeper into the void.`,
-    mutations: [
-      {
-        kind:       'promote_player',
-        player_id:  chosen.id,
-        stat_bumps: { technical: 2, mental: 1 },
+    reason,
+    mutations:   [{ kind: 'promote_player', player_id: chosen.id, stat_bumps }],
+  });
+
+  // Variant pool (#424). Weights chosen per the design rationale above.
+  const variants: FocusVariant[] = [
+    {
+      key:    'pure_skill',
+      weight: 40,
+      apply:  () => {
+        const chosen = sortedHighestRated[0]!;
+        return buildPromotion(
+          chosen,
+          { technical: 2, mental: 1 },
+          `A hidden gem is uncovered. ${chosen.name} — overlooked, underestimated — now steps into the light. The scout network reaches deeper into the void.`,
+        );
       },
-    ],
-  };
+    },
+    {
+      key:    'youth_find',
+      weight: 35,
+      apply:  () => {
+        const chosen = sortedYoungest[0]!;
+        return buildPromotion(
+          chosen,
+          { athletic: 2, technical: 1 },
+          `The scouts brought back a name from the outer colonies. ${chosen.name} runs faster than the squad's expectations — and the cosmos suspects there is more still to come.`,
+        );
+      },
+    },
+    {
+      key:    'veteran_steal',
+      weight: 25,
+      apply:  () => {
+        const chosen = sortedOldest[0]!;
+        return buildPromotion(
+          chosen,
+          { mental: 3 },
+          `The scouts uncovered a journeyman, undervalued for their age. ${chosen.name} brings a vault of game knowledge to the squad — a wily voice in the dressing room the cosmos has finally remembered.`,
+        );
+      },
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
