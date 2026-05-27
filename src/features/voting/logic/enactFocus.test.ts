@@ -520,33 +520,41 @@ describe('fan_engagement', () => {
 // ── sports_science ────────────────────────────────────────────────────────────
 
 describe('sports_science', () => {
-  it('produces two mutations per player (athletic +1 and defending +1)', () => {
+  it('produces only stat_bump mutations targeting squad members', () => {
+    // Pre-#424 was tightly "2N mutations × athletic+1/defending+1". Variants
+    // diverge on (a) bump set and (b) target scope; we widen to "every
+    // mutation is a positive stat bump on a real squad member".
     const squad = makeSquad();
     const spec = enactFocus('sports_science', TEAM, SEASON, squad, rng())!;
-    expect(spec.mutations).toHaveLength(squad.length * 2);
-  });
-
-  it('each mutation is a player_stat_bump of +1', () => {
-    const spec = enactFocus('sports_science', TEAM, SEASON, makeSquad(), rng())!;
+    expect(spec.mutations.length).toBeGreaterThan(0);
+    const squadIds = new Set(squad.map((p) => p.id));
+    const VALID_STATS = new Set(['attacking', 'defending', 'mental', 'athletic', 'technical']);
     for (const mut of spec.mutations) {
       expect(mut.kind).toBe('player_stat_bump');
       const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
-      expect(bump.delta).toBe(1);
-      expect(['athletic', 'defending']).toContain(bump.stat);
+      expect(VALID_STATS.has(bump.stat)).toBe(true);
+      expect(bump.delta).toBeGreaterThan(0);
+      expect(squadIds.has(bump.player_id)).toBe(true);
     }
   });
 
-  it('each player gets exactly one athletic and one defending bump', () => {
-    const squad = makeSquad();
-    const spec = enactFocus('sports_science', TEAM, SEASON, squad, rng())!;
-    for (const player of squad) {
-      const bumps = spec.mutations.filter(
-        (m) => (m as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>).player_id === player.id,
-      ) as Array<Extract<EnactmentMutation, { kind: 'player_stat_bump' }>>;
-      expect(bumps).toHaveLength(2);
-      const stats = bumps.map((b) => b.stat).sort();
-      expect(stats).toEqual(['athletic', 'defending']);
+  it('produces variety across distinct seeds (#424)', () => {
+    // Each variant has a unique signature:
+    //   conditioning  → athletic=1, defending=1 × 14 players (28 mutations)
+    //   recovery      → defending=2 × 14 players (14 mutations)
+    //   explosiveness → athletic=2 × 11 starters (11 mutations)
+    const signatures = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:lab-variety-${i}`);
+      const spec = enactFocus('sports_science', TEAM, SEASON, makeSquad(), localRng)!;
+      const pairs = new Set<string>();
+      for (const mut of spec.mutations) {
+        const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
+        pairs.add(`${bump.stat}=${bump.delta}`);
+      }
+      signatures.add(`${[...pairs].sort().join(',')}|${spec.mutations.length}`);
     }
+    expect(signatures.size).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -1142,22 +1142,94 @@ function enactFanEngagement(
 }
 
 /**
- * Sports science programme: medical and physio investment yields squad-wide
- * conditioning gains. Buffs athletic +1 and defending +1 across ALL players —
- * better conditioning protects all positions.
+ * Sports science programme: medical and physio investment yields stat gains
+ * shaped by which sub-discipline the staff chose to invest in.
+ *
+ * VARIANTS (#424):
+ *   - conditioning   — Athletic +1 AND defending +1 across ALL players (the
+ *                      pre-#424 baseline).  Whole-squad durability gain.
+ *   - recovery       — Defending +2 across ALL players.  Cellular-level
+ *                      injury resistance; players take fewer knocks.
+ *   - explosiveness  — Athletic +2 on STARTERS only.  The lab focused on
+ *                      peak-output sprint conditioning for the first XI;
+ *                      bigger lift, narrower scope.
+ *
+ * Weights split roughly evenly (33/33/34) — no a-priori reason the cosmos
+ * should prefer one sub-discipline over another.
  */
-function enactSportsScience(players: PlayerRow[]): FocusEnactmentSpec {
-  const mutations: EnactmentMutation[] = players.flatMap((p) => [
-    { kind: 'player_stat_bump' as const, player_id: p.id, stat: 'athletic'  as const, delta: 1 },
-    { kind: 'player_stat_bump' as const, player_id: p.id, stat: 'defending' as const, delta: 1 },
-  ]);
-
-  return {
-    focus_key:   'sports_science',
-    focus_label: 'Sports Science Programme',
-    reason: `The medical staff rewrite the squad's limits at a cellular level. The cosmos approves — it prefers its mortals difficult to break.`,
-    mutations,
+function enactSportsScience(
+  players: PlayerRow[],
+  rng:     () => number,
+): FocusEnactmentSpec {
+  /**
+   * Spec builder — every variant supplies a `targets` predicate (squad-wide
+   * or starters only), one or more (stat, delta) pairs to apply per
+   * targeted player, and a variant-specific reason.
+   *
+   * @param targets  Filter predicate selecting which players to bump.
+   * @param bumps    Array of (stat, delta) pairs applied per targeted player.
+   * @param reason   Variant-specific in-world explanation.
+   */
+  const build = (
+    targets: (p: PlayerRow) => boolean,
+    bumps:   Array<{ stat: 'attacking' | 'defending' | 'mental' | 'athletic' | 'technical'; delta: number }>,
+    reason:  string,
+  ): FocusEnactmentSpec => {
+    const mutations: EnactmentMutation[] = [];
+    for (const p of players) {
+      if (!targets(p)) continue;
+      for (const b of bumps) {
+        mutations.push({
+          kind:      'player_stat_bump',
+          player_id: p.id,
+          stat:      b.stat,
+          delta:     b.delta,
+        });
+      }
+    }
+    return {
+      focus_key:   'sports_science',
+      focus_label: 'Sports Science Programme',
+      reason,
+      mutations,
+    };
   };
+
+  // Variant pool (#424). Equal weights — see prose above.
+  const variants: FocusVariant[] = [
+    {
+      key:    'conditioning',
+      weight: 33,
+      apply:  () => build(
+        () => true,                // all players
+        [
+          { stat: 'athletic',  delta: 1 },
+          { stat: 'defending', delta: 1 },
+        ],
+        `The medical staff rewrite the squad's limits at a cellular level. The cosmos approves — it prefers its mortals difficult to break.`,
+      ),
+    },
+    {
+      key:    'recovery',
+      weight: 33,
+      apply:  () => build(
+        () => true,                // all players
+        [{ stat: 'defending', delta: 2 }],
+        `The lab focuses on the long arc: collagen mapping, joint scans, regenerative protocols. The squad emerges harder to break, harder to bend. The cosmos collects fewer souls this season.`,
+      ),
+    },
+    {
+      key:    'explosiveness',
+      weight: 34,
+      apply:  () => build(
+        (p) => p.starter,          // starters only
+        [{ stat: 'athletic', delta: 2 }],
+        `The lab burns its budget on peak output. Sprint conditioning, plyometric drills, neural-pathway tuning — the first XI emerges sharper than the cosmos has seen them. The bench watches from the sidelines.`,
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
@@ -1283,7 +1355,7 @@ export function enactFocus(
     case 'preseason_camp':   return enactPreseasonCamp(players, rng);
     case 'scout_network':    return enactScoutNetwork(players, rng);
     case 'fan_engagement':   return enactFanEngagement(teamId, seasonId, players, rng);
-    case 'sports_science':   return enactSportsScience(players);
+    case 'sports_science':   return enactSportsScience(players, rng);
     case 'mental_coaching':  return enactMentalCoaching(players, rng);
     default:                 return null;
   }
