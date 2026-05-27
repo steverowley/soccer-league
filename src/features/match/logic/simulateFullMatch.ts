@@ -43,8 +43,10 @@ import { applyFanBoostToTeam } from '../../finance/logic/applyFanBoost';
 // mechanical effect on the match outcome (not just narrative).
 import {
   applyAnnulGoals,
+  applyForceRedCards,
   resolveInterference,
   type AnnulGoalIntent,
+  type ForceRedCardIntent,
   type InterferenceContext,
 } from './interferenceResolver';
 
@@ -229,7 +231,7 @@ export interface AgentReflexHooks {
  * stream. When omitted entirely, simulateFullMatch's behaviour is
  * identical to before (#428 slice 2).
  *
- * Two distinct interference flavours live here, applied at different
+ * Three distinct interference flavours live here, applied at different
  * phases of the simulator:
  *
  *   curses / blesses  — persistent per-player effects. Applied INLINE
@@ -244,9 +246,21 @@ export interface AgentReflexHooks {
  *                       the mutated events stream so the annulled
  *                       goals are removed from the scoreline.
  *
+ *   forceRedCards     — one-shot retrospective intents promoting an
+ *                       existing foul / tackle / dive event by the
+ *                       target player into a red-card dismissal.
+ *                       Applied as a POST-PASS via applyForceRedCards
+ *                       (#428 slice 5 wiring) AFTER applyAnnulGoals
+ *                       so a goal-turned-shot can't be picked up by
+ *                       the red-card scanner (only the whitelisted
+ *                       card-able event types qualify anyway).
+ *                       finalScore is unaffected — card promotions
+ *                       never change the scoreline.
+ *
  * The caller maps `architect.activeCurses` / `activeBlesses` /
- * `pickedAnnulIntents` into these fields, then passes a deterministic
- * RNG for reproducibility (seeded LCG in tests, Math.random in prod).
+ * `pickedAnnulIntents` / `pickedForceRedIntents` into these fields,
+ * then passes a deterministic RNG for reproducibility (seeded LCG
+ * in tests, Math.random in prod).
  */
 export interface InterferenceWiring {
   /** Active curse + bless effects keyed by player name. */
@@ -258,9 +272,20 @@ export interface InterferenceWiring {
    */
   annulGoals?: AnnulGoalIntent[];
   /**
+   * Optional one-shot force-red-card intents (#428 slice 5). Each
+   * intent consumes at most one matching foul / tackle / dive event
+   * by the target player in the post-simulation pass and rewrites
+   * its cardType to 'red'. Intents fizzle silently when no matching
+   * card-able event exists — we never fabricate a synthetic foul.
+   * Omit / pass [] to disable the force-red mechanic.
+   */
+  forceRedCards?: ForceRedCardIntent[];
+  /**
    * Injected RNG ∈ [0, 1). Called at most once per applicable
    * event/intent; pure pass-through otherwise. Defaults to
-   * Math.random when the caller omits it.
+   * Math.random when the caller omits it. The same RNG is shared
+   * across all post-passes (annulGoals, forceRedCards) so a single
+   * seeded LCG drives the entire Architect resolution phase.
    */
   random?: () => number;
 }
@@ -441,6 +466,39 @@ export function simulateFullMatch(
       else if (team === away.shortName) rederived[1]++;
     }
     finalScore = rederived;
+  }
+
+  // ── Architect force_red_card post-pass (#428 slice 5) ─────────────────────
+  // Sequenced AFTER applyAnnulGoals so the two passes can't fight over the
+  // same event.  In practice they target disjoint event kinds (goal vs.
+  // foul / tackle / dive — see CARDABLE_EVENT_TYPES in
+  // interferenceResolver.ts), but ordering them explicitly keeps the
+  // pipeline predictable as we add more interference kinds.
+  //
+  // Each intent fires with probability magnitude*0.1; on fire, the FIRST
+  // card-able event by the target player at/after intent.minute that
+  // doesn't already carry a red card is rewritten in place:
+  //   payload.cardType: 'red' (overwrites yellow if present)
+  //   payload.interferenceApplied: 'force_red_card'
+  //   payload.interferenceMagnitude: <intent magnitude>
+  // The event's type / isGoal stay unchanged — a foul stays a foul.
+  //
+  // ASYMMETRY WITH PLAYERSTATS
+  //   playerStats was accumulated during the per-minute loop based on
+  //   the engine's original cardType output, so a promoted red here
+  //   does NOT retro-fill the targeted player's `redCard` flag.  Same
+  //   trade-off as the annul_goal pass: the engine's bias bag for the
+  //   remainder of the match was computed against the un-promoted card,
+  //   so retro-filling stats would no longer match the simulated
+  //   gameplay.  A follow-up slice can sweep playerStats across all
+  //   post-passes if the asymmetry shows up in UX.
+  //
+  // ALSO NOTABLY ABSENT
+  //   finalScore is NOT touched here — card promotions never change the
+  //   scoreline, so there is no equivalent of the annul re-derivation.
+  if (interferences?.forceRedCards && interferences.forceRedCards.length > 0) {
+    const random = interferences.random ?? Math.random;
+    finalEvents = applyForceRedCards(finalEvents, interferences.forceRedCards, random);
   }
 
   // ── Final-time derivations ─────────────────────────────────────────────────

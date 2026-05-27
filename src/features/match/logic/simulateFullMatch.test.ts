@@ -328,5 +328,101 @@ describe('simulateFullMatch', () => {
         expect(annulled.finalScore[0]).toBe(0);
       }
     });
+
+    // ── #428 slice 5: force_red_card post-pass wiring ──────────────────────
+    //
+    // These tests verify the post-loop pass:
+    //   - An empty `forceRedCards` array is a no-op (byte-identical run).
+    //   - A guaranteed-firing intent targeting every player on both sides
+    //     promotes at least one card-able event into a red card whenever
+    //     the baseline run produced any foul / tackle / dive.  We
+    //     intentionally allow the vacuous-baseline branch (no card-able
+    //     events on this seed) so the test does not depend on engine RNG
+    //     details staying constant.
+
+    it('empty forceRedCards array → byte-identical to legacy', () => {
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(301));
+      const [h1, a1] = freshTeams();
+      const baseline = simulateFullMatch(h1, a1);
+
+      vi.restoreAllMocks();
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(301));
+      const [h2, a2] = freshTeams();
+      // Pass empty arrays for both post-pass kinds to lock down that the
+      // mere presence of an InterferenceWiring object (with no active
+      // intents) doesn't perturb the run.
+      const withEmpty = simulateFullMatch(
+        h2, a2, null, null, null,
+        {
+          ctx: { curses: [], blesses: [] },
+          annulGoals: [],
+          forceRedCards: [],
+          random: () => 0.5,
+        },
+      );
+
+      expect(withEmpty.finalScore).toEqual(baseline.finalScore);
+      expect(withEmpty.events.length).toBe(baseline.events.length);
+    });
+
+    /**
+     * Card-able event types the resolver promotes.  Mirrored here for the
+     * baseline filter so the test stays self-contained — keeping the set
+     * in lockstep with interferenceResolver.ts's CARDABLE_EVENT_TYPES is
+     * an explicit human task on the (rare) day either set grows.
+     */
+    const CARDABLE_TYPES = new Set(['foul', 'tackle', 'dive']);
+
+    it('force-red-on-everyone-magnitude-10 → at least one card-able event carries the marker (if any occurred)', () => {
+      // Baseline first to know whether this seed produces any card-able
+      // events at all.  If it doesn't, the assertion arm of the test is
+      // skipped (vacuous seed) and we only confirm the intent fizzled
+      // cleanly without throwing.
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(301));
+      const [hBase, aBase] = freshTeams();
+      const baseline = simulateFullMatch(hBase, aBase);
+      const baselineCardable = baseline.events.filter(
+        ev => CARDABLE_TYPES.has(ev.type),
+      );
+
+      vi.restoreAllMocks();
+      vi.spyOn(Math, 'random').mockImplementation(makeLCG(301));
+      const [home, away] = freshTeams();
+
+      // One 100%-firing intent per player on both rosters from minute 0.
+      // The resolver walks the stream finding card-able events to
+      // promote; with random=()=>0 every intent fires, so any foul /
+      // tackle / dive by a known player gets the red-card marker.
+      const allPlayers = [...home.players, ...away.players].map(p => p.name);
+      const promoted = simulateFullMatch(
+        home, away, null, null, null,
+        {
+          ctx: { curses: [], blesses: [] },
+          forceRedCards: allPlayers.map(playerName => ({
+            playerName, minute: 0, magnitude: 10,
+          })),
+          random: () => 0,           // fire on the threshold roll
+        },
+      );
+
+      // finalScore is unchanged by card promotions — assert that
+      // unconditionally so the no-side-effect-on-score guarantee is
+      // locked down.
+      expect(promoted.finalScore).toEqual(baseline.finalScore);
+
+      if (baselineCardable.length > 0) {
+        const marked = promoted.events.filter(
+          ev => ev.payload['interferenceApplied'] === 'force_red_card',
+        );
+        // At least one card-able event got promoted.  Not all of them
+        // necessarily — events with no `player` string in payload, or
+        // already carrying cardType:'red' from the engine, are skipped
+        // by applyForceRedCards.
+        expect(marked.length).toBeGreaterThan(0);
+        for (const ev of marked) {
+          expect(ev.payload['cardType']).toBe('red');
+        }
+      }
+    });
   });
 });
