@@ -410,25 +410,56 @@ describe('sports_science', () => {
 // ── mental_coaching ───────────────────────────────────────────────────────────
 
 describe('mental_coaching', () => {
-  it('produces one mental bump per starter', () => {
+  it('produces only positive mental bumps on squad members', () => {
+    // Pre-#424 was "N starters × mental+3". Variants diverge on
+    // (a) target scope (collective_calm = starters, captain_focus =
+    // one player, squad_therapy = whole squad) and (b) delta magnitude
+    // (3 / 5 / 1).  Widen to "every mutation is a positive mental bump
+    // on a real squad member".
     const squad = makeSquad();
-    const starters = squad.filter((p) => p.starter);
     const spec = enactFocus('mental_coaching', TEAM, SEASON, squad, rng())!;
-    expect(spec.mutations).toHaveLength(starters.length);
+    expect(spec.mutations.length).toBeGreaterThan(0);
+    const squadIds = new Set(squad.map((p) => p.id));
     for (const mut of spec.mutations) {
       const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
       expect(bump.stat).toBe('mental');
-      expect(bump.delta).toBe(3);
+      expect(bump.delta).toBeGreaterThan(0);
+      expect(squadIds.has(bump.player_id)).toBe(true);
     }
   });
 
-  it('tactical_overhaul delta (4) > mental_coaching delta (3)', () => {
+  it('mental_coaching always produces mental-stat bumps (not other stats)', () => {
+    // Cross-test note: pre-#424 had "tactical_overhaul delta (4) >
+    // mental_coaching delta (3)" — the captain_focus variant breaks
+    // that (delta=5 > 4), so the comparison no longer holds for all
+    // variants.  Replaced with this lock-down on the focus's mental-only
+    // contract — mental_coaching never accidentally bumps athletic or
+    // technical regardless of which variant fires.
     const squad = makeSquad();
-    const overhaul = enactFocus('tactical_overhaul', TEAM, SEASON, squad, rng())!;
-    const coaching = enactFocus('mental_coaching', TEAM, SEASON, squad, rng())!;
-    const ovDelta = (overhaul.mutations[0] as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>).delta;
-    const coachDelta = (coaching.mutations[0] as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>).delta;
-    expect(ovDelta).toBeGreaterThan(coachDelta);
+    const spec = enactFocus('mental_coaching', TEAM, SEASON, squad, rng())!;
+    for (const mut of spec.mutations) {
+      const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
+      expect(bump.stat).toBe('mental');
+    }
+  });
+
+  it('produces variety across distinct seeds (#424)', () => {
+    // Each variant has a unique signature:
+    //   collective_calm → mental=3 × 11 starters (11 mutations)
+    //   captain_focus   → mental=5 × 1 player    (1 mutation)
+    //   squad_therapy   → mental=1 × 14 players  (14 mutations)
+    const signatures = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:therapy-variety-${i}`);
+      const spec = enactFocus('mental_coaching', TEAM, SEASON, makeSquad(), localRng)!;
+      const deltas = new Set<number>();
+      for (const mut of spec.mutations) {
+        const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
+        deltas.add(bump.delta);
+      }
+      signatures.add(`${[...deltas].sort().join(',')}|${spec.mutations.length}`);
+    }
+    expect(signatures.size).toBeGreaterThanOrEqual(2);
   });
 });
 

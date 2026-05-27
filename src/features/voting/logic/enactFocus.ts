@@ -718,24 +718,97 @@ function enactSportsScience(players: PlayerRow[]): FocusEnactmentSpec {
 }
 
 /**
- * Mental resilience coaching: a sports psychologist runs workshops across
- * the starting eleven. Boosts mental +3 for all starters.
+ * Mental resilience coaching: a sports psychologist runs workshops. The
+ * variants differ on which set of mortals end up doing the work.
+ *
+ * VARIANTS (#424):
+ *   - collective_calm — Mental +3 across ALL starters (the pre-#424
+ *                       baseline).  Group-therapy cadence — every
+ *                       starter pulls a moderate lift.
+ *   - captain_focus   — Mental +5 on the highest-mental starter alone.
+ *                       The cosmos chose the squad's natural leader to
+ *                       carry the dressing room.  Bigger lift, single
+ *                       point of failure.
+ *   - squad_therapy   — Mental +1 across the WHOLE squad (starters +
+ *                       bench).  The psychologist ran open sessions;
+ *                       the bench's belief lifts too.
+ *
+ * Weights split equally — no a-priori preference between solidarity,
+ * captaincy, or breadth.  When the squad has no starters (degenerate
+ * test fixture), captain_focus still emits zero mutations cleanly.
  */
-function enactMentalCoaching(players: PlayerRow[]): FocusEnactmentSpec {
-  const starters  = players.filter((p) => p.starter);
-  const mutations: EnactmentMutation[] = starters.map((p) => ({
-    kind:      'player_stat_bump',
-    player_id: p.id,
-    stat:      'mental',
-    delta:     3,
-  }));
+function enactMentalCoaching(
+  players: PlayerRow[],
+  rng:     () => number,
+): FocusEnactmentSpec {
+  const starters = players.filter((p) => p.starter);
 
-  return {
-    focus_key:   'mental_coaching',
-    focus_label: 'Mental Resilience Coaching',
-    reason: `The ghosts in their minds are quieted. The squad faces pressure with new calm — the kind only suffering, and then release, can produce.`,
-    mutations,
+  /**
+   * Build a spec from a list of (player, stat, delta) triples + a reason.
+   * Variants compose their own triples and feed them in.
+   *
+   * @param triples  Pre-resolved mutation list.
+   * @param reason   Variant-specific in-world explanation.
+   */
+  const build = (
+    triples: Array<{ player: PlayerRow; delta: number }>,
+    reason:  string,
+  ): FocusEnactmentSpec => {
+    const mutations: EnactmentMutation[] = triples.map((t) => ({
+      kind:      'player_stat_bump',
+      player_id: t.player.id,
+      stat:      'mental',
+      delta:     t.delta,
+    }));
+    return {
+      focus_key:   'mental_coaching',
+      focus_label: 'Mental Resilience Coaching',
+      reason,
+      mutations,
+    };
   };
+
+  // Find the natural captain — highest-mental starter, ties broken by
+  // overall_rating then id (deterministic, RNG-free). Used by
+  // captain_focus only.  Falls back to null when no starters exist.
+  const captain = [...starters]
+    .sort((a, b) => {
+      const diff = b.mental - a.mental;
+      if (diff !== 0) return diff;
+      return (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
+    })[0] ?? null;
+
+  // Variant pool (#424). Equal weights per the design rationale above.
+  const variants: FocusVariant[] = [
+    {
+      key:    'collective_calm',
+      weight: 33,
+      apply:  () => build(
+        starters.map((p) => ({ player: p, delta: 3 })),
+        `The ghosts in their minds are quieted. The squad faces pressure with new calm — the kind only suffering, and then release, can produce.`,
+      ),
+    },
+    {
+      key:    'captain_focus',
+      weight: 33,
+      apply:  () => build(
+        captain ? [{ player: captain, delta: 5 }] : [],
+        captain
+          ? `${captain.name} carries the dressing room. The coach speaks only to one mortal this season — and the cosmos watches them grow heavier, steadier, until the whole squad rests on their shoulders.`
+          : `The coach searched for a captain among the empty pitch. None was found.`,
+      ),
+    },
+    {
+      key:    'squad_therapy',
+      weight: 34,
+      apply:  () => build(
+        players.map((p) => ({ player: p, delta: 1 })),
+        `The psychologist opens the sessions to everyone — bench, starters, recently-injured. The whole squad's belief lifts a half-degree. Quiet, but the cosmos notes the spread.`,
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -768,7 +841,7 @@ export function enactFocus(
     case 'scout_network':    return enactScoutNetwork(players, rng);
     case 'fan_engagement':   return enactFanEngagement(teamId, seasonId);
     case 'sports_science':   return enactSportsScience(players);
-    case 'mental_coaching':  return enactMentalCoaching(players);
+    case 'mental_coaching':  return enactMentalCoaching(players, rng);
     default:                 return null;
   }
 }
