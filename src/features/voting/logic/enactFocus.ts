@@ -808,23 +808,102 @@ function enactStadiumUpgrade(
 
 /**
  * Intensive preseason camp: the squad runs harder drills before the season
- * opens. Boosts athletic by +2 across ALL players (not just starters) —
- * the squad depth benefits too.
+ * opens.
+ *
+ * VARIANTS (#424):
+ *   - traditional — Athletic +2 across ALL players (the pre-#424 baseline).
+ *                   The on-tin preseason: lungs burn, the whole squad
+ *                   sharpens.
+ *   - holistic    — Athletic +1 AND mental +1 across all players.
+ *                   Conditioning is split with mindfulness work; the bump
+ *                   reaches further but each stat moves less.
+ *   - brutal      — Athletic +3 on starters ONLY.  The coaching staff
+ *                   chose to push the first XI to the edge; the bench
+ *                   spent the camp running cones.  Bigger lift, narrower
+ *                   scope.
+ *
+ * Weights equal across the three philosophies — no a-priori reason the
+ * cosmos should prefer one preseason style over another. If analytics
+ * later show fans rebel against `brutal` (the only variant that excludes
+ * the bench), drop its weight; the variant key is stable.
  */
-function enactPreseasonCamp(players: PlayerRow[]): FocusEnactmentSpec {
-  const mutations: EnactmentMutation[] = players.map((p) => ({
-    kind:      'player_stat_bump',
-    player_id: p.id,
-    stat:      'athletic',
-    delta:     2,
-  }));
-
-  return {
-    focus_key:   'preseason_camp',
-    focus_label: 'Intensive Preseason Camp',
-    reason: `The squad is driven to the edge of endurance before the first whistle blows. They emerge harder, faster — but the stars only watch to see if it was enough.`,
-    mutations,
+function enactPreseasonCamp(
+  players: PlayerRow[],
+  rng:     () => number,
+): FocusEnactmentSpec {
+  /**
+   * Per-variant spec builder.  Each variant decides:
+   *   - a `targets` predicate (filter the players list — squad-wide or
+   *     starters only),
+   *   - one or more (stat, delta) pairs to apply per targeted player,
+   *   - a variant-specific reason.
+   *
+   * @param targets  Filter predicate selecting which players to bump.
+   * @param bumps    Array of (stat, delta) pairs applied per targeted
+   *                 player.  Each pair becomes ONE mutation per player.
+   * @param reason   Variant-specific in-world explanation.
+   */
+  const build = (
+    targets: (p: PlayerRow) => boolean,
+    bumps:   Array<{ stat: 'attacking' | 'defending' | 'mental' | 'athletic' | 'technical'; delta: number }>,
+    reason:  string,
+  ): FocusEnactmentSpec => {
+    const mutations: EnactmentMutation[] = [];
+    for (const p of players) {
+      if (!targets(p)) continue;
+      for (const b of bumps) {
+        mutations.push({
+          kind:      'player_stat_bump',
+          player_id: p.id,
+          stat:      b.stat,
+          delta:     b.delta,
+        });
+      }
+    }
+    return {
+      focus_key:   'preseason_camp',
+      focus_label: 'Intensive Preseason Camp',
+      reason,
+      mutations,
+    };
   };
+
+  // Variant pool (#424).  Weights chosen equal — see prose above for the
+  // tie-breaking rationale.
+  const variants: FocusVariant[] = [
+    {
+      key:    'traditional',
+      weight: 33,
+      apply:  () => build(
+        () => true,                // all players
+        [{ stat: 'athletic', delta: 2 }],
+        `The squad is driven to the edge of endurance before the first whistle blows. They emerge harder, faster — but the stars only watch to see if it was enough.`,
+      ),
+    },
+    {
+      key:    'holistic',
+      weight: 33,
+      apply:  () => build(
+        () => true,                // all players
+        [
+          { stat: 'athletic', delta: 1 },
+          { stat: 'mental',   delta: 1 },
+        ],
+        `The staff balance lungs with thought. Morning drills end with breathing work in the shade; the squad emerges quieter, surer, evenly tempered. The cosmos approves of the patience.`,
+      ),
+    },
+    {
+      key:    'brutal',
+      weight: 34,
+      apply:  () => build(
+        (p) => p.starter,          // starters only
+        [{ stat: 'athletic', delta: 3 }],
+        `The bench ran cones. The first XI ran walls. The coaching staff chose their warriors, and the squad's reserves know it. The starters emerge sharper than the cosmos has seen them before — at a price.`,
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
@@ -1201,7 +1280,7 @@ export function enactFocus(
     case 'youth_academy':    return enactYouthAcademy(players, rng);
     case 'tactical_overhaul':return enactTacticalOverhaul(players, rng);
     case 'stadium_upgrade':  return enactStadiumUpgrade(teamId, seasonId, players, rng);
-    case 'preseason_camp':   return enactPreseasonCamp(players);
+    case 'preseason_camp':   return enactPreseasonCamp(players, rng);
     case 'scout_network':    return enactScoutNetwork(players, rng);
     case 'fan_engagement':   return enactFanEngagement(teamId, seasonId, players, rng);
     case 'sports_science':   return enactSportsScience(players);
