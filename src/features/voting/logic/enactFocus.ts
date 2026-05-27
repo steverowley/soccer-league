@@ -594,25 +594,113 @@ function enactTacticalOverhaul(
 
 /**
  * Stadium upgrade: improved facilities yield higher gate revenue.
- * Adds +5 000 to ticket_revenue and balance in team_finances for this season.
- * In the absence of a `home_ground.capacity` column in this schema, the
- * financial proxy (ticket revenue delta) is used instead.
+ * Adds a revenue delta to team_finances for this season; some variants
+ * also bump starter mental on the back of the cosmic event.
+ *
+ * VARIANTS (#424):
+ *   - gleaming_new       — Higher revenue (+7500). The cosmos delivers
+ *                          everything fans hoped for: bright steel,
+ *                          turnstiles spinning, gates singing.
+ *   - haunted_renovation — Lower revenue (+2500) + ominous reason.
+ *                          The renovation woke something. Fans came,
+ *                          but fewer than the planners expected.
+ *   - record_crowd       — Median revenue (+5000) + mental +1 across
+ *                          every starter. The cosmic crowd surge
+ *                          reaches the squad — confidence builds with
+ *                          witnesses.
+ *
+ * Weights lean gleaming_new (45) because the pure facility upgrade is
+ * the on-tin outcome; haunted_renovation (25) is the cosmos punishing
+ * hubris; record_crowd (30) is the rare "extra boon" outcome.
+ *
+ * REVENUE FIGURES
+ *   In the absence of a `home_ground.capacity` column in this schema,
+ *   the financial proxy (ticket revenue delta) is used.  The 7.5k /
+ *   5k / 2.5k spread keeps the median variant at the pre-#424 +5000
+ *   so the season-aggregate impact of stadium_upgrade only shifts
+ *   slightly as the variants mix.
  */
-function enactStadiumUpgrade(teamId: string, seasonId: string): FocusEnactmentSpec {
-  return {
-    focus_key:   'stadium_upgrade',
-    focus_label: 'Upgrade the Stadium',
-    reason: `The stadium's walls push outward. More mortals will witness the spectacle — and their presence will echo in the coffers.`,
-    mutations: [
+function enactStadiumUpgrade(
+  teamId:   string,
+  seasonId: string,
+  players:  PlayerRow[],
+  rng:      () => number,
+): FocusEnactmentSpec {
+  /**
+   * Build the spec for a given (revenue, reason, optional mental bump
+   * count).  Every variant emits the team_finances_delta first; record_crowd
+   * additionally appends per-starter player_stat_bump mutations.
+   *
+   * @param revenue   Positive integer delta added to both ticket_revenue
+   *                  and balance.  Variant tunables.
+   * @param reason    Variant-specific in-world explanation.
+   * @param mentalBump Optional +N applied to mental across every
+   *                  starter.  Pass 0 (or omit) for variants that
+   *                  don't touch player stats.
+   */
+  const build = (
+    revenue:    number,
+    reason:     string,
+    mentalBump: number = 0,
+  ): FocusEnactmentSpec => {
+    const mutations: EnactmentMutation[] = [
       {
         kind:                 'team_finances_delta',
         team_id:              teamId,
         season_id:            seasonId,
-        ticket_revenue_delta: 5_000,
-        balance_delta:        5_000,
+        ticket_revenue_delta: revenue,
+        balance_delta:        revenue,
       },
-    ],
+    ];
+    if (mentalBump > 0) {
+      for (const p of players) {
+        if (!p.starter) continue;
+        mutations.push({
+          kind:      'player_stat_bump',
+          player_id: p.id,
+          stat:      'mental',
+          delta:     mentalBump,
+        });
+      }
+    }
+    return {
+      focus_key:   'stadium_upgrade',
+      focus_label: 'Upgrade the Stadium',
+      reason,
+      mutations,
+    };
   };
+
+  // Variant pool (#424). Weights tuned per the design rationale above.
+  const variants: FocusVariant[] = [
+    {
+      key:    'gleaming_new',
+      weight: 45,
+      apply:  () => build(
+        7_500,
+        `The stadium's walls push outward. Bright steel, turnstiles spinning, gates singing. More mortals than ever will witness the spectacle — and their presence will swell the coffers.`,
+      ),
+    },
+    {
+      key:    'haunted_renovation',
+      weight: 25,
+      apply:  () => build(
+        2_500,
+        `The renovation woke something. Fans still came — but fewer than the planners promised, and they spoke of cold drafts in the new concourse. The cosmos collects its tribute in silence.`,
+      ),
+    },
+    {
+      key:    'record_crowd',
+      weight: 30,
+      apply:  () => build(
+        5_000,
+        `The cosmic crowd surge reaches the pitch. The squad walks out beneath a wall of witnesses; confidence settles into the bones of every starter. Revenue rises — and so does the squad's composure.`,
+        1, // +1 mental on every starter
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
@@ -763,7 +851,7 @@ export function enactFocus(
     case 'sign_star_player': return enactSignStarPlayer(teamId, players, rng);
     case 'youth_academy':    return enactYouthAcademy(players, rng);
     case 'tactical_overhaul':return enactTacticalOverhaul(players, rng);
-    case 'stadium_upgrade':  return enactStadiumUpgrade(teamId, seasonId);
+    case 'stadium_upgrade':  return enactStadiumUpgrade(teamId, seasonId, players, rng);
     case 'preseason_camp':   return enactPreseasonCamp(players);
     case 'scout_network':    return enactScoutNetwork(players, rng);
     case 'fan_engagement':   return enactFanEngagement(teamId, seasonId);
