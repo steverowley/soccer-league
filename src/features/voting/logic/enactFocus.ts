@@ -463,6 +463,29 @@ function enactSignStarPlayer(
  * The plan specifies "lift a 16–18yo bench player" but the template says
  * "youth_academy" so we interpret broadly as ≤21 (youth/reserve age).
  */
+/**
+ * Promote a bench player into the starting XI with a small stat bump.
+ *
+ * VARIANTS (#424):
+ *   - rapid_ascent     — youngest ≤21 bench player gets the +2/+4 bump
+ *                         on their position's primary stats (the
+ *                         original pre-#424 behaviour, kept as the
+ *                         "academy works" baseline).
+ *   - dormant_promise  — same youngest target but smaller (+1/+2)
+ *                         bumps. Reason text hints at patience: the
+ *                         cosmos isn't done with this one yet.
+ *   - wrong_one        — picks the OLDEST bench player instead. The
+ *                         academy was meant for the young; the cosmos
+ *                         elevated a veteran instead. When no
+ *                         non-youth bench player exists, falls back to
+ *                         the youth pool (so the variant still produces
+ *                         a promotion rather than fizzling).
+ *
+ * Weights lean rapid_ascent (50) because that's the on-tin behaviour
+ * fans expect; dormant_promise (30) is the cosmos saying "not yet";
+ * wrong_one (20) is the rarer twist. Same focus_key + label for all
+ * variants — only the chosen target and bump magnitude vary.
+ */
 function enactYouthAcademy(
   players: PlayerRow[],
   rng: () => number,
@@ -477,39 +500,119 @@ function enactYouthAcademy(
     };
   }
 
-  // Prefer youngest ≤21; fallback to any bench player.
-  const youth  = bench.filter((p) => p.age !== null && p.age <= 21);
-  const pool   = youth.length > 0 ? youth : bench;
-  // Sort: youngest first, then by overall_rating DESC as tiebreaker.
-  const sorted = [...pool].sort((a, b) => {
-    const ageDiff = (a.age ?? 99) - (b.age ?? 99);
-    if (ageDiff !== 0) return ageDiff;
-    return (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
-  });
-  const chosen = sorted[0]!;
-
-  // Determine primary stats to boost based on position.
+  // ── Per-position primary stats to bump ──
+  // Mirrors the per-position bias logic in sign_star_player: forwards
+  // bump attacking + athletic, defenders bump defending + mental, etc.
+  // Two stats per position is the long-standing cadence — wider would
+  // dilute the "academy lift" feel; narrower would be invisible at the
+  // running average level.
   const posBumps: Record<string, Array<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical'>> = {
     FW: ['attacking', 'athletic'],
     DF: ['defending', 'mental'],
     MF: ['technical', 'mental'],
     GK: ['defending', 'mental'],
   };
-  const statsToBoost = posBumps[chosen.position] ?? ['mental', 'athletic'];
 
-  const bumpAmount = Math.round(2 + rng() * 2); // 2–4
-  const stat_bumps: Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>> = {};
+  // Sort youngest-first (with overall_rating DESC as tiebreaker so the
+  // best of equal-aged kids gets the lift). Used by rapid_ascent +
+  // dormant_promise — both target the prodigy at the bottom of the squad.
+  const youth = bench.filter((p) => p.age !== null && p.age <= 21);
+  const youthPool = youth.length > 0 ? youth : bench;
+  const sortedYoungest = [...youthPool].sort((a, b) => {
+    const ageDiff = (a.age ?? 99) - (b.age ?? 99);
+    if (ageDiff !== 0) return ageDiff;
+    return (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
+  });
 
-  for (const s of statsToBoost) {
-    (stat_bumps as Record<string, number>)[s] = bumpAmount;
-  }
+  // Sort oldest-first for wrong_one. Prefers the older end of the
+  // bench (the "veteran finally given their chance" framing); falls
+  // back to the youth pool when every bench player is ≤21 so the
+  // variant still produces a promotion.
+  const nonYouth = bench.filter((p) => p.age === null || p.age > 21);
+  const wrongPool = nonYouth.length > 0 ? nonYouth : bench;
+  const sortedOldest = [...wrongPool].sort((a, b) => {
+    const ageDiff = (b.age ?? 0) - (a.age ?? 0);
+    if (ageDiff !== 0) return ageDiff;
+    return (b.overall_rating ?? 50) - (a.overall_rating ?? 50);
+  });
 
-  return {
-    focus_key:   'youth_academy',
-    focus_label: 'Invest in Youth Academy',
-    reason: `The youth steps into the light. ${chosen.name} — long watched, long waiting — claims a place in the starting eleven. The Architect notes: this one was always meant to emerge now.`,
-    mutations: [{ kind: 'promote_player', player_id: chosen.id, stat_bumps }],
+  /**
+   * Shared spec builder — every variant ends up calling this with a
+   * chosen player, a bump magnitude, and a variant-specific reason.
+   *
+   * @param chosen  The bench player being promoted.
+   * @param bump    Magnitude added to each of the position's two
+   *                primary stats (variants pass 1–4 here).
+   * @param reason  Variant-specific in-world explanation.
+   */
+  const buildPromotion = (
+    chosen: PlayerRow,
+    bump:   number,
+    reason: string,
+  ): FocusEnactmentSpec => {
+    const statsToBoost = posBumps[chosen.position] ?? ['mental', 'athletic'];
+    const stat_bumps: Partial<Record<'attacking' | 'defending' | 'mental' | 'athletic' | 'technical', number>> = {};
+    for (const s of statsToBoost) (stat_bumps as Record<string, number>)[s] = bump;
+    return {
+      focus_key:   'youth_academy',
+      focus_label: 'Invest in Youth Academy',
+      reason,
+      mutations:   [{ kind: 'promote_player', player_id: chosen.id, stat_bumps }],
+    };
   };
+
+  // Variant pool (#424). rapid_ascent is the "on-tin" outcome that
+  // most fans expect; dormant_promise is a quieter beat with a
+  // narrative hint; wrong_one is the cosmos contradicting itself.
+  const variants: FocusVariant[] = [
+    {
+      key:    'rapid_ascent',
+      weight: 50,
+      apply:  () => {
+        const chosen = sortedYoungest[0]!;
+        // 2–4 bump: the established "academy works" magnitude.
+        const bump = Math.round(2 + rng() * 2);
+        return buildPromotion(
+          chosen,
+          bump,
+          `The youth steps into the light. ${chosen.name} — long watched, long waiting — claims a place in the starting eleven. The Architect notes: this one was always meant to emerge now.`,
+        );
+      },
+    },
+    {
+      key:    'dormant_promise',
+      weight: 30,
+      apply:  () => {
+        const chosen = sortedYoungest[0]!;
+        // 1–2 bump: deliberately smaller than rapid_ascent so the
+        // variant FEELS like a partial step rather than a full lift.
+        const bump = Math.round(1 + rng());
+        return buildPromotion(
+          chosen,
+          bump,
+          `${chosen.name} steps forward, but the threads twist slowly. The academy whispers: be patient. The cosmos is not finished with this one.`,
+        );
+      },
+    },
+    {
+      key:    'wrong_one',
+      weight: 20,
+      apply:  () => {
+        const chosen = sortedOldest[0]!;
+        // Same 2–4 magnitude as rapid_ascent — the cosmos delivers a
+        // full lift, just to the unexpected target. The twist is the
+        // identity, not the size of the gift.
+        const bump = Math.round(2 + rng() * 2);
+        return buildPromotion(
+          chosen,
+          bump,
+          `The academy was meant for the young. But the cosmos plucked ${chosen.name} from the shadows instead — a veteran finally given their chance. The Architect insists this was always the plan.`,
+        );
+      },
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
