@@ -361,26 +361,56 @@ describe('stadium_upgrade', () => {
 // ── preseason_camp ────────────────────────────────────────────────────────────
 
 describe('preseason_camp', () => {
-  it('produces one athletic bump per player (starters + bench)', () => {
+  it('produces only player_stat_bump mutations', () => {
+    // Pre-#424 was always athletic+2 across every player (14 mutations
+    // on the default squad). Variants change both the bump set
+    // (traditional 1 stat, holistic 2 stats per player, brutal starters
+    // only) so we widen the assertion: every mutation is a stat bump
+    // on a valid stat, and `mutations` is non-empty.
     const squad = makeSquad();
     const spec = enactFocus('preseason_camp', TEAM, SEASON, squad, rng())!;
-    expect(spec.mutations).toHaveLength(squad.length);
+    expect(spec.mutations.length).toBeGreaterThan(0);
+    const VALID_STATS = new Set(['attacking', 'defending', 'mental', 'athletic', 'technical']);
     for (const mut of spec.mutations) {
       expect(mut.kind).toBe('player_stat_bump');
       const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
-      expect(bump.stat).toBe('athletic');
-      expect(bump.delta).toBe(2);
+      expect(VALID_STATS.has(bump.stat)).toBe(true);
+      expect(bump.delta).toBeGreaterThan(0);
     }
   });
 
-  it('covers each player exactly once', () => {
+  it('every mutation targets a real player from the squad', () => {
     const squad = makeSquad();
     const spec = enactFocus('preseason_camp', TEAM, SEASON, squad, rng())!;
-    const ids = spec.mutations.map(
-      (m) => (m as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>).player_id,
-    );
-    const expected = squad.map((p) => p.id);
-    expect(ids.sort()).toEqual(expected.sort());
+    const squadIds = new Set(squad.map((p) => p.id));
+    for (const mut of spec.mutations) {
+      const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
+      expect(squadIds.has(bump.player_id)).toBe(true);
+    }
+  });
+
+  it('produces variety across distinct seeds (#424)', () => {
+    // Run preseason_camp against 50 distinct seeds. Variants differ on
+    // (a) which stats they bump and (b) whether they target starters
+    // only or the whole squad — so we should see >=2 distinct
+    // "signatures" across the sweep.
+    const signatures = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:preseason-variety-${i}`);
+      const spec = enactFocus('preseason_camp', TEAM, SEASON, makeSquad(), localRng)!;
+      // Signature: sorted distinct (stat, delta) pairs + total mutation
+      // count.  Each variant has a unique signature:
+      //   traditional → athletic=2 × 14
+      //   holistic    → athletic=1, mental=1 × 14
+      //   brutal      → athletic=3 × 11
+      const pairs = new Set<string>();
+      for (const mut of spec.mutations) {
+        const bump = mut as Extract<EnactmentMutation, { kind: 'player_stat_bump' }>;
+        pairs.add(`${bump.stat}=${bump.delta}`);
+      }
+      signatures.add(`${[...pairs].sort().join(',')}|${spec.mutations.length}`);
+    }
+    expect(signatures.size).toBeGreaterThanOrEqual(2);
   });
 });
 
