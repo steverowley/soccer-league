@@ -644,6 +644,7 @@ function CosmosDecidedSection({ rows }: { rows: any[] }) {
     const ts = r?.enacted_at ? new Date(r.enacted_at).getTime() : 0;
     return ts > max ? ts : max;
   }, 0);
+  // eslint-disable-next-line react-hooks/purity -- intentional wall-clock read; the parent's data-load effect re-runs on focus/refresh so the freshness window stays accurate without a per-second tick on this surface
   const isFresh = newestEnactedAt > 0 && (Date.now() - newestEnactedAt) < ELECTION_NIGHT_RITUAL_WINDOW_MS;
 
   // Reduced-motion users skip straight to the static variant — the

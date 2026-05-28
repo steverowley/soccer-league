@@ -1005,6 +1005,7 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   const status      = match?.status ?? 'scheduled';
   const isCancelled = status === 'cancelled';
   const kickoffMs   = match?.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  // eslint-disable-next-line react-hooks/purity -- intentional wall-clock read; re-renders are driven by the per-second elapsedMinute tick below
   const kickoffPassed = kickoffMs != null && kickoffMs <= Date.now();
 
   // Render the section once kickoff has passed for any non-cancelled match,
@@ -1025,6 +1026,7 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   // expected, and (c) decide between "Live" headings and "Replay" headings.
   const livePacingWindowOpen =
     kickoffMs != null &&
+    // eslint-disable-next-line react-hooks/purity -- intentional wall-clock read; the per-second elapsedMinute tick re-renders to keep this fresh
     Date.now() < kickoffMs + duration * 1000;
 
   // ── Initial fetch: event log + season pacing knob ─────────────────────────
