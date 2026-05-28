@@ -387,26 +387,50 @@ describe('preseason_camp', () => {
 // ── scout_network ─────────────────────────────────────────────────────────────
 
 describe('scout_network', () => {
-  it('promotes the highest-rated bench player', () => {
-    // sub3 has overall_rating: 62, highest bench
+  it('promotes a bench player (variant decides who)', () => {
+    // Pre-#424 asserted sub3 specifically (highest-rated). pure_skill
+    // still targets sub3; youth_find targets sub1 (age 18); veteran_steal
+    // targets sub3 (age 25 — oldest bench). Widen the assertion: the
+    // promoted id must belong to the bench.
     const spec = enactFocus('scout_network', TEAM, SEASON, makeSquad(), rng())!;
     const promos = spec.mutations.filter((m) => m.kind === 'promote_player');
     expect(promos).toHaveLength(1);
     const promo = promos[0] as Extract<EnactmentMutation, { kind: 'promote_player' }>;
-    expect(promo.player_id).toBe('sub3');
+    const benchIds = makeSquad().filter((p) => !p.starter).map((p) => p.id);
+    expect(benchIds).toContain(promo.player_id);
   });
 
-  it('applies technical +2 and mental +1 to the promoted player', () => {
+  it('applies at least one positive stat bump to the promoted player', () => {
+    // Pre-#424 hard-coded technical+2 / mental+1. Variants pick different
+    // (stat, delta) sets — pure_skill keeps the classic shape, youth_find
+    // bumps athletic+2/technical+1, veteran_steal bumps mental+3 alone.
+    // Invariant: bumps are non-empty and every value is positive.
     const spec = enactFocus('scout_network', TEAM, SEASON, makeSquad(), rng())!;
     const promo = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'promote_player' }>;
-    expect(promo.stat_bumps.technical).toBe(2);
-    expect(promo.stat_bumps.mental).toBe(1);
+    const values = Object.values(promo.stat_bumps);
+    expect(values.length).toBeGreaterThan(0);
+    for (const v of values) expect(v).toBeGreaterThan(0);
   });
 
   it('returns empty mutations when bench is empty', () => {
     const startersOnly = makeSquad().filter((p) => p.starter);
     const spec = enactFocus('scout_network', TEAM, SEASON, startersOnly, rng())!;
     expect(spec.mutations).toHaveLength(0);
+  });
+
+  it('produces variety across distinct seeds (#424)', () => {
+    // Run scout_network against 50 distinct seeds. Each variant has a
+    // unique signature (target id + sorted stat-bump pairs); ≥2 distinct
+    // signatures across the sweep proves the picker rolls.
+    const signatures = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:scout-variety-${i}`);
+      const spec = enactFocus('scout_network', TEAM, SEASON, makeSquad(), localRng)!;
+      const promo = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'promote_player' }>;
+      const bumpsKey = Object.entries(promo.stat_bumps).sort().map(([k, v]) => `${k}=${v}`).join(',');
+      signatures.add(`${promo.player_id}|${bumpsKey}`);
+    }
+    expect(signatures.size).toBeGreaterThanOrEqual(2);
   });
 });
 
