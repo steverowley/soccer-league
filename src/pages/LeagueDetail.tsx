@@ -84,7 +84,12 @@ export default function LeagueDetail() {
         setRows([]);
       });
     return () => { cancelled = true; };
-  }, [db, league?.id]);
+    // `league` (not `league?.id`) is the canonical exhaustive-deps form
+    // — the effect body reads the full object via the `!league` guard.
+    // The two are equivalent at runtime here because `league` is derived
+    // from `leagueId` via `LEAGUES.find`, so its identity only changes
+    // when `leagueId` changes.
+  }, [db, league]);
 
   if (!league) return <UnknownLeague leagueId={leagueId} />;
 

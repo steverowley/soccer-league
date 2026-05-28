@@ -206,7 +206,10 @@ export default function Matches() {
         setLoaded(true);
       });
     return () => { cancelled = true; };
-  }, []);
+    // `db` is stable across renders (SupabaseProvider memoises) but the
+    // exhaustive-deps rule still wants it listed.  Including it is a
+    // no-op for the refetch cadence but satisfies the lint.
+  }, [db]);
 
   // The {filter → matches} dispatch.  Built per render but cheap — three
   // shallow array references swapped into a plain object.  Lets the
