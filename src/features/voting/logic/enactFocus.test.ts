@@ -187,14 +187,19 @@ describe('sign_star_player', () => {
 // ── youth_academy ─────────────────────────────────────────────────────────────
 
 describe('youth_academy', () => {
-  it('promotes the youngest bench player aged ≤21', () => {
+  it('promotes a bench player (variant decides who)', () => {
+    // Pre-#424 this asserted `sub1` (age 18) specifically. The
+    // rapid_ascent + dormant_promise variants still pick sub1, but
+    // wrong_one targets the OLDEST bench player (sub3, age 25). The
+    // invariant we lock down now is: the promoted player is on the
+    // bench — never a starter.
     const spec = enactFocus('youth_academy', TEAM, SEASON, makeSquad(), rng())!;
     expect(spec).not.toBeNull();
     const promos = spec.mutations.filter((m) => m.kind === 'promote_player');
     expect(promos).toHaveLength(1);
     const promo = promos[0] as Extract<EnactmentMutation, { kind: 'promote_player' }>;
-    // sub1 (age 18) is the youngest ≤21
-    expect(promo.player_id).toBe('sub1');
+    const benchIds = makeSquad().filter((p) => !p.starter).map((p) => p.id);
+    expect(benchIds).toContain(promo.player_id);
   });
 
   it('stat_bumps are non-zero for the promoted player', () => {
@@ -227,6 +232,24 @@ describe('youth_academy', () => {
     const spec1 = enactFocus('youth_academy', TEAM, SEASON, makeSquad(), rng())!;
     const spec2 = enactFocus('youth_academy', TEAM, SEASON, makeSquad(), rng())!;
     expect(spec1.mutations).toEqual(spec2.mutations);
+  });
+
+  it('produces variety across distinct seeds (#424)', () => {
+    // Run youth_academy against 50 distinct seeds and confirm both the
+    // rapid_ascent/dormant_promise target (sub1, age 18) AND the
+    // wrong_one target (sub3, age 25) are observed at least once. That
+    // proves the variant picker rolls — pre-#424 the only possible
+    // target was sub1.
+    const targets = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:youth-variety-${i}`);
+      const spec = enactFocus('youth_academy', TEAM, SEASON, makeSquad(), localRng)!;
+      const promo = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'promote_player' }>;
+      targets.add(promo.player_id);
+    }
+    // sub1 (rapid_ascent / dormant_promise) + sub3 (wrong_one) =
+    // at least 2 distinct promoted ids across the seed sweep.
+    expect(targets.size).toBeGreaterThanOrEqual(2);
   });
 });
 
