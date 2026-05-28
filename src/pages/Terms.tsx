@@ -43,21 +43,21 @@ export default function Terms() {
           <H2>Eligibility</H2>
           <P>
             You must be at least 18 years old to use the Service. The game contains
-            simulated betting; we don't want to normalise gambling for minors even
+            simulated betting; we don&apos;t want to normalise gambling for minors even
             though no real money is involved. Sign-up requires self-attestation.
           </P>
 
           <H2>Account</H2>
           <P>
-            You're responsible for keeping your password safe and for everything that
-            happens on your account. Pick a username that isn't impersonation, isn't
-            a slur, and isn't a reserved word (admin, architect, cosmic, etc.).
+            You&apos;re responsible for keeping your password safe and for everything that
+            happens on your account. Pick a username that isn&apos;t impersonation, isn&apos;t
+            a slur, and isn&apos;t a reserved word (admin, architect, cosmic, etc.).
           </P>
 
           <H2>Acceptable use</H2>
           <P>
-            Don't try to abuse, harass, or impersonate other users. Don't try to
-            exploit bugs to manipulate balances, bets, votes, or leaderboards. Don't
+            Don&apos;t try to abuse, harass, or impersonate other users. Don&apos;t try to
+            exploit bugs to manipulate balances, bets, votes, or leaderboards. Don&apos;t
             scrape the Service, automate gameplay, or run multiple accounts to
             inflate fan-support boosts or vote weight.
           </P>
@@ -74,9 +74,9 @@ export default function Terms() {
           <P>
             The Service code is open source under the licence in the repository.
             Generated narrative content (commentary, journalist takes, Architect
-            whispers) is produced by AI models against the project's prompts; we
-            don't claim author copyright on individual generations. Club names,
-            crests, and editorial copy are part of the project's design system.
+            whispers) is produced by AI models against the project&apos;s prompts; we
+            don&apos;t claim author copyright on individual generations. Club names,
+            crests, and editorial copy are part of the project&apos;s design system.
           </P>
 
           <H2>Termination</H2>
@@ -89,7 +89,7 @@ export default function Terms() {
           <P>
             The Service is provided &quot;as is&quot; without warranty of any kind.
             We do our best, but the Service may break, change, or disappear without
-            notice — it's an experiment.
+            notice — it&apos;s an experiment.
           </P>
 
           <H2>Changes to these terms</H2>
