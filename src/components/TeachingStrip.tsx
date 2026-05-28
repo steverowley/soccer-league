@@ -80,6 +80,7 @@ export default function TeachingStrip({ storageKey, title, body, accent }: Teach
   useEffect(() => {
     try {
       if (window.localStorage.getItem(STORAGE_PREFIX + storageKey) === 'dismissed') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- sync hydration check: dismissed state is stored in localStorage, mirrored into React state once after first paint
         setVisible(false);
       }
     } catch {

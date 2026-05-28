@@ -101,6 +101,7 @@ export default function MatchDetail() {
   useEffect(() => {
     if (!matchId) return undefined;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error/loading state, fire fetch, settle into match+loaded state once it resolves
     setLoadError(null);
     setLoaded(false);
     getMatch(db, matchId)
@@ -1594,6 +1595,7 @@ function MatchPitchPanel({
   // surface a separate error chrome here.
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: clear stale events before re-fetching for the new matchId
     setEvents([]);
     Promise.all([
       getMatch(db, matchId),

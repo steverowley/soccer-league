@@ -69,6 +69,7 @@ export default function LeagueDetail() {
   useEffect(() => {
     if (!league) return undefined;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset to loading state, fire fetch, settle into rows once it resolves
     setRows(null);
     fetchLeagueStandings(db, league.id)
       .then((fetched) => {

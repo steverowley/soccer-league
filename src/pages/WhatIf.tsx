@@ -150,6 +150,7 @@ export default function WhatIf() {
 
   useEffect(() => {
     if (denyAccess) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auth-gated short-circuit: non-admins must collapse the loading skeleton into the deny-access surface; no async fetch fires in this branch
       setLoading(false);
       return;
     }

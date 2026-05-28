@@ -81,6 +81,7 @@ export default function Wagers() {
   useEffect(() => {
     if (!user) return undefined;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error/loading state, fire fetch, settle into wagers once it resolves
     setLoadError(null);
     setLoaded(false);
 

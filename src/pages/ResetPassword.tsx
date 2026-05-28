@@ -54,6 +54,7 @@ export default function ResetPassword() {
     });
     // Also flip when the page is opened with a hash fragment that
     // already established a session before React mounted.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot sync hydration: mirror the URL-fragment recovery hint into React state once on mount so the form switches modes without waiting for the subscription event
     if (window.location.hash.includes('type=recovery')) setIsRecovering(true);
     return () => subscription.unsubscribe();
   }, [db]);
