@@ -33,7 +33,7 @@ import { getRecentNarratives } from '../features/entities';
 // Architect cards use QUANTUM (the canonical Architect / focus hue per
 // the design system).  Cosmic Disturbance cards stay FLARE — that's
 // the only error-coded narrative kind (catastrophic reality hiccup).
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: _QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;

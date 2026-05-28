@@ -51,7 +51,6 @@ import {
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { Card, Chip, EmptyState } from '../shared/ui';
-import { useAuth } from '../features/auth';
 import { LEAGUES } from '../data/leagueData';
 import {
   fetchLeagueStandings,
@@ -71,7 +70,7 @@ import {
 // FLARE is kept for future error states.  Both are imported even when
 // only one is currently referenced so the alias block stays a stable
 // single source of truth for this page.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: _FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE   = COLORS.hairline;
 const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;

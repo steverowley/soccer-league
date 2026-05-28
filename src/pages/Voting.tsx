@@ -27,7 +27,6 @@
 //     reader infers, the simulation doesn't reveal.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -106,7 +105,10 @@ export default function Voting() {
   const db = useSupabase();
   const { user, profile, refreshProfile } = useAuth();
 
-  const [season,         setSeason]         = useState<any>(null);
+  // season state is set after fetch but no consumer reads it today —
+  // kept (prefixed `_`) so the loader keeps writing a season ref the
+  // upcoming reshape can grab without a follow-up state addition.
+  const [_season,        setSeason]         = useState<any>(null);
   const [options,        setOptions]        = useState<any[]>([]);
   const [tally,          setTally]          = useState<any[]>([]);
   const [enactedHistory, setEnactedHistory] = useState<any[]>([]);

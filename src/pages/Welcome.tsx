@@ -28,7 +28,7 @@
 //   Existing users who already picked allegiance are unaffected and go
 //   to /profile or wherever they were heading.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';

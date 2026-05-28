@@ -22,7 +22,7 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
-import type { League, Team } from '../data/leagueData';
+import type { Team } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
 
