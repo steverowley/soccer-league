@@ -185,6 +185,7 @@ export default function Matches() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire parallel fetches, settle once they resolve
     setLoadError(null);
     Promise.all([
       getLiveMatches(db),

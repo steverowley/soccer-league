@@ -103,6 +103,7 @@ export default function TeamDetail() {
   useEffect(() => {
     if (!staticTeam || !teamId) return undefined;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire fetch, settle into liveTeam once it resolves
     setLoadError(null);
     getTeam(db, teamId)
       .then((data: any) => { if (!cancelled) setLiveTeam(data); })

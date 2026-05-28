@@ -74,6 +74,7 @@ export default function Idols() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire fetch, settle into success/error state once it resolves
     setLoadError(null);
     Promise.all([
       getIdolBoard(db, { globalLimit: GLOBAL_LIMIT }),
