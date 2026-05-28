@@ -58,6 +58,11 @@ import {
   type TeammateNameSeed,
 } from '../logic/replacementPlayer';
 import { buildArrivalNarrative } from '../logic/arrivalNarrative';
+import {
+  parseActivePlayerRows,
+  parseIdolRankRows,
+  parseTeamNameRows,
+} from './orchestrator.schema';
 
 // ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -211,17 +216,19 @@ export async function runElectionNight(
 
   // ── Step 2: fetch active players + idol ranks + team names in parallel ────
   // All three reads are independent; running them in parallel keeps the
-  // ceremony latency low even on slow connections.  Each query has a small
-  // typed cast at the boundary because PostgREST typing is loose for views.
+  // ceremony latency low even on slow connections.  Raw rows pass through
+  // the Zod parse helpers in orchestrator.schema (slice 6 of #386) so
+  // a column rename in the DB drops the offending row with a warn-log
+  // instead of corrupting the audit / decree write further down.
   const [playersResult, idolResult, teamsResult] = await Promise.all([
-    (db as unknown as { from: (t: string) => { select: (s: string) => { eq: (c: string, v: boolean) => Promise<{ data: ActivePlayerRow[] | null; error: { message: string } | null }> } } })
+    (db as unknown as { from: (t: string) => { select: (s: string) => { eq: (c: string, v: boolean) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } })
       .from('players')
       .select('id, name, team_id, nationality, position')
       .eq('is_active', true),
-    (db as unknown as { from: (t: string) => { select: (s: string) => Promise<{ data: IdolRankRow[] | null; error: { message: string } | null }> } })
+    (db as unknown as { from: (t: string) => { select: (s: string) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } })
       .from('player_idol_score')
       .select('player_id, global_rank'),
-    (db as unknown as { from: (t: string) => { select: (s: string) => Promise<{ data: TeamNameRow[] | null; error: { message: string } | null }> } })
+    (db as unknown as { from: (t: string) => { select: (s: string) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } })
       .from('teams')
       .select('id, name'),
   ]);
@@ -230,9 +237,9 @@ export async function runElectionNight(
   if (idolResult.error)    throw new Error(`runElectionNight: idol fetch failed: ${idolResult.error.message}`);
   if (teamsResult.error)   throw new Error(`runElectionNight: teams fetch failed: ${teamsResult.error.message}`);
 
-  const players = playersResult.data ?? [];
-  const idolRows = idolResult.data ?? [];
-  const teams = teamsResult.data ?? [];
+  const players: ActivePlayerRow[] = parseActivePlayerRows(playersResult.data ?? [], 'runElectionNight');
+  const idolRows: IdolRankRow[]    = parseIdolRankRows(idolResult.data ?? [],     'runElectionNight');
+  const teams:    TeamNameRow[]    = parseTeamNameRows(teamsResult.data ?? [],    'runElectionNight');
 
   // Build O(1) lookups so the candidate-building loop stays linear.
   const idolRankByPlayerId = new Map<string, number>();
