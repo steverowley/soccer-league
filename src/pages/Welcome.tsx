@@ -130,7 +130,7 @@ function PickClubStep({ onPick, onSkip }: { onPick: (teamId: string) => void; on
 
   return (
     <>
-      <StepImage src="/img/step-02-pick-club.png" alt="Pick your club" />
+      <StepImage src="/img/step-02-pick-club" alt="Pick your club" />
 
       {/* League chips */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '24px 0' }}>
@@ -197,7 +197,7 @@ function PickPlayerStep({ teamId, onPick, onSkip }: {
 
   return (
     <>
-      <StepImage src="/img/step-01-sign-on.png" alt="Pick your player" />
+      <StepImage src="/img/step-01-sign-on" alt="Pick your player" />
 
       {players.length === 0 ? (
         <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: '24px 0' }}>
@@ -262,7 +262,7 @@ function StarterBetStep({ teamId, playerId, onDone }: {
 
   return (
     <>
-      <StepImage src="/img/step-03-watch-bet.png" alt="Watch and bet" />
+      <StepImage src="/img/step-03-watch-bet" alt="Watch and bet" />
 
       <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
         {loading && <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>Finding your next match…</p>}
@@ -321,12 +321,30 @@ function LoadingLine() {
   );
 }
 
+/**
+ * Step illustration with AVIF + WebP <picture> sources (#393).
+ *
+ * The caller passes a base path WITHOUT extension (e.g.
+ * "/img/step-01-sign-on"); the component derives `${base}.avif` for
+ * modern browsers and `${base}.webp` for the rest.  PNG fallback is
+ * intentionally omitted — every browser the app targets supports
+ * WebP, and dropping the PNG is what makes the 20MB → 3MB asset
+ * reduction stick.
+ *
+ * @param src  Base path under /img/ without extension.
+ * @param alt  Accessible image description.
+ */
 function StepImage({ src, alt }: { src: string; alt: string }) {
+  const imgStyle: React.CSSProperties = {
+    display: 'block', width: '100%', maxWidth: 480, marginTop: 24,
+    border: `1px solid ${HAIRLINE}`,
+  };
   return (
-    <img src={src} alt={alt} style={{
-      display: 'block', width: '100%', maxWidth: 480, marginTop: 24,
-      border: `1px solid ${HAIRLINE}`,
-    }} />
+    <picture>
+      <source srcSet={`${src}.avif`} type="image/avif" />
+      <source srcSet={`${src}.webp`} type="image/webp" />
+      <img src={`${src}.webp`} alt={alt} style={imgStyle} />
+    </picture>
   );
 }
 

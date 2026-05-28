@@ -298,11 +298,18 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
             background: '#000',
             minHeight: 480,
           }}>
-            <img
-              src={`${import.meta.env.BASE_URL}img/hero-pillars.png`}
-              alt="The cosmos charted from Earth orbit"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
+            {/* #393: AVIF preferred (smallest), WebP fallback covers every
+                supported browser. PNG was deleted at conversion time so the
+                <img> src must point at WebP, not the legacy .png path. */}
+            <picture>
+              <source srcSet={`${import.meta.env.BASE_URL}img/hero-pillars.avif`} type="image/avif" />
+              <source srcSet={`${import.meta.env.BASE_URL}img/hero-pillars.webp`} type="image/webp" />
+              <img
+                src={`${import.meta.env.BASE_URL}img/hero-pillars.webp`}
+                alt="The cosmos charted from Earth orbit"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </picture>
           </div>
 
           {/* Right column — content stack. */}
