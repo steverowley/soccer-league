@@ -952,24 +952,114 @@ function enactScoutNetwork(
 }
 
 /**
- * Fan engagement drive: community investment lifts gate income.
- * Adds +2 000 to ticket_revenue and balance in team_finances.
+ * Fan engagement drive: community investment lifts gate income and/or
+ * lifts the squad's spirits.
+ *
+ * VARIANTS (#424):
+ *   - revenue_focus  — Pure +2000 ticket revenue, no stat bump (the
+ *                      pre-#424 baseline).  Pure financial cosmetic.
+ *   - mental_lift    — +1000 revenue + mental +1 on starters.  The
+ *                      community campaign reaches the dressing room;
+ *                      every starter walks a little taller.
+ *   - morale_surge   — +500 revenue + athletic +1 across ALL players.
+ *                      The fan energy translates to physical
+ *                      excitement; the whole squad runs harder.
+ *
+ * Weights split the cosmos's preferences roughly 40/30/30.  The
+ * revenue-only outcome stays the most common (matches the pre-#424
+ * "fan drive lifts revenue" expectation), with the two stat-bump
+ * variants splitting the remainder.  Total revenue across the three
+ * variants averages roughly 2000/3 + 1000/3 + 500/3 ≈ 1167 — lower
+ * than the pre-#424 flat 2000 because the stat bumps absorb some
+ * of the cosmos's gift.
  */
-function enactFanEngagement(teamId: string, seasonId: string): FocusEnactmentSpec {
-  return {
-    focus_key:   'fan_engagement',
-    focus_label: 'Fan Engagement Drive',
-    reason: `The fans are drawn closer. Their voices grow louder. The treasury notes the increase.`,
-    mutations: [
+function enactFanEngagement(
+  teamId:   string,
+  seasonId: string,
+  players:  PlayerRow[],
+  rng:      () => number,
+): FocusEnactmentSpec {
+  /**
+   * Build a spec from a revenue amount + optional player stat bumps.
+   *
+   * @param revenue  Positive ticket_revenue + balance delta.
+   * @param reason   Variant-specific in-world explanation.
+   * @param bumps    Optional per-player bumps applied to the players
+   *                 matching `targets`.  Pass undefined for no bumps.
+   * @param targets  Filter predicate for which players receive bumps.
+   *                 Only used when `bumps` is non-null.
+   */
+  const build = (
+    revenue: number,
+    reason:  string,
+    bumps?:  Array<{ stat: 'attacking' | 'defending' | 'mental' | 'athletic' | 'technical'; delta: number }>,
+    targets?: (p: PlayerRow) => boolean,
+  ): FocusEnactmentSpec => {
+    const mutations: EnactmentMutation[] = [
       {
         kind:                 'team_finances_delta',
         team_id:              teamId,
         season_id:            seasonId,
-        ticket_revenue_delta: 2_000,
-        balance_delta:        2_000,
+        ticket_revenue_delta: revenue,
+        balance_delta:        revenue,
       },
-    ],
+    ];
+    if (bumps && targets) {
+      for (const p of players) {
+        if (!targets(p)) continue;
+        for (const b of bumps) {
+          mutations.push({
+            kind:      'player_stat_bump',
+            player_id: p.id,
+            stat:      b.stat,
+            delta:     b.delta,
+          });
+        }
+      }
+    }
+    return {
+      focus_key:   'fan_engagement',
+      focus_label: 'Fan Engagement Drive',
+      reason,
+      mutations,
+    };
   };
+
+  // Variant pool (#424). Revenue-focus stays the most common outcome
+  // (matches the pre-#424 expectation that fan engagement = revenue);
+  // mental_lift + morale_surge split the cosmos's flair budget.
+  const variants: FocusVariant[] = [
+    {
+      key:    'revenue_focus',
+      weight: 40,
+      apply:  () => build(
+        2_000,
+        `The fans are drawn closer. Their voices grow louder. The treasury notes the increase.`,
+      ),
+    },
+    {
+      key:    'mental_lift',
+      weight: 30,
+      apply:  () => build(
+        1_000,
+        `The campaign reaches the dressing room. Letters from children, banners hand-painted in the stands — every starter walks a little taller into the next match.`,
+        [{ stat: 'mental', delta: 1 }],
+        (p) => p.starter,
+      ),
+    },
+    {
+      key:    'morale_surge',
+      weight: 30,
+      apply:  () => build(
+        500,
+        `The crowd's energy crosses the touchline. The whole squad — starters and reserves — picks up the rhythm. The cosmos approves of the contagion.`,
+        [{ stat: 'athletic', delta: 1 }],
+        () => true,
+      ),
+    },
+  ];
+
+  return pickVariant(variants, rng).apply();
 }
 
 /**
@@ -1040,7 +1130,7 @@ export function enactFocus(
     case 'stadium_upgrade':  return enactStadiumUpgrade(teamId, seasonId, players, rng);
     case 'preseason_camp':   return enactPreseasonCamp(players);
     case 'scout_network':    return enactScoutNetwork(players, rng);
-    case 'fan_engagement':   return enactFanEngagement(teamId, seasonId);
+    case 'fan_engagement':   return enactFanEngagement(teamId, seasonId, players, rng);
     case 'sports_science':   return enactSportsScience(players);
     case 'mental_coaching':  return enactMentalCoaching(players);
     default:                 return null;

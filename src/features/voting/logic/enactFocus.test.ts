@@ -437,25 +437,53 @@ describe('scout_network', () => {
 // ── fan_engagement ────────────────────────────────────────────────────────────
 
 describe('fan_engagement', () => {
-  it('produces exactly one team_finances_delta mutation', () => {
-    const spec = enactFocus('fan_engagement', TEAM, SEASON, [], rng())!;
-    expect(spec.mutations).toHaveLength(1);
+  it('first mutation is a team_finances_delta', () => {
+    // Pre-#424 was always exactly one mutation. The mental_lift / morale_surge
+    // variants append per-player stat bumps after the finance row; lock down
+    // that the finance row stays at index 0.
+    const spec = enactFocus('fan_engagement', TEAM, SEASON, makeSquad(), rng())!;
+    expect(spec.mutations.length).toBeGreaterThanOrEqual(1);
     expect(spec.mutations[0]!.kind).toBe('team_finances_delta');
   });
 
-  it('adds 2000 to ticket_revenue and balance', () => {
-    const spec = enactFocus('fan_engagement', TEAM, SEASON, [], rng())!;
+  it('produces a positive ticket_revenue + balance delta', () => {
+    // Pre-#424 was always +2000. Variants span 500 → 2000; widen to "positive".
+    const spec = enactFocus('fan_engagement', TEAM, SEASON, makeSquad(), rng())!;
     const mut = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'team_finances_delta' }>;
-    expect(mut.ticket_revenue_delta).toBe(2_000);
-    expect(mut.balance_delta).toBe(2_000);
+    expect(mut.ticket_revenue_delta).toBeGreaterThan(0);
+    expect(mut.balance_delta).toBeGreaterThan(0);
+    expect(mut.ticket_revenue_delta).toBe(mut.balance_delta);
   });
 
-  it('fan_engagement deltas are smaller than stadium_upgrade', () => {
-    const fan = enactFocus('fan_engagement', TEAM, SEASON, [], rng())!;
-    const stadium = enactFocus('stadium_upgrade', TEAM, SEASON, [], rng())!;
+  it('fan_engagement revenue stays smaller than stadium_upgrade revenue', () => {
+    // The two calls share a seed (same `rng()` helper) so they pick the same
+    // variant index. The min fan variant (500) is still strictly less than
+    // the min stadium variant (2500), so the inequality holds for every
+    // pairing.  Documented inline so the constraint is visible if a future
+    // variant tweak threatens it.
+    const fan = enactFocus('fan_engagement', TEAM, SEASON, makeSquad(), rng())!;
+    const stadium = enactFocus('stadium_upgrade', TEAM, SEASON, makeSquad(), rng())!;
     const fanMut = fan.mutations[0] as Extract<EnactmentMutation, { kind: 'team_finances_delta' }>;
     const stadMut = stadium.mutations[0] as Extract<EnactmentMutation, { kind: 'team_finances_delta' }>;
     expect(fanMut.ticket_revenue_delta).toBeLessThan(stadMut.ticket_revenue_delta);
+  });
+
+  it('produces variety across distinct seeds (#424)', () => {
+    // Run fan_engagement against 50 distinct seeds. Each variant has a
+    // unique (revenue, mutation count) signature so ≥2 signatures across
+    // the sweep proves the picker rolls.
+    // Seed prefix note: the shared seededRng (djb2 → LCG) is non-uniform
+    // on the first call.  `fans-variety-${i}` produces only morale_surge
+    // outcomes (all rolls land >= 0.70); `comm-variety-${i}` empirically
+    // touches all three variant bands.
+    const signatures = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const localRng = seededRng(`${SEASON}:${TEAM}:comm-variety-${i}`);
+      const spec = enactFocus('fan_engagement', TEAM, SEASON, makeSquad(), localRng)!;
+      const finance = spec.mutations[0] as Extract<EnactmentMutation, { kind: 'team_finances_delta' }>;
+      signatures.add(`${finance.ticket_revenue_delta}|${spec.mutations.length}`);
+    }
+    expect(signatures.size).toBeGreaterThanOrEqual(2);
   });
 });
 
