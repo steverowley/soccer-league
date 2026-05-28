@@ -291,7 +291,9 @@ describe('blendDecision — Architect nudge', () => {
   });
 
   it('no architect field produces identical result to empty nudge', () => {
-    const noArch   = blendDecision(makeInput({ architect: undefined }));
+    // Omit `architect` entirely (rather than passing undefined, which
+    // exactOptionalPropertyTypes forbids) and compare to an empty-nudge input.
+    const noArch    = blendDecision(makeInput());
     const emptyArch = blendDecision(makeInput({ architect: {} }));
     expect(noArch.shoot).toBeCloseTo(emptyArch.shoot, 10);
   });
@@ -341,12 +343,15 @@ describe('sampleAction', () => {
     };
     const N = 5000;
     for (let i = 0; i < N; i++) {
-      counts[sampleAction(equalBias)]++;
+      const action = sampleAction(equalBias);
+      // `?? 0` satisfies noUncheckedIndexedAccess (indexed reads are T|undefined)
+      counts[action] = (counts[action] ?? 0) + 1;
     }
     // Each action should get roughly 20% ± 5% of samples
     for (const action of VALID_ACTIONS) {
-      expect(counts[action] / N).toBeGreaterThan(0.15);
-      expect(counts[action] / N).toBeLessThan(0.25);
+      const share = (counts[action] ?? 0) / N;
+      expect(share).toBeGreaterThan(0.15);
+      expect(share).toBeLessThan(0.25);
     }
   });
 });

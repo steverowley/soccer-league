@@ -230,8 +230,12 @@ function parseFormation(raw: string | undefined | null): Formation {
 export function playerHomeZone(jerseyNumber: number, formationRaw: string | null | undefined): Zone {
   const formation = parseFormation(formationRaw);
   const zones = FORMATION_ZONES[formation];
+  // Clamp to [0, 21] — every FORMATION_ZONES entry has exactly 22 elements
+  // (11 starters + 11 bench), so the clamped index is always in bounds.
+  // The `?? { col: 1, row: 0 }` fallback (the GK home zone) satisfies
+  // noUncheckedIndexedAccess; it can never actually fire given the clamp.
   const idx = Math.max(0, Math.min(21, jerseyNumber - 1));
-  return zones[idx];
+  return zones[idx] ?? { col: 1, row: 0 };
 }
 
 // ── Position → action bias ────────────────────────────────────────────────────
@@ -267,8 +271,14 @@ const POSITION_BIAS: Record<string, ActionBias> = {
   FW:  { shoot: 0.40, pass: 0.18, dribble: 0.22, tackle: 0.05, press: 0.10 },
 };
 
-/** Fallback when position is unknown */
-const DEFAULT_POSITION_BIAS: ActionBias = POSITION_BIAS['MF'];
+/**
+ * Fallback when position is unknown — mirrors the MF baseline.
+ * Declared as a literal (rather than `POSITION_BIAS['MF']`) so it is a
+ * guaranteed ActionBias under noUncheckedIndexedAccess, which would otherwise
+ * type the indexed lookup as `ActionBias | undefined`.
+ */
+const DEFAULT_POSITION_BIAS: ActionBias =
+  { shoot: 0.18, pass: 0.32, dribble: 0.22, tackle: 0.15, press: 0.18 };
 
 // ── Manager playstyle → zone pressure modifier ────────────────────────────────
 //
@@ -325,8 +335,13 @@ const STYLE_MODIFIERS: Record<string, StyleModifier> = {
   Aggressive:      { shoot: +0.05, pass: -0.08, dribble: +0.05, tackle: +0.15, press: +0.10 },
 };
 
-/** Fallback when manager style is unknown */
-const DEFAULT_STYLE_MODIFIER: StyleModifier = STYLE_MODIFIERS['Balanced'];
+/**
+ * Fallback when manager style is unknown — the Balanced zero-delta modifier.
+ * Declared as a literal (rather than `STYLE_MODIFIERS['Balanced']`) so it is a
+ * guaranteed StyleModifier under noUncheckedIndexedAccess.
+ */
+const DEFAULT_STYLE_MODIFIER: StyleModifier =
+  { shoot: 0.00, pass: 0.00, dribble: 0.00, tackle: 0.00, press: 0.00 };
 
 // ── Manager stat → tactical urgency ──────────────────────────────────────────
 //

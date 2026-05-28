@@ -623,14 +623,23 @@ export function blendDecision(input: BlendInput): ActionBias {
   // outcome without inflating one layer's raw contribution.
   // Bounded to ±0.05 per action so the Architect is a thumb on the scale,
   // not a hammer.
+  //
+  // ActionBias is a readonly type, so rather than mutate `blended` we build a
+  // new object with the nudge folded in.  When no nudge is present we pass
+  // `blended` straight through to normalise().
   if (architect?.nudge) {
     const n = architect.nudge;
     const CAP = 0.05; // maximum per-action Architect influence
-    blended.shoot   = blended.shoot   + Math.max(-CAP, Math.min(CAP, n.shoot   ?? 0));
-    blended.pass    = blended.pass    + Math.max(-CAP, Math.min(CAP, n.pass    ?? 0));
-    blended.dribble = blended.dribble + Math.max(-CAP, Math.min(CAP, n.dribble ?? 0));
-    blended.tackle  = blended.tackle  + Math.max(-CAP, Math.min(CAP, n.tackle  ?? 0));
-    blended.press   = blended.press   + Math.max(-CAP, Math.min(CAP, n.press   ?? 0));
+    // clamp() bounds each nudge to ±CAP before adding it to the blended weight
+    const clamp = (v: number | undefined): number => Math.max(-CAP, Math.min(CAP, v ?? 0));
+    const nudged: ActionBias = {
+      shoot:   blended.shoot   + clamp(n.shoot),
+      pass:    blended.pass    + clamp(n.pass),
+      dribble: blended.dribble + clamp(n.dribble),
+      tackle:  blended.tackle  + clamp(n.tackle),
+      press:   blended.press   + clamp(n.press),
+    };
+    return normalise(nudged);
   }
 
   // Normalise so all five weights sum to 1.0 — required for correct weighted
