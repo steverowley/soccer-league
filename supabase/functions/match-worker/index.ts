@@ -33,6 +33,14 @@ import { simulateFullMatch } from './simulateFullMatch.ts';
 import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket, writeMatchCompletionMemories } from './postMatchEffects.ts';
 import { prepareArchitectForMatch, type CosmicArchitect, type LoreStore } from './architect.ts';
 import { generateInterferences } from './architectInterference.ts';
+import {
+  applyAnnulGoals,
+  applyForceRedCards,
+  resolveInterferenceStream,
+  type AnnulGoalIntent,
+  type ForceRedCardIntent,
+  type InterferenceEffect,
+} from './interferenceResolver.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 // Phase 8 reflex-tier hooks duplicated into the worker (isl-5kx) so
@@ -569,6 +577,136 @@ async function processMatch(match: any): Promise<boolean> {
       }
       if (interferences.length > 0) {
         console.log(`[match-worker] Architect emitted ${interferences.length} interference(s) for match ${match.id}`);
+      }
+
+      // ── Architect mechanical effects (#476) ──────────────────────────────
+      // Up to this point `interferences` is purely narrative — each one
+      // emitted an `architect_interference` row for live commentary but the
+      // simulated match outcome was identical with or without it. This
+      // block closes #428's "headline mechanic is dark code" by partitioning
+      // the LLM-chosen interferences into the four resolver-input buckets
+      // and applying the pure post-passes from interferenceResolver.ts:
+      //
+      //   curse_player    → InterferenceEffect on `ctx.curses`
+      //   bless_player    → InterferenceEffect on `ctx.blesses`
+      //   annul_goal      → AnnulGoalIntent (retrospective goal rewind)
+      //   force_red_card  → ForceRedCardIntent (forward card promotion)
+      //
+      // ORDER OF PASSES matters: curse/bless first (so an annulled goal
+      // doesn't get re-cursed), then annul_goal, then force_red_card.
+      // The resolvers naturally skip narrative architect_interference
+      // events (no `payload.player`, no `payload.isGoal`, not a card-able
+      // type) so we can run the post-pass over the FULL events array —
+      // engine events + narrative items — and only the engine events
+      // mutate.
+      //
+      // ── targetTeam mapping ──
+      // architectInterference returns 'home' | 'away' | null. The engine
+      // stamps goals with `payload.team === posTeam.shortName`, so we
+      // map at the partition step to keep the resolver string-compare
+      // pure.
+      //
+      // ── annul_goal minute offset ──
+      // The Architect speaks AT or just AFTER the trigger goal (subminute
+      // = goal.subminute + 0.005). applyAnnulGoals walks AT or AFTER
+      // intent.minute. To catch the just-occurred goal we subtract
+      // ANNUL_BACKSCAN_MINUTES from the speak-minute so the walk picks
+      // up the goal that triggered the proclamation. The window is small
+      // (3) so we don't accidentally consume a much older goal.
+      const ANNUL_BACKSCAN_MINUTES = 3;
+
+      const curses:        InterferenceEffect[]  = [];
+      const blesses:       InterferenceEffect[]  = [];
+      const annulGoals:    AnnulGoalIntent[]     = [];
+      const forceRedCards: ForceRedCardIntent[]  = [];
+
+      for (const inter of interferences) {
+        // Map 'home'/'away' → the engine's shortName for goal-team match.
+        const targetTeamShortName = inter.targetTeam === 'home' ? (home.shortName ?? home.name)
+                                  : inter.targetTeam === 'away' ? (away.shortName ?? away.name)
+                                  : null;
+        switch (inter.interferenceType) {
+          case 'curse_player':
+            if (inter.targetPlayer) {
+              curses.push({
+                playerName: inter.targetPlayer,
+                magnitude:  inter.magnitude,
+                startMin:   inter.minute,
+              });
+            }
+            break;
+          case 'bless_player':
+            if (inter.targetPlayer) {
+              blesses.push({
+                playerName: inter.targetPlayer,
+                magnitude:  inter.magnitude,
+                startMin:   inter.minute,
+              });
+            }
+            break;
+          case 'annul_goal':
+            // Without a target team we can't disambiguate which side's
+            // goal to annul — skip rather than guess.
+            if (targetTeamShortName) {
+              annulGoals.push({
+                team:      targetTeamShortName,
+                minute:    Math.max(0, inter.minute - ANNUL_BACKSCAN_MINUTES),
+                magnitude: inter.magnitude,
+              });
+            }
+            break;
+          case 'force_red_card':
+            if (inter.targetPlayer) {
+              forceRedCards.push({
+                playerName: inter.targetPlayer,
+                minute:     inter.minute,
+                magnitude:  inter.magnitude,
+              });
+            }
+            break;
+          // All other interferenceTypes remain narrative-only in this slice.
+          // Adding mechanics for them is straightforward — wire another
+          // resolver in interferenceResolver.ts and another bucket here.
+        }
+      }
+
+      // Apply the post-passes in sequence. Each takes a SimulatedEvent[]
+      // and returns a (possibly new) SimulatedEvent[] — input is never
+      // mutated. Production uses Math.random; the resolvers' magnitude*0.1
+      // probability gate encodes the per-intent uncertainty so the
+      // Architect's call is not always guaranteed to fire.
+      let mutated = result.events;
+      if (curses.length > 0 || blesses.length > 0) {
+        mutated = resolveInterferenceStream(mutated, { curses, blesses }, Math.random);
+      }
+      if (annulGoals.length > 0) {
+        mutated = applyAnnulGoals(mutated, annulGoals, Math.random);
+      }
+      if (forceRedCards.length > 0) {
+        mutated = applyForceRedCards(mutated, forceRedCards, Math.random);
+      }
+
+      // Re-derive finalScore from the mutated stream so annulled / cursed
+      // goals are removed from the scoreline. Engine-side score lives in
+      // `result.finalScore`; mirrors the same shortName comparison the
+      // simulator uses internally.
+      if (mutated !== result.events) {
+        const rederived: [number, number] = [0, 0];
+        for (const ev of mutated) {
+          const pl = ev.payload as Record<string, unknown>;
+          if (pl['isGoal'] !== true) continue;
+          if (pl['team'] === (home.shortName ?? home.name))      rederived[0]++;
+          else if (pl['team'] === (away.shortName ?? away.name)) rederived[1]++;
+        }
+        const mutationCount = mutated.filter(
+          ev => (ev.payload as Record<string, unknown>)['interferenceApplied'],
+        ).length;
+        console.log(
+          `[match-worker] Architect mechanically mutated ${mutationCount} event(s); ` +
+          `score ${result.finalScore[0]}–${result.finalScore[1]} → ${rederived[0]}–${rederived[1]}`,
+        );
+        result.events     = mutated;
+        result.finalScore = rederived;
       }
     } catch (err) {
       console.warn('[match-worker] generateInterferences threw (non-fatal):', err);
