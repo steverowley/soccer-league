@@ -1352,6 +1352,32 @@ export function genEvent(min, homeTeam, awayTeam, momentum, possession, playerSt
   // Desperate late-game mode: losing after minute 80 → nearly every event is an attack
   if (scoreDiff < 0 && min >= 80) roll *= 0.5;
 
+  // ── Decision blender: team action-bias roll modifier ─────────────────────
+  // simulateFullMatch.ts pre-computes a WeightedActionBias for each team
+  // every minute via getPositionalInstructions() (manager playstyle +
+  // manager stats + match situation) and stores it in genCtx as
+  // `homeTeamBias` / `awayTeamBias`.  The bias's `shoot` weight relative to
+  // its 0.18 MF baseline drives a signed roll nudge:
+  //
+  //   shoot > 0.18 (attacking / high-pressing manager) → nudge < 0 → lower
+  //     roll → event more likely to cross the 0.20 shot threshold.
+  //
+  //   shoot < 0.18 (defensive / possession manager)    → nudge > 0 → higher
+  //     roll → event drifts into the defence/pass branch instead.
+  //
+  // Cap: ±0.10 so the blender can never push the roll further than momentum
+  // or weather alone could (both cap at ~0.10).  This keeps the blender as
+  // a nudge layer rather than a dominant control signal.
+  //
+  // Baseline of 0.18: the POSITION_BIAS['MF'].shoot value from zoneMapping.ts
+  // — the neutral midfield player's base shooting tendency.  Values above it
+  // indicate an attack-minded team; values below indicate a defensive one.
+  const _teamBias = isHome ? genCtx.homeTeamBias : genCtx.awayTeamBias;
+  if (_teamBias) {
+    const _shootNudge = Math.max(-0.10, Math.min(0.10, (_teamBias.shoot - 0.18) * 0.5));
+    roll = Math.max(0, roll - _shootNudge);
+  }
+
   // ── Feature 4: Manager tactics — shotBias roll modifier ──────────────────
   // If the possessing team has an active tactical stance (expiresMin not yet
   // reached), their shotBias shifts the roll toward or away from the shot

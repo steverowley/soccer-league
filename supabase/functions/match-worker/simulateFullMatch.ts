@@ -8,6 +8,11 @@ import { createAIManager, calcMVP, genEvent } from './gameEngine.js';
 import type { EngineTeam, SimulationResult } from './gameEngine.types.ts';
 import { applyFanBoostToTeam } from './applyFanBoost.ts';
 import { CosmicVoiceEngine } from './cosmicVoices.ts';
+import {
+  emitPositionSnapshot,
+  SNAPSHOT_INTERVAL_SECONDS,
+  type PositionSnapshot,
+} from './positionEmitter.ts';
 
 // ── Input types ────────────────────────────────────────────────────────────
 
@@ -60,7 +65,8 @@ export interface SimulatedEvent {
 }
 
 /**
- * Complete 90-minute simulation output — events, score, MVP, player stats.
+ * Complete 90-minute simulation output — events, score, MVP, player stats,
+ * and 2D pitch position snapshots for the live viewer.
  * All fields are plain data suitable for direct DB insertion.
  */
 export interface SimulatedMatchResult {
@@ -80,6 +86,70 @@ export interface SimulatedMatchResult {
     yellowCard: boolean;
     redCard: boolean;
   }>;
+  /**
+   * 2-second positional snapshots for all 22 active players + ball.
+   * ~2 700 entries per match (30/min × 90 min).  Batch-inserted into
+   * `match_positions` by index.ts after simulation completes.
+   */
+  positionSnapshots: PositionSnapshot[];
+}
+
+// ── Decision blender helper ───────────────────────────────────────────────────
+
+/**
+ * Derive a simplified team action-bias from the manager's numeric stats
+ * and the live match situation.
+ *
+ * This mirrors the logic in `getPositionalInstructions()` from zoneMapping.ts
+ * but uses only the five manager stats (attacking / defending / mental /
+ * athletic / technical) instead of the full position × playstyle matrix —
+ * the worker's normalizeTeamForEngine does not expose the playstyle string.
+ *
+ * The returned object is stored in genCtx as `homeTeamBias` / `awayTeamBias`
+ * and read by gameEngine.js to shade the event-selection roll (see the
+ * "Decision blender" comment block in genEvent()).
+ *
+ * @param team      EngineTeam as returned by normalizeTeamForEngine.
+ * @param scoreDiff Goal difference from this team's perspective (+ = winning).
+ * @param minute    Current match minute (1–90).
+ * @returns         ActionBias with all weights ≥ 0.01.
+ */
+function computeTeamBias(
+  team:      EngineTeam,
+  scoreDiff: number,
+  minute:    number,
+): { shoot: number; pass: number; dribble: number; tackle: number; press: number } {
+  const mgr = team.manager;
+
+  // ── Manager stat amplifiers ────────────────────────────────────────────────
+  // Map [0, 100] stats to [−0.25, +0.25] amplifiers centred on 70 (league avg).
+  // A stat of 70 → amplifier 0 (neutral).  90 → +0.10 (elite).  50 → −0.10.
+  const atkScale = (mgr.attacking - 70) / 200;  // attacking manager pushes shoot/press
+  const defScale = (mgr.defending - 70) / 200;  // defensive manager pushes tackle
+
+  // ── Situation modifiers ────────────────────────────────────────────────────
+  // Desperation: losing with < 20 minutes left → push shoot/press bias up.
+  // 0.04 per goal behind (same factor as getPositionalInstructions desperation mod).
+  const desperationMod = (scoreDiff < 0 && minute >= 70)
+    ? Math.abs(scoreDiff) * 0.04
+    : 0;
+
+  // Comfort: winning by > 1 goal after the hour → pass/tackle bias up.
+  // 0.03 per extra goal (same factor as getPositionalInstructions comfort mod).
+  const comfortMod = (scoreDiff > 1 && minute >= 60)
+    ? scoreDiff * 0.03
+    : 0;
+
+  // ── MF baseline from zoneMapping.ts POSITION_BIAS['MF'] ───────────────────
+  // shoot:0.18  pass:0.28  dribble:0.18  tackle:0.18  press:0.18
+  // These are the neutral starting weights before stat amplifiers apply.
+  return {
+    shoot:   Math.max(0.01, 0.18 + atkScale * 0.4 + desperationMod),
+    pass:    Math.max(0.01, 0.28 - atkScale * 0.2 + comfortMod * 0.5),
+    dribble: Math.max(0.01, 0.18 + atkScale * 0.2 + desperationMod * 0.3),
+    tackle:  Math.max(0.01, 0.18 + defScale * 0.3 + comfortMod),
+    press:   Math.max(0.01, 0.18 + atkScale * 0.3 + desperationMod * 0.4),
+  };
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -204,6 +274,15 @@ export function simulateFullMatch(
   let momentum: [number, number] = [...INITIAL_MOMENTUM];
   const playerStats: Record<string, any> = {};
   const events: SimulatedEvent[] = [];
+  const positionSnapshots: PositionSnapshot[] = [];
+
+  // ── Possession tracking for position snapshots ─────────────────────────────
+  // genEvent stamps every event with `team: posTeam.shortName` — the team
+  // that had the ball this minute.  We mirror that to drive the snapshot
+  // emitter's ball-placement and player-position logic.
+  //
+  // Default: home team kicks off → home has possession at minute 1.
+  let hasPossessionHome = true;
 
   // ── Cosmic voices (#371) ──────────────────────────────────────────────────
   // One engine per match. Drifts Balance + Chaos interest levels per event;
@@ -243,26 +322,36 @@ export function simulateFullMatch(
   let withinMinuteCount = 0;
 
   for (let min = 1; min <= REGULATION_MINUTES; min++) {
+    // ── Decision blender: per-minute team biases ───────────────────────────
+    // Compute action-bias vectors for each team using the manager's numeric
+    // stats + live match situation.  Stored in genCtx so gameEngine.js can
+    // shade the event-selection roll (see the "Decision blender" block in
+    // genEvent() at ~line 1353 of gameEngine.js).
+    //
+    // Recomputed each minute because scoreDiff changes on goals — a team
+    // that falls behind at minute 72 immediately gets a desperation bias
+    // boost rather than waiting until the next "phase" threshold.
+    const homeScoreDiff = score[0] - score[1];
+    const awayScoreDiff = score[1] - score[0];
+    const homeTeamBias  = computeTeamBias(home, homeScoreDiff, min);
+    const awayTeamBias  = computeTeamBias(away, awayScoreDiff, min);
+
     // Call the engine's event generator. 14 positional args:
     // minute, home, away, momentum, possession, playerStats, score,
     // activePlayers, substitutionsUsed, aiInfluence, aim, momentum_magnitude,
-    // lastEventType, genCtx (empty).
-    // genCtx threading.  gameEngine.js reads four cosmic fields:
+    // lastEventType, genCtx.
+    // genCtx threading.  gameEngine.js reads the cosmic fields AND the
+    // new decision-blender fields:
     //   • architect            — feeds getRelationshipFor / getFeaturedMortals
-    //                            / getActiveRelationships in contest +
-    //                            commentary + foul-bias paths.
-    //   • architectIntentions  — pre-decided narrative pulls; filtered to
-    //                            the current minute so windows close cleanly.
-    //   • architectEdictFn     — closure (isHome) → resolved edict modifiers
-    //                            for the requested side, or {} when no edict.
-    //   • architectFate        — sealed-fate decree (or null) the engine may
-    //                            force-fire inside its window.
-    //   • consumeFate          — callback gameEngine fires the moment it
-    //                            executes the fated event so it can't double-fire.
+    //   • architectIntentions  — pre-decided narrative pulls per minute window
+    //   • architectEdictFn     — closure returning edict modifiers per side
+    //   • architectFate        — sealed-fate decree (or null) for this window
+    //   • consumeFate          — fires once when the fated event executes
+    //   • homeTeamBias         — Phase 2 decision-blender bias for home team
+    //   • awayTeamBias         — Phase 2 decision-blender bias for away team
     //
-    // When `architect` is absent every accessor short-circuits to `null`/`[]`
-    // / `{}` and gameEngine runs the empty-state branches — no behaviour
-    // change vs the pre-Slice-6 worker.
+    // When `architect` is absent every accessor short-circuits to `null`/`[]`/`{}`
+    // and gameEngine runs the empty-state branches — identical to pre-Slice-6.
     const architectIntentions = architect?.getIntentions?.(min) ?? [];
     const architectEdictFn    = architect
       ? (isHome: boolean) => architect.getEdictModifiers(isHome)
@@ -280,10 +369,15 @@ export function simulateFullMatch(
         architect, architectIntentions, architectEdictFn, architectFate, consumeFate,
         agentCorpus: reflexHooks?.agentCorpus ?? null,
         runDecision: reflexHooks?.runDecision ?? null,
+        homeTeamBias,
+        awayTeamBias,
       },
     );
 
-    if (!ev) continue;
+    // ── Event processing (skipped for quiet minutes) ───────────────────────
+    if (ev) {
+      // Update possession from the event's team tag.
+      hasPossessionHome = ev.team === home.shortName;
 
     // ── subminute assignment ───────────────────────────────────────────────
     // Reset the in-minute index on a new minute, otherwise advance it.  The
@@ -398,7 +492,22 @@ export function simulateFullMatch(
       slot.assists++;
     }
 
-    lastEventType = ev.type;
+      lastEventType = ev.type;
+    } // end if (ev)
+
+    // ── Position snapshots (emitted every minute, event or not) ───────────
+    // The 2D pitch viewer needs continuous motion even during quiet minutes.
+    // Positions within a minute differ only by deterministic jitter so the
+    // pitch stays alive without simulating physics between discrete events.
+    for (let sec = 0; sec < 60; sec += SNAPSHOT_INTERVAL_SECONDS) {
+      positionSnapshots.push(emitPositionSnapshot(
+        min, sec,
+        home, away,
+        activePlayers.home, activePlayers.away,
+        hasPossessionHome,
+        score,
+      ));
+    }
   }
 
   // ── Final-time derivations ─────────────────────────────────────────────────
@@ -411,5 +520,6 @@ export function simulateFullMatch(
     finalScore: score,
     mvp,
     playerStats,
+    positionSnapshots,
   };
 }

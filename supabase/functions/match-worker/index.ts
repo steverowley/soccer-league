@@ -736,6 +736,53 @@ async function processMatch(match: any): Promise<boolean> {
 
     console.log(`[match-worker] Inserted ${result.events.length} events`);
 
+    // ── Persist position snapshots ─────────────────────────────────────────
+    // Batch-insert the 2-second position snapshots emitted by simulateFullMatch.
+    //
+    // WHY WE INSERT AFTER EVENTS (not before)
+    // ─────────────────────────────────────────
+    // Events are the authoritative match record — if this step fails, the
+    // retry path re-simulates and re-inserts.  Position snapshots are
+    // supplementary (2D viewer only); inserting them second means a retry
+    // can use ON CONFLICT DO NOTHING to skip already-written snapshots
+    // without touching the canonical event rows.
+    //
+    // BATCH STRATEGY
+    // ──────────────
+    // 2 700 rows × ~1.2 KB JSONB ≈ 3.2 MB per match.  We insert in chunks
+    // of 100 rows to stay within the Supabase 4 MB request body limit and
+    // avoid a single huge payload that risks a mid-flight timeout.
+    const POSITION_INSERT_BATCH_SIZE = 100;
+    if (result.positionSnapshots && result.positionSnapshots.length > 0) {
+      for (
+        let i = 0;
+        i < result.positionSnapshots.length;
+        i += POSITION_INSERT_BATCH_SIZE
+      ) {
+        const chunk = result.positionSnapshots.slice(i, i + POSITION_INSERT_BATCH_SIZE);
+        const posRows = chunk.map((snap) => ({
+          match_id:  match.id,
+          minute:    snap.minute,
+          second:    snap.second,
+          snapshots: {
+            players: snap.players,
+            ball:    snap.ball,
+          },
+        }));
+        const { error: posError } = await supabase
+          .from('match_positions')
+          // ON CONFLICT DO NOTHING: safe on retry — the PK (match_id, minute, second)
+          // prevents duplicate rows without failing the whole batch.
+          .upsert(posRows, { onConflict: 'match_id,minute,second', ignoreDuplicates: true });
+        if (posError) {
+          // Non-fatal: log and continue.  The 2D viewer degrades gracefully
+          // when no position data is available (falls back to event-only feed).
+          console.warn(`[match-worker] Position snapshot insert warning: ${posError.message}`);
+        }
+      }
+      console.log(`[match-worker] Inserted ${result.positionSnapshots.length} position snapshots`);
+    }
+
     // ── Persist per-player stats ───────────────────────────────────────────
     // The engine returns playerStats keyed by player *name*; the DB table
     // match_player_stats is keyed by player_id (uuid) + team_id (slug).
