@@ -53,7 +53,7 @@ import {
   PITCH_WIDTH, PITCH_HEIGHT,
   type ActionBias,
 } from './zoneMapping';
-import type { RelationshipIndex } from './matchRelationships';
+import { getEdgesBetween, type RelationshipIndex } from './matchRelationships';
 
 // ── Public input types ───────────────────────────────────────────────────────
 
@@ -638,12 +638,45 @@ export function simulateFullMatch(
       // modifier after the base roll is computed (see genEvent ~line 1370).
       homeTeamBias,
       awayTeamBias,
-      // Relationship index for resolveContest (Phase 2 wiring).
+      // Relationship index for resolveContest (Phase 2B wiring).
       // When present, the engine populates the `relationship` parameter of
-      // resolveContest() for partnership/rivalry modifiers — currently a
-      // no-op hook that is populated here and consumed in Phase 2B once the
-      // engine-side resolver is wired.
+      // resolveContest() so rivalry / grudge / partnership edges shade contest
+      // outcomes.  Stored in genCtx as both the raw index (for the blender)
+      // and a pre-bound resolver function so gameEngine.js can call it without
+      // importing TypeScript.
       ...(relationshipIndex ? { relationshipIndex } : {}),
+      // getRelationshipForEntities(entityA, entityB) → { type, intensity } | null
+      //
+      // Adapts the EntityRelationship DB shape to the { type, intensity } shape
+      // resolveContest expects:
+      //   kind     → type    (both use the same string vocabulary)
+      //   strength → intensity, normalised from [-100,+100] to [0,1]
+      //              (absolute value: -80 grudge and +80 partnership both give 0.8)
+      //
+      // When multiple edges exist between the same pair, we pick the one with
+      // the greatest absolute strength — the "loudest" relationship wins.
+      // Returns null when either entity_id is absent or no edges exist, which
+      // preserves the pre-Phase-2B fallback of no relationship modifier.
+      ...(relationshipIndex
+        ? {
+            getRelationshipForEntities: (
+              entityA: string | null | undefined,
+              entityB: string | null | undefined,
+            ): { type: string; intensity: number } | null => {
+              if (!entityA || !entityB) return null;
+              const edges = getEdgesBetween(relationshipIndex, entityA, entityB);
+              if (edges.length === 0) return null;
+              const strongest = edges.reduce((a, b) =>
+                Math.abs(a.strength) >= Math.abs(b.strength) ? a : b,
+              );
+              return {
+                type:      strongest.kind,
+                // strength ∈ [-100,+100] → intensity ∈ [0,1]
+                intensity: Math.min(1, Math.abs(strongest.strength) / 100),
+              };
+            },
+          }
+        : {}),
     };
     const ev = genEvent(
       min, home, away, momentum, INITIAL_POSSESSION, playerStats, score,

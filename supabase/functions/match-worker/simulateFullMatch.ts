@@ -252,6 +252,12 @@ export function simulateFullMatch(
   architect: any | null = null,
   reflexHooks: AgentReflexHooks | null = null,
   refOverride: RefereeOverride | null = null,
+  // Pre-built relationship resolver — built from entity_relationships rows
+  // fetched by index.ts before simulation starts.  Accepts two entity_ids
+  // and returns the { type, intensity } shape resolveContest expects.
+  // null → no relationship modifiers (same as pre-Phase-2B behaviour).
+  // deno-lint-ignore no-explicit-any
+  getRelationshipForEntities: ((a: any, b: any) => { type: string; intensity: number } | null) | null = null,
 ): SimulatedMatchResult {
   // ── Apply fan-support boost ────────────────────────────────────────────────
   // The team with more logged-in fans gets a small stat boost across every
@@ -371,6 +377,12 @@ export function simulateFullMatch(
         runDecision: reflexHooks?.runDecision ?? null,
         homeTeamBias,
         awayTeamBias,
+        // Relationship resolver (Phase 2B).  When non-null, gameEngine's
+        // resolveContest calls use entity-graph edges to shade shot outcomes
+        // — rivals raise card-bias, partners boost atkMod, etc.  Falls back
+        // to the Architect's name-based getRelationshipFor when null, which
+        // preserves pre-Phase-2B behaviour for matches without DB edges.
+        ...(getRelationshipForEntities ? { getRelationshipForEntities } : {}),
       },
     );
 

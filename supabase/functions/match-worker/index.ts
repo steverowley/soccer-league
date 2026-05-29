@@ -491,6 +491,60 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn('[match-worker] reflex corpus hydration threw:', (err as Error)?.message ?? err);
     }
 
+    // ── Phase 2B: pre-load entity relationship graph ──────────────────────
+    // Fetch entity_relationships for every match participant so resolveContest
+    // can apply rivalry / partnership modifiers without touching the DB during
+    // the synchronous simulation loop.
+    //
+    // One query covers all edges where any participant appears on either end.
+    // On failure, degradation is silent: `getRelationshipForEntities` stays
+    // null and the engine runs with no relationship modifiers — same outcome
+    // as a match with no seeded relationship data.
+    //
+    // Bidirectional indexing: each edge is stored for both (A→B) and (B→A)
+    // so the lookup works regardless of which end was from_id in the DB.
+    type RelEdge = { type: string; intensity: number };
+    let getRelationshipForEntities: ((a: unknown, b: unknown) => RelEdge | null) | null = null;
+    if (involvedEntityIds.length > 0) {
+      try {
+        const { data: relRows } = await supabase
+          .from('entity_relationships')
+          .select('from_id, to_id, kind, strength')
+          .or(`from_id.in.(${involvedEntityIds.join(',')}),to_id.in.(${involvedEntityIds.join(',')})`)
+          .limit(2000);
+
+        if (relRows && relRows.length > 0) {
+          // Build a bidirectional nested Map: entityA → entityB → edges[].
+          const relIdx = new Map<string, Map<string, RelEdge[]>>();
+          for (const row of relRows) {
+            // strength ∈ [-100,+100]; intensity normalised to [0,1].
+            const edge: RelEdge = {
+              type:      String(row.kind),
+              intensity: Math.min(1, Math.abs(Number(row.strength)) / 100),
+            };
+            for (const [from, to] of [[row.from_id, row.to_id], [row.to_id, row.from_id]] as const) {
+              let inner = relIdx.get(from as string);
+              if (!inner) { inner = new Map(); relIdx.set(from as string, inner); }
+              let arr = inner.get(to as string);
+              if (!arr) { arr = []; inner.set(to as string, arr); }
+              // Dedupe: same kind can appear twice when from/to are swapped.
+              if (!arr.some((e) => e.type === edge.type)) arr.push(edge);
+            }
+          }
+          getRelationshipForEntities = (a: unknown, b: unknown): RelEdge | null => {
+            if (!a || !b) return null;
+            const edges = relIdx.get(a as string)?.get(b as string) ?? [];
+            if (edges.length === 0) return null;
+            // Pick the edge with the highest intensity (absolute strength).
+            return edges.reduce((best, e) => e.intensity >= best.intensity ? e : best);
+          };
+          console.log(`[match-worker] relationship index: ${relRows.length} edges for ${involvedEntityIds.length} entities`);
+        }
+      } catch (err) {
+        console.warn('[match-worker] relationship index failed:', (err as Error)?.message ?? err);
+      }
+    }
+
     // Simulate the full 90 minutes.  `refOverride` is the isl-84e wiring —
     // passes the assigned referee's identity (incl. entity_id) into
     // createAIManager so the Phase 8 card_severity resolver can find
@@ -499,7 +553,9 @@ async function processMatch(match: any): Promise<boolean> {
     // `reflexHooks` (isl-5kx) supplies the in-match shoot_or_pass +
     // card_severity dispatcher; null falls back to legacy stat-driven
     // decisions inside gameEngine.
-    const result = simulateFullMatch(home, away, fanBoost, architect, reflexHooks, refOverride);
+    // `getRelationshipForEntities` (Phase 2B) wires entity-graph rivalry /
+    // partnership edges into resolveContest outcomes.
+    const result = simulateFullMatch(home, away, fanBoost, architect, reflexHooks, refOverride, getRelationshipForEntities);
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 

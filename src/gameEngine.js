@@ -1916,7 +1916,11 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
     const shooterAgent   = aim?.getAgentByName(player.name);
     const gkAgent        = aim?.getAgentByName(gk.name);
     const isClutchMoment = shooterAgent?.isClutch && min >= 80 && Math.abs(score[0] - score[1]) <= 1;
-    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null, ...archModCtx });
+    // Relationship lookup: prefer entity-graph edges (preloaded by matchRelationships.ts
+    // before kickoff) over the Architect's name-based synthetic lookup.  Both
+    // produce { type, intensity } — entity-graph wins when the data exists.
+    const shotRelationship = genCtx.getRelationshipForEntities?.(player.entity_id, gk?.entity_id) ?? genCtx.architect?.getRelationshipFor?.(player.name, gk.name) ?? null;
+    const shotResult     = resolveContest(player, shooterAgent, gk, gkAgent, { type: 'shot', weather: wx, isClutch: isClutchMoment, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: shotRelationship, ...archModCtx });
     const formAdj        = formBonus(player.name, playerStats) - formBonus(gk.name, playerStats) + (aim?.getAgentByName(player.name)?.getDecisionBonus() || 0) - wxStatPen + wxGkPen;
 
     // ── Phase 8: shoot-or-pass reflex resolver — confidence/grudge shading ──
@@ -2054,7 +2058,8 @@ function _genEventBranches(min, homeTeam, awayTeam, posTeam, defTeam, isHome, po
           const cAtkAgent   = aim?.getAgentByName(cPlayer.name);
           const cGkAgent    = aim?.getAgentByName(cGk.name);
           const cIsClutch   = cAtkAgent?.isClutch && min >= 80;
-          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null, ...archModCtx });
+          const cRel1       = genCtx.getRelationshipForEntities?.(cPlayer.entity_id, cGk?.entity_id) ?? genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null;
+          const cResult     = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, isClutch: cIsClutch, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: cRel1, ...archModCtx });
           const cGoal       = cResult.outcome === 'goal';
           const cIsHome     = defTeam === homeTeam;
           const savedSeqEvt = { minute: min, type: 'shot', team: posTeam.shortName, player: player.name, defender: gk.name, outcome: 'saved', commentary: saveComm, momentumChange: [0, 0] };
@@ -2211,7 +2216,8 @@ function _genEventPart3(min, homeTeam, awayTeam, posTeam, defTeam, isHome, posAc
           const cSeq      = genCounterSeq(min, cPlayer, cGk, defTeam, cSupport);
           const cAtkAgent = aim?.getAgentByName(cPlayer.name);
           const cGkAgent  = aim?.getAgentByName(cGk.name);
-          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null, ...archModCtx });
+          const cRel2     = genCtx.getRelationshipForEntities?.(cPlayer.entity_id, cGk?.entity_id) ?? genCtx.architect?.getRelationshipFor?.(cPlayer.name, cGk.name) ?? null;
+          const cResult   = resolveContest(cPlayer, cAtkAgent, cGk, cGkAgent, { type: 'shot', weather: wx, flashpoints: genCtx.flashpoints ?? [], architectIntentions: genCtx.architectIntentions ?? [], relationship: cRel2, ...archModCtx });
           const cGoal     = cResult.outcome === 'goal';
           const cIsHome   = defTeam === homeTeam;
           const intEvt    = { minute: min, type: 'attack', team: posTeam.shortName, player: player.name, defender: defender.name, outcome: 'intercepted', commentary, momentumChange: [0, 0] };
