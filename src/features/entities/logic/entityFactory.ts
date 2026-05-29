@@ -327,6 +327,326 @@ export function createBookieEntity(opts: {
   });
 }
 
+// ── Phase 6 world-building factories ────────────────────────────────────────
+// These factories cover the expanded entity graph introduced in migrations
+// 0062–0064: political parties, politicians, officials associations, managing
+// staff, social media platforms, sports writers, stadiums, and training
+// facilities.  The `meta` shapes here are the canonical source of truth —
+// any future code that creates rows of these kinds must use these factories
+// so the Architect's context hydration never silently mis-renders.
+
+/**
+ * Political party entity. Parties exist at three scopes:
+ *   - `system`    — system-wide (e.g. The Solaris Compact)
+ *   - `regional`  — multi-planet region (e.g. The Frontier Coalition)
+ *   - `planetary` — single planet (e.g. Mars Red Frontier Party)
+ *
+ * `leaning` is free-form narrative text ("technocratic nationalist", "labour
+ * unionist") rather than a left/right number so the Architect can quote it
+ * directly in prose without arithmetic.
+ *
+ * @param opts.name         Full party name.
+ * @param opts.display_name Short label shown in UI (e.g. "Frontier Coalition").
+ * @param opts.scope        Jurisdictional scope.
+ * @param opts.homeworld    Planet of origin; null for system-wide parties.
+ * @param opts.leaning      Short political characterisation for narrative use.
+ * @param opts.description  One-sentence Architect-facing description.
+ */
+export function createPoliticalPartyEntity(opts: {
+  name: string;
+  display_name?: string;
+  scope: 'system' | 'regional' | 'planetary';
+  homeworld?: string | null;
+  leaning: string;
+  description: string;
+}): EntityInsert {
+  return createEntity({
+    kind: 'political_party',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      scope: opts.scope,
+      homeworld: opts.homeworld ?? null,
+      leaning: opts.leaning,
+      description: opts.description,
+    },
+  });
+}
+
+/**
+ * Politician entity. Politicians are named individuals attached to a party
+ * and a homeworld.  `role` is their current office (e.g. "President",
+ * "Assembly Speaker") — free-form so it can be quoted directly in decrees
+ * and news narratives without normalisation.
+ *
+ * `party` stores the party's display name (not entity_id) so the Architect
+ * can render it in prose without a join.  The proper entity_id link is
+ * stored in `entity_relationships` (politician `member_of` political_party).
+ *
+ * @param opts.name         Full name of the politician.
+ * @param opts.display_name Short form; defaults to full name.
+ * @param opts.role         Current office or title.
+ * @param opts.party        Party display name (for in-line prose only).
+ * @param opts.homeworld    Planet the politician represents.
+ * @param opts.description  One-sentence summary for Architect context.
+ */
+export function createPoliticianEntity(opts: {
+  name: string;
+  display_name?: string;
+  role: string;
+  party: string;
+  homeworld: string;
+  description: string;
+}): EntityInsert {
+  return createEntity({
+    kind: 'politician',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      role: opts.role,
+      party: opts.party,
+      homeworld: opts.homeworld,
+      description: opts.description,
+    },
+  });
+}
+
+/**
+ * Officials association entity. Distinct from the generic `association` kind
+ * because officials associations specifically govern referees and match
+ * officials — the Architect references them when generating VAR controversy
+ * narratives and post-match official accountability stories.
+ *
+ * `scope` mirrors political_body's vocabulary:
+ *   - `system`   — ISL-wide (IEOB already exists as 'association'; RMAS is new)
+ *   - `regional` — inner-system or outer-system bloc
+ *
+ * @param opts.name         Full name of the association.
+ * @param opts.display_name Acronym or short label (e.g. "RMAS").
+ * @param opts.scope        Jurisdictional reach.
+ * @param opts.role         Functional role: "referee_union", "regional_board", etc.
+ * @param opts.description  One-sentence Architect-facing description.
+ */
+export function createOfficialsAssociationEntity(opts: {
+  name: string;
+  display_name?: string;
+  scope: 'system' | 'regional' | 'planetary';
+  role: string;
+  description: string;
+}): EntityInsert {
+  return createEntity({
+    kind: 'officials_association',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      scope: opts.scope,
+      role: opts.role,
+      description: opts.description,
+    },
+  });
+}
+
+/**
+ * Managing staff entity (assistant managers, specialist coaches). Each club
+ * has one or more managing staff who are distinct from the head manager.
+ * They appear in Architect narratives ("the assistant spotted the weakness"),
+ * in training facility lore, and as relationship nodes for inter-club drama.
+ *
+ * `role` is free-form: "assistant_manager", "fitness_coach", "set_piece_coach",
+ * "goalkeeper_coach", etc.
+ *
+ * `specialty` is a short Architect tag (e.g. "altitude conditioning",
+ * "possession systems") that colours how the Architect references them.
+ *
+ * @param opts.name         Full name.
+ * @param opts.display_name Short form; defaults to full name.
+ * @param opts.role         Staff role title.
+ * @param opts.team_id      Team slug (FK to teams.id).
+ * @param opts.nationality  Optional nationality string.
+ * @param opts.specialty    Optional Architect-facing coaching speciality.
+ */
+export function createManagingStaffEntity(opts: {
+  name: string;
+  display_name?: string;
+  role: string;
+  team_id: string;
+  nationality?: string | null;
+  specialty?: string | null;
+}): EntityInsert {
+  return createEntity({
+    kind: 'managing_staff',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      role: opts.role,
+      team_id: opts.team_id,
+      nationality: opts.nationality ?? null,
+      specialty: opts.specialty ?? null,
+    },
+  });
+}
+
+/**
+ * Social media platform entity. Platforms are first-class entities so the
+ * Architect can direct narratives at them ("the story went viral on
+ * Stellarverse"; "CometFeed clips of the brawl circulated for days").
+ *
+ * `format` shapes the narrative register the Architect uses:
+ *   - `microblog` — short hot takes, quote-chains, trending topics
+ *   - `video`     — viral clips, highlight reels, player lifestyle
+ *   - `forum`     — long analytical threads, tactical debates
+ *
+ * @param opts.name         Platform name (e.g. "Stellarverse").
+ * @param opts.display_name Short label; defaults to name.
+ * @param opts.format       Content format — drives Architect narrative register.
+ * @param opts.reach        Geographic reach (mirrors media_company reach values).
+ * @param opts.description  One-sentence Architect-facing description.
+ */
+export function createSocialMediaEntity(opts: {
+  name: string;
+  display_name?: string;
+  format: 'microblog' | 'video' | 'forum';
+  reach: string;
+  description: string;
+}): EntityInsert {
+  return createEntity({
+    kind: 'social_media',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      format: opts.format,
+      reach: opts.reach,
+      description: opts.description,
+    },
+  });
+}
+
+/**
+ * Sports writer entity. Writers are distinct from `journalist` (beat
+ * reporters) — they produce opinion columns, long-reads, and polemics.
+ * The Architect uses their `style` and `political_leaning` to generate
+ * credibly biased post-match takes and transfer gossip.
+ *
+ * `style` is free-form Architect tag: "polemicist", "tactician", "romantic",
+ * "contrarian", "labour-angle", "traditionalist", etc.
+ *
+ * `political_leaning` mirrors political_party leaning language so the
+ * Architect can infer allegiances without explicit joins.
+ *
+ * @param opts.name               Full name.
+ * @param opts.display_name       Short form; defaults to full name.
+ * @param opts.employer           Media company display name (for prose).
+ * @param opts.homeworld          Writer's home planet.
+ * @param opts.style              Writing style tag for Architect use.
+ * @param opts.political_leaning  Optional political flavour.
+ */
+export function createSportsWriterEntity(opts: {
+  name: string;
+  display_name?: string;
+  employer: string;
+  homeworld: string;
+  style: string;
+  political_leaning?: string | null;
+}): EntityInsert {
+  return createEntity({
+    kind: 'sports_writer',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      employer: opts.employer,
+      homeworld: opts.homeworld,
+      style: opts.style,
+      political_leaning: opts.political_leaning ?? null,
+    },
+  });
+}
+
+/**
+ * Stadium entity. Stadiums become first-class entities so the Architect can
+ * target them directly: "the pitch is cursed", "the roof collapsed during
+ * stoppage time", "there are rumours the stadium is haunted".  Journalists
+ * can file stadium renovation stories; political bodies can threaten
+ * to revoke operating licences.
+ *
+ * `nickname` is the informal crowd name (e.g. "The Heat Box") separate from
+ * the formal `name` so the Architect can vary how it references the ground.
+ *
+ * `quality` tracks the ISL's internal pitch-quality rating — the game engine
+ * can use this to modulate weather effects and ball-bounce variance.
+ *   - `legendary` — elite heritage venues (Blue Marble Arena, Storm Arena)
+ *   - `professional` — standard top-flight quality
+ *   - `functional` — adequate but limited
+ *   - `frontier` — remote or improvised venues with notable quirks
+ *
+ * @param opts.name       Full stadium name.
+ * @param opts.display_name  Short form; defaults to full name.
+ * @param opts.team_id    Owning team slug.
+ * @param opts.location   Planet or colony name.
+ * @param opts.capacity   Formatted capacity string (e.g. "35,000").
+ * @param opts.nickname   Crowd nickname (e.g. "The Heat Box").
+ * @param opts.quality    ISL pitch-quality tier.
+ */
+export function createStadiumEntity(opts: {
+  name: string;
+  display_name?: string;
+  team_id: string;
+  location: string;
+  capacity: string;
+  nickname?: string | null;
+  quality: 'legendary' | 'professional' | 'functional' | 'frontier';
+}): EntityInsert {
+  return createEntity({
+    kind: 'stadium',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      team_id: opts.team_id,
+      location: opts.location,
+      capacity: opts.capacity,
+      nickname: opts.nickname ?? null,
+      quality: opts.quality,
+    },
+  });
+}
+
+/**
+ * Training facility entity. Facilities are first-class entities so the
+ * Architect can generate stories around them: player development controversies,
+ * facility upgrades from the voting system, cosmic interference with training.
+ * The voting system's "training investment" focus directly upgrades the
+ * owning entity's `quality` trait.
+ *
+ * `quality` levels:
+ *   - `elite`        — top-tier facilities with cutting-edge equipment
+ *   - `professional` — solid standard; all positions well-served
+ *   - `standard`     — adequate; some gaps in specialist coaching
+ *   - `basic`        — limited resources; development relies on raw talent
+ *
+ * @param opts.name       Full facility name.
+ * @param opts.display_name  Short form; defaults to full name.
+ * @param opts.team_id    Owning team slug.
+ * @param opts.location   Planet or colony name.
+ * @param opts.quality    Current facility quality tier.
+ */
+export function createTrainingFacilityEntity(opts: {
+  name: string;
+  display_name?: string;
+  team_id: string;
+  location: string;
+  quality: 'elite' | 'professional' | 'standard' | 'basic';
+}): EntityInsert {
+  return createEntity({
+    kind: 'training_facility',
+    name: opts.name,
+    ...(opts.display_name !== undefined && { display_name: opts.display_name }),
+    meta: {
+      team_id: opts.team_id,
+      location: opts.location,
+      quality: opts.quality,
+    },
+  });
+}
+
 // ── Traits ──────────────────────────────────────────────────────────────────
 
 /**
