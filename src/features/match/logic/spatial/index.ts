@@ -27,3 +27,15 @@ export {
 } from './types';
 
 export { type Formation, narrowFormation } from './formation';
+
+export {
+  adaptSpatialResult,
+  buildPlayerIndex,
+  deriveSimStats,
+  toSpatialTeamInput,
+  type PlayerEntry,
+  type PlayerIndex,
+  type AdaptedEvent,
+  type PlayerStatsEntry,
+  type AdaptedSpatialResult,
+} from './spatialEventAdapter';
