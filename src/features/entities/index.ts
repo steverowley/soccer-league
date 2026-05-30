@@ -74,6 +74,10 @@ export { writeRefereeNarrativeForMatch } from './api/refereeNarrativeWriter';
 // Factory functions for building well-shaped `entities`/`entity_traits`/
 // `entity_relationships` insert rows. The shapes mirror the seed migration
 // (0002_entities.sql) exactly so runtime code and seed data stay in sync.
+//
+// Phase 6 factories (0062–0064) cover the expanded world-building graph:
+// political parties, politicians, officials associations, managing staff,
+// social media platforms, sports writers, stadiums, and training facilities.
 export {
   STRENGTH_MAX,
   STRENGTH_MIN,
@@ -83,13 +87,21 @@ export {
   createEntity,
   createJournalistEntity,
   createManagerEntity,
+  createManagingStaffEntity,
   createMediaCompanyEntity,
   createMutualRelationship,
+  createOfficialsAssociationEntity,
   createPlayerEntity,
+  createPoliticalPartyEntity,
+  createPoliticianEntity,
   createPunditEntity,
   createRefereeEntity,
   createRelationship,
+  createSocialMediaEntity,
+  createSportsWriterEntity,
+  createStadiumEntity,
   createTrait,
+  createTrainingFacilityEntity,
   createTraits,
 } from './logic/entityFactory';
 export type {

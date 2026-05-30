@@ -44,7 +44,16 @@ export type EntityKind =
   // team-to-team rivalries + player→team affiliations.  Click resolution
   // walks the entity's meta.team_id slug, not the entity uuid (see
   // entityRoute.ts).
-  | 'team';
+  | 'team'
+  // Phase 6 world-building entities — seeded in migrations 0062–0064.
+  | 'political_party'
+  | 'politician'
+  | 'officials_association'
+  | 'managing_staff'
+  | 'social_media'
+  | 'sports_writer'
+  | 'stadium'
+  | 'training_facility';
 
 /**
  * Core entity row — matches the `entities` table from 0002_entities.sql.
