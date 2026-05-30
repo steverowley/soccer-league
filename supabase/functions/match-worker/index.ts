@@ -49,6 +49,9 @@ import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 // src/features/agents/{api/prepareCorpusForMatch,logic/decisions,
 // logic/resolvers/{shootOrPass,cardSeverity}}.
 import { prepareCorpusForMatch, runDecision } from './agentReflex.ts';
+import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
+import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput } from './spatial/spatialEventAdapter.ts';
+import type { PositionFrame } from './spatial/types.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -63,6 +66,19 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
  * completion is never blocked on this key being present.
  */
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+
+/**
+ * When truthy, the full agent-based spatial simulation (Phase A rebuild)
+ * runs instead of `simulateFullMatch`.  The spatial engine emits real
+ * per-second (x,y) position frames and derives match events from geometry
+ * (ball crossing goal line, tackle distance, etc.) rather than probability
+ * rolls.  All downstream code — Architect interference, event persistence,
+ * player-stat rows — is unchanged because `adaptSpatialResult` emits the
+ * same `{ events, finalScore, mvp, playerStats }` shape.
+ *
+ * Set to 'true' in the Supabase Function environment to enable.
+ */
+const USE_SPATIAL_ENGINE = Deno.env.get('USE_SPATIAL_ENGINE') === 'true';
 
 const MATCH_BATCH_SIZE = 5;          // Fetch up to 5 due matches per invocation
 const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
@@ -169,7 +185,10 @@ async function fetchTeamForSimulation(teamId: string) {
     // which in turn picked a random `planet` and therefore the wrong
     // PLANET_WX table — every weather-keyed mechanic was running off the
     // wrong distribution.
-    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
+    // `preferred_formation` on the manager row is read by `toSpatialTeamInput`
+    // to assign each player to their correct formation slot (e.g. '4-4-2').
+    // The legacy `normalizeTeamForEngine` path ignores it safely.
+    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id, preferred_formation), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
     .eq('id', teamId)
     .single();
 
@@ -491,15 +510,77 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn('[match-worker] reflex corpus hydration threw:', (err as Error)?.message ?? err);
     }
 
-    // Simulate the full 90 minutes.  `refOverride` is the isl-84e wiring —
-    // passes the assigned referee's identity (incl. entity_id) into
-    // createAIManager so the Phase 8 card_severity resolver can find
-    // the referee persona.  `null` (no referee assigned to this match)
-    // falls back to a random fabricated official with `entity_id: null`.
-    // `reflexHooks` (isl-5kx) supplies the in-match shoot_or_pass +
-    // card_severity dispatcher; null falls back to legacy stat-driven
-    // decisions inside gameEngine.
-    const result = simulateFullMatch(home, away, fanBoost, architect, reflexHooks, refOverride);
+    // ── Simulation dispatch ────────────────────────────────────────────────
+    // Two engine paths share all downstream code (Architect interference,
+    // event persist, stat rows) because both emit the same result shape:
+    //   { events, finalScore, mvp, playerStats }
+    //
+    // PATH A — spatial engine (USE_SPATIAL_ENGINE=true)
+    //   Full agent-based simulation: 22 autonomous players with Reynolds
+    //   steering behaviours, formation slots, and possession physics.
+    //   Events (goals, tackles, saves) emerge from geometry rather than
+    //   probability rolls.  Returns real per-player (x,y) frames stored in
+    //   `match_positions` for the high-res pitch viewer.
+    //
+    // PATH B — legacy dice-roller (USE_SPATIAL_ENGINE=false / default)
+    //   `simulateFullMatch` wrapping `genEvent` probability rolls with
+    //   Architect + reflex-hook wiring.  `refOverride` passes the assigned
+    //   referee identity; `reflexHooks` powers the Phase 8 shoot_or_pass /
+    //   card_severity resolvers.  `null` on either falls back gracefully.
+    //
+    // `result` is mutable because Architect interference may reassign
+    // `result.events` and `result.finalScore` further down this function.
+    // eslint-disable-next-line prefer-const
+    let result: ReturnType<typeof simulateFullMatch>;
+    // Position frames collected from the spatial engine; empty for Path B.
+    let positionFrames: PositionFrame[] = [];
+
+    if (USE_SPATIAL_ENGINE) {
+      // Convert raw DB rows to the typed input the spatial engine expects.
+      const homeInput = toSpatialTeamInput(homeData);
+      const awayInput = toSpatialTeamInput(awayData);
+
+      // Derive a deterministic 32-bit seed from the first 8 hex chars of the
+      // match UUID.  Same match_id → identical simulation outcome on every
+      // worker retry, which is the spatial engine's equivalent of the legacy
+      // engine's seeded LCG guarantee.
+      const seed = parseInt(match.id.replace(/-/g, '').slice(0, 8), 16);
+
+      const spatialResult = simulateSpatialMatch(homeInput, awayInput, { seed });
+
+      // Build the id → { name, teamName, side } index the adapter needs to
+      // map spatial player ids back to names (which the worker's playerIndex
+      // join is keyed on downstream).
+      const playerIdx = buildPlayerIndex(homeData, awayData);
+
+      const adapted = adaptSpatialResult(
+        spatialResult,
+        playerIdx,
+        homeData.short_name ?? homeData.name,
+        awayData.short_name ?? awayData.name,
+      );
+      // Cast is safe: AdaptedSpatialResult has the same runtime shape as
+      // SimulatedMatchResult — events, finalScore, mvp, playerStats — and
+      // all downstream consumers treat these fields as `any`.
+      result = adapted as unknown as ReturnType<typeof simulateFullMatch>;
+      positionFrames = spatialResult.frames;
+
+      console.log(
+        `[match-worker] Spatial sim: ${spatialResult.finalScore[0]}–${spatialResult.finalScore[1]}, ` +
+        `${spatialResult.events.length} events, ${positionFrames.length} position frames`,
+      );
+    } else {
+      // PATH B: legacy simulateFullMatch.
+      // `refOverride` is the isl-84e wiring — passes the assigned referee's
+      // identity (incl. entity_id) into createAIManager so the Phase 8
+      // card_severity resolver can find the referee persona.  `null` (no
+      // referee assigned to this match) falls back to a random fabricated
+      // official with `entity_id: null`.
+      // `reflexHooks` (isl-5kx) supplies the in-match shoot_or_pass +
+      // card_severity dispatcher; null falls back to legacy stat-driven
+      // decisions inside gameEngine.
+      result = simulateFullMatch(home, away, fanBoost, architect, reflexHooks, refOverride);
+    }
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
@@ -736,6 +817,52 @@ async function processMatch(match: any): Promise<boolean> {
 
     console.log(`[match-worker] Inserted ${result.events.length} events`);
 
+    // ── Persist spatial position frames ───────────────────────────────────
+    // Only populated when USE_SPATIAL_ENGINE=true.  The frames are written
+    // in the same batch-insert style as events (500 rows/call) and stored in
+    // `match_positions` keyed by (match_id, minute, second).
+    //
+    // Frame → row mapping:
+    //   minute  = floor(tSec / 60) + 1, clamped to [1, 120] (extra time)
+    //   second  = floor(tSec % 60)          — second within the minute
+    //   snapshots.players[].hasBall is derived here (not in PositionFrame)
+    //   by comparing each player id against frame.ball.ownerId.
+    //
+    // Failure is non-fatal: the match is already committed as completed and
+    // position data is cosmetic (viewer only).  A missing frame just means
+    // the viewer interpolates across a wider gap.
+    if (positionFrames.length > 0) {
+      const posRows = positionFrames.map((frame) => {
+        const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
+        const second = Math.floor(frame.tSec % 60);
+        return {
+          match_id:  match.id,
+          minute,
+          second,
+          snapshots: {
+            players: frame.players.map((p) => ({
+              id:      p.id,
+              x:       p.x,
+              y:       p.y,
+              hasBall: frame.ball.ownerId === p.id,
+            })),
+            ball: frame.ball,
+          },
+        };
+      });
+
+      for (let i = 0; i < posRows.length; i += EVENT_INSERT_BATCH_SIZE) {
+        const chunk = posRows.slice(i, i + EVENT_INSERT_BATCH_SIZE);
+        const { error: posErr } = await supabase.from('match_positions').insert(chunk);
+        if (posErr) {
+          // Non-fatal: log and continue — position data is cosmetic.
+          console.warn(`[match-worker] match_positions insert failed: ${posErr.message}`);
+          break;
+        }
+      }
+      console.log(`[match-worker] Persisted ${posRows.length} position frames`);
+    }
+
     // ── Persist per-player stats ───────────────────────────────────────────
     // The engine returns playerStats keyed by player *name*; the DB table
     // match_player_stats is keyed by player_id (uuid) + team_id (slug).
@@ -945,6 +1072,9 @@ async function processMatch(match: any): Promise<boolean> {
     // this attempt left behind before flipping status back to 'scheduled'.
     await supabase.from('match_events').delete().eq('match_id', match.id);
     await supabase.from('match_player_stats').delete().eq('match_id', match.id);
+    // Spatial position frames are cosmetic but must be cleaned up too so a
+    // retry doesn't hit the (match_id, minute, second) primary-key conflict.
+    await supabase.from('match_positions').delete().eq('match_id', match.id);
 
     // Revert status so another worker (or next cron invocation) will retry.
     // We don't throw — the worker must process the rest of the batch even
