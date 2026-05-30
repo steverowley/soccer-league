@@ -50,6 +50,8 @@ import {
   PitchView,
   type MatchEventRow,
 } from '../features/match';
+import { getMatchPositions, type PositionSnapshot } from '../features/match/api/matchPositions';
+import { useSpatialPlayback } from '../features/match/ui/useSpatialPlayback';
 import TeachingStrip from '../components/TeachingStrip';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -1589,29 +1591,42 @@ function MatchPitchPanel({
     awayPlayers:   [],
   });
 
+  // ── Spatial position data (isl-phase5) ────────────────────────────────
+  // Pre-loaded from `match_positions` when the spatial engine ran.  Empty
+  // array means "legacy match" — the choreography hook drives positions
+  // instead.  `scheduledAt` is the real-time pacing anchor shared with
+  // LiveCommentary; `useSpatialPlayback` uses it to derive elapsed game
+  // seconds and advance through the frame array at 1× speed.
+  const [positionFrames, setPositionFrames] = useState<PositionSnapshot[]>([]);
+  const [scheduledAt,   setScheduledAt]    = useState<string | null>(null);
+
   // ── Initial fetch ─────────────────────────────────────────────────────
-  // Two queries in parallel: the match row (for team short_names + the
-  // manager formation + roster + colour each PitchView dot needs) and
-  // the full event log.  Errors are logged + swallowed — the rest-
-  // state PitchView is a usable fallback and there's no need to
-  // surface a separate error chrome here.
+  // Three queries in parallel: the match row (formation + roster + colour),
+  // the full event log, and the spatial position snapshots.  All errors
+  // are logged + swallowed — the rest-state PitchView is a usable fallback
+  // and position data being absent just means we fall back to choreography.
   useEffect(() => {
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: clear stale events before re-fetching for the new matchId
     setEvents([]);
+    setPositionFrames([]);
+    setScheduledAt(null);
     Promise.all([
       getMatch(db, matchId),
       getMatchEvents(db, matchId),
+      getMatchPositions(db, matchId),
     ])
-      .then(([m, evRows]) => {
+      .then(([m, evRows, posRows]) => {
         if (cancelled) return;
         setEvents(evRows);
+        setPositionFrames(posRows);
 
         // Narrow the loose getMatch return into the per-side shape
         // PitchView consumes.  Each branch is independently optional
         // so a half-joined row (e.g. RLS strips one column) still
         // produces a renderable rest state instead of throwing.
         const matchRow = (m ?? {}) as {
+          scheduled_at?: string | null;
           home_team?: {
             short_name?: string | null;
             color?:      string | null;
@@ -1639,6 +1654,7 @@ function MatchPitchPanel({
         const homePlayers = pickStartingXI(homeTeam?.players ?? []);
         const awayPlayers = pickStartingXI(awayTeam?.players ?? []);
 
+        setScheduledAt(matchRow.scheduled_at ?? null);
         setMeta({
           homeShort:     homeTeam?.short_name ?? null,
           awayShort:     awayTeam?.short_name ?? null,
@@ -1656,6 +1672,14 @@ function MatchPitchPanel({
       });
     return () => { cancelled = true; };
   }, [db, matchId]);
+
+  // ── Spatial playback (isl-phase5) ─────────────────────────────────────
+  // Drives real agent-simulation positions when `positionFrames` is
+  // populated (i.e., the spatial engine ran for this match).  When
+  // `active` is false (legacy match or frames not yet loaded), the
+  // choreography hook inside PitchView drives positions instead — no
+  // conditional hook calls needed, we simply omit the override props.
+  const spatial = useSpatialPlayback(positionFrames, scheduledAt);
 
   // ── Realtime subscription ──────────────────────────────────────────────
   // Same channel the commentary feed subscribes to.  Supabase multiplexes
@@ -1699,6 +1723,19 @@ function MatchPitchPanel({
       {...(awayTeamName !== undefined && { awayTeamName })}
       {...(homeScore    !== undefined && { homeScore })}
       {...(awayScore    !== undefined && { awayScore })}
+      // ── Spatial overrides (isl-phase5) ──────────────────────────────
+      // When the spatial engine ran for this match, `spatial.active`
+      // is true once the frame array is loaded and the match clock is
+      // live.  Passing the overrides replaces PitchView's synthetic
+      // event-choreography positions with real agent-simulation
+      // positions for every player + the ball.  When `active` is
+      // false (legacy match or frames not yet arrived) these props are
+      // omitted entirely so PitchView falls back to its choreography
+      // hook — no visible difference for the viewer.
+      {...(spatial.active && {
+        positionOverrides: spatial.playerOverrides,
+        ballOverride:      spatial.ballOverride,
+      })}
     />
   );
 }

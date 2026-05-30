@@ -174,6 +174,25 @@ export interface PitchViewProps {
   homeScore?:    number;
   awayTeamName?: string;
   awayScore?:    number;
+  /**
+   * When present, overrides the choreography-hook position for each player,
+   * keyed by player id.  Values are normalised to [0, 1] (the same space the
+   * choreography hook produces — 0 = home goal line / top touchline, 1 = away
+   * goal / bottom touchline).  Used by the spatial engine playback path
+   * (`useSpatialPlayback`) to show real agent-simulation positions instead of
+   * synthetic event-driven choreography.
+   *
+   * Players NOT present in the map fall back to their choreography position,
+   * so a partial override (e.g. only the ball carrier's position is known) is
+   * safe to pass.
+   */
+  positionOverrides?: ReadonlyMap<string, { x: number; y: number }>;
+  /**
+   * When present, overrides the ball position rendered by the SVG layer.
+   * Normalised to [0, 1] (same convention as `positionOverrides`).
+   * Ignored when null.
+   */
+  ballOverride?: { x: number; y: number; ownerId: string | null } | null;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -209,6 +228,8 @@ export function PitchView({
   homeScore,
   awayTeamName,
   awayScore,
+  positionOverrides,
+  ballOverride,
 }: PitchViewProps = {}) {
   // ── Container-width tracking (isl-7rh mobile polish) ────────────────
   // Measures the wrapper div via ResizeObserver so we can drop the
@@ -478,8 +499,17 @@ export function PitchView({
             const fallbackFill = p.side === 'home' ? COLORS.dust : COLORS.quantum;
             const fill =
               (p.side === 'home' ? homeTeamColor : awayTeamColor) ?? fallbackFill;
-            const cx = p.x * PITCH_VIEWBOX_WIDTH;
-            const cy = p.y * PITCH_VIEWBOX_HEIGHT;
+            // ── Spatial override (isl-phase5) ──────────────────────────────
+            // When the spatial engine ran, `positionOverrides` carries real
+            // agent-simulation positions keyed by player id.  We prefer the
+            // override over the choreography hook's synthetic position.
+            // Players absent from the map (e.g. if a frame predates a sub)
+            // fall back to the choreography position so no dot disappears.
+            const overridePos = positionOverrides?.get(p.id);
+            const effectiveX = overridePos ? overridePos.x : p.x;
+            const effectiveY = overridePos ? overridePos.y : p.y;
+            const cx = effectiveX * PITCH_VIEWBOX_WIDTH;
+            const cy = effectiveY * PITCH_VIEWBOX_HEIGHT;
             return (
               <g key={p.id} style={{ transition: dotTransition }}>
                 {/* GK ring — rendered FIRST so the dot fill paints
@@ -562,10 +592,15 @@ export function PitchView({
           {/* Ball: astro orange so it's the visually loudest dot on the
               surface and the eye immediately catches its position.
               Same CSS transition as the players keeps the motion arc
-              in sync visually. */}
+              in sync visually.
+              ── Spatial override (isl-phase5) ──────────────────────
+              When `ballOverride` is set the spatial engine's real ball
+              position is used instead of the choreography hook's
+              synthetic estimate.  Both use [0, 1] normalised coords so
+              the multiply-by-viewBox logic is identical. */}
           <circle
-            cx={state.ball.x * PITCH_VIEWBOX_WIDTH}
-            cy={state.ball.y * PITCH_VIEWBOX_HEIGHT}
+            cx={(ballOverride ? ballOverride.x : state.ball.x) * PITCH_VIEWBOX_WIDTH}
+            cy={(ballOverride ? ballOverride.y : state.ball.y) * PITCH_VIEWBOX_HEIGHT}
             r={BALL_RADIUS}
             fill={COLORS.astro}
             stroke={COLORS.abyss}
