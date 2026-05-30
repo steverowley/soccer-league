@@ -33,6 +33,11 @@ const NAV_LINKS = [
   // but seen through the betting + idol-score views combined on one page.
   { label: 'Boards',  to: '/leaderboards' },
   { label: 'Voting',  to: '/voting'  },
+  // World (Galaxy Atlas) — entity browser for the Phase 6 world-building
+  // graph.  Surfaces politicians, media companies, stadiums, officials, and
+  // their relationship web.  Lives between Voting and the auth CTA so it
+  // reads as "depth content" rather than a primary match/standings page.
+  { label: 'World',   to: '/world'   },
   // Roadmap is admin-only now and reached via /admin's tabbed nav.  It's
   // intentionally absent from this public NAV strip so non-admins don't
   // see an Access Denied surface when they click it.
