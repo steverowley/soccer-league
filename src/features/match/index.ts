@@ -218,6 +218,16 @@ export type {
   MatchEventRow,
 } from './api/matchEvents';
 
+// ── Spatial position playback (isl-phase5) ────────────────────────────────
+// API read + React hook for replaying real agent-simulation positions in
+// <PitchView>.  `getMatchPositions` fetches the pre-computed frames from
+// `match_positions`; `useSpatialPlayback` converts them into per-tick
+// normalised overrides keyed by player id.
+export { getMatchPositions } from './api/matchPositions';
+export type { PositionSnapshot } from './api/matchPositions';
+export { useSpatialPlayback } from './ui/useSpatialPlayback';
+export type { SpatialPlaybackResult, NormalisedPosition } from './ui/useSpatialPlayback';
+
 // ── Per-player surfaces (powers /players/:playerId) ───────────────────────
 // Recent appearances + narrative mentions for the Player Detail page.
 // Pulled into the feature barrel so the page (and any future surface
