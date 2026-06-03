@@ -56,6 +56,13 @@ concurrency:
 
 jobs:
   deploy:
+    # Production guardrail: only ever deploy from main.  workflow_dispatch lets
+    # the caller choose any branch or tag, and this job deploys whatever ref it
+    # runs on to the hard-coded production Supabase project — so without this
+    # gate, dispatching from a feature branch would publish unmerged worker
+    # code to prod.  The push trigger is already main-only; this guards the
+    # manual/API path too.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
