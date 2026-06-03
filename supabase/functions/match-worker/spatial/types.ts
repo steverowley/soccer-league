@@ -11,7 +11,7 @@
 //   y ∈ [0,  68]  pitch width.   0 = top touchline, 68 = bottom touchline.
 //   All distances metres, all speeds metres/second, all times seconds.
 
-import type { Vec2 } from './vec2';
+import type { Vec2 } from './vec2.ts';
 
 // ── Pitch geometry ────────────────────────────────────────────────────────────
 
