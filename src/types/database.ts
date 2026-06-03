@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletions: {
+        Row: {
+          deleted_at: string
+          deleted_user_id: string
+          deleted_username: string
+          id: string
+          vote_count: number
+          wager_count: number
+        }
+        Insert: {
+          deleted_at?: string
+          deleted_user_id: string
+          deleted_username: string
+          id?: string
+          vote_count: number
+          wager_count: number
+        }
+        Update: {
+          deleted_at?: string
+          deleted_user_id?: string
+          deleted_username?: string
+          id?: string
+          vote_count?: number
+          wager_count?: number
+        }
+        Relationships: []
+      }
       agent_runs: {
         Row: {
           cache_create_tokens: number
@@ -664,21 +691,21 @@ export type Database = {
           credits_spent: number
           focus_option_id: string
           id: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           credits_spent: number
           focus_option_id: string
           id?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           credits_spent?: number
           focus_option_id?: string
           id?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1833,7 +1860,9 @@ export type Database = {
           location: string | null
           name: string
           short_name: string | null
+          stadium_entity_id: string | null
           tagline: string | null
+          training_facility_entity_id: string | null
         }
         Insert: {
           capacity?: string | null
@@ -1846,7 +1875,9 @@ export type Database = {
           location?: string | null
           name: string
           short_name?: string | null
+          stadium_entity_id?: string | null
           tagline?: string | null
+          training_facility_entity_id?: string | null
         }
         Update: {
           capacity?: string | null
@@ -1859,7 +1890,9 @@ export type Database = {
           location?: string | null
           name?: string
           short_name?: string | null
+          stadium_entity_id?: string | null
           tagline?: string | null
+          training_facility_entity_id?: string | null
         }
         Relationships: [
           {
@@ -1876,6 +1909,20 @@ export type Database = {
             referencedRelation: "leagues"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "teams_stadium_entity_id_fkey"
+            columns: ["stadium_entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_training_facility_entity_id_fkey"
+            columns: ["training_facility_entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
         ]
       }
       wagers: {
@@ -1888,7 +1935,7 @@ export type Database = {
           stake: number
           status: string
           team_choice: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1899,7 +1946,7 @@ export type Database = {
           stake: number
           status?: string
           team_choice: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1910,7 +1957,7 @@ export type Database = {
           stake?: number
           status?: string
           team_choice?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -2212,7 +2259,7 @@ export type Database = {
           stake: number
           status: string
           team_choice: string
-          user_id: string
+          user_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -2221,6 +2268,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_account_deletion: { Args: never; Returns: Json }
       settle_wager: {
         Args: { p_payout: number; p_status: string; p_wager_id: string }
         Returns: boolean

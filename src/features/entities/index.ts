@@ -49,6 +49,7 @@ export {
   getEntity,
   getEntityRelationships,
   getEntitiesByIds,
+  listEntities,
 } from './api/relationships';
 
 // ── API — referees (Phase 5a) ──────────────────────────────────────────────

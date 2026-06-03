@@ -151,6 +151,30 @@ const MAX_FOCUS_REACTIONS_PER_TICK = 3;
  */
 const MID_WEEK_INTRUSION_PROB = 0.04;
 
+// ── Phase 6 world-building generators ────────────────────────────────────────
+// These generators use the new entity kinds (political_party, politician,
+// social_media, sports_writer) seeded in migrations 0062–0064 to produce
+// narrative kinds that widen the Galaxy Dispatch beyond pure match commentary.
+
+/**
+ * Per-tick probability of a political decree being issued. At 2-hour cadence,
+ * ~12 ticks/day × 0.20 ≈ 2.4 attempts, clamped by MAX_POLITICAL_DECREES_PER_DAY.
+ * Lower than media_buzz because decrees carry more narrative weight.
+ */
+const POLITICAL_DECREE_PROB = 0.20;
+
+/**
+ * Per-tick probability of a social_media buzz piece being generated.
+ * Slightly higher than decrees — platforms react faster than politicians.
+ */
+const MEDIA_BUZZ_PROB = 0.25;
+
+/** Max political decrees per UTC calendar day. */
+const MAX_POLITICAL_DECREES_PER_DAY = 1;
+
+/** Max media_buzz narratives per UTC calendar day. */
+const MAX_MEDIA_BUZZ_PER_DAY = 1;
+
 /**
  * Minimum days since a team's last architect_interventions row before
  * that team is eligible for another mid-week mutation. 7 days mirrors
@@ -367,6 +391,41 @@ interface InterventionRow {
   created_at: string;
 }
 
+/**
+ * A politician entity row fetched for decree generation.
+ * `meta` carries the fields seeded in migration 0062 — role, party name,
+ * homeworld, and description — so the LLM can produce in-character decrees
+ * without needing a join to the political_party table.
+ */
+interface PoliticianRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  meta: {
+    role: string;
+    party: string;
+    homeworld: string;
+    description: string;
+  };
+}
+
+/**
+ * A social_media platform entity row fetched for media buzz generation.
+ * `format` ('microblog' | 'video' | 'forum') drives the narrative register
+ * so each platform sounds distinct — Stellarverse hot takes feel different
+ * from an OrbNet long thread.
+ */
+interface SocialMediaRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  meta: {
+    format: string;
+    reach: string;
+    description: string;
+  };
+}
+
 // ── Deno runtime handler ────────────────────────────────────────────────────
 
 // @ts-ignore — `Deno` is only present at deploy time.
@@ -437,11 +496,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       priorNarratives,
       todayNarrativeRows,
       interventionRows,
+      politicianRows,
+      socialMediaRows,
     ] = await Promise.all([
-      // Entities that can post: pundits, journalists, the bookie.
+      // Entities that can post entity-narrative kinds.
+      // sports_writer was added in migration 0062 — they generate
+      // 'sports_writer_column' narratives via the same generateEntityNarrative
+      // path as pundits and journalists.
       db.from('entities')
         .select('id, kind, name, display_name')
-        .in('kind', ['pundit', 'journalist', 'bookie'])
+        .in('kind', ['pundit', 'journalist', 'bookie', 'sports_writer'])
         .order('name'),
 
       // Recent completed matches for context.
@@ -474,14 +538,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .select('field, reason, created_at')
         .order('created_at', { ascending: false })
         .limit(COSMIC_DISTURBANCES_LIMIT),
+
+      // Politicians for the political_decree generator (Phase 6).
+      // We fetch all 10 seeded politicians and pick one randomly per tick
+      // so the cast rotates across the feed.
+      db.from('entities')
+        .select('id, name, display_name, meta')
+        .eq('kind', 'politician'),
+
+      // Social media platforms for the media_buzz generator (Phase 6).
+      // Only 3 platforms exist (Stellarverse, CometFeed, OrbNet) but we
+      // query dynamically so future additions are picked up automatically.
+      db.from('entities')
+        .select('id, name, display_name, meta')
+        .eq('kind', 'social_media'),
     ]);
 
-    const entities   = (entityRows.data ?? []) as EntityRow[];
-    const matches    = (matchRows.data ?? []) as MatchRow[];
-    const focuses    = (focusEnactedRows.data ?? []) as FocusEnactedRow[];
-    const priorNarr  = (priorNarratives.data ?? []) as NarrativeRow[];
-    const todayNarr  = (todayNarrativeRows.data ?? []) as Array<{ entities_involved: string[] }>;
+    const entities      = (entityRows.data ?? [])      as EntityRow[];
+    const matches       = (matchRows.data ?? [])        as MatchRow[];
+    const focuses       = (focusEnactedRows.data ?? []) as FocusEnactedRow[];
+    const priorNarr     = (priorNarratives.data ?? [])  as NarrativeRow[];
+    const todayNarr     = (todayNarrativeRows.data ?? []) as Array<{ entities_involved: string[] }>;
     const interventions = (interventionRows.data ?? []) as InterventionRow[];
+    const politicians   = (politicianRows.data ?? [])   as PoliticianRow[];
+    const socialPlatforms = (socialMediaRows.data ?? []) as SocialMediaRow[];
 
     // ── Build per-entity daily post count ────────────────────────────────
     // Count how many times each entity_id appears in today's narratives
@@ -849,6 +929,73 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
+    // ── Political decree (Phase 6) ────────────────────────────────────────
+    // A randomly-selected politician issues a brief public statement about
+    // something happening in the league. Rolls POLITICAL_DECREE_PROB per
+    // tick, capped at MAX_POLITICAL_DECREES_PER_DAY so the feed isn't
+    // flooded with political commentary.
+    //
+    // We use the same `todayWithKind` slice used by the Voices checks above
+    // so the daily cap is consistent without an extra DB round-trip.
+    const politicalDecreeTodayCount = todayWithKind.filter(
+      (n) => n.kind === 'political_decree',
+    ).length;
+
+    if (
+      politicians.length > 0 &&
+      politicalDecreeTodayCount < MAX_POLITICAL_DECREES_PER_DAY &&
+      Math.random() < POLITICAL_DECREE_PROB
+    ) {
+      const politician = pickRandom(politicians);
+      const decree = await generatePoliticalDecree(anthropic, politician, redactedMatches, priorNarr);
+      if (decree) {
+        const { error, data } = await db.from('narratives').insert({
+          kind:              'political_decree',
+          summary:           decree,
+          entities_involved: [politician.id],
+          source:            'scheduled',
+        }).select();
+        if (error) {
+          console.warn('[galaxy-tick] political decree insert failed:', error.message);
+        } else {
+          allInserted.push(...(data ?? []));
+        }
+      }
+    }
+
+    // ── Media buzz (Phase 6) ──────────────────────────────────────────────
+    // A social media platform amplifies something that happened recently —
+    // a match result, a rumour, a player moment. The platform's `format`
+    // (microblog/video/forum) shapes the register so Stellarverse reads like
+    // hot takes and OrbNet reads like a long thread.
+    //
+    // Cap: MAX_MEDIA_BUZZ_PER_DAY per UTC day, gate: MEDIA_BUZZ_PROB per tick.
+    const mediaBuzzTodayCount = todayWithKind.filter(
+      (n) => n.kind === 'media_buzz',
+    ).length;
+
+    if (
+      socialPlatforms.length > 0 &&
+      mediaBuzzTodayCount < MAX_MEDIA_BUZZ_PER_DAY &&
+      Math.random() < MEDIA_BUZZ_PROB
+    ) {
+      const platform = pickRandom(socialPlatforms);
+      const buzz = await generateMediaBuzz(anthropic, platform, redactedMatches, priorNarr);
+      if (buzz) {
+        const { error, data } = await db.from('narratives').insert({
+          kind:              'media_buzz',
+          summary:           buzz,
+          entities_involved: [platform.id],
+          source:            'scheduled',
+        }).select();
+        if (error) {
+          console.warn('[galaxy-tick] media buzz insert failed:', error.message);
+        } else {
+          allInserted.push(...(data ?? []));
+        }
+      }
+    }
+
     return json({
       ok: true,
       todayKey,
@@ -870,10 +1017,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
  */
 function narrativeKindForEntityKind(entityKind: string): string {
   switch (entityKind) {
-    case 'pundit':     return 'pundit_takes';
-    case 'journalist': return 'journalist_report';
-    case 'bookie':     return 'bookie_update';
-    default:           return 'news';
+    case 'pundit':        return 'pundit_takes';
+    case 'journalist':    return 'journalist_report';
+    case 'bookie':        return 'bookie_update';
+    case 'sports_writer': return 'sports_writer_column';
+    default:              return 'news';
   }
 }
 
@@ -1186,6 +1334,152 @@ Write one Architect whisper reacting to this choice. Plain text only.`;
     return text.trim() || null;
   } catch (err) {
     console.warn('[generateFocusReaction] failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Generate one in-character political decree from a randomly-selected
+ * politician entity (seeded in migration 0062).
+ *
+ * Decrees are brief, self-important public statements that blend soccer
+ * commentary with in-world political posturing. They are meant to make the
+ * galaxy feel larger than the pitch — politics cares about the league, but
+ * the league does not necessarily care about politics.
+ *
+ * Design intent:
+ *   - The politician's `role`, `party`, and `homeworld` contextualise the
+ *     statement so each voice sounds distinct (a Cloud Prefect speaks
+ *     differently from a Congress Chair).
+ *   - Recent match results are provided in redacted form so the decree can
+ *     reference them without exposing raw scores.
+ *   - Prior narratives are provided so Claude avoids repeating recent themes.
+ *
+ * @param anthropic  Anthropic SDK client (already initialised with API key).
+ * @param politician The PoliticianRow selected for this tick.
+ * @param matches    Redacted recent match results (qualitative, no numbers).
+ * @param priorNarr  Recent narratives for deduplication guidance.
+ * @returns          The decree text (1–3 sentences), or null on any error.
+ */
+async function generatePoliticalDecree(
+  // deno-lint-ignore no-explicit-any
+  anthropic: any,
+  politician: PoliticianRow,
+  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
+  priorNarr: NarrativeRow[],
+): Promise<string | null> {
+  const displayName = politician.display_name ?? politician.name;
+  const { role, party, homeworld, description } = politician.meta;
+
+  const system = `You are ${displayName}, ${role} of the ${party}, representing ${homeworld} in the Intergalactic Soccer League universe.
+
+${description}
+
+RULES (absolute):
+1. NEVER reveal underlying stats, numbers, probabilities, or game mechanics.
+2. 1–3 sentences only. Official, slightly pompous, in-character.
+3. You may reference teams or recent results but only in qualitative terms (never scores).
+4. Output ONLY the decree text. No JSON, no labels, no headers.
+
+TONE: Political officials in the ISL universe treat soccer as a proxy for interplanetary prestige. Your statement should feel like a press release filtered through genuine in-world ideology — concern for your homeworld's clubs, commentary on cosmic governance, self-serving but plausible.`;
+
+  const user = `Recent ISL results (redacted, no raw scores):
+${matches.slice(0, 5).map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
+
+Recent narratives (do NOT repeat these themes):
+${priorNarr.filter((n) => n.kind === 'political_decree').slice(0, 4).map((n) => `• ${n.summary.slice(0, 150)}`).join('\n') || '• (none yet)'}
+
+Issue one brief political decree as ${displayName}. Plain text only.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model:      CLAUDE_MODEL,
+      max_tokens: 250,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    // deno-lint-ignore no-explicit-any
+    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
+    return text.trim() || null;
+  } catch (err) {
+    console.warn('[generatePoliticalDecree] failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Generate one piece of viral media buzz from a randomly-selected
+ * social_media platform entity (seeded in migration 0062).
+ *
+ * Each platform has a distinct `format` field that determines the
+ * narrative register:
+ *   - `microblog`  → hot-take energy, short, punchy, likely inflammatory
+ *                    (Stellarverse / CometFeed)
+ *   - `video`      → thumbnail-bait hook, exclamation-heavy, hype-driven
+ *   - `forum`      → long-form thread energy, more analytical but still
+ *                    opinionated (OrbNet)
+ *
+ * Design intent: The social media layer makes the world feel inhabited.
+ * Fans don't just consume matches — they see how "regular citizens" of the
+ * galaxy react, argue, and memefiy outcomes. The Architect can use this
+ * layer to seed viral rumours (no mechanical effect, but narrative weight).
+ *
+ * @param anthropic Anthropic SDK client (already initialised with API key).
+ * @param platform  The SocialMediaRow selected for this tick.
+ * @param matches   Redacted recent match results (qualitative, no numbers).
+ * @param priorNarr Recent narratives for deduplication guidance.
+ * @returns         The buzz text (1–3 sentences), or null on any error.
+ */
+async function generateMediaBuzz(
+  // deno-lint-ignore no-explicit-any
+  anthropic: any,
+  platform: SocialMediaRow,
+  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
+  priorNarr: NarrativeRow[],
+): Promise<string | null> {
+  const displayName = platform.display_name ?? platform.name;
+  const { format, reach, description } = platform.meta;
+
+  // Each format gets a distinct writing register so platforms sound
+  // distinguishable in the feed without requiring per-platform templates.
+  const formatGuide =
+    format === 'microblog'
+      ? 'hot takes, punchy, 1–2 sentences, possibly inflammatory — the kind of post that goes viral for the wrong reasons'
+      : format === 'forum'
+      ? 'long-thread energy condensed into 2–3 sentences — analytical, opinionated, name-drops teams and players freely'
+      : 'video-hook style — exclamation-heavy, YouTube-thumbnail energy, promises something dramatic';
+
+  const system = `You are summarising trending content on ${displayName}, a ${format} platform in the Intergalactic Soccer League universe.
+
+${description}
+Platform reach: ${reach}.
+
+RULES (absolute):
+1. NEVER reveal underlying stats, numbers, probabilities, or game mechanics.
+2. Write as a narrator describing what is trending ON the platform — not as a single user, but as the voice of the crowd.
+3. ${formatGuide}
+4. Output ONLY the buzz summary. No JSON, no labels.`;
+
+  const user = `Recent ISL results (redacted, no raw scores):
+${matches.slice(0, 5).map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
+
+Recent narratives (do NOT repeat these themes):
+${priorNarr.filter((n) => n.kind === 'media_buzz').slice(0, 4).map((n) => `• ${n.summary.slice(0, 150)}`).join('\n') || '• (none yet)'}
+
+Write one trending ${format} buzz summary from ${displayName}. Plain text only.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model:      CLAUDE_MODEL,
+      max_tokens: 250,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    // deno-lint-ignore no-explicit-any
+    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
+    return text.trim() || null;
+  } catch (err) {
+    console.warn('[generateMediaBuzz] failed:', err);
     return null;
   }
 }

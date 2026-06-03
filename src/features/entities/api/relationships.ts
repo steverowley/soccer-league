@@ -209,6 +209,65 @@ export async function getEntityRelationships(
   return merged;
 }
 
+// ── listEntities ─────────────────────────────────────────────────────────────
+
+/**
+ * List entities, optionally filtered to a set of kinds.
+ *
+ * Used by the Galaxy Atlas (World page) to populate the browseable entity
+ * directory.  Alphabetical order keeps the list predictable and diffable
+ * across renders — the page doesn't need recency ordering here.
+ *
+ * WHY a separate function from getEntitiesByIds
+ *   `getEntitiesByIds` takes an explicit list of known UUIDs — it's a bulk
+ *   hydration tool for the subgraph renderer, not a discovery tool.
+ *   `listEntities` is a discovery tool: "give me all politicians" or "give me
+ *   the first 200 entities".  The different intent and pagination needs
+ *   justify a focused helper rather than stretching the existing one.
+ *
+ * @param db     Injected Supabase client.
+ * @param kinds  Optional filter — only return entities whose `kind` is in this
+ *               array.  Omit (or pass an empty array) to return all kinds up
+ *               to `limit`.
+ * @param limit  Maximum rows to return.  Default 200 — the full ISL entity
+ *               graph is currently well under this cap; bump if future phases
+ *               add many more entities.
+ * @returns      Validated Entity rows sorted by name.  Empty on error.
+ */
+export async function listEntities(
+  db:     IslSupabaseClient,
+  kinds?: string[],
+  limit = 200,
+): Promise<Entity[]> {
+  let q = db
+    .from('entities')
+    .select('id, kind, name, display_name, meta, created_at')
+    .order('name', { ascending: true })
+    .limit(limit);
+
+  if (kinds && kinds.length > 0) {
+    q = q.in('kind', kinds);
+  }
+
+  const { data, error } = await q;
+  if (error) {
+    console.warn('[listEntities] failed:', error.message);
+    return [];
+  }
+
+  const validated: Entity[] = [];
+  for (const row of data ?? []) {
+    const parsed = EntityRowSchema.safeParse(row);
+    if (!parsed.success) {
+      console.warn('[listEntities] dropped invalid row:', parsed.error.message);
+      continue;
+    }
+    const e = toEntity(parsed.data);
+    if (e) validated.push(e);
+  }
+  return validated;
+}
+
 // ── getEntitiesByIds ─────────────────────────────────────────────────────────
 
 /**

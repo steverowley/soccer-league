@@ -153,6 +153,10 @@ const WhatIf = lazy(() => import('./pages/WhatIf'));
 // only; no new tables.
 const Seasons      = lazy(() => import('./pages/Seasons'));
 const SeasonDetail = lazy(() => import('./pages/SeasonDetail'));
+// Galaxy Atlas (Phase 6 world-building) — filterable entity browser with
+// an inline RelationshipGraph panel.  Surfaces the ISL's political actors,
+// media companies, stadiums, and officials without exposing mechanics.
+const World        = lazy(() => import('./pages/World'));
 
 // Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
 // 404.html redirects to the root and stores the original path in sessionStorage.
@@ -351,6 +355,13 @@ createRoot(document.getElementById('root')!).render(
                   for any entity (player, ref, journalist, planet, …).
                   No raw stats exposed — text only. */}
               <Route path="entities/:entityId"  element={<EntityDetail />} />
+
+              {/* /world — Galaxy Atlas (Phase 6 world-building).
+                  Filterable entity browser — politicians, media companies,
+                  stadiums, officials, and more.  Selecting an entity surfaces
+                  its relationship graph inline; "View full profile" links to
+                  /entities/:id.  No raw stats exposed (hidden mechanics). */}
+              <Route path="world"               element={<World />} />
 
               {/* /admin/what-if — Phase 12 alternate-timeline viewer.
                   Admin-gated client-side; service-role RLS gates the
