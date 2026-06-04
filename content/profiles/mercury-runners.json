@@ -1,0 +1,80 @@
+{
+  "team_id": "mercury-runners",
+  "team": {
+    "date_founded": "Founded by shift-workers on the sun-scorched first colony, who played in the brief shadow of dawn.",
+    "fans_nickname": "The Sunchasers",
+    "number_of_fans": "Around 14 million, fierce and few, baked hard by their home star.",
+    "badge": "A silver runner mid-stride across a blazing solar disc, heat-lines trailing behind.",
+    "home_kit": "Bronze and white with a shimmering heat-haze pattern across the shoulders.",
+    "away_kit": "Deep solar-flare orange fading to black, like the terminator line of their world.",
+    "third_kit": "Mirror-silver, designed to throw back the light — and dazzle opponents.",
+    "history": "Mercury Runners are built on one thing: speed. The closest club to the sun plays the fastest football in the system, pressing opponents into mistakes and breaking before they can blink. They have never been the richest, but on a good day no one can live with them.",
+    "club_culture": "Frantic, fearless, and proudly scrappy. The Sunchasers believe tempo is a weapon and rest is for the dead.",
+    "political_leaning": "Frontier-independent. A hard outpost that resents being told anything by the comfortable inner worlds.",
+    "trophy_cabinet": ["A handful of giant-killing cup runs that live long in the memory"],
+    "legends": ["Solene 'Quicksilver' Vex — the fastest player ever recorded in the inner system"],
+    "achievements": ["Holds the league's fastest goal from kickoff"]
+  },
+  "stadium": {
+    "date_built": "Carved into a shaded crater wall during the colony's first expansion.",
+    "sponsors": "Powered and named by the solar-harvest combines that keep the colony alive.",
+    "pitch_size": "Long and wide — built to give the Runners room to sprint.",
+    "pitch_type": "Heat-resistant synthetic weave that stays playable as the temperature swings.",
+    "stand_names": ["The Quicksilver Stand", "The Dawn End", "The Furnace"],
+    "bio": "The Heat Box earns its name: visiting players describe legs of lead and lungs of fire by the hour mark. The Runners, raised on it, only get faster."
+  },
+  "training_facility": {
+    "date_built": "A modern, climate-sealed complex — the club's single biggest investment.",
+    "sponsors": "Funded by the colony's pride as much as its solar-combine money.",
+    "bio": "The Sunrunner Training Complex is an elite sprint laboratory disguised as a football ground. Everything here is measured in fractions of a second; the Runners' entire identity is forged on its tracks."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human (Mercury-adapted)",
+    "age": 44,
+    "nationality": "Mercurian",
+    "appearance": "Compact and electric, never still on the touchline, eyes hidden behind a permanent visor against the glare.",
+    "bio": "Solano Vex is pace incarnate — a former flying winger who now demands her teams play the way she ran. Her high-pressing system is exhausting to play against and, frankly, to play in, but it has embarrassed far grander clubs.",
+    "personality": "Restless, intense, and impatient with anything slow.",
+    "playing_history": "A blistering winger for the Runners in her day, briefly the quickest in the league.",
+    "playing_philosophy": "Win the ball high, score before they breathe, never let the game slow down.",
+    "political_leaning": "Frontier-independent to her bones.",
+    "culture": "A Mercurian who believes her hard little world is owed nothing and fears no one.",
+    "achievements": ["Masterminded several famous cup upsets of inner-system giants"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Male",
+      "race": "Human (Mercury-adapted)",
+      "age": 39,
+      "nationality": "Mercurian",
+      "appearance": "Lithe and twitchy, stopwatch in hand, talks as fast as his players run.",
+      "bio": "Cress Voltan obsesses over the first three steps of every sprint. He has turned acceleration into a science and the Runners' press into an art.",
+      "personality": "Hyperactive and precise; lives in milliseconds.",
+      "playing_history": "A sprinter who came to football from the running track.",
+      "playing_philosophy": "The game is won in the first stride. Everything after is just finishing.",
+      "political_leaning": "Frontier-independent.",
+      "culture": "The high priest of pace.",
+      "achievements": ["Built the conditioning behind the league's fastest press"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Sharp and alert, a sweeper-keeper who starts every counter.", "bio": "Blaze Corsen is the launchpad for the Runners' breaks — a keeper who clears his lines before opponents have reorganised. Balanced and brave off his line.", "personality": "Composed and proactive.", "political_leaning": "Frontier-independent.", "culture": "The first link in the fast chain.", "achievements": ["Most assists by a goalkeeper in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Female", "race": "Human (Mercury-adapted)", "appearance": "All elbows and acceleration, a full-back who overlaps relentlessly.", "bio": "Flare Nakamura presses higher than some forwards and runs the right flank into the ground. Aggression is her whole game.", "personality": "Fiery and tireless.", "political_leaning": "Frontier-independent.", "culture": "The wide pressing engine.", "achievements": ["Crowd favourite for her relentless running"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Female", "race": "Human (Mercury-adapted)", "appearance": "Quick and selfless, the manager's younger sister and quietest disciple.", "bio": "Solara Vex carries the family name and the family pace, but none of the swagger — a team-first defender who covers every gap the press leaves behind.", "personality": "Selfless and dutiful; lives in her sister's shadow without complaint.", "political_leaning": "Frontier-independent.", "culture": "The loyal lieutenant.", "achievements": ["Ever-present at the back"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Balanced and fast-recovering, the safety net behind the press.", "bio": "Cinder Kato is the cool head who sweeps up when the high line is beaten, fast enough to make recovery runs others can only dream of.", "personality": "Level-headed and rapid.", "political_leaning": "Frontier-independent.", "culture": "The last fast retreat.", "achievements": ["Fewest beaten one-on-ones in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Older, lean, and weathered, the veteran organiser of a young, breathless side.", "bio": "Torch Hadley is the workhorse who holds the back line's shape while everyone ahead of him sprints. The Runners' press only works because he never stops covering.", "personality": "Tireless and vocal; the senior voice.", "political_leaning": "Frontier-independent.", "culture": "The steadying veteran.", "achievements": ["Long-serving defensive leader"], "injuries": "Manages tired legs but rarely rests." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Bright-eyed and inventive, the rare slow-down button in a fast side.", "bio": "Prism Osei is the creative heart who decides when the chaos becomes a chance. He sees the killer pass the instant the press wins the ball.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The brain behind the speed.", "achievements": ["Most chances created in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Compact and relentless, the ball-winner who never tires.", "bio": "Flint Reyes is the press made flesh — first to every loose ball, balanced enough to keep it once he's won it.", "personality": "Balanced and indefatigable.", "political_leaning": "Frontier-independent.", "culture": "The engine room.", "achievements": ["Most recoveries in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Female", "race": "Human (Mercury-adapted)", "appearance": "Tidy and team-minded, the glue of the midfield three.", "bio": "Vela Cruz does the selfless work that lets Osei create and Reyes hunt — the unfussy passer who keeps the tempo lethal.", "personality": "Selfless and consistent.", "political_leaning": "Frontier-independent.", "culture": "The quiet connector.", "achievements": ["Highest pass volume in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Whip-thin and twitchy, perpetually poised to dart in behind.", "bio": "Nova Hashimoto is the selfish, electric finisher the whole system feeds. Give him a yard and he is gone; give him a chance and he scores.", "personality": "Selfish and lightning-quick.", "political_leaning": "Indifferent.", "culture": "The point of the spear.", "achievements": ["Club's top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Balanced and busy, links the press to the finish.", "bio": "Scorch Lindqvist is the all-rounder who turns turnovers into shots, equally happy to score or set up Hashimoto.", "personality": "Composed and unselfish.", "political_leaning": "Frontier-independent.", "culture": "The complete forward.", "achievements": ["Most combined goals and assists"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Broad-shouldered and direct, the workhorse on the left.", "bio": "Ember Kosi runs the channel raw, harrying defenders for ninety minutes so the quicker men can punish the tired.", "personality": "Relentless and humble.", "political_leaning": "Frontier-independent.", "culture": "The honest grafter.", "achievements": ["Most pressures applied in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Older and steady, the calm deputy in goal.", "bio": "Crest Fontaine is the cautious veteran keeper who keeps the young Corsen sharp and rarely lets the side down when called.", "personality": "Cautious and dependable.", "political_leaning": "Frontier-independent.", "culture": "The patient backup.", "achievements": ["Years of loyal deputy service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Young and rapid, learning to harness his speed.", "bio": "Glow Petrov is an academy full-back with frightening pace and a defender's lessons still to learn. Balanced and eager.", "personality": "Keen and coachable.", "political_leaning": "Frontier-independent.", "culture": "The bright prospect.", "achievements": ["Fast-tracked from the youth side"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Heavy-footed for a Runner, the squad's reluctant trainer.", "bio": "Lumen Diaz has the talent to start but not the legs for the press, kept on for the slower games his guile can still win.", "personality": "Laid-back; conserves energy.", "political_leaning": "Cynical.", "culture": "The mismatched veteran.", "achievements": ["A cup-run hero in years past"], "injuries": "Fully fit, but ill-suited to the high tempo." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Slight and inventive, an academy playmaker in waiting.", "bio": "Spark Tanaka is the creative deputy who can change a slow game, a youngster whose imagination outstrips his consistency.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Mercury-adapted)", "appearance": "Lean and hungry, sprints like the manager once did.", "bio": "Pyro Okafor is the teenage striker with the colony dreaming again — fast, selfish, and desperate to be the next Quicksilver.", "personality": "Selfish and burning to prove himself.", "political_leaning": "Indifferent.", "culture": "The next great hope.", "achievements": ["Youngest scorer in recent club memory"], "injuries": "Fully fit." }
+  ]
+}

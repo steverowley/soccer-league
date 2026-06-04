@@ -1,0 +1,80 @@
+{
+  "team_id": "olympus-mons",
+  "team": {
+    "date_founded": "Established by the highland settlements on the slopes of the great volcano, in the shadow of the system's tallest peak.",
+    "fans_nickname": "The Mountain",
+    "number_of_fans": "Around 38 million, a vast and demanding Martian following used to looking down on everyone.",
+    "badge": "A golden volcano crowned with a single star, rising above a band of red.",
+    "home_kit": "Deep crimson with gold trim and a stylised summit climbing the shirt.",
+    "away_kit": "Gold with crimson shoulders, worn like a statement of intent.",
+    "third_kit": "Slate-grey with a gold summit-line — the colour of the high rock.",
+    "history": "Olympus Mons are Martian aristocracy. From their towering home they have looked down on the rest of the planet for generations, winning with sheer physical dominance — they out-jump, out-muscle, and out-last almost everyone. Beloved at home, resented everywhere else, they wear the arrogance of altitude.",
+    "club_culture": "Imperious and grand. The Mountain expects to win, and treats a draw as a minor humiliation.",
+    "political_leaning": "Martian establishment grandee — the club of the planet's old money and its proudest institutions.",
+    "trophy_cabinet": ["Multiple Martian-era league titles", "Celestial Cup pedigree", "The fullest trophy room on Mars"],
+    "legends": ["Goliath Renn — the towering striker who scored more headers than anyone in league history"],
+    "achievements": ["Record aerial-goal tally across the leagues", "Longest unbeaten home run on Mars"]
+  },
+  "stadium": {
+    "date_built": "A legendary old ground, expanded over generations into a cathedral on the slope.",
+    "sponsors": "Adorned with the crests of Mars's oldest and richest houses.",
+    "pitch_size": "Full size, with the highest crossbar tolerances in the league for the aerial game.",
+    "pitch_type": "Pristine managed turf, kept immaculate as a point of pride.",
+    "stand_names": ["The Summit Stand", "The Renn End", "The Highland Terrace", "The Caldera Gallery"],
+    "bio": "Limeil Stadium — The Mountain — is one of the great venues of the system, a steep, looming bowl where the crowd seems to hang directly over the pitch. Few away sides leave with their dignity, let alone points."
+  },
+  "training_facility": {
+    "date_built": "An elite, purpose-built performance centre high on the volcano's flank.",
+    "sponsors": "Lavishly funded by the club's blue-blooded backers.",
+    "bio": "The High Peak Performance Centre trains players in thin highland air, so they arrive at lower grounds with lungs to spare. It is as much a statement of wealth as a training ground."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Mars-adapted)",
+    "age": 56,
+    "nationality": "Martian",
+    "appearance": "Tall, silver-maned, and immaculately dressed, with the bearing of a man who expects to be obeyed.",
+    "bio": "Caldera Osei is Martian football royalty — a manager of grand reputation who plays direct, dominant football and makes no apology for it. He believes in getting the ball forward and winning the second ball, and he has the trophies to argue the point.",
+    "personality": "Imperious and exacting; carries himself like a head of state.",
+    "playing_history": "A commanding centre-forward in his playing days, a terror in the air.",
+    "playing_philosophy": "Get it forward, win it back higher, and overpower them. Subtlety is for clubs without our resources.",
+    "political_leaning": "Martian establishment to the core.",
+    "culture": "The proud custodian of the planet's grandest club.",
+    "achievements": ["Multiple major honours as player and manager"]
+  },
+  "managing_staff": [
+    {
+      "role": "fitness_coach",
+      "gender": "Female",
+      "race": "Human (Mars-adapted)",
+      "age": 43,
+      "nationality": "Martian",
+      "appearance": "Trim and exacting, with the bearing of an athlete who never quite stopped competing.",
+      "bio": "Ira Shen built the altitude-conditioning program that lets Olympus Mons run grander clubs into the ground in the final twenty minutes. The thin-air edge is her doing.",
+      "personality": "Disciplined and demanding; tolerates no shortcuts.",
+      "playing_history": "A former highland endurance athlete turned conditioning specialist.",
+      "playing_philosophy": "Win the last twenty minutes and you win the match. Fitness is dominance made physical.",
+      "political_leaning": "Martian establishment.",
+      "culture": "The architect of the altitude advantage.",
+      "achievements": ["Built the league's strongest late-game fitness record"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Towering and commanding, dominates his box like a landlord.", "bio": "Apex Voss is a giant keeper who owns every cross that enters his area — fitting, for the most aerial side in the league. Balanced and authoritative.", "personality": "Composed and dominant.", "political_leaning": "Martian establishment.", "culture": "The master of his box.", "achievements": ["Most claimed crosses in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Broad and bullish, attacks every header like a duel of honour.", "bio": "Caldera Nkosi is an aggressive full-back who relishes the physical battle and wins more aerial duels than most centre-backs.", "personality": "Aggressive and combative.", "political_leaning": "Martian establishment.", "culture": "The enforcer on the flank.", "achievements": ["Most aerial duels won by a full-back"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Female", "race": "Human (Mars-adapted)", "appearance": "Tall and tireless, a tower at the back.", "bio": "Summit Ivanova is the workhorse colossus of the defence, a relentless presence who heads away everything the opposition dares to loft.", "personality": "Tireless and uncompromising.", "political_leaning": "Martian establishment.", "culture": "The wall.", "achievements": ["Most clearances in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Imposing yet team-minded, leads the line of giants.", "bio": "Ridge Okonkwo organises the towering back four with selfless authority, the calm captain of a side built on power.", "personality": "Selfless and commanding.", "political_leaning": "Martian establishment.", "culture": "The defensive captain.", "achievements": ["Club captain"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Veteran and vast, a fixture at the heart of defence.", "bio": "Plateau Walsh is the balanced old head who anchors the giants, reading the game so his power is rarely even needed.", "personality": "Composed and experienced.", "political_leaning": "Martian establishment.", "culture": "The seasoned anchor.", "achievements": ["Hundreds of appearances"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Slighter than his teammates, the rare craftsman in a side of bruisers.", "bio": "Vent Suzuki is the creative spark who delivers the crosses the giants devour — the system's brain among its brawn.", "personality": "Creative and precise.", "political_leaning": "Cosmopolitan.", "culture": "The supply line.", "achievements": ["Most assists from set pieces"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Tall and willing, a midfielder who covers the artist.", "bio": "Flow Ferreira does the selfless running that frees Suzuki to create, winning second balls and recycling possession high up the pitch.", "personality": "Selfless and industrious.", "political_leaning": "Martian establishment.", "culture": "The dutiful runner.", "achievements": ["Most second balls won"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Balanced and strong, the midfield's quiet metronome.", "bio": "Magma Park keeps the direct game from becoming aimless, the composed passer who picks the right long ball at the right moment.", "personality": "Balanced and unhurried.", "political_leaning": "Martian establishment.", "culture": "The tempo-setter.", "achievements": ["Most accurate long passer in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Enormous and predatory, a throwback target man.", "bio": "Crater Mensah is the selfish, towering spearhead the whole system serves — a classic number nine who lives to bury headers.", "personality": "Selfish and clinical in the air.", "political_leaning": "Indifferent.", "culture": "The aerial king.", "achievements": ["Club top scorer, most goals with the head"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Powerful and relentless, the second striker who never rests.", "bio": "Shield Petrov is the workhorse forward who batters defences alongside Mensah, occupying markers and bullying the back line.", "personality": "Relentless and selfless up top.", "political_leaning": "Martian establishment.", "culture": "The battering ram.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Quick and inventive, the wide outlet who whips in the crosses.", "bio": "Peak Osei is the creative winger feeding the giants, a rapid crosser who turns wide possession into aerial chaos.", "personality": "Creative and direct.", "political_leaning": "Cosmopolitan.", "culture": "The wide supply line.", "achievements": ["Most crosses completed in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Older and watchful, the steady deputy keeper.", "bio": "Crust Yamamoto is the cautious veteran who guards the net when Voss rests, dependable on the rare day he is needed.", "personality": "Cautious and reliable.", "political_leaning": "Martian establishment.", "culture": "The patient understudy.", "achievements": ["Long deputy service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Tall and raw, an academy giant still growing.", "bio": "Flow Dubois is the balanced young defender being moulded into the next Olympus colossus, all promise and lessons to come.", "personality": "Eager and coachable.", "political_leaning": "Martian establishment.", "culture": "The towering prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Big-framed and unmotivated, the squad's wasted talent.", "bio": "Pump Rashidi has the physique the club covets and none of the appetite for work, a veteran kept for the games his presence alone can win.", "personality": "Laid-back; coasts on size.", "political_leaning": "Cynical.", "culture": "The cautionary giant.", "achievements": ["A title winner long ago"], "injuries": "Fully fit, slow to recover." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Compact and willing, the selfless squad midfielder.", "bio": "Fissure Kim is the dependable deputy who keeps the engine room running when the starters rest, never flashy, never a problem.", "personality": "Team-first and steady.", "political_leaning": "Martian establishment.", "culture": "The rotation man.", "achievements": ["Reliable squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Lanky and intense, a teenage striker already taller than most defenders.", "bio": "Dome Aziz is the academy prodigy the Mountain is grooming to inherit Mensah's crown — selfish, gifted, and dangerously confident for his years.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The heir apparent.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

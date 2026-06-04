@@ -1,0 +1,80 @@
+{
+  "team_id": "valles-mariners",
+  "team": {
+    "date_founded": "Founded by the canyon-dwelling communities of the great Martian rift, who played their first matches on the trench floor.",
+    "fans_nickname": "The Canyoneers",
+    "number_of_fans": "Around 28 million patient Martians who appreciate a well-worked goal over a scrambled one.",
+    "badge": "A deep canyon cleaving a red plateau, a thin river of silver at its base.",
+    "home_kit": "Burnt-orange and brown with a canyon-stratum banding across the shirt.",
+    "away_kit": "Sandstone cream with brown trim and a thin silver rift line.",
+    "third_kit": "Deep canyon-shadow purple, worn under floodlights.",
+    "history": "Valles Mariners are the thinking person's Martian club — patient, technical, and devoted to keeping the ball. While their rivals bludgeon, the Canyoneers pass, building moves as slowly and inexorably as their canyon was carved. It is football as geology.",
+    "club_culture": "Cerebral, patient, and quietly superior. The Canyoneers believe possession is a kind of meditation.",
+    "political_leaning": "Martian regionalist-technocrat — proud of their rift, sceptical of grand planetary politics.",
+    "trophy_cabinet": ["A cultured collection of cups won the hard, patient way"],
+    "legends": ["Strato Vire — the midfield maestro who could keep the ball for whole halves"],
+    "achievements": ["Highest average possession in the league, season after season"]
+  },
+  "stadium": {
+    "date_built": "Built into the canyon wall itself, with stands stacked up the rift face.",
+    "sponsors": "Backed by the rift's geological survey consortia and water-mining guilds.",
+    "pitch_size": "Generously wide to reward patient circulation and positional play.",
+    "pitch_type": "Smooth, true synthetic turf, kept fast for crisp passing.",
+    "stand_names": ["The Vire Stand", "The Rift End", "The Strata Terrace"],
+    "bio": "The Trench is an extraordinary venue, the pitch sunk deep into the canyon with fans climbing the rift walls above. The acoustics turn a slow passing move into a hypnotic, building roar."
+  },
+  "training_facility": {
+    "date_built": "A professional complex carved into a sheltered side-canyon.",
+    "sponsors": "Maintained by the same guilds that fill the stands.",
+    "bio": "The Canyon Drills Complex is obsessive about one thing: keeping the ball. Rondos, positional grids, and passing patterns fill every session. Players who can't pass under pressure don't last."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Mars-adapted)",
+    "age": 50,
+    "nationality": "Martian",
+    "appearance": "Lean and contemplative, often pausing mid-sentence to watch a passing move unfold in his head.",
+    "bio": "Rift Nkosi is a possession purist on a planet that prefers muscle, and he is faintly proud of being the odd one out. His Valles sides keep the ball with monastic discipline and pick opponents apart at their own unhurried pace.",
+    "personality": "Patient, cerebral, and quietly contrarian.",
+    "playing_history": "A deep-lying playmaker who orchestrated games at a walking pace.",
+    "playing_philosophy": "The ball is the only thing that doesn't tire. Keep it, move it, and let the opponent exhaust themselves chasing.",
+    "political_leaning": "Martian regionalist-technocrat.",
+    "culture": "An intellectual in a planet of pragmatists.",
+    "achievements": ["Built the league's most distinctive possession side"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Female",
+      "race": "Human (Mars-adapted)",
+      "age": 42,
+      "nationality": "Martian",
+      "appearance": "Precise and unhurried, sketches passing diagrams in the dust during breaks.",
+      "bio": "Lore Castillo runs the possession drills that make the Valles system tick, fanatical about spacing and the angle of every pass. Nkosi designs the philosophy; she enforces it metre by metre.",
+      "personality": "Exacting and methodical; obsessed with positioning.",
+      "playing_history": "A technical midfielder turned coaching perfectionist.",
+      "playing_philosophy": "Possession is geometry. Stand in the right place and the pass appears.",
+      "political_leaning": "Martian regionalist-technocrat.",
+      "culture": "The enforcer of the passing creed.",
+      "achievements": ["Built the drills behind the league's best possession numbers"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Composed and tidy, a keeper comfortable as an extra outfielder.", "bio": "Canyon Reyes is the calm last passer in the chain, a balanced keeper trusted to start every patient build-up from the back.", "personality": "Composed and assured with the ball.", "political_leaning": "Martian regionalist.", "culture": "The first passer.", "achievements": ["Highest passing accuracy by a keeper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Sharp and combative, the rare aggressor in a patient side.", "bio": "Gorge Bauer brings bite to the Canyoneers, an aggressive full-back who wins the ball back so the artists can keep it.", "personality": "Aggressive and committed.", "political_leaning": "Martian regionalist.", "culture": "The ball-winner.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Veteran and steady, the workhorse who holds the shape.", "bio": "Valley Petrov is the experienced defender who does the patient covering work that lets Valles commit numbers to possession.", "personality": "Tireless and reliable.", "political_leaning": "Martian regionalist.", "culture": "The steady anchor.", "achievements": ["Long-serving defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Balanced and calm, a centre-back who passes like a midfielder.", "bio": "Trench Yamada is the composed defender at the base of the build-up, as comfortable threading a pass as making a tackle.", "personality": "Calm and technical.", "political_leaning": "Martian regionalist-technocrat.", "culture": "The ball-playing defender.", "achievements": ["Most progressive passes by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Thoughtful and unhurried, the selfless defensive organiser.", "bio": "Rift Diallo is the team-first defender who keeps the line patient and disciplined, never lured into the chaos opponents crave.", "personality": "Selfless and disciplined.", "political_leaning": "Martian regionalist.", "culture": "The patient organiser.", "achievements": ["Fewest rash challenges in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Slight and elegant, the conductor of the canyon orchestra.", "bio": "Abyss Nakamura is the creative maestro who decides the rhythm of every Valles attack, capable of keeping the ball until an opening simply appears.", "personality": "Creative and serene.", "political_leaning": "Martian regionalist-technocrat.", "culture": "The maestro.", "achievements": ["Most touches and chances created in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Compact and willing, the selfless legs of the midfield.", "bio": "Gully Santos is the team-first shuttler who covers the ground the artists won't, keeping the possession machine balanced.", "personality": "Selfless and industrious.", "political_leaning": "Martian regionalist.", "culture": "The tireless link.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Balanced and neat, the dependable midfield pivot.", "bio": "Chasm Okafor is the composed pivot who keeps the ball circulating, the unflashy heartbeat of the patient system.", "personality": "Balanced and unhurried.", "political_leaning": "Martian regionalist.", "culture": "The heartbeat.", "achievements": ["Highest pass completion in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Patient and predatory, a striker who waits for the perfect ball.", "bio": "Depth Kim is the selfish finisher who lives off the chances the patient build-up eventually carves out, clinical when the moment finally arrives.", "personality": "Selfish and cold-blooded.", "political_leaning": "Indifferent.", "culture": "The patient predator.", "achievements": ["Best chance-conversion rate in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Hardworking and mobile, the running forward in a slow side.", "bio": "Mesa Cruz is the workhorse striker who stretches defences so the possession has somewhere to go, the selfless movement behind the patience.", "personality": "Relentless and unselfish.", "political_leaning": "Martian regionalist.", "culture": "The willing runner.", "achievements": ["Most off-ball runs in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Balanced and tidy, a forward who keeps the move alive.", "bio": "Plateau Mensah is the composed forward who can drop in and pass as readily as finish, perfectly suited to the canyon game.", "personality": "Composed and team-minded.", "political_leaning": "Martian regionalist.", "culture": "The link forward.", "achievements": ["Most link-up passes in the final third"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Basin Volkov is the cautious veteran second keeper, comfortable on the ball and dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Martian regionalist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Young and balanced, an academy defender learning the system.", "bio": "Silt Ferreira is the promising young defender absorbing the club's passing principles, calm and quick to learn.", "personality": "Composed and coachable.", "political_leaning": "Martian regionalist.", "culture": "The rising defender.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Unhurried to a fault, the squad's resident coaster.", "bio": "Ravine Osei has the touch the system loves and none of the work-rate it demands, a veteran kept for the slow games his guile suits.", "personality": "Laid-back; coasts.", "political_leaning": "Cynical.", "culture": "The gifted idler.", "achievements": ["A cultured talent never fully realised"], "injuries": "Fully fit, slow to recover." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Compact and willing, the selfless squad midfielder.", "bio": "Flood Walsh is the dependable deputy who keeps the possession ticking when the starters rest, tidy and unobtrusive.", "personality": "Team-first and reliable.", "political_leaning": "Martian regionalist.", "culture": "The reliable understudy.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Lean and eager, an academy striker hungry to start.", "bio": "Erosion Park is the teenage forward pushing for a place, a selfish finisher learning to fit his ambition into the patient system.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The impatient prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

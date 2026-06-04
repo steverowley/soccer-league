@@ -1,0 +1,80 @@
+{
+  "team_id": "terra-nova",
+  "team": {
+    "date_founded": "A relatively young Earth club, founded on an idealistic charter to grow its own talent rather than buy it.",
+    "fans_nickname": "The Greenshoots",
+    "number_of_fans": "Around 26 million, young and hopeful, drawn by the club's romance.",
+    "badge": "A green sprout breaking through cracked earth toward a rising sun.",
+    "home_kit": "Fresh leaf-green with white sleeves and a sprouting-seedling motif at the heart.",
+    "away_kit": "White with green trim and a single green seedling on the chest.",
+    "third_kit": "Earthy brown-and-green, like soil ready to grow.",
+    "history": "Terra Nova are football's idealists — a club that believes in building, not buying. They throw their academy graduates into attacking, fearless football and accept the defeats that come with youth, trusting that the harvest will be worth it. Neutrals adore them; the establishment finds them naive.",
+    "club_culture": "Romantic, attacking, and patient with youth. Terra Nova would rather lose four-three with kids than win one-nil with mercenaries.",
+    "political_leaning": "Progressive idealist — a club that votes with its conscience and wears it proudly.",
+    "trophy_cabinet": ["No major silverware yet, but a youth-cup pedigree the giants envy"],
+    "legends": ["Marisol Vant — the academy's first true star, sold for a fortune that built the club"],
+    "achievements": ["Produces more top-flight players than any other academy", "Highest-scoring side in the league most seasons"]
+  },
+  "stadium": {
+    "date_built": "A modern, sunlit ground built with the academy at its centre.",
+    "sponsors": "Backed by sustainable-agriculture concerns sympathetic to the club's ethos.",
+    "pitch_size": "Large and open, built to encourage the expansive, attacking game.",
+    "pitch_type": "Real living grass under managed sunlight — the namesake greenhouse effect.",
+    "stand_names": ["The Seedling Stand", "The Harvest End", "The Academy Terrace"],
+    "bio": "The World Park — The Greenhouse — is bright, open, and forgiving, a stage designed for young players to express themselves. The crowd cheers a brave through-ball as loudly as a goal."
+  },
+  "training_facility": {
+    "date_built": "The beating heart of the club, built before the first team was even competitive.",
+    "sponsors": "Funded by reinvested academy sales, a virtuous cycle the club guards fiercely.",
+    "bio": "The Greenhouse Performance Centre is where Terra Nova's whole philosophy lives. More money goes here than into transfers, and every coach is judged on the players they raise, not the matches they win."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human",
+    "age": 45,
+    "nationality": "Earthian",
+    "appearance": "Boyish and animated, in tracksuit more often than a suit, always closest to the youngest players.",
+    "bio": "Dominic Harrow is a true believer — a coach who would rather develop a teenager than sign a star. His attacking, offensive football is thrilling and fragile in equal measure, and he wouldn't have it any other way.",
+    "personality": "Optimistic, nurturing, and stubbornly principled.",
+    "playing_history": "A modest attacking midfielder whose career was ended early by injury, turning him to coaching young.",
+    "playing_philosophy": "Attack, express, and trust the kids. Goals conceded are the price of goals scored.",
+    "political_leaning": "Progressive idealist.",
+    "culture": "A teacher first and a manager second.",
+    "achievements": ["Developed a generation of stars now scattered across the leagues"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Female",
+      "race": "Human",
+      "age": 38,
+      "nationality": "Earthian",
+      "appearance": "Warm and watchful, the first face every academy graduate trusts.",
+      "bio": "Seren Bright is the bridge between the academy and the first team, the one who decides when a teenager is ready and protects them when they aren't. Harrow's vision runs on her judgement.",
+      "personality": "Nurturing but clear-eyed; protective of the young.",
+      "playing_history": "A former youth-international who chose coaching over a fading playing career.",
+      "playing_philosophy": "A young player thrown in too early is a talent wasted; timing is everything.",
+      "political_leaning": "Progressive idealist.",
+      "culture": "The guardian of the next generation.",
+      "achievements": ["Integrated dozens of academy players into the senior side"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human", "appearance": "Young and assured, a modern ball-playing keeper.", "bio": "Pioneer Reyes is the composed last line who starts the attacks, comfortable with the ball at his feet in a side that loves to play out. Balanced and brave.", "personality": "Composed and proactive.", "political_leaning": "Progressive.", "culture": "The academy's pride in goal.", "achievements": ["Youngest first-choice keeper in club history"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human", "appearance": "Energetic and willing, an overlapping full-back.", "bio": "Colony Bauer is the selfless full-back who joins every attack and sprints back for every counter, the engine of the right flank.", "personality": "Selfless and tireless.", "political_leaning": "Progressive.", "culture": "The flying full-back.", "achievements": ["Most attacking-third touches by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human", "appearance": "Sturdy and dependable, the workhorse of a leaky defence.", "bio": "Frontier Walsh does the thankless defensive grafting that keeps Terra Nova's attacking gambles from collapsing entirely.", "personality": "Tireless and uncomplaining.", "political_leaning": "Progressive.", "culture": "The unsung defender.", "achievements": ["Most clearances in a young back line"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human", "appearance": "Balanced and calm, the senior head among kids.", "bio": "Settler Yildiz is the rare experienced presence at the back, the steadying influence Harrow leans on to shepherd the youngsters.", "personality": "Calm and composed.", "political_leaning": "Progressive.", "culture": "The defensive mentor.", "achievements": ["Club's defensive elder statesman"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human", "appearance": "Combative and physical, the bite in a gentle side.", "bio": "Habitat Park is the aggressive centre-back who supplies the steel Terra Nova's romantics often lack, relishing the dirty work.", "personality": "Aggressive and committed.", "political_leaning": "Progressive.", "culture": "The enforcer.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human", "appearance": "Graceful and inventive, the jewel of the academy.", "bio": "Genesis Okafor is the creative prodigy the whole club is built around — a playmaker of rare vision who makes the attacking philosophy sing.", "personality": "Creative and fearless.", "political_leaning": "Progressive idealist.", "culture": "The crown jewel.", "achievements": ["Youngest player to lead the league in assists"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human", "appearance": "Industrious and selfless, the balance behind the artists.", "bio": "Origin Moreau is the team-first midfielder who covers for the attacking gambles around him, the quiet sacrifice the system needs.", "personality": "Selfless and diligent.", "political_leaning": "Progressive.", "culture": "The shield.", "achievements": ["Most defensive recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human", "appearance": "Balanced and tidy, the metronome of a frantic side.", "bio": "Epoch Santos brings order to Terra Nova's chaos, the composed passer who links defence to a hungry, sprinting attack.", "personality": "Balanced and measured.", "political_leaning": "Progressive.", "culture": "The calm in the storm.", "achievements": ["Highest pass volume in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human", "appearance": "Sharp and hungry, a young striker with a killer instinct.", "bio": "Horizon Kim is the selfish, gifted finisher Terra Nova will one day sell for a fortune — a teenager who already scores like a veteran.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The next big sale.", "achievements": ["Club top scorer at a remarkably young age"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human", "appearance": "Strong and relentless, the running heart of the attack.", "bio": "Drift Bergmann is the workhorse forward who presses, runs, and creates space for Kim, the selfless foil to the finisher.", "personality": "Relentless and humble.", "political_leaning": "Progressive.", "culture": "The honest runner.", "achievements": ["Most attacking pressures applied"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human", "appearance": "Quick and inventive, a winger full of tricks.", "bio": "Pulse Nkosi is the creative wide threat who turns the academy's attacking dreams into chances, fearless in the one-on-one.", "personality": "Creative and daring.", "political_leaning": "Progressive.", "culture": "The flair on the flank.", "achievements": ["Most successful dribbles in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Vault Schneider is the cautious veteran second keeper, a settling presence behind a young first choice.", "personality": "Cautious and steady.", "political_leaning": "Progressive.", "culture": "The patient deputy.", "achievements": ["Reliable backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Core Petrov is the promising young defender being eased into the side, calm beyond his years and a future regular.", "personality": "Composed and coachable.", "political_leaning": "Progressive.", "culture": "The rising defender.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human", "appearance": "Languid and unbothered, the rare cynic in an idealistic dressing room.", "bio": "Dome Rashidi is the gifted veteran whose appetite faded young, an odd fit in a club of believers, kept for his experience.", "personality": "Laid-back; coasts.", "political_leaning": "Cynical.", "culture": "The outlier.", "achievements": ["A talent that never fully delivered"], "injuries": "Fully fit, slow to recover." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human", "appearance": "Compact and willing, a selfless squad midfielder.", "bio": "Signal Hayashi is the dependable academy product who fills in across midfield without complaint, the reliable next man up.", "personality": "Team-first and steady.", "political_leaning": "Progressive.", "culture": "The dependable graduate.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human", "appearance": "Lean and eager, an academy striker brimming with confidence.", "bio": "Crux Amara is the latest jewel off the academy line, a selfish young forward already being talked about across the leagues.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The next prodigy.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}
