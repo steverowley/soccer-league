@@ -46,7 +46,7 @@ export interface SpatialTeamInput {
 export const DEFAULT_CONFIG: SimConfig = {
   dtSec:         0.1,        // 10 Hz physics
   matchSeconds:  90 * 60,    // full regulation match
-  frameEverySec: 0.5,        // 2 frames/sec stored for replay
+  frameEverySec: 2,          // 1 frame / 2s — match_positions PK is whole-second (match_id,minute,second)
   seed:          1,
 };
 
