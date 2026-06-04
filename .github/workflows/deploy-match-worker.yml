@@ -74,6 +74,13 @@ jobs:
           # Pin to the version validated against this function's bundle.
           version: 2.104.0
 
+      - name: Set USE_SPATIAL_ENGINE secret
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase secrets set USE_SPATIAL_ENGINE=true \
+            --project-ref ddtpbipkqamuxnvupddc
+
       - name: Deploy match-worker
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
