@@ -1709,22 +1709,32 @@ function MatchPitchPanel({
   // there is no Realtime channel for `match_positions`.  So a viewer who
   // opened the match BEFORE kickoff got an empty array from the initial fetch
   // and would otherwise watch the choreography fallback for the whole match.
-  // Poll for the frames once kickoff has passed and we're still inside the
-  // live pacing window, stopping the instant they land — or when the window
-  // closes, so a legacy match (which never gets frames) doesn't poll forever.
+  //
+  // The effect's deps don't change as the wall clock crosses kickoff, so the
+  // polling loop has to schedule ITSELF to begin at kickoff — we must not poll
+  // (or, worse, stop) before then.  Three wall-clock cases when the effect
+  // mounts: (a) past the window → nothing to recover, bail; (b) before kickoff
+  // → defer the start with a single setTimeout so we don't spin pre-kickoff;
+  // (c) already in-window → start immediately.  Once started, poll every 5s
+  // until the frames land or the window closes (a legacy match never gets
+  // frames, so the window-close guard stops it polling forever).
   useEffect(() => {
     if (positionFrames.length > 0 || !scheduledAt) return undefined;
     const kickoffMs = new Date(scheduledAt).getTime();
     if (Number.isNaN(kickoffMs)) return undefined;
+    const windowEndMs = kickoffMs + duration * 1000;
 
     let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const stop = () => { if (timer !== null) { clearInterval(timer); timer = null; } };
+    let interval:     ReturnType<typeof setInterval> | null = null;
+    let startTimeout: ReturnType<typeof setTimeout>  | null = null;
+    const stop = () => {
+      if (interval     !== null) { clearInterval(interval);  interval = null; }
+      if (startTimeout !== null) { clearTimeout(startTimeout); startTimeout = null; }
+    };
 
     const poll = () => {
-      const now = Date.now();
-      // Only worth polling between kickoff and the close of the pacing window.
-      if (now < kickoffMs || now >= kickoffMs + duration * 1000) { stop(); return; }
+      // Window closed → give up (covers legacy matches that never get frames).
+      if (Date.now() >= windowEndMs) { stop(); return; }
       getMatchPositions(db, matchId)
         .then((rows) => {
           if (cancelled || rows.length === 0) return;
@@ -1734,10 +1744,22 @@ function MatchPitchPanel({
         .catch(() => { /* transient — the next tick retries */ });
     };
 
-    poll();
     // 5s cadence: the worker lands frames within ~90s of kickoff, so a handful
     // of polls covers it without hammering the table.
-    timer = setInterval(poll, 5000);
+    const begin = () => {
+      if (cancelled || Date.now() >= windowEndMs) return;
+      poll();
+      interval = setInterval(poll, 5000);
+    };
+
+    const now = Date.now();
+    if (now >= windowEndMs) {
+      return undefined;                                // window already closed
+    } else if (now < kickoffMs) {
+      startTimeout = setTimeout(begin, kickoffMs - now); // defer until kickoff
+    } else {
+      begin();                                         // already in-window
+    }
     return () => { cancelled = true; stop(); };
   }, [db, matchId, scheduledAt, duration, positionFrames.length]);
 
