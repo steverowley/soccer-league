@@ -794,8 +794,11 @@ function humaniseKind(kind: string): string {
  * POSITIONING LOGIC
  * -----------------
  * The panel defaults to the right of the node with a small upward offset.
- * Two flips prevent it from escaping the wrapper:
+ * Three guards prevent it from escaping the wrapper:
  *   • Horizontal flip  — if right edge exceeds container width, place left.
+ *   • Left-edge clamp  — after a flip, Math.max(MARGIN, x) so a narrow
+ *                        container (< ~260 px) never pushes the panel off
+ *                        the left edge.
  *   • Vertical clamp   — pin to top/bottom margin if the panel would clip.
  * SVG node coordinates equal CSS pixel offsets within the `position: relative`
  * wrapper, so no coordinate-space conversion is needed.
@@ -849,14 +852,16 @@ function NodeTooltip({
   let x = nodeX + nodeRadius + TOOLTIP_GAP;
   let y = nodeY - 32; // -32 aligns the panel header near the node centre
 
-  // Horizontal flip: if the panel's right edge exceeds the container,
-  // place it to the LEFT of the node instead.
-  if (x + TOOLTIP_WIDTH > containerWidth - 8) {
-    x = nodeX - nodeRadius - TOOLTIP_GAP - TOOLTIP_WIDTH;
-  }
-
-  // Vertical clamp: keep a 8 px margin from top and bottom edges.
+  // Horizontal flip + left-edge clamp.
+  // If the right edge overflows the container, place the panel LEFT of the
+  // node.  Then clamp to MARGIN so a narrow container (e.g. 300 px, node at
+  // x=150) doesn't produce a negative x that hides the panel off-screen.
+  // Example: 300 px wide, nodeX=150 → unguarded = 150−8−14−228 = −100;
+  //          clamped → MARGIN (8 px).
   const MARGIN = 8;
+  if (x + TOOLTIP_WIDTH > containerWidth - MARGIN) {
+    x = Math.max(MARGIN, nodeX - nodeRadius - TOOLTIP_GAP - TOOLTIP_WIDTH);
+  }
   if (y < MARGIN) y = MARGIN;
   if (y + TOOLTIP_HEIGHT_EST > containerHeight - MARGIN) {
     y = containerHeight - TOOLTIP_HEIGHT_EST - MARGIN;
