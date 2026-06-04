@@ -209,6 +209,118 @@ export async function getEntityRelationships(
   return merged;
 }
 
+// ── getRelationshipsForIds ─────────────────────────────────────────────────────
+
+/**
+ * Fetch every relationship touching ANY of the given entity ids — both
+ * directions.  The batched cousin of {@link getEntityRelationships}: instead
+ * of one seed, it unions the edges of a whole set of entities in a single
+ * pair of round-trips.  Used to pull the SECOND hop of a neighbourhood (the
+ * edges of the seed's direct neighbours) without N separate queries.
+ *
+ * Implementation mirrors `getEntityRelationships`: an outgoing `.in('from_id',…)`
+ * and an incoming `.in('to_id',…)` merged + deduped in memory.  Empty input
+ * short-circuits so PostgREST never sees an `id=in.()` URL.
+ *
+ * @param db   Injected Supabase client.
+ * @param ids  Entity UUIDs whose edges to collect (deduped internally).
+ * @returns    All edges where any id is `from_id` OR `to_id`, validated and
+ *             deduped by (from_id, to_id, kind).  Empty on empty input / error.
+ */
+export async function getRelationshipsForIds(
+  db:  IslSupabaseClient,
+  ids: readonly string[],
+): Promise<EntityRelationship[]> {
+  if (ids.length === 0) return [];
+  const unique = Array.from(new Set(ids));
+
+  const [outRes, inRes] = await Promise.all([
+    db.from('entity_relationships')
+      .select('from_id, to_id, kind, strength, meta')
+      .in('from_id', unique),
+    db.from('entity_relationships')
+      .select('from_id, to_id, kind, strength, meta')
+      .in('to_id', unique),
+  ]);
+
+  if (outRes.error) {
+    console.warn('[getRelationshipsForIds] outgoing failed:', outRes.error.message);
+  }
+  if (inRes.error) {
+    console.warn('[getRelationshipsForIds] incoming failed:', inRes.error.message);
+  }
+
+  const seen = new Set<string>();
+  const merged: EntityRelationship[] = [];
+  for (const row of [...(outRes.data ?? []), ...(inRes.data ?? [])]) {
+    const parsed = RelationshipRowSchema.safeParse(row);
+    if (!parsed.success) {
+      console.warn('[getRelationshipsForIds] dropped invalid row:', parsed.error.message);
+      continue;
+    }
+    const r = parsed.data;
+    const pk = `${r.from_id}|${r.to_id}|${r.kind}`;
+    if (seen.has(pk)) continue;
+    seen.add(pk);
+    merged.push(toRelationship(r));
+  }
+  return merged;
+}
+
+// ── getEntityNeighbourhood ─────────────────────────────────────────────────────
+
+/**
+ * Fetch every edge within TWO hops of the seed so the subgraph extractor can
+ * actually render a second layer.
+ *
+ * WHY THIS EXISTS
+ *   `getEntityRelationships` returns only the seed's own edges — a 1-hop star.
+ *   Feeding that to `extractSubgraph(…, { maxHops: 2 })` can never produce a
+ *   second ring, because the seed's neighbours carry no OTHER edges in the
+ *   fetched set: the friends-of-friends simply aren't in the data.  This
+ *   helper does the two waves the graph needs:
+ *     wave 1 — the seed's direct edges (its first-hop neighbours)
+ *     wave 2 — every edge of those neighbours (which surfaces the second hop)
+ *   merged + deduped by the (from_id, to_id, kind) PK.
+ *
+ * The extractor still bounds the final render via `maxNeighbours`; this only
+ * makes the second-hop edges AVAILABLE to walk.
+ *
+ * @param db      Injected Supabase client.
+ * @param seedId  Seed entity UUID at the centre of the neighbourhood.
+ * @returns       All edges within two hops of the seed, deduped.  Falls back
+ *                to just the seed's edges when it has no neighbours.
+ */
+export async function getEntityNeighbourhood(
+  db:     IslSupabaseClient,
+  seedId: string,
+): Promise<EntityRelationship[]> {
+  const firstHop = await getEntityRelationships(db, seedId);
+
+  // Collect the seed's direct neighbours (the "other" endpoint of each edge).
+  const neighbourIds = new Set<string>();
+  for (const e of firstHop) {
+    const other = e.from_id === seedId ? e.to_id : e.from_id;
+    if (other !== seedId) neighbourIds.add(other);
+  }
+  if (neighbourIds.size === 0) return firstHop;
+
+  const secondHop = await getRelationshipsForIds(db, Array.from(neighbourIds));
+
+  // Merge both waves, deduped by PK.  firstHop wins on collisions (identical
+  // rows surface in both waves because a seed↔neighbour edge is also a
+  // neighbour's edge).
+  const seen = new Set<string>();
+  const merged: EntityRelationship[] = [];
+  for (const e of [...firstHop, ...secondHop]) {
+    const pk = `${e.from_id}|${e.to_id}|${e.kind}`;
+    if (seen.has(pk)) continue;
+    seen.add(pk);
+    merged.push(e);
+  }
+  return merged;
+}
+
 // ── listEntities ─────────────────────────────────────────────────────────────
 
 /**

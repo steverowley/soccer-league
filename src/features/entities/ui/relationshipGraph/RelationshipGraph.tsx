@@ -12,8 +12,9 @@
 //
 // INTERNAL DATA FLOW
 //   1. On mount / entityId change: kick off three sequential fetches.
-//      a) `getEntity(seedId)`           — needed for the centre node label
-//      b) `getEntityRelationships(seedId)` — every edge touching the seed
+//      a) `getEntity(seedId)`              — needed for the centre node label
+//      b) `getEntityNeighbourhood(seedId)` — the seed's edges AND its
+//         neighbours' edges (two hops) so the second layer has data to render
 //      c) `buildGraph(edges)` + `extractSubgraph(graph, seedId)` — pure
 //      d) `getEntitiesByIds([...nodeIds])` — hydrate node metadata
 //   2. Hand `nodes` + `edges` to `useForceLayout` which runs d3-force in
@@ -91,7 +92,7 @@ import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
 import {
   getEntitiesByIds,
   getEntity,
-  getEntityRelationships,
+  getEntityNeighbourhood,
 } from '../../api/relationships';
 import { buildGraph } from '../../logic/relationshipGraph';
 import { extractSubgraph } from '../../logic/subgraph';
@@ -316,7 +317,10 @@ export function RelationshipGraph({
           return;
         }
 
-        const edgeRows = await getEntityRelationships(db, entityId);
+        // Two-hop fetch: the seed's edges PLUS its neighbours' edges, so the
+        // extractor below has the friends-of-friends needed to render a real
+        // second layer (a single-hop fetch can only ever yield a 1-hop star).
+        const edgeRows = await getEntityNeighbourhood(db, entityId);
         if (cancelled) return;
 
         // Run the extractor inline here so we know which entity ids

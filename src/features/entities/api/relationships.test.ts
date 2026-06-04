@@ -21,6 +21,8 @@ import type { IslSupabaseClient } from '@shared/supabase/client';
 import {
   getEntity,
   getEntityRelationships,
+  getRelationshipsForIds,
+  getEntityNeighbourhood,
   getEntitiesByIds,
 } from './relationships';
 
@@ -334,5 +336,91 @@ describe('getEntitiesByIds', () => {
       {},
       {},
     ]);
+  });
+});
+
+// ── getRelationshipsForIds ────────────────────────────────────────────────────
+
+describe('getRelationshipsForIds', () => {
+  let mock: ReturnType<typeof makeQueryMock>;
+  beforeEach(() => { mock = makeQueryMock(); });
+
+  it('short-circuits on an empty id list (no DB call)', async () => {
+    const result = await getRelationshipsForIds(mock.db, []);
+    expect(result).toEqual([]);
+    expect(mock.db.from).not.toHaveBeenCalled();
+  });
+
+  it('dedupes input ids before issuing the `in` queries', async () => {
+    mock.queue.push('entity_relationships', []); // outgoing
+    mock.queue.push('entity_relationships', []); // incoming
+    await getRelationshipsForIds(mock.db, ['a', 'a', 'b']);
+    const inCalls = mock.calls.filter(c => c.method === 'in');
+    // Both the from_id and to_id `in` filters receive the deduped id list.
+    expect(inCalls.map(c => c.args[1])).toEqual([['a', 'b'], ['a', 'b']]);
+  });
+
+  it('unions outgoing + incoming edges across the id set, deduped by PK', async () => {
+    mock.queue.push('entity_relationships', [
+      relRow({ from_id: 'a', to_id: 'x', kind: 'friend_of', strength: 40 }),
+    ]);
+    mock.queue.push('entity_relationships', [
+      relRow({ from_id: 'y', to_id: 'b', kind: 'rival', strength: -30 }),
+    ]);
+    const result = await getRelationshipsForIds(mock.db, ['a', 'b']);
+    expect(result.map(r => `${r.from_id}->${r.to_id}:${r.kind}`).sort()).toEqual([
+      'a->x:friend_of',
+      'y->b:rival',
+    ]);
+  });
+});
+
+// ── getEntityNeighbourhood ────────────────────────────────────────────────────
+
+describe('getEntityNeighbourhood', () => {
+  let mock: ReturnType<typeof makeQueryMock>;
+  beforeEach(() => { mock = makeQueryMock(); });
+
+  it('returns just the seed edges when the seed has no neighbours', async () => {
+    // Wave 1: both directions empty → no neighbours → wave 2 is skipped.
+    mock.queue.push('entity_relationships', []); // wave1 outgoing
+    mock.queue.push('entity_relationships', []); // wave1 incoming
+    const result = await getEntityNeighbourhood(mock.db, 'lonely');
+    expect(result).toEqual([]);
+    // Only the two wave-1 queries ran (no `in` wave-2 queries).
+    expect(mock.calls.filter(c => c.method === 'in')).toHaveLength(0);
+  });
+
+  it('pulls the second hop: the seed neighbours\' edges are included', async () => {
+    // Wave 1: seed → b (one direct neighbour, b).
+    mock.queue.push('entity_relationships', [
+      relRow({ from_id: 'seed', to_id: 'b', kind: 'friend_of', strength: 42 }),
+    ]);
+    mock.queue.push('entity_relationships', []); // wave1 incoming
+    // Wave 2 (edges of neighbour b): b → c is the second-hop edge.
+    mock.queue.push('entity_relationships', [
+      relRow({ from_id: 'b', to_id: 'c', kind: 'colleague_of', strength: 22 }),
+    ]);
+    mock.queue.push('entity_relationships', []); // wave2 incoming
+    const result = await getEntityNeighbourhood(mock.db, 'seed');
+    expect(result.map(r => `${r.from_id}->${r.to_id}`).sort()).toEqual([
+      'b->c',     // ← the second-layer edge that a single-hop fetch would miss
+      'seed->b',
+    ]);
+    // Wave 2 queried by the neighbour id set {b}.
+    const inCalls = mock.calls.filter(c => c.method === 'in');
+    expect(inCalls.map(c => c.args[1])).toEqual([['b'], ['b']]);
+  });
+
+  it('dedupes the seed↔neighbour edge that surfaces in both waves', async () => {
+    // seed → b appears in wave 1 AND again in wave 2 (it is also b's edge).
+    const shared = relRow({ from_id: 'seed', to_id: 'b', kind: 'friend_of', strength: 42 });
+    mock.queue.push('entity_relationships', [shared]); // wave1 outgoing
+    mock.queue.push('entity_relationships', []);       // wave1 incoming
+    mock.queue.push('entity_relationships', []);       // wave2 outgoing (from b) — none new
+    mock.queue.push('entity_relationships', [shared]); // wave2 incoming (to b) — the same edge
+    const result = await getEntityNeighbourhood(mock.db, 'seed');
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ from_id: 'seed', to_id: 'b', kind: 'friend_of' });
   });
 });
