@@ -1,0 +1,66 @@
+{
+  "team_id": "charon-united",
+  "team": {
+    "date_founded": "Founded on Charon, forever locked face-to-face with Pluto, a young club still carving out an identity of its own.",
+    "fans_nickname": "The Twins",
+    "number_of_fans": "Around 6 million, devoted dwellers of the binary world.",
+    "badge": "Two locked moons orbiting a shared point, bound by a silver thread.",
+    "home_kit": "Pale grey and silver with a binary-orbit motif.",
+    "away_kit": "Dark slate with a single silver thread.",
+    "third_kit": "Twilight blue with twin discs.",
+    "history": "Charon United are a young, balanced side still finding themselves in the long shadow of Pluto. Tidally bound to their larger neighbour, they play steady, organised football and dream of stepping out of the gloom into a light of their own.",
+    "club_culture": "Earnest, developing, and quietly ambitious. The Twins are still writing their story.",
+    "political_leaning": "Kuiper-autonomist — a small world seeking its own voice.",
+    "trophy_cabinet": ["A young honours board with everything still to prove"],
+    "legends": ["Tide Vann — the first Charonian to be capped at system level"],
+    "achievements": ["Fastest-developing youth setup in the Kuiper Belt"]
+  },
+  "stadium": {
+    "date_built": "Built at the Pluto-Charon Lagrange point, facing its twin world.",
+    "sponsors": "Backed by the binary system's modest settlement funds.",
+    "pitch_size": "Standard, balanced for an organised side.",
+    "pitch_type": "Hardy synthetic turf rated for the deep Kuiper cold.",
+    "stand_names": ["The Vann Stand", "The Lagrange End", "The Binary Terrace"],
+    "bio": "The Moon is a small, intimate ground where Pluto hangs vast and unmoving in the sky above. The view alone unsettles visitors; the organised home side does the rest."
+  },
+  "training_facility": {
+    "date_built": "A basic facility, all the small colony can afford.",
+    "sponsors": "Funded modestly by the binary settlements.",
+    "bio": "The Binary Training Complex drills organisation and balance, building the steady foundations a young club needs to grow."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Kuiper-adapted)",
+    "age": 44,
+    "nationality": "Charonian",
+    "appearance": "Earnest and watchful, always looking up at the world overhead.",
+    "bio": "Binary Nakamura is a patient builder developing Charon United's identity one balanced season at a time, prizing organisation while the young club learns to believe in itself.",
+    "personality": "Patient, steady, and quietly hopeful.",
+    "playing_history": "A dependable midfielder at small Kuiper clubs.",
+    "playing_philosophy": "Be balanced, be organised, and grow. Identity comes from doing the simple things well.",
+    "political_leaning": "Kuiper-autonomist.",
+    "culture": "A builder laying foundations for a young world.",
+    "achievements": ["Steadied a fledgling club into respectability"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 39, "nationality": "Charonian", "appearance": "Calm and methodical, attuned to the binary world's strange rhythms.", "bio": "Orbit Diallo trains the side to the tidal rhythms of the locked twin worlds, a quiet specialist building Charon's steady base.", "personality": "Methodical and patient.", "playing_history": "A lower-league midfielder turned coach.", "playing_philosophy": "Work with the rhythm of your world, not against it.", "political_leaning": "Kuiper-autonomist.", "culture": "The rhythm-keeper.", "achievements": ["Built the side's conditioning base"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Steady and assured, the calm last line.", "bio": "Lock Reyes is the balanced keeper who anchors the young Twins with composure beyond his club's years.", "personality": "Composed and reliable.", "political_leaning": "Kuiper-autonomist.", "culture": "The steady base.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and willing, grafts the flank.", "bio": "Fixed Torres is the workhorse full-back who runs the channel for the developing side.", "personality": "Tireless and uncomplaining.", "political_leaning": "Kuiper-autonomist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the organiser.", "bio": "Sync Okafor is the team-first defender who keeps the young back line balanced.", "personality": "Selfless and disciplined.", "political_leaning": "Kuiper-autonomist.", "culture": "The organiser.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and firm, the bite at the back.", "bio": "Tidal Kane is the aggressive defender who adds steel to the developing side.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-autonomist.", "culture": "The enforcer.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Orbit Rivera is the composed defender who keeps the Twins solid and growing.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-autonomist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and bright, the young creator.", "bio": "Anchor Chen is the creative spark the developing Twins are building around.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The bright hope.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the engine.", "bio": "Bind Petrov is the team-first midfielder who does the running for a young side.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-autonomist.", "culture": "The engine.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and tidy, the steady pivot.", "bio": "Chain Morales is the composed midfielder who keeps the Twins organised.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-autonomist.", "culture": "The steadier.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and eager, the young finisher.", "bio": "Bond Yamamoto is the selfish striker the developing side relies on for goals.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and willing, the running forward.", "bio": "Link Nakamura is the aggressive forward who stretches defences for the young Twins.", "personality": "Aggressive and selfless up top.", "political_leaning": "Kuiper-autonomist.", "culture": "The runner.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Couple Fischer is the selfish wide forward hungry to make his name as the Twins rise.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Tether Tanaka is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-autonomist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Shackle Kim is the team-first deputy who keeps the young side balanced in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-autonomist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Yoke Osei is the promising young defender central to the Twins' growing future.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-autonomist.", "culture": "The future.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Fetter Park is the creative deputy who offers a glimpse of the Twins' future from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Lash Beck is the eager young finisher pushing to lead the Twins' rise.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

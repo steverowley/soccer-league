@@ -1,0 +1,66 @@
+{
+  "team_id": "eris-wanderers",
+  "team": {
+    "date_founded": "Founded on Eris, the most distant outpost in the leagues, by settlers who chose the edge of everything.",
+    "fans_nickname": "The Discordant",
+    "number_of_fans": "Around 5 million fiercely defiant edge-dwellers.",
+    "badge": "A jagged star at the far edge of a thin disc, turned away from the sun.",
+    "home_kit": "Deep void-violet and black with a fractured-star motif.",
+    "away_kit": "Ash-grey with violet shards.",
+    "third_kit": "Near-black with a single distant star.",
+    "history": "Eris Wanderers play with the chip-on-the-shoulder defiance of the system's most remote club. Counterattacking specialists who relish the long, lonely journey to every away game, they take grim pleasure in spoiling the parties of warmer, richer worlds.",
+    "club_culture": "Defiant, hardy, and proudly contrarian. The Discordant exist to disrupt.",
+    "political_leaning": "Kuiper-separatist — the loudest voice for the outer worlds' independence.",
+    "trophy_cabinet": ["A reputation for ruining favourites' seasons"],
+    "legends": ["Strife Calder — the counterattacking captain who scored on the longest away trips"],
+    "achievements": ["Most away points won by a Kuiper side"]
+  },
+  "stadium": {
+    "date_built": "A frontier ground at the literal edge of settled space.",
+    "sponsors": "Backed by the remote outpost's survival co-operatives.",
+    "pitch_size": "Standard, with deep space to launch the counter.",
+    "pitch_type": "Basic frontier synthetic turf, hard-wearing.",
+    "stand_names": ["The Calder Stand", "The Edge End", "The Outpost Terrace"],
+    "bio": "The Outpost is the most distant venue in the leagues — cold, defiant, and proud of how far visitors must travel to lose there. Few away days are more dreaded."
+  },
+  "training_facility": {
+    "date_built": "A basic facility at the edge of everything.",
+    "sponsors": "Funded co-operatively by the outpost.",
+    "bio": "The Long Road Training Ground drills transition and resilience, preparing the Discordant for the brutal counterattacking, long-travelling life of the system's edge."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Kuiper-adapted)",
+    "age": 50,
+    "nationality": "Eridean",
+    "appearance": "Hard-bitten and defiant, wears the cold like a badge.",
+    "bio": "Distant Cruz is a counterattacking spoiler who has turned remoteness into a weapon. His Wanderers sit deep, soak up pressure, and punish complacent favourites with cold, sudden breaks.",
+    "personality": "Defiant, shrewd, and quietly bloody-minded.",
+    "playing_history": "A counterattacking forward at the system's smallest clubs.",
+    "playing_philosophy": "Make them travel, make them wait, and break their hearts on the counter.",
+    "political_leaning": "Kuiper-separatist.",
+    "culture": "An edge-dweller who relishes spoiling the centre's party.",
+    "achievements": ["Built the Kuiper's best away record"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 44, "nationality": "Eridean", "appearance": "Weathered and practical, plans every gruelling away trip.", "bio": "Far Christodoulou specialises in long-journey preparation, keeping the Wanderers sharp through the system's most punishing travel schedules.", "personality": "Practical and resilient.", "playing_history": "A lower-league journeyman.", "playing_philosophy": "The journey is half the battle; win it before kickoff.", "political_leaning": "Kuiper-separatist.", "culture": "The travel specialist.", "achievements": ["Built the side's away resilience"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Steady and proactive, starts the break.", "bio": "Chaos Vasquez is the balanced keeper who launches the Wanderers' counters from deep.", "personality": "Composed and proactive.", "political_leaning": "Kuiper-separatist.", "culture": "The launchpad.", "achievements": ["Most counter-launching distributions"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Anarchy Cruz is the workhorse full-back who covers the channel and breaks fast.", "personality": "Tireless and uncomplaining.", "political_leaning": "Kuiper-separatist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the deep defender.", "bio": "Discord Okafor is the team-first defender who holds the deep block patient.", "personality": "Selfless and disciplined.", "political_leaning": "Kuiper-separatist.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and hard, the disruptor.", "bio": "Strife Sato is the aggressive defender who breaks up attacks to feed the counter.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-separatist.", "culture": "The disruptor.", "achievements": ["Most interceptions in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, times the break.", "bio": "Unrest Lee is the composed defender who reads the moment to counter.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-separatist.", "culture": "The timer.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and quick, the break's brain.", "bio": "Havoc Kim is the creative spark who threads the killing pass on the counter.", "personality": "Creative and decisive.", "political_leaning": "Cosmopolitan.", "culture": "The architect.", "achievements": ["Most counter assists"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the transition engine.", "bio": "Tumult Mori is the team-first runner who powers the break from deep.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-separatist.", "culture": "The engine.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and tidy, the controlled link.", "bio": "Mayhem Nakamura is the composed midfielder who keeps the counter purposeful.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-separatist.", "culture": "The controlled spark.", "achievements": ["Highest pass completion on the break"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and predatory, the point of the break.", "bio": "Mayhem Rivera is the selfish finisher who feeds on the space the counter creates.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and combative, sparks the break.", "bio": "Bedlam Patel is the aggressive forward who triggers the counter by hounding defenders.", "personality": "Aggressive and relentless.", "political_leaning": "Kuiper-separatist.", "culture": "The trigger.", "achievements": ["Most high turnovers won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, a second finisher.", "bio": "Turmoil Novak is the selfish forward who doubles the threat on the break.", "personality": "Selfish and competitive.", "political_leaning": "Indifferent.", "culture": "The rival finisher.", "achievements": ["Second top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Frenzy Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-separatist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Unruly Anderson is the team-first deputy who keeps the block intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-separatist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Riot Martinez is the promising young defender learning the edge's hard ways.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-separatist.", "culture": "The young wall.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Ferment Chandra is the creative deputy who can unlock a stubborn block from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Upheaval Ito is the eager young finisher pushing for a place at the system's edge.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

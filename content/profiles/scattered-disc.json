@@ -1,0 +1,66 @@
+{
+  "team_id": "scattered-disc",
+  "team": {
+    "date_founded": "Founded in the scattered disc, the wild outer fringe, by drifters flung to the very edge of everything.",
+    "fans_nickname": "The Scatter",
+    "number_of_fans": "Around 3 million, the hardiest, wildest supporters in the leagues.",
+    "badge": "A field of scattered points flung outward from a distant sun.",
+    "home_kit": "Olive and black with a scattered-debris pattern.",
+    "away_kit": "Dust-grey with olive flecks.",
+    "third_kit": "Deep void-green with scattered points of light.",
+    "history": "Scattered Disc FC Rangers play wild, untamed football from the literal edge of the settled system. Balanced but unpredictable, hardened by survival, they are nobody's easy fixture and proud of how far they have come from nothing at all.",
+    "club_culture": "Wild, self-reliant, and unbreakable. The Scatter survive where others wouldn't dare to settle.",
+    "political_leaning": "Kuiper-frontier anarchist — beholden to no one beyond their own.",
+    "trophy_cabinet": ["A reputation as the toughest survivors in the leagues"],
+    "legends": ["Drift Vane — the captain who carried the club through its leanest years"],
+    "achievements": ["Most remarkable survival story in league history"]
+  },
+  "stadium": {
+    "date_built": "A rough frontier ground at the edge of charted space.",
+    "sponsors": "Backed by the scattered outposts' survival co-operatives.",
+    "pitch_size": "Standard, weathered by the harsh frontier.",
+    "pitch_type": "Basic frontier synthetic turf, patched and hard-wearing.",
+    "stand_names": ["The Vane Stand", "The Edge End", "The Scatter Terrace"],
+    "bio": "The Scatter is the most remote ground in the leagues, a rough, wind-scoured bowl at the literal edge of everything. To play here is to feel how far you are from home."
+  },
+  "training_facility": {
+    "date_built": "A basic facility scraped together at the frontier.",
+    "sponsors": "Funded by the outposts' survival co-operatives.",
+    "bio": "The Scatter Academy drills survivalist football — adaptability, resilience, and making do with whatever the harsh frontier provides."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Kuiper-adapted)",
+    "age": 48,
+    "nationality": "Trans-Neptunian",
+    "appearance": "Rugged and weather-beaten, looks like he was carved from the frontier itself.",
+    "bio": "Void Larsen is a balanced pragmatist who has kept a club alive at the edge of the possible. His Scatter sides are adaptable, hardy, and unpredictable, forged by survival into something no opponent enjoys facing.",
+    "personality": "Hardy, resourceful, and quietly indomitable.",
+    "playing_history": "A utility player who scraped a career at the system's smallest clubs.",
+    "playing_philosophy": "Adapt, endure, and surprise. Out here you survive or you vanish.",
+    "political_leaning": "Kuiper-frontier anarchist.",
+    "culture": "A survivor who made a club from nothing.",
+    "achievements": ["Kept the most remote club in the leagues alive and competitive"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 43, "nationality": "Trans-Neptunian", "appearance": "Lean and resourceful, can fix anything with nothing.", "bio": "Void Mensah teaches survivalist football — making do, adapting fast, and finding an edge where none should exist.", "personality": "Resourceful and unflappable.", "playing_history": "A frontier journeyman.", "playing_philosophy": "Use what you have, however little. Resourcefulness is a tactic.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The survivalist.", "achievements": ["Built the side's adaptability"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Calm and adaptable, a keeper hardened by the frontier.", "bio": "Scatter Vasquez is the balanced keeper who has seen everything the edge can throw at him.", "personality": "Composed and adaptable.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The constant.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Irregular Torres is the workhorse full-back who survives the channel by sheer effort.", "personality": "Tireless and uncomplaining.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the adaptable anchor.", "bio": "Disc Kane is the team-first defender who shifts to whatever the wild match demands.", "personality": "Selfless and versatile.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The anchor.", "achievements": ["Plays multiple defensive roles"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and wild, the bite at the back.", "bio": "Erratic Walker is the aggressive defender who fights for everything at the frontier.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The enforcer.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Eccentric Rivera is the composed defender who keeps the wild side from unravelling.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and unpredictable, the wild creator.", "bio": "Random Chen is the creative spark whose unpredictability suits the chaotic Scatter perfectly.", "personality": "Creative and mercurial.", "political_leaning": "Cosmopolitan.", "culture": "The wild card.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the engine.", "bio": "Chaotic Petrov is the team-first midfielder who does the running for a side with no reserves to spare.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The engine.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and tidy, the steadier.", "bio": "Dispersed Morales is the composed midfielder who brings order to the Scatter's wildness.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The steadier.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and opportunistic, the survivor finisher.", "bio": "Flung Park is the selfish striker who scraps for every chance at the edge of everything.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and wild, the running forward.", "bio": "Strewn Kim is the aggressive forward who hounds defences with frontier ferocity.", "personality": "Aggressive and relentless.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The hunter.", "achievements": ["Most pressures by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Cast Okafor is the selfish wide forward hungry to make his name at the system's edge.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Hurled Tanaka is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Ejected Nakamura is the team-first deputy who fills any gap the thin squad leaves.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Thrown Fischer is the promising young defender hardened young by the frontier.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-frontier anarchist.", "culture": "The young survivor.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Expelled Hayashi is the creative deputy whose unpredictability fits the wild side from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy wild card.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Launched Sato is the eager young finisher fighting for a place at the edge of everything.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

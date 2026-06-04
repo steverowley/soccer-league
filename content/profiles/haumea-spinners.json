@@ -1,0 +1,66 @@
+{
+  "team_id": "haumea-spinners",
+  "team": {
+    "date_founded": "Founded on fast-spinning, egg-shaped Haumea, where the dizzying rotation shaped a unique wide-area game.",
+    "fans_nickname": "The Whirl",
+    "number_of_fans": "Around 5 million, as restless as their spinning world.",
+    "badge": "An elongated ellipse spinning around a bright core, motion-blurred.",
+    "home_kit": "Bright white and electric-yellow with a spiral motion pattern.",
+    "away_kit": "Yellow with white swirls.",
+    "third_kit": "Silver with a blurred-rotation motif.",
+    "history": "Haumea Spinners play a giddy, attacking, wide-area game born of their fast-spinning world. They stretch the pitch end to end and side to side, whirling opponents into dizziness with relentless offensive movement. It is exhausting to watch and worse to mark.",
+    "club_culture": "Restless, attacking, and dizzyingly energetic. The Whirl never stop moving.",
+    "political_leaning": "Kuiper-frontier libertarian — fast, free, and allergic to being held in place.",
+    "trophy_cabinet": ["A reputation for the most chaotic, attacking football in the Kuiper"],
+    "legends": ["Spin Halloran — the winger who reputedly never stood still"],
+    "achievements": ["Highest-scoring side in the Kuiper Belt"]
+  },
+  "stadium": {
+    "date_built": "A frontier ground on the spinning dwarf's equator.",
+    "sponsors": "Backed by the rotation-survey and ice-mining outfits.",
+    "pitch_size": "Wide and long, built to exploit the whirling wide game.",
+    "pitch_type": "Basic frontier synthetic turf, hard-wearing.",
+    "stand_names": ["The Halloran Stand", "The Equator End", "The Spin Terrace"],
+    "bio": "The Oval is an elongated, dizzying ground where the home side's relentless wide movement and the world's fast spin combine to leave visitors reeling."
+  },
+  "training_facility": {
+    "date_built": "A basic facility on the fast-rotating equator.",
+    "sponsors": "Funded modestly by local mining outfits.",
+    "bio": "The Oval Athletic Centre drills relentless wide movement and rotation, conditioning players for the giddy, attacking whirl that defines the club."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human (Kuiper-adapted)",
+    "age": 45,
+    "nationality": "Haumeian",
+    "appearance": "Energetic and quick, paces the touchline as restlessly as her team plays.",
+    "bio": "Ellipse Yamamoto is an attacking zealot who builds wild, wide, offensive sides that whirl opponents dizzy. Caution is a foreign word; the Spinners attack until someone falls over.",
+    "personality": "Restless, daring, and relentlessly attacking.",
+    "playing_history": "A flying winger who never tracked back in her life.",
+    "playing_philosophy": "Attack wide, attack everywhere, and spin them until they break. Defence is for the timid.",
+    "political_leaning": "Kuiper-frontier libertarian.",
+    "culture": "An attacker who believes in joy over caution.",
+    "achievements": ["Built the Kuiper's most thrilling attack"]
+  },
+  "managing_staff": [
+    { "role": "fitness_coach", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 40, "nationality": "Haumeian", "appearance": "Lean and tireless, drills movement in the spinning gravity.", "bio": "Spin Larsen masters rotation dynamics, conditioning the Whirl to keep moving wide and fast for the full ninety minutes.", "personality": "Energetic and inventive.", "playing_history": "A rotation-dynamics specialist.", "playing_philosophy": "Movement is everything. Keep spinning and they can't catch you.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The motion specialist.", "achievements": ["Built the side's relentless movement"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Alert and proactive, sweeps behind a high line.", "bio": "Gyro Reyes is the balanced sweeper-keeper who covers the space the all-out attack leaves behind.", "personality": "Composed and proactive.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The safety net.", "achievements": ["Most sweeper actions in the Kuiper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and flying, an attacking full-back.", "bio": "Spiral Torres is the workhorse full-back who whirls up and down the wide right all match.", "personality": "Tireless and adventurous.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The flying full-back.", "achievements": ["Most attacking-third touches by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the rare anchor.", "bio": "Rotate Okafor is the team-first defender who tries to hold order behind the whirl.", "personality": "Selfless and disciplined.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The anchor.", "achievements": ["Most recoveries by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and willing, the bite at the back.", "bio": "Whirl Kane is the aggressive defender who covers the chaos with sheer effort.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The enforcer.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Twist Rivera is the composed defender who tries to anticipate the whirl's own chaos.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and mobile, the creative whirl.", "bio": "Spin Chen is the creative engine who keeps the wide attack flowing in dizzying patterns.", "personality": "Creative and restless.", "political_leaning": "Cosmopolitan.", "culture": "The creative whirl.", "achievements": ["Most chances created in the Kuiper"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the engine.", "bio": "Orbit Petrov is the team-first midfielder who covers the ground the attack abandons.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The engine.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and busy, the spinning pivot.", "bio": "Pirouette Morales is the composed midfielder who keeps the whirl from spinning out of control.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The pivot.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Quick and predatory, the finisher.", "bio": "Blur Yamamoto is the selfish striker who finishes the whirling chaos with deadly speed.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and ferocious, the storm forward.", "bio": "Cyclone Nakamura is the aggressive forward who spins defences apart alongside the strikers.", "personality": "Aggressive and relentless.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The storm.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and rapid, the wide weapon.", "bio": "Storm Fischer is the selfish wide forward who whirls in from the flank to score.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide weapon.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Twirl Tanaka is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Reel Kim is the team-first deputy who tries to keep order when the starters rest.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Swivel Osei is the promising young defender learning to ride the whirl.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-frontier libertarian.", "culture": "The young anchor.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Cartwheel Park is the creative deputy who fits the wild attack from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy whirl.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Pivot Beck is the eager young finisher pushing for a place in the whirl.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

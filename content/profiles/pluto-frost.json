@@ -1,0 +1,66 @@
+{
+  "team_id": "pluto-frost",
+  "team": {
+    "date_founded": "Founded on Pluto in the first age of outer-system football, once a giant of the game and never quite over it.",
+    "fans_nickname": "The Demoted",
+    "number_of_fans": "Around 9 million proud, wounded supporters who remember the glory days.",
+    "badge": "A frozen heart-shaped glacier beneath a faded crown.",
+    "home_kit": "Frost-white and pale blue with a faded-crown crest.",
+    "away_kit": "Ice-grey with a thin blue heart motif.",
+    "third_kit": "Deep nitrogen-blue with a cracked-crown emblem.",
+    "history": "Pluto Frost are the fallen giants of the outer system — once the grandest club beyond the asteroid belt, now a proud, defensive side clinging to former glory. Their fans carry a grievance the size of a planet, and every win feels like a small reclamation of lost status.",
+    "club_culture": "Proud, wounded, and defiantly nostalgic. The Demoted believe they belong among the elite and intend to climb back.",
+    "political_leaning": "Kuiper-restorationist — a club that wants its old standing back.",
+    "trophy_cabinet": ["A glittering historic honours board, dusty but proud", "Former outer-system champions"],
+    "legends": ["Tombaugh Crane — the legendary forward of the club's golden age"],
+    "achievements": ["Most historic trophies of any Kuiper club"]
+  },
+  "stadium": {
+    "date_built": "A grand old ground from the club's golden age, lovingly preserved.",
+    "sponsors": "Backed by Pluto's old institutions and proud heritage funds.",
+    "pitch_size": "Full regulation, maintained as a monument to past glory.",
+    "pitch_type": "Hardy synthetic turf rated for the deep nitrogen cold.",
+    "stand_names": ["The Tombaugh Stand", "The Glory End", "The Heartland Terrace"],
+    "bio": "The Deep Freeze is a grand, faded cathedral of a ground, far larger than the club's current standing warrants. The old crowd's roar still carries the memory of greatness."
+  },
+  "training_facility": {
+    "date_built": "A standard complex, a step down from the club's grand past.",
+    "sponsors": "Funded by Pluto's heritage institutions.",
+    "bio": "The Frost Academy drills disciplined, defensive football — the pragmatic creed of a proud club rebuilding from reduced means toward the heights it once knew."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Kuiper-adapted)",
+    "age": 53,
+    "nationality": "Plutonian",
+    "appearance": "Dignified and severe, carries the weight of the club's history on his shoulders.",
+    "bio": "Glacis Montoya is a defensive pragmatist tasked with restoring a fallen giant. He builds disciplined, hard-to-beat sides and dreams of marching the Demoted back toward the glory their fans never stop demanding.",
+    "personality": "Proud, disciplined, and burdened by expectation.",
+    "playing_history": "A defender from the tail end of the club's golden era.",
+    "playing_philosophy": "Be solid, be disciplined, and rebuild from the back. Glory is reclaimed one clean sheet at a time.",
+    "political_leaning": "Kuiper-restorationist.",
+    "culture": "A custodian of faded greatness.",
+    "achievements": ["Steadied the fallen giant and halted its decline"]
+  },
+  "managing_staff": [
+    { "role": "fitness_coach", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 44, "nationality": "Plutonian", "appearance": "Hardy and exacting, drills the squad in the cryogenic cold.", "bio": "Frost Bergman builds the cryo-adapted fitness that lets the Demoted endure the deep freeze and outlast opponents in the cold.", "personality": "Disciplined and resilient.", "playing_history": "A cold-climate conditioning specialist.", "playing_philosophy": "Endure the cold and you endure the match.", "political_leaning": "Kuiper-restorationist.", "culture": "The endurance specialist.", "achievements": ["Built the side's cold-weather resilience"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Solid and commanding, the proud last line.", "bio": "Cryo Vasquez is the balanced keeper who anchors the Demoted's disciplined defence.", "personality": "Composed and commanding.", "political_leaning": "Kuiper-restorationist.", "culture": "The last bastion.", "achievements": ["Most clean sheets in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Permafrost Cruz is the workhorse full-back who covers the channel without rest.", "personality": "Tireless and uncomplaining.", "political_leaning": "Kuiper-restorationist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the proud organiser.", "bio": "Frost Kane is the team-first defender who marshals the Demoted's disciplined line.", "personality": "Selfless and disciplined.", "political_leaning": "Kuiper-restorationist.", "culture": "The marshal.", "achievements": ["Club captain"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and hard, the enforcer.", "bio": "Glacial Sato is the aggressive defender who supplies the steel behind the proud rebuild.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-restorationist.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Arctic Lee is the composed defender who keeps the Demoted solid as they rebuild.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-restorationist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and proud, the creative hope.", "bio": "Charon Kim is the creative spark the Demoted pin their dreams of revival on.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The hope.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the shield.", "bio": "Styx Mori is the team-first midfielder who screens the proud old defence.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-restorationist.", "culture": "The shield.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and steady, the metronome.", "bio": "Nix Nakamura is the composed midfielder who keeps the Demoted ticking through the rebuild.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-restorationist.", "culture": "The metronome.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Sharp and proud, the finisher carrying the legacy.", "bio": "Nyx Rivera is the selfish striker who shoulders the weight of the club's goalscoring heritage.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The heir to legends.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and willing, the running forward.", "bio": "Hydra Patel is the aggressive forward who stretches defences for the proud Demoted.", "personality": "Aggressive and selfless up top.", "political_leaning": "Kuiper-restorationist.", "culture": "The runner.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Kerberos Novak is the selfish wide forward who provides the cutting edge in the rebuild.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Cerberus Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-restorationist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Polar Anderson is the team-first deputy who keeps the line solid in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-restorationist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Boreas Martinez is the promising young defender the Demoted hope will restore their glory.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-restorationist.", "culture": "The future.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Kelvin Chandra is the creative deputy who offers a spark of the old flair from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Zero Ito is the eager young finisher dreaming of restoring the Demoted to greatness.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}
