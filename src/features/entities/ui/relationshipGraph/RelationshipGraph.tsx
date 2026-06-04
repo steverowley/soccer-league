@@ -51,6 +51,38 @@ import {
   useRef,
   useState,
 } from 'react';
+
+// ── Tooltip sizing constants ─────────────────────────────────────────────────
+/** Fixed pixel width of the hover detail panel.
+ *  228 px fits the longest single-line meta value (party names, employer slugs)
+ *  without wrapping at typical graph sidebar widths. */
+const TOOLTIP_WIDTH      = 228;
+
+/** Conservative upper-bound on the tooltip's rendered height (px).
+ *  Used only for viewport-edge clamping — the actual card is shorter when
+ *  few meta fields exist.  Over-estimating is safe; under-estimating clips. */
+const TOOLTIP_HEIGHT_EST = 210;
+
+/** Gap (px) between the node circle edge and the nearest tooltip edge.
+ *  Keeps the panel from overlapping the node label text. */
+const TOOLTIP_GAP        = 14;
+
+/** Maximum character length for the description excerpt shown in the tooltip.
+ *  Anything longer is truncated with an ellipsis so the panel stays compact. */
+const TOOLTIP_DESC_MAX   = 110;
+
+/**
+ * Meta field keys rendered in the tooltip, in display priority order.
+ * These cover all world-building entity kinds (politician, journalist, pundit,
+ * sports_writer, referee, managing_staff, media_company, etc.).  Only keys
+ * that are actually present on the entity's meta object are shown — missing
+ * keys are silently skipped.  `description` is excluded here because it gets
+ * its own styled excerpt block below the divider.
+ */
+const TOOLTIP_META_KEYS: readonly string[] = [
+  'role', 'party', 'homeworld', 'employer', 'beat',
+  'specialty', 'era', 'style', 'corps', 'format',
+];
 import { useNavigate } from 'react-router-dom';
 
 import { COLORS } from '../../../../components/Layout';
@@ -474,6 +506,15 @@ export function RelationshipGraph({
     }
   }
 
+  // ── Tooltip data derivation ─────────────────────────────────────────
+  // Derive the hovered node's position and entity data from existing
+  // state — no extra useState needed.  `hoveredNode` gives us the SVG
+  // (x, y) coords which map 1:1 to CSS pixel offsets within the wrapper
+  // because the SVG fills the container exactly.  Both values are null
+  // when nothing is hovered so the tooltip renders nothing.
+  const hoveredNode   = focusId ? layout.nodes.find(n => n.id === focusId) ?? null : null;
+  const hoveredEntity = focusId ? (nodeMap.get(focusId) ?? null)               : null;
+
   return (
     <div ref={wrapperRef} className={className} style={wrapperStyle}>
       {/* ── aria-live announcement ──────────────────────────────────────
@@ -525,6 +566,25 @@ export function RelationshipGraph({
           />
         ))}
       </svg>
+
+      {/* ── Hover detail panel ─────────────────────────────────────────
+          HTML overlay (not SVG foreignObject) so we get full CSS layout,
+          overflow clipping, and font rendering for free.  Positioned
+          absolutely within the `position: relative` wrapper; SVG coords
+          map 1:1 to CSS pixel offsets here.  Renders nothing when no
+          node is hovered. */}
+      {hoveredNode && hoveredEntity && focusId !== seed.id && (
+        <NodeTooltip
+          entity={hoveredEntity}
+          nodeX={hoveredNode.x}
+          nodeY={hoveredNode.y}
+          nodeRadius={NODE_RADIUS}
+          containerWidth={width}
+          containerHeight={height}
+          relationshipToSeed={seedAdjacency.get(focusId!) ?? null}
+          seedName={seedName}
+        />
+      )}
     </div>
   );
 }
@@ -698,6 +758,304 @@ function NodeMark({
         </text>
       )}
     </g>
+  );
+}
+
+// ── Tooltip helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Format a relationship strength value as a signed string with a colour hint.
+ * Returns e.g. "+55" (terraNova) for positive, "−45" (flare) for negative,
+ * "0" (dust50) for neutral.  The Architect uses strength to encode how
+ * tightly two entities are bound; showing the raw number lets curious users
+ * read the lore tension at a glance.
+ */
+function formatStrength(strength: number): { label: string; color: string } {
+  if (strength >  5) return { label: `+${strength}`, color: COLORS.terraNova };
+  if (strength < -5) return { label: `−${Math.abs(strength)}`, color: COLORS.flare };
+  return { label: String(strength), color: COLORS.dust50 };
+}
+
+/**
+ * Humanise a snake_case relationship kind for display in the tooltip.
+ * e.g. "affiliated_with" → "affiliated with", "family_of" → "family of".
+ * Keeps labels legible without a large lookup table.
+ */
+function humaniseKind(kind: string): string {
+  return kind.replace(/_/g, ' ');
+}
+
+/**
+ * Floating detail panel that appears when the user hovers or focuses a node
+ * in the relationship graph.  Mirrors the "Node Details" pattern from the
+ * Mirofish reference but uses the ISL retro-minimalist design language
+ * (Space Mono, COLORS tokens, hairline borders).
+ *
+ * POSITIONING LOGIC
+ * -----------------
+ * The panel defaults to the right of the node with a small upward offset.
+ * Two flips prevent it from escaping the wrapper:
+ *   • Horizontal flip  — if right edge exceeds container width, place left.
+ *   • Vertical clamp   — pin to top/bottom margin if the panel would clip.
+ * SVG node coordinates equal CSS pixel offsets within the `position: relative`
+ * wrapper, so no coordinate-space conversion is needed.
+ *
+ * CONTENT STRATEGY
+ * ----------------
+ * 1. Kind badge — colour-coded dot + kind label (same palette as the node).
+ * 2. Display name — the entity's human-readable name in larger type.
+ * 3. Relationship row — direct-hop kind + signed strength, or "indirect"
+ *    indicator for second-hop nodes.  Absent for the seed node (suppressed
+ *    upstream by the caller's `focusId !== seed.id` guard).
+ * 4. Meta key-value rows — up to 3 priority fields from TOOLTIP_META_KEYS
+ *    (role, homeworld, employer, etc.).  Kind-agnostic: only present keys
+ *    are shown, so the panel is compact for sparse entities.
+ * 5. Description excerpt — truncated at TOOLTIP_DESC_MAX chars with an
+ *    ellipsis; rendered in italics to visually distinguish prose from data.
+ *
+ * @param entity            - Hydrated entity row for the hovered node.
+ * @param nodeX             - Node centre x in SVG / container-relative px.
+ * @param nodeY             - Node centre y in SVG / container-relative px.
+ * @param nodeRadius        - Circle radius (px) — used to offset the gap.
+ * @param containerWidth    - Wrapper pixel width for horizontal flip logic.
+ * @param containerHeight   - Wrapper pixel height for vertical clamp logic.
+ * @param relationshipToSeed - Direct edge from seed to this node, or null
+ *                            if the node is a second-hop satellite.
+ * @param seedName          - Display name of the seed for the "→ SEED" label.
+ */
+function NodeTooltip({
+  entity,
+  nodeX,
+  nodeY,
+  nodeRadius,
+  containerWidth,
+  containerHeight,
+  relationshipToSeed,
+  seedName,
+}: {
+  entity:             Entity;
+  nodeX:              number;
+  nodeY:              number;
+  nodeRadius:         number;
+  containerWidth:     number;
+  containerHeight:    number;
+  relationshipToSeed: { kind: string; strength: number } | null;
+  seedName:           string;
+}) {
+  // ── Position calculation ────────────────────────────────────────────
+  // Default: place the tooltip TOOLTIP_GAP px to the right of the node
+  // edge, slightly above centre so the node circle aligns near the panel
+  // header rather than disappearing behind the middle of the panel.
+  let x = nodeX + nodeRadius + TOOLTIP_GAP;
+  let y = nodeY - 32; // -32 aligns the panel header near the node centre
+
+  // Horizontal flip: if the panel's right edge exceeds the container,
+  // place it to the LEFT of the node instead.
+  if (x + TOOLTIP_WIDTH > containerWidth - 8) {
+    x = nodeX - nodeRadius - TOOLTIP_GAP - TOOLTIP_WIDTH;
+  }
+
+  // Vertical clamp: keep a 8 px margin from top and bottom edges.
+  const MARGIN = 8;
+  if (y < MARGIN) y = MARGIN;
+  if (y + TOOLTIP_HEIGHT_EST > containerHeight - MARGIN) {
+    y = containerHeight - TOOLTIP_HEIGHT_EST - MARGIN;
+  }
+
+  // ── Meta field extraction ───────────────────────────────────────────
+  // Pull up to 3 of the priority keys from entity.meta in the order
+  // defined by TOOLTIP_META_KEYS.  Skip nullish values so we never
+  // render an empty row.
+  const meta = (entity.meta ?? {}) as Record<string, unknown>;
+  const metaRows: Array<{ key: string; value: string }> = [];
+  for (const key of TOOLTIP_META_KEYS) {
+    if (metaRows.length >= 3) break;
+    const val = meta[key];
+    if (val !== null && val !== undefined && val !== '') {
+      metaRows.push({ key, value: String(val) });
+    }
+  }
+
+  // Description excerpt — omit from TOOLTIP_META_KEYS list; shown below
+  // a divider in italic prose style to distinguish it from structured data.
+  const rawDesc = typeof meta['description'] === 'string' ? meta['description'] : '';
+  const desc = rawDesc.length > TOOLTIP_DESC_MAX
+    ? rawDesc.slice(0, TOOLTIP_DESC_MAX).trimEnd() + '…'
+    : rawDesc;
+
+  // ── Kind badge colour ───────────────────────────────────────────────
+  const kindStr  = entity.kind ?? 'unknown';
+  const dotColor = kindColor(kindStr);
+
+  // ── Strength badge (only for direct edges) ──────────────────────────
+  const rel = relationshipToSeed
+    ? { ...relationshipToSeed, ...formatStrength(relationshipToSeed.strength) }
+    : null;
+
+  // ── Shared style fragments ──────────────────────────────────────────
+  const monoBase: CSSProperties = {
+    fontFamily:    'Space Mono, monospace',
+    letterSpacing: '0.04em',
+  };
+  const labelStyle: CSSProperties = {
+    ...monoBase,
+    fontSize:      9,
+    fontWeight:    700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.12em',
+    color:         COLORS.dust50,
+  };
+  const hairline: CSSProperties = {
+    borderBottom: `1px solid ${COLORS.hairline}`,
+    margin:       '6px 0',
+  };
+
+  return (
+    <div
+      // `pointer-events: none` so the tooltip itself never swallows the
+      // mouse-leave event that would hide it — hover stays on the SVG node.
+      style={{
+        position:      'absolute',
+        left:          x,
+        top:           y,
+        width:         TOOLTIP_WIDTH,
+        background:    COLORS.phobosAsh,
+        border:        `1px solid ${COLORS.hairline}`,
+        boxShadow:     '0 4px 24px rgba(0,0,0,0.55)',
+        padding:       '10px 12px',
+        boxSizing:     'border-box',
+        pointerEvents: 'none',
+        zIndex:        10,
+        // Prevent the panel from causing layout jitter as the simulation
+        // moves nodes — `will-change` tells the compositor to composite
+        // this layer independently.
+        willChange:    'left, top',
+      }}
+      role="tooltip"
+      aria-hidden="true"
+    >
+      {/* ── Kind badge ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+        <span
+          style={{
+            display:      'inline-block',
+            width:        7,
+            height:       7,
+            borderRadius: '50%',
+            background:   dotColor,
+            flexShrink:   0,
+          }}
+        />
+        <span style={labelStyle}>{kindStr.replace(/_/g, ' ')}</span>
+      </div>
+
+      {/* ── Display name ───────────────────────────────────────────── */}
+      <div
+        style={{
+          ...monoBase,
+          fontSize:   12,
+          fontWeight: 700,
+          color:      COLORS.dust,
+          lineHeight: 1.3,
+          marginBottom: 6,
+          // Wrap long names rather than truncating — the tooltip is wide
+          // enough to hold two lines for even the longest entity names.
+          wordBreak: 'break-word',
+        }}
+      >
+        {entity.display_name ?? entity.name}
+      </div>
+
+      <div style={hairline} />
+
+      {/* ── Relationship to seed ────────────────────────────────────── */}
+      {rel ? (
+        <div style={{ marginBottom: 6 }}>
+          {/* Arrow + seed name label */}
+          <div style={{ ...labelStyle, marginBottom: 2 }}>
+            {'→ '}{seedName}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Relationship kind */}
+            <span
+              style={{
+                ...monoBase,
+                fontSize:      10,
+                fontWeight:    700,
+                color:         COLORS.dust70,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              {humaniseKind(rel.kind)}
+            </span>
+            {/* Strength badge */}
+            <span
+              style={{
+                ...monoBase,
+                fontSize:   10,
+                fontWeight: 700,
+                color:      rel.color,
+              }}
+            >
+              {rel.label}
+            </span>
+          </div>
+        </div>
+      ) : (
+        // Second-hop node — no direct edge to the seed.  Show a subtle
+        // "indirect" label so the user knows why there's no strength score.
+        <div style={{ ...labelStyle, marginBottom: 6, color: COLORS.dust50 }}>
+          indirect connection
+        </div>
+      )}
+
+      {/* ── Meta key-value rows ─────────────────────────────────────── */}
+      {metaRows.length > 0 && (
+        <>
+          <div style={hairline} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: desc ? 6 : 0 }}>
+            {metaRows.map(({ key, value }) => (
+              <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                <span style={{ ...labelStyle, flexShrink: 0, minWidth: 56 }}>
+                  {key.replace(/_/g, ' ')}
+                </span>
+                <span
+                  style={{
+                    ...monoBase,
+                    fontSize:   10,
+                    color:      COLORS.dust70,
+                    overflow:   'hidden',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Description excerpt ─────────────────────────────────────── */}
+      {desc && (
+        <>
+          <div style={hairline} />
+          <div
+            style={{
+              ...monoBase,
+              fontSize:   10,
+              fontStyle:  'italic',
+              color:      COLORS.dust50,
+              lineHeight: 1.5,
+            }}
+          >
+            {desc}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
