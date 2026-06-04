@@ -400,13 +400,12 @@ export default function World() {
                   </div>
 
                   {/* The graph widget re-fetches whenever selectedId changes.
-                      maxHops=2 keeps the viewport readable — deeper traversals
-                      produce 150+ nodes and lose legibility. */}
-                  <RelationshipGraph
-                    entityId={selectedId}
-                    maxHops={2}
-                    maxNeighbours={10}
-                  />
+                      Uses the component defaults (maxHops=2, maxNeighbours=12)
+                      so every relationship graph across the app — detail pages
+                      and this atlas — renders the same two layers at the same
+                      depth and breadth.  The second-hop recession (smaller,
+                      fainter outer ring) keeps the fuller graph legible. */}
+                  <RelationshipGraph entityId={selectedId} />
                 </div>
               )}
 

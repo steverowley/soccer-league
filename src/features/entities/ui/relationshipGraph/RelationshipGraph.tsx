@@ -119,8 +119,23 @@ const MIN_VIEWPORT_WIDTH = 160;
 
 /** Radius (px) for the seed node.  1.5× the regular node per spec. */
 const SEED_RADIUS = 12;
-/** Radius (px) for every non-seed node. */
+/** Radius (px) for every direct (first-hop) node. */
 const NODE_RADIUS = 8;
+
+// ── Second-layer (friends-of-friends) recession ──────────────────────────────
+// The subgraph always pulls two hops: hop 1 = direct ties (the inner ring),
+// hop 2 = friends-of-friends (the outer ring).  To make the two layers read as
+// distinct — the way a hub-and-spoke "web of influence" should — second-hop
+// nodes and the edges between them are deliberately recessed: smaller, fainter.
+// The seed and its direct ties stay full-size and full-opacity so the eye
+// lands on the centre first and treats the outer ring as context.
+
+/** Radius (px) for second-hop nodes — noticeably smaller than a direct tie. */
+const SECOND_HOP_RADIUS = 5;
+/** Resting opacity for a second-hop NODE when nothing is hovered. */
+const SECOND_HOP_OPACITY = 0.55;
+/** Resting opacity for a second-layer EDGE (one that does not touch the seed). */
+const SECOND_LAYER_EDGE_OPACITY = 0.4;
 
 /** Edge stroke-width clamps — pixels.  Driven by |strength|/100. */
 const EDGE_STROKE_MIN = 0.5;
@@ -585,15 +600,20 @@ export function RelationshipGraph({
               key={edgeKey(edge)}
               edge={edge}
               focusId={focusId}
+              seedId={seed.id}
             />
           ))}
 
           {/* ── Nodes ──────────────────────────────────────────────────── */}
+          {/* A node is second-hop when it is neither the seed nor a direct
+              neighbour of it (seedAdjacency holds exactly the first-hop ties),
+              which drives the outer-ring recession. */}
           {layout.nodes.map((node) => (
             <NodeMark
               key={node.id}
               node={node}
               isSeed={node.id === seed.id}
+              isSecondHop={node.id !== seed.id && !seedAdjacency.has(node.id)}
               focusId={focusId}
               relationshipToSeed={seedAdjacency.get(node.id) ?? null}
               onHoverChange={setFocusId}
@@ -635,18 +655,29 @@ export function RelationshipGraph({
  * Single edge line.  Stroke colour by sign of strength; stroke-width by
  * absolute magnitude clamped to [EDGE_STROKE_MIN..EDGE_STROKE_MAX].
  *
- * Highlight rules:
- *   • If nothing is focused → render at full opacity.
+ * Layer rules (resting state, nothing focused):
+ *   • "Spoke" edges — those touching the seed — render at full opacity as the
+ *     first layer.
+ *   • "Second-layer" edges — between two non-seed nodes (friends-of-friends) —
+ *     render at SECOND_LAYER_EDGE_OPACITY so the outer web recedes.
+ *
+ * Highlight rules (something focused):
  *   • If this edge is incident on the focused node → emphasise (2× stroke,
- *     full opacity).
+ *     full opacity) regardless of layer.
  *   • Otherwise → dim to DIM_OPACITY.
+ *
+ * @param seedId  The id of the centre node, used to classify spoke vs
+ *                second-layer edges.  An edge is a spoke iff either endpoint
+ *                is the seed.
  */
 function EdgeLine({
   edge,
   focusId,
+  seedId,
 }: {
   edge: PositionedEdge;
   focusId: string | null;
+  seedId: string;
 }) {
   // d3-force mutates `source`/`target` from string id to the node object
   // after the first tick — guard both shapes so the first paint doesn't
@@ -664,10 +695,14 @@ function EdgeLine({
     strength < -5 ? COLORS.flare     :
                     COLORS.hairline;
 
+  // A spoke touches the seed (first layer); everything else is the outer web.
+  const isSpoke = s.id === seedId || t.id === seedId;
   const incidentToFocus =
     focusId !== null && (s.id === focusId || t.id === focusId);
   const opacity =
-    focusId === null ? 1 : incidentToFocus ? 1 : DIM_OPACITY;
+    focusId !== null
+      ? (incidentToFocus ? 1 : DIM_OPACITY)
+      : (isSpoke ? 1 : SECOND_LAYER_EDGE_OPACITY);
   const strokeWidth = incidentToFocus ? baseWidth * 2 : baseWidth;
 
   return (
@@ -698,6 +733,7 @@ function EdgeLine({
 function NodeMark({
   node,
   isSeed,
+  isSecondHop,
   focusId,
   relationshipToSeed,
   onHoverChange,
@@ -706,6 +742,13 @@ function NodeMark({
 }: {
   node: PositionedNode;
   isSeed: boolean;
+  /**
+   * True when this node is a second-hop satellite (friend-of-a-friend) — i.e.
+   * not the seed and with no direct edge to it.  Drives the outer-ring
+   * recession (smaller radius + lower resting opacity) so the two layers of
+   * the web read distinctly.
+   */
+  isSecondHop: boolean;
   focusId: string | null;
   /**
    * The first-hop relationship from the seed to this node, if one
@@ -733,13 +776,18 @@ function NodeMark({
       ? `${name}, ${kindStr}, relationship to seed: ${relationshipToSeed.kind}, strength: ${relationshipToSeed.strength}`
       : `${name}, ${kindStr}`;
 
-  // Dim non-focused, non-seed nodes when something is focused.  The seed
-  // stays at full opacity so the visual anchor never drops out.
+  // Resting state recesses second-hop nodes to SECOND_HOP_OPACITY; when
+  // something is focused, the focused node (and seed) stay full while every
+  // other node dims to DIM_OPACITY.  The seed is never recessed.
   const isFocused = focusId === node.id;
   const opacity =
-    focusId === null || isFocused || isSeed ? 1 : DIM_OPACITY;
+    focusId !== null
+      ? (isFocused || isSeed ? 1 : DIM_OPACITY)
+      : (isSecondHop ? SECOND_HOP_OPACITY : 1);
 
-  const radius = isSeed ? SEED_RADIUS : NODE_RADIUS;
+  const radius = isSeed
+    ? SEED_RADIUS
+    : isSecondHop ? SECOND_HOP_RADIUS : NODE_RADIUS;
   const fill   = isSeed ? COLORS.dust : kindColor(kindStr);
 
   // Show the label for the seed always; non-seed only on hover/focus
@@ -1156,7 +1204,7 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
 /**
  * Compact colour-key rendered below the relationship graph SVG.
  *
- * Two row groups:
+ * Three row groups:
  *   1. LINKS — edge strength tiers: allied (teal) / neutral (dim) / rival (red).
  *      Stroke weight also encodes magnitude, but colour encodes the sign — this
  *      legend surfaces the sign mapping so the graph is readable at a glance.
@@ -1164,6 +1212,9 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
  *      Disruption, Place.  Intentionally coarse — the hover tooltip reveals the
  *      exact kind.  One entry per visual tier rather than one per `kind` value
  *      keeps the legend scannable (6 rows vs 20+).
+ *   3. WEB — the two layers: a full-size dot = a direct tie (first hop), a
+ *      smaller faint dot = a 2nd-degree tie (friend-of-a-friend).  Explains the
+ *      deliberate size/opacity recession applied to the outer ring.
  *
  * Shares the border treatment (left/right/bottom hairline on abyss) with the
  * SVG box above so the two render as a single integrated panel.
@@ -1227,6 +1278,20 @@ function GraphLegend() {
             {label}
           </span>
         ))}
+      </div>
+
+      {/* Web (layer) tier — mirrors the size/opacity recession on the canvas:
+          a full dot is a direct tie, a smaller faint dot is a 2nd-degree tie. */}
+      <div style={rowStyle}>
+        <span style={sectionLabel}>Web</span>
+        <span style={entryStyle}>
+          <span style={{ ...swatchBase, width: 8, height: 8, borderRadius: '50%', background: COLORS.dust70 }} />
+          Direct
+        </span>
+        <span style={entryStyle}>
+          <span style={{ ...swatchBase, width: 5, height: 5, borderRadius: '50%', background: COLORS.dust70, opacity: SECOND_HOP_OPACITY }} />
+          2nd degree
+        </span>
       </div>
     </div>
   );
