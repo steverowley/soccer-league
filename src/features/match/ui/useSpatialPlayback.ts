@@ -7,16 +7,27 @@
 //   This is a replay system, NOT a live physics stream.  The spatial engine
 //   pre-computes every player and ball position for the full 90 minutes during
 //   batch simulation (~100ms), stores the result in `match_positions`, and the
-//   viewer replays it at 1× speed by advancing through the pre-loaded frame
-//   array as real wall-clock time elapses past `scheduledAt`.
+//   viewer replays it over the season's `match_duration_seconds` window by
+//   advancing through the pre-loaded frame array as real wall-clock time
+//   elapses past `scheduledAt`.
+//
+// PACING — SYNC WITH THE COMMENTARY FEED
+//   The commentary feed reveals a 90-game-minute match over
+//   `match_duration_seconds` real seconds (600s = 10min default) — it
+//   COMPRESSES game time.  This hook MUST apply the identical mapping or the
+//   dots would crawl along at 1× and fall ~9× behind the play-by-play (a
+//   90-minute match would take 90 real minutes on the pitch but only 10 in the
+//   feed).  So real elapsed time is converted to game time before frame
+//   lookup, mirroring `computeElapsedGameMinute` (× 90) at second resolution:
+//     gameSec = (realElapsedSec / durationSeconds) × (90 × 60)
 //
 // FRAME RESOLUTION
 //   The spatial engine emits one frame every 2 game-seconds (frameEverySec=2)
 //   producing ~2 700 frames per 90-minute match.  This hook ticks every
 //   TICK_MS real-time ms; on each tick it binary-searches the frame array for
-//   the last frame whose game-time ≤ current elapsed game-seconds, then
-//   updates state only when the active frame index actually changes — avoiding
-//   unnecessary React re-renders between frame boundaries.
+//   the last frame whose game-time ≤ current game-seconds, then updates state
+//   only when the active frame index actually changes — avoiding unnecessary
+//   React re-renders between frame boundaries.
 //
 // COORDINATE NORMALISATION
 //   The spatial engine uses pitch-metre space: x ∈ [0, 105], y ∈ [0, 68].
@@ -44,6 +55,16 @@ import type { PositionSnapshot } from '../api/matchPositions';
  * the 1-second commentary tick or cause visible jitter on lower-end devices.
  */
 const TICK_MS = 500;
+
+/**
+ * Total regulation game time in seconds (90 minutes × 60).  The pacing window
+ * (`match_duration_seconds`) is mapped onto this span so that, by the end of
+ * the window, playback has advanced through a full 90 minutes of frames —
+ * matching `computeElapsedGameMinute`, which scales the same window by 90.
+ * Stoppage-time frames (minute 91+) sit just past this value and are reached
+ * fractionally after the window closes, where playback holds the final frame.
+ */
+const TOTAL_GAME_SECONDS = 90 * 60;
 
 /**
  * FIFA standard pitch length in metres.  Dividing spatial-engine x by this
@@ -108,22 +129,23 @@ export interface SpatialPlaybackResult {
  * needed on the initial call or after a tab wake-up where many frames
  * elapsed while the interval was paused by the browser.
  *
- * Returns -1 when no frame has started yet (elapsedSec < first frame's time).
+ * Returns -1 when no frame has started yet (gameSec < first frame's time).
  *
- * @param frames     Pre-loaded, (minute, second)-sorted snapshot array.
- * @param elapsedSec Real seconds elapsed since `scheduledAt`.
+ * @param frames   Pre-loaded, (minute, second)-sorted snapshot array.
+ * @param gameSec  Game-clock seconds since kickoff (already compressed from
+ *                 real time by the caller).  Negative before kickoff → -1.
  */
-function findFrameIndex(frames: PositionSnapshot[], elapsedSec: number): number {
+function findFrameIndex(frames: PositionSnapshot[], gameSec: number): number {
   if (frames.length === 0) return -1;
-  // Each frame's game-time in seconds since kickoff:
-  //   gameSec = (minute - 1) * 60 + second
-  // We want the last frame where gameSec ≤ elapsedSec.
+  // Each frame's own game-time in seconds since kickoff:
+  //   frameGameSec = (minute - 1) * 60 + second
+  // We want the index of the last frame where frameGameSec ≤ gameSec.
   let lo = 0, hi = frames.length - 1, result = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     const f = frames[mid]!;
-    const gameSec = (f.minute - 1) * 60 + f.second;
-    if (gameSec <= elapsedSec) {
+    const frameGameSec = (f.minute - 1) * 60 + f.second;
+    if (frameGameSec <= gameSec) {
       result = mid;
       lo = mid + 1;
     } else {
@@ -174,18 +196,25 @@ function toNormalisedOverrides(snap: PositionSnapshot): {
  * anchor LiveCommentary uses — so the dots and commentary events stay in step
  * without any additional coordination.
  *
- * @param frames       Pre-loaded position snapshots from `getMatchPositions`.
- *                     Pass `[]` when the spatial engine wasn't used (legacy
- *                     matches) — the hook returns `active: false` gracefully.
- * @param scheduledAt  ISO-8601 timestamp of the match kickoff.  The elapsed
- *                     game seconds are computed as `(now − scheduledAt) / 1000`.
- *                     Pass `null` before the match row is loaded.
- * @returns            Normalised overrides + `active` flag.  Thread the result
- *                     into <PitchView> when `active` is true.
+ * @param frames           Pre-loaded position snapshots from `getMatchPositions`.
+ *                         Pass `[]` when the spatial engine wasn't used (legacy
+ *                         matches) — the hook returns `active: false` gracefully.
+ * @param scheduledAt      ISO-8601 timestamp of the match kickoff.  Real elapsed
+ *                         time is measured from here, then compressed to game
+ *                         time via `durationSeconds`.  Pass `null` before the
+ *                         match row is loaded.
+ * @param durationSeconds  The season's `match_duration_seconds` — how long the
+ *                         viewer takes to reveal the full 90 minutes in real
+ *                         time (600s default).  Drives the same compression the
+ *                         commentary feed uses, keeping the dots in lockstep
+ *                         with the play-by-play.
+ * @returns                Normalised overrides + `active` flag.  Thread the
+ *                         result into <PitchView> when `active` is true.
  */
 export function useSpatialPlayback(
   frames: PositionSnapshot[],
   scheduledAt: string | null,
+  durationSeconds: number,
 ): SpatialPlaybackResult {
   // ── Derived anchor timestamp ─────────────────────────────────────────────
   // Parse once, memoised so a parent re-render with the same ISO string
@@ -216,8 +245,16 @@ export function useSpatialPlayback(
     // caller sees the right frame on the first render without waiting for
     // the first interval to fire.
     const advance = () => {
-      const elapsedSec = (Date.now() - anchorMs) / 1000;
-      const idx = findFrameIndex(frames, elapsedSec);
+      const realElapsedSec = (Date.now() - anchorMs) / 1000;
+      // Compress real elapsed time into game time using the season pacing
+      // knob — identical to the commentary's mapping — so the dots and the
+      // event feed reveal the same game-minute at the same wall-clock moment.
+      // A non-positive duration would divide-by-zero / invert; fall back to a
+      // 1× mapping (real seconds = game seconds) so playback still progresses.
+      const gameSec = durationSeconds > 0
+        ? (realElapsedSec / durationSeconds) * TOTAL_GAME_SECONDS
+        : realElapsedSec;
+      const idx = findFrameIndex(frames, gameSec);
       if (idx !== lastIndexRef.current) {
         lastIndexRef.current = idx;
         setFrameIndex(idx);
@@ -227,7 +264,7 @@ export function useSpatialPlayback(
     advance();
     const id = setInterval(advance, TICK_MS);
     return () => clearInterval(id);
-  }, [frames, anchorMs]);
+  }, [frames, anchorMs, durationSeconds]);
 
   // ── Compute override maps ─────────────────────────────────────────────────
   // Derive normalised positions from the current frame index.
