@@ -235,7 +235,12 @@ export default function News() {
   // a silent feed reading as intentional cosmic hush rather than a broken page.
   // computeQuiet wraps the impure Date.now() read outside the render body
   // (mirrors how formatRelativeTime keeps its clock read out of components).
-  const quiet = computeQuiet(rows);
+  //
+  // Gated to the unfiltered view only: under a kind filter, `rows` holds just
+  // that kind, so a naturally low-frequency kind (Balance/Chaos cap at 1/day)
+  // would falsely trip the cue even while the overall dispatch is fresh. The
+  // cue is a global-pipeline signal, so it belongs on the ALL feed.
+  const quiet = showPinned ? computeQuiet(rows) : null;
 
   return (
     <div style={{
