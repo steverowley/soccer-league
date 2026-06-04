@@ -1,0 +1,66 @@
+{
+  "team_id": "hygiea-united",
+  "team": {
+    "date_founded": "Founded in the sealed subterranean warrens of Hygiea, where football is played far below the surface.",
+    "fans_nickname": "The Shades",
+    "number_of_fans": "Around 13 million, dwelling in the dark and proud of it.",
+    "badge": "A shielded lantern glowing in a black tunnel mouth.",
+    "home_kit": "Charcoal and deep green with a faint tunnel-light glow on the chest.",
+    "away_kit": "Slate grey with green trim.",
+    "third_kit": "Near-black with a single lantern emblem.",
+    "history": "Hygiea United are masters of the dark arts of defending — a subterranean side built on impregnable structure who smother opponents in the gloom of The Dark Pitch and dare them to find a way through.",
+    "club_culture": "Insular, disciplined, and defensively obsessive. The Shades trust the structure above all.",
+    "political_leaning": "Belt-isolationist — a closed, self-sufficient warren that keeps the system at arm's length.",
+    "trophy_cabinet": ["A long record of frustrating better-resourced sides"],
+    "legends": ["Umbra Vell — the sweeper who reputedly organised the league's best back line"],
+    "achievements": ["Fewest goals conceded in the belt across multiple seasons"]
+  },
+  "stadium": {
+    "date_built": "Excavated deep beneath the Hygiean surface.",
+    "sponsors": "Backed by the warren's life-support and mining guilds.",
+    "pitch_size": "Compact and tight, perfect for a smothering block.",
+    "pitch_type": "Hardy synthetic turf under managed tunnel-light.",
+    "stand_names": ["The Vell Stand", "The Tunnel End", "The Warren Terrace"],
+    "bio": "The Dark Pitch is a low, dim, claustrophobic bowl deep underground where visiting players speak of losing their bearings — and of never finding a gap in the Shades' defence."
+  },
+  "training_facility": {
+    "date_built": "A basic complex carved into a side-warren.",
+    "sponsors": "Funded modestly by the warren guilds.",
+    "bio": "The Dark Pitch Academy drills one thing above all: defensive shape, repeated until the block moves as a single shadow."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 51,
+    "nationality": "Hygieian",
+    "appearance": "Pale and quiet, comfortable in the gloom, gives little away.",
+    "bio": "Shadow Diallo is a defensive obsessive who has made Hygiea the hardest side in the belt to score against, drilling an impregnable block that thrives in the dark.",
+    "personality": "Reserved, meticulous, and unyielding.",
+    "playing_history": "A sweeper who organised defences his whole career.",
+    "playing_philosophy": "Give them nothing. A clean sheet is a victory in itself.",
+    "political_leaning": "Belt-isolationist.",
+    "culture": "The high priest of the block.",
+    "achievements": ["Built the belt's meanest defence"]
+  },
+  "managing_staff": [
+    { "role": "goalkeeper_coach", "gender": "Male", "race": "Human (Belt-adapted)", "age": 45, "nationality": "Hygieian", "appearance": "Watchful and precise, drills shot-stopping in the dim.", "bio": "Dim Osei perfects the goalkeeping that anchors Hygiea's famed defence, the last refinement on an already miserly block.", "personality": "Exacting and patient.", "playing_history": "A former keeper of long service.", "playing_philosophy": "The keeper is the final word of the block. Make it unanswerable.", "political_leaning": "Belt-isolationist.", "culture": "The guardian of the goal.", "achievements": ["Coached the belt's tightest goalkeeping records"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Solid and calm, master of the dim box.", "bio": "Clean Vasquez is the balanced keeper who anchors the Shades' famous defence with composure.", "personality": "Composed and commanding.", "political_leaning": "Belt-isolationist.", "culture": "The last shadow.", "achievements": ["Most clean sheets in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Cleanse Torres is the workhorse full-back who covers the right channel without rest.", "personality": "Tireless and uncomplaining.", "political_leaning": "Belt-isolationist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the heart of the block.", "bio": "Pure Kane is the team-first defender who keeps the Shades' shape immaculate.", "personality": "Selfless and disciplined.", "political_leaning": "Belt-isolationist.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative and hard, relishes the duel.", "bio": "Pristine Walker is the aggressive enforcer who wins the dark battles up front of goal.", "personality": "Aggressive and committed.", "political_leaning": "Belt-isolationist.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, reads the gloom.", "bio": "Sterile Rivera is the composed defender who snuffs out attacks before they take shape.", "personality": "Balanced and intelligent.", "political_leaning": "Belt-isolationist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and rare, the lone creator.", "bio": "Vital Chen is the creative spark the defensive Shades pin their attacking hopes on.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The lone artist.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and selfless, the midfield shield.", "bio": "Heal Petrov is the team-first midfielder who screens the block tirelessly.", "personality": "Selfless and industrious.", "political_leaning": "Belt-isolationist.", "culture": "The shield.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and steady, keeps the ball.", "bio": "Cure Morales is the composed midfielder who refuses to surrender possession cheaply.", "personality": "Balanced and measured.", "political_leaning": "Belt-isolationist.", "culture": "The keeper of the ball.", "achievements": ["Highest pass retention in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Strong and predatory, the lone spearhead.", "bio": "Vigor Park is the selfish target striker who must take the Shades' scarce chances.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The lone spearhead.", "achievements": ["Club top scorer in a low-scoring side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and combative, supports the striker.", "bio": "Robust Kim is the aggressive forward who battles to win territory for the Shades.", "personality": "Aggressive and selfless up top.", "political_leaning": "Belt-isolationist.", "culture": "The battler.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Vitality Okafor is the selfish wide forward who carries the rare counter from the gloom.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most counter goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Remedy Tanaka is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt-isolationist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Tonic Nakamura is the team-first deputy who keeps the block intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Belt-isolationist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Salve Fischer is the promising young defender learning the Shades' dark discipline.", "personality": "Composed and coachable.", "political_leaning": "Belt-isolationist.", "culture": "The young wall.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Balm Hayashi is the creative deputy who offers a rare spark from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy spark.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Elixir Sato is the eager young finisher pushing for a place in the gloom.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "team_id": "solar-miners",
+  "team": {
+    "date_founded": "Founded by the deep-extraction crews of a belt mining colony, who drill for every advantage.",
+    "fans_nickname": "The Drillers",
+    "number_of_fans": "Around 14 million relentless, blue-collar belt supporters.",
+    "badge": "A spinning drill-bit boring into ore, sparks scattering.",
+    "home_kit": "Hi-vis amber and black with a drill-tread pattern.",
+    "away_kit": "Black with amber hazard striping.",
+    "third_kit": "Deep-shaft grey with an amber bit-line.",
+    "history": "Solar Miners drill for every inch of the pitch — a relentless high-pressing side that hounds opponents into the ground and never, ever lets up. Pure work-rate as a philosophy, the most exhausting team in the belt to face.",
+    "club_culture": "Relentless, blue-collar, and proud of the graft. The Drillers believe effort is non-negotiable.",
+    "political_leaning": "Belt labour-militant — a miners' union club with a chip on its shoulder.",
+    "trophy_cabinet": ["A reputation for running better-resourced sides into exhaustion"],
+    "legends": ["Bore Vask — the midfielder who reputedly never stopped running"],
+    "achievements": ["Most pressures applied in the belt"]
+  },
+  "stadium": {
+    "date_built": "A rough frontier ground built at the extraction site.",
+    "sponsors": "Backed by the colony's drilling and extraction crews.",
+    "pitch_size": "Standard, churned hard by the relentless pressing game.",
+    "pitch_type": "Basic frontier synthetic turf, well-worn.",
+    "stand_names": ["The Vask Stand", "The Shaft End", "The Crews' Terrace"],
+    "bio": "The Dig is a rough, raucous frontier ground where the crowd works as hard as the team. Away sides leave with empty legs and, usually, empty hands."
+  },
+  "training_facility": {
+    "date_built": "A basic facility at the extraction camp.",
+    "sponsors": "Funded on a shoestring by the drilling crews.",
+    "bio": "The Extraction Athletic Campus drills work-rate above all — the Drillers' relentless press is built on conditioning so brutal that opponents simply cannot match it."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 46,
+    "nationality": "Belt Colonist",
+    "appearance": "Lean and intense, never sits, paces the whole match.",
+    "bio": "Drill Rashidi is a high-pressing zealot who demands relentless effort and gets it. His Drillers hound opponents from the first whistle and outlast almost everyone.",
+    "personality": "Intense, demanding, and tireless.",
+    "playing_history": "A box-to-box midfielder who ran his whole career.",
+    "playing_philosophy": "Press them everywhere, all the time, until they break. Effort is the only entitlement.",
+    "political_leaning": "Belt labour-militant.",
+    "culture": "A miner who believes in graft above talent.",
+    "achievements": ["Built the belt's most relentless press"]
+  },
+  "managing_staff": [
+    { "role": "fitness_coach", "gender": "Male", "race": "Human (Belt-adapted)", "age": 41, "nationality": "Belt Colonist", "appearance": "Wiry and merciless, runs the hardest sessions in the belt.", "bio": "Seam Adeyemi builds the work-rate conditioning that powers the Drillers' relentless press, the engine behind the effort.", "personality": "Merciless and driven.", "playing_history": "An endurance specialist.", "playing_philosophy": "Out-run them and you out-play them. There is no substitute for graft.", "political_leaning": "Belt labour-militant.", "culture": "The engine of the press.", "achievements": ["Built the side's stamina edge"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Alert and proactive, sweeps behind the press.", "bio": "Photon Vasquez is the balanced sweeper-keeper who covers the space the high press leaves behind.", "personality": "Composed and proactive.", "political_leaning": "Belt labour-militant.", "culture": "The safety net.", "achievements": ["Most defensive actions outside the box"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and rugged, presses from full-back.", "bio": "Beam Cruz is the workhorse full-back who presses higher than most wingers.", "personality": "Tireless and uncomplaining.", "political_leaning": "Belt labour-militant.", "culture": "The wide presser.", "achievements": ["Most pressures by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the recovery runner.", "bio": "Solar Okafor is the team-first defender fast enough to cover when the press is beaten.", "personality": "Selfless and disciplined.", "political_leaning": "Belt labour-militant.", "culture": "The recovery man.", "achievements": ["Most recovery runs in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative and hard, leads the back-line press.", "bio": "Ray Sato is the aggressive defender who steps out to win the ball high.", "personality": "Aggressive and committed.", "political_leaning": "Belt labour-militant.", "culture": "The aggressor.", "achievements": ["Most high turnovers by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, holds the line.", "bio": "Flux Lee is the composed defender who keeps the high block organised.", "personality": "Balanced and intelligent.", "political_leaning": "Belt labour-militant.", "culture": "The organiser.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and busy, the press's brain.", "bio": "Radiant Kim is the creative spark who makes the high turnovers count.", "personality": "Creative and decisive.", "political_leaning": "Cosmopolitan.", "culture": "The brain.", "achievements": ["Most chances created from turnovers"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and relentless, the press engine.", "bio": "Lumens Mori is the selfless midfielder who hounds the ball for ninety minutes.", "personality": "Selfless and relentless.", "political_leaning": "Belt labour-militant.", "culture": "The engine.", "achievements": ["Most pressures in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and busy, the two-way midfielder.", "bio": "Watt Nakamura is the composed midfielder who links the press to the attack.", "personality": "Balanced and industrious.", "political_leaning": "Belt labour-militant.", "culture": "The two-way engine.", "achievements": ["Most recoveries in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and predatory, feeds on panic.", "bio": "Flare Rivera is the selfish finisher who punishes the mistakes the press forces.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The scavenger.", "achievements": ["Most goals from forced errors"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Fierce and direct, leads from the front.", "bio": "Blaze Patel is the aggressive forward who triggers the press by hounding defenders.", "personality": "Aggressive and relentless.", "political_leaning": "Belt labour-militant.", "culture": "The front of the press.", "achievements": ["Most forward pressures in the belt"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and direct, the outlet.", "bio": "Shine Novak is the selfish forward who finishes the chaos the press creates.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Most goals from high turnovers"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Array Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt labour-militant.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Volt Anderson is the team-first deputy who maintains the press's intensity in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Belt labour-militant.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Panel Martinez is the promising young defender learning the Drillers' relentless ways.", "personality": "Composed and coachable.", "political_leaning": "Belt labour-militant.", "culture": "The young presser.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Current Chandra is the creative deputy who offers a different answer from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Ampere Ito is the eager young finisher pushing for a place among the Drillers.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "team_id": "pallas-wanderers",
+  "team": {
+    "date_founded": "Founded by the roving prospector crews of Pallas, who never stayed in one crater for long.",
+    "fans_nickname": "The Drifters",
+    "number_of_fans": "Around 12 million, scattered and wandering like the club itself.",
+    "badge": "A lone figure walking toward a distant asteroid horizon.",
+    "home_kit": "Sand-tan and brown with a drifting-dune pattern.",
+    "away_kit": "Faded ochre with brown trim.",
+    "third_kit": "Dusk-purple with a wandering-trail motif.",
+    "history": "Pallas Wanderers have no fixed identity and make a virtue of it — a balanced, adaptable side that shifts its approach to suit any opponent. Rootless and flexible, they are nobody's easy game.",
+    "club_culture": "Restless, adaptable, and self-reliant. The Drifters belong to no one and adjust to everyone.",
+    "political_leaning": "Belt free-prospector — fiercely independent and suspicious of all authority.",
+    "trophy_cabinet": ["A reputation for upsetting sides that underestimate them"],
+    "legends": ["Rove Castan — the versatile captain who played every position with distinction"],
+    "achievements": ["Most tactically varied side in the belt"]
+  },
+  "stadium": {
+    "date_built": "A modular, relocatable ground assembled on the Pallas surface.",
+    "sponsors": "Backed by the roving prospector guilds.",
+    "pitch_size": "Standard, kept flexible to suit the shifting game plan.",
+    "pitch_type": "Hardy synthetic turf rated for low gravity.",
+    "stand_names": ["The Castan Stand", "The Drift End", "The Prospectors' Terrace"],
+    "bio": "The Drifter is a modest, modular ground with a transient feel — fitting for a club that prides itself on never being pinned down. Away teams rarely know which Pallas will turn up."
+  },
+  "training_facility": {
+    "date_built": "A basic facility, deliberately lean and portable.",
+    "sponsors": "Funded modestly by the prospector guilds.",
+    "bio": "The Nomad Training Grounds drill versatility above all — every player learns multiple roles, so the Drifters can reshape themselves match to match."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 47,
+    "nationality": "Palladian",
+    "appearance": "Lean and restless, never seems quite settled on the touchline.",
+    "bio": "Nomad Ferreira is a tactical pragmatist who builds adaptable sides with no fixed shape, shifting his Wanderers to exploit whatever an opponent fears. Flexibility is his whole creed.",
+    "personality": "Adaptable, shrewd, and independent.",
+    "playing_history": "A versatile utility player who filled every role in his career.",
+    "playing_philosophy": "Have no fixed plan they can prepare for. Read the match and become whatever beats them.",
+    "political_leaning": "Belt free-prospector.",
+    "culture": "A wanderer who trusts only adaptability.",
+    "achievements": ["Built the belt's most flexible side"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Belt-adapted)", "age": 42, "nationality": "Palladian", "appearance": "Wiry and watchful, tweaks the press between phases.", "bio": "Drift Macias drills the pressing systems that let the Wanderers switch their approach mid-match, the specialist behind the adaptability.", "personality": "Inventive and restless.", "playing_history": "A roving midfielder turned pressing coach.", "playing_philosophy": "Change the press, change the game. Never let them settle.", "political_leaning": "Belt free-prospector.", "culture": "The pressing specialist.", "achievements": ["Built the side's variable press"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Calm and adaptable, a keeper for any plan.", "bio": "Nomad Petrov is the balanced keeper comfortable behind whatever shape the Drifters pick.", "personality": "Composed and adaptable.", "political_leaning": "Belt free-prospector.", "culture": "The constant.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and versatile, fills any flank role.", "bio": "Stray Torres is the workhorse defender who adapts to whatever the match demands.", "personality": "Tireless and adaptable.", "political_leaning": "Belt free-prospector.", "culture": "The utility grafter.", "achievements": ["Plays anywhere across the back"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the flexible anchor.", "bio": "Roam Okafor is the team-first defender who shifts seamlessly between back-four and back-five.", "personality": "Selfless and versatile.", "political_leaning": "Belt free-prospector.", "culture": "The adaptable anchor.", "achievements": ["Plays multiple defensive roles"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative and willing, the bite at the back.", "bio": "Wander Kane is the aggressive defender who adds steel to the shifting structure.", "personality": "Aggressive and committed.", "political_leaning": "Belt free-prospector.", "culture": "The enforcer.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Vagrant Lee is the composed defender who keeps the Drifters solid through every tactical shift.", "personality": "Balanced and intelligent.", "political_leaning": "Belt free-prospector.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and mobile, the creative chameleon.", "bio": "Trek Kim is the creative midfielder who reinvents his game to suit each plan.", "personality": "Creative and adaptable.", "political_leaning": "Cosmopolitan.", "culture": "The chameleon.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and selfless, the flexible engine.", "bio": "Journey Mori is the team-first midfielder who covers whatever gap the shifting shape leaves.", "personality": "Selfless and industrious.", "political_leaning": "Belt free-prospector.", "culture": "The engine.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and tidy, the steady pivot.", "bio": "Range Osei is the composed midfielder who anchors the Drifters through every change of plan.", "personality": "Balanced and measured.", "political_leaning": "Belt free-prospector.", "culture": "The steadier.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and opportunistic, the adaptable finisher.", "bio": "Ramble Rivera is the selfish striker who finds goals in whatever system Ferreira builds.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and willing, the flexible forward.", "bio": "Traverse Chen is the aggressive forward who fills whatever attacking role the plan needs.", "personality": "Aggressive and adaptable.", "political_leaning": "Belt free-prospector.", "culture": "The utility forward.", "achievements": ["Goals across multiple roles"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and sharp, the wide finisher.", "bio": "Pilgrim Patel is the selfish wide forward who provides the cutting edge in any shape.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Exile Beck is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt free-prospector.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Quest Park is the team-first deputy who slots into any defensive shape.", "personality": "Selfless and reliable.", "political_leaning": "Belt free-prospector.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Odyssey Torres is the promising young defender learning the Drifters' versatile ways.", "personality": "Composed and coachable.", "political_leaning": "Belt free-prospector.", "culture": "The adaptable prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Venture Tanaka is the creative deputy who fits the flexible side from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Sojourn Brennan is the eager young finisher pushing for a place among the Wanderers.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

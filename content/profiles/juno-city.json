@@ -1,0 +1,66 @@
+{
+  "team_id": "juno-city",
+  "team": {
+    "date_founded": "Founded as the civic pride of Juno, the belt's most orderly and well-governed settlement.",
+    "fans_nickname": "The Civics",
+    "number_of_fans": "Around 17 million orderly, organised supporters.",
+    "badge": "A balanced civic scale over a stylised city skyline.",
+    "home_kit": "Royal purple and white with a clean geometric city-grid pattern.",
+    "away_kit": "White with purple trim and a thin skyline silhouette.",
+    "third_kit": "Slate with luminous grid lines.",
+    "history": "Juno City are the belt's disciplinarians — a balanced, organised side that values structure and tactical order above all. They rarely beat themselves, and that, in the chaotic belt, is half the battle won.",
+    "club_culture": "Orderly, civic-minded, and tactically disciplined. The Civics believe in doing things properly.",
+    "political_leaning": "Belt civic-institutionalist — the belt's voice of law and order.",
+    "trophy_cabinet": ["A steady record built on consistency rather than flair"],
+    "legends": ["Statute Vorn — the captain who embodied the club's disciplined order"],
+    "achievements": ["Fewest cards and most disciplined record in the belt"]
+  },
+  "stadium": {
+    "date_built": "Built as a civic monument at the heart of Juno's main settlement.",
+    "sponsors": "Backed by the Junonian civic authority and trade halls.",
+    "pitch_size": "Full regulation, immaculately maintained.",
+    "pitch_type": "Well-kept synthetic turf, true and even.",
+    "stand_names": ["The Vorn Stand", "The Civic End", "The Forum Terrace"],
+    "bio": "The Temple is the belt's grandest civic venue — orderly, well-run, and quietly imposing. Visiting sides find a disciplined, knowledgeable crowd that punishes indiscipline with scorn."
+  },
+  "training_facility": {
+    "date_built": "A well-organised standard complex run with civic efficiency.",
+    "sponsors": "Funded by the Junonian civic authority.",
+    "bio": "The Juno Temple Training Ground drills tactical organisation and positional discipline, turning out players who always know their job and rarely shirk it."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 50,
+    "nationality": "Junonian",
+    "appearance": "Neat and precise, runs his sessions like a civic meeting.",
+    "bio": "Order Mensah is a balanced tactician obsessed with structure and discipline. His Juno sides are rarely spectacular but almost never careless, the most organised team in the belt.",
+    "personality": "Methodical, calm, and exacting.",
+    "playing_history": "A disciplined deep midfielder who rarely lost his position.",
+    "playing_philosophy": "Be balanced, be organised, and let the opponent make the mistakes. Order beats chaos.",
+    "political_leaning": "Belt civic-institutionalist.",
+    "culture": "The custodian of belt order.",
+    "achievements": ["Built the belt's most disciplined side"]
+  },
+  "managing_staff": [
+    { "role": "analyst", "gender": "Male", "race": "Human (Belt-adapted)", "age": 38, "nationality": "Junonian", "appearance": "Studious and quiet, forever reviewing match footage.", "bio": "Lens Becker dissects every opponent on video, feeding Mensah the organised plans that keep the Civics one disciplined step ahead.", "personality": "Analytical and meticulous.", "playing_history": "Came to football through analysis, not play.", "playing_philosophy": "Order is built on information. Know them better than they know themselves.", "political_leaning": "Belt civic-institutionalist.", "culture": "The analyst.", "achievements": ["Built the club's opponent-analysis system"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Calm and orderly, a keeper for any plan.", "bio": "Civic Reyes is the balanced, reliable keeper who anchors the Civics' organised structure.", "personality": "Composed and reliable.", "political_leaning": "Belt civic-institutionalist.", "culture": "The steady base.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and disciplined, holds his position.", "bio": "District Torres is the workhorse full-back who never abandons his structural duty.", "personality": "Tireless and disciplined.", "political_leaning": "Belt civic-institutionalist.", "culture": "The disciplined grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the organiser at the back.", "bio": "Metro Okafor is the team-first defender who keeps the Civics' lines immaculate.", "personality": "Selfless and disciplined.", "political_leaning": "Belt civic-institutionalist.", "culture": "The organiser.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative but controlled, disciplined aggression.", "bio": "Urban Kane is the aggressive defender who channels his fire within the structure.", "personality": "Aggressive but disciplined.", "political_leaning": "Belt civic-institutionalist.", "culture": "The controlled enforcer.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, reads the game.", "bio": "Precinct Rivera is the composed defender who keeps the order when chaos beckons.", "personality": "Balanced and intelligent.", "political_leaning": "Belt civic-institutionalist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and tidy, the creative order.", "bio": "Boulevard Chen is the creative midfielder who finds chances without breaking the structure.", "personality": "Creative and disciplined.", "political_leaning": "Cosmopolitan.", "culture": "The orderly artist.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and selfless, the structural engine.", "bio": "Avenue Petrov is the team-first midfielder who holds the shape and does the running.", "personality": "Selfless and industrious.", "political_leaning": "Belt civic-institutionalist.", "culture": "The engine.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and composed, the metronome.", "bio": "Plaza Morales is the steady midfielder who keeps the Civics ticking to plan.", "personality": "Balanced and measured.", "political_leaning": "Belt civic-institutionalist.", "culture": "The metronome.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Sharp and self-assured, the orderly finisher.", "bio": "Skyline Yamamoto is the selfish striker who finishes the structured build-up with precision.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and willing, the disciplined forward.", "bio": "Spire Nakamura is the aggressive forward who presses within the plan and stretches defences.", "personality": "Aggressive and selfless up top.", "political_leaning": "Belt civic-institutionalist.", "culture": "The disciplined spearhead.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and sharp, the wide finisher.", "bio": "Apex Fischer is the selfish wide forward who turns the orderly build-up into goals.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Dome Tanaka is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt civic-institutionalist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Sector Kim is the team-first deputy who keeps the structure intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Belt civic-institutionalist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Level Osei is the promising young defender learning the Civics' disciplined order.", "personality": "Composed and coachable.", "political_leaning": "Belt civic-institutionalist.", "culture": "The orderly prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Grid Park is the creative deputy who offers a spark within the structure.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Neon Beck is the eager young finisher pushing for a place in the orderly side.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}
