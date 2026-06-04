@@ -202,8 +202,11 @@ FROM (VALUES
   ('70000000-0000-0000-0000-000000000014'::uuid, 'enceladus-geysers', 60),
   -- Sideways Republic backs Uranus Sidewinders
   ('70000000-0000-0000-0000-000000000015'::uuid, 'uranus-sidewinders', 85),
-  -- Deep Current Party backs Neptune — but barely engages publicly
-  ('70000000-0000-0000-0000-000000000016'::uuid, 'neptune-mariners', 70),
+  -- Deep Current Party (party 16) intentionally backs no club: Neptune has
+  -- no club in the current 32-team roster, and the isolationist Deep Current
+  -- faction "rarely speaks, never twice" — leaving it without a sympathises_with
+  -- edge is lore-consistent. (Previously referenced a phantom 'neptune-mariners'
+  -- slug that the inner JOIN silently dropped.)
   -- Belt Workers' Congress backs all Belt clubs
   ('70000000-0000-0000-0000-000000000017'::uuid, 'ceres-miners',    85),
   ('70000000-0000-0000-0000-000000000017'::uuid, 'vesta',           75),
