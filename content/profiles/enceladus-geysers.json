@@ -1,0 +1,80 @@
+{
+  "team_id": "enceladus-geysers",
+  "team": {
+    "date_founded": "Founded by the research outposts clustered around Enceladus's great geysers, a young and scrappy club.",
+    "fans_nickname": "The Eruption",
+    "number_of_fans": "Around 11 million, small in number but explosive in voice.",
+    "badge": "A white geyser bursting from blue ice toward a ringed sky.",
+    "home_kit": "Pale ice-blue with white spray streaks rising from the hem.",
+    "away_kit": "White with blue trim and a single erupting plume.",
+    "third_kit": "Deep ocean teal flecked with frost-white.",
+    "history": "Enceladus Geysers do one thing spectacularly: they erupt. A modest, youthful side with little money, they sit deep, absorb pressure, and then explode forward in sudden, devastating counters that have humbled far richer clubs.",
+    "club_culture": "Patient then explosive, and proud of their underdog status. The Eruption love nothing more than ambushing a giant.",
+    "political_leaning": "Frontier-independent, with the open-minded streak of a research colony.",
+    "trophy_cabinet": ["A reputation as everyone's least favourite away trip"],
+    "legends": ["Vex Tarn — the counterattacking striker who scored the colony's most famous goal"],
+    "achievements": ["Most goals scored on the counter in the league"]
+  },
+  "stadium": {
+    "date_built": "A functional ground built beside the geyser fields.",
+    "sponsors": "Backed by the Enceladus research and water-harvest stations.",
+    "pitch_size": "Standard, with deep space behind to launch the counter into.",
+    "pitch_type": "Hardy synthetic turf rated for the moon's deep cold.",
+    "stand_names": ["The Tarn Stand", "The Plume End", "The Spray Terrace"],
+    "bio": "The Spray is a tight, functional bowl where the small crowd erupts in unison with every breaking counter — a sudden roar that mirrors the geysers outside."
+  },
+  "training_facility": {
+    "date_built": "A standard-grade complex run on a research-colony budget.",
+    "sponsors": "Funded modestly by the science stations.",
+    "bio": "The Geyser Training Grounds focus relentlessly on transition: the instant the ball is won, everyone explodes forward. It is counterattacking drilled to instinct."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human (Enceladus-adapted)",
+    "age": 42,
+    "nationality": "Enceladean",
+    "appearance": "Sharp and quick, paces the technical area waiting for the moment to spring.",
+    "bio": "Crystal Murai turns poverty into a weapon — her Geysers defend deep and patiently, then erupt forward the instant they win the ball. She has built a side that punches far above its modest budget.",
+    "personality": "Patient, opportunistic, and fearless against bigger names.",
+    "playing_history": "A quick counterattacking forward who played her whole career at small clubs.",
+    "playing_philosophy": "Absorb, wait, erupt. Let them have the ball until the moment it costs them everything.",
+    "political_leaning": "Frontier-independent.",
+    "culture": "An underdog by birth who relishes humbling the rich.",
+    "achievements": ["Masterminded famous counterattacking upsets"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Male",
+      "race": "Human (Enceladus-adapted)",
+      "age": 37,
+      "nationality": "Enceladean",
+      "appearance": "Earnest and youthful, more at home with the academy kids than the seniors.",
+      "bio": "Spra Iversen runs the youth pathway that keeps the cash-strapped Geysers stocked with eager, fast-breaking talent. The club's future is his charge.",
+      "personality": "Patient and nurturing; an optimist.",
+      "playing_history": "A modest winger turned youth developer.",
+      "playing_philosophy": "Young legs win counters. Grow them, trust them, and let them run.",
+      "political_leaning": "Frontier-independent.",
+      "culture": "The keeper of the colony's young talent.",
+      "achievements": ["Built a youth pipeline that sustains the senior side"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Composed and alert, ready to start the counter.", "bio": "Plume Torres is the balanced keeper who launches the eruption, distributing fast and accurately the instant he claims the ball.", "personality": "Composed and proactive.", "political_leaning": "Frontier-independent.", "culture": "The first spark of the counter.", "achievements": ["Most counter-launching distributions"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Combative and quick, the bite on the flank.", "bio": "Vapor Cruz is the aggressive full-back who breaks forward like a released spring once the Geysers win the ball.", "personality": "Aggressive and energetic.", "political_leaning": "Frontier-independent.", "culture": "The flank eruption.", "achievements": ["Most counterattacking runs by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Selfless and steady, the patient deep defender.", "bio": "Geyser Walsh is the team-first defender who absorbs pressure without panic, the patience before the eruption.", "personality": "Selfless and disciplined.", "political_leaning": "Frontier-independent.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Veteran and tireless, the workhorse anchor.", "bio": "Steam Hayashi never stops covering, the relentless grafter who holds the deep block together.", "personality": "Tireless and reliable.", "political_leaning": "Frontier-independent.", "culture": "The steady anchor.", "achievements": ["Most clearances in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Balanced and calm, reads the danger early.", "bio": "Jet Fischer is the composed defender who keeps the block disciplined and times the spring forward perfectly.", "personality": "Balanced and intelligent.", "political_leaning": "Frontier-independent.", "culture": "The timer of the counter.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Inventive and quick-thinking, the brain of the break.", "bio": "Spray Morales is the creative spark who threads the killer pass the instant the counter erupts.", "personality": "Creative and decisive.", "political_leaning": "Cosmopolitan.", "culture": "The eruption's architect.", "achievements": ["Most counter assists"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Willing and selfless, covers every blade.", "bio": "Brine Nakamura is the team-first runner who powers the transition from deep block to lightning break.", "personality": "Selfless and industrious.", "political_leaning": "Frontier-independent.", "culture": "The transition engine.", "achievements": ["Most distance covered in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Balanced and tidy, the calm link in the break.", "bio": "Saline Park is the composed midfielder who keeps the counter under control instead of letting it spill into chaos.", "personality": "Balanced and measured.", "political_leaning": "Frontier-independent.", "culture": "The controlled spark.", "achievements": ["Highest pass completion on the break"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Lean and predatory, the tip of the eruption.", "bio": "Gush Li is the selfish finisher who lives for the half-chance the counter creates, lethal in space.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The point of the eruption.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Fierce and direct, sparks the break from the front.", "bio": "Surge Patel is the aggressive forward who triggers the counter by hounding tired defenders into mistakes.", "personality": "Aggressive and relentless.", "political_leaning": "Frontier-independent.", "culture": "The trigger.", "achievements": ["Most high turnovers won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Sharp and self-assured, a second finisher.", "bio": "Flood Novak is the selfish forward who doubles the threat on the break, hungry to outscore his strike partner.", "personality": "Selfish and competitive.", "political_leaning": "Indifferent.", "culture": "The rival finisher.", "achievements": ["Second top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Tide Brennan is the cautious veteran second keeper, a settling presence behind the first choice.", "personality": "Cautious and steady.", "political_leaning": "Frontier-independent.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Ripple Tanaka is the team-first deputy who slots into the deep block without weakening it.", "personality": "Selfless and reliable.", "political_leaning": "Frontier-independent.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Drizzle Osei is the promising young defender Iversen is grooming, calm and quick to learn.", "personality": "Composed and coachable.", "political_leaning": "Frontier-independent.", "culture": "The bright prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Current Webb is the creative deputy who can unlock a stubborn block, a youngster brimming with ideas.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Enceladus-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Wave Koval is the eager young finisher pushing for a place, a selfish forward desperate to make the counter his own.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The impatient prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

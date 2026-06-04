@@ -1,0 +1,80 @@
+{
+  "team_id": "titan-methane",
+  "team": {
+    "date_founded": "Founded in the haze-shrouded settlements of Titan, where football is played half-glimpsed through orange murk.",
+    "fans_nickname": "The Haze",
+    "number_of_fans": "Around 21 million, secretive and loyal, hard to read as their home moon.",
+    "badge": "An orange droplet falling through swirling haze, half-hidden.",
+    "home_kit": "Murky orange and brown with a swirling haze pattern that obscures the number.",
+    "away_kit": "Smoke-grey with faint orange seams.",
+    "third_kit": "Deep methane-amber fading into shadow.",
+    "history": "Titan Methane are the system's enigma — a hardy, patient side raised in thick atmosphere who specialise in the unsettling, counterattacking ambush. Opponents say playing them is like grasping at smoke: nothing seems to happen, and then suddenly the ball is in the net.",
+    "club_culture": "Patient, secretive, and quietly tough. The Haze reveal nothing and punish everything.",
+    "political_leaning": "Frontier-independent, with the guarded reserve of an isolated moon.",
+    "trophy_cabinet": ["A reputation for ambushing the unwary"],
+    "legends": ["Vapor Sturm — the counterattacking striker who scored from nowhere, again and again"],
+    "achievements": ["Most goals scored in the final fifteen minutes"]
+  },
+  "stadium": {
+    "date_built": "Built within a sealed dome against Titan's thick, cold atmosphere.",
+    "sponsors": "Backed by the hydrocarbon-harvest combines that fuel the moon.",
+    "pitch_size": "Standard, with deep space to launch the ambush.",
+    "pitch_type": "Hardy synthetic turf rated for the dense, frigid air.",
+    "stand_names": ["The Sturm Stand", "The Haze End", "The Hydrocarbon Terrace"],
+    "bio": "The Orange Haze is a strange, half-lit dome where the murky atmosphere seems to seep onto the pitch. Visiting players speak of losing track of the ball — and of the Haze's counterattacks materialising out of the gloom."
+  },
+  "training_facility": {
+    "date_built": "A professional campus built into the hydrocarbon harvest works.",
+    "sponsors": "Funded by the moon's harvest combines.",
+    "bio": "The Hydrocarbon Athletic Campus drills endurance in thick-air conditions, building lungs that outlast opponents and the patience to wait for the killing counter."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Titan-adapted)",
+    "age": 50,
+    "nationality": "Titanian",
+    "appearance": "Inscrutable and still, gives nothing away from the technical area.",
+    "bio": "Haze Kowalski is a master of the patient ambush — his Titan sides sit deep in the murk, absorb everything, and strike on the counter when opponents least expect it. He says little and reveals less.",
+    "personality": "Guarded, patient, and quietly cunning.",
+    "playing_history": "A counterattacking forward who specialised in the late, decisive goal.",
+    "playing_philosophy": "Give them nothing to see, then strike from the haze. Patience is a weapon; surprise is the kill.",
+    "political_leaning": "Frontier-independent.",
+    "culture": "An enigma who treats information as currency.",
+    "achievements": ["Built a side feared for its late ambushes"]
+  },
+  "managing_staff": [
+    {
+      "role": "fitness_coach",
+      "gender": "Male",
+      "race": "Human (Titan-adapted)",
+      "age": 42,
+      "nationality": "Titanian",
+      "appearance": "Quiet and rugged, drills the squad in the thickest dome air.",
+      "bio": "Haze Mbuyi builds the atmospheric endurance that lets the Haze outlast opponents and ambush them late, when tired legs can no longer track the counter.",
+      "personality": "Stoic and methodical.",
+      "playing_history": "A thick-air endurance specialist.",
+      "playing_philosophy": "Win the last fifteen minutes. The haze belongs to whoever can still breathe.",
+      "political_leaning": "Frontier-independent.",
+      "culture": "The engine of the late ambush.",
+      "achievements": ["Built the conditioning behind the late-goal record"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Calm and obscured, a keeper who reads the murk.", "bio": "Haze Yamamoto is the balanced keeper who launches the ambush, distributing fast and accurate from a deep block.", "personality": "Composed and proactive.", "political_leaning": "Frontier-independent.", "culture": "The first whisper of the counter.", "achievements": ["Most counter-launching distributions"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Tireless and quiet, the workhorse on the flank.", "bio": "Murk Anderson is the relentless full-back who grafts in the deep block and breaks late when the ambush springs.", "personality": "Tireless and uncomplaining.", "political_leaning": "Frontier-independent.", "culture": "The patient grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Selfless and steady, the deep defender.", "bio": "Fog Larsson is the team-first defender who absorbs pressure without panic, the patience before the strike.", "personality": "Selfless and disciplined.", "political_leaning": "Frontier-independent.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Combative and firm, the bite in the block.", "bio": "Smog Walker is the aggressive defender who breaks up attacks to feed the counter, relishing the murky battle.", "personality": "Aggressive and committed.", "political_leaning": "Frontier-independent.", "culture": "The disruptor.", "achievements": ["Most interceptions in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Balanced and watchful, times the ambush.", "bio": "Miasma Santos is the composed defender who reads the moment to spring, the patient timer of the counter.", "personality": "Balanced and intelligent.", "political_leaning": "Frontier-independent.", "culture": "The timer.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Inventive and quick, the brain of the ambush.", "bio": "Drift Cruz is the creative spark who threads the killing pass the instant the counter erupts from the haze.", "personality": "Creative and decisive.", "political_leaning": "Cosmopolitan.", "culture": "The architect of the ambush.", "achievements": ["Most counter assists"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Willing and quiet, covers the murk.", "bio": "Murky Rivers is the selfless runner who powers the transition from deep block to sudden break.", "personality": "Selfless and industrious.", "political_leaning": "Frontier-independent.", "culture": "The transition engine.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Balanced and calm, the controlled link.", "bio": "Dusk Ito is the composed midfielder who keeps the counter purposeful rather than frantic.", "personality": "Balanced and measured.", "political_leaning": "Frontier-independent.", "culture": "The controlled spark.", "achievements": ["Highest pass completion on the break"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Lean and predatory, the point of the ambush.", "bio": "Halo Nkosi is the selfish finisher who appears from the gloom to convert the counter, cold and clinical in space.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The ghost striker.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Direct and combative, sparks the break.", "bio": "Shroud Martinez is the aggressive forward who triggers the ambush, hounding tired defenders into the mistakes the Haze feed on.", "personality": "Aggressive and relentless.", "political_leaning": "Frontier-independent.", "culture": "The trigger.", "achievements": ["Most high turnovers won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Self-assured and sharp, a second finisher.", "bio": "Fume Chandra is the selfish forward who doubles the threat on the break, hungry to outscore his partner.", "personality": "Selfish and competitive.", "political_leaning": "Indifferent.", "culture": "The rival finisher.", "achievements": ["Second top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Gloom Beck is the cautious veteran second keeper, a settling presence behind the first choice.", "personality": "Cautious and steady.", "political_leaning": "Frontier-independent.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Veil Torres is the team-first deputy who slots into the deep block without weakening it.", "personality": "Selfless and reliable.", "political_leaning": "Frontier-independent.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Dim Park is the promising young defender absorbing the club's patient ways, calm and durable.", "personality": "Composed and coachable.", "political_leaning": "Frontier-independent.", "culture": "The young wall.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Fade Tanaka is the creative deputy who can unlock a stubborn block, a youngster brimming with quiet ideas.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Titan-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Pall Kim is the eager young finisher pushing for a place, a selfish forward learning the art of the late ambush.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The impatient prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}
