@@ -1,0 +1,84 @@
+# ── Deploy match-worker edge function ─────────────────────────────────────────
+# WHY THIS EXISTS
+# ───────────────
+# Edge functions are NOT deployed by the main deploy.yml workflow (that one only
+# ships the static site to GitHub Pages).  Historically the match-worker function
+# was deployed by hand, so merging worker changes to main left production running
+# stale code until someone remembered to redeploy.  This workflow closes that gap:
+# any change to the worker's source on main redeploys it automatically, and it can
+# also be run on demand from the Actions tab (workflow_dispatch).
+#
+# WHY CI RATHER THAN LOCAL / MCP
+# ──────────────────────────────
+# The Supabase deploy endpoint (api.supabase.com) is not reachable from every
+# development environment's network policy, and the MCP deploy tool requires the
+# whole ~600 KB function inlined as text.  A GitHub-hosted runner has open egress
+# and reads the files straight off the checkout, so the deploy is byte-exact with
+# no transcription step.
+#
+# REQUIRED SECRET
+# ───────────────
+#   SUPABASE_ACCESS_TOKEN — a Supabase Personal Access Token (Dashboard →
+#   Account → Access Tokens).  Add it under repo Settings → Secrets and
+#   variables → Actions.  Scope: account-level; rotate/revoke as you would any
+#   deploy credential.
+#
+# AUTH NOTE (--no-verify-jwt)
+# ───────────────────────────
+# match-worker implements its own shared-secret auth (WORKER_SHARED_SECRET) and is
+# invoked by pg_cron with a Bearer secret, NOT a Supabase JWT.  It must therefore
+# be deployed with JWT verification DISABLED — otherwise every cron invocation
+# would be rejected with 401.  Do not remove --no-verify-jwt.
+
+name: Deploy match-worker
+
+on:
+  # Manual trigger from the Actions tab (and via the GitHub API / MCP).
+  workflow_dispatch:
+  # Auto-deploy whenever the worker's source changes on main.
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/match-worker/**'
+      - '.github/workflows/deploy-match-worker.yml'
+
+# Least-privilege GITHUB_TOKEN: this workflow only needs to read the repo to
+# check it out — the Supabase deploy authenticates via SUPABASE_ACCESS_TOKEN,
+# not the GITHUB_TOKEN.  Restricting to contents:read satisfies CodeQL's
+# workflow-permissions check and limits blast radius if the token ever leaks.
+permissions:
+  contents: read
+
+# Serialize deploys so two runs can't race to publish different versions.
+concurrency:
+  group: deploy-match-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Production guardrail: only ever deploy from main.  workflow_dispatch lets
+    # the caller choose any branch or tag, and this job deploys whatever ref it
+    # runs on to the hard-coded production Supabase project — so without this
+    # gate, dispatching from a feature branch would publish unmerged worker
+    # code to prod.  The push trigger is already main-only; this guards the
+    # manual/API path too.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pin to the version validated against this function's bundle.
+          version: 2.104.0
+
+      - name: Deploy match-worker
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy match-worker \
+            --project-ref ddtpbipkqamuxnvupddc \
+            --use-api \
+            --no-verify-jwt
