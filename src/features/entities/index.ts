@@ -162,6 +162,24 @@ export {
   sortRefereesById,
 } from './logic/refereeSelection';
 
+// ── Logic — Galaxy Dispatch feed shaping (News page) ───────────────────────
+// Pure presentation helpers so the news feed reads "alive" instead of spammed:
+// collapse repetitive `cosmic_omen` batches into one card, and detect a stale
+// wire so the page can show an in-world quiet cue rather than looking broken.
+export {
+  FLOOD_KINDS,
+  MIN_COLLAPSE_RUN,
+  QUIET_THRESHOLD_HOURS,
+  collapseFloodRuns,
+  feedQuietness,
+} from './logic/shapeNewsFeed';
+export type {
+  FeedItem,
+  SingleFeedItem,
+  CollapsedFeedItem,
+  FeedQuietness,
+} from './logic/shapeNewsFeed';
+
 export {
   STRICT_THRESHOLD,
   LENIENT_THRESHOLD,
