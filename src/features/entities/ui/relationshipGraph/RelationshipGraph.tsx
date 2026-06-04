@@ -129,6 +129,35 @@ const EDGE_STROKE_MAX = 3;
 /** Opacity applied to non-highlighted nodes/edges when something is focused. */
 const DIM_OPACITY = 0.35;
 
+// ── Legend data ──────────────────────────────────────────────────────────────
+// Defined at module scope so they're shared across renders without
+// re-allocation.  COLORS is safe to reference here because ES module imports
+// are hoisted to the top of the module regardless of source position.
+
+/**
+ * Edge-colour legend entries (link strength tiers).
+ * dust50 stands in for `hairline` in the legend swatch — hairline is 18%
+ * opacity, which is near-invisible as a 2 px colour sample on abyss.
+ */
+const EDGE_LEGEND = [
+  { color: COLORS.terraNova, label: 'Allied'  },
+  { color: COLORS.dust50,    label: 'Neutral' },
+  { color: COLORS.flare,     label: 'Rival'   },
+] as const;
+
+/**
+ * Node-colour legend entries (entity kind tiers, one entry per visual tier).
+ * Labels are intentionally concise — the tooltip reveals the exact kind on hover.
+ */
+const NODE_LEGEND = [
+  { color: COLORS.dust,      label: 'Player'      },
+  { color: COLORS.astro,     label: 'Manager / Team' },
+  { color: COLORS.quantum,   label: 'Media'       },
+  { color: COLORS.terraNova, label: 'Governance'  },
+  { color: COLORS.flare,     label: 'Disruption'  },
+  { color: COLORS.dust70,    label: 'Place'       },
+] as const;
+
 /**
  * Visually-hidden style for the aria-live announcement (sr-only pattern).
  * Renders the live region into the accessibility tree but keeps it
@@ -515,76 +544,87 @@ export function RelationshipGraph({
   const hoveredNode   = focusId ? layout.nodes.find(n => n.id === focusId) ?? null : null;
   const hoveredEntity = focusId ? (nodeMap.get(focusId) ?? null)               : null;
 
+  // ── Outer container: graph box + legend ─────────────────────────────
+  // The outer div carries `ref` (for ResizeObserver width measurement) and
+  // `className` (caller's layout glue).  The inner graph box keeps
+  // `position: relative` so the NodeTooltip HTML overlay can be absolutely
+  // positioned within it without affecting the legend below.
   return (
-    <div ref={wrapperRef} className={className} style={wrapperStyle}>
-      {/* ── aria-live announcement ──────────────────────────────────────
-          Off-screen but still in the accessibility tree.  Updates as
-          the connection count changes (e.g. when the user navigates
-          to a different entity via a node click). */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        style={SR_ONLY_STYLE}
-      >
-        {announcement}
+    <div ref={wrapperRef} className={className} style={{ width: '100%' }}>
+      {/* ── Graph SVG box ──────────────────────────────────────────────── */}
+      <div style={wrapperStyle}>
+        {/* ── aria-live announcement ──────────────────────────────────────
+            Off-screen but still in the accessibility tree.  Updates as
+            the connection count changes (e.g. when the user navigates
+            to a different entity via a node click). */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          style={SR_ONLY_STYLE}
+        >
+          {announcement}
+        </div>
+
+        <svg
+          role="img"
+          aria-label={`Relationship graph for ${seedName}, ${connectionCount} connections`}
+          width={width}
+          height={height}
+          viewBox={`0 0 ${width} ${height}`}
+          // `touch-action: none` so pinch + double-tap on the SVG area
+          // don't accidentally trigger the browser's page zoom (most
+          // common pain point on mobile Safari).  Pan / tap still work —
+          // the property only suppresses the gesture handler the
+          // browser would otherwise own.
+          style={{ display: 'block', touchAction: 'none' }}
+        >
+          {/* ── Edges ──────────────────────────────────────────────────── */}
+          {layout.edges.map((edge) => (
+            <EdgeLine
+              key={edgeKey(edge)}
+              edge={edge}
+              focusId={focusId}
+            />
+          ))}
+
+          {/* ── Nodes ──────────────────────────────────────────────────── */}
+          {layout.nodes.map((node) => (
+            <NodeMark
+              key={node.id}
+              node={node}
+              isSeed={node.id === seed.id}
+              focusId={focusId}
+              relationshipToSeed={seedAdjacency.get(node.id) ?? null}
+              onHoverChange={setFocusId}
+              onActivate={handleNodeClick}
+              onKeyDown={handleNodeKey}
+            />
+          ))}
+        </svg>
+
+        {/* ── Hover detail panel ─────────────────────────────────────────
+            HTML overlay (not SVG foreignObject) so we get full CSS layout,
+            overflow clipping, and font rendering for free.  Positioned
+            absolutely within the `position: relative` wrapper; SVG coords
+            map 1:1 to CSS pixel offsets here.  Renders nothing when no
+            node is hovered. */}
+        {hoveredNode && hoveredEntity && focusId !== seed.id && (
+          <NodeTooltip
+            entity={hoveredEntity}
+            nodeX={hoveredNode.x}
+            nodeY={hoveredNode.y}
+            nodeRadius={NODE_RADIUS}
+            containerWidth={width}
+            containerHeight={height}
+            relationshipToSeed={seedAdjacency.get(focusId!) ?? null}
+            seedName={seedName}
+          />
+        )}
       </div>
 
-      <svg
-        role="img"
-        aria-label={`Relationship graph for ${seedName}, ${connectionCount} connections`}
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        // `touch-action: none` so pinch + double-tap on the SVG area
-        // don't accidentally trigger the browser's page zoom (most
-        // common pain point on mobile Safari).  Pan / tap still work —
-        // the property only suppresses the gesture handler the
-        // browser would otherwise own.
-        style={{ display: 'block', touchAction: 'none' }}
-      >
-        {/* ── Edges ──────────────────────────────────────────────────── */}
-        {layout.edges.map((edge) => (
-          <EdgeLine
-            key={edgeKey(edge)}
-            edge={edge}
-            focusId={focusId}
-          />
-        ))}
-
-        {/* ── Nodes ──────────────────────────────────────────────────── */}
-        {layout.nodes.map((node) => (
-          <NodeMark
-            key={node.id}
-            node={node}
-            isSeed={node.id === seed.id}
-            focusId={focusId}
-            relationshipToSeed={seedAdjacency.get(node.id) ?? null}
-            onHoverChange={setFocusId}
-            onActivate={handleNodeClick}
-            onKeyDown={handleNodeKey}
-          />
-        ))}
-      </svg>
-
-      {/* ── Hover detail panel ─────────────────────────────────────────
-          HTML overlay (not SVG foreignObject) so we get full CSS layout,
-          overflow clipping, and font rendering for free.  Positioned
-          absolutely within the `position: relative` wrapper; SVG coords
-          map 1:1 to CSS pixel offsets here.  Renders nothing when no
-          node is hovered. */}
-      {hoveredNode && hoveredEntity && focusId !== seed.id && (
-        <NodeTooltip
-          entity={hoveredEntity}
-          nodeX={hoveredNode.x}
-          nodeY={hoveredNode.y}
-          nodeRadius={NODE_RADIUS}
-          containerWidth={width}
-          containerHeight={height}
-          relationshipToSeed={seedAdjacency.get(focusId!) ?? null}
-          seedName={seedName}
-        />
-      )}
+      {/* ── Legend ─────────────────────────────────────────────────────── */}
+      <GraphLegend />
     </div>
   );
 }
@@ -1107,6 +1147,87 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
           50.01%, 100% { opacity: 0; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ── Legend ───────────────────────────────────────────────────────────────────
+
+/**
+ * Compact colour-key rendered below the relationship graph SVG.
+ *
+ * Two row groups:
+ *   1. LINKS — edge strength tiers: allied (teal) / neutral (dim) / rival (red).
+ *      Stroke weight also encodes magnitude, but colour encodes the sign — this
+ *      legend surfaces the sign mapping so the graph is readable at a glance.
+ *   2. NODES — entity kind tiers: Player, Manager/Team, Media, Governance,
+ *      Disruption, Place.  Intentionally coarse — the hover tooltip reveals the
+ *      exact kind.  One entry per visual tier rather than one per `kind` value
+ *      keeps the legend scannable (6 rows vs 20+).
+ *
+ * Shares the border treatment (left/right/bottom hairline on abyss) with the
+ * SVG box above so the two render as a single integrated panel.
+ */
+function GraphLegend() {
+  const swatchBase: CSSProperties = {
+    display:      'block',
+    flexShrink:   0,
+  };
+  const rowStyle: CSSProperties = {
+    display:     'flex',
+    alignItems:  'center',
+    flexWrap:    'wrap',
+    gap:         '6px 12px',
+  };
+  const entryStyle: CSSProperties = {
+    display:     'flex',
+    alignItems:  'center',
+    gap:          5,
+  };
+  const sectionLabel: CSSProperties = {
+    color:         COLORS.dust70,
+    marginRight:   4,
+    letterSpacing: '0.14em',
+  };
+
+  return (
+    <div style={{
+      display:       'flex',
+      flexWrap:      'wrap',
+      gap:           '6px 28px',
+      padding:       '8px 12px',
+      borderLeft:    `1px solid ${COLORS.hairline}`,
+      borderRight:   `1px solid ${COLORS.hairline}`,
+      borderBottom:  `1px solid ${COLORS.hairline}`,
+      background:    COLORS.abyss,
+      fontFamily:    '"Space Mono", monospace',
+      fontSize:       9,
+      letterSpacing: '0.10em',
+      textTransform: 'uppercase',
+      color:          COLORS.dust50,
+      userSelect:    'none',
+    }}>
+      {/* Edge (link) colour tier */}
+      <div style={rowStyle}>
+        <span style={sectionLabel}>Links</span>
+        {EDGE_LEGEND.map(({ color, label }) => (
+          <span key={label} style={entryStyle}>
+            <span style={{ ...swatchBase, width: 18, height: 2, background: color, borderRadius: 1 }} />
+            {label}
+          </span>
+        ))}
+      </div>
+
+      {/* Node (entity kind) colour tier */}
+      <div style={rowStyle}>
+        <span style={sectionLabel}>Nodes</span>
+        {NODE_LEGEND.map(({ color, label }) => (
+          <span key={label} style={entryStyle}>
+            <span style={{ ...swatchBase, width: 8, height: 8, borderRadius: '50%', background: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
