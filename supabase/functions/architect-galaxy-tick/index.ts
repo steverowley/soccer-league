@@ -111,10 +111,14 @@ const CORPUS_SNIPPET_MAX_AGE_DAYS = 30;
 const CORPUS_SNIPPET_MAX_USAGE = 3;
 
 /**
- * Claude model. Sonnet 4.6 for out-of-match narration — lower
- * latency-sensitivity than in-match commentary; benefit from a stronger model.
+ * Claude model for out-of-match narration. Pinned to the fully-dated Haiku
+ * 4.5 id — the SAME id the corpus-enricher uses successfully (see #514). The
+ * short `claude-sonnet-4-6` alias previously here was rejected by the API on
+ * this project's key, so every entity narrative / whisper / decree / buzz
+ * call failed silently for two weeks while the template-only kinds kept
+ * flowing. A dated, known-good id avoids that whole class of failure.
  */
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
 /** Max output tokens per entity call. Narratives are 2–4 sentences each. */
 const MAX_OUTPUT_TOKENS = 512;
@@ -352,6 +356,40 @@ function pickRandom<T>(pool: readonly T[]): T {
   // Callers always pass non-empty arrays.  The non-null assertion documents
   // that for Deno's strict checking.
   return pool[Math.floor(Math.random() * pool.length)]!;
+}
+
+/**
+ * Record a swallowed LLM failure to `agent_runs` so a model/key outage is
+ * OBSERVABLE instead of vanishing into a null return.  Every generator below
+ * (entity narrative, whisper, decree, buzz, focus reaction) catches its own
+ * Anthropic error and returns null; without this row a total LLM failure looks
+ * identical to "nothing to say" — which is exactly how #514 went unnoticed for
+ * two weeks.  Mirrors the zero-token corpus_hit / corpus_miss telemetry
+ * pattern.  `entityId` is null for voices with no backing entity (the Architect
+ * whisper, focus reactions).  Telemetry must never break the tick, so failures
+ * to log are themselves swallowed with a warn.
+ *
+ * @param db        Service-role Supabase client.
+ * @param entityId  The entity whose generation failed, or null.
+ */
+async function logLlmError(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  entityId: string | null,
+): Promise<void> {
+  try {
+    await db.from('agent_runs').insert({
+      entity_id:           entityId,
+      kind:                'llm_error',
+      model:               CLAUDE_MODEL,
+      prompt_tokens:       0,
+      output_tokens:       0,
+      cache_read_tokens:   0,
+      cache_create_tokens: 0,
+    });
+  } catch (_e) {
+    console.warn('[galaxy-tick] llm_error telemetry insert failed');
+  }
 }
 
 // ── Type declarations ────────────────────────────────────────────────────────
@@ -602,6 +640,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // fall through to generateEntityNarrative.  Hit/miss outcomes land
     // in `agent_runs` so the corpus effectiveness metric is queryable.
     const allInserted: Array<Record<string, unknown>> = [];
+    // Count swallowed LLM failures across every generator so the tick's
+    // response surfaces them at a glance (the per-failure rows land in
+    // agent_runs via logLlmError). narrativesInserted=0 + llmErrors>0 reads
+    // as "the model is down", not "the cosmos had nothing to say".
+    let llmErrors = 0;
 
     for (const entity of selected) {
       const kind = narrativeKindForEntityKind(entity.kind);
@@ -690,7 +733,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         focuses,
         priorNarr,
       );
-      if (!draft) continue;
+      if (!draft) {
+        // LLM call failed (caught inside the generator). Record it so a
+        // model/key outage is visible rather than a silent zero-insert tick.
+        llmErrors += 1;
+        await logLlmError(db, entity.id);
+        continue;
+      }
 
       const { error, data } = await db.from('narratives').insert({
         kind:               draft.kind,
@@ -722,6 +771,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       } else {
         allInserted.push(...(data ?? []));
       }
+    } else {
+      // No entity backs the Architect's voice — log with entity_id null.
+      llmErrors += 1;
+      await logLlmError(db, null);
     }
 
     // ── Cosmic disturbance (0–1 per tick) ────────────────────────────────
@@ -817,8 +870,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     for (const row of unreacted) {
       const summary = await generateFocusReaction(anthropic, row);
       if (!summary) {
-        // generation failed: leave architect_reacted_at NULL so we retry
-        // on the next tick. Single skipped enactment is acceptable.
+        // LLM call failed: leave architect_reacted_at NULL so we retry on the
+        // next tick, and record the failure so a model outage is visible.
+        llmErrors += 1;
+        await logLlmError(db, null);
         continue;
       }
       const ins = await db.from('narratives').insert({
@@ -960,6 +1015,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         } else {
           allInserted.push(...(data ?? []));
         }
+      } else {
+        llmErrors += 1;
+        await logLlmError(db, politician.id);
       }
     }
 
@@ -993,6 +1051,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         } else {
           allInserted.push(...(data ?? []));
         }
+      } else {
+        llmErrors += 1;
+        await logLlmError(db, platform.id);
       }
     }
 
@@ -1001,6 +1062,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       todayKey,
       entitiesSelected: selected.map((e) => e.name),
       narrativesInserted: allInserted.length,
+      llmErrors,
     });
   } catch (err) {
     console.error('[architect-galaxy-tick] crashed:', err);
