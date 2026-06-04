@@ -381,7 +381,7 @@ ON CONFLICT (from_id, to_id, kind) DO NOTHING;
 
 -- Managing staff → pundit admiration (random UUIDs resolved by name)
 INSERT INTO entity_relationships (from_id, to_id, kind, strength, meta)
-SELECT f.id, t.id, v.kind, v.strength, '{}'::jsonb
+SELECT v.from_id, t.id, v.kind, v.strength, '{}'::jsonb
 FROM (VALUES
   -- Dim Osei (Hygiea goalkeeper coach) admires Nova Petrossian (goalkeeping pundit)
   ('75000000-0000-0000-0000-000000000020'::uuid, 'Nova Petrossian', 'admires', 55),
@@ -529,10 +529,7 @@ FROM (VALUES
 
   -- Lore Castillo (Valles Mariners, possession systems) respects Merak Ivanova
   -- (Ivanova's consistent Martian-derby standards are a model for fair play)
-  ('Lore Castillo',   'Merak Ivanova',     'admires',      40),
-
-  -- Sol Petrov admires Mizar Cruz (the most intellectually honest ref working)
-  ('Sol Petrov',      'Mizar Cruz',        'admires',      45)
+  ('Lore Castillo',   'Merak Ivanova',     'admires',      40)
 ) AS v(from_name, to_name, kind, strength)
 JOIN entities f ON f.name = v.from_name
 JOIN entities t ON t.name = v.to_name
