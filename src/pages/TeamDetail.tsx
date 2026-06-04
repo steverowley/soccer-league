@@ -26,7 +26,7 @@ import { COLORS, Container, SectionHeader, Footer, BackLink } from '../component
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getTeam } from '../features/match';
 import { getTeamSupporterCount } from '../features/auth';
-import { RelationshipGraph } from '../features/entities';
+import { RelationshipGraph, getEntityProfile } from '../features/entities';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -99,6 +99,9 @@ export default function TeamDetail() {
   // yet OR fetch error — the badge surface treats both the same. See
   // src/features/auth/api/teamSupporters.ts for the view rationale.
   const [supporterCount, setSupporterCount] = useState<number>(0);
+  // Authored club profile from entities.meta.profile (history, kits, honours).
+  // Null until the team's shadow-entity id resolves and the profile loads.
+  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (!staticTeam || !teamId) return undefined;
@@ -121,6 +124,19 @@ export default function TeamDetail() {
     });
     return () => { cancelled = true; };
   }, [db, teamId, staticTeam]);
+
+  // Club profile — fetched once the team's shadow entity id is known. Keyed
+  // separately from the main load so it never blocks the squad/manager paint;
+  // the section is simply omitted when no profile has been authored.
+  useEffect(() => {
+    const entityId = liveTeam?.entity_id as string | undefined;
+    if (!entityId) return undefined;
+    let cancelled = false;
+    getEntityProfile(db, entityId)
+      .then((res) => { if (!cancelled) setProfile(res?.profile ?? null); })
+      .catch(() => { /* supplementary; silently omit on error */ });
+    return () => { cancelled = true; };
+  }, [db, liveTeam?.entity_id]);
 
   if (!staticTeam) return <UnknownClub teamId={teamId} />;
 
@@ -164,11 +180,28 @@ export default function TeamDetail() {
         </section>
       )}
 
-      {/* Section II — Squad. */}
+      {/* Section II — Club Dossier.
+          Authored narrative profile from entities.meta.profile (history,
+          club culture, fans nickname, kit descriptions, honours). Hidden
+          entirely when the club has no authored profile yet. */}
+      {profile && (
+        <section style={{ padding: '48px 16px 0' }}>
+          <Container>
+            <SectionHeader
+              kicker="II"
+              label="The Story"
+              title="Club Dossier"
+            />
+            <ClubDossier profile={profile} />
+          </Container>
+        </section>
+      )}
+
+      {/* Section III — Squad. */}
       <section style={{ padding: '48px 16px 48px' }}>
         <Container>
           <SectionHeader
-            kicker="II"
+            kicker="III"
             label="The Squad"
             title={`${players.length || '—'} Souls On The Books`}
             subtitle="The full roster, sorted by position.  Starters appear before substitutes within each block.  Numbers are jersey assignments — not ratings."
@@ -197,11 +230,11 @@ export default function TeamDetail() {
         </Container>
       </section>
 
-      {/* Section III — Manager. */}
+      {/* Section IV — Manager. */}
       <section style={{ padding: '0 0 80px' }}>
         <Container>
           <SectionHeader
-            kicker="III"
+            kicker="IV"
             label="The Dugout"
             title="Manager"
           />
@@ -229,7 +262,7 @@ export default function TeamDetail() {
         </Container>
       </section>
 
-      {/* Section IV — Web of Influence (issue isl-3ov).
+      {/* Section V — Web of Influence (issue isl-3ov).
           Renders the relationship-graph widget seeded from the team's
           shadow entity (created by the teams_sync_entity trigger,
           migration 0048).  Surfaces player→team, manager→team, and
@@ -240,7 +273,7 @@ export default function TeamDetail() {
         <section style={{ padding: '0 16px 80px' }}>
           <Container>
             <SectionHeader
-              kicker="IV"
+              kicker="V"
               label="Connections"
               title="Web of Influence"
             />
@@ -252,6 +285,90 @@ export default function TeamDetail() {
       )}
 
       <Footer />
+    </div>
+  );
+}
+
+/**
+ * Club Dossier block: renders the authored narrative profile
+ * (entities.meta.profile) for a club — the history and culture prose, a grid
+ * of identity facts (fans nickname, founding, allegiance, kit descriptions),
+ * and the honours/legends lists. Defensive against missing/mistyped fields
+ * since the profile arrives as an untyped JSON bag; empty fields are omitted.
+ *
+ * @param {object} props
+ * @param {Record<string, unknown>} props.profile Parsed meta.profile object.
+ */
+function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
+  const str = (k: string): string => (typeof profile[k] === 'string' ? (profile[k] as string) : '');
+  const list = (k: string): string[] =>
+    Array.isArray(profile[k]) ? (profile[k] as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+
+  const labelStyle = {
+    fontSize: 11,
+    letterSpacing: '0.18em',
+    textTransform: 'uppercase' as const,
+    color: DUST_70,
+    margin: '0 0 6px',
+  };
+  const bodyStyle = { fontSize: 14, lineHeight: 1.7, color: DUST_50, margin: 0 };
+
+  const history = str('history');
+  const culture = str('club_culture');
+  // Single-value identity facts; only non-empty entries render.
+  const facts: Array<[string, string]> = (
+    [
+      ['Fans', str('fans_nickname')],
+      ['Founded', str('date_founded')],
+      ['Allegiance', str('political_leaning')],
+      ['Following', str('number_of_fans')],
+      ['Badge', str('badge')],
+      ['Home Kit', str('home_kit')],
+      ['Away Kit', str('away_kit')],
+      ['Third Kit', str('third_kit')],
+    ] as Array<[string, string]>
+  ).filter(([, v]) => v.length > 0);
+  const trophies = list('trophy_cabinet');
+  const legends = list('legends');
+  const achievements = list('achievements');
+
+  // Small helper for the three honours-style lists so the markup stays flat.
+  const renderList = (label: string, items: string[]) =>
+    items.length > 0 ? (
+      <div style={{ marginTop: 24 }}>
+        <p style={labelStyle}>{label}</p>
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          {items.map((i) => (
+            <li key={i} style={{ ...bodyStyle, marginBottom: 4 }}>{i}</li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      {history && <p style={{ ...bodyStyle, maxWidth: 760, marginBottom: culture ? 20 : 0 }}>{history}</p>}
+      {culture && <p style={{ ...bodyStyle, maxWidth: 760, fontStyle: 'italic', color: DUST_70 }}>{culture}</p>}
+      {facts.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 24,
+            marginTop: 28,
+          }}
+        >
+          {facts.map(([label, value]) => (
+            <div key={label}>
+              <p style={labelStyle}>{label}</p>
+              <p style={bodyStyle}>{value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {renderList('Trophy Cabinet', trophies)}
+      {renderList('Legends', legends)}
+      {renderList('Achievements', achievements)}
     </div>
   );
 }

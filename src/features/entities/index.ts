@@ -40,6 +40,12 @@ export type {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export { getRecentNarratives, getRecentNarrativesByKinds } from './api/entities';
 
+// ── API — narrative profiles (entities.meta.profile) ───────────────────────
+// Zod-validated read of an entity's authored profile content, consumed by the
+// player/team detail pages.
+export { getEntityProfile } from './api/entityProfiles';
+export type { EntityProfileResult } from './api/entityProfiles';
+
 // ── API — relationship graph fetch (issue isl-szm) ─────────────────────────
 // Three Zod-validated helpers that feed the relationship-graph viewer:
 // `getEntity` for the seed row, `getEntityRelationships` for the union of
