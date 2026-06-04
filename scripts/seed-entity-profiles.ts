@@ -72,6 +72,17 @@ interface ClubProfileFile {
   players?: Array<{ jersey_number: number } & Record<string, unknown>>;
 }
 
+// Shape of a global (non-club) content file: league-wide entities resolved by
+// (kind, name) rather than by team. The `name` routing key is stripped before
+// validation. Files are distinguished from club files by the absence of
+// `team_id` (see main()).
+interface GlobalProfileFile {
+  referees?: Array<{ name: string } & Record<string, unknown>>;
+  pundits?: Array<{ name: string } & Record<string, unknown>>;
+  journalists?: Array<{ name: string } & Record<string, unknown>>;
+  media_companies?: Array<{ name: string } & Record<string, unknown>>;
+}
+
 // ── Write helper ─────────────────────────────────────────────────────────────
 
 /**
@@ -122,6 +133,17 @@ async function resolveStaff(teamId: string, role: string): Promise<string | null
     .eq('kind', 'managing_staff')
     .eq('meta->>team_id', teamId)
     .eq('meta->>role', role)
+    .limit(1);
+  return data?.[0]?.id ?? null;
+}
+
+/** Resolve a global entity id by kind + exact name (names are unique per kind). */
+async function resolveByName(kind: ProfiledKind, name: string): Promise<string | null> {
+  const { data } = await db
+    .from('entities')
+    .select('id')
+    .eq('kind', kind)
+    .eq('name', name)
     .limit(1);
   return data?.[0]?.id ?? null;
 }
@@ -208,6 +230,23 @@ async function seedClub(file: ClubProfileFile, counters: { ok: number; fail: num
   }
 }
 
+/** Seed every section of a global (non-club) file, resolving entities by name. */
+async function seedGlobal(file: GlobalProfileFile, counters: { ok: number; fail: number }): Promise<void> {
+  // Each entry pairs a routing `name` with its kind's profile fields.
+  const groups: Array<[ProfiledKind, Array<{ name: string } & Record<string, unknown>> | undefined]> = [
+    ['referee', file.referees],
+    ['pundit', file.pundits],
+    ['journalist', file.journalists],
+    ['media_company', file.media_companies],
+  ];
+  for (const [kind, entries] of groups) {
+    for (const entry of entries ?? []) {
+      const { name, ...profile } = entry;
+      await seedOne(`${kind}:${name}`, await resolveByName(kind, name), kind, profile, counters);
+    }
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -216,8 +255,13 @@ async function main(): Promise<void> {
 
   const counters = { ok: 0, fail: 0 };
   for (const filename of files) {
-    const file = JSON.parse(readFileSync(join(PROFILES_DIR, filename), 'utf8')) as ClubProfileFile;
-    await seedClub(file, counters);
+    const file = JSON.parse(readFileSync(join(PROFILES_DIR, filename), 'utf8')) as Record<string, unknown>;
+    // Club files carry a team_id; global (media/officials) files do not.
+    if ('team_id' in file) {
+      await seedClub(file as unknown as ClubProfileFile, counters);
+    } else {
+      await seedGlobal(file as GlobalProfileFile, counters);
+    }
     console.log(`[seed-profiles] ${filename}: ok=${counters.ok} fail=${counters.fail} (cumulative)`);
   }
 
