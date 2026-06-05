@@ -1,0 +1,80 @@
+{
+  "team_id": "europa-oceanic",
+  "team": {
+    "date_founded": "Founded by the deep-sea habitats beneath Europa's ice, where football was played in pressurised domes on the ocean floor.",
+    "fans_nickname": "The Deep",
+    "number_of_fans": "Around 33 million, drawn to the club's flowing, hypnotic football.",
+    "badge": "A stylised wave curling beneath a cracked ice ceiling, lit from below.",
+    "home_kit": "Deep ocean blue with flowing wave-line gradients down the body.",
+    "away_kit": "Pale seafoam with blue trim and a rippling current motif.",
+    "third_kit": "Abyssal black with bioluminescent blue seams.",
+    "history": "Europa Oceanic are the pioneers of fluid football — a side that moves like water, flowing around opponents in endless interchanging patterns. Raised in the weightless calm of the subsurface ocean, they play with a grace that makes possession look effortless and inevitable.",
+    "club_culture": "Graceful, fluid, and quietly confident. The Deep believe football should flow, never force.",
+    "political_leaning": "Frontier progressive, with the contemplative calm of the ocean depths.",
+    "trophy_cabinet": ["A cabinet of cups won with style", "Admired across the system for their fluid play"],
+    "legends": ["Nerin Cole — the playmaker who made the ball flow like a current"],
+    "achievements": ["Pioneers of the fluid interchange now studied league-wide"]
+  },
+  "stadium": {
+    "date_built": "Built within a vast pressurised dome on the Europan ocean floor.",
+    "sponsors": "Backed by the subsurface habitat authorities and deep-ocean mining guilds.",
+    "pitch_size": "Generously large, to let the fluid interchange breathe.",
+    "pitch_type": "Pristine engineered turf grown under the dome's managed light.",
+    "stand_names": ["The Cole Stand", "The Current End", "The Abyss Terrace", "The Ice Ceiling Gallery"],
+    "bio": "The Ice Bowl is an eerie, beautiful venue — a glowing dome beneath kilometres of ice and ocean, where the crowd's roar carries strangely through the water. Visiting players describe it as playing inside a dream."
+  },
+  "training_facility": {
+    "date_built": "A professional institute built into the habitat's research wing.",
+    "sponsors": "Funded by the wealthy subsurface settlements.",
+    "bio": "The Subsurface Athletic Institute trains players in low-resistance water tanks and managed gravity, building the balance and grace the fluid game demands. Few facilities are stranger or more effective."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human (Europa-adapted)",
+    "age": 49,
+    "nationality": "Europan",
+    "appearance": "Serene and elegant, watches matches with the stillness of someone reading a tide.",
+    "bio": "Marina Crestfall is the high priestess of fluid possession — her Europa sides flow in endless interchanging patterns until an opening simply appears. She speaks softly and her teams play softly, right up until they slip a knife between your ribs.",
+    "personality": "Serene, patient, and deeply cerebral.",
+    "playing_history": "An elegant deep-lying playmaker who orchestrated games at a glide.",
+    "playing_philosophy": "Football is water. Flow around the obstacle; never crash into it. Keep the ball moving and the game will yield.",
+    "political_leaning": "Frontier progressive.",
+    "culture": "An aesthete who believes beauty and victory are the same thing.",
+    "achievements": ["Built one of the most admired possession sides in the system"]
+  },
+  "managing_staff": [
+    {
+      "role": "fitness_coach",
+      "gender": "Male",
+      "race": "Human (Europa-adapted)",
+      "age": 40,
+      "nationality": "Europan",
+      "appearance": "Lithe and calm, conducts sessions in the habitat's water tanks.",
+      "bio": "Fen Rask builds the balance and core strength that lets the Deep glide through ninety minutes of interchange without losing shape. The grace is his quiet engineering.",
+      "personality": "Methodical and serene.",
+      "playing_history": "A subsurface swimmer-turned-conditioning specialist.",
+      "playing_philosophy": "Grace is strength you cannot see. Build the body that never has to force.",
+      "political_leaning": "Frontier progressive.",
+      "culture": "The hidden architect of the flow.",
+      "achievements": ["Built the conditioning behind the fluid game"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Calm and assured, a keeper comfortable starting the flow.", "bio": "Depth Vasquez is the composed last passer in the chain, balanced and trusted to begin every fluid build-up from the back.", "personality": "Composed and assured.", "political_leaning": "Frontier progressive.", "culture": "The source of the current.", "achievements": ["Highest passing accuracy by a keeper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Quick and combative, the rare edge in a graceful side.", "bio": "Marine Okafor is the aggressive full-back who adds bite to the flow, winning the ball so the artists can keep it moving.", "personality": "Aggressive and energetic.", "political_leaning": "Frontier progressive.", "culture": "The bite in the current.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Selfless and smooth, a defender who passes like a midfielder.", "bio": "Abyss Storm is the team-first defender who keeps the flow unbroken, as comfortable gliding forward as defending.", "personality": "Selfless and composed.", "political_leaning": "Frontier progressive.", "culture": "The unbroken link.", "achievements": ["Most progressive passes by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Tireless and steady, the workhorse who holds the shape.", "bio": "Coral Sato is the relentless defender who covers the space the fluid game leaves behind, the quiet guarantor of the grace.", "personality": "Tireless and reliable.", "political_leaning": "Frontier progressive.", "culture": "The steady tide.", "achievements": ["Most recoveries by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Balanced and calm, reads the flow a step ahead.", "bio": "Trench Reyes is the composed centre-back who keeps the Deep solid while everyone ahead of him flows forward.", "personality": "Balanced and intelligent.", "political_leaning": "Frontier progressive.", "culture": "The defensive calm.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Elegant and inventive, the conductor of the current.", "bio": "Tide Walker is the creative heart who sets the rhythm of the flow, capable of keeping the ball until the ocean parts.", "personality": "Creative and serene.", "political_leaning": "Frontier progressive.", "culture": "The conductor.", "achievements": ["Most chances created in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Willing and smooth, the selfless legs of the flow.", "bio": "Current Rivers is the team-first runner who keeps the interchange alive, always offering the next angle.", "personality": "Selfless and industrious.", "political_leaning": "Frontier progressive.", "culture": "The tireless link.", "achievements": ["Most passes received and recycled"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Balanced and neat, the steady pivot of the flow.", "bio": "Wave Santiago is the composed midfielder who keeps the possession circulating, the unflashy heartbeat of the fluid game.", "personality": "Balanced and unhurried.", "political_leaning": "Frontier progressive.", "culture": "The heartbeat.", "achievements": ["Highest pass volume in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Patient and predatory, a striker who waits for the perfect ball.", "bio": "Surge Yamamoto is the selfish finisher who lives off the openings the flow creates, clinical when the current finally reaches him.", "personality": "Selfish and cold-blooded.", "political_leaning": "Indifferent.", "culture": "The patient predator.", "achievements": ["Best conversion rate in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Direct and combative, the cutting edge of the flow.", "bio": "Deep Nkosi is the aggressive forward who stretches defences so the interchange has somewhere to go, the spear behind the grace.", "personality": "Aggressive and direct.", "political_leaning": "Frontier progressive.", "culture": "The cutting edge.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Self-assured and sharp, a second finisher hungry for goals.", "bio": "Rift Larsson is the selfish forward who turns the fluid build-up into goals, competing fiercely with Yamamoto for them.", "personality": "Selfish and competitive.", "political_leaning": "Indifferent.", "culture": "The rival finisher.", "achievements": ["Second top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Shell Novak is the cautious veteran second keeper, comfortable on the ball and dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Frontier progressive.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Kelp Anderson is the team-first deputy who keeps the flow intact when the starters rest.", "personality": "Selfless and reliable.", "political_leaning": "Frontier progressive.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Shoal Martinez is the promising young defender absorbing the club's fluid principles, calm beyond his years.", "personality": "Composed and coachable.", "political_leaning": "Frontier progressive.", "culture": "The rising defender.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Brine Chandra is the creative deputy who can keep the flow going when the starters rest, a youngster of real promise.", "personality": "Creative and raw.", "political_leaning": "Frontier progressive.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Europa-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish streak.", "bio": "Plunge Ito is the eager young finisher pushing for a place, a selfish forward learning to wait for the current.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The impatient prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

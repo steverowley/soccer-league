@@ -1,0 +1,66 @@
+{
+  "team_id": "orcus-athletic",
+  "team": {
+    "date_founded": "Founded on Orcus, the so-called anti-Pluto, by settlers who embraced the world's underworld mythology.",
+    "fans_nickname": "The Shades",
+    "number_of_fans": "Around 5 million who revel in the club's dark mystique.",
+    "badge": "A black gate ajar over an underworld river, a single coin glinting.",
+    "home_kit": "Funereal black and deep green with an underworld-gate motif.",
+    "away_kit": "Charcoal with green seams.",
+    "third_kit": "Obsidian with a faint river-of-souls line.",
+    "history": "Orcus Athletic are the Kuiper's dark horses — a direct, defensively stubborn side who lurk in the gloom and strike from set pieces. Quiet, ominous, and dangerous, they specialise in stealing matches no one expected them to win.",
+    "club_culture": "Brooding, stubborn, and quietly dangerous. The Shades thrive on being underestimated.",
+    "political_leaning": "Kuiper-traditionalist — a solemn, ritual-bound community.",
+    "trophy_cabinet": ["A reputation for stealing results from set pieces"],
+    "legends": ["Charon Vex — the dead-ball specialist whose free-kicks were the stuff of legend"],
+    "achievements": ["Most set-piece goals in the Kuiper"]
+  },
+  "stadium": {
+    "date_built": "A frontier ground carved into a shadowed Orcian basin.",
+    "sponsors": "Backed by the colony's mining and ritual guilds.",
+    "pitch_size": "Compact, suited to the deep, direct block.",
+    "pitch_type": "Basic frontier synthetic turf, hard-wearing.",
+    "stand_names": ["The Vex Stand", "The Gate End", "The Shades' Terrace"],
+    "bio": "The Pit is a dim, brooding basin where the home crowd falls eerily silent before every set piece — and erupts when the Shades steal another goal from the gloom."
+  },
+  "training_facility": {
+    "date_built": "A basic facility in the shadowed basin.",
+    "sponsors": "Funded modestly by the Orcian guilds.",
+    "bio": "The Pit Training Complex drills defensive resilience and set-piece precision, the two pillars of the Shades' dark, direct game."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human (Kuiper-adapted)",
+    "age": 49,
+    "nationality": "Orcian",
+    "appearance": "Solemn and still, watches from the shadows of the technical area.",
+    "bio": "Abyss Ivanova is a direct, defensive pragmatist who turns the Shades into a side nobody wants to draw. She sits deep, goes long, and wins ugly through set pieces and stubbornness.",
+    "personality": "Solemn, patient, and quietly cunning.",
+    "playing_history": "A defensive stalwart at small Kuiper clubs.",
+    "playing_philosophy": "Defend, go direct, and steal it from a dead ball. Beauty is optional; points are not.",
+    "political_leaning": "Kuiper-traditionalist.",
+    "culture": "A pragmatist who relishes the dark arts.",
+    "achievements": ["Built the Kuiper's best set-piece record"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Female", "race": "Human (Kuiper-adapted)", "age": 43, "nationality": "Orcian", "appearance": "Quiet and exacting, drills the block until it is impenetrable.", "bio": "Shade Petrova perfects the defensive resilience that lets the Shades frustrate and then strike, the architect of their stubbornness.", "personality": "Exacting and patient.", "playing_history": "A defender turned resilience specialist.", "playing_philosophy": "Concede nothing, and the set piece will win it.", "political_leaning": "Kuiper-traditionalist.", "culture": "The keeper of the block.", "achievements": ["Built the side's defensive resilience"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Solid and calm, master of the dim box.", "bio": "Shade Reyes is the balanced keeper who anchors the Shades' stubborn block.", "personality": "Composed and commanding.", "political_leaning": "Kuiper-traditionalist.", "culture": "The last shadow.", "achievements": ["Most clean sheets in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Specter Torres is the workhorse full-back who covers the channel without rest.", "personality": "Tireless and uncomplaining.", "political_leaning": "Kuiper-traditionalist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the heart of the block.", "bio": "Shadow Okafor is the team-first defender who keeps the Shades' shape immovable.", "personality": "Selfless and disciplined.", "political_leaning": "Kuiper-traditionalist.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and hard, the aerial threat.", "bio": "Wraith Kane is the aggressive defender who is also a menace at attacking set pieces.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-traditionalist.", "culture": "The set-piece threat.", "achievements": ["Most set-piece goals by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Phantom Rivera is the composed defender who snuffs out danger in the gloom.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-traditionalist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and precise, the dead-ball artist.", "bio": "Void Kim is the creative spark and free-kick specialist who wins the Shades their stolen goals.", "personality": "Creative and precise.", "political_leaning": "Cosmopolitan.", "culture": "The dead-ball artist.", "achievements": ["Most direct free-kick goals in the Kuiper"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the midfield shield.", "bio": "Abyss Mori is the team-first midfielder who screens the block tirelessly.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-traditionalist.", "culture": "The shield.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and steady, keeps the direct game honest.", "bio": "Dark Nakamura is the composed midfielder who keeps the long game from becoming aimless.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-traditionalist.", "culture": "The steadier.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and predatory, the lurking finisher.", "bio": "Ghost Yamamoto is the selfish striker who appears from the shadows to convert set pieces and scraps.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The ghost striker.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and combative, the target man.", "bio": "Nether Patel is the aggressive forward who wins the long balls and the set-piece duels.", "personality": "Aggressive and selfless up top.", "political_leaning": "Kuiper-traditionalist.", "culture": "The target man.", "achievements": ["Most aerial duels won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Dusk Novak is the selfish wide forward who delivers the set pieces and finishes the rare counter.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most set-piece assists"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Umbra Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-traditionalist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Eclipse Anderson is the team-first deputy who keeps the block intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-traditionalist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Penumbra Martinez is the promising young defender learning the Shades' dark discipline.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-traditionalist.", "culture": "The young wall.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Occult Chandra is the creative deputy and a promising dead-ball talent from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Obscure Ito is the eager young finisher pushing for a place among the Shades.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

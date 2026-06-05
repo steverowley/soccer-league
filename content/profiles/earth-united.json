@@ -1,0 +1,276 @@
+{
+  "team_id": "earth-united",
+  "team": {
+    "date_founded": "First Season of the League Era — the oldest continuous charter in the Rocky Inner League.",
+    "fans_nickname": "The Old Worlders",
+    "number_of_fans": "Around 40 million, scattered across Earth and her orbital colonies.",
+    "badge": "A pale blue marble cradled between two crossed comet-tails, ringed by eleven stars — one for each of the founding players who first took the pitch.",
+    "home_kit": "Royal blue shirt, white shorts, white socks. A thin silver meridian line runs from collar to hem.",
+    "away_kit": "Bone white with royal-blue trim and a faint topographic map of the old continents printed across the chest.",
+    "third_kit": "Deep midnight navy flecked with starfield silver — worn for cup nights and remembrance fixtures.",
+    "history": "Earth United are the keepers of the game's oldest memory. Before the leagues reached the gas giants or the belt was ever settled, the Old Worlders were already playing the patient, passing football that every rival has since tried to copy or kill. They have known dynasties and droughts in equal measure, but the club's identity has never wavered: the ball is sacred, possession is virtue, and the institution outlives any one star.",
+    "club_culture": "Institutional and proud to the point of stubbornness. Earth United believe football should be earned through patience, not stolen through chaos — a worldview that makes them beloved by purists and insufferable to everyone else.",
+    "political_leaning": "Solaris Compact establishment. The club of the old order, courted by every inner-system politician who wants to look respectable.",
+    "trophy_cabinet": [
+      "Inner League champions, multiple eras",
+      "Celestial Cup winners (twice in the modern age)",
+      "Solar Shield runners-up"
+    ],
+    "legends": [
+      "Tobias 'The Meridian' Crane — the metronome who defined the club's passing creed",
+      "Ngozi Abara — record-appearance captain and spiritual centre of three title sides"
+    ],
+    "achievements": [
+      "Oldest charter never to have been relegated from the top flight",
+      "Architects of the possession style now taught system-wide"
+    ]
+  },
+  "stadium": {
+    "date_built": "Rebuilt over the bones of the original ground; the current bowl dates to the early modern era.",
+    "sponsors": "Naming rights held by the Terran Orbital Authority; concourse partnerships with old-Earth heritage brands.",
+    "pitch_size": "Full regulation, kept generously wide to reward the club's patient build-up.",
+    "pitch_type": "Living Earth-grass hybrid, grown under managed daylight — a deliberate, expensive nod to tradition in an age of synthetic surfaces.",
+    "stand_names": [
+      "The Meridian Stand (main)",
+      "The Comet End",
+      "The Continental Terrace",
+      "The Founders' Gallery"
+    ],
+    "bio": "The Blue Marble is less a stadium than a cathedral to the old game. Opposition players speak of the hush before kickoff and the roar that follows a fifteen-pass move — the home crowd applauds the build-up, not just the goal. To play here is to be reminded that football was here first."
+  },
+  "training_facility": {
+    "date_built": "Established a generation ago on the wooded estate at Kingswood, outside the old capital.",
+    "sponsors": "Funded through the club's heritage trust rather than corporate backing — a point of considerable institutional pride.",
+    "bio": "The Academy at Kingswood is where the Earth United creed is pressed into the young: rondo before running, brain before brawn. Its graduates carry the club's passing gospel to every corner of the leagues, and rival scouts haunt its perimeter fences for the ones who get away."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human",
+    "age": 53,
+    "nationality": "Earthian",
+    "appearance": "Silver-locked and unhurried, always in a long charcoal coat regardless of the dome's climate. Watches matches with her hands clasped behind her back like a woman inspecting a garden.",
+    "bio": "Priya Okafor learned the game in the Kingswood youth pitches and never truly left. A cerebral midfielder turned cerebral coach, she returned to the club that raised her with a single mandate: protect the creed. She speaks rarely and never raises her voice, yet her sides are the most disciplined in the league.",
+    "personality": "Calm, exacting, and quietly merciless about standards. Treats sloppy passing as a personal insult.",
+    "playing_history": "A deep-lying playmaker in her day, capped many times for the Earthian national side before a knee betrayed her early.",
+    "playing_philosophy": "Possession is not a tactic but a moral position: keep the ball, and the opponent cannot hurt you. Build slowly, suffocate patiently, strike only when the geometry is perfect.",
+    "political_leaning": "Compact traditionalist by temperament, though she loathes politicians in her dressing room.",
+    "culture": "Old-school institutionalist who believes the badge outranks any individual, herself included.",
+    "achievements": [
+      "Restored the club's possession identity after a chaotic interregnum",
+      "Youngest graduate ever promoted from the Kingswood academy staff to first-team management"
+    ]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Female",
+      "race": "Human (Lunar-born)",
+      "age": 41,
+      "nationality": "Earthborn",
+      "appearance": "Compact and restless, forever clutching a battered data-slate; the only person at Kingswood who jogs to the training pitches.",
+      "bio": "Nadia Voss came up through sports science on the lunar colonies before Okafor poached her to run Earth United's conditioning. Where the manager guards the soul of the team, Voss guards its body — and the two argue productively about almost everything.",
+      "personality": "Energetic, data-hungry, and cheerfully blunt — the dressing-room counterweight to Okafor's stillness.",
+      "playing_history": "Never played professionally; came to football through the laboratory, a fact she wears as a badge of honour.",
+      "playing_philosophy": "A team that cannot run in the last ten minutes has no philosophy at all. Marries the club's patient style to ruthless late-game fitness.",
+      "political_leaning": "Frontier-sympathetic — a colony kid who never quite bought the old-Earth establishment line.",
+      "culture": "Pragmatic moderniser inside a deeply traditional house.",
+      "achievements": [
+        "Built the conditioning program credited with the club's strong late-match record"
+      ]
+    }
+  ],
+  "players": [
+    {
+      "jersey_number": 1,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Broad-shouldered and unflappable, with a goalkeeper's economy of movement and a greying temple that makes him look older than he is.",
+      "bio": "Marco Delgado is the last line and the calm voice behind it. A one-club man who turned down richer offers from the gas giants to stay at the Blue Marble, he organises the back line like a conductor and saves his theatrics for the rare moments that demand them.",
+      "personality": "Steady, vocal, and reassuring — the dressing-room anchor.",
+      "political_leaning": "Quiet Compact voter; keeps his opinions in the dressing room.",
+      "culture": "Loyalist who measures himself in seasons, not contracts.",
+      "achievements": ["Long-serving first-choice keeper", "Club's record holder for consecutive clean sheets in a single run"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 2,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Lean and sharp-featured, hair cropped short, always the first into a challenge and the last to back out of one.",
+      "bio": "Sophie Hartmann is the snarl in an otherwise gentle side. A full-back who treats the touchline as a personal border to be defended at all costs, she gives the patient Old Worlders the edge of aggression they would otherwise lack.",
+      "personality": "Fiery and confrontational, walks the line of the referee's patience.",
+      "political_leaning": "Outspoken Frontier Coalition supporter — unusual in this dressing room.",
+      "culture": "A scrapper who respects effort above pedigree.",
+      "achievements": ["Most fan-voted tackles of the season, twice"],
+      "injuries": "Fully fit; carries a long-managed ankle that flares in cold domes."
+    },
+    {
+      "jersey_number": 3,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Tall, composed, with the easy posture of a man who is never rushed on the ball.",
+      "bio": "Yusuf Mensah is the quiet professional every passing side needs — a defender who would rather play out of trouble than clear his lines, trusting the system to protect him as he protects it.",
+      "personality": "Selfless and unselfconscious; defers to the collective.",
+      "political_leaning": "Apolitical by choice.",
+      "culture": "Team-first to a fault.",
+      "achievements": ["Ever-present in three consecutive campaigns"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 4,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Medium build, watchful eyes, a centre-back who reads the game a half-second before it happens.",
+      "bio": "Lena Kovacs is the balance at the heart of the defence — neither reckless nor passive, simply, reliably correct. Okafor trusts her to start every move, and the team's rhythm begins at her feet.",
+      "personality": "Level-headed and consistent; rarely flustered.",
+      "political_leaning": "Centrist; votes Compact but grumbles about it.",
+      "culture": "A steadying influence on the younger defenders.",
+      "achievements": ["Voted players' player by her own dressing room"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 5,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Weathered and barrel-chested, a veteran's frame held together by tape and willpower.",
+      "bio": "James Okello is the old soldier of the back line, a workhorse defender in the twilight of a long career who leads by relentless example. The youngsters watch how he prepares; the manager keeps him for exactly that reason.",
+      "personality": "Tireless and uncomplaining; the first to training, the last to leave.",
+      "political_leaning": "Compact traditionalist of the old school.",
+      "culture": "Embodies the club's grindstone work ethic.",
+      "achievements": ["Testimonial-honoured veteran", "Two-time title winner in his prime"],
+      "injuries": "Managing a chronic back complaint; rotated to preserve him."
+    },
+    {
+      "jersey_number": 6,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Small, balanced, perpetually scanning — a midfielder who seems to see the whole pitch at once.",
+      "bio": "Aiko Nakajima is the metronome at the base of midfield, the inheritor of the club's most sacred role. She rarely makes the highlight reels and never wants to; her artistry is in the pass before the pass.",
+      "personality": "Selfless orchestrator; lives to make others look good.",
+      "political_leaning": "Disengaged from politics entirely.",
+      "culture": "The purest expression of the Earth United creed in the current side.",
+      "achievements": ["Highest pass-completion run in a single season in club records"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 7,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Slight and quick-footed, with a magician's flair for the unexpected and an untucked shirt to match.",
+      "bio": "Carlos Ribeiro is the licensed disruptor in a disciplined system — the one player Okafor permits to gamble. When the patient build-up stalls, it is Ribeiro who finds the pass nobody else could see.",
+      "personality": "Creative, mercurial, occasionally maddening.",
+      "political_leaning": "Bohemian; sympathetic to the colonies but allergic to manifestos.",
+      "culture": "The spark the institution tolerates because it needs him.",
+      "achievements": ["Assist of the Season, twice voted by the fans"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 8,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Athletic and upright, a box-to-box runner with a tidy, economical style.",
+      "bio": "Priya Sharma is the lungs of the midfield, a balanced all-rounder still growing into her game. She does the unglamorous covering that lets Ribeiro roam, and the coaching staff believe her ceiling is higher than she yet knows.",
+      "personality": "Diligent and even-tempered; a coach's player.",
+      "political_leaning": "Moderate Compact voter.",
+      "culture": "Quietly ambitious within the collective.",
+      "achievements": ["Academy graduate of her cohort"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 9,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Lean, hungry, with a striker's swagger and a permanent half-smile that opponents find infuriating.",
+      "bio": "Rafael Costa is the club's prized young finisher and its biggest ego. Devastating in front of goal and entirely aware of it, he is the modern star the traditional institution is still learning how to handle. The fans adore him; the dressing room is divided.",
+      "personality": "Selfish, supremely confident, and ruthless in the box.",
+      "political_leaning": "Self-interested; cares for no party but his own profile.",
+      "culture": "The friction point between old-club humility and new-age stardom.",
+      "achievements": ["Golden Boot contender in his breakout season", "Most-followed Earth United player on Stellarverse"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 10,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Strong and direct, with the relentless body language of a forward who never stops pressing.",
+      "bio": "Emma Volkov wears the sacred number ten and earns it through work rather than flair. A forward who defends from the front and drags the patient system up the pitch by sheer will, she is the manager's favourite kind of player.",
+      "personality": "Relentless and humble; leads the press by example.",
+      "political_leaning": "Trade-union Frontier sympathiser.",
+      "culture": "The honest engine of the attack.",
+      "achievements": ["Most distance covered in the league, two seasons running"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 11,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Broad and balanced, a forward in his prime with a calm finishing temperament.",
+      "bio": "Kofi Asante is the steady hand of the front line — neither the youngest nor the flashiest, but the one who scores the goals that actually win matches. A balanced presence who keeps Costa's ego and Volkov's fire in equilibrium.",
+      "personality": "Composed and reliable; the senior voice in attack.",
+      "political_leaning": "Pragmatic Compact moderate.",
+      "culture": "The grown-up in a young forward line.",
+      "achievements": ["Reached a century of club goals"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 12,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Tall and reedy, all elbows and nerves, still filling out a keeper's frame.",
+      "bio": "Liu Wei is the understudy learning at Delgado's shoulder — talented, anxious, and acutely aware that his moment will come the day the veteran finally slows. For now he waits, watches, and works.",
+      "personality": "Cautious and self-critical; rattled by mistakes.",
+      "political_leaning": "Undecided and uninterested.",
+      "culture": "The patient apprentice.",
+      "achievements": ["Youth international honours"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 13,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Coltish and quick, a teenager's lankiness not yet grown into power.",
+      "bio": "Helena Papadopoulos is the academy's brightest defensive prospect, fast-tracked into the squad ahead of schedule. Balanced beyond her years, she is being eased in carefully — the club has waited generations for a centre-back like her and refuses to rush it.",
+      "personality": "Composed for her age; quietly determined.",
+      "political_leaning": "Too young to have decided.",
+      "culture": "The future of the back line.",
+      "achievements": ["Kingswood academy player of her year"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 14,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Heavy-set and slow to warm up, with the relaxed air of a man who has seen it all.",
+      "bio": "Sam Obi is the squad's contradiction — a gifted veteran defender whose application has never quite matched his talent. Kept on for his experience and his reading of the game, he frustrates the staff as often as he rescues them.",
+      "personality": "Laid-back to the point of laziness; coasts on instinct.",
+      "political_leaning": "Cynical about all of it.",
+      "culture": "The cautionary tale the youngsters are warned about and the veteran they secretly like.",
+      "achievements": ["Former title winner now in his final seasons"],
+      "injuries": "Fully fit, though slow to recover between fixtures."
+    },
+    {
+      "jersey_number": 15,
+      "gender": "Female",
+      "race": "Human",
+      "appearance": "Compact and tidy, with a low centre of gravity and a quick first touch.",
+      "bio": "Amara Diallo is the squad's selfless utility midfielder, equally content covering, pressing, or recycling possession. A team player in the truest sense, she gives Okafor the tactical flexibility a single system rarely allows.",
+      "personality": "Generous and adaptable; never complains about her role.",
+      "political_leaning": "Mildly Frontier-leaning.",
+      "culture": "The glue of the second unit.",
+      "achievements": ["Most appearances off the bench last campaign"],
+      "injuries": "Fully fit."
+    },
+    {
+      "jersey_number": 16,
+      "gender": "Male",
+      "race": "Human",
+      "appearance": "Wiry and intense, a teenager who plays with the urgency of someone trying to prove a point every minute.",
+      "bio": "Sven Andersen is the academy's prodigy striker and a handful for everyone around him. Blessed with rare instinct in front of goal and cursed with the impatience of youth, he is Costa's heir apparent — and, the staff fear, his temperament too.",
+      "personality": "Selfish and combustible, but frighteningly gifted.",
+      "political_leaning": "Apolitical; consumed by his own ambition.",
+      "culture": "The next great hope and the next great headache.",
+      "achievements": ["Youngest player to score for the senior side in a generation"],
+      "injuries": "Fully fit."
+    }
+  ]
+}

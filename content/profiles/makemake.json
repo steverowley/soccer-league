@@ -1,0 +1,66 @@
+{
+  "team_id": "makemake",
+  "team": {
+    "date_founded": "Founded on Makemake, named for a creator-deity, by settlers who prized making something from nothing.",
+    "fans_nickname": "The Makers",
+    "number_of_fans": "Around 4 million faithful, devoted to the club's creative gospel.",
+    "badge": "An open hand cupping a newborn star, rays spreading outward.",
+    "home_kit": "Warm terracotta and cream with a creation-ray motif.",
+    "away_kit": "Cream with terracotta sunburst.",
+    "third_kit": "Deep earth-red with a single newborn star.",
+    "history": "Makemake are the Kuiper's artists — a possession side famed for conjuring chances from nothing on a shoestring budget. Where others see a dead end, the Makers thread a pass; their creative, patient football is a small miracle at the edge of the system.",
+    "club_culture": "Creative, devout, and resourceful. The Makers believe football is an act of creation.",
+    "political_leaning": "Kuiper-communalist — a co-operative club that shares everything it has.",
+    "trophy_cabinet": ["A reputation for creative football far beyond their means"],
+    "legends": ["Genesis Vail — the playmaker who made chances appear from thin vacuum"],
+    "achievements": ["Most chances created per budget credit in the Kuiper"]
+  },
+  "stadium": {
+    "date_built": "A frontier ground built by the colony's own hands.",
+    "sponsors": "Backed communally by the Makemake settlement.",
+    "pitch_size": "Generously wide to let the possession game breathe.",
+    "pitch_type": "Basic frontier synthetic turf, lovingly maintained.",
+    "stand_names": ["The Vail Stand", "The Creation End", "The Makers' Terrace"],
+    "bio": "The Cradle is a humble, hand-built ground where the small crowd worships the perfect pass. Visitors underestimate the Makers' creativity at their peril."
+  },
+  "training_facility": {
+    "date_built": "A basic academy the community treasures.",
+    "sponsors": "Funded communally by the settlement.",
+    "bio": "The Creation Academy drills technique, vision, and youth above all — the Makers grow their own creators, since they cannot afford to buy them."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Human (Kuiper-adapted)",
+    "age": 47,
+    "nationality": "Makemakean",
+    "appearance": "Calm and devout, watches her side weave patterns with a quiet smile.",
+    "bio": "Genesis Solano is a possession purist who conjures creative, patient football from a tiny budget. Her Makers keep the ball and craft chances from nothing — an act of faith and skill in equal measure.",
+    "personality": "Patient, creative, and quietly devout.",
+    "playing_history": "A playmaker who orchestrated games at small clubs.",
+    "playing_philosophy": "Keep the ball and create. With patience and craft, something always appears.",
+    "political_leaning": "Kuiper-communalist.",
+    "culture": "A believer in creation over expenditure.",
+    "achievements": ["Built the Kuiper's most creative side on the smallest budget"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 41, "nationality": "Makemakean", "appearance": "Warm and patient, happiest among the academy youngsters.", "bio": "Origin Okonjo runs the youth development that keeps the cash-strapped Makers stocked with home-grown creators.", "personality": "Nurturing and patient.", "playing_history": "A creative midfielder turned youth coach.", "playing_philosophy": "If you cannot buy creators, you must grow them.", "political_leaning": "Kuiper-communalist.", "culture": "The grower of talent.", "achievements": ["Built a youth pipeline that sustains the senior side"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Calm and assured, comfortable starting the build-up.", "bio": "Ancient Vasquez is the balanced keeper trusted to begin every patient Makers move.", "personality": "Composed and assured.", "political_leaning": "Kuiper-communalist.", "culture": "The first creator.", "achievements": ["Highest passing accuracy by a keeper in the Kuiper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and willing, an overlapping full-back.", "bio": "Rune Cruz is the workhorse full-back who joins the patient build-up without breaking its rhythm.", "personality": "Tireless and tidy.", "political_leaning": "Kuiper-communalist.", "culture": "The graceful overlap.", "achievements": ["Most flank combinations completed"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and smooth, a passing defender.", "bio": "Mystic Okafor is the team-first defender comfortable keeping the ball under pressure.", "personality": "Selfless and composed.", "political_leaning": "Kuiper-communalist.", "culture": "The unbroken link.", "achievements": ["Most progressive passes by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and firm, the rare edge.", "bio": "Oracle Sato is the aggressive defender who wins the ball back so the artists can create.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-communalist.", "culture": "The ball-winner.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and calm, the composed base.", "bio": "Enigma Lee is the composed centre-back who keeps the Makers solid while they create.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-communalist.", "culture": "The base.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Elegant and inventive, the conductor.", "bio": "Totem Kim is the creative heart who sets the rhythm and conjures the Makers' chances.", "personality": "Creative and serene.", "political_leaning": "Cosmopolitan.", "culture": "The conductor.", "achievements": ["Most chances created in the Kuiper"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the tireless link.", "bio": "Ritual Mori is the team-first midfielder who keeps the possession flowing.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-communalist.", "culture": "The link.", "achievements": ["Most passes completed in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and neat, the metronome.", "bio": "Omen Osei is the composed pivot who keeps the Makers circulating the ball.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-communalist.", "culture": "The metronome.", "achievements": ["Highest pass volume in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Patient and predatory, waits for the perfect ball.", "bio": "Deity Rivera is the selfish finisher who lives off the chances the patient build-up conjures.", "personality": "Selfish and cold-blooded.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Best conversion rate in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and willing, the cutting edge.", "bio": "Idol Chen is the aggressive forward who stretches defences so the creation has space.", "personality": "Aggressive and direct.", "political_leaning": "Kuiper-communalist.", "culture": "The cutting edge.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, a second finisher.", "bio": "Shrine Patel is the selfish forward who turns the Makers' craft into goals.", "personality": "Selfish and competitive.", "political_leaning": "Indifferent.", "culture": "The rival finisher.", "achievements": ["Second top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Altar Beck is the cautious veteran second keeper, comfortable on the ball and dependable.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-communalist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Votive Park is the team-first deputy who keeps the build-up intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-communalist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Icon Torres is the promising young defender absorbing the Makers' patient principles.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-communalist.", "culture": "The rising base.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Rite Tanaka is the creative deputy and the Makers' brightest young hope.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The young creator.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Effigy Brennan is the eager young finisher pushing for a place among the Makers.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

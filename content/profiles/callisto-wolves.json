@@ -1,0 +1,80 @@
+{
+  "team_id": "callisto-wolves",
+  "team": {
+    "date_founded": "Founded by the ice-mining crews of Callisto, who hunted in packs against the cold and learned to play the same way.",
+    "fans_nickname": "The Pack",
+    "number_of_fans": "Around 20 million, a tight-knit, howling support that travels as one.",
+    "badge": "A silver wolf's head against a pale moon, ringed by frost.",
+    "home_kit": "Steel-grey and white with a frosted wolf-fur texture across the shoulders.",
+    "away_kit": "Midnight blue with silver claw-marks raking down one side.",
+    "third_kit": "Pale ice-white with a faint pawprint trail.",
+    "history": "Callisto Wolves play as a pack or not at all. Their coordinated, snapping press is the most synchronised in the league — eleven players moving as one organism, hunting the ball in relays until the prey makes a mistake. Individual stars are distrusted here; the collective is everything.",
+    "club_culture": "Communal, loyal, and fiercely collective. At Callisto, no one hunts alone.",
+    "political_leaning": "Frontier collectivist — a co-operative club in a co-operative colony.",
+    "trophy_cabinet": ["A proud record of punching above their weight"],
+    "legends": ["Lupa Vane — the captain who could trigger the whole pack's press with a single glance"],
+    "achievements": ["Most coordinated team presses in the league"]
+  },
+  "stadium": {
+    "date_built": "Built on the frozen plains where the first mining packs played.",
+    "sponsors": "Backed by the Callisto ice-extraction co-operatives.",
+    "pitch_size": "Compact, to keep the pack tight and the prey cornered.",
+    "pitch_type": "Insulated synthetic turf that holds heat against the moon's deep cold.",
+    "stand_names": ["The Vane Stand", "The Den End", "The Frost Terrace"],
+    "bio": "The Howling Den is a wall of sound — the Pack's supporters howl in unison when the press is triggered, a noise that has unnerved far grander visitors into surrendering the ball."
+  },
+  "training_facility": {
+    "date_built": "A modest, functional centre built on the colony's tight budget.",
+    "sponsors": "Funded co-operatively, like everything on Callisto.",
+    "bio": "The Tundra Performance Centre is no-frills but ruthlessly effective at one thing: drilling the synchronised press until the whole squad moves on instinct, as a single hunting pack."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Callisto-adapted)",
+    "age": 47,
+    "nationality": "Callistian",
+    "appearance": "Lean and watchful, with pale eyes that seem to track the whole pitch at once.",
+    "bio": "Frost Adeyemi conducts the Wolves' press like a pack leader, demanding total synchronisation and total trust. He cares nothing for individual brilliance and everything for the collective hunt.",
+    "personality": "Calm, communal, and quietly authoritative.",
+    "playing_history": "A tireless pressing midfielder who embodied the pack ethos before he coached it.",
+    "playing_philosophy": "Press as one, win as one. The pack that hunts together never goes hungry.",
+    "political_leaning": "Frontier collectivist.",
+    "culture": "A true believer in the collective over the individual.",
+    "achievements": ["Built the league's most synchronised pressing unit"]
+  },
+  "managing_staff": [
+    {
+      "role": "fitness_coach",
+      "gender": "Male",
+      "race": "Human (Callisto-adapted)",
+      "age": 41,
+      "nationality": "Callistian",
+      "appearance": "Stocky and frost-bearded, runs the conditioning sessions outdoors in the cold on principle.",
+      "bio": "Grip Svenson keeps the Pack able to press for ninety minutes in brutal cold, building the relentless engine the collective hunt depends on.",
+      "personality": "Hardy and communal; trains alongside the players.",
+      "playing_history": "A cold-climate endurance athlete before coaching.",
+      "playing_philosophy": "A pack that tires is a pack that starves. Fitness is the price of the press.",
+      "political_leaning": "Frontier collectivist.",
+      "culture": "The engine behind the endurance.",
+      "achievements": ["Built the conditioning behind a ninety-minute press"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Calm and broad, the steady eyes at the back of the pack.", "bio": "Frost Vega is the composed last line who sweeps behind the high press, balanced and unflustered when the hunt leaves space behind.", "personality": "Steady and composed.", "political_leaning": "Frontier collectivist.", "culture": "The pack's safety net.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Selfless and rangy, the right edge of the press.", "bio": "Tundra Cross is the team-first full-back who triggers the press from wide, hunting the touchline as part of the pack.", "personality": "Selfless and disciplined.", "political_leaning": "Frontier collectivist.", "culture": "The dutiful wing-hunter.", "achievements": ["Most coordinated press triggers"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Snarling and combative, attacks every challenge.", "bio": "Glacier Kane brings the bite to the back line, an aggressive defender who relishes the physical edge of the hunt.", "personality": "Aggressive and committed.", "political_leaning": "Frontier collectivist.", "culture": "The teeth of the pack.", "achievements": ["Most tackles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Tireless and sturdy, the workhorse of the defence.", "bio": "Ice Brennan never stops covering, the relentless grafter who keeps the pack's shape when the hunt scatters.", "personality": "Tireless and uncomplaining.", "political_leaning": "Frontier collectivist.", "culture": "The unsung runner.", "achievements": ["Most recoveries by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Watchful and careful, the cautious anchor at the back.", "bio": "Blizzard Sato is the prudent defender who refuses to be drawn out of position, the cool head that keeps the press from over-committing.", "personality": "Cautious and disciplined.", "political_leaning": "Frontier collectivist.", "culture": "The patient anchor.", "achievements": ["Fewest positions lost"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Bright and inventive, the rare creator in a pressing machine.", "bio": "Howl Okafor is the creative pulse who turns the pack's turnovers into chances, the imagination behind the relentless hunt.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The spark in the pack.", "achievements": ["Most chances created from turnovers"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Willing and selfless, the heart of the midfield hunt.", "bio": "Shadow Mori is the team-first midfielder who closes every gap, the glue that keeps eleven hunters moving as one.", "personality": "Selfless and relentless.", "political_leaning": "Frontier collectivist.", "culture": "The connective tissue.", "achievements": ["Most pressures applied in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Balanced and tidy, the calm in the midfield storm.", "bio": "Pack Reyes is the composed passer who keeps the ball once the hunt wins it, balancing the chaos with control.", "personality": "Balanced and measured.", "political_leaning": "Frontier collectivist.", "culture": "The steadying pivot.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Lean and predatory, the lone selfish streak in a selfless side.", "bio": "Fang Petrov is the finisher who feeds on the panic the press creates, a selfish striker the collective tolerates for his goals.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The pack's reluctant individualist.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Fierce and direct, leads the hunt from the front.", "bio": "Claw Nakamura is the aggressive forward who sets the press in motion, snapping at defenders until they break.", "personality": "Aggressive and relentless.", "political_leaning": "Frontier collectivist.", "culture": "The front of the hunt.", "achievements": ["Most forward pressures in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Balanced and quick, the outlet on the break.", "bio": "Hunt Rivera is the composed forward who finishes the chaos, carrying the ball into space when the pack wins it high.", "personality": "Composed and direct.", "political_leaning": "Frontier collectivist.", "culture": "The finisher of the hunt.", "achievements": ["Most goals from high turnovers"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Chill Vargas is the cautious veteran second keeper, dependable on the rare day the pack needs him.", "personality": "Cautious and steady.", "political_leaning": "Frontier collectivist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Permafrost Kim is the team-first deputy who slots into the press without disrupting it, the reliable next hunter up.", "personality": "Selfless and reliable.", "political_leaning": "Frontier collectivist.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Young and balanced, an academy defender finding his place.", "bio": "Arctic Tran is the promising young defender learning the pack's synchronised ways, calm and quick to adapt.", "personality": "Composed and coachable.", "political_leaning": "Frontier collectivist.", "culture": "The young hunter.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Winter Chen is the creative deputy who offers a different answer when the press alone won't break a side, a youngster with rare vision.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Callisto-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish streak.", "bio": "Stalker Beck is the prowling young finisher pushing for a place, a selfish forward the collective is still learning to trust.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The lone-wolf prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

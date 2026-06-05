@@ -1,0 +1,80 @@
+{
+  "team_id": "mars-athletic",
+  "team": {
+    "date_founded": "An early-colonial charter, founded by the first wave of Martian settlers who needed something to do between dust storms.",
+    "fans_nickname": "The Red Wall",
+    "number_of_fans": "Around 22 million hard-bitten Martians who travel in dust-caked convoys.",
+    "badge": "A clenched iron fist rising from red soil, set against a black sky with two small moons.",
+    "home_kit": "Oxide-red shirt, black shorts, red socks — the colours of the planet itself.",
+    "away_kit": "Charcoal black with thin red piping and a faint ridge-line of Olympus across the chest.",
+    "third_kit": "Pale dust-grey, worn for derby days against the other Martian sides.",
+    "history": "Mars Athletic are the planet's grinders — a club built not on flair but on the refusal to be beaten. They concede grudgingly, counter ruthlessly, and have made a virtue of frustrating richer, prettier sides into the red dust. Martians love them for it.",
+    "club_culture": "Stubborn, defiant, and proudly unglamorous. Effort is the only currency that buys respect at the Dust Bowl.",
+    "political_leaning": "Martian-nationalist. The club has always carried the planet's chip-on-the-shoulder resentment of inner-system condescension.",
+    "trophy_cabinet": ["Inner League title (one famous, dogged campaign)", "Multiple top-half finishes against the odds"],
+    "legends": ["Garrick 'The Anchor' Vohl — a centre-back who reportedly never lost a header"],
+    "achievements": ["Best defensive record in the league across several seasons"]
+  },
+  "stadium": {
+    "date_built": "Raised in the early colonial era and reinforced against the dust storms ever since.",
+    "sponsors": "Backed by the Martian mining consortia whose rigs ring the city.",
+    "pitch_size": "Tight and compact — deliberately narrow to choke the space attackers crave.",
+    "pitch_type": "Hardy red-tinted synthetic turf, the only surface that survives the grit.",
+    "stand_names": ["The Anchor Stand", "The Storm End", "The Miners' Terrace"],
+    "bio": "The Dust Bowl is one of the most hostile away days in the league — wind-scoured, cold, and packed with fans who treat every opposition pass as a personal affront. Visiting sides talk about the dust in their teeth long after the final whistle."
+  },
+  "training_facility": {
+    "date_built": "A functional, weatherproofed complex built when the club first turned professional.",
+    "sponsors": "Maintained on a tight budget by the same mining money that fills the stands.",
+    "bio": "Red Dust Training Grounds is no palace, but it forges hard players. The drills here are built around organisation, recovery runs, and the lung-busting fitness a counterattacking side lives or dies on."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Mars-adapted)",
+    "age": 49,
+    "nationality": "Martian",
+    "appearance": "Tall and rangy, with the leathery, wind-burned look of a man who refuses to coach from indoors.",
+    "bio": "Dustin Kael is the embodiment of the Mars Athletic way — a former defender who turned an unfashionable career into a managerial creed. He builds walls, waits, and strikes on the break, and he has out-thought managers with ten times his budget.",
+    "personality": "Dour, disciplined, and allergic to excuses. Smiles roughly once a season.",
+    "playing_history": "A no-nonsense Martian centre-half who spent his whole career at unglamorous inner-system clubs.",
+    "playing_philosophy": "Concede nothing, then punish. Defence wins respect; counterattacks win matches.",
+    "political_leaning": "Quietly Martian-nationalist, like the club he serves.",
+    "culture": "A son of the red dust who believes hardship makes better footballers.",
+    "achievements": ["Led the club's famous title-challenging campaign on a shoestring"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Male",
+      "race": "Human (Mars-adapted)",
+      "age": 44,
+      "nationality": "Martian",
+      "appearance": "Squat and intense, with a whistle permanently around his neck and a clipboard that never leaves his hand.",
+      "bio": "Redd Okafor drills the back line until they move as one organism. Kael trusts him completely with the club's defensive shape, which is to say the club's entire identity.",
+      "personality": "Obsessive about structure; treats a misplaced marking assignment as a crisis.",
+      "playing_history": "A journeyman defender who learned the trade the hard way.",
+      "playing_philosophy": "There is no glory in defending, only necessity — so do it perfectly.",
+      "political_leaning": "Apolitical; the back four is his only nation.",
+      "culture": "The keeper of the club's defensive faith.",
+      "achievements": ["Architect of the league's meanest defence"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Broad and unshakeable, with a goalkeeper's calm in a cage of red metal.", "bio": "Rex Volkov is the reliable last line of a side that asks its keeper to do a lot. Balanced and unflustered, he organises the wall in front of him with a quiet authority.", "personality": "Steady and composed; the calm at the back.", "political_leaning": "Quietly Martian-nationalist.", "culture": "A one-club stalwart.", "achievements": ["Several seasons as first choice"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Female", "race": "Human (Mars-adapted)", "appearance": "Wiry and sharp, with a full-back's endless engine and a permanent scowl.", "bio": "Zara Kwan attacks every fifty-fifty like a personal insult. Her aggression is the spark in Kael's otherwise patient machine.", "personality": "Fierce and combative; rides the edge of bookings.", "political_leaning": "Hardline Martian-nationalist.", "culture": "The Dust Bowl's favourite kind of player.", "achievements": ["Crowd-voted hardest tackler"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Tall and unhurried, the calm head in a hot-tempered defence.", "bio": "Orion Steele is the organiser, the one who keeps Kwan's fire from boiling over. A selfless defender who lives for the clean sheet.", "personality": "Selfless and level-headed; the dressing-room peacemaker.", "political_leaning": "Moderate.", "culture": "Team-first to the core.", "achievements": ["Long-serving defensive leader"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Female", "race": "Human (Mars-adapted)", "appearance": "Compact and balanced, reads the counter before it starts.", "bio": "Lira Solano is the spring in the trap — the defender who turns desperate clearances into the first pass of a counterattack.", "personality": "Cool-headed and precise.", "political_leaning": "Martian-nationalist.", "culture": "Quietly dependable.", "achievements": ["Rising defensive talent"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Scarred and barrel-chested, a veteran who throws his body at everything.", "bio": "Dash Petrov is the heart of the Red Wall, a workhorse defender who has bled for the badge for over a decade. The younger players are terrified of disappointing him.", "personality": "Tireless and demanding; leads by brutal example.", "political_leaning": "Old-guard Martian-nationalist.", "culture": "The soul of the back line.", "achievements": ["Club captain and record appearance-maker among defenders"], "injuries": "Carries the aches of a long career but never misses a match." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Slight and sharp-eyed, the rare flair player in a workmanlike side.", "bio": "Echo Nakamura is the one Martian permitted to dream — the creative spark who launches the counters everyone else finishes.", "personality": "Creative and quick-thinking; the team's imagination.", "political_leaning": "Cosmopolitan; doesn't share the club's nationalism.", "culture": "The licensed artist.", "achievements": ["Most assists in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Stocky and relentless, covers every blade of the narrow pitch.", "bio": "Flux Santos is the engine that lets Nakamura create — a selfless midfielder who does two players' running so the artist can breathe.", "personality": "Selfless and indefatigable.", "political_leaning": "Moderate Martian-nationalist.", "culture": "The unsung runner.", "achievements": ["Most distance covered in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Female", "race": "Human (Mars-adapted)", "appearance": "Even-keeled and tidy, the balance of the midfield.", "bio": "Sable Torres is the metronome that keeps the Mars Athletic counter from descending into chaos — composed where her teammates are frantic.", "personality": "Balanced and unflappable.", "political_leaning": "Martian-nationalist.", "culture": "The steady hand.", "achievements": ["Ever-present in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Lean and predatory, lurks on the shoulder of the last defender.", "bio": "Blaze Adeyemi is the tip of the spear, a selfish young finisher who exists to convert the one chance the counter creates. Cold-blooded in front of goal and hungry for more.", "personality": "Selfish and clinical; lives for goals.", "political_leaning": "Self-focused, indifferent to politics.", "culture": "The lethal point of the counter.", "achievements": ["Top scorer in his breakout season"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Female", "race": "Human (Mars-adapted)", "appearance": "Strong and direct, never stops harrying the ball.", "bio": "Nova Cruz is the workhorse forward who makes Adeyemi's goals possible, pressing defenders into the mistakes the counter feeds on.", "personality": "Relentless and selfless up front.", "political_leaning": "Martian-nationalist.", "culture": "The forward who defends.", "achievements": ["Most fan-voted pressing forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Balanced and quick, comfortable on either flank.", "bio": "Rift Osei is the outlet on the break — a forward who carries the ball seventy metres in a heartbeat when Mars Athletic turn defence into attack.", "personality": "Composed and dangerous in transition.", "political_leaning": "Moderate.", "culture": "The counterattack made flesh.", "achievements": ["Several long-range counter goals"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Older and watchful, the steady understudy in goal.", "bio": "Iron Kato is the veteran backup who keeps Volkov honest. Cautious and experienced, he could start for half the league.", "personality": "Cautious and meticulous.", "political_leaning": "Old-guard Martian-nationalist.", "culture": "The patient deputy.", "achievements": ["Long, loyal service as second keeper"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Young and rangy, growing into his frame.", "bio": "Red Fontaine is the academy defender being toughened up the Mars Athletic way. Balanced and willing, his education is in stubbornness.", "personality": "Eager and coachable.", "political_leaning": "Martian-nationalist.", "culture": "The apprentice grinder.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Heavy-legged and unbothered, the squad's resident pessimist.", "bio": "Dust Mensah is the veteran whose talent always outran his appetite for work — kept around for the games his reading of play can still win.", "personality": "Laid-back to a fault; coasts.", "political_leaning": "Cynical about everything.", "culture": "The cautionary veteran.", "achievements": ["A title winner in a former life"], "injuries": "Fully fit, but slow between matches." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Compact and willing, a tidy squad midfielder.", "bio": "Canyon Joshi is the selfless deputy who keeps the midfield ticking when the starters rest. Never spectacular, never a liability.", "personality": "Team-first and dependable.", "political_leaning": "Martian-nationalist.", "culture": "The reliable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Mars-adapted)", "appearance": "Skinny and intense, all sharp angles and ambition.", "bio": "Crater Diaz is the academy striker desperate to be the next Adeyemi — and just as selfish about it. The staff are trying to channel the hunger before it curdles.", "personality": "Selfish and raw; burning to prove himself.", "political_leaning": "Indifferent.", "culture": "The impatient prospect.", "achievements": ["Top scorer in the youth ranks"], "injuries": "Fully fit." }
+  ]
+}

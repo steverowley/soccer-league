@@ -1,0 +1,80 @@
+{
+  "team_id": "jupiter-titans",
+  "team": {
+    "date_founded": "One of the oldest and grandest charters of the outer worlds, founded in the storm-cities of Jupiter at the dawn of gas-giant football.",
+    "fans_nickname": "The Storm",
+    "number_of_fans": "Around 60 million — a colossal, demanding following spread across the Jovian moons.",
+    "badge": "A clenched titan's fist wreathed in storm-cloud, the Great Red Spot raging behind it.",
+    "home_kit": "Burnt orange and storm-grey with a swirling tempest pattern across the chest.",
+    "away_kit": "Deep charcoal with orange lightning forking down the sides.",
+    "third_kit": "Cream and rust, evoking the planet's banded clouds.",
+    "history": "Jupiter Titans are the great power of the gas-giant game — vast, wealthy, and physically overwhelming. Built on raw strength and a fearsome defensive line, they bully opponents into submission and expect to win every trophy in sight. Loved on Jupiter, feared and envied everywhere else.",
+    "club_culture": "Powerful, entitled, and ruthlessly winning. The Storm believe dominance is their birthright.",
+    "political_leaning": "Jovian establishment superpower — the club of the outer system's old money and political muscle.",
+    "trophy_cabinet": ["A vast haul of league titles and cups", "The most decorated club of the gas giants"],
+    "legends": ["Atlas Vorn — the colossal defender who reportedly went a full season without being dribbled past"],
+    "achievements": ["Most trophies of any outer-system club", "Record for fewest goals conceded in a season"]
+  },
+  "stadium": {
+    "date_built": "A legendary storm-sealed arena, one of the grandest venues in the system.",
+    "sponsors": "Bankrolled by the Jovian energy conglomerates and storm-harvest combines.",
+    "pitch_size": "Full size, immaculate, built to showcase the Titans' physical command.",
+    "pitch_type": "Pristine managed turf, flawless and fast.",
+    "stand_names": ["The Vorn Stand", "The Tempest End", "The Red Spot Kop", "The Storm Gallery"],
+    "bio": "Storm Arena — The Red Spot — is a cauldron of sixty thousand storm-fans, a towering, intimidating fortress where the Titans rarely lose. The roar when they win the ball is said to register on the colony's weather sensors."
+  },
+  "training_facility": {
+    "date_built": "An elite, sprawling campus, the best-funded in the gas giants.",
+    "sponsors": "Lavishly backed by the club's energy-conglomerate owners.",
+    "bio": "The Storm Belt Athletic Campus is a temple to physical dominance, drilling power, conditioning, and the suffocating defensive structure that defines the Titans. It produces giants."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Jupiter-adapted)",
+    "age": 54,
+    "nationality": "Jovian",
+    "appearance": "Broad, imposing, and severe, with the heavy frame of a man bred for high gravity.",
+    "bio": "Titan Krell is a winner and a bully in equal measure — an aggressive, physical coach who demands total dominance and accepts nothing less than trophies. His sides overpower opponents and grind out the rest.",
+    "personality": "Imposing, demanding, and ferociously competitive.",
+    "playing_history": "A monstrous defensive midfielder feared across the outer leagues.",
+    "playing_philosophy": "Dominate the physical battle and the football takes care of itself. Be aggressive, be solid, and never, ever lose at home.",
+    "political_leaning": "Jovian establishment superpower.",
+    "culture": "The iron-fisted custodian of the outer system's grandest club.",
+    "achievements": ["A long list of major trophies as player and manager"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Male",
+      "race": "Human (Jupiter-adapted)",
+      "age": 46,
+      "nationality": "Jovian",
+      "appearance": "Sharp-suited and intense, the cold tactical mind beside Krell's bluster.",
+      "bio": "Kael Borren designs the high-pressure traps that turn the Titans' aggression into control, the strategist who keeps all that power organised.",
+      "personality": "Calculating and exacting.",
+      "playing_history": "A tactically astute midfielder turned analyst-coach.",
+      "playing_philosophy": "Power without structure is just noise. Aim the aggression and it becomes unstoppable.",
+      "political_leaning": "Jovian establishment.",
+      "culture": "The brain behind the brawn.",
+      "achievements": ["Architect of the league's most feared pressing structure"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Vast and commanding, dominates his area in the heavy gravity.", "bio": "Storm Reyes is the balanced, imperious keeper behind the Titans' fearsome line, an immovable last word in any siege.", "personality": "Composed and commanding.", "political_leaning": "Jovian establishment.", "culture": "The fortress door.", "achievements": ["Most clean sheets among outer-system keepers"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Broad and tireless, an overlapping powerhouse.", "bio": "Cyclone Walsh is the workhorse full-back who grafts both ways for ninety minutes, the relentless edge of the Storm's defence.", "personality": "Tireless and uncomplaining.", "political_leaning": "Jovian establishment.", "culture": "The two-way engine.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Immovable and team-minded, the heart of the fearsome line.", "bio": "Thunder Okafor is the selfless colossus who marshals the Titans' famous defence, the calm authority at its core.", "personality": "Selfless and commanding.", "political_leaning": "Jovian establishment.", "culture": "The marshal.", "achievements": ["Club captain"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Bullish and ferocious, attacks every duel.", "bio": "Lightning Petrov is the aggressive enforcer who makes forwards regret entering the Titans' half, the snarl in the line.", "personality": "Aggressive and intimidating.", "political_leaning": "Jovian establishment.", "culture": "The enforcer.", "achievements": ["Most duels won in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Vast and balanced, the reader of the back line.", "bio": "Gale Fischer is the composed defender who organises the giants, snuffing danger before it forms.", "personality": "Balanced and intelligent.", "political_leaning": "Jovian establishment.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Sharp and inventive, the craft amid the power.", "bio": "Vortex Chen is the creative spark who turns the Titans' dominance into goals, the rare artist in a side of bruisers.", "personality": "Creative and decisive.", "political_leaning": "Cosmopolitan.", "culture": "The playmaker.", "achievements": ["Most chances created in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Willing and powerful, the engine of the midfield.", "bio": "Squall Morales is the selfless midfield workhorse who wins the ball and feeds the artists, the lungs of the Storm.", "personality": "Selfless and industrious.", "political_leaning": "Jovian establishment.", "culture": "The engine.", "achievements": ["Most ball recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Balanced and strong, the controlling pivot.", "bio": "Gust Nakamura is the composed midfielder who dictates the tempo from deep, keeping the Titans' power purposeful.", "personality": "Balanced and measured.", "political_leaning": "Jovian establishment.", "culture": "The conductor.", "achievements": ["Highest pass volume in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Towering and predatory, a complete modern striker.", "bio": "Tempest Rivera is the selfish, devastating spearhead who finishes everything the Titans' dominance creates, the jewel of the attack.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The star.", "achievements": ["Golden Boot contender", "Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Direct and ferocious, the storm up front.", "bio": "Typhoon Lee is the aggressive forward who batters back lines alongside Rivera, all power and menace.", "personality": "Aggressive and relentless.", "political_leaning": "Jovian establishment.", "culture": "The battering ram.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Self-assured and explosive, the wide weapon.", "bio": "Maelstrom Park is the selfish wide forward who turns dominance into chaos, hungry to add to the Titans' goal glut.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide weapon.", "achievements": ["Most goals from the flank"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Zephyr Torres is the cautious veteran second keeper, a dependable understudy at a club that expects perfection.", "personality": "Cautious and steady.", "political_leaning": "Jovian establishment.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Mist Tanaka is the team-first deputy who maintains the fearsome line's standards when the starters rest.", "personality": "Selfless and reliable.", "political_leaning": "Jovian establishment.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Young and vast, an academy giant in the making.", "bio": "Nimbus Kim is the balanced young defender being moulded into the next Titan colossus, all power and promise.", "personality": "Composed and coachable.", "political_leaning": "Jovian establishment.", "culture": "The towering prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Breeze Brennan is the creative deputy who offers a different gear from the bench, a youngster of real promise.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Jupiter-adapted)", "appearance": "Lean and hungry, an academy striker with a star's swagger.", "bio": "Rush Sato is the gifted young forward the Storm are grooming behind Rivera — selfish, confident, and impatient for his moment.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The heir apparent.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

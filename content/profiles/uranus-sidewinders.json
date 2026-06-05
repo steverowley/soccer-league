@@ -1,0 +1,80 @@
+{
+  "team_id": "uranus-sidewinders",
+  "team": {
+    "date_founded": "Founded on tilted, sideways-spinning Uranus, where nothing is quite oriented the way it should be — including the football.",
+    "fans_nickname": "The Tilt",
+    "number_of_fans": "Around 19 million, eccentric and devoted, who never know what they'll get.",
+    "badge": "A planet tipped fully on its side, a serpentine sidewinder coiled around it.",
+    "home_kit": "Turquoise and white with a diagonal, off-kilter slash across the body.",
+    "away_kit": "Pale ice-cyan with crooked, sideways striping.",
+    "third_kit": "Deep teal with a tilted, asymmetric crest.",
+    "history": "Uranus Sidewinders are the league's wild card. Raised on a world that spins on its side, they play unpredictable, lopsided, attacking football that bewilders opponents and, frequently, themselves. On their day they are dazzling; on their off day, chaos — and no one, least of all them, can predict which it will be.",
+    "club_culture": "Eccentric, attacking, and gloriously unpredictable. The Tilt would rather entertain than be safe.",
+    "political_leaning": "Frontier-eccentric — contrarian and allergic to convention.",
+    "trophy_cabinet": ["A scattering of giant-killings and a few baffling collapses"],
+    "legends": ["Skew Vantel — the winger who scored from impossible angles no one else would try"],
+    "achievements": ["Most goals from unconventional positions in the league"]
+  },
+  "stadium": {
+    "date_built": "Built on the tilted polar plains, its stands set at deliberately odd angles.",
+    "sponsors": "Backed by the eccentric independent guilds of the tilted world.",
+    "pitch_size": "Asymmetric within the rules — wider on one flank than the other, to the visitors' confusion.",
+    "pitch_type": "Hardy synthetic turf rated for the long, strange Uranian seasons.",
+    "stand_names": ["The Skew Stand", "The Tilt End", "The Sideways Terrace"],
+    "bio": "The Tilted Field disorients before kickoff: the stands lean, the sightlines are wrong, and the home side's lopsided football only deepens the confusion. Visitors rarely feel settled here."
+  },
+  "training_facility": {
+    "date_built": "A professional institute built, naturally, at an angle.",
+    "sponsors": "Funded by the world's independent-minded guilds.",
+    "bio": "The Sideways Athletic Institute drills the unconventional — overloads, switches, and lateral movement designed to pull defences out of shape. Orthodoxy is gently discouraged."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Uranus-adapted)",
+    "age": 46,
+    "nationality": "Uranian",
+    "appearance": "Animated and quirky, gestures constantly, dresses with deliberate mismatch.",
+    "bio": "Axis Brennan is a gleeful contrarian who builds attacking, lopsided sides that confound opponents through sheer unpredictability. Brilliant and maddening in equal measure, his Sidewinders are never, ever boring.",
+    "personality": "Eccentric, inventive, and cheerfully unpredictable.",
+    "playing_history": "A maverick attacking midfielder who never met a convention he liked.",
+    "playing_philosophy": "Attack from strange angles, overload the unexpected flank, and refuse to do what they expect. Predictability is the only sin.",
+    "political_leaning": "Frontier-eccentric.",
+    "culture": "A contrarian who prizes surprise above safety.",
+    "achievements": ["Engineered several unforgettable upsets"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Male",
+      "race": "Human (Uranus-adapted)",
+      "age": 40,
+      "nationality": "Uranian",
+      "appearance": "Wiry and restless, diagrams strange lateral runs in the air with his hands.",
+      "bio": "Axis Tanaka specialises in lateral movement, drilling the sideways overloads and switches that make the Sidewinders so disorienting to mark.",
+      "personality": "Inventive and energetic.",
+      "playing_history": "A wide player obsessed with movement off the ball.",
+      "playing_philosophy": "Move them sideways until a hole opens. Defences can't track what they can't predict.",
+      "political_leaning": "Frontier-eccentric.",
+      "culture": "The choreographer of chaos.",
+      "achievements": ["Built the side's disorienting lateral movement"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Calm amid chaos, a keeper used to the unexpected.", "bio": "Tilt Vasquez is the balanced last line of a famously unpredictable side, unflappable when his own team's chaos leaves him exposed.", "personality": "Composed and unflappable.", "political_leaning": "Frontier-eccentric.", "culture": "The calm in the chaos.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Tireless and willing, an unconventional full-back.", "bio": "Axis Torres is the workhorse defender who powers the lopsided overloads, popping up wherever he isn't expected.", "personality": "Tireless and adaptable.", "political_leaning": "Frontier-eccentric.", "culture": "The roaming grafter.", "achievements": ["Most attacking-third touches by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Selfless and steady, the rare orthodoxy at the back.", "bio": "Roll Kane is the team-first defender who tries to keep order behind the chaos, the anchor of a tilting side.", "personality": "Selfless and disciplined.", "political_leaning": "Frontier-eccentric.", "culture": "The anchor.", "achievements": ["Most recoveries by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Combative and unpredictable, a defender with attacking urges.", "bio": "Spin Walker is the aggressive defender who can't resist joining the overload, thrilling and risky in equal measure.", "personality": "Aggressive and adventurous.", "political_leaning": "Frontier-eccentric.", "culture": "The adventurer.", "achievements": ["Most defender goals in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Balanced and watchful, the reader of the chaos.", "bio": "Orbit Rivera is the composed defender who tries to anticipate his own side's unpredictability, the calm at the back.", "personality": "Balanced and intelligent.", "political_leaning": "Frontier-eccentric.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Inventive and unpredictable, the maddening genius.", "bio": "Slant Chen is the creative heart of the chaos, conjuring passes from impossible angles that even his teammates don't expect.", "personality": "Creative and mercurial.", "political_leaning": "Frontier-eccentric.", "culture": "The genius.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Willing and selfless, the order behind the chaos.", "bio": "Lean Petrov is the team-first midfielder who covers for the side's adventures, the unsung balance to the eccentricity.", "personality": "Selfless and industrious.", "political_leaning": "Frontier-eccentric.", "culture": "The balance.", "achievements": ["Most defensive recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Balanced and tidy, the rare steady hand.", "bio": "Skew Morales is the composed midfielder who keeps the lopsided side from tipping fully into chaos.", "personality": "Balanced and measured.", "political_leaning": "Frontier-eccentric.", "culture": "The steadier.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Sharp and opportunistic, a finisher from odd angles.", "bio": "Lateral Park is the selfish finisher who thrives on the chaos, scoring from positions no orthodox striker would occupy.", "personality": "Selfish and opportunistic.", "political_leaning": "Indifferent.", "culture": "The unorthodox finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Direct and combative, the cutting edge of the overload.", "bio": "Sideways Kim is the aggressive forward who attacks from wherever the overload sends him, impossible to mark.", "personality": "Aggressive and unpredictable.", "political_leaning": "Frontier-eccentric.", "culture": "The unmarkable.", "achievements": ["Most goals from wide overloads"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Self-assured and inventive, the wide wild card.", "bio": "Tangent Okafor is the selfish wide forward who goes off-script at will, infuriating and electrifying in equal measure.", "personality": "Selfish and maverick.", "political_leaning": "Indifferent.", "culture": "The wild card.", "achievements": ["Most successful dribbles in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Rotate Tanaka is the cautious veteran second keeper, a steady presence behind the unpredictable side.", "personality": "Cautious and steady.", "political_leaning": "Frontier-eccentric.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Veer Nakamura is the team-first deputy who tries to keep order when the starters rest, a calming substitute.", "personality": "Selfless and reliable.", "political_leaning": "Frontier-eccentric.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Wobble Fischer is the promising young defender learning to read his own side's chaos, calm and quick to adapt.", "personality": "Composed and coachable.", "political_leaning": "Frontier-eccentric.", "culture": "The adaptable prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Drift Hayashi is the creative deputy who fits the eccentric side perfectly, a youngster of unpredictable promise.", "personality": "Creative and raw.", "political_leaning": "Frontier-eccentric.", "culture": "The understudy maverick.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Uranus-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish flair.", "bio": "Deflect Sato is the eager young finisher pushing for a place, a selfish forward with a taste for the spectacular.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The flashy prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

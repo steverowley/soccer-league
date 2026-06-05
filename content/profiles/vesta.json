@@ -1,0 +1,66 @@
+{
+  "team_id": "vesta",
+  "team": {
+    "date_founded": "Founded on the protoplanet Vesta, where the punishing low gravity shaped a unique long-ball game.",
+    "fans_nickname": "The Floaters",
+    "number_of_fans": "Around 16 million, devoted to their gravity-defying side.",
+    "badge": "A ball arcing high over a cratered protoplanet horizon.",
+    "home_kit": "Pale silver and sky-blue with a high-arc trajectory motif.",
+    "away_kit": "White with blue trim and a faint crater pattern.",
+    "third_kit": "Deep space-blue with a luminous arc.",
+    "history": "Vesta are masters of low-gravity football — a direct side that launches long, floating balls into the great open spaces the weak gravity creates. It looks strange to outsiders and works beautifully for the Floaters.",
+    "club_culture": "Inventive, proud, and at home in the low gravity. The Floaters embrace what makes their world different.",
+    "political_leaning": "Belt frontier-pragmatist — practical, independent, and quietly inventive.",
+    "trophy_cabinet": ["A reputation for a style no one else can replicate"],
+    "legends": ["Arc Velmore — the target striker who turned the high ball into an art"],
+    "achievements": ["Most goals from direct, long-ball play in the belt"]
+  },
+  "stadium": {
+    "date_built": "Built in a great crater on the Vestan surface.",
+    "sponsors": "Backed by the protoplanet's survey and mining guilds.",
+    "pitch_size": "Large and open, to exploit the floating long ball.",
+    "pitch_type": "Hardy synthetic turf rated for the extreme low gravity.",
+    "stand_names": ["The Velmore Stand", "The Crater End", "The Arc Terrace"],
+    "bio": "The Crater is a wide, open bowl where the ball seems to hang in the thin gravity. Visiting sides struggle to judge the floating long balls the Floaters thrive on."
+  },
+  "training_facility": {
+    "date_built": "A standard complex on the crater rim.",
+    "sponsors": "Funded by the Vestan survey guilds.",
+    "bio": "The Vesta Athletic Centre drills the timing and aerial judgement that low-gravity, direct football demands — a craft unique to the protoplanet."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 48,
+    "nationality": "Vestan",
+    "appearance": "Tall and angular, watches the high balls arc with a craftsman's eye.",
+    "bio": "Float Inoue is the apostle of low-gravity direct football, building Vesta sides that launch floating long balls into space no other team knows how to defend. Strange, effective, and proudly Vestan.",
+    "personality": "Inventive, calm, and quietly stubborn.",
+    "playing_history": "A target striker who mastered the Vestan high ball.",
+    "playing_philosophy": "Use the gravity. Go direct, go long, and attack the space the low gravity gives you.",
+    "political_leaning": "Belt frontier-pragmatist.",
+    "culture": "An inventor who turned his world's quirk into a weapon.",
+    "achievements": ["Built the belt's unique low-gravity game"]
+  },
+  "managing_staff": [
+    { "role": "fitness_coach", "gender": "Male", "race": "Human (Belt-adapted)", "age": 42, "nationality": "Vestan", "appearance": "Lean and precise, drills aerial timing in the thin gravity.", "bio": "Crust Eriksson conditions players for the vacuum-thin, low-gravity Vestan game, the specialist behind the Floaters' aerial mastery.", "personality": "Methodical and inventive.", "playing_history": "A low-gravity conditioning specialist.", "playing_philosophy": "Train for the gravity you have. Master the arc and you master the match.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The low-gravity specialist.", "achievements": ["Built the side's aerial timing"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Calm and commanding, judges the high balls.", "bio": "Lava Reyes is the balanced keeper who reads the floating long balls better than any visiting forward.", "personality": "Composed and commanding.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The aerial reader.", "achievements": ["Most high claims in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Igneous Cruz is the workhorse full-back who works the channel and launches the long diagonal.", "personality": "Tireless and uncomplaining.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The grafter.", "achievements": ["Most long passes by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the aerial anchor.", "bio": "Magma Okafor is the team-first defender who wins the aerial duels the low-gravity game produces.", "personality": "Selfless and disciplined.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The aerial anchor.", "achievements": ["Most aerial duels won"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative and firm, the bite at the back.", "bio": "Basalt Sato is the aggressive defender who dominates the physical, floating battles.", "personality": "Aggressive and committed.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, the reader.", "bio": "Crater Lee is the composed defender who keeps Vesta solid against the rare quick side.", "personality": "Balanced and intelligent.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and precise, the long-ball architect.", "bio": "Pyro Kim is the creative midfielder who pings the floating diagonals the Floaters live on.", "personality": "Creative and precise.", "political_leaning": "Cosmopolitan.", "culture": "The architect.", "achievements": ["Most long-ball assists"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and selfless, the engine.", "bio": "Ember Mori is the team-first midfielder who chases down the second balls the long game creates.", "personality": "Selfless and industrious.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The engine.", "achievements": ["Most second balls won"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and tidy, the steady pivot.", "bio": "Flare Nakamura is the composed midfielder who keeps the direct game from becoming aimless.", "personality": "Balanced and measured.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The steadier.", "achievements": ["Highest pass completion in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tall and predatory, the target man.", "bio": "Eruption Rivera is the selfish target striker who attacks the floating long balls with deadly timing.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The target man.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and willing, the second striker.", "bio": "Scorch Patel is the aggressive forward who feeds off the flick-ons in the low gravity.", "personality": "Aggressive and selfless up top.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The poacher.", "achievements": ["Most goals from flick-ons"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and sharp, the wide finisher.", "bio": "Cinder Novak is the selfish wide forward who attacks the space the long ball opens.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Ash Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Slag Anderson is the team-first deputy who keeps the aerial block intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Coke Martinez is the promising young defender learning the Floaters' aerial craft.", "personality": "Composed and coachable.", "political_leaning": "Belt frontier-pragmatist.", "culture": "The young anchor.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Char Chandra is the creative deputy who can ping the long diagonals from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy architect.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Blaze Ito is the eager young target man pushing for a place among the Floaters.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

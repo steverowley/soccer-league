@@ -43,7 +43,7 @@ import {
   type PlayerRecentMatch,
   type NarrativeMention,
 } from '../features/match';
-import { RelationshipGraph } from '../features/entities';
+import { RelationshipGraph, getEntityProfile } from '../features/entities';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const {
@@ -142,6 +142,7 @@ export default function PlayerDetail() {
   const [idolDone,      setIdolDone]      = useState(false);
   const [matchesDone,   setMatchesDone]   = useState(false);
   const [narrativesDone, setNarrativesDone] = useState(false);
+  const [profile,       setProfile]       = useState<Record<string, unknown> | null>(null);
 
   // ── Parallel fetch on mount ───────────────────────────────────────────────
   // Four queries fire simultaneously.  Each `*Done` flag gates its own
@@ -187,6 +188,19 @@ export default function PlayerDetail() {
 
     return () => { cancelled = true; };
   }, [db, playerId]);
+
+  // Narrative profile (entities.meta.profile) — fetched in its own effect once
+  // the player's entity_id resolves. Supplementary content: the section is
+  // simply omitted when the player has no entity link or no authored profile.
+  useEffect(() => {
+    const entityId = player?.entity_id;
+    if (!entityId) return undefined;
+    let cancelled = false;
+    getEntityProfile(db, entityId)
+      .then((res) => { if (!cancelled) setProfile(res?.profile ?? null); })
+      .catch(() => { /* supplementary; silently omit on error */ });
+    return () => { cancelled = true; };
+  }, [db, player?.entity_id]);
 
   // ── Unknown player ────────────────────────────────────────────────────────
   // Only show the error surface once the player fetch has settled (to avoid
@@ -246,13 +260,31 @@ export default function PlayerDetail() {
           </Container>
         </section>
 
+        {/* ── II. Dossier ──────────────────────────────────────────────
+            Authored narrative profile from entities.meta.profile (bio,
+            appearance, personality, allegiances, achievements). Hidden
+            entirely when the player has no authored profile yet. */}
+        {profile && (
+          <>
+            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+            <section aria-labelledby="dossier-heading">
+              <Container>
+                <div style={{ padding: '40px 0' }}>
+                  <SectionLabel id="dossier-heading" kicker="II" title="Dossier" />
+                  <PlayerDossier profile={profile} />
+                </div>
+              </Container>
+            </section>
+          </>
+        )}
+
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── II. Season Stats ─────────────────────────────────────────── */}
+        {/* ── III. Season Stats ────────────────────────────────────────── */}
         <section aria-labelledby="stats-heading">
           <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="stats-heading" kicker="II" title="Season Statistics" />
+              <SectionLabel id="stats-heading" kicker="III" title="Season Statistics" />
 
               {!playerDone ? (
                 <Skeleton height={100} />
@@ -265,11 +297,11 @@ export default function PlayerDetail() {
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── III. Idol Standing ───────────────────────────────────────── */}
+        {/* ── IV. Idol Standing ────────────────────────────────────────── */}
         <section aria-labelledby="idol-heading">
           <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="idol-heading" kicker="III" title="Idol Standing" />
+              <SectionLabel id="idol-heading" kicker="IV" title="Idol Standing" />
 
               {!idolDone ? (
                 <Skeleton height={80} />
@@ -286,7 +318,7 @@ export default function PlayerDetail() {
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── IV. Recent Matches ────────────────────────────────────────
+        {/* ── V. Recent Matches ─────────────────────────────────────────
             Sourced from `match_lineups` (one row per starter) with a
             LEFT JOIN to `match_player_stats` for the contribution
             columns — see getPlayerRecentMatches in playerStats.ts.
@@ -296,7 +328,7 @@ export default function PlayerDetail() {
         <section aria-labelledby="matches-heading">
           <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="matches-heading" kicker="IV" title="Recent Matches" />
+              <SectionLabel id="matches-heading" kicker="V" title="Recent Matches" />
 
               {!matchesDone ? (
                 <Skeleton height={120} />
@@ -313,11 +345,11 @@ export default function PlayerDetail() {
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── V. Narrative Mentions ────────────────────────────────────── */}
+        {/* ── VI. Narrative Mentions ───────────────────────────────────── */}
         <section aria-labelledby="narratives-heading">
           <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="narratives-heading" kicker="V" title="Narrative Mentions" />
+              <SectionLabel id="narratives-heading" kicker="VI" title="Narrative Mentions" />
 
               {!narrativesDone ? (
                 <Skeleton height={100} />
@@ -332,7 +364,7 @@ export default function PlayerDetail() {
           </Container>
         </section>
 
-        {/* ── VI. Web of Influence (issue isl-uwq) ──────────────────────
+        {/* ── VII. Web of Influence (issue isl-uwq) ─────────────────────
             Drop-in <RelationshipGraph> hub showing the player's
             connections to managers, rivals, mentors, journalists, etc.
             Hidden when the player row has no entity_id link (legacy
@@ -347,7 +379,7 @@ export default function PlayerDetail() {
           <section aria-labelledby="connections-heading">
             <Container>
               <div style={{ padding: '40px 0 80px' }}>
-                <SectionLabel id="connections-heading" kicker="VI" title="Web of Influence" />
+                <SectionLabel id="connections-heading" kicker="VII" title="Web of Influence" />
                 <RelationshipGraph entityId={player.entity_id} />
               </div>
             </Container>
@@ -365,6 +397,73 @@ export default function PlayerDetail() {
 }
 
 // ── Sub-sections ──────────────────────────────────────────────────────────────
+
+/**
+ * Dossier block: renders the authored narrative profile (entities.meta.profile)
+ * for a player — a lead bio paragraph, a grid of identity facts, and the
+ * achievements list. Defensive against missing/mistyped fields since the
+ * profile arrives as an untyped JSON bag; any empty field is simply omitted.
+ *
+ * Note: deliberately surfaces NO raw stat numbers — only the narrative,
+ * world-as-real fields, per the project's hidden-mechanics non-goal.
+ */
+function PlayerDossier({ profile }: { profile: Record<string, unknown> }) {
+  const str = (k: string): string => (typeof profile[k] === 'string' ? (profile[k] as string) : '');
+  const list = (k: string): string[] =>
+    Array.isArray(profile[k]) ? (profile[k] as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+
+  const bio = str('bio');
+  const achievements = list('achievements');
+  // Identity facts shown as a label-over-value grid; only non-empty entries render.
+  const facts: Array<[string, string]> = (
+    [
+      ['Race', str('race')],
+      ['Gender', str('gender')],
+      ['Appearance', str('appearance')],
+      ['Personality', str('personality')],
+      ['Political Leaning', str('political_leaning')],
+      ['Culture', str('culture')],
+      ['Fitness', str('injuries')],
+    ] as Array<[string, string]>
+  ).filter(([, v]) => v.length > 0);
+
+  return (
+    <div>
+      {bio && (
+        <p style={{ ...VALUE_STYLE, color: DUST_50, lineHeight: 1.7, maxWidth: 760, marginBottom: 28 }}>
+          {bio}
+        </p>
+      )}
+      {facts.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 24,
+            marginBottom: achievements.length > 0 ? 28 : 0,
+          }}
+        >
+          {facts.map(([label, value]) => (
+            <div key={label}>
+              <p style={{ ...LABEL_STYLE, color: QUANTUM, marginBottom: 6 }}>{label}</p>
+              <p style={{ ...VALUE_STYLE, color: DUST_50, margin: 0 }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {achievements.length > 0 && (
+        <div>
+          <p style={{ ...LABEL_STYLE, color: QUANTUM, marginBottom: 8 }}>Achievements</p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {achievements.map((a) => (
+              <li key={a} style={{ ...VALUE_STYLE, color: DUST_50, marginBottom: 4 }}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Hero block: player name, jersey number pill, team, position, and the

@@ -1,0 +1,66 @@
+{
+  "team_id": "psyche-metallics",
+  "team": {
+    "date_founded": "Founded by the metal-extraction crews of Psyche, the great metallic asteroid.",
+    "fans_nickname": "The Forgers",
+    "number_of_fans": "Around 18 million, hard as the metal they mine.",
+    "badge": "A glowing ingot struck on an anvil, sparks flying.",
+    "home_kit": "Molten orange and gunmetal with a forged-metal sheen.",
+    "away_kit": "Bright steel-silver with orange seams.",
+    "third_kit": "Blackened iron with ember flecks.",
+    "history": "Psyche Metallics are built on raw physical power — an aggressive, muscular side that out-muscles and out-fights opponents into submission. On the great metal asteroid, strength is everything, and the Forgers have plenty.",
+    "club_culture": "Hard, physical, and aggressive. The Forgers believe football is a test of strength first.",
+    "political_leaning": "Belt industrial-syndicalist — a foundry-workers' club with muscle.",
+    "trophy_cabinet": ["A reputation as the belt's most physically dominant side"],
+    "legends": ["Anvil Strode — the midfield destroyer no one enjoyed facing"],
+    "achievements": ["Most duels and physical battles won in the belt"]
+  },
+  "stadium": {
+    "date_built": "Built beside the great metal foundries of Psyche.",
+    "sponsors": "Backed by the metal-extraction and smelting guilds.",
+    "pitch_size": "Standard, with a heavy, physical feel.",
+    "pitch_type": "Hardy synthetic turf rated for the metallic asteroid's conditions.",
+    "stand_names": ["The Strode Stand", "The Foundry End", "The Smelters' Terrace"],
+    "bio": "The Forge is a hot, loud, industrial bowl beside the smelters where the crowd roars for every crunching tackle. Away sides find it a physical and mental ordeal."
+  },
+  "training_facility": {
+    "date_built": "A standard complex built into the foundry district.",
+    "sponsors": "Funded by the smelting guilds.",
+    "bio": "The Core Training Campus drills physical conditioning and aggression, forging players as hard as the metal around them."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 49,
+    "nationality": "Psychean",
+    "appearance": "Broad and heavy, with the build of a man who worked the foundries.",
+    "bio": "Forge Petrov is an aggressive coach who builds physically overwhelming sides. His Metallics dominate the muscle battle and grind opponents down through sheer force.",
+    "personality": "Forceful, combative, and uncompromising.",
+    "playing_history": "A bruising defensive midfielder feared across the belt.",
+    "playing_philosophy": "Win the physical battle and the football follows. Be stronger, be harder, never back down.",
+    "political_leaning": "Belt industrial-syndicalist.",
+    "culture": "A foundry man who believes in strength above all.",
+    "achievements": ["Built the belt's most physical side"]
+  },
+  "managing_staff": [
+    { "role": "fitness_coach", "gender": "Male", "race": "Human (Belt-adapted)", "age": 43, "nationality": "Psychean", "appearance": "Hulking and intense, runs brutal conditioning sessions.", "bio": "Forge Nakamura builds the raw physical power that lets the Metallics overwhelm opponents, the architect of their muscle.", "personality": "Demanding and relentless.", "playing_history": "A strength-and-conditioning specialist.", "playing_philosophy": "Strength is trainable. Make them the hardest team on the pitch.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The forger of bodies.", "achievements": ["Built the side's physical dominance"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Big and commanding, fills the goal.", "bio": "Magnesium Reyes is the balanced, imposing keeper who dominates his box physically.", "personality": "Composed and commanding.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The last wall.", "achievements": ["Most claimed crosses in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Powerful and tireless, grafts the flank.", "bio": "Chrome Cruz is the workhorse full-back who bullies wingers and runs all day.", "personality": "Tireless and physical.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and immense, the heart of defence.", "bio": "Iron Okafor is the team-first colossus who marshals the Forgers' powerful back line.", "personality": "Selfless and commanding.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The marshal.", "achievements": ["Club captain"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Bullish and ferocious, attacks every duel.", "bio": "Nickel Sato is the aggressive enforcer who wins every physical battle at the back.", "personality": "Aggressive and intimidating.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Vast and balanced, the powerful reader.", "bio": "Cobalt Lee is the composed defender who reads the game so his strength rarely needs proving.", "personality": "Balanced and intelligent.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Slighter and inventive, the rare craft.", "bio": "Coil Kim is the creative spark amid the muscle, the one Forger asked to make something delicate.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The lone artist.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Powerful and willing, the engine.", "bio": "Static Mori is the selfless midfield workhorse who wins the ball and powers the side.", "personality": "Selfless and industrious.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The engine.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Strong and balanced, the controlling pivot.", "bio": "Spark Nakamura is the composed midfielder who keeps the Forgers' power purposeful.", "personality": "Balanced and measured.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The conductor.", "achievements": ["Highest pass volume in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Towering and predatory, the spearhead.", "bio": "Alloy Rivera is the selfish target striker who bullies defences and finishes the power.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The spearhead.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and ferocious, the battering forward.", "bio": "Ferrous Patel is the aggressive forward who batters back lines into submission.", "personality": "Aggressive and relentless.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The battering ram.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and powerful, the wide weapon.", "bio": "Steel Novak is the selfish wide forward who turns the Forgers' dominance into goals.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide weapon.", "achievements": ["Most goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Weld Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Solder Anderson is the team-first deputy who keeps the powerful block intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and powerful, an academy giant on the rise.", "bio": "Flux Martinez is the promising young defender being forged into the next Metallics colossus.", "personality": "Composed and coachable.", "political_leaning": "Belt industrial-syndicalist.", "culture": "The young forge.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Arc Chandra is the creative deputy who offers a rare delicate touch from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Forge Ito is the eager young finisher pushing for a place among the Forgers.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "team_id": "ganymede-united",
+  "team": {
+    "date_founded": "Founded by the deep-core mining unions of Ganymede, the system's largest moon, on a charter of solidarity and graft.",
+    "fans_nickname": "The Miners",
+    "number_of_fans": "Around 34 million working-class supporters who treat the club as their own.",
+    "badge": "Crossed mining picks over a great grey moon, ringed by iron.",
+    "home_kit": "Iron grey and black with a riveted-plate texture across the chest.",
+    "away_kit": "Ore-brown with grey trim and a thin seam-line of silver.",
+    "third_kit": "Deep core-black with a single grey strike-line.",
+    "history": "Ganymede United are football's labourers — a club founded by miners and built on endurance, organisation, and refusal to yield. They defend in deep, disciplined banks and grind opponents down with sheer unbreakable solidity. It is unglamorous, and they are proud of that.",
+    "club_culture": "Working-class, solid, and stubbornly collective. The Miners value graft over glamour and solidarity over stars.",
+    "political_leaning": "Frontier labour-collectivist — a union club to its bones.",
+    "trophy_cabinet": ["A long record of defensive resilience and hard-won points"],
+    "legends": ["Bedrock Hale — the centre-back who anchored the famous immovable defence"],
+    "achievements": ["Most clean sheets in the league across multiple seasons"]
+  },
+  "stadium": {
+    "date_built": "Built on the great crater fields above the deepest mine shafts.",
+    "sponsors": "Backed by the Ganymede mining unions and core-extraction guilds.",
+    "pitch_size": "Compact, suited to the deep, narrow defensive banks.",
+    "pitch_type": "Hardy synthetic turf rated for the moon's heavy gravity.",
+    "stand_names": ["The Hale Stand", "The Shaft End", "The Union Terrace"],
+    "bio": "Crater Fields — The Cradle — is a heavy, hard-working ground where the crowd appreciates a block as loudly as a goal. Away forwards leave frustrated and bruised."
+  },
+  "training_facility": {
+    "date_built": "A professional academy built to grow loyal, hard-working talent.",
+    "sponsors": "Funded by the mining unions as an investment in the colony's future.",
+    "bio": "The Cradle Academy drills organisation, discipline, and endurance above all. Its graduates are rarely flashy, but they are reliable, durable, and loyal to the union club that raised them."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Ganymede-adapted)",
+    "age": 52,
+    "nationality": "Ganymedean",
+    "appearance": "Heavy-set and unhurried, with the calloused hands of a man who once worked the shafts.",
+    "bio": "Ore Iwata builds immovable defences. A former miner who came to coaching late, he prizes organisation and endurance over flair and has made the Miners the hardest team in the league to break down.",
+    "personality": "Stoic, patient, and quietly stubborn.",
+    "playing_history": "A late-blooming defender who learned the game in the colliery leagues.",
+    "playing_philosophy": "Defend like your life depends on it, because down the mines it once did. Concede nothing and take what comes.",
+    "political_leaning": "Frontier labour-collectivist.",
+    "culture": "A son of the unions who believes in graft above all.",
+    "achievements": ["Built the league's most resilient defence"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Male",
+      "race": "Human (Ganymede-adapted)",
+      "age": 44,
+      "nationality": "Ganymedean",
+      "appearance": "Bluff and broad, forever poring over set-piece diagrams.",
+      "bio": "Dax Morison wrings goals from a side that rarely creates them, drilling the set-piece routines that turn the Miners' few chances into points.",
+      "personality": "Practical and meticulous.",
+      "playing_history": "A journeyman defender with an eye for dead-ball detail.",
+      "playing_philosophy": "If you can't outplay them, out-organise them at the set piece.",
+      "political_leaning": "Frontier labour-collectivist.",
+      "culture": "The pragmatic points-finder.",
+      "achievements": ["Most set-piece goals for a low-scoring side"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Huge and commanding, fills the goal in the heavy gravity.", "bio": "Magnet Petrov is the balanced, dominant keeper who anchors the Miners' deep block, commanding his box with quiet authority.", "personality": "Composed and commanding.", "political_leaning": "Frontier labour-collectivist.", "culture": "The last bastion.", "achievements": ["Most clean sheets in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Broad and tireless, a full-back who never stops working.", "bio": "Massive Cruz is the workhorse defender who grafts up and down the flank for ninety minutes, the engine of the disciplined block.", "personality": "Tireless and uncomplaining.", "political_leaning": "Frontier labour-collectivist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Immovable and team-minded, the rock of the defence.", "bio": "Titan Kane is the selfless centre-back who organises the deep banks, the calm heart of the immovable Miners.", "personality": "Selfless and commanding.", "political_leaning": "Frontier labour-collectivist.", "culture": "The rock.", "achievements": ["Club captain"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Bullish and combative, relishes the physical battle.", "bio": "Colossal Wren is the aggressive enforcer of the back line, winning every duel in the heavy gravity.", "personality": "Aggressive and committed.", "political_leaning": "Frontier labour-collectivist.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Vast and balanced, a fixture at the back.", "bio": "Enormous Lee is the composed defensive partner who reads the danger early, the brain beside the brawn.", "personality": "Balanced and intelligent.", "political_leaning": "Frontier labour-collectivist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Slighter and inventive, the rare creator in a defensive side.", "bio": "Pole Kim is the creative spark the Miners hide their attacking hopes in, the one player asked to make something from little.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The lone artist.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Willing and selfless, the midfield labourer.", "bio": "Flux Mori is the team-first midfielder who screens the defence tirelessly, the unglamorous shield the Miners depend on.", "personality": "Selfless and industrious.", "political_leaning": "Frontier labour-collectivist.", "culture": "The shield.", "achievements": ["Most defensive recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Balanced and steady, the dependable pivot.", "bio": "Field Osei is the composed midfielder who keeps the ball when the Miners finally win it, refusing to give it cheaply back.", "personality": "Balanced and measured.", "political_leaning": "Frontier labour-collectivist.", "culture": "The keeper of the ball.", "achievements": ["Highest pass retention in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Strong and predatory, the lone selfish point of attack.", "bio": "Giant Rivera is the selfish target striker who must convert the Miners' rare chances, isolated up front and ruthless when fed.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The lone spearhead.", "achievements": ["Club top scorer in a low-scoring side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Direct and combative, supports the lone striker.", "bio": "Vast Chen is the aggressive forward who battles to give Rivera support, doing the dirty work to win the Miners territory.", "personality": "Aggressive and selfless up top.", "political_leaning": "Frontier labour-collectivist.", "culture": "The battler.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Self-assured and sharp, the wide selfish threat.", "bio": "Immense Patel is the selfish wide forward who carries the rare counter, hungry for the goals a defensive side rarely offers.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most counter goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Shield Beck is the cautious veteran second keeper, a steady presence behind the first choice.", "personality": "Cautious and steady.", "political_leaning": "Frontier labour-collectivist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Bastion Park is the team-first deputy who slots into the deep block without weakening it.", "personality": "Selfless and reliable.", "political_leaning": "Frontier labour-collectivist.", "culture": "The dependable rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Bulwark Torres is the promising young defender the Cradle is toughening up, calm and durable.", "personality": "Composed and coachable.", "political_leaning": "Frontier labour-collectivist.", "culture": "The young rock.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Aegis Tanaka is the creative deputy who offers the Miners a rare attacking spark from the bench, a youngster of promise.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy spark.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Ganymede-adapted)", "appearance": "Big and hungry, an academy striker with a selfish edge.", "bio": "Goliath Brennan is the towering young forward pushing for a place, a selfish target man the club hopes will solve its goal shortage.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The hopeful prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

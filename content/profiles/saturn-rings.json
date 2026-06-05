@@ -1,0 +1,80 @@
+{
+  "team_id": "saturn-rings",
+  "team": {
+    "date_founded": "Founded in the elegant ring-cities of Saturn, where football was always meant to be beautiful.",
+    "fans_nickname": "The Haloed",
+    "number_of_fans": "Around 36 million connoisseurs who prize a sweeping move over a scrappy win.",
+    "badge": "A golden ringed planet haloed in light, encircled by a band of stars.",
+    "home_kit": "Royal purple and gold with a sweeping ring-band across the chest.",
+    "away_kit": "Pale gold with purple trim and a thin halo line.",
+    "third_kit": "Deep space-violet with a luminous golden ring.",
+    "history": "Saturn Rings play the most beautiful football in the gas giants — fluid movement, intricate passing, and a refusal to do anything ugly. Aristocratic and aesthetic, they would rather lose with grace than win without it, a creed that thrills neutrals and occasionally costs them.",
+    "club_culture": "Refined, aesthetic, and proud of its beautiful traditions. The Haloed value how you win almost as much as whether you win.",
+    "political_leaning": "Saturnian old-aristocracy — cultured, conservative, and quietly grand.",
+    "trophy_cabinet": ["A graceful collection of titles won the beautiful way"],
+    "legends": ["Aurelia Sand — the playmaker whose passing was called living poetry"],
+    "achievements": ["Most admired playing style in the outer leagues"]
+  },
+  "stadium": {
+    "date_built": "An elegant arena suspended within Saturn's inner rings.",
+    "sponsors": "Patronised by the ring-cities' cultured trading houses.",
+    "pitch_size": "Generously wide, to let the beautiful game breathe.",
+    "pitch_type": "Immaculate managed turf, kept fast and true for crisp passing.",
+    "stand_names": ["The Sand Stand", "The Halo End", "The Ring Gallery"],
+    "bio": "Cassini Colosseum — The Halo — is among the most beautiful venues in the system, a ringed bowl that glows gold at dusk. The crowd applauds a perfect passing move as warmly as a goal."
+  },
+  "training_facility": {
+    "date_built": "A professional complex on the inner ring's calmest band.",
+    "sponsors": "Funded by the cultured patronage of the ring-cities.",
+    "bio": "The Ring-Side Training Complex drills technique and movement above all, prizing the touch and timing that make the beautiful game possible. Ugliness is gently coached out."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Saturn-adapted)",
+    "age": 51,
+    "nationality": "Saturnian",
+    "appearance": "Silver-haired and impeccably dressed, watches matches like a patron at the opera.",
+    "bio": "Helios Voss is a possession aesthete who believes football is an art form first and a contest second. His Saturn sides pass with intricate, shifting beauty — and he changes formation mid-match like a composer changing key.",
+    "personality": "Cultured, calm, and quietly demanding of beauty.",
+    "playing_history": "An elegant playmaker of the old school.",
+    "playing_philosophy": "Keep the ball, move it beautifully, and reshape the team until the opponent simply cannot follow.",
+    "political_leaning": "Saturnian old-aristocracy.",
+    "culture": "An aesthete who believes the beautiful game is the only game.",
+    "achievements": ["Built one of the most admired sides in the gas giants"]
+  },
+  "managing_staff": [
+    {
+      "role": "assistant_manager",
+      "gender": "Female",
+      "race": "Human (Saturn-adapted)",
+      "age": 43,
+      "nationality": "Saturnian",
+      "appearance": "Poised and precise, forever sketching shifting formations.",
+      "bio": "Lumen Delacroix is the specialist in formation variation who lets Voss reshape the side seamlessly mid-match, the tactical chameleon behind the beauty.",
+      "personality": "Inventive and exacting.",
+      "playing_history": "A versatile midfielder turned tactical specialist.",
+      "playing_philosophy": "Shape is a living thing; change it before the opponent learns it.",
+      "political_leaning": "Saturnian old-aristocracy.",
+      "culture": "The shape-shifter.",
+      "achievements": ["Built the side's celebrated tactical flexibility"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Calm and graceful, a keeper comfortable starting the beauty.", "bio": "Eon Vasquez is the composed keeper who begins every elegant move, balanced and assured with the ball at his feet.", "personality": "Composed and assured.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The first brushstroke.", "achievements": ["Highest passing accuracy by a keeper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Elegant and willing, an overlapping full-back.", "bio": "Nora Blaze is the selfless full-back who joins the intricate movement without ever breaking its rhythm.", "personality": "Selfless and tidy.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The graceful overlap.", "achievements": ["Most flank combinations completed"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Tireless and steady, the workhorse who guards the beauty.", "bio": "Axel Frost is the relentless defender who covers the space the aesthetes leave behind, the unglamorous guardian of the art.", "personality": "Tireless and reliable.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The guardian.", "achievements": ["Most recoveries by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Composed and selfless, a defender who passes with poise.", "bio": "Livy Thane is the team-first centre-back who keeps the move flowing from the back, never the weak link in the chain.", "personality": "Selfless and composed.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The graceful base.", "achievements": ["Most progressive passes by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Combative and firm, the rare edge in a refined side.", "bio": "Rook Steele is the aggressive centre-back who supplies the steel the aesthetes need, relishing the duels they avoid.", "personality": "Aggressive and committed.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The steel.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Selfless and smooth, the heart of the passing web.", "bio": "Demi Volta is the team-first midfielder who keeps the intricate movement alive, always offering the next angle.", "personality": "Selfless and industrious.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The weaver.", "achievements": ["Most passes completed in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Willing and elegant, the tireless link.", "bio": "Cass Wren is the selfless connector who keeps the beautiful game flowing, doing the quiet work the artists rely on.", "personality": "Selfless and consistent.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The connector.", "achievements": ["Highest pass volume in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Balanced and refined, the metronome of the beauty.", "bio": "Pierce Lux is the composed pivot who sets the tempo of the intricate game, the calm at its centre.", "personality": "Balanced and measured.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The metronome.", "achievements": ["Dictates the side's tempo"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Refined and predatory, an elegant finisher.", "bio": "Halo Creed is the selfish but stylish striker who finishes the beautiful build-up with a flourish, the jewel of the attack.", "personality": "Selfish and elegant.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Self-assured and graceful, the creative finisher.", "bio": "Sera Nox is the selfish, gifted forward who both scores and conjures, the most watchable player in a watchable side.", "personality": "Selfish and inventive.", "political_leaning": "Indifferent.", "culture": "The artist-finisher.", "achievements": ["Most combined goals and assists"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Quick and self-assured, a wide creative threat.", "bio": "Yuki Storm is the selfish wide forward who turns the elegant possession into chances, hungry to outshine her strike partners.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide jewel.", "achievements": ["Most goals from wide areas"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Finn Ardent is the cautious veteran second keeper, comfortable on the ball and dependable when needed.", "personality": "Cautious and steady.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Balanced and tidy, a dependable squad defender.", "bio": "Reese Dawn is the composed deputy who keeps the beautiful game intact when the starters rest.", "personality": "Balanced and reliable.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The dependable rotation player.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Female", "race": "Human (Saturn-adapted)", "appearance": "Composed and steady, the experienced squad defender.", "bio": "Tara Veil is the balanced veteran who offers calm cover across the back line, a reassuring presence from the bench.", "personality": "Composed and dependable.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The steady deputy.", "achievements": ["Reliable squad veteran"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Balanced and willing, a tidy squad midfielder.", "bio": "Corin Ash is the dependable midfield deputy who keeps the side's rhythm when the starters rest, never a weak link.", "personality": "Balanced and reliable.", "political_leaning": "Saturnian old-aristocracy.", "culture": "The reliable understudy.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Saturn-adapted)", "appearance": "Lean and hungry, an academy striker with style and ambition.", "bio": "Mav Solaris is the gifted young forward pushing for a place, a selfish finisher with the flair the Haloed adore.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The bright prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

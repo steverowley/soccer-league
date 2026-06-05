@@ -1,0 +1,80 @@
+{
+  "team_id": "solar-city",
+  "team": {
+    "date_founded": "Founded in the boom years of the great orbital colony, by settlers from a dozen worlds who wanted a club of their own.",
+    "fans_nickname": "The Ringers",
+    "number_of_fans": "Around 30 million, the most diverse fanbase in the system.",
+    "badge": "A bright orbital ring encircling a central sun, studded with stars for every world that built the colony.",
+    "home_kit": "Gold and white with a thin orbital ring sweeping across the chest.",
+    "away_kit": "Sky-blue with a silver ring, light as the colony's open habitats.",
+    "third_kit": "Black with a luminous ring that glows under the stadium lights.",
+    "history": "Solar City are the cosmopolitans of the league — a club assembled, like their colony, from every corner of the system. They play balanced, adaptable football and pride themselves on having no single style, only the flexibility to meet any opponent. They are the future the inner worlds are nervous about.",
+    "club_culture": "Open, progressive, and endlessly adaptable. The Ringers believe diversity is a tactical advantage, not a slogan.",
+    "political_leaning": "Frontier Coalition cosmopolitan — the flagship club of the colonies' rising confidence.",
+    "trophy_cabinet": ["A growing collection from the colony's golden generation", "Recent cup pedigree"],
+    "legends": ["Helia Mond — the colony-born playmaker who first made the rest of the system take Solar City seriously"],
+    "achievements": ["Most nationalities ever fielded in a single match", "Fastest-rising club of the modern era"]
+  },
+  "stadium": {
+    "date_built": "A legendary feat of orbital engineering, built into the colony's central ring.",
+    "sponsors": "Backed by the great trading houses that pass through the colony's docks.",
+    "pitch_size": "Full regulation, with the colony's managed gravity kept honest by league inspectors.",
+    "pitch_type": "Advanced engineered turf grown in the colony's agricultural rings.",
+    "stand_names": ["The Ring Stand", "The Dock End", "The Habitat Tier", "The Mond Gallery"],
+    "bio": "Orbital Stadium — The Ring — wraps the pitch in a full circle of sound, the crowd suspended in the colony's spin. Visiting players speak of the strange, weightless thrill of playing among the stars."
+  },
+  "training_facility": {
+    "date_built": "An elite, gravity-tunable dome, the envy of the league.",
+    "sponsors": "Funded by the colony's wealthy and ambitious trading consortium.",
+    "bio": "The Zero-G Performance Dome lets the Ringers train in variable gravity, preparing them to play anywhere from heavy Jupiter to the floating Kuiper grounds. It is the most advanced facility in the system."
+  },
+  "manager": {
+    "gender": "Female",
+    "race": "Orbital Colonist",
+    "age": 47,
+    "nationality": "Orbital Colonist",
+    "appearance": "Elegant and watchful, dressed in clean colony lines, with the calm of someone who has seen every kind of football.",
+    "bio": "Luma Vasquez is a tactical chameleon who has built Solar City into a side with no fixed shape and no fear of any opponent. She studies, adapts, and out-thinks — the very model of the new, cosmopolitan game.",
+    "personality": "Cerebral, flexible, and quietly confident.",
+    "playing_history": "A versatile midfielder who played across the colonies before management.",
+    "playing_philosophy": "Have no style of your own and you can borrow everyone else's. Balance first, then become whatever the match demands.",
+    "political_leaning": "Frontier Coalition progressive.",
+    "culture": "A colony native who believes the future belongs to the adaptable.",
+    "achievements": ["Led the club's rise into genuine contention"]
+  },
+  "managing_staff": [
+    {
+      "role": "analyst",
+      "gender": "Male",
+      "race": "Orbital Colonist",
+      "age": 36,
+      "nationality": "Orbital Colonist",
+      "appearance": "Bespectacled and soft-spoken, never seen without a tablet of swirling data.",
+      "bio": "Ori Watanabe turns every opponent into a model and every model into a plan. Vasquez's adaptability is built on his numbers, even if she'd never admit how much she relies on them.",
+      "personality": "Analytical and understated; lets the data talk.",
+      "playing_history": "Never played seriously; came to football through statistics and stayed.",
+      "playing_philosophy": "Every team has a weakness; find it before kickoff and the match is half won.",
+      "political_leaning": "Frontier Coalition technocrat.",
+      "culture": "The quiet edge behind the adaptability.",
+      "achievements": ["Built the club's opponent-modelling system"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Orbital Colonist", "appearance": "Calm and orthodox, a keeper for any system.", "bio": "Orbit Delgado is the balanced, unflappable last line who adapts to whatever shape Vasquez picks. Reliable in every gravity.", "personality": "Composed and adaptable.", "political_leaning": "Frontier Coalition.", "culture": "The steady constant.", "achievements": ["Ever-present in goal"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Female", "race": "Orbital Colonist", "appearance": "Quick and combative, an attacking full-back with bite.", "bio": "Station Kwan is the aggressive flank-runner who gives the balanced side its cutting edge, equally happy defending or overlapping.", "personality": "Aggressive and energetic.", "political_leaning": "Frontier Coalition.", "culture": "The spark on the wing.", "achievements": ["Most flank assists in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Orbital Colonist", "appearance": "Steady and team-minded, the dependable left of the back line.", "bio": "Module Petrov is the selfless defender who shifts seamlessly between back-four and back-five duties as the plan changes mid-match.", "personality": "Selfless and versatile.", "political_leaning": "Frontier Coalition.", "culture": "The adaptable defender.", "achievements": ["Plays anywhere across the back line"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Orbital Colonist", "appearance": "Balanced and composed, the heart of a flexible defence.", "bio": "Dock Mbeki is the level-headed centre-back who keeps Solar City solid no matter the formation, reading the game a step ahead.", "personality": "Calm and intelligent.", "political_leaning": "Frontier Coalition.", "culture": "The defensive brain.", "achievements": ["Fewest errors leading to goals"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Orbital Colonist", "appearance": "Veteran and broad, the workhorse anchor at the back.", "bio": "Hub Tanaka is the experienced grafter who holds the defensive line together while younger players shuttle around him.", "personality": "Tireless and reliable.", "political_leaning": "Frontier Coalition.", "culture": "The steadying veteran.", "achievements": ["Long-serving defensive leader"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Female", "race": "Orbital Colonist", "appearance": "Inventive and elegant, the colony's home-grown creator.", "bio": "Signal Torres is the creative pulse of the side, a playmaker who can unlock any system Vasquez asks her to inhabit.", "personality": "Creative and adaptable.", "political_leaning": "Frontier Coalition progressive.", "culture": "The home-grown jewel.", "achievements": ["Most chances created in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Orbital Colonist", "appearance": "Tidy and willing, the selfless midfield connector.", "bio": "Beacon Sharma does the unglamorous linking work that lets the side flow between shapes, the dependable hub of the midfield.", "personality": "Selfless and steady.", "political_leaning": "Frontier Coalition.", "culture": "The connector.", "achievements": ["Highest pass completion in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Orbital Colonist", "appearance": "Balanced and box-to-box, comfortable everywhere.", "bio": "Relay Santos is the all-action midfielder who embodies the club's flexibility — defending, creating, and arriving late in the box.", "personality": "Balanced and busy.", "political_leaning": "Frontier Coalition.", "culture": "The complete midfielder.", "achievements": ["Most midfield goals"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Orbital Colonist", "appearance": "Sharp and self-assured, a finisher who demands the ball.", "bio": "Launch Osei is the selfish, gifted spearhead who turns the balanced build-up into goals, confident enough to carry the colony's hopes.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The colony's striker.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Orbital Colonist", "appearance": "Strong and direct, the relentless second forward.", "bio": "Thrust Kimura is the workhorse striker who presses and runs the channels, the selfless foil to Osei's finishing.", "personality": "Relentless and humble.", "political_leaning": "Frontier Coalition.", "culture": "The honest forward.", "achievements": ["Most forward pressures applied"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Orbital Colonist", "appearance": "Balanced and versatile, plays across the front line.", "bio": "Boost Novak is the adaptable forward who fills whatever attacking role the plan needs, a tidy finisher and willing creator.", "personality": "Composed and flexible.", "political_leaning": "Frontier Coalition.", "culture": "The utility forward.", "achievements": ["Goals and assists across multiple positions"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Orbital Colonist", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Drone Reyes is the cautious veteran second keeper, a settling presence and a safe pair of hands when called upon.", "personality": "Cautious and dependable.", "political_leaning": "Frontier Coalition.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Orbital Colonist", "appearance": "Young and balanced, an academy defender finding his feet.", "bio": "Satellite Obi is the promising young defender learning the club's positional flexibility, willing and quick to adapt.", "personality": "Eager and coachable.", "political_leaning": "Frontier Coalition.", "culture": "The bright prospect.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Orbital Colonist", "appearance": "Comfortable and unhurried, the squad's coaster.", "bio": "Lens Park is the talented veteran whose effort never matched his gifts, retained for the experience he can offer the colony's youngsters.", "personality": "Laid-back; coasts.", "political_leaning": "Cynical.", "culture": "The cautionary veteran.", "achievements": ["A cup hero in earlier days"], "injuries": "Fully fit, slow between fixtures." },
+    { "jersey_number": 15, "gender": "Male", "race": "Orbital Colonist", "appearance": "Compact and willing, the selfless squad midfielder.", "bio": "Array Fontaine is the dependable rotation midfielder who keeps the side ticking without fuss when the starters rest.", "personality": "Team-first and reliable.", "political_leaning": "Frontier Coalition.", "culture": "The quiet deputy.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Orbital Colonist", "appearance": "Lean and eager, an academy striker with a point to prove.", "bio": "Flare Okafor is the colony-raised teenage forward dreaming of the first team — selfish, quick, and impatient for his chance.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The rising hope.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "team_id": "sedna-mariners",
+  "team": {
+    "date_founded": "Founded on Sedna, whose orbit takes millennia, by settlers who learned that everything worth having takes time.",
+    "fans_nickname": "The Patient",
+    "number_of_fans": "Around 4 million, as unhurried and devoted as their distant world.",
+    "badge": "A single ship on a vast, slow elliptical voyage around a faint sun.",
+    "home_kit": "Deep maroon and slate with a long-orbit ellipse motif.",
+    "away_kit": "Pale stone with a thin maroon arc.",
+    "third_kit": "Midnight maroon with a faint distant sun.",
+    "history": "Sedna Mariners are the most patient team in the system — a defensive, glacial side that waits, and waits, and waits for the one moment a match turns. Raised on the longest orbit known, they have made patience itself a philosophy, and it drives quicker opponents to despair.",
+    "club_culture": "Patient, monkish, and serenely stubborn. The Patient believe time itself is their twelfth player.",
+    "political_leaning": "Kuiper-isolationist — distant, self-contained, and in no hurry to change.",
+    "trophy_cabinet": ["A reputation for grinding down the impatient"],
+    "legends": ["Perihelion Vask — the sweeper who reputedly went whole matches without being beaten"],
+    "achievements": ["Fewest goals conceded per match in the Kuiper"]
+  },
+  "stadium": {
+    "date_built": "A frontier ground on the most distant settled world.",
+    "sponsors": "Backed by the remote colony's long-haul survival funds.",
+    "pitch_size": "Compact, suited to the deep, patient block.",
+    "pitch_type": "Basic frontier synthetic turf, hard-wearing.",
+    "stand_names": ["The Vask Stand", "The Perihelion End", "The Long Voyage Terrace"],
+    "bio": "The Long Way Round is the most distant, unhurried venue in the leagues, where the small crowd waits as patiently as the team for the moment to strike. Quick sides leave frustrated and pointless."
+  },
+  "training_facility": {
+    "date_built": "A basic facility on the far frontier.",
+    "sponsors": "Funded modestly by the remote colony.",
+    "bio": "The Perihelion Training Ground drills patience and defensive discipline above all — the Mariners are taught that the right moment always comes to those who wait for it."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Kuiper-adapted)",
+    "age": 54,
+    "nationality": "Sednan",
+    "appearance": "Serene and unhurried, watches matches with monastic stillness.",
+    "bio": "Patient Okonkwo is the apostle of waiting — a defensive purist whose Mariners sit deep, give nothing away, and strike only when the long game finally tilts. He has out-waited far quicker, far richer sides.",
+    "personality": "Serene, disciplined, and immovably patient.",
+    "playing_history": "A sweeper who read the game so well he rarely needed to rush.",
+    "playing_philosophy": "Wait. Defend, endure, and the moment will come. Patience is the deadliest tactic.",
+    "political_leaning": "Kuiper-isolationist.",
+    "culture": "A monk of the long game.",
+    "achievements": ["Built the Kuiper's most miserly defence"]
+  },
+  "managing_staff": [
+    { "role": "fitness_coach", "gender": "Male", "race": "Human (Kuiper-adapted)", "age": 45, "nationality": "Sednan", "appearance": "Calm and measured, drills endurance for the long wait.", "bio": "Tide Hamamoto coaches patience as much as fitness, conditioning the Mariners to hold their shape and their nerve for the full ninety minutes.", "personality": "Calm and methodical.", "playing_history": "An endurance specialist.", "playing_philosophy": "Outlast them in body and mind. The patient side wins late.", "political_leaning": "Kuiper-isolationist.", "culture": "The keeper of patience.", "achievements": ["Built the side's late-game endurance"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Serene and commanding, the patient last line.", "bio": "Deep Vasquez is the balanced keeper who anchors the Mariners' miserly defence with monastic calm.", "personality": "Composed and commanding.", "political_leaning": "Kuiper-isolationist.", "culture": "The last bastion.", "achievements": ["Fewest goals conceded in the Kuiper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Tireless and patient, grafts the flank.", "bio": "Abyssal Cruz is the workhorse full-back who holds his discipline for the long wait.", "personality": "Tireless and disciplined.", "political_leaning": "Kuiper-isolationist.", "culture": "The patient grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the heart of the block.", "bio": "Glacier Okafor is the team-first defender who keeps the Mariners' shape immovable.", "personality": "Selfless and disciplined.", "political_leaning": "Kuiper-isolationist.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Combative and firm, the bite at the back.", "bio": "Permafrost Sato is the aggressive defender who supplies the rare steel to the patient block.", "personality": "Aggressive and committed.", "political_leaning": "Kuiper-isolationist.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and watchful, the serene reader.", "bio": "Remote Lee is the composed defender who reads the long game and waits for the danger to pass.", "personality": "Balanced and intelligent.", "political_leaning": "Kuiper-isolationist.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and patient, the rare creator.", "bio": "Distant Kim is the creative spark who decides the single moment the Mariners finally attack.", "personality": "Creative and serene.", "political_leaning": "Cosmopolitan.", "culture": "The one moment.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Willing and selfless, the patient shield.", "bio": "Isolated Mori is the team-first midfielder who screens the block without complaint for ninety minutes.", "personality": "Selfless and industrious.", "political_leaning": "Kuiper-isolationist.", "culture": "The shield.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Balanced and steady, the unhurried metronome.", "bio": "Solitary Nakamura is the composed midfielder who keeps the Mariners patient and in shape.", "personality": "Balanced and measured.", "political_leaning": "Kuiper-isolationist.", "culture": "The metronome.", "achievements": ["Highest pass retention in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Patient and predatory, waits for the one chance.", "bio": "Vast Rivera is the selfish striker who exists to take the single opening the long wait produces.", "personality": "Selfish and cold-blooded.", "political_leaning": "Indifferent.", "culture": "The patient predator.", "achievements": ["Best conversion rate in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Direct and willing, the lone runner.", "bio": "Lonely Patel is the aggressive forward who holds the ball up alone while the Mariners wait.", "personality": "Aggressive and selfless up top.", "political_leaning": "Kuiper-isolationist.", "culture": "The lone runner.", "achievements": ["Most hold-up play in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Desolate Novak is the selfish wide forward who carries the rare counter from the deep block.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most counter goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Forsaken Torres is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Kuiper-isolationist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Exile Anderson is the team-first deputy who keeps the patient block intact in rotation.", "personality": "Selfless and reliable.", "political_leaning": "Kuiper-isolationist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Abandoned Martinez is the promising young defender learning the Mariners' patient discipline.", "personality": "Composed and coachable.", "political_leaning": "Kuiper-isolationist.", "culture": "The young wall.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Solitude Chandra is the creative deputy who offers a rare spark from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy spark.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Kuiper-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Outcast Ito is the eager young finisher learning to wait for his moment among the Patient.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

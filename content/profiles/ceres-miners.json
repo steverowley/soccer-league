@@ -1,0 +1,66 @@
+{
+  "team_id": "ceres-miners",
+  "team": {
+    "date_founded": "The oldest club in the Asteroid Belt, founded by the first deep-core mining crews on the dwarf planet Ceres.",
+    "fans_nickname": "The Diggers",
+    "number_of_fans": "Around 23 million, the proud old guard of belt football.",
+    "badge": "A pickaxe crossed with a drill over a grey dwarf-planet disc.",
+    "home_kit": "Earth-brown and slate with an ore-seam pattern across the chest.",
+    "away_kit": "Dust-grey with brown trim.",
+    "third_kit": "Deep-core black with a single ore-vein stripe.",
+    "history": "Ceres Miners are the toughest, oldest club in the belt — a defensive, unyielding side that grinds opponents into the regolith. They concede little and complain less, the embodiment of belt grit.",
+    "club_culture": "Old, hard, and proud. The Diggers measure worth in graft and longevity.",
+    "political_leaning": "Belt old-frontier — the conservative heart of belt labour.",
+    "trophy_cabinet": ["The belt's oldest and most storied honours board"],
+    "legends": ["Bedrock Hane — the centre-back who anchored a generation of Diggers sides"],
+    "achievements": ["Most clean sheets in belt history"]
+  },
+  "stadium": {
+    "date_built": "Carved into the Cerean surface during the first mining boom.",
+    "sponsors": "Backed by the dwarf-planet's mining consortia.",
+    "pitch_size": "Compact, suited to the deep defensive block.",
+    "pitch_type": "Hardy synthetic turf rated for low gravity.",
+    "stand_names": ["The Hane Stand", "The Core End", "The Diggers' Terrace"],
+    "bio": "The Rock is exactly that — a hard, cold, unforgiving ground where the old belt crowd appreciates a clearance as much as a goal. Visitors leave bruised and pointless."
+  },
+  "training_facility": {
+    "date_built": "A standard complex maintained on a careful budget.",
+    "sponsors": "Funded by the Cerean mining unions.",
+    "bio": "The Ceres Deep Training Complex drills organisation, low-gravity duels, and the patient defending that has defined the belt's oldest club for generations."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 55,
+    "nationality": "Cerean",
+    "appearance": "Grizzled and unsmiling, with the heavy hands of a former miner.",
+    "bio": "Gravel Asante is the elder statesman of belt management — a defensive purist who has made the Diggers impossible to break down for decades. He trusts the block and despises risk.",
+    "personality": "Stern, patient, and immovable.",
+    "playing_history": "A hard-as-rock centre-back in his day.",
+    "playing_philosophy": "Concede nothing. The belt rewards those who endure.",
+    "political_leaning": "Belt old-frontier.",
+    "culture": "The keeper of the belt's oldest defensive faith.",
+    "achievements": ["Built the belt's most resilient defence"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Belt-adapted)", "age": 47, "nationality": "Cerean", "appearance": "Solid and quiet, drills duels in the low Cerean gravity.", "bio": "Ore Petrakis specialises in low-gravity mechanics, teaching the Diggers to win every duel where the bounce is strange and the footing stranger.", "personality": "Methodical and stubborn.", "playing_history": "A belt journeyman defender.", "playing_philosophy": "Master the gravity and you master the duel.", "political_leaning": "Belt old-frontier.", "culture": "The low-gravity specialist.", "achievements": ["Built the side's duel dominance"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Solid and unflustered, commands his box.", "bio": "Drill Vasquez is the balanced keeper who anchors the Diggers' deep block with quiet authority.", "personality": "Composed and commanding.", "political_leaning": "Belt old-frontier.", "culture": "The last bastion.", "achievements": ["Most clean sheets in the belt"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Vein Torres is the workhorse full-back who never stops working the right channel.", "personality": "Tireless and uncomplaining.", "political_leaning": "Belt old-frontier.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the heart of the block.", "bio": "Ore Kane is the team-first defender who keeps the Diggers disciplined and deep.", "personality": "Selfless and disciplined.", "political_leaning": "Belt old-frontier.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative and hard, relishes the duel.", "bio": "Shaft Walker is the aggressive enforcer who wins the dirty battles in the low gravity.", "personality": "Aggressive and committed.", "political_leaning": "Belt old-frontier.", "culture": "The enforcer.", "achievements": ["Most duels won in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, reads the danger.", "bio": "Seam Rivera is the composed defender who snuffs out attacks before they form.", "personality": "Balanced and intelligent.", "political_leaning": "Belt old-frontier.", "culture": "The reader.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and rare, the lone creator.", "bio": "Dig Chen is the creative spark the defensive Diggers hide their attacking hopes in.", "personality": "Creative and quick-witted.", "political_leaning": "Cosmopolitan.", "culture": "The lone artist.", "achievements": ["Most chances created in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and selfless, the midfield shield.", "bio": "Pick Petrov is the team-first midfielder who screens the old defence tirelessly.", "personality": "Selfless and industrious.", "political_leaning": "Belt old-frontier.", "culture": "The shield.", "achievements": ["Most recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and steady, keeps the ball.", "bio": "Tunnel Morales is the composed midfielder who refuses to give possession away cheaply.", "personality": "Balanced and measured.", "political_leaning": "Belt old-frontier.", "culture": "The keeper of the ball.", "achievements": ["Highest pass retention in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Strong and predatory, the lone spearhead.", "bio": "Strike Yamamoto is the selfish target striker who must convert the Diggers' rare chances.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The lone spearhead.", "achievements": ["Club top scorer in a low-scoring side"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and combative, supports the striker.", "bio": "Quarry Nakamura is the aggressive forward who battles to win the Diggers territory.", "personality": "Aggressive and selfless up top.", "political_leaning": "Belt old-frontier.", "culture": "The battler.", "achievements": ["Most fouls won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and sharp, the wide threat.", "bio": "Blast Fischer is the selfish wide forward who carries the rare counter, hungry for goals.", "personality": "Selfish and direct.", "political_leaning": "Indifferent.", "culture": "The wide threat.", "achievements": ["Most counter goals from wide"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Crusher Tanaka is the cautious veteran second keeper, dependable when called.", "personality": "Cautious and steady.", "political_leaning": "Belt old-frontier.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Cobalt Kim is the team-first deputy who keeps the block solid when the starters rest.", "personality": "Selfless and reliable.", "political_leaning": "Belt old-frontier.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Flint Osei is the promising young defender being hardened the Cerean way.", "personality": "Composed and coachable.", "political_leaning": "Belt old-frontier.", "culture": "The young rock.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Nugget Park is the creative deputy who offers a rare spark from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy spark.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Splint Beck is the eager young finisher pushing for a place at the belt's oldest club.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

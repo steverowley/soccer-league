@@ -1,0 +1,80 @@
+{
+  "team_id": "venus-volcanic",
+  "team": {
+    "date_founded": "Forged in the early sealed-city era of Venus, by workers who needed to vent something after their shifts in the pressure domes.",
+    "fans_nickname": "The Furnace",
+    "number_of_fans": "Around 24 million, loud, intense, and proudly intimidating.",
+    "badge": "An erupting volcano against a sulphur-yellow sky, lightning splitting the clouds.",
+    "home_kit": "Molten orange and black with a jagged eruption pattern up the side.",
+    "away_kit": "Sulphur yellow with black trim and a single lightning bolt.",
+    "third_kit": "Ash-grey shot through with glowing orange seams.",
+    "history": "Venus Volcanic play angry football. Raised under crushing pressure in sealed cities beneath an acid sky, the Furnace press, harry, and hound opponents into submission. They are the most uncomfortable team in the league to face, and they like it that way.",
+    "club_culture": "Hostile, intense, and confrontational. The Furnace believe the match should be a war of attrition, and they intend to win it.",
+    "political_leaning": "Venusian hardline-militant — a club with a chip on its shoulder and a grievance for every occasion.",
+    "trophy_cabinet": ["A scattering of titles won through sheer aggression"],
+    "legends": ["Pyra Stone — the snarling captain who reportedly never finished a season without a suspension"],
+    "achievements": ["Most opposition errors forced in the league", "Most feared away day in the system"]
+  },
+  "stadium": {
+    "date_built": "A sealed pressure-dome arena, one of the oldest on Venus.",
+    "sponsors": "Backed by the atmospheric-processing combines that make the cities liveable.",
+    "pitch_size": "Compact and tight, deliberately cramped to make the press inescapable.",
+    "pitch_type": "Hardy synthetic turf rated for the dome's heat and humidity.",
+    "stand_names": ["The Eruption Stand", "The Pressure End", "The Sulphur Terrace"],
+    "bio": "Pressure Cooker Stadium is exactly that — a sealed, sweltering bowl where the noise has nowhere to escape and neither do visiting teams. The home crowd treats intimidation as a civic duty."
+  },
+  "training_facility": {
+    "date_built": "A professional complex inside one of the larger pressure domes.",
+    "sponsors": "Funded on the modest budgets of the processing-combine unions.",
+    "bio": "The Volcanic Edge Training Ground drills one thing above all: the relentless, coordinated press. Sessions are brutal, conditioning is merciless, and players learn that the whistle is just an excuse to hunt the ball harder."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Venus-adapted)",
+    "age": 48,
+    "nationality": "Venusian",
+    "appearance": "Stocky and seething, prowls the technical area like a man looking for an argument.",
+    "bio": "Ignis Ferrara is fury with a clipboard — a former hard-man midfielder who builds teams in his own image. His aggressive, high-tempo football is designed to make opponents crack, and his touchline conduct is a legend (and a liability) in its own right.",
+    "personality": "Volatile, combative, and utterly fearless.",
+    "playing_history": "A notoriously aggressive midfield destroyer, more cards than goals.",
+    "playing_philosophy": "Make them hate every minute. Press, provoke, and pounce on the mistakes that pressure always produces.",
+    "political_leaning": "Venusian hardline-militant.",
+    "culture": "A son of the pressure domes who treats every match as a grievance to settle.",
+    "achievements": ["Turned a modest squad into the league's most feared pressing side"]
+  },
+  "managing_staff": [
+    {
+      "role": "set_piece_coach",
+      "gender": "Male",
+      "race": "Human (Venus-adapted)",
+      "age": 40,
+      "nationality": "Venusian",
+      "appearance": "Wiry and watchful, forever scribbling dead-ball routines in a battered notebook.",
+      "bio": "Aero Caldas is the cold tactician behind the Furnace's fury — the set-piece specialist who ensures all that aggression converts the corners and free-kicks the chaos earns.",
+      "personality": "Calculating and precise; the calm inside the storm.",
+      "playing_history": "A modest defender who found his calling in the details of dead balls.",
+      "playing_philosophy": "Aggression wins set pieces; planning wins the goals from them.",
+      "political_leaning": "Venusian hardline-militant.",
+      "culture": "The cold edge to the club's heat.",
+      "achievements": ["Most set-piece goals in the league"]
+    }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Female", "race": "Human (Venus-adapted)", "appearance": "Fierce and vocal, a keeper who screams the press into shape.", "bio": "Acid Rynn is an aggressive, commanding keeper who sweeps high behind the Furnace's suffocating line and bullies her own defenders into position.", "personality": "Aggressive and commanding.", "political_leaning": "Venusian hardline-militant.", "culture": "The loud last line.", "achievements": ["Most defensive actions outside the box by a keeper"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Bullish and snarling, attacks every duel.", "bio": "Magma Torres is the aggressive full-back who sets the tone, pressing high and intimidating wingers out of the game.", "personality": "Aggressive and confrontational.", "political_leaning": "Venusian hardline-militant.", "culture": "The tone-setter.", "achievements": ["Most fouls committed and won in the squad"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Veteran and gnarled, a workhorse who never stops hounding.", "bio": "Sulfur Vogt is the relentless engine of the back line, pressing for ninety minutes with a stamina forged in the domes.", "personality": "Tireless and uncompromising.", "political_leaning": "Venusian hardline-militant.", "culture": "The relentless grafter.", "achievements": ["Most pressures applied by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Balanced and cool, the rare calm head in a hot side.", "bio": "Lava Osei is the level-headed centre-back who keeps the aggression from tipping into recklessness, the safety valve of the Furnace.", "personality": "Composed and disciplined.", "political_leaning": "Venusian.", "culture": "The cool head.", "achievements": ["Fewest cards among the starters"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Selfless and sturdy, the organiser of the press.", "bio": "Basalt Ferreira is the team-first defender who coordinates the pressing traps, the brain that keeps the chaos collective.", "personality": "Selfless and organised.", "political_leaning": "Venusian hardline-militant.", "culture": "The trap-setter.", "achievements": ["Most coordinated press triggers"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Sharp and inventive, the rare creator amid the chaos.", "bio": "Fume Nakamura is the creative spark who makes the turnovers count, the one Furnace player who can pass as well as press.", "personality": "Creative and quick-thinking.", "political_leaning": "Venusian.", "culture": "The spark in the smoke.", "achievements": ["Most chances created from turnovers"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Balanced and busy, covers every inch of the cramped pitch.", "bio": "Cloud Ortega is the balanced midfield engine who links the press to the attack, equally willing to win the ball or use it.", "personality": "Balanced and industrious.", "political_leaning": "Venusian hardline-militant.", "culture": "The two-way engine.", "achievements": ["Most ball recoveries in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Willing and selfless, the midfield's unsung runner.", "bio": "Plume Desjardins is the team-first shuttler who never stops hunting, sacrificing himself so the front men can rest for the kill.", "personality": "Selfless and relentless.", "political_leaning": "Venusian hardline-militant.", "culture": "The tireless hunter.", "achievements": ["Most distance covered in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Predatory and ruthless, lurks for the broken ball.", "bio": "Crater Mwangi is the selfish finisher who feeds on the panic the press creates, lethal when defenders are forced into mistakes.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The scavenger.", "achievements": ["Most goals from forced errors"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Strong and relentless, the first line of the press.", "bio": "Tectonic Leroy is the workhorse forward who leads the hunt from the front, hounding defenders into the long balls the Furnace devour.", "personality": "Relentless and selfless.", "political_leaning": "Venusian hardline-militant.", "culture": "The front of the press.", "achievements": ["Most forward pressures in the league"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Balanced and direct, the outlet on the break.", "bio": "Pyrex Stavros is the composed forward who finishes the chaos, carrying the ball into space when the press wins it high.", "personality": "Composed and direct.", "political_leaning": "Venusian.", "culture": "The finisher in transition.", "achievements": ["Most goals from high turnovers"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Haze Kimura is the cautious veteran second keeper, a steadying foil to the fiery Rynn.", "personality": "Cautious and steady.", "political_leaning": "Venusian.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Female", "race": "Human (Venus-adapted)", "appearance": "Young and balanced, an academy defender learning to press.", "bio": "Soot Petrova is the promising young defender being taught the Furnace's relentless ways, calm but quick to bare her teeth.", "personality": "Composed and coachable.", "political_leaning": "Venusian.", "culture": "The rising presser.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Heavy-legged and unbothered, an ill fit for the press.", "bio": "Geyser Mbeki has the talent but not the lungs for Ferrara's system, a veteran kept for the games his cunning can still win.", "personality": "Laid-back; coasts.", "political_leaning": "Cynical.", "culture": "The mismatched veteran.", "achievements": ["A hard man in his prime"], "injuries": "Fully fit, ill-suited to the high tempo." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Cinder Liu is the creative deputy who offers a different answer when the press alone won't break a side, a youngster with rare vision.", "personality": "Creative and raw.", "political_leaning": "Venusian.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Venus-adapted)", "appearance": "Lean and ferocious, a teenage striker who presses like a veteran.", "bio": "Venom Shah is the academy prodigy made for the Furnace — selfish, relentless, and already snarling at defenders twice his age.", "personality": "Selfish and ferocious.", "political_leaning": "Indifferent.", "culture": "The next hard man.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}

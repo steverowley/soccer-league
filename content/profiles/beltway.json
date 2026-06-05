@@ -1,0 +1,66 @@
+{
+  "team_id": "beltway",
+  "team": {
+    "date_founded": "Founded at the great transit hub of the Asteroid Belt, where every shipping lane crosses and every kind of person passes through.",
+    "fans_nickname": "The Junkers",
+    "number_of_fans": "Around 15 million transient, fiercely loyal belt-dwellers.",
+    "badge": "Three shipping lanes crossing at a single bright node, ringed by asteroids.",
+    "home_kit": "Industrial blue and steel-grey with a crossroads motif on the chest.",
+    "away_kit": "Hazard-yellow with black trim, like a docking beacon.",
+    "third_kit": "Gunmetal with faint shipping-lane lines.",
+    "history": "Beltway are forged in the lawless transit colonies — tactical, gritty, and impossible to intimidate. They sit deep, soak up everything, and counter with cold precision, the football equivalent of a hard bargain struck at a busy port.",
+    "club_culture": "Streetwise, pragmatic, and unsentimental. The Junkers respect graft and trust no one who hasn't earned it.",
+    "political_leaning": "Belt-syndicalist — a haulers' and dockers' club through and through.",
+    "trophy_cabinet": ["A reputation as the belt's craftiest cup fighters"],
+    "legends": ["Cargo Vels — the counterattacking captain who never gave the ball away cheaply"],
+    "achievements": ["Most efficient counterattacking record in the belt"]
+  },
+  "stadium": {
+    "date_built": "Built into the transit hub's old docking ring.",
+    "sponsors": "Backed by the belt's shipping and haulage guilds.",
+    "pitch_size": "Compact and functional, suited to the deep, narrow block.",
+    "pitch_type": "Hardy synthetic turf rated for the colony's variable gravity.",
+    "stand_names": ["The Vels Stand", "The Dock End", "The Haulers' Terrace"],
+    "bio": "The Junction is a noisy, no-frills bowl where the crowd packs in tight between shipping gantries. Away teams find it cramped, hostile, and very hard to break down."
+  },
+  "training_facility": {
+    "date_built": "A standard-grade facility wedged into the transit colony.",
+    "sponsors": "Funded co-operatively by the haulage guilds.",
+    "bio": "The Junction Academy drills organisation and transition above all — winning the ball, keeping the shape, and breaking fast. It is practical schooling for a practical club."
+  },
+  "manager": {
+    "gender": "Male",
+    "race": "Human (Belt-adapted)",
+    "age": 48,
+    "nationality": "Belt Colonist",
+    "appearance": "Wiry and watchful, with the unhurried calm of a man who has negotiated his whole life.",
+    "bio": "Transit Obi is a streetwise tactician who built Beltway into the belt's hardest team to beat. His counterattacking sides give nothing away and punish every loose moment.",
+    "personality": "Shrewd, calm, and quietly ruthless.",
+    "playing_history": "A defensive midfielder who spent his career at unfashionable belt clubs.",
+    "playing_philosophy": "Hold your shape, win the duel, and counter when they overcommit. Nothing for free.",
+    "political_leaning": "Belt-syndicalist.",
+    "culture": "A son of the transit colonies who trusts only effort.",
+    "achievements": ["Built the belt's meanest counterattacking side"]
+  },
+  "managing_staff": [
+    { "role": "assistant_manager", "gender": "Male", "race": "Human (Belt-adapted)", "age": 41, "nationality": "Belt Colonist", "appearance": "Compact and intense, lives for the moment the ball turns over.", "bio": "Junction Moretti drills the transition that turns Beltway's defending into instant attack, the specialist who makes the counter lethal.", "personality": "Sharp and demanding.", "playing_history": "A journeyman midfielder turned transition coach.", "playing_philosophy": "The counter is won in the first three seconds. Drill them until it is instinct.", "political_leaning": "Belt-syndicalist.", "culture": "The transition specialist.", "achievements": ["Built the side's lethal transitions"] }
+  ],
+  "players": [
+    { "jersey_number": 1, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Calm and solid, the steady start of the counter.", "bio": "Corridor Vasquez is the balanced keeper who launches Beltway's breaks with fast, accurate distribution.", "personality": "Composed and proactive.", "political_leaning": "Belt-syndicalist.", "culture": "The launchpad.", "achievements": ["Most counter-launching distributions"], "injuries": "Fully fit." },
+    { "jersey_number": 2, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Tireless and rugged, grafts the flank.", "bio": "Bypass Torres is the workhorse full-back who covers every metre of the right channel for ninety minutes.", "personality": "Tireless and uncomplaining.", "political_leaning": "Belt-syndicalist.", "culture": "The grafter.", "achievements": ["Most distance covered by a defender"], "injuries": "Fully fit." },
+    { "jersey_number": 3, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the deep defender.", "bio": "Highway Kane is the team-first defender who holds the block disciplined and patient.", "personality": "Selfless and disciplined.", "political_leaning": "Belt-syndicalist.", "culture": "The patient wall.", "achievements": ["Most blocks in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 4, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Combative and firm, the bite in the block.", "bio": "Transit Walker is the aggressive defender who breaks up attacks to feed the counter.", "personality": "Aggressive and committed.", "political_leaning": "Belt-syndicalist.", "culture": "The disruptor.", "achievements": ["Most interceptions in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 5, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and watchful, times the spring.", "bio": "Toll Rivera is the composed defender who reads the moment to counter, the patient timer of the break.", "personality": "Balanced and intelligent.", "political_leaning": "Belt-syndicalist.", "culture": "The timer.", "achievements": ["Fewest errors in the side"], "injuries": "Fully fit." },
+    { "jersey_number": 6, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and quick, the brain of the break.", "bio": "Freeway Chen is the creative spark who threads the killing pass the instant Beltway win the ball.", "personality": "Creative and decisive.", "political_leaning": "Cosmopolitan.", "culture": "The architect.", "achievements": ["Most counter assists"], "injuries": "Fully fit." },
+    { "jersey_number": 7, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Willing and selfless, the engine of transition.", "bio": "Ramp Petrov is the team-first runner who powers Beltway from deep block to fast break.", "personality": "Selfless and industrious.", "political_leaning": "Belt-syndicalist.", "culture": "The engine.", "achievements": ["Most distance covered in midfield"], "injuries": "Fully fit." },
+    { "jersey_number": 8, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Balanced and tidy, the controlled link.", "bio": "Junction Morales is the composed midfielder who keeps the counter purposeful rather than frantic.", "personality": "Balanced and measured.", "political_leaning": "Belt-syndicalist.", "culture": "The controlled spark.", "achievements": ["Highest pass completion on the break"], "injuries": "Fully fit." },
+    { "jersey_number": 9, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and predatory, the point of the break.", "bio": "Exit Park is the selfish finisher who feeds on the space the counter creates, cold in front of goal.", "personality": "Selfish and clinical.", "political_leaning": "Indifferent.", "culture": "The finisher.", "achievements": ["Club top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 10, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Direct and combative, sparks the break.", "bio": "Merge Kim is the aggressive forward who triggers the counter by hounding defenders into mistakes.", "personality": "Aggressive and relentless.", "political_leaning": "Belt-syndicalist.", "culture": "The trigger.", "achievements": ["Most high turnovers won by a forward"], "injuries": "Fully fit." },
+    { "jersey_number": 11, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Self-assured and sharp, a second finisher.", "bio": "Overpass Okafor is the selfish forward who doubles the threat on the break, hungry to outscore his partner.", "personality": "Selfish and competitive.", "political_leaning": "Indifferent.", "culture": "The rival finisher.", "achievements": ["Second top scorer"], "injuries": "Fully fit." },
+    { "jersey_number": 12, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Older and careful, the calm deputy keeper.", "bio": "Underpass Tanaka is the cautious veteran second keeper, dependable when called upon.", "personality": "Cautious and steady.", "political_leaning": "Belt-syndicalist.", "culture": "The patient deputy.", "achievements": ["Long backup service"], "injuries": "Fully fit." },
+    { "jersey_number": 13, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Selfless and steady, the dependable squad defender.", "bio": "Offramp Nakamura is the team-first deputy who slots into the block without weakening it.", "personality": "Selfless and reliable.", "political_leaning": "Belt-syndicalist.", "culture": "The rotation man.", "achievements": ["Solid squad contributor"], "injuries": "Fully fit." },
+    { "jersey_number": 14, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Young and balanced, an academy defender on the rise.", "bio": "Onramp Fischer is the promising young defender learning the belt's hard, patient ways.", "personality": "Composed and coachable.", "political_leaning": "Belt-syndicalist.", "culture": "The young wall.", "achievements": ["Academy graduate"], "injuries": "Fully fit." },
+    { "jersey_number": 15, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Inventive and raw, an academy playmaker in waiting.", "bio": "Interchange Hayashi is the creative deputy who can unlock a stubborn block from the bench.", "personality": "Creative and raw.", "political_leaning": "Cosmopolitan.", "culture": "The understudy artist.", "achievements": ["Youth player of his year"], "injuries": "Fully fit." },
+    { "jersey_number": 16, "gender": "Male", "race": "Human (Belt-adapted)", "appearance": "Lean and hungry, an academy striker with a selfish edge.", "bio": "Detour Sato is the eager young finisher pushing for a place, learning the art of the belt counter.", "personality": "Selfish and ambitious.", "political_leaning": "Indifferent.", "culture": "The prospect.", "achievements": ["Youth top scorer"], "injuries": "Fully fit." }
+  ]
+}
