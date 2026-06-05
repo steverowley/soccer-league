@@ -15,6 +15,7 @@ import {
 } from './simulateSpatialMatch';
 import type { SimPlayerStats, Role } from './types';
 import { PITCH_LENGTH, PITCH_WIDTH } from './types';
+import { adaptSpatialResult, type PlayerIndex } from './spatialEventAdapter';
 
 // ── Fixture builders ──────────────────────────────────────────────────────────
 
@@ -137,4 +138,55 @@ describe('simulateSpatialMatch — emergent football', () => {
     // A real flowing match touches several event kinds (passes, restarts, etc.).
     expect(kinds.size).toBeGreaterThanOrEqual(3);
   });
+});
+
+describe('simulateSpatialMatch — goal attribution (#522)', () => {
+  // Build an id→side map and an adapter PlayerIndex straight from the fixtures.
+  function sideOf(home: SpatialTeamInput, away: SpatialTeamInput): Map<string, 'home' | 'away'> {
+    const m = new Map<string, 'home' | 'away'>();
+    for (const p of home.players) m.set(p.id, 'home');
+    for (const p of away.players) m.set(p.id, 'away');
+    return m;
+  }
+  function indexOf(home: SpatialTeamInput, away: SpatialTeamInput): PlayerIndex {
+    const m: PlayerIndex = new Map();
+    for (const p of home.players) m.set(p.id, { id: p.id, name: p.name, teamName: 'Home', side: 'home' });
+    for (const p of away.players) m.set(p.id, { id: p.id, name: p.name, teamName: 'Away', side: 'away' });
+    return m;
+  }
+
+  it('credits every shot-goal to a player on the scoring side, and the adapter counts them', () => {
+    // A lopsided fixture makes goals plentiful across a handful of full matches,
+    // so the attribution assertions get real data without flaking on a 0-0.
+    const home = team('H', 80);
+    const away = team('A', 55);
+    const sides = sideOf(home, away);
+
+    let goalEvents = 0;
+    let attributed = 0;
+    let statGoals = 0;
+
+    for (const seed of [10, 20, 30, 40]) {
+      const r = simulateSpatialMatch(home, away, { ...FULL, seed });
+      for (const g of r.events.filter((e) => e.type === 'goal')) {
+        goalEvents++;
+        if (g.playerId !== undefined) {
+          attributed++;
+          // The scorer must belong to the side credited with the goal — never the opponent.
+          expect(sides.get(g.playerId)).toBe(g.side);
+        }
+      }
+      // The adapter turns each attributed goal event into a +1 on that player's
+      // goal tally; summing them must equal the number of attributed events.
+      const adapted = adaptSpatialResult(r, indexOf(home, away));
+      statGoals += Object.values(adapted.playerStats).reduce((sum, s) => sum + s.goals, 0);
+    }
+
+    // The engine scored, and the fix attributed those goals.  Before #522 every
+    // goal event had no playerId, so `attributed` and `statGoals` would be 0 —
+    // this is the regression guard.
+    expect(goalEvents).toBeGreaterThan(0);
+    expect(attributed).toBeGreaterThan(0);
+    expect(statGoals).toBe(attributed);
+  }, 60000);
 });

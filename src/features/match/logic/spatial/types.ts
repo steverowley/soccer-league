@@ -155,7 +155,7 @@ export interface SimBall {
    * line this tells step.ts whether to resolve a save (shot) and how hard the
    * keeper's job is.  null before the first kick of a possession.
    */
-  lastTouch: { side: TeamSide; isShot: boolean; sq: number } | null;
+  lastTouch: { side: TeamSide; isShot: boolean; sq: number; playerId?: string } | null;
 }
 
 // ── World ─────────────────────────────────────────────────────────────────
