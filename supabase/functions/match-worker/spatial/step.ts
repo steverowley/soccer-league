@@ -300,7 +300,7 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
         ball.ownerId = null;
         ball.vel = shotKick(owner, rng);
         ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
-        ball.lastTouch = { side: owner.side, isShot: true, sq };
+        ball.lastTouch = { side: owner.side, isShot: true, sq, playerId: owner.id };
         // The 'shot' vs 'goal'/'save' event is emitted on resolution below.
       } else if (action.kind === 'pass') {
         ball.ownerId = null;
@@ -409,9 +409,20 @@ function resolveLooseBall(
       // GOAL.  Credit the scorer's side, reset for kickoff, and start the
       // post-goal dead-ball pause (GOAL_PAUSE_SEC converted to ticks via the
       // world's fixed timestep).
-      const scorerSide = ball.lastTouch?.side ?? attackingSide;
+      const lastTouch = ball.lastTouch;
+      const scorerSide = lastTouch?.side ?? attackingSide;
       if (scorerSide === 'home') world.score[0] += 1; else world.score[1] += 1;
-      events.push({ tSec: world.clockSec, minute, type: 'goal', side: scorerSide });
+      // Attribute the goal to the shooter only when it came from their shot, so a
+      // deflection or stray roll into the net (an own-goal in spirit) credits nobody
+      // rather than a phantom striker.  The adapter increments the scorer's goal
+      // tally + payload team off this playerId.
+      events.push({
+        tSec: world.clockSec,
+        minute,
+        type: 'goal',
+        side: scorerSide,
+        ...(lastTouch?.isShot && lastTouch.playerId ? { playerId: lastTouch.playerId } : {}),
+      });
       kickoffReset(world, scorerSide === 'home' ? 'away' : 'home');
       world.deadBallTicks = Math.round(GOAL_PAUSE_SEC / world.dtSec);
       world.phase = 'dead_ball';
