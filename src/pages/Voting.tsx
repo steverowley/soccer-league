@@ -16,7 +16,7 @@
 //   - getTeamFocusOptions(db, t, s)     — option catalogue for the team
 //   - getTeamTally(db, t, s)            — current vote totals per option
 //   - getEnactedFocuses(db, s, t)       — what the cosmos decided last season
-//   - castVote(db, userId, optId, credits) — POST a vote (debits credits)
+//   - castVote(db, optId, credits)         — POST a vote (atomic server-side debit)
 //
 // Design pillars served:
 //   - Fan-driven collective agency: the credit-pooling visualisation makes
@@ -205,7 +205,7 @@ export default function Voting() {
     }
     setVoteInFlight(optionId);
     try {
-      const result = await castVote(db, user.id, optionId, credits);
+      const result = await castVote(db, optionId, credits);
       if (!result) {
         toast.error('Vote did not register. Try again.');
       } else {

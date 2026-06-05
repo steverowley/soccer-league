@@ -20,14 +20,6 @@ import {
   parseFocusVoteRow,
 } from './focuses.schema';
 
-// The optimistic `decrement_credits` RPC fallback below is a pre-existing
-// dev-era convenience that was never deployed as a SQL function; the
-// generated types correctly omit it. We cast just that one RPC call so the
-// existing read-modify-write fallback path still compiles. Production
-// vote-cost debits run via that fallback path today.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RpcAny = any;
-
 // ── Option generation ───────────────────────────────────────────────────────
 
 /**
@@ -102,66 +94,37 @@ export async function getTeamFocusOptions(
 // ── Vote casting ────────────────────────────────────────────────────────────
 
 /**
- * Cast a vote by spending credits on a focus option. Inserts a focus_votes
- * row and deducts credits from the user's profile.
- *
- * The caller must verify `canAffordVote()` before calling this. The DB
- * CHECK constraint on `profiles.credits >= 0` is a safety net.
+ * Cast a vote by spending credits on a focus option, via the atomic
+ * `cast_focus_vote` RPC (migration 0072). The RPC validates auth, the
+ * 10-credit minimum, own-club eligibility, and the balance, then inserts the
+ * vote and debits credits in one transaction — the voter identity comes from
+ * auth.uid() server-side, not a client-supplied id, and the debit can no
+ * longer be skipped (#524).
  *
  * @param db             Injected Supabase client.
- * @param userId         The voting user's UUID.
  * @param focusOptionId  The focus option UUID to vote for.
- * @param creditsSpent   Number of credits to allocate (must be > 0).
+ * @param creditsSpent   Credits to allocate (server enforces >= 10).
  * @returns              The inserted FocusVote row, or null on error.
  */
 export async function castVote(
   db: IslSupabaseClient,
-  userId: string,
   focusOptionId: string,
   creditsSpent: number,
 ): Promise<FocusVote | null> {
-  // 1. Insert the vote.
-  const { data: vote, error: voteErr } = await db
-    .from('focus_votes')
-    .insert({
-      user_id: userId,
-      focus_option_id: focusOptionId,
-      credits_spent: creditsSpent,
-    })
-    .select()
-    .single();
+  // cast_focus_vote isn't in the generated database.ts yet; regenerate types
+  // once migration 0072 is applied, then drop this cast.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (db.rpc as any)('cast_focus_vote', {
+    p_focus_option_id: focusOptionId,
+    p_credits: creditsSpent,
+  });
 
-  if (voteErr) {
-    console.warn('[castVote] insert failed:', voteErr.message);
+  if (error) {
+    console.warn('[castVote] RPC failed:', error.message);
     return null;
   }
 
-  // 2. Deduct credits from the user's profile.
-  // Try atomic RPC first, fall back to read-modify-write. The
-  // `decrement_credits` RPC isn't declared in the generated types
-  // (it predates the typegen and was never deployed as a SQL function);
-  // the call always errors, which hits the RMW fallback below.
-  const { error: rpcErr } = await (db.rpc as RpcAny)(
-    'decrement_credits',
-    { user_id: userId, amount: creditsSpent },
-  );
-
-  if (rpcErr) {
-    const { data: profile } = await db
-      .from('profiles')
-      .select('credits')
-      .eq('id', userId)
-      .single();
-
-    if (profile) {
-      await db
-        .from('profiles')
-        .update({ credits: profile.credits - creditsSpent })
-        .eq('id', userId);
-    }
-  }
-
-  return parseFocusVoteRow(vote, 'castVote') as FocusVote | null;
+  return parseFocusVoteRow(data, 'castVote') as FocusVote | null;
 }
 
 // ── Tally queries ───────────────────────────────────────────────────────────
