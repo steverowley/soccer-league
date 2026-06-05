@@ -465,8 +465,41 @@ async function handler(): Promise<Response> {
   );
 }
 
+// ── Shared-secret auth (mirrors match-worker / drama-tick / galaxy-tick) ──
+// Without this gate anyone on the internet could POST and trigger a full
+// shadow-match simulation batch — a cheap compute/cost-drain amplification.
+// The endpoint has no pg_cron caller today; if one is added it must send
+// `Authorization: Bearer <vault.worker_shared_secret>` like 0027/0043.
+// Fails closed when the env var is unset.
+
 // @ts-ignore — Deno-only API.
-Deno.serve(async (_req: Request) => {
+const WORKER_SHARED_SECRET = Deno.env.get('WORKER_SHARED_SECRET') || '';
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const aa = enc.encode(a);
+  const bb = enc.encode(b);
+  if (aa.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i += 1) diff |= aa[i]! ^ bb[i]!;
+  return diff === 0;
+}
+
+function isAuthorized(req: Request): boolean {
+  if (!WORKER_SHARED_SECRET) {
+    console.warn('[shadow-match-worker] WORKER_SHARED_SECRET unset — rejecting all calls');
+    return false;
+  }
+  const header = req.headers.get('Authorization') ?? '';
+  if (!header.startsWith('Bearer ')) return false;
+  return timingSafeEqual(header.slice('Bearer '.length).trim(), WORKER_SHARED_SECRET);
+}
+
+// @ts-ignore — Deno-only API.
+Deno.serve(async (req: Request) => {
+  if (!isAuthorized(req)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
   try {
     return await handler();
   } catch (err) {
