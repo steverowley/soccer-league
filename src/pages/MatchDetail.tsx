@@ -252,8 +252,25 @@ export default function MatchDetail() {
             • Completed / cancelled matches → unchanged single-column
               commentary layout (no pitch — the match is over). */}
       {match && !loadError && (() => {
+        // The pitch belongs on screen while the match is LIVE from the
+        // viewer's perspective — a wall-clock window, NOT the raw DB status.
+        // The worker flips status → 'completed' ~90s into a 10-minute paced
+        // window, so gating on status alone would yank the pitch away
+        // mid-match.  Show it for scheduled / in-progress rows AND for any
+        // match still inside its pacing window (kickoff … kickoff + duration).
+        // The page doesn't fetch the season knob, so use the default duration
+        // as a proxy — same approximation the hero pip makes
+        // (PERCEIVED_LIVE_WINDOW_MS); a non-default season only shifts the
+        // pitch's disappearance by a few minutes.
+        const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+        // eslint-disable-next-line react-hooks/purity -- wall-clock read; a stale value only mis-decides the pitch near the window edge and self-corrects on the next render / nav
+        const nowMs = Date.now();
+        const withinPacingWindow = kickoffMs != null
+          && nowMs >= kickoffMs
+          && nowMs < kickoffMs + DEFAULT_MATCH_DURATION_SECONDS * 1000;
         const liveOrScheduled =
-          match.status === 'in_progress' || match.status === 'scheduled' || match.status === 'live';
+          match.status === 'in_progress' || match.status === 'scheduled' || match.status === 'live'
+          || withinPacingWindow;
         return (
           <section style={{ padding: '0 0 48px' }}>
             <Container>
@@ -1599,6 +1616,10 @@ function MatchPitchPanel({
   // seconds and advance through the frame array at 1× speed.
   const [positionFrames, setPositionFrames] = useState<PositionSnapshot[]>([]);
   const [scheduledAt,   setScheduledAt]    = useState<string | null>(null);
+  // Season pacing knob (match_duration_seconds).  Drives the SAME real→game
+  // time compression the commentary feed uses so the dots stay in lockstep
+  // with the play-by-play.  Defaults to the production value until fetched.
+  const [duration,      setDuration]       = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
 
   // ── Initial fetch ─────────────────────────────────────────────────────
   // Three queries in parallel: the match row (formation + roster + colour),
@@ -1615,11 +1636,13 @@ function MatchPitchPanel({
       getMatch(db, matchId),
       getMatchEvents(db, matchId),
       getMatchPositions(db, matchId),
+      getMatchDurationSeconds(db, matchId),
     ])
-      .then(([m, evRows, posRows]) => {
+      .then(([m, evRows, posRows, durSeconds]) => {
         if (cancelled) return;
         setEvents(evRows);
         setPositionFrames(posRows);
+        setDuration(durSeconds);
 
         // Narrow the loose getMatch return into the per-side shape
         // PitchView consumes.  Each branch is independently optional
@@ -1679,7 +1702,66 @@ function MatchPitchPanel({
   // `active` is false (legacy match or frames not yet loaded), the
   // choreography hook inside PitchView drives positions instead — no
   // conditional hook calls needed, we simply omit the override props.
-  const spatial = useSpatialPlayback(positionFrames, scheduledAt);
+  const spatial = useSpatialPlayback(positionFrames, scheduledAt, duration);
+
+  // ── Late-arriving frames (open-before-kickoff) ─────────────────────────
+  // The worker writes every position frame in a single burst at kickoff, and
+  // there is no Realtime channel for `match_positions`.  So a viewer who
+  // opened the match BEFORE kickoff got an empty array from the initial fetch
+  // and would otherwise watch the choreography fallback for the whole match.
+  //
+  // The effect's deps don't change as the wall clock crosses kickoff, so the
+  // polling loop has to schedule ITSELF to begin at kickoff — we must not poll
+  // (or, worse, stop) before then.  Three wall-clock cases when the effect
+  // mounts: (a) past the window → nothing to recover, bail; (b) before kickoff
+  // → defer the start with a single setTimeout so we don't spin pre-kickoff;
+  // (c) already in-window → start immediately.  Once started, poll every 5s
+  // until the frames land or the window closes (a legacy match never gets
+  // frames, so the window-close guard stops it polling forever).
+  useEffect(() => {
+    if (positionFrames.length > 0 || !scheduledAt) return undefined;
+    const kickoffMs = new Date(scheduledAt).getTime();
+    if (Number.isNaN(kickoffMs)) return undefined;
+    const windowEndMs = kickoffMs + duration * 1000;
+
+    let cancelled = false;
+    let interval:     ReturnType<typeof setInterval> | null = null;
+    let startTimeout: ReturnType<typeof setTimeout>  | null = null;
+    const stop = () => {
+      if (interval     !== null) { clearInterval(interval);  interval = null; }
+      if (startTimeout !== null) { clearTimeout(startTimeout); startTimeout = null; }
+    };
+
+    const poll = () => {
+      // Window closed → give up (covers legacy matches that never get frames).
+      if (Date.now() >= windowEndMs) { stop(); return; }
+      getMatchPositions(db, matchId)
+        .then((rows) => {
+          if (cancelled || rows.length === 0) return;
+          setPositionFrames(rows);
+          stop();
+        })
+        .catch(() => { /* transient — the next tick retries */ });
+    };
+
+    // 5s cadence: the worker lands frames within ~90s of kickoff, so a handful
+    // of polls covers it without hammering the table.
+    const begin = () => {
+      if (cancelled || Date.now() >= windowEndMs) return;
+      poll();
+      interval = setInterval(poll, 5000);
+    };
+
+    const now = Date.now();
+    if (now >= windowEndMs) {
+      return undefined;                                // window already closed
+    } else if (now < kickoffMs) {
+      startTimeout = setTimeout(begin, kickoffMs - now); // defer until kickoff
+    } else {
+      begin();                                         // already in-window
+    }
+    return () => { cancelled = true; stop(); };
+  }, [db, matchId, scheduledAt, duration, positionFrames.length]);
 
   // ── Realtime subscription ──────────────────────────────────────────────
   // Same channel the commentary feed subscribes to.  Supabase multiplexes
