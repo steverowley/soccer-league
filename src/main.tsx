@@ -157,6 +157,9 @@ const SeasonDetail = lazy(() => import('./pages/SeasonDetail'));
 // an inline RelationshipGraph panel.  Surfaces the ISL's political actors,
 // media companies, stadiums, and officials without exposing mechanics.
 const World        = lazy(() => import('./pages/World'));
+// Catch-all for any URL matching no route below — renders an on-brand 404
+// instead of a blank content area (#532).
+const NotFound     = lazy(() => import('./pages/NotFound'));
 
 // Handle GitHub Pages 404 redirect: when a route like /admin doesn't exist,
 // 404.html redirects to the root and stores the original path in sessionStorage.
@@ -382,6 +385,13 @@ createRoot(document.getElementById('root')!).render(
                   users here after a successful sign-in when
                   favourite_team_id is still null. See Welcome.tsx. */}
               <Route path="welcome"             element={<Welcome />} />
+
+              {/* Catch-all (#532). Any URL matching no route above renders the
+                  NotFound page instead of blanking the content area. Pairs with
+                  the GitHub Pages 404.html redirect handled by RedirectHandler:
+                  an unknown deep link bounces to root, the path is restored,
+                  and if it still matches nothing this is what renders. */}
+              <Route path="*"                   element={<NotFound />} />
             </Routes>
             </KeyedRouteBoundary>
             </Suspense>

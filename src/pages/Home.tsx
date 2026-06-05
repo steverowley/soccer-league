@@ -70,7 +70,7 @@ import {
 // FLARE is kept for future error states.  Both are imported even when
 // only one is currently referenced so the alias block stays a stable
 // single source of truth for this page.
-const { dust: DUST, abyss: ABYSS, flare: _FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE   = COLORS.hairline;
 const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;
@@ -115,6 +115,11 @@ export default function Home() {
   // season year, completion percentage).  Stable across session.
   const [activeSeason, setActiveSeason] = useState<any>(null);
 
+  // Surface fetch failures instead of silently rendering an empty matchday
+  // (#532). retryNonce re-triggers both data effects when the user retries.
+  const [loadError, setLoadError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -128,9 +133,13 @@ export default function Home() {
         setUpcomingMatches(upcoming);
         setActiveSeason(season);
       })
-      .catch((err) => { console.warn('[Home] fixture/season fetch failed:', err); });
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[Home] fixture/season fetch failed:', err);
+        setLoadError(true);
+      });
     return () => { cancelled = true; };
-  }, [db]);
+  }, [db, retryNonce]);
 
   const featuredLive = liveMatches[0] ?? null;
 
@@ -166,7 +175,7 @@ export default function Home() {
       })
       .catch((err) => { console.warn('[Home] standings fetch failed:', err); });
     return () => { cancelled = true; };
-  }, [db, featuredLeague.id]);
+  }, [db, featuredLeague.id, retryNonce]);
 
   return (
     <div style={{
@@ -177,6 +186,31 @@ export default function Home() {
       fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
+
+      {loadError && (
+        <div role="alert" style={{
+          background: '#241012',
+          color: DUST,
+          borderBottom: `1px solid ${FLARE}`,
+          fontFamily: 'Space Mono, monospace',
+          fontSize: 13,
+          padding: '12px 0',
+        }}>
+          <Container>
+            <span style={{ color: FLARE }}>Signal lost</span> — the league feed didn&apos;t load.{' '}
+            <button
+              type="button"
+              onClick={() => { setLoadError(false); setRetryNonce((n) => n + 1); }}
+              style={{
+                color: FLARE, background: 'none', border: 'none', padding: 0,
+                font: 'inherit', textDecoration: 'underline', cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </Container>
+        </div>
+      )}
 
       {/* Hero — full bleed, two-column. */}
       <Hero season={activeSeason} liveMatchCount={liveMatches.length} />
