@@ -27,7 +27,13 @@ import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getRecentNarratives } from '../features/entities';
+import {
+  getRecentNarratives,
+  collapseFloodRuns,
+  feedQuietness,
+  type FeedItem,
+  type CollapsedFeedItem,
+} from '../features/entities';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // Architect cards use QUANTUM (the canonical Architect / focus hue per
@@ -215,6 +221,27 @@ export default function News() {
   const pinnedRows = showPinned ? rows.filter((n: any) => n.kind === DAYBREAK_KIND) : [];
   const otherRows  = showPinned ? rows.filter((n: any) => n.kind !== DAYBREAK_KIND) : rows;
 
+  // ── Feed shaping ────────────────────────────────────────────────────────────
+  // In the unfiltered view, fold each repetitive pre-match cosmic_omen batch
+  // into a single card so the characterful voices aren't buried — one match day
+  // drops 8–16 near-identical omens. When a specific kind is selected the reader
+  // asked for exactly those rows, so we leave them expanded.
+  const feedItems: FeedItem[] = showPinned
+    ? collapseFloodRuns(otherRows)
+    : otherRows.map((n): FeedItem => ({ type: 'single', narrative: n }));
+
+  // Quiet-wire cue: if the newest narrative is hours stale, the cosmos has gone
+  // quiet (or the content pipeline has stalled). Surfacing an in-world line keeps
+  // a silent feed reading as intentional cosmic hush rather than a broken page.
+  // computeQuiet wraps the impure Date.now() read outside the render body
+  // (mirrors how formatRelativeTime keeps its clock read out of components).
+  //
+  // Gated to the unfiltered view only: under a kind filter, `rows` holds just
+  // that kind, so a naturally low-frequency kind (Balance/Chaos cap at 1/day)
+  // would falsely trip the cue even while the overall dispatch is fresh. The
+  // cue is a global-pipeline signal, so it belongs on the ALL feed.
+  const quiet = showPinned ? computeQuiet(rows) : null;
+
   return (
     <div style={{
       background: ABYSS,
@@ -270,6 +297,10 @@ export default function News() {
           )}
           {loaded && !loadError && rows.length > 0 && (
             <>
+              {/* Quiet-wire cue — rendered above the feed when the newest
+                  narrative is hours stale, so a stalled cosmos reads as an
+                  in-world hush rather than a dead page. */}
+              {quiet && <QuietWireNotice hours={quiet.hours} />}
               {/* Pinned daybreak digest(s) — see DAYBREAK_KIND. Only shown
                   when no kind filter is active; filtering to a single kind
                   keeps the chronological view. */}
@@ -290,10 +321,16 @@ export default function News() {
                 listStyle: 'none', padding: 0, margin: pinnedRows.length > 0 ? 0 : '24px 0 0',
                 display: 'flex', flexDirection: 'column', gap: 12,
               }}>
-                {otherRows.map((n: any) => (
-                  <li key={n.id}>
-                    <NarrativeCard narrative={n} />
-                  </li>
+                {feedItems.map((item) => (
+                  item.type === 'collapsed' ? (
+                    <li key={`omens-${item.ids[0]}`}>
+                      <CollapsedOmenCard item={item} />
+                    </li>
+                  ) : (
+                    <li key={item.narrative.id}>
+                      <NarrativeCard narrative={item.narrative} />
+                    </li>
+                  )
                 ))}
               </ul>
               {canLoadMore && (
@@ -473,6 +510,103 @@ function NarrativeCard({ narrative  }: any) {
 }
 
 /**
+ * Collapsed-omen card.  Stands in for a consecutive run of repetitive
+ * pre-match `cosmic_omen` narratives (one per upcoming fixture) so a single
+ * match day's batch reads as one cosmic murmur instead of 8–16 near-identical
+ * cards burying the feed's other voices.
+ *
+ * Shows the newest omen's text plus a muted footer counting the rest; styled
+ * with the same kind accent as a single omen card so it still reads as the
+ * Architect's pre-match register.
+ *
+ * @param {{ item: CollapsedFeedItem }} props
+ */
+function CollapsedOmenCard({ item }: { item: CollapsedFeedItem }) {
+  const kindMeta = KIND_BY_KEY[item.kind] ?? null;
+  const border   = kindMeta?.border ?? HAIRLINE;
+  const pip      = kindMeta?.pip;
+  const label    = kindMeta?.label ?? prettifyKind(item.kind);
+  // count includes the displayed (newest) omen; the footer counts the rest.
+  const remainder = item.count - 1;
+
+  return (
+    <article style={{
+      border: `1px solid ${border}`,
+      padding: 20,
+      background: ABYSS,
+    }}>
+      <header style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: 12,
+        paddingBottom: 12,
+        marginBottom: 12,
+        borderBottom: `1px solid ${HAIRLINE}`,
+        fontSize: 11,
+        letterSpacing: '0.14em',
+        textTransform: 'uppercase',
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          {pip && (
+            <span
+              aria-hidden="true"
+              style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: pip, display: 'inline-block',
+              }}
+            />
+          )}
+          {label}
+        </span>
+        <span style={{ color: DUST_70 }}>
+          {formatRelativeTime(item.latest.created_at)}
+        </span>
+      </header>
+      <p style={{ fontSize: 14, lineHeight: 1.6, color: DUST, margin: 0 }}>
+        {item.latest.summary}
+      </p>
+      <p style={{
+        fontSize: 12, lineHeight: 1.5, color: DUST_50,
+        fontStyle: 'italic', margin: '12px 0 0',
+      }}>
+        {remainder > 0
+          ? `…and ${remainder} more omen${remainder === 1 ? '' : 's'} stir ahead of the coming fixtures.`
+          : 'An omen stirs ahead of the coming fixtures.'}
+      </p>
+    </article>
+  );
+}
+
+/**
+ * Quiet-wire notice — an in-world line rendered above the feed when the most
+ * recent narrative is hours old (see feedQuietness / QUIET_THRESHOLD_HOURS).
+ * Frames a stalled feed as deliberate cosmic silence so a quiet (or broken)
+ * pipeline never reads as a blank, dead page.
+ *
+ * @param {{ hours: number }} props  Whole hours since the last dispatch.
+ */
+function QuietWireNotice({ hours }: { hours: number }) {
+  return (
+    <div style={{
+      border: `1px solid ${HAIRLINE}`,
+      borderLeft: `2px solid ${DUST_50}`,
+      padding: '14px 18px',
+      margin: '24px 0 0',
+      background: COLORS.dustFaint,
+    }}>
+      <p style={{
+        fontSize: 13, lineHeight: 1.6, color: DUST_70,
+        fontStyle: 'italic', margin: 0,
+      }}>
+        The wire has been quiet for {hours}h. The cosmos is between breaths —
+        its voices will return.
+      </p>
+    </div>
+  );
+}
+
+/**
  * Dust-outline Load More button used at the bottom of the feed.  Acts
  * as a plain button (not a router link) since pagination is in-memory.
  *
@@ -501,6 +635,19 @@ function LoadMoreButton({ onClick  }: any) {
       Load More
     </button>
   );
+}
+
+/**
+ * Compute the quiet-wire cue against the wall clock.  Wrapped in a
+ * module-level function so the impure `Date.now()` read stays out of the
+ * component render body (React purity lint), exactly as `formatRelativeTime`
+ * keeps its own clock read out of the cards.
+ *
+ * @param rows  The loaded narrative rows (newest-first).
+ * @returns     `{ hours }` when the wire is stale, else null.
+ */
+function computeQuiet(rows: Parameters<typeof feedQuietness>[0]) {
+  return feedQuietness(rows, Date.now());
 }
 
 /**
