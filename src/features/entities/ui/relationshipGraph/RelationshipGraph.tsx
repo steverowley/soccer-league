@@ -12,8 +12,9 @@
 //
 // INTERNAL DATA FLOW
 //   1. On mount / entityId change: kick off three sequential fetches.
-//      a) `getEntity(seedId)`           — needed for the centre node label
-//      b) `getEntityRelationships(seedId)` — every edge touching the seed
+//      a) `getEntity(seedId)`              — needed for the centre node label
+//      b) `getEntityNeighbourhood(seedId)` — the seed's edges AND its
+//         neighbours' edges (two hops) so the second layer has data to render
 //      c) `buildGraph(edges)` + `extractSubgraph(graph, seedId)` — pure
 //      d) `getEntitiesByIds([...nodeIds])` — hydrate node metadata
 //   2. Hand `nodes` + `edges` to `useForceLayout` which runs d3-force in
@@ -91,7 +92,7 @@ import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
 import {
   getEntitiesByIds,
   getEntity,
-  getEntityRelationships,
+  getEntityNeighbourhood,
 } from '../../api/relationships';
 import { buildGraph } from '../../logic/relationshipGraph';
 import { extractSubgraph } from '../../logic/subgraph';
@@ -316,7 +317,10 @@ export function RelationshipGraph({
           return;
         }
 
-        const edgeRows = await getEntityRelationships(db, entityId);
+        // Two-hop fetch: the seed's edges PLUS its neighbours' edges, so the
+        // extractor below has the friends-of-friends needed to render a real
+        // second layer (a single-hop fetch can only ever yield a 1-hop star).
+        const edgeRows = await getEntityNeighbourhood(db, entityId);
         if (cancelled) return;
 
         // Run the extractor inline here so we know which entity ids
@@ -541,8 +545,15 @@ export function RelationshipGraph({
   // already sorted by |strength| desc, so first wins on parallel
   // edges).  Non-adjacent nodes (second-hop satellites) get just
   // "NAME, KIND" — no direct relationship label.
+  //
+  // Built from `subgraph.edges` (the RENDERED edges), not the full fetched
+  // set: with the two-hop fetch, a weak seed→X edge can be pruned by
+  // `maxNeighbours` while X still appears in the graph via a kept neighbour.
+  // Deriving adjacency from the rendered subgraph keeps the layer styling
+  // (first vs second hop) and the relationship label honest — a node is only
+  // "direct" if its seed edge actually survived into the visible graph.
   const seedAdjacency = new Map<string, { kind: string; strength: number }>();
-  for (const edge of edges) {
+  for (const edge of subgraph.edges) {
     if (edge.from_id === seed.id && !seedAdjacency.has(edge.to_id)) {
       seedAdjacency.set(edge.to_id, { kind: edge.kind, strength: edge.strength });
     } else if (edge.to_id === seed.id && !seedAdjacency.has(edge.from_id)) {

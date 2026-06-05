@@ -47,13 +47,17 @@ export { getEntityProfile } from './api/entityProfiles';
 export type { EntityProfileResult } from './api/entityProfiles';
 
 // ── API — relationship graph fetch (issue isl-szm) ─────────────────────────
-// Three Zod-validated helpers that feed the relationship-graph viewer:
-// `getEntity` for the seed row, `getEntityRelationships` for the union of
-// outgoing + incoming edges, and `getEntitiesByIds` for bulk node-metadata
-// hydration after the subgraph extractor selects which ids to render.
+// Zod-validated helpers that feed the relationship-graph viewer:
+// `getEntity` for the seed row, `getEntityRelationships` for the union of one
+// entity's outgoing + incoming edges, `getRelationshipsForIds` for the batched
+// equivalent over many ids, `getEntityNeighbourhood` for the two-hop fetch the
+// graph renders, and `getEntitiesByIds` for bulk node-metadata hydration after
+// the subgraph extractor selects which ids to render.
 export {
   getEntity,
   getEntityRelationships,
+  getRelationshipsForIds,
+  getEntityNeighbourhood,
   getEntitiesByIds,
   listEntities,
 } from './api/relationships';
