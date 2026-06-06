@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAnnulGoals,
   applyForceRedCards,
+  reconcileStatsAfterInterference,
   resolveInterference,
   resolveInterferenceStream,
   type AnnulGoalIntent,
@@ -331,6 +332,19 @@ describe('applyForceRedCards', () => {
     expect(out[0]?.payload['cardType']).toBe('red');
   });
 
+  it('overwrites commentary with a sending-off line so the feed reads as a dismissal', () => {
+    const cleanTackle: SimulatedEvent = {
+      minute: 30, subminute: 0, type: 'tackle',
+      payload: { player: 'Twin Vex', team: 'HOME', commentary: 'Twin Vex wins the ball with a clean tackle.' },
+    };
+    const intents: ForceRedCardIntent[] = [
+      { playerName: 'Twin Vex', minute: 0, magnitude: 10 },
+    ];
+    const out = applyForceRedCards([cleanTackle], intents, constantRng(0));
+    expect(out[0]?.payload['cardType']).toBe('red');
+    expect(out[0]?.payload['commentary']).toBe('Twin Vex is shown a straight red card.');
+  });
+
   it('only fires on the whitelisted card-able event types (foul / tackle / dive)', () => {
     const events: SimulatedEvent[] = [
       foulBy('Twin Vex', 30, 'shot'),             // shot not card-able
@@ -417,5 +431,70 @@ describe('resolveInterferenceStream', () => {
     expect(out[1]?.payload['interferenceApplied']).toBe('curse');
     expect(out[2]).toBe(events[2]);                      // not a goal, unaffected
     expect(out[3]?.payload['interferenceApplied']).toBe('curse');
+  });
+});
+
+// ── #530: post-interference stat reconciliation ──────────────────────────
+
+describe('reconcileStatsAfterInterference', () => {
+  type Stats = {
+    goals: number; assists: number; shots: number;
+    tackles: number; yellowCard: boolean; redCard: boolean;
+  };
+  function entry(over: Partial<Stats> = {}): Stats {
+    return { goals: 0, assists: 0, shots: 0, tackles: 0, yellowCard: false, redCard: false, ...over };
+  }
+
+  it('drops a cursed/annulled goal from the scorer’s tally without mutating input', () => {
+    const before = { 'Kael Vorn': entry({ goals: 1 }) };
+    // The goal was downgraded to a shot (isGoal:false) by a curse.
+    const mutated: SimulatedEvent[] = [
+      { minute: 30, subminute: 0, type: 'shot',
+        payload: { player: 'Kael Vorn', team: 'HOME', isGoal: false, interferenceApplied: 'curse' } },
+    ];
+    const after = reconcileStatsAfterInterference(before, mutated);
+    expect(after['Kael Vorn']?.goals).toBe(0);
+    expect(before['Kael Vorn']?.goals).toBe(1); // input untouched
+  });
+
+  it('keeps an untouched goal on the scorer’s tally', () => {
+    const before = { 'Kael Vorn': entry({ goals: 1 }) };
+    const mutated: SimulatedEvent[] = [
+      { minute: 30, subminute: 0, type: 'goal',
+        payload: { player: 'Kael Vorn', team: 'HOME', isGoal: true } },
+    ];
+    expect(reconcileStatsAfterInterference(before, mutated)['Kael Vorn']?.goals).toBe(1);
+  });
+
+  it('sets redCard for a force_red_card stamp and preserves other counters', () => {
+    const before = { 'Rax Dol': entry({ tackles: 3, yellowCard: true }) };
+    const mutated: SimulatedEvent[] = [
+      { minute: 50, subminute: 0, type: 'tackle',
+        payload: { player: 'Rax Dol', team: 'AWAY', cardType: 'red', interferenceApplied: 'force_red_card' } },
+    ];
+    const after = reconcileStatsAfterInterference(before, mutated);
+    expect(after['Rax Dol']?.redCard).toBe(true);
+    expect(after['Rax Dol']?.tackles).toBe(3);
+    expect(after['Rax Dol']?.yellowCard).toBe(true);
+    expect(after['Rax Dol']?.goals).toBe(0);
+  });
+
+  it('only adjusts the targeted player, leaving the rest of the stat map intact', () => {
+    const before = {
+      'Kael Vorn': entry({ goals: 2 }),               // one of two goals annulled
+      'Aiya Tek':  entry({ goals: 1, assists: 2 }),   // untouched
+    };
+    const mutated: SimulatedEvent[] = [
+      { minute: 20, subminute: 0, type: 'goal',
+        payload: { player: 'Kael Vorn', team: 'HOME', isGoal: true } },          // survives
+      { minute: 40, subminute: 0, type: 'shot',
+        payload: { player: 'Kael Vorn', team: 'HOME', isGoal: false, interferenceApplied: 'annul_goal' } }, // annulled
+      { minute: 60, subminute: 0, type: 'goal',
+        payload: { player: 'Aiya Tek', team: 'AWAY', isGoal: true } },           // untouched
+    ];
+    const after = reconcileStatsAfterInterference(before, mutated);
+    expect(after['Kael Vorn']?.goals).toBe(1); // 2 → 1
+    expect(after['Aiya Tek']?.goals).toBe(1);  // unchanged
+    expect(after['Aiya Tek']?.assists).toBe(2); // preserved
   });
 });

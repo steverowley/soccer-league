@@ -343,7 +343,10 @@ export function applyAnnulGoals(
  *
  * Type / isGoal stay unchanged — a foul stays a foul, just with a red
  * card flag.  The engine's downstream stats accumulator reads
- * `cardType === 'red'` and updates redCard accordingly.
+ * `cardType === 'red'` and updates redCard accordingly.  `payload.commentary`
+ * is overwritten with a sending-off line so the live feed reads as a
+ * dismissal — without it a promoted spatial tackle would still narrate "wins
+ * the ball with a clean tackle" while carrying a red card.
  *
  * FIZZLE BEHAVIOUR
  *   If the target player never has a card-able event in the remaining
@@ -388,11 +391,73 @@ export function applyForceRedCards(
           cardType:              'red',
           interferenceApplied:   'force_red_card' satisfies InterferenceMark,
           interferenceMagnitude: intent.magnitude,
+          commentary:            `${player} is shown a straight red card.`,
         },
       };
       consumedIdx.add(i);
       break;     // single-shot per intent
     }
+  }
+  return out;
+}
+
+// ── Post-interference stat reconciliation (#530) ──────────────────────────
+
+/**
+ * The minimal per-player counters the reconciler reads and rewrites — a
+ * structural subset of the spatial adapter's `PlayerStatsEntry` and the
+ * dice-roller's stat slot.  Only the two fields the Architect's post-passes
+ * can change.
+ */
+export interface ReconcilableStats {
+  goals:   number;
+  redCard: boolean;
+}
+
+/**
+ * Reconcile per-player goal + red-card counters against a POST-interference
+ * event stream.  Mirror of the src/ twin — see it for the full rationale.
+ *
+ * The adapter accumulates player stats from the ORIGINAL stream, before the
+ * curse / annul / bless / force_red_card post-passes run.  This worker
+ * re-derives the scoreline from the mutated stream but leaves the per-player
+ * counters describing the pre-interference match, so an annulled goal stays on
+ * its scorer's tally and a forced red card never reaches match_player_stats /
+ * the idol leaderboard.  This recomputes each known player's `goals` from the
+ * mutated stream's `isGoal===true` events and ORs in `redCard` for any
+ * `force_red_card` stamp, keeping persisted stats consistent with the
+ * re-derived scoreline.
+ *
+ * Pure — returns a new map, never mutates input.  Keyed by player name; only
+ * players already present in `playerStats` are returned (interference can only
+ * touch a player who already produced a stat event).
+ */
+export function reconcileStatsAfterInterference<T extends ReconcilableStats>(
+  playerStats: Record<string, T>,
+  events:      SimulatedEvent[],
+): Record<string, T> {
+  const goalsByPlayer = new Map<string, number>();
+  const sentOff       = new Set<string>();
+
+  for (const ev of events) {
+    const pl = ev.payload as Record<string, unknown>;
+    const player = pl['player'];
+    if (typeof player !== 'string' || player.length === 0) continue;
+    if (pl['isGoal'] === true) {
+      goalsByPlayer.set(player, (goalsByPlayer.get(player) ?? 0) + 1);
+    }
+    if (pl['interferenceApplied'] === 'force_red_card') {
+      sentOff.add(player);
+    }
+  }
+
+  const out: Record<string, T> = {};
+  for (const [name, stats] of Object.entries(playerStats)) {
+    out[name] = {
+      ...stats,
+      goals:   goalsByPlayer.get(name) ?? 0,
+      redCard: stats.redCard || sentOff.has(name),
+    } as T;
   }
   return out;
 }
