@@ -74,12 +74,13 @@ import { AuthProvider }     from './features/auth';
 // Removed in #372:
 //   SeasonEnactmentListener   — used to react to `season.ended` and run
 //                                enactSeasonFocuses in every open browser
-//                                tab. The per-browser race that produced
-//                                (player stat mutations are NOT idempotent
-//                                even though focus_enacted INSERTs are) is
-//                                gone. Enactment now runs only via the
-//                                admin-triggered triggerSeasonEnactment +
-//                                triggerElectionNight paths.
+//                                tab, a per-browser race (player stat mutations
+//                                are NOT idempotent even though focus_enacted
+//                                INSERTs are). Enactment now runs server-side
+//                                via the scheduled `enact-due-seasons` GitHub
+//                                Action (#529), with the admin-triggered
+//                                triggerSeasonEnactment / triggerElectionNight
+//                                paths kept for manual/recovery use.
 import { WagerSettlementListener }  from './features/betting';
 import { CupRoundAdvancerListener } from './features/match';
 import { RefereeNarrativeListener } from './features/entities';

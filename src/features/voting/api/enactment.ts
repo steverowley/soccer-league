@@ -416,6 +416,34 @@ async function enactOneTeamFocus(
   focusLabel: string,
   players: Awaited<ReturnType<typeof fetchTeamPlayers>>,
 ): Promise<boolean> {
+  // ── Idempotency guard (#529) ──────────────────────────────────────────────
+  // The mutations below are NOT individually idempotent — a re-run would
+  // double-bump stats, re-insert a signed player, and double-credit finances.
+  // The `focus_enacted` row (UNIQUE on team_id, season_id, tier) is the durable
+  // "already done" marker, so check it BEFORE mutating: if this tier was enacted
+  // on a prior run (a worker/cron retry, a double admin click), return without
+  // touching the roster again.  The post-mutation upsert below writes that
+  // marker on the first run.
+  const { data: alreadyEnacted, error: guardErr } = await db
+    .from('focus_enacted')
+    .select('id')
+    .eq('season_id', seasonId)
+    .eq('team_id', teamId)
+    .eq('tier', tier)
+    .maybeSingle();
+
+  if (guardErr) {
+    // Fail safe: if we can't confirm the prior state, do NOT mutate — a false
+    // "not enacted" here would double-apply.  Skip and let the next run retry
+    // once the read recovers.
+    console.warn(`[enactOneTeamFocus] focus_enacted precheck failed for ${teamId}/${tier}:`, guardErr.message);
+    return false;
+  }
+  if (alreadyEnacted) {
+    // Already enacted on a prior run — no-op so mutations stay applied once.
+    return true;
+  }
+
   // Deterministic RNG seeded per (season, team, focus) triple.
   const rng  = seededRng(`${seasonId}:${teamId}:${focusKey}`);
   const spec = enactFocus(focusKey, teamId, seasonId, players, rng);
@@ -484,10 +512,12 @@ export interface SeasonEnactmentResult {
  * winners from the vote tally, resolves mutations, applies them, and writes
  * `focus_enacted` audit rows with Architect narrative entries.
  *
- * Idempotent: the UNIQUE constraint on `focus_enacted` means re-running this
- * for the same season_id will not create duplicate rows or apply mutations
- * twice (the mutations themselves are not idempotent, but the outer `upsert`
- * call on `focus_enacted` prevents double-runs in normal operation).
+ * Idempotent (#529): each `enactOneTeamFocus` checks for an existing
+ * `focus_enacted` row for its (team, season, tier) BEFORE applying any
+ * mutation, so re-running this for the same season — a cron retry, an
+ * overlapping admin click — neither duplicates `focus_enacted` rows nor
+ * re-applies the (individually non-idempotent) roster mutations.  Safe to
+ * call repeatedly; the second run is a no-op.
  *
  * @param db        Injected Supabase client.
  * @param seasonId  Season UUID whose voting results should be enacted.

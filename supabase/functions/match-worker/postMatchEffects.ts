@@ -262,9 +262,14 @@ export async function maybeTransitionSeasonForMatch(
   }
 
   // Atomic CAS: only flip if still 'active'.
+  // Stamp election_opens_at alongside ended_at so the server-side enactment
+  // scheduler (#529, scripts/enact-due-seasons.ts) has a reliable voting-window
+  // anchor — the admin path stamps it via admin_set_season_status, but this
+  // worker transition is the production path and previously left it null.
+  const openedAt = new Date().toISOString();
   const { data: updated, error } = await db
     .from('seasons')
-    .update({ status: 'voting', ended_at: new Date().toISOString() })
+    .update({ status: 'voting', ended_at: openedAt, election_opens_at: openedAt })
     .eq('id', competition.season_id)
     .eq('status', 'active')
     .select('id');
