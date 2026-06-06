@@ -51,7 +51,7 @@ import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 // logic/resolvers/{shootOrPass,cardSeverity}}.
 import { prepareCorpusForMatch, runDecision } from './agentReflex.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
-import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput } from './spatial/spatialEventAdapter.ts';
+import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
 import type { PositionFrame } from './spatial/types.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
@@ -797,6 +797,22 @@ async function processMatch(match: any): Promise<boolean> {
       }
     } catch (err) {
       console.warn('[match-worker] generateInterferences threw (non-fatal):', err);
+    }
+
+    // ── Trim the spatial event flood (#519) ────────────────────────────────
+    // The spatial engine emits ~8,500 per-tick events/match (thousands of
+    // tackles/interceptions/passes).  Persist + show only the notable beats
+    // plus anything the Architect just touched.  Runs AFTER interference so
+    // force_red_card still found its tackle to promote, and so cursed/annulled
+    // goals (now interferenceApplied 'shot' events) survive the trim.  Stats
+    // were accumulated over the full stream in adaptSpatialResult and are
+    // unaffected.  Spatial-only; the legacy path already emits ~40-50 events.
+    if (USE_SPATIAL_ENGINE) {
+      const beforeCount = result.events.length;
+      result.events = filterNotableEvents(result.events);
+      if (beforeCount !== result.events.length) {
+        console.log(`[match-worker] Significance filter: ${beforeCount} → ${result.events.length} events`);
+      }
     }
 
     // ── Persist events (batch-insert) ──────────────────────────────────────

@@ -16,7 +16,9 @@ import {
   buildPlayerIndex,
   deriveSimStats,
   toSpatialTeamInput,
+  filterNotableEvents,
   type PlayerIndex,
+  type AdaptedEvent,
 } from './spatialEventAdapter';
 import type { SpatialMatchResult, SimEvent, PositionFrame } from './types';
 
@@ -148,6 +150,45 @@ describe('adaptSpatialResult — event shape', () => {
   it('preserves finalScore', () => {
     const adapted = adaptSpatialResult(baseResult([], [2, 1]), new Map());
     expect(adapted.finalScore).toEqual([2, 1]);
+  });
+});
+
+describe('filterNotableEvents (#519)', () => {
+  const aev = (type: string, payload: Record<string, unknown> = {}): AdaptedEvent =>
+    ({ minute: 5, subminute: 0, type, payload });
+
+  it('drops the per-tick flood and keeps only the notable beats', () => {
+    const events: AdaptedEvent[] = [
+      aev('kickoff'), aev('goal'), aev('save'), aev('out_corner'),
+      aev('tackle'), aev('interception'), aev('pass'), aev('out_throw'), aev('out_goalkick'),
+    ];
+    const out = filterNotableEvents(events);
+    expect(out.map((e) => e.type).sort()).toEqual(['goal', 'kickoff', 'out_corner', 'save']);
+  });
+
+  it('always keeps worker-injected mvp + architect_interference events', () => {
+    const out = filterNotableEvents([aev('mvp'), aev('architect_interference'), aev('tackle')]);
+    expect(out.map((e) => e.type).sort()).toEqual(['architect_interference', 'mvp']);
+  });
+
+  it('keeps any Architect-touched event even on a dropped type', () => {
+    // A force_red_card-promoted tackle and a curse-downgraded goal (now a 'shot')
+    // both carry interferenceApplied and must survive the trim, while a plain
+    // tackle is dropped.
+    const out = filterNotableEvents([
+      aev('tackle', { interferenceApplied: 'force_red_card', cardType: 'red' }),
+      aev('shot',   { interferenceApplied: 'curse', isGoal: false }),
+      aev('tackle'),
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out.every((e) => e.payload['interferenceApplied'] != null)).toBe(true);
+  });
+
+  it('does not mutate the input array', () => {
+    const events = [aev('tackle'), aev('goal')];
+    const out = filterNotableEvents(events);
+    expect(events).toHaveLength(2); // input untouched
+    expect(out).toHaveLength(1);
   });
 });
 
