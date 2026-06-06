@@ -221,14 +221,19 @@ const ALWAYS_KEEP_EVENT_TYPES: ReadonlySet<string> = new Set([
  * `adaptSpatialResult`: the resolvers (curse / annul / bless / force_red_card)
  * scan the FULL stream — `force_red_card` in particular promotes a `tackle`
  * event to a red card — so filtering tackles out before interference would
- * re-break that mechanic.  Running it here keeps the notable beats, the
- * worker-injected MVP + architect_interference lines, and ANY event the
- * Architect mechanically touched (`payload.interferenceApplied` set) — e.g. a
- * cursed/annulled goal downgraded to a 'shot', or a tackle promoted to a red
- * card — so the Architect's hand stays visible even on a dropped event type.
+ * re-break that mechanic.  Running it here keeps:
+ *   - the notable beats (NOTABLE_EVENT_TYPES),
+ *   - the worker-injected MVP + architect_interference lines, and
+ *   - ANY event the Architect mechanically touched (`payload.interferenceApplied`
+ *     set) — e.g. a cursed/annulled goal downgraded to a 'shot', or a tackle
+ *     promoted to a red card — so the Architect's hand is always visible even
+ *     on an otherwise-dropped event type.
  *
  * Pure — returns a new array, never mutates input.  Stats are unaffected
- * (accumulated over the full stream in `adaptSpatialResult`).
+ * (they were accumulated over the full stream in `adaptSpatialResult`).
+ *
+ * @param events  The adapted (and possibly interference-mutated) event stream.
+ * @returns       The subset worth persisting / displaying.
  */
 export function filterNotableEvents(events: AdaptedEvent[]): AdaptedEvent[] {
   return events.filter((ev) =>
