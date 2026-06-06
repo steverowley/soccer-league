@@ -88,12 +88,13 @@ export async function fastForwardScheduledMatches(
 /**
  * Force-fire `enactSeasonFocuses` for the given season.
  *
- * The worker runs this automatically when a season's league phase finishes
- * (Package 13).  This admin-fired path is for two cases:
- *   1. Dev / test setups where the worker hasn't simulated all matches yet.
+ * Automatic enactment runs server-side once the voting window closes, via the
+ * scheduled `enact-due-seasons` GitHub Action (#529, scripts/enact-due-seasons.ts).
+ * This admin-fired path is for two cases:
+ *   1. Dev / test setups where you want to enact immediately, before the
+ *      scheduled sweep next runs.
  *   2. Recovery from a transient failure that left a season stuck in
- *      `voting` after the worker's automatic transition succeeded but the
- *      enactment call itself errored.
+ *      `voting`.  Safe to click repeatedly — enactment is idempotent.
  *
  * The function dynamically imports the voting feature's enactment API to
  * avoid a static cross-feature dependency at the barrel level — the admin
