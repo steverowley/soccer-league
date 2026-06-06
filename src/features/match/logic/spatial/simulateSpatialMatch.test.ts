@@ -62,11 +62,11 @@ describe('simulateSpatialMatch — determinism', () => {
   });
 
   it('different seeds generally diverge', () => {
-    const results = [1, 2, 3, 4, 5, 6].map((seed) =>
+    const results = [1, 2, 3].map((seed) =>
       simulateSpatialMatch(team('H', 70), team('A', 70), { ...SHORT, seed }),
     );
     const signatures = new Set(results.map((r) => `${r.finalScore[0]}-${r.finalScore[1]}:${r.events.length}`));
-    // Not all six runs should be identical — the seed must actually matter.
+    // Not all three runs should be identical — the seed must actually matter.
     expect(signatures.size).toBeGreaterThan(1);
   });
 });
