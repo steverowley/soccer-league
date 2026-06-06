@@ -30,7 +30,7 @@
 // goalkeeper_swap follow in later slices once the wiring is proven
 // on this pair.
 
-import type { SimulatedEvent } from './simulateFullMatch';
+import type { SimulatedEvent } from './simEvent';
 
 // ── Inputs ────────────────────────────────────────────────────────────────
 
