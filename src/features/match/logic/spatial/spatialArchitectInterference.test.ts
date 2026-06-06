@@ -1,13 +1,14 @@
 // ── spatial/spatialArchitectInterference.test.ts ─────────────────────────────
-// Acceptance test for #530: prove the Architect's mechanical interference
-// actually bites against the LIVE spatial engine (not just the legacy
-// dice-roller fixtures).  Drives a real seeded spatial match, adapts it to the
-// match_events shape, casts a curse_player decree at the first scorer, then
-// replays the worker's post-pass: resolve curse → re-derive scoreline →
-// reconcile stats.  Asserts the cursed player's goal leaves BOTH the scoreline
-// and match_player_stats — the end-to-end guarantee the worker relies on.
+// Acceptance tests for #530: prove the Architect's mechanical interference
+// bites against the LIVE spatial engine (not just hand-authored fixtures).
+// We drive ONE real seeded spatial match where both sides score and a tackle
+// occurs, then replay the worker's post-pass against it:
+//   • curse_player  → the scorer's goal leaves both the re-derived scoreline
+//                     AND match_player_stats (leaving the other side intact).
+//   • force_red_card → a real spatial tackle is promoted to a red card in the
+//                     feed (commentary) and the stats (redCard) — criterion (b).
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   simulateSpatialMatch,
   type SpatialTeamInput,
@@ -16,9 +17,9 @@ import {
 import type { SimPlayerStats, Role } from './types';
 import { adaptSpatialResult, type PlayerIndex, type AdaptedEvent } from './spatialEventAdapter';
 import {
+  applyForceRedCards,
   resolveInterferenceStream,
   reconcileStatsAfterInterference,
-  type InterferenceContext,
 } from '../interferenceResolver';
 
 // ── Fixtures (mirror simulateSpatialMatch.test.ts) ──────────────────────────
@@ -61,54 +62,73 @@ function deriveScore(events: AdaptedEvent[]): [number, number] {
   return [home, away];
 }
 
+const firstAttributedGoal = (a: { events: AdaptedEvent[] }, t: 'HOME' | 'AWAY') =>
+  a.events.find((e) => e.type === 'goal' && e.payload['team'] === t && typeof e.payload['player'] === 'string');
+
 describe('spatial engine × Architect interference (#530)', () => {
-  it('a curse_player decree annuls that scorer’s goal — scoreline and stats both drop', () => {
-    const home = team('H', 80);
-    const away = team('A', 55); // lopsided so an attributed goal is effectively certain
-    const index = indexOf(home, away);
+  // Closeish ratings so BOTH sides score — makes the "other side untouched"
+  // assertion non-vacuous and guarantees an away co-scorer to preserve.
+  const home = team('H', 76);
+  const away = team('A', 72);
+  const index = indexOf(home, away);
 
-    // Find a seed whose match yields at least one attributed goal.
-    let adapted: ReturnType<typeof adaptSpatialResult> | null = null;
-    let scorer = '';
-    let scorerTeam = '';
-    for (const seed of [10, 20, 30, 40, 50]) {
+  let adapted: ReturnType<typeof adaptSpatialResult>;
+
+  beforeAll(() => {
+    for (let seed = 1; seed <= 30; seed++) {
       const a = adaptSpatialResult(simulateSpatialMatch(home, away, { ...FULL, seed }), index);
-      const goal = a.events.find((e) => e.type === 'goal' && typeof e.payload['player'] === 'string');
-      if (goal) {
-        adapted = a;
-        scorer = goal.payload['player'] as string;
-        scorerTeam = goal.payload['team'] as string;
-        break;
-      }
+      const [h, aw] = deriveScore(a.events);
+      const hasTackle = a.events.some((e) => e.type === 'tackle' && typeof e.payload['player'] === 'string');
+      if (h > 0 && aw > 0 && hasTackle) { adapted = a; return; }
     }
+    throw new Error('no seed produced a both-sides-scoring spatial match with a tackle');
+  }, 30000);
 
-    // Precondition: the spatial engine attributed a goal (the #522/#533 fix).
-    expect(adapted).not.toBeNull();
-    const a = adapted!;
-    const sideIdx = scorerTeam === 'HOME' ? 0 : 1;
-    const otherIdx = sideIdx === 0 ? 1 : 0;
+  it('curse_player annuls the scorer’s goal in scoreline AND stats, leaving the other side intact', () => {
+    const before = deriveScore(adapted.events);
 
-    const scoreBefore = deriveScore(a.events);
-    const scorerGoalsBefore = a.playerStats[scorer]?.goals ?? 0;
-    expect(scorerGoalsBefore).toBeGreaterThan(0);
+    const homeGoal = firstAttributedGoal(adapted, 'HOME')!;
+    const scorer = homeGoal.payload['player'] as string;
+    const scorerGoals = adapted.playerStats[scorer]?.goals ?? 0;
+    expect(scorerGoals).toBeGreaterThan(0);
 
-    // Cast an inescapable curse (magnitude 10) and force every roll to fire.
-    const ctx: InterferenceContext = {
-      curses: [{ playerName: scorer, magnitude: 10, startMin: 0 }],
-      blesses: [],
-    };
-    const mutated = resolveInterferenceStream(a.events, ctx, () => 0);
-
-    // The curse actually fired.
+    // Inescapable curse: magnitude 10, every roll fires.
+    const mutated = resolveInterferenceStream(
+      adapted.events,
+      { curses: [{ playerName: scorer, magnitude: 10, startMin: 0 }], blesses: [] },
+      () => 0,
+    );
     expect(mutated.some((e) => e.payload['interferenceApplied'] === 'curse')).toBe(true);
 
-    // Scoreline: the cursed side loses exactly the scorer's goals; the other side is untouched.
-    const scoreAfter = deriveScore(mutated);
-    expect(scoreAfter[sideIdx]).toBe(scoreBefore[sideIdx] - scorerGoalsBefore);
-    expect(scoreAfter[otherIdx]).toBe(scoreBefore[otherIdx]);
+    const after = deriveScore(mutated);
+    expect(after[0]).toBe(before[0] - scorerGoals); // home loses exactly the cursed scorer's goals
+    expect(after[1]).toBe(before[1]);               // away untouched...
+    expect(after[1]).toBeGreaterThan(0);            // ...and this is a real (non-zero) invariant
 
-    // Stats: the scorer's goal tally is reconciled to zero, matching the scoreline.
-    const reconciled = reconcileStatsAfterInterference(a.playerStats, mutated);
+    const reconciled = reconcileStatsAfterInterference(adapted.playerStats, mutated);
     expect(reconciled[scorer]?.goals).toBe(0);
-  }, 30000);
+
+    // A scorer on the untouched side keeps their goal (only the target is annulled).
+    const awayScorer = firstAttributedGoal(adapted, 'AWAY')!.payload['player'] as string;
+    expect(reconciled[awayScorer]?.goals).toBe(adapted.playerStats[awayScorer]?.goals);
+  });
+
+  it('force_red_card promotes a real spatial tackle to a red card in feed + stats (criterion b)', () => {
+    const tackle = adapted.events.find((e) => e.type === 'tackle' && typeof e.payload['player'] === 'string')!;
+    const tackler = tackle.payload['player'] as string;
+    expect(adapted.playerStats[tackler]?.redCard).toBe(false); // not sent off pre-interference
+
+    const mutated = applyForceRedCards(
+      adapted.events,
+      [{ playerName: tackler, minute: 0, magnitude: 10 }],
+      () => 0,
+    );
+
+    const promoted = mutated.find((e) => e.payload['interferenceApplied'] === 'force_red_card');
+    expect(promoted?.payload['cardType']).toBe('red');
+    expect(promoted?.payload['commentary']).toBe(`${tackler} is shown a straight red card.`);
+
+    const reconciled = reconcileStatsAfterInterference(adapted.playerStats, mutated);
+    expect(reconciled[tackler]?.redCard).toBe(true);
+  });
 });

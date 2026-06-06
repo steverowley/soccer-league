@@ -466,6 +466,16 @@ describe('reconcileStatsAfterInterference', () => {
     expect(reconcileStatsAfterInterference(before, mutated)['Kael Vorn']?.goals).toBe(1);
   });
 
+  it('adds a blessed shot-turned-goal to a player who had none', () => {
+    const before = { 'Aiya Tek': entry({ goals: 0, shots: 1 }) };
+    // bless upgraded the miss to a goal (type→goal, isGoal:true).
+    const mutated: SimulatedEvent[] = [
+      { minute: 30, subminute: 0, type: 'goal',
+        payload: { player: 'Aiya Tek', team: 'AWAY', isGoal: true, interferenceApplied: 'bless' } },
+    ];
+    expect(reconcileStatsAfterInterference(before, mutated)['Aiya Tek']?.goals).toBe(1);
+  });
+
   it('sets redCard for a force_red_card stamp and preserves other counters', () => {
     const before = { 'Rax Dol': entry({ tackles: 3, yellowCard: true }) };
     const mutated: SimulatedEvent[] = [
