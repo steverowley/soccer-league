@@ -108,10 +108,22 @@ export interface SettlementSummary {
 }
 
 /**
- * Resolve every `status='open'` wager on this match, mark it won/lost, and
- * credit winning users' profiles in a read-modify-write loop.  Returns a
- * count so the worker can log it.  No-op (returns {0,0}) when there are no
- * open wagers — the common case during early-season cron ticks.
+ * Resolve every `status='open'` wager on this match via the atomic
+ * `settle_wager` RPC (migration 0053): one transaction per wager that locks
+ * the wager row, flips its status + payout, and credits the winner's profile.
+ * Returns a count so the worker can log it.  No-op (returns {0,0}) when there
+ * are no open wagers — the common case during early-season cron ticks.
+ *
+ * IDEMPOTENT: the RPC re-checks `status='open'` under the row lock and
+ * returns `false` for an already-settled wager, so re-running a completed
+ * match (a worker retry, or a match an admin force-completed) credits nobody
+ * twice.  This replaces the old non-atomic update-then-read-modify-write on
+ * `profiles.credits`, where a crash between the wager flip and the credit
+ * write left a bet "won but unpaid" with no reconciliation path.
+ *
+ * Mirrors the browser-side `settleMatchWagers` in src/features/betting/api/
+ * wagers.ts (which the admin-completion listener uses) — both now route
+ * through the same RPC, so there is no longer a divergent settlement copy.
  *
  * @param db          Supabase service-role client.
  * @param matchId     Match UUID whose wagers should be settled.
@@ -149,36 +161,22 @@ export async function settleMatchWagers(
       Number(wager.odds_snapshot),
     );
 
-    // payout=0 is stored as null per the legacy convention (the column is
-    // nullable and downstream reports use NULL to distinguish "lost" from
-    // "settled-but-zero").
-    const { error: updateErr } = await db
-      .from('wagers')
-      .update({ status, payout: payout || null })
-      .eq('id', wager.id);
+    // Atomic settle: flip status + credit the winner in one transaction.
+    // resolveWager already floors wins and returns 0 on a loss; the RPC
+    // stores payout=0 as NULL (legacy "lost" convention) internally.
+    const { data: applied, error: rpcErr } = await db.rpc('settle_wager', {
+      p_wager_id: wager.id,
+      p_status: status,
+      p_payout: payout,
+    });
 
-    if (updateErr) {
-      console.warn(`[settleMatchWagers] update wager ${wager.id} failed: ${updateErr.message}`);
+    if (rpcErr) {
+      console.warn(`[settleMatchWagers] settle_wager ${wager.id} failed: ${rpcErr.message}`);
       continue;
     }
-
-    if (status === 'won' && payout > 0) {
-      // Credit the winner's profile balance.  Read-modify-write — safe at
-      // current traffic levels because settlement is single-writer
-      // (service-role worker, no concurrent settlement of the same wager).
-      const { data: profile } = await db
-        .from('profiles')
-        .select('credits')
-        .eq('id', wager.user_id)
-        .single();
-
-      if (profile) {
-        await db
-          .from('profiles')
-          .update({ credits: (profile.credits ?? 0) + payout })
-          .eq('id', wager.user_id);
-      }
-    }
+    // applied===false → wager was already settled (idempotent re-run); don't
+    // count it and don't double-add the payout.
+    if (applied === false) continue;
 
     settled += 1;
     totalPayout += payout;
