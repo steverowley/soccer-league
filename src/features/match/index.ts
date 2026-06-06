@@ -77,12 +77,11 @@ export type {
   AdvanceCupRoundResult,
 } from './api/cupSeeder';
 
-// ── Full-match simulation (pure orchestrator, Package 10) ─────────────────
-export { simulateFullMatch } from './logic/simulateFullMatch';
-export type {
-  SimulatedMatchResult,
-  SimulatedEvent,
-} from './logic/simulateFullMatch';
+// ── Match event type (shared, engine-independent) ─────────────────────────
+// The persisted match_events shape, consumed by the interference resolver and
+// the spatial adapter.  Extracted here after the legacy simulateFullMatch /
+// gameEngine.js were deleted (#389).
+export type { SimulatedEvent } from './logic/simEvent';
 
 // ── Pitch view primitives (issue isl-doe) ─────────────────────────────────
 // Pure-logic foundation for the 2D top-down pitch view.  Formation slot

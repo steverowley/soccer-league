@@ -30,7 +30,7 @@
 // event stream and returns a new (or same) stream with the rewrites applied.
 // gameEngine.js is never touched, so the 200-seeded smoke test stays stable.
 
-import type { SimulatedEvent } from './simulateFullMatch.ts';
+import type { SimulatedEvent } from './simEvent.ts';
 
 // ── Inputs ────────────────────────────────────────────────────────────────
 

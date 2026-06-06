@@ -17,7 +17,7 @@ import {
   type InterferenceContext,
   type InterferenceEffect,
 } from './interferenceResolver';
-import type { SimulatedEvent } from './simulateFullMatch';
+import type { SimulatedEvent } from './simEvent';
 
 /**
  * Factory for a baseline goal event by `player` at `minute`. Keeps

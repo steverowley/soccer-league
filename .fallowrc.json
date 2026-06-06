@@ -21,8 +21,7 @@
   },
 
   "ignoreExports": [
-    { "file": "src/features/*/index.ts", "exports": ["*"] },
-    { "file": "src/gameEngine.js",       "exports": ["*"] }
+    { "file": "src/features/*/index.ts", "exports": ["*"] }
   ],
 
   "health": {
