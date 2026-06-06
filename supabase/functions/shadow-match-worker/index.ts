@@ -188,15 +188,11 @@ interface ShadowRow {
  *
  * @param db         Supabase client.
  * @param matchId    Match UUID.
- * @param homeTeamId Home team slug — needed for real-engine fetch.
- * @param awayTeamId Away team slug — needed for real-engine fetch.
  * @returns          Array of ShadowRow inserts.
  */
 async function generateShadows(
   db: any,
   matchId: string,
-  homeTeamId: string,
-  awayTeamId: string,
 ): Promise<ShadowRow[]> {
   // ── Outcome probabilities from match_odds, if present. ──────────────────
   const oddsQ = await db
@@ -268,9 +264,7 @@ async function handler(): Promise<Response> {
 
   const matchesQ = await db
     .from('matches')
-    // home_team_id / away_team_id are required by the real-engine path so
-    // we can fetch + normalise both squads.  Poisson-only mode ignores them.
-    .select('id, scheduled_at, home_team_id, away_team_id')
+    .select('id, scheduled_at')
     .eq('status', 'scheduled')
     .gte('scheduled_at', nowIso)
     .lte('scheduled_at', horizonIso)
@@ -297,12 +291,7 @@ async function handler(): Promise<Response> {
       .eq('match_id', match.id);
     if ((existingQ.count ?? 0) >= SHADOWS_PER_MATCH) continue;
 
-    const rows = await generateShadows(
-      db,
-      match.id,
-      match.home_team_id,
-      match.away_team_id,
-    );
+    const rows = await generateShadows(db, match.id);
     if (rows.length === 0) continue;
 
     const { error: upsertErr } = await db
