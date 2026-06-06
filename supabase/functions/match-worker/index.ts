@@ -36,6 +36,7 @@ import { generateInterferences } from './architectInterference.ts';
 import {
   applyAnnulGoals,
   applyForceRedCards,
+  reconcileStatsAfterInterference,
   resolveInterferenceStream,
   type AnnulGoalIntent,
   type ForceRedCardIntent,
@@ -553,12 +554,11 @@ async function processMatch(match: any): Promise<boolean> {
       // join is keyed on downstream).
       const playerIdx = buildPlayerIndex(homeData, awayData);
 
-      const adapted = adaptSpatialResult(
-        spatialResult,
-        playerIdx,
-        homeData.short_name ?? homeData.name,
-        awayData.short_name ?? awayData.name,
-      );
+      // adaptSpatialResult derives team display names from the playerIndex
+      // entries (buildPlayerIndex stamps each player's short team name), so it
+      // takes only (result, playerIndex) — the home/away short names this call
+      // used to pass were silently ignored.
+      const adapted = adaptSpatialResult(spatialResult, playerIdx);
       // Cast is safe: AdaptedSpatialResult has the same runtime shape as
       // SimulatedMatchResult — events, finalScore, mvp, playerStats — and
       // all downstream consumers treat these fields as `any`.
@@ -788,6 +788,12 @@ async function processMatch(match: any): Promise<boolean> {
         );
         result.events     = mutated;
         result.finalScore = rederived;
+        // Reconcile per-player counters with the mutated stream so an annulled
+        // goal leaves its scorer's tally and a forced red card reaches
+        // match_player_stats / the idol leaderboard — otherwise statRows below
+        // would persist the pre-interference counts, diverging from the
+        // re-derived scoreline.
+        result.playerStats = reconcileStatsAfterInterference(result.playerStats, mutated);
       }
     } catch (err) {
       console.warn('[match-worker] generateInterferences threw (non-fatal):', err);
