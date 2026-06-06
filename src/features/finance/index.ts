@@ -46,10 +46,3 @@ export {
   calculateTicketRevenue,
   DEFAULT_TICKET_PRICE,
 } from './logic/ticketPricing';
-
-// ── API (Supabase queries) ─────────────────────────────────────────────────
-export {
-  countPresentFans,
-  recordMatchAttendance,
-  type MatchAttendanceRow,
-} from './api/attendance';
