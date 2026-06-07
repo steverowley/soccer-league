@@ -4,8 +4,8 @@
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# Skip validation for main, dev, and dependency bot branches
-if [[ "$BRANCH" =~ ^(main|dev|dependabot/)$ ]]; then
+# Skip validation for main and dependency bot branches
+if [[ "$BRANCH" =~ ^(main|dependabot/)$ ]]; then
   exit 0
 fi
 
