@@ -58,10 +58,6 @@ export {
   batchUpsertLore,
 } from './api/lore';
 
-export { getRecentInterventions } from './api/interventions';
-
-export type { LogInterventionResult } from './api/interventions';
-
 // ── Logic (pure TS) ────────────────────────────────────────────────────────
 export {
   emptyLore,
