@@ -64,7 +64,6 @@ import { AuthProvider }     from './features/auth';
 // SupabaseProvider (they call useSupabase()) but OUTSIDE the Router (so a
 // route transition mid-settlement / mid-enactment doesn't cancel them).
 //
-// WagerSettlementListener      — `match.completed` → settle open wagers
 // CupRoundAdvancerListener     — `match.completed` → fill bracket + insert next-round fixture
 // RefereeNarrativeListener     — `match.completed` → write the named-referee narrative
 // MemoryWriteListener          — `match.completed` / `season.ended` /
@@ -81,7 +80,12 @@ import { AuthProvider }     from './features/auth';
 //                                Action (#529), with the admin-triggered
 //                                triggerSeasonEnactment / triggerElectionNight
 //                                paths kept for manual/recovery use.
-import { WagerSettlementListener }  from './features/betting';
+//   WagerSettlementListener   — used to react to `match.completed` and call
+//                                settle_wager from every open browser tab. Wager
+//                                settlement now runs server-side in the
+//                                match-worker (service-role only — #557); the
+//                                listener and its `authenticated` settle_wager
+//                                grant were removed.
 import { CupRoundAdvancerListener } from './features/match';
 import { RefereeNarrativeListener } from './features/entities';
 import { MemoryWriteListener }      from './features/agents';
@@ -204,7 +208,6 @@ createRoot(document.getElementById('root')!).render(
       <SupabaseProvider client={supabaseClient}>
         {/* Listeners mounted before AuthProvider so they're alive for the
             entire session, including the moment auth state changes. */}
-        <WagerSettlementListener />
         <CupRoundAdvancerListener />
         {/* SeasonEnactmentListener removed in #372 — enactment now runs only
             via the admin-triggered path (no per-browser race). */}
