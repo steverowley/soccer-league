@@ -119,8 +119,7 @@ e.g. `feat/welcome-wizard`, `fix/spatial-goal-scorer-attribution`.
 ## Engineering principles (non-negotiable, apply to every PR)
 
 1. **TypeScript everywhere** with `strict: true`. The typed Supabase client is regenerated on every
-   migration via the Supabase MCP's `generate_typescript_types` into `src/types/database.ts`. (One
-   legacy `.js` file remains — `src/gameEngine.js` — and is slated for deletion; see "Match Simulation".)
+   migration via the Supabase MCP's `generate_typescript_types` into `src/types/database.ts`.
 2. **Feature-based folder layout**: `src/features/<feature>/{api,logic,ui}/` + `types.ts` + `index.ts`
    barrel. Cross-feature deep imports are forbidden — ESLint `no-restricted-imports` enforces it. Pages
    under `src/pages/` are thin route wrappers. Shared primitives in
@@ -289,8 +288,8 @@ simulate matches and tick the galaxy forward.
 - **Frontend** — React 18.3 + Vite 6.4, React Router 7, Tailwind 4.2, strict TypeScript 6. Routing is
   defined inline in `src/main.tsx` (`BrowserRouter` + `Routes`); every page is `React.lazy`-loaded
   under a single `Suspense` boundary with a per-route `ErrorBoundary` and a `*` → `NotFound` catch-all.
-- **Backend** — Supabase (PostgreSQL + row-level security). 73 migrations (`0000`–`0072`), 40 tables,
-  9 views, 13 RPC/functions. Generated types in `src/types/database.ts`.
+- **Backend** — Supabase (PostgreSQL + row-level security). 74 migrations (`0000`–`0073`), 40 tables,
+  9 views, 14 RPC/functions. Generated types in `src/types/database.ts`.
 - **AI** — Anthropic SDK. Two models in use: `claude-sonnet-4-6` for in-match Architect/interference and
   the daily drama tick; `claude-haiku-4-5-20251001` for the galaxy tick, corpus enrichment, and in-app
   commentary (`CLAUDE_MODEL` in `src/constants.ts`). Each edge function hardcodes its own model id, so
@@ -330,26 +329,17 @@ shape is the ideal, not a guarantee — real folders deviate:
 
 ## Match Simulation
 
-The live engine is the **spatial, agent-based physics engine**. The older `gameEngine.js` "dice-roller"
-survives only as an off-by-default fallback and is **slated for deletion**.
+The live engine is the **spatial, agent-based physics engine** — and as of #389 it is the *only* engine.
+The legacy `gameEngine.js` "dice-roller", the `USE_SPATIAL_ENGINE` env switch, and the PATH B fallback
+were all deleted; the worker now runs the spatial sim unconditionally.
 
-### Two engines, one switch
+### How a match runs
 All matches are simulated server-side by `supabase/functions/match-worker/index.ts`, invoked by a
 `pg_cron` job (`trigger-match-worker`, every minute). On each tick the worker claims due matches
-(optimistic lock), fetches both rosters, and dispatches on one env flag:
-
-```ts
-const USE_SPATIAL_ENGINE = Deno.env.get('USE_SPATIAL_ENGINE') === 'true';
-```
-
-- **PATH A — spatial engine** (`true`): the live path. `toSpatialTeamInput` → seed derived from the
-  match UUID → `simulateSpatialMatch` → `adaptSpatialResult`.
-- **PATH B — legacy dice-roller** (`false`/default): `simulateFullMatch(...)` wrapping `gameEngine.js`
-  probability rolls.
-
-Both return the same shape (`{ events, finalScore, mvp, playerStats }`), so downstream code is
-engine-agnostic. **`deploy-match-worker.yml` sets `USE_SPATIAL_ENGINE=true` on every production
-deploy**, so spatial is what runs in prod and the dice-roller is off.
+(optimistic lock), fetches both rosters, runs the spatial engine (`toSpatialTeamInput` → seed derived
+from the match UUID → `simulateSpatialMatch` → `adaptSpatialResult`), then trims the stream to the
+notable beats via `filterNotableEvents` before persisting. It returns `{ events, finalScore, mvp,
+playerStats }`; per-player stats accumulate over the full pre-filter stream, so they stay complete.
 
 ### The spatial engine
 It lives in two byte-identical copies — `src/features/match/logic/spatial/` (browser + tests) and
@@ -376,16 +366,10 @@ so a fixture always reproduces the same match — the stored frames, live viewer
 never disagree.
 
 ### Position frames & the 2D viewer
-On PATH A only, the engine samples a position frame every 2s and the worker persists them to
+The engine samples a position frame every 2s and the worker persists them to
 `match_positions` (migration `0061`), keyed by `(match_id, minute, second)` with a `jsonb` snapshot of
 player/ball coordinates (public read, service-role write). The browser reads these via
-`src/features/match/api/matchPositions.ts` for 2D playback. A legacy-engine match produces no rows.
-
-### Legacy `gameEngine.js`
-Two copies (`src/gameEngine.js` ~2,576 LOC and `supabase/functions/match-worker/gameEngine.js`
-~2,815 LOC). Its only dedicated test is `src/gameEngine.smoke.test.ts` (100 random matches via a seeded
-LCG). **Decision: delete it and its tests** in favour of the spatial engine — tracked as a dedicated
-M3 issue. Until then it remains the PATH B fallback.
+`src/features/match/api/matchPositions.ts` for 2D playback.
 
 ---
 
@@ -430,7 +414,7 @@ unless noted.
 
 ---
 
-## Database Schema (40 tables + 9 views + 13 RPC functions, migrations 0000–0072)
+## Database Schema (40 tables + 9 views + 14 RPC functions, migrations 0000–0073)
 
 Source of truth is the generated `src/types/database.ts` (regenerate after every migration).
 
@@ -454,11 +438,11 @@ Source of truth is the generated `src/types/database.ts` (regenerate after every
 **Views (9)**: `active_watchers_v`, `focus_tally`, `match_referee_v`, `player_idol_movers`,
 `player_idol_score`, `public_profiles`, `team_supporter_count_v`, `wager_leaderboard`, `wager_volume_v`
 
-**RPC functions (13)**: `admin_add_player`, `admin_complete_match`, `admin_fast_forward_matches`,
+**RPC functions (14)**: `admin_add_player`, `admin_complete_match`, `admin_fast_forward_matches`,
 `admin_inject_narrative`, `admin_reset_season`, `admin_set_season_status`, `assign_match_referee`,
-`berger_round_robin_fixtures`, `bump_login_streak`, `incinerate_player`, `place_wager`,
-`request_account_deletion`, `settle_wager` (note: `cast_focus_vote` was added in migration `0072` —
-regenerate types to surface it).
+`berger_round_robin_fixtures`, `bump_login_streak`, `cast_focus_vote`, `incinerate_player`,
+`place_wager`, `request_account_deletion`, `settle_wager` (note: `cast_focus_vote` ships in migration
+`0072`; regenerate types after it is applied to surface it in `database.ts`).
 
 ---
 
@@ -467,7 +451,7 @@ regenerate types to surface it).
 | Function | Purpose | Cron | Model | Writes match data? |
 |---|---|---|---|---|
 | `match-worker` | Claim due matches, run the 90-min spatial sim, persist events + stats + lineups, generate odds, seed cups | every minute | sonnet (in-match architect) | **yes** (service-role) |
-| `shadow-match-worker` | Cheap Monte-Carlo alternate-timeline outcomes per upcoming match | **not scheduled by any migration** (header notes intended hourly) | none | yes (`shadow_match_results`) |
+| `shadow-match-worker` | Cheap Poisson alternate-timeline outcomes per upcoming match (engine-independent since #389 dropped its legacy-engine path) | **not scheduled by any migration** (header notes intended hourly) | none | yes (`shadow_match_results`) |
 | `match-notify-worker` | Web-push "match starting" notifications; idempotent | every minute | none | no |
 | `architect-galaxy-tick` | Out-of-match Architect heartbeat → Galaxy Dispatch narratives | every 2h | haiku | no |
 | `drama-tick` | Daily drama narrative (transfer demand, retirement, decree, feud) | daily 07:00 | sonnet | no |
@@ -481,14 +465,17 @@ The four LLM-spending workers are gated by a shared secret bridging pg_cron and 
 
 ## Continuous Integration
 
-Three workflows under `.github/workflows/`:
+Four workflows under `.github/workflows/`:
 - **`deploy.yml`** — on push to `main`, PRs to `main`, and manual dispatch. Jobs: **`quality`** (`npm ci`
   → `typecheck` → `test`; lint runs last with `continue-on-error: true` and **does not gate**) →
   `build` → `deploy` (GitHub Pages, `main` only).
 - **`deploy-match-worker.yml`** — deploys the `match-worker` edge function on pushes to `main` touching
-  it; sets `USE_SPATIAL_ENGINE=true`; deploys with `--no-verify-jwt`.
+  it; deploys with `--no-verify-jwt`.
+- **`enact-due-seasons.yml`** — scheduled daily (06:00 UTC) + manual dispatch; runs end-of-season focus
+  enactment as a service-role Node job (added in #529/#544). Needs the `SUPABASE_URL` +
+  `SUPABASE_SERVICE_ROLE_KEY` repo secrets.
 - **`setup-branch-protection.yml`** — manual helper; **stale** (still references a nonexistent `dev`
-  branch).
+  branch; cleanup tracked in #549/#550).
 
 There is no CodeQL workflow file, though branch protection references `Analyze` checks (CodeQL is likely
 enabled via GitHub's repo-level default setup).
@@ -592,10 +579,10 @@ See `ROADMAP.md` for the milestone index, or filter directly, e.g.
 
 All core systems are wired and tested:
 - **Infrastructure** — strict TypeScript, 11-feature layout, event bus, generated typed client, GitHub
-  Pages deploy. **~1,320 Vitest tests** across 85 files (1 known flaky timeout in
-  `simulateSpatialMatch.test.ts`).
-- **Match simulation** — live spatial engine + 2D position viewer; legacy `gameEngine.js` fallback
-  pending deletion.
+  Pages deploy. **~1,325 Vitest tests** (the legacy `gameEngine.smoke.test.ts` was removed with the
+  engine in #389; the seed-divergence test was de-flaked in #541).
+- **Match simulation** — live spatial engine + 2D position viewer (the legacy `gameEngine.js` engine and
+  its PATH B fallback were deleted in #389).
 - **Cosmic Architect** — interference layers, persistent lore, Galaxy Dispatch (galaxy-tick + drama-tick).
 - **Auth & profiles**, **Betting** (odds + settlement), **Focus voting & enactment** (+ Election Night),
   **Training** (clicker), **Cup tournaments** (Celestial Cup + Solar Shield), **Entity system**
@@ -603,6 +590,6 @@ All core systems are wired and tested:
   **Admin dashboard** — all live.
 
 **Known drift / cleanup (tracked under M3):** the spatial engine is duplicated between `src/` and the
-Deno worker (a runtime constraint — ~17% of the codebase is this src↔worker mirror); `gameEngine.js`
-deletion; ~230 pre-existing ESLint errors (lint is informationally-gated until cleared); stale `dev`
-references in `setup-branch-protection.yml` and `scripts/validate-branch-name.sh`.
+Deno worker (a runtime constraint — ~17% of the codebase is this src↔worker mirror; a drift-guard test
+is added in #547); ~230 pre-existing ESLint errors (lint is informationally-gated until cleared); stale
+`dev` references in `setup-branch-protection.yml` and `scripts/validate-branch-name.sh` (#549/#550).

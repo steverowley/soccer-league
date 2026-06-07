@@ -16,10 +16,10 @@ Each milestone is a **label** on GitHub Issues (not a GitHub Milestone object). 
   Design primitives, first-match teaching layer, login streaks, social presence, accessibility, smarter
   Home, global toast / per-route ErrorBoundary.
 - **[M3 — Architectural Cleanup](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM3-architectural-cleanup)**
-  Delete the legacy `gameEngine.js` + its tests (the spatial engine is live); reduce the `src/` ↔ Deno
-  `match-worker/` code duplication; clear the ESLint backlog so lint can gate CI; remove dead code/exports;
-  remove stale `dev` references in `setup-branch-protection.yml` and `scripts/validate-branch-name.sh`;
-  regenerate types; perf + RLS index passes.
+  Reduce the `src/` ↔ Deno `match-worker/` code duplication (the legacy `gameEngine.js` engine was
+  already deleted in #389; a twin drift-guard test lands in #547); clear the ESLint backlog so lint can
+  gate CI; remove dead code/exports; remove stale `dev` references in `setup-branch-protection.yml` and
+  `scripts/validate-branch-name.sh`; regenerate types; perf + RLS index passes.
 - **[M4 — Depth & Community](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM4-depth-community)**
   Mid-season micro-votes, training-narrative wiring, personal narrative threads, Discord + feedback +
   `/roadmap`, share-to-grow OG images, rivalry threads, supporter tier, DR runbook, doc re-audits.
