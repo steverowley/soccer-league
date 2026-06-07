@@ -71,7 +71,6 @@ export {
   placeWager,
   getUserWagers,
   getUserWagerForMatch,
-  settleMatchWagers,
 } from './api/wagers';
 
 export {
@@ -95,15 +94,11 @@ export { writeWagerNarrativeForMatch } from './api/narrativeWriter';
 // the current design system after the 2026-05 nuke) and is consumed
 // directly by `src/pages/MatchDetail.tsx`; we don't re-export it from this
 // barrel because that page imports it via its concrete path.  BetHistory
-// and WagerVolumeStrip are still pending rebuilds.  The
-// WagerSettlementListener stays — it's a side-effect-only listener for
-// the (still-aspirational) in-browser match-completion path.
-
-// ── Side-effect listener ────────────────────────────────────────────────────
-// WagerSettlementListener registers a `match.completed` bus subscription and
-// renders null.  Mount it once inside <SupabaseProvider> at the app root so
-// it has DB client access for every settlement write.
-export { WagerSettlementListener } from './ui/WagerSettlementListener';
+// and WagerVolumeStrip are still pending rebuilds.
+//
+// Wager settlement runs server-side in the match-worker (service-role
+// `settle_wager`); the old in-browser WagerSettlementListener was removed with
+// migration 0074 / #557.
 
 // ── Wager volume — pure data layer only ────────────────────────────────────
 // WagerVolumeStrip (the visual bar) was removed in the 2026-05 nuke; the

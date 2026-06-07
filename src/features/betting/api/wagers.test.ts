@@ -1,9 +1,8 @@
 // ── betting/api/wagers.test.ts ───────────────────────────────────────────────
-// WHY: Integration-style coverage for the wager DB layer. The pure logic in
-// `logic/settlement.ts` is unit-tested separately; these tests verify that
-// `settleMatchWagers` correctly orchestrates the chain — read open wagers →
-// resolve → update wager row → credit winner — by inspecting the Supabase
-// call surface via an in-memory fake client.
+// WHY: Integration-style coverage for the wager DB read layer, verifying the
+// Supabase call surface via an in-memory fake client. (Settlement moved
+// server-side to the match-worker — `settle_wager` is service-role only, #557 —
+// so it is no longer exercised here.)
 //
 // MOCK STRATEGY
 //   We build a hand-rolled Supabase client double that records every chained
@@ -12,14 +11,11 @@
 //   surface coverage lives in the api modules' own integration suites.
 //
 // COVERAGE
-//   • settleMatchWagers — happy path: home win pays out the home backer.
-//   • settleMatchWagers — losing branch: away wager on a home win → status='lost'.
-//   • settleMatchWagers — no open wagers → returns 0, no DB writes.
 //   • getUserWagerForMatch — returns the most recent wager for the user/match
 //     pair; returns null when no wager exists.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { settleMatchWagers, getUserWagerForMatch } from './wagers';
+import { getUserWagerForMatch } from './wagers';
 import type { Wager } from '../types';
 import type { IslSupabaseClient } from '@shared/supabase/client';
 
@@ -125,41 +121,7 @@ function makeFakeDb(store: FakeStore): IslSupabaseClient {
     return builder;
   }
 
-  // ── rpc() shim ────────────────────────────────────────────────────────────
-  // Real placement + settlement now go through Postgres SECURITY DEFINER RPCs
-  // (migration 0053). The tests still exercise the orchestration layer in
-  // wagers.ts — so the fake mirrors the RPC's effects in-memory, exactly the
-  // same way the SQL function would mutate the wager row and bump credits.
-  // Only the two RPCs that wagers.ts calls are implemented.
-  async function rpc(name: string, args: Record<string, unknown>) {
-    if (name === 'settle_wager') {
-      const wagerId = args.p_wager_id as string;
-      const status  = args.p_status  as 'won' | 'lost' | 'void';
-      const payout  = (args.p_payout as number) || 0;
-
-      const wager = store.wagers.find((w) => w.id === wagerId);
-      if (!wager) return { data: null, error: { message: 'wager not found' } };
-      // Idempotency: already-settled wager returns false (matches RPC).
-      if (wager.status !== 'open') return { data: false, error: null };
-
-      wager.status = status;
-      wager.payout = payout > 0 ? payout : null;
-
-      if (status === 'won' && payout > 0) {
-        const profile = store.profiles.find((p) => p.id === wager.user_id);
-        if (profile) profile.credits += payout;
-      }
-      return { data: true, error: null };
-    }
-    if (name === 'place_wager') {
-      // place_wager isn't covered by this test file, but the shim returns a
-      // best-effort row for any future test that adds coverage.
-      return { data: null, error: { message: 'place_wager not stubbed in tests' } };
-    }
-    return { data: null, error: { message: `unknown rpc ${name}` } };
-  }
-
-  return { from, rpc } as unknown as IslSupabaseClient;
+  return { from } as unknown as IslSupabaseClient;
 }
 
 // ── Common fixtures ─────────────────────────────────────────────────────────
@@ -183,92 +145,6 @@ let store: FakeStore;
 
 beforeEach(() => {
   store = { wagers: [], profiles: [] };
-});
-
-// ── settleMatchWagers ──────────────────────────────────────────────────────
-
-describe('settleMatchWagers', () => {
-  it('credits the winner and marks the wager won', async () => {
-    // Setup: one open home-win wager from a user with 200 credits.
-    store.wagers.push(makeWager({
-      id: 'w1', user_id: 'u1', match_id: 'm1',
-      team_choice: 'home', stake: 50, odds_snapshot: 2.5,
-    }));
-    store.profiles.push({ id: 'u1', credits: 200 });
-
-    // Run: home wins 2–0.
-    const settled = await settleMatchWagers(makeFakeDb(store), 'm1', 2, 0);
-
-    // Verify: 1 wager settled, status flipped to 'won', payout = 50 × 2.5 = 125,
-    // user balance jumps from 200 → 325 (stake was already deducted at placement,
-    // so the full payout is added on settlement).
-    expect(settled).toBe(1);
-    const wager = store.wagers[0]!;
-    expect(wager.status).toBe('won');
-    expect(wager.payout).toBe(125);
-    expect(store.profiles[0]!.credits).toBe(200 + 125);
-  });
-
-  it('marks the wager lost without any credit change', async () => {
-    // Setup: an away-win wager — but home will win.
-    store.wagers.push(makeWager({
-      id: 'w1', user_id: 'u1', match_id: 'm1',
-      team_choice: 'away', stake: 75, odds_snapshot: 3.0,
-    }));
-    store.profiles.push({ id: 'u1', credits: 200 });
-
-    const settled = await settleMatchWagers(makeFakeDb(store), 'm1', 1, 0);
-
-    expect(settled).toBe(1);
-    const wager = store.wagers[0]!;
-    expect(wager.status).toBe('lost');
-    // Lost wagers store payout=null (we filter `payout || null` in the update).
-    expect(wager.payout).toBeNull();
-    // No credit change — stake was already deducted on placement.
-    expect(store.profiles[0]!.credits).toBe(200);
-  });
-
-  it('returns 0 with no DB writes when no open wagers exist', async () => {
-    // Setup: a previously-settled wager + no open ones.
-    store.wagers.push(makeWager({
-      id: 'w1', status: 'won', payout: 200,
-    }));
-    store.profiles.push({ id: 'u1', credits: 500 });
-
-    const settled = await settleMatchWagers(makeFakeDb(store), 'm1', 2, 0);
-
-    expect(settled).toBe(0);
-    // Nothing should have been touched — the historical row is preserved.
-    expect(store.wagers[0]!.status).toBe('won');
-    expect(store.wagers[0]!.payout).toBe(200);
-    expect(store.profiles[0]!.credits).toBe(500);
-  });
-
-  it('settles multiple wagers on the same match independently', async () => {
-    // Setup: three users, three different choices on the same match.
-    store.wagers.push(
-      makeWager({ id: 'w1', user_id: 'u1', team_choice: 'home', stake: 100, odds_snapshot: 2.0 }),
-      makeWager({ id: 'w2', user_id: 'u2', team_choice: 'draw', stake: 50,  odds_snapshot: 3.5 }),
-      makeWager({ id: 'w3', user_id: 'u3', team_choice: 'away', stake: 75,  odds_snapshot: 4.0 }),
-    );
-    store.profiles.push(
-      { id: 'u1', credits: 100 },
-      { id: 'u2', credits: 100 },
-      { id: 'u3', credits: 100 },
-    );
-
-    // Match outcome: home win → only u1 wins.
-    const settled = await settleMatchWagers(makeFakeDb(store), 'm1', 3, 1);
-
-    expect(settled).toBe(3);
-    expect(store.wagers.find((w) => w.id === 'w1')!.status).toBe('won');
-    expect(store.wagers.find((w) => w.id === 'w2')!.status).toBe('lost');
-    expect(store.wagers.find((w) => w.id === 'w3')!.status).toBe('lost');
-    // Only u1 gets paid out (100 × 2.0 = 200 credits added).
-    expect(store.profiles.find((p) => p.id === 'u1')!.credits).toBe(100 + 200);
-    expect(store.profiles.find((p) => p.id === 'u2')!.credits).toBe(100);
-    expect(store.profiles.find((p) => p.id === 'u3')!.credits).toBe(100);
-  });
 });
 
 // ── getUserWagerForMatch ────────────────────────────────────────────────────
