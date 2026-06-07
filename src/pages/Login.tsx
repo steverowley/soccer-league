@@ -395,7 +395,6 @@ function Shell({ children }: { children: React.ReactNode }) {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 

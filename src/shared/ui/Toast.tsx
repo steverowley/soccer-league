@@ -286,7 +286,6 @@ function ToastItem({ toast, onDismiss }: { toast: QueuedToast; onDismiss: () => 
       }}
     >
       <p style={{
-        fontFamily: 'Space Mono, monospace',
         fontSize:   12,
         fontWeight: 700,
         color:      fg,

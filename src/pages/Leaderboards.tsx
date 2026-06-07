@@ -115,7 +115,6 @@ export default function Leaderboards(): JSX.Element {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 

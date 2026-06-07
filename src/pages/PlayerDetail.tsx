@@ -482,7 +482,6 @@ function PlayerHero({ player }: { player: PlayerWithStats }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         {player.jersey_number != null && (
           <span style={{
-            fontFamily: 'Space Mono, monospace',
             fontSize: 12,
             fontWeight: 700,
             color: DUST_50,
@@ -508,7 +507,6 @@ function PlayerHero({ player }: { player: PlayerWithStats }) {
       <h1
         id="player-name"
         style={{
-          fontFamily: 'Space Mono, monospace',
           fontSize: 36,
           fontWeight: 700,
           color: DUST,
@@ -525,7 +523,6 @@ function PlayerHero({ player }: { player: PlayerWithStats }) {
         <Link
           to={`/teams/${player.teams.id}`}
           style={{
-            fontFamily: 'Space Mono, monospace',
             fontSize: 14,
             fontWeight: 700,
             color: QUANTUM,
@@ -606,7 +603,6 @@ function StatsGrid({ stats }: { stats: SeasonStats }) {
         >
           <p style={{ ...LABEL_STYLE, margin: 0 }}>{label}</p>
           <p style={{
-            fontFamily: 'Space Mono, monospace',
             fontSize: 22,
             fontWeight: 700,
             color: accent ?? DUST,
@@ -663,7 +659,6 @@ function IdolPanel({ idol }: { idol: IdolRank }) {
         >
           <p style={{ ...LABEL_STYLE, margin: 0 }}>{label}</p>
           <p style={{
-            fontFamily: 'Space Mono, monospace',
             fontSize: 22,
             fontWeight: 700,
             color: QUANTUM,
@@ -769,7 +764,6 @@ function ResultPill({ result }: { result: 'W' | 'D' | 'L' | null }) {
   return (
     <span style={{
       color,
-      fontFamily: 'Space Mono, monospace',
       fontWeight: 700,
       letterSpacing: '0.04em',
     }}>
@@ -857,7 +851,6 @@ function NarrativeCard({ narrative }: { narrative: NarrativeMention }) {
         </span>
       </header>
       <p style={{
-        fontFamily: 'Space Mono, monospace',
         fontSize:   14,
         lineHeight: 1.6,
         color:      DUST,
@@ -973,7 +966,6 @@ function SectionLabel({ id, kicker, title }: {
       <h2
         id={id}
         style={{
-          fontFamily: 'Space Mono, monospace',
           fontSize: 18,
           fontWeight: 700,
           color: DUST,
@@ -1037,7 +1029,6 @@ function Skeleton({ height }: { height: number }) {
 
 /** Uppercase mono label used for field names, kickers, and table headers. */
 const LABEL_STYLE: React.CSSProperties = {
-  fontFamily:    'Space Mono, monospace',
   fontSize:      11,
   fontWeight:    700,
   textTransform: 'uppercase',
@@ -1047,7 +1038,6 @@ const LABEL_STYLE: React.CSSProperties = {
 
 /** Value display — slightly larger mono for data values. */
 const VALUE_STYLE: React.CSSProperties = {
-  fontFamily: 'Space Mono, monospace',
   fontSize:   13,
   fontWeight: 400,
   color:      DUST,

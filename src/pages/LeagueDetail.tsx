@@ -100,7 +100,6 @@ export default function LeagueDetail() {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 
@@ -287,7 +286,6 @@ function UnknownLeague({ leagueId }: UnknownLeagueProps) {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
       <section style={{ padding: '80px 16px' }}>

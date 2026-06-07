@@ -129,7 +129,6 @@ export function EmptyState({
         textAlign:      centred ? 'center' : 'left',
         gap:            8,
         padding:        `${PAD_Y}px ${PAD_X}px`,
-        fontFamily:     'Space Mono, monospace',
         ...style,
       }}
     >

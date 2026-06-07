@@ -28,7 +28,11 @@ body,
   min-height: 100vh;
   background: #000;
   color: #fff;
-  font-family: system-ui, -apple-system, sans-serif;
+  /* Space Mono is the app's canonical typeface (#378). Setting it on the root
+     means pages inherit it instead of each re-declaring `fontFamily: 'Space
+     Mono, monospace'` inline — those inline copies were removed in this change,
+     and the eslint.config.js `no-restricted-syntax` rule blocks new ones. */
+  font-family: 'Space Mono', monospace;
 }
 
 /* ── Mobile tap-target floor (isl-aaf) ────────────────────────────────────

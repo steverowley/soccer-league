@@ -90,7 +90,6 @@ export function StatPair({
     <div className={className} style={style}>
       <p
         style={{
-          fontFamily:    'Space Mono, monospace',
           fontSize:      DEFAULT_LABEL_FONT_SIZE,
           fontWeight:    700,
           textTransform: 'uppercase',
@@ -103,7 +102,6 @@ export function StatPair({
       </p>
       <p
         style={{
-          fontFamily: 'Space Mono, monospace',
           fontSize:   DEFAULT_VALUE_FONT_SIZE,
           fontWeight: 400,
           color:      valueColor,

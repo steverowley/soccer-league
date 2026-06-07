@@ -15,7 +15,7 @@ export default function NotFound() {
   usePageTitle('Lost in the void');
   return (
     <div style={{
-      background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace',
+      background: ABYSS, color: DUST, minHeight: '100vh', 
     }}>
       <Header />
       <Container>

@@ -67,7 +67,6 @@ function tabStyle(isActive: boolean): CSSProperties {
     display: 'inline-flex',
     alignItems: 'center',
     minHeight: 44,
-    fontFamily: 'Space Mono, monospace',
     fontSize: 12,
     fontWeight: 700,
     letterSpacing: '0.12em',

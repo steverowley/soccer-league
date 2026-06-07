@@ -491,7 +491,6 @@ function DangerZone({ username, onOpen }: { username: string | null; onOpen: () 
             border:         `1px solid ${FLARE}`,
             padding:        '14px 28px',
             cursor:         'pointer',
-            fontFamily:     'Space Mono, monospace',
             minHeight:      44,
           }}
         >
@@ -566,7 +565,6 @@ function DeleteAccountModal({
           maxWidth:       480,
           width:          '100%',
           padding:        '28px 24px',
-          fontFamily:     'Space Mono, monospace',
         }}
       >
         <h2
@@ -691,7 +689,6 @@ function Shell({ children, username }: { children: React.ReactNode; username?: s
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 

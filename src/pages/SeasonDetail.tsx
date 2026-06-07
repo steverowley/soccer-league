@@ -84,13 +84,12 @@ export default function SeasonDetail() {
   // ── Not found ─────────────────────────────────────────────────────────
   if (loaded && !season) {
     return (
-      <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+      <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
         <Header />
         <main>
           <Container>
             <div style={{ padding: '80px 0', textAlign: 'center' }}>
               <p style={{
-                fontFamily:    'Space Mono, monospace',
                 fontSize:      11,
                 fontWeight:    700,
                 letterSpacing: '0.14em',
@@ -106,7 +105,6 @@ export default function SeasonDetail() {
               <Link
                 to="/seasons"
                 style={{
-                  fontFamily:    'Space Mono, monospace',
                   fontSize:      11,
                   fontWeight:    700,
                   letterSpacing: '0.14em',
@@ -126,7 +124,7 @@ export default function SeasonDetail() {
   }
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
       <main>
         <section style={{ padding: '48px 0 24px' }}>
@@ -200,7 +198,6 @@ function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ background: PHOBOS, padding: '20px 18px' }}>
       <p style={{
-        fontFamily:    'Space Mono, monospace',
         fontSize:      11,
         fontWeight:    700,
         letterSpacing: '0.14em',
@@ -211,7 +208,6 @@ function Cell({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p style={{
-        fontFamily: 'Space Mono, monospace',
         fontSize:   16,
         fontWeight: 700,
         color:      DUST,

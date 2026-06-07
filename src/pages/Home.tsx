@@ -183,7 +183,6 @@ export default function Home() {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 
@@ -192,7 +191,6 @@ export default function Home() {
           background: '#241012',
           color: DUST,
           borderBottom: `1px solid ${FLARE}`,
-          fontFamily: 'Space Mono, monospace',
           fontSize: 13,
           padding: '12px 0',
         }}>

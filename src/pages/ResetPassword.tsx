@@ -60,7 +60,7 @@ export default function ResetPassword() {
   }, [db]);
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
       <Container>
         <SectionHeader

@@ -95,7 +95,7 @@ export default function Seasons() {
   }, [db]);
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
       <main>
         <Container>
@@ -144,7 +144,6 @@ export default function Seasons() {
                     >
                       <div>
                         <div style={{
-                          fontFamily:    'Space Mono, monospace',
                           fontSize:      11,
                           fontWeight:    700,
                           letterSpacing: '0.14em',
@@ -171,7 +170,6 @@ export default function Seasons() {
                         </div>
                       </div>
                       <span style={{
-                        fontFamily:    'Space Mono, monospace',
                         fontSize:      10,
                         fontWeight:    700,
                         letterSpacing: '0.18em',

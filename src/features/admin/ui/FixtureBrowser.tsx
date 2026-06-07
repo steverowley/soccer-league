@@ -354,7 +354,7 @@ function CompletionEditor({
         style={{
           width: 48, padding: '4px 6px', background: ABYSS,
           border: `1px solid ${HAIRLINE}`, color: DUST,
-          fontFamily: 'Space Mono, monospace', fontSize: 12,
+          fontSize: 12,
         }}
       />
       <span style={{ color: DUST_50 }}>–</span>
@@ -368,7 +368,7 @@ function CompletionEditor({
         style={{
           width: 48, padding: '4px 6px', background: ABYSS,
           border: `1px solid ${HAIRLINE}`, color: DUST,
-          fontFamily: 'Space Mono, monospace', fontSize: 12,
+          fontSize: 12,
         }}
       />
       <AdminButton onClick={onSave} busy={busy} variant="primary">Save</AdminButton>

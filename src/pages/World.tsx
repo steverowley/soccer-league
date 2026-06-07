@@ -203,7 +203,6 @@ export default function World() {
       background: ABYSS,
       color:      DUST,
       minHeight:  '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 
