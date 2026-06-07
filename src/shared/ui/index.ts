@@ -59,3 +59,7 @@ export {
 export {
   KeyValue,
 } from './KeyValue';
+
+export {
+  SectionPanel,
+} from './SectionPanel';

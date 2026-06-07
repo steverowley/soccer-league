@@ -50,7 +50,7 @@ import {
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { Card, Chip, EmptyState } from '../shared/ui';
+import { Card, Chip, EmptyState, SectionPanel } from '../shared/ui';
 import { LEAGUES } from '../data/leagueData';
 import {
   fetchLeagueStandings,
@@ -781,36 +781,13 @@ function computeRoughMatchMinute(match: any): number | null {
  */
 function UpcomingPanel({ matches  }: any) {
   return (
-    <div style={{
-        ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 24,
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      <header style={{
-        ...(undefined as any),
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        paddingBottom: 12,
-        borderBottom: `1px solid ${HAIRLINE}`,
-        marginBottom: 16,
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-      }}>
-        <span>Upcoming Fixtures</span>
-        <span style={{ color: DUST_70 }}>Next 48h</span>
-      </header>
-
+    <SectionPanel title="Upcoming Fixtures" meta="Next 48h">
       {matches.length === 0 ? (
         <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
           No matches scheduled in the next 48 hours.
         </p>
       ) : (
         <ul style={{
-        ...(undefined as any),
           listStyle: 'none',
           padding: 0,
           margin: 0,
@@ -825,7 +802,7 @@ function UpcomingPanel({ matches  }: any) {
       <div style={{ marginTop: 'auto', paddingTop: 24 }}>
         <DustButton to="/matches">Browse Matches</DustButton>
       </div>
-    </div>
+    </SectionPanel>
   );
 }
 
