@@ -1,84 +1,58 @@
 # Agent Instructions
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
+Instructions for AI coding agents working in this repo. The full project charter — vision, engineering
+principles, architecture, and invariants — lives in [`CLAUDE.md`](./CLAUDE.md); **read it first**.
 
-## Quick Reference
+## Where the work lives
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
-```
-
-## Non-Interactive Shell Commands
-
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
-
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
-
-**Use these forms instead:**
-```bash
-# Force overwrite without prompting
-cp -f source dest           # NOT: cp source dest
-mv -f source dest           # NOT: mv source dest
-rm -f file                  # NOT: rm file
-
-# For recursive operations
-rm -rf directory            # NOT: rm -r directory
-cp -rf source dest          # NOT: cp -r source dest
-```
-
-**Other commands that may prompt:**
-- `scp` - use `-o BatchMode=yes` for non-interactive
-- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
-- `apt-get` - use `-y` flag
-- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
+Task tracking is **GitHub Issues**, organised by label-based milestones (`M0`–`M4`) and priority
+(`P0`–`P3`).
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
+gh issue list --state open --label M0-launch-blockers   # current launch-blockers
+gh issue list --state open --label "M0-launch-blockers" --label P0   # top priority
+gh issue view <number>                                   # full body + acceptance criteria
 ```
 
-### Rules
+Or use the GitHub MCP tools: `mcp__github__list_issues`, `mcp__github__issue_read`,
+`mcp__github__issue_write`, `mcp__github__add_issue_comment`.
 
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+> **Do NOT use beads/`bd`.** That tooling was removed in #357 — there is no `bd` binary and no `.beads/`
+> data. Don't use `TodoWrite` or markdown TODO files for cross-session tracking either. GitHub Issues is
+> the single system of record.
 
-## Session Completion
+## Session ritual
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+1. **Start** — pick an issue (start at the current milestone, sort by priority), read its body, then
+   check the current branch and `git status`.
+2. **Branch** — from `main`: `git checkout -b <type>/<short-description>`. There is **no `dev` branch**;
+   ignore any doc/hook/workflow that mentions one.
+3. **Work** — follow the layer boundaries and import discipline in `CLAUDE.md`. Keep changes surgical.
+4. **Verify** — run `npm run check` (`typecheck` + `lint` + `test`). CI gates on typecheck + tests; lint
+   is currently informational, but write lint-clean code.
+5. **Commit** — Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `perf:`, `test:`,
+   `ci:`), imperative, lowercase, no trailing period.
+6. **Finish** — push the branch, open a PR **targeting `main`**, subscribe to PR activity, and close any
+   issues you completed. Work isn't done until it's pushed and the PR is open.
 
-**MANDATORY WORKFLOW:**
+## Database changes
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd dolt push
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+Schema changes are numbered migrations under `supabase/migrations/{NNNN}_{name}.sql`, applied via the
+Supabase MCP `apply_migration`, after which you regenerate `src/types/database.ts` via the Supabase MCP
+`generate_typescript_types`. Commit the migration and the regenerated types together. (There is no
+`npm run supabase:types` script and no `supabase/config.toml`.)
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-<!-- END BEADS INTEGRATION -->
+## Non-interactive shell commands
+
+**Always use non-interactive flags** so an agent never hangs on a confirmation prompt. `cp`/`mv`/`rm`
+may be aliased to `-i` on some systems:
+
+```bash
+cp -f source dest        # not: cp source dest
+mv -f source dest        # not: mv source dest
+rm -f file               # not: rm file
+rm -rf directory         # not: rm -r directory
+```
+
+Other commands that may prompt: `scp`/`ssh` (use `-o BatchMode=yes`), `apt-get` (`-y`), `brew`
+(`HOMEBREW_NO_AUTO_UPDATE=1`).
