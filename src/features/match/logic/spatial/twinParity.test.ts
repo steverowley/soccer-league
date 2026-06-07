@@ -15,10 +15,19 @@
 // the WORKER copy to the src source of truth (src is canonical: it is the
 // tsc-checked, unit-tested copy).
 //
-// SCOPE: the spatial engine only.  The other src↔worker twins (cosmicVoices,
-// cupDraw/cupSeeder, interferenceResolver) are functionally identical but carry
-// heavier prose-comment drift; extending the guard to them (after aligning
-// their comments, or with a comment-stripping normaliser) is a follow-up.
+// SCOPE (#547):
+//   1. The spatial engine (8 modules) — guarded strictly below: code AND prose
+//      must match (modulo import extensions + `// ──` dividers), since those
+//      twins are hand-copied verbatim.
+//   2. Three further pure-logic twins (cupDraw, random, simEvent) that are
+//      code-identical but carry differing header prose — guarded with a
+//      code-only comparison (full-line comments stripped, code kept verbatim).
+//   The remaining same-named worker files (cosmicVoices, cupSeeder,
+//   interferenceResolver, shadowDistribution) have genuinely DIVERGED beyond
+//   comments — some legitimately (Deno-specific Supabase-client imports), some
+//   look like real drift — so they are NOT pure twins and are deliberately
+//   excluded here rather than force-aligned. Reconciling them is a separate,
+//   higher-risk task (they run in the deployed worker). See #547.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -64,6 +73,61 @@ describe('spatial engine src ↔ match-worker twin parity (#547)', () => {
       // If this fails, the worker spatial copy has drifted — re-sync it to the
       // src source of truth (src is the tsc-checked, unit-tested canonical copy).
       expect(normalise(worker)).toBe(normalise(src));
+    });
+  }
+});
+
+// ── Code-only twins ───────────────────────────────────────────────────────────
+// These three pure-logic modules live outside spatial/ but are still hand-copied
+// into the worker. They are code-identical to their src source but carry their
+// own header prose (the worker copies say "Verbatim copy of …"), so the strict
+// normalise above would flag them. `normaliseCodeOnly` drops WHOLE-LINE comments
+// and blank lines but keeps every code line verbatim — so prose drift is ignored
+// while any real code divergence still fails the test.
+
+/** Pure-logic twins guarded on code only (paths differ, so list both ends). */
+const CODE_TWINS: ReadonlyArray<{ name: string; src: string; worker: string }> = [
+  { name: 'cupDraw',  src: 'src/features/match/logic/cupDraw.ts',  worker: 'supabase/functions/match-worker/cupDraw.ts' },
+  { name: 'random',   src: 'src/shared/utils/random.ts',          worker: 'supabase/functions/match-worker/random.ts' },
+  { name: 'simEvent', src: 'src/features/match/logic/simEvent.ts', worker: 'supabase/functions/match-worker/simEvent.ts' },
+];
+
+/**
+ * Strip full-line comments (both line-style and block-style) and the `// ──`
+ * dividers, drop blank lines, remove the worker's `.ts` import-extension, and
+ * trim trailing whitespace. Code lines (including any inline trailing comment or
+ * a string that happens to contain `//`) are kept verbatim and compared in full,
+ * so this can only ever hide whole-line PROSE differences — never a code diff.
+ */
+function normaliseCodeOnly(source: string): string {
+  const out: string[] = [];
+  let inBlock = false;
+  for (const raw of source.split(/\r?\n/)) {
+    const line = raw.replace(/\s+$/, '');
+    const t = line.trim();
+    if (inBlock) {
+      if (t.includes('*/')) inBlock = false;
+      continue;
+    }
+    if (t.startsWith('/*')) {
+      if (!t.includes('*/')) inBlock = true;
+      continue;
+    }
+    if (t.startsWith('//')) continue; // full-line comment or `// ──` divider
+    if (t.length === 0) continue;     // blank line
+    out.push(line.replace(/\.ts(['"])/g, '$1')); // worker import extension
+  }
+  return out.join('\n');
+}
+
+describe('pure-logic src ↔ match-worker twin parity, code-only (#547)', () => {
+  for (const { name, src, worker } of CODE_TWINS) {
+    it(`${name}.ts is code-identical in both copies (prose ignored)`, () => {
+      const srcSource = readFileSync(resolve(ROOT, src), 'utf8');
+      const workerSource = readFileSync(resolve(ROOT, worker), 'utf8');
+      // If this fails, the worker copy's CODE has drifted — re-sync it to the
+      // src source of truth (src is the tsc-checked, unit-tested canonical copy).
+      expect(normaliseCodeOnly(workerSource)).toBe(normaliseCodeOnly(srcSource));
     });
   }
 });
