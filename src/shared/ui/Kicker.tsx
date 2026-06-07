@@ -78,7 +78,6 @@ export function Kicker({
     <span
       className={className}
       style={{
-        fontFamily:     'Space Mono, monospace',
         fontSize:       DEFAULT_FONT_SIZE,
         fontWeight:     700,
         textTransform:  'uppercase',

@@ -149,7 +149,6 @@ export default function TeamDetail() {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 
@@ -650,7 +649,6 @@ function UnknownClub({ teamId  }: any) {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
       <section style={{ padding: '120px 32px' }}>

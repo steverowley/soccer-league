@@ -20,7 +20,7 @@ export default function Terms() {
   usePageTitle('Terms');
   return (
     <div style={{
-      background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace',
+      background: ABYSS, color: DUST, minHeight: '100vh', 
     }}>
       <Header />
       <Container>

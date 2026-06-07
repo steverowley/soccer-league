@@ -167,6 +167,20 @@ export default tseslint.config(
           ],
         },
       ],
+
+      // INLINE FONT GUARD ──────────────────────────────────────────────────
+      // Space Mono is the app's global typeface, set on #root in
+      // src/index.css; every element inherits it. Re-declaring
+      // `fontFamily: 'Space Mono'` inline is the duplication #378 removed
+      // (83 copies across 42 files) — this rule blocks its return.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='fontFamily'][value.value=/Space Mono/]",
+          message:
+            "Don't set `fontFamily: 'Space Mono'` inline — it's the global app font (src/index.css #root); elements inherit it. Remove the inline declaration. (#378)",
+        },
+      ],
     },
   },
 

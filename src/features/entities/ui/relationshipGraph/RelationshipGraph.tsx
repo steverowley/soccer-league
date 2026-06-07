@@ -837,7 +837,6 @@ function NodeMark({
           y={radius + 14}
           textAnchor="middle"
           style={{
-            fontFamily:    'Space Mono, monospace',
             fontSize:      11,
             fontWeight:    700,
             letterSpacing: '0.06em',
@@ -998,7 +997,6 @@ function NodeTooltip({
 
   // ── Shared style fragments ──────────────────────────────────────────
   const monoBase: CSSProperties = {
-    fontFamily:    'Space Mono, monospace',
     letterSpacing: '0.04em',
   };
   const labelStyle: CSSProperties = {
@@ -1179,7 +1177,6 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
         alignItems:     'center',
         justifyContent: 'center',
         color:          COLORS.dust50,
-        fontFamily:     'Space Mono, monospace',
         fontSize:       12,
         fontWeight:     700,
         letterSpacing:  '0.18em',

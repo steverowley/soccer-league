@@ -305,7 +305,7 @@ function StarterBetStep({ teamId, playerId, onDone }: {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
       <Container>{children}</Container>
       <Footer />

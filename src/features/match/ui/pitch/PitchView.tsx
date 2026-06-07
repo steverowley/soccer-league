@@ -555,7 +555,6 @@ export function PitchView({
                       // widths — small enough not to dominate the
                       // dot but readable on desktop.  Tabular-nums
                       // so two-digit jerseys align cleanly.
-                      fontFamily:    'Space Mono, monospace',
                       fontSize:      1.6,
                       fontWeight:    700,
                       fill:          COLORS.abyss,

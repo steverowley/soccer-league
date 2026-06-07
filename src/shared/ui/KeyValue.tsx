@@ -92,7 +92,6 @@ export function KeyValue({
     >
       <span
         style={{
-          fontFamily:    'Space Mono, monospace',
           fontSize:      DEFAULT_LABEL_FONT_SIZE,
           fontWeight:    700,
           textTransform: 'uppercase',
@@ -104,7 +103,6 @@ export function KeyValue({
       </span>
       <span
         style={{
-          fontFamily: 'Space Mono, monospace',
           fontSize:   DEFAULT_VALUE_FONT_SIZE,
           fontWeight: 400,
           color:      valueColor,

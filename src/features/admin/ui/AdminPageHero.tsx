@@ -25,7 +25,6 @@ export function AdminPageHero() {
             Admin Dashboard
           </p>
           <h1 style={{
-            fontFamily: 'Space Mono, monospace',
             fontSize: 32,
             fontWeight: 700,
             color: DUST,

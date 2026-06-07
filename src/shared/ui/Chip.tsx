@@ -137,7 +137,6 @@ export function Chip({
         fontWeight:     700,
         letterSpacing:  LETTER_SPACING,
         textTransform:  'uppercase',
-        fontFamily:     'Space Mono, monospace',
         ...style,
       }}
     >

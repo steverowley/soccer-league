@@ -133,7 +133,6 @@ export default function Training() {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 

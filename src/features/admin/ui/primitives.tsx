@@ -26,7 +26,6 @@ export const DUST_70 = COLORS.dust70;
 
 /** Uppercase mono label — used for section kickers and table headers. */
 export const LABEL_STYLE: CSSProperties = {
-  fontFamily: 'Space Mono, monospace',
   fontSize: 11,
   fontWeight: 700,
   textTransform: 'uppercase',
@@ -36,7 +35,6 @@ export const LABEL_STYLE: CSSProperties = {
 
 /** Value display — slightly larger mono for data cells. */
 export const VALUE_STYLE: CSSProperties = {
-  fontFamily: 'Space Mono, monospace',
   fontSize: 13,
   fontWeight: 400,
   color: DUST,
@@ -47,7 +45,6 @@ export const adminSelectStyle: CSSProperties = {
   background:  ABYSS,
   border:      `1px solid ${HAIRLINE}`,
   color:       DUST,
-  fontFamily:  'Space Mono, monospace',
   fontSize:    13,
   padding:     '8px 10px',
   width:       '100%',
@@ -87,7 +84,6 @@ export function PanelHeader({ id, kicker, title }: {
       <h2
         id={id}
         style={{
-          fontFamily: 'Space Mono, monospace',
           fontSize: 20,
           fontWeight: 700,
           color: DUST,
@@ -143,7 +139,6 @@ export function AdminButton({
       onClick={onClick}
       disabled={isDisabled}
       style={{
-        fontFamily: 'Space Mono, monospace',
         fontSize: 12,
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -177,7 +172,6 @@ export function FilterChip({
       type="button"
       onClick={onClick}
       style={{
-        fontFamily: 'Space Mono, monospace',
         fontSize: 11,
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -220,7 +214,6 @@ export function ActionToast({ toast }: { toast: Toast }) {
       }}
     >
       <p style={{
-        fontFamily: 'Space Mono, monospace',
         fontSize: 12,
         fontWeight: 700,
         color: ABYSS,

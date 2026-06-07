@@ -140,7 +140,7 @@ export default function ManagerDetail(): JSX.Element {
   // "Unknown Manager" flash while loading.
   if (done && (error || !manager)) {
     return (
-      <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+      <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
         <Header />
         <Container>
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
@@ -165,7 +165,7 @@ export default function ManagerDetail(): JSX.Element {
   }
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh', fontFamily: 'Space Mono, monospace' }}>
+    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
       {/* Loading state — render minimal scaffold so the page doesn't blank. */}
       {!done && (

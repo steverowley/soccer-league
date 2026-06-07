@@ -259,7 +259,6 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
                     background: ABYSS,
                     border: `1px solid ${HAIRLINE}`,
                     color: DUST,
-                    fontFamily: 'Space Mono, monospace',
                     fontSize: 13,
                   }}
                 />

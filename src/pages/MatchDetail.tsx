@@ -150,7 +150,6 @@ export default function MatchDetail() {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
 
@@ -846,7 +845,6 @@ function UnknownMatch({ matchId  }: any) {
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
-      fontFamily: 'Space Mono, monospace',
     }}>
       <Header />
       <section style={{ padding: '120px 32px' }}>

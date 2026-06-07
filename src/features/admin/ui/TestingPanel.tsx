@@ -232,7 +232,6 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
                 type="submit"
                 disabled={narrativeBusy || !narrativeBody.trim()}
                 style={{
-                  fontFamily: 'Space Mono, monospace',
                   fontSize: 12,
                   fontWeight: 700,
                   textTransform: 'uppercase' as const,
@@ -338,7 +337,6 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
                 type="submit"
                 disabled={playerBusy || !playerTeam || !playerName.trim()}
                 style={{
-                  fontFamily: 'Space Mono, monospace',
                   fontSize: 12,
                   fontWeight: 700,
                   textTransform: 'uppercase' as const,
