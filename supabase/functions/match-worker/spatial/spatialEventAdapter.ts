@@ -184,6 +184,60 @@ export function adaptSpatialResult(
   return { events, finalScore: result.finalScore, mvp, playerStats, frames: result.frames };
 }
 
+// ── Significance filter (#519) ──────────────────────────────────────────────
+
+/**
+ * Spatial event types worth surfacing in the live commentary feed / persisting
+ * to `match_events`.  The engine fires a SimEvent nearly every physics tick —
+ * thousands of tackles / interceptions / passes per match (~8,500 total) — but
+ * `LiveCommentary` reveals ~40-50 dramatic beats over the paced 90-minute
+ * window, and persisting 8,500 rows/match bloats `match_events`.  We keep the
+ * notable beats (goals, saves, corners, opening kickoff) and drop the
+ * high-volume midfield churn (tackle / interception / pass / out_throw /
+ * out_goalkick).
+ */
+const NOTABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'kickoff',
+  'goal',
+  'save',
+  'out_corner',
+]);
+
+/**
+ * Worker-injected non-engine event types that must always survive the filter:
+ * the terminal MVP card and the Architect's narrative interference lines, both
+ * pushed onto the stream AFTER adaptSpatialResult.
+ */
+const ALWAYS_KEEP_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'mvp',
+  'architect_interference',
+]);
+
+/**
+ * Trim a (post-interference) adapted event stream down to the events worth
+ * showing / persisting — the fix for the ~8,500-events-per-match flood (#519).
+ *
+ * MUST run AFTER the Architect's mechanical interference passes, not inside
+ * `adaptSpatialResult`: the resolvers (curse / annul / bless / force_red_card)
+ * scan the FULL stream — `force_red_card` in particular promotes a `tackle`
+ * event to a red card — so filtering tackles out before interference would
+ * re-break that mechanic.  Running it here keeps the notable beats, the
+ * worker-injected MVP + architect_interference lines, and ANY event the
+ * Architect mechanically touched (`payload.interferenceApplied` set) — e.g. a
+ * cursed/annulled goal downgraded to a 'shot', or a tackle promoted to a red
+ * card — so the Architect's hand stays visible even on a dropped event type.
+ *
+ * Pure — returns a new array, never mutates input.  Stats are unaffected
+ * (accumulated over the full stream in `adaptSpatialResult`).
+ */
+export function filterNotableEvents(events: AdaptedEvent[]): AdaptedEvent[] {
+  return events.filter((ev) =>
+    NOTABLE_EVENT_TYPES.has(ev.type) ||
+    ALWAYS_KEEP_EVENT_TYPES.has(ev.type) ||
+    ev.payload['interferenceApplied'] != null,
+  );
+}
+
 // ── Player index builder ──────────────────────────────────────────────────────
 
 /**

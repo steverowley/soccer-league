@@ -49,7 +49,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import type { SimulatedEvent } from './simulateFullMatch.ts';
+import type { SimulatedEvent } from './simEvent.ts';
 
 // ── Tuning constants ────────────────────────────────────────────────────────
 

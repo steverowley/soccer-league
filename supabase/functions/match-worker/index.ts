@@ -29,13 +29,13 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
-import { simulateFullMatch } from './simulateFullMatch.ts';
 import { settleMatchWagers, maybeTransitionSeasonForMatch, maybeAdvanceCupBracket, writeMatchCompletionMemories } from './postMatchEffects.ts';
 import { prepareArchitectForMatch, type CosmicArchitect, type LoreStore } from './architect.ts';
 import { generateInterferences } from './architectInterference.ts';
 import {
   applyAnnulGoals,
   applyForceRedCards,
+  reconcileStatsAfterInterference,
   resolveInterferenceStream,
   type AnnulGoalIntent,
   type ForceRedCardIntent,
@@ -43,14 +43,8 @@ import {
 } from './interferenceResolver.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
-// Phase 8 reflex-tier hooks duplicated into the worker (isl-5kx) so
-// in-match shoot_or_pass + card_severity decisions can consult each
-// agent's persona + memory substrate.  Worker-side mirror of
-// src/features/agents/{api/prepareCorpusForMatch,logic/decisions,
-// logic/resolvers/{shootOrPass,cardSeverity}}.
-import { prepareCorpusForMatch, runDecision } from './agentReflex.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
-import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput } from './spatial/spatialEventAdapter.ts';
+import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
 import type { PositionFrame } from './spatial/types.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
@@ -66,19 +60,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
  * completion is never blocked on this key being present.
  */
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
-
-/**
- * When truthy, the full agent-based spatial simulation (Phase A rebuild)
- * runs instead of `simulateFullMatch`.  The spatial engine emits real
- * per-second (x,y) position frames and derives match events from geometry
- * (ball crossing goal line, tackle distance, etc.) rather than probability
- * rolls.  All downstream code — Architect interference, event persistence,
- * player-stat rows — is unchanged because `adaptSpatialResult` emits the
- * same `{ events, finalScore, mvp, playerStats }` shape.
- *
- * Set to 'true' in the Supabase Function environment to enable.
- */
-const USE_SPATIAL_ENGINE = Deno.env.get('USE_SPATIAL_ENGINE') === 'true';
 
 const MATCH_BATCH_SIZE = 5;          // Fetch up to 5 due matches per invocation
 const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
@@ -477,110 +458,41 @@ async function processMatch(match: any): Promise<boolean> {
       console.warn('[match-worker] getPreMatchOmen threw:', (err as Error)?.message ?? err);
     }
 
-    // ── Phase 8 reflex-hooks hydration (isl-5kx) ─────────────────────────
-    // Collect every involved entity_id (players + referee + both
-    // managers) and batch-fetch their personas + recent memories into
-    // an in-memory corpus.  The engine's shoot_or_pass / card_severity
-    // resolvers consult this corpus synchronously during the match —
-    // a Supabase round-trip per decision would tank simulation speed
-    // (thousands of in-match calls).  Failure modes degrade silently:
-    // missing personas fall back to neutral 0.5 Big-Five values; the
-    // resolvers remain well-behaved.
-    const involvedEntityIds: string[] = [];
-    for (const p of home.players ?? []) {
-      if (p?.entity_id) involvedEntityIds.push(p.entity_id);
-    }
-    for (const p of away.players ?? []) {
-      if (p?.entity_id) involvedEntityIds.push(p.entity_id);
-    }
-    if (refOverride?.entity_id) involvedEntityIds.push(refOverride.entity_id);
-    if (home.manager?.entity_id) involvedEntityIds.push(home.manager.entity_id);
-    if (away.manager?.entity_id) involvedEntityIds.push(away.manager.entity_id);
+    // Phase 8 reflex-hooks (shoot_or_pass / card_severity) were a feature of
+    // the legacy dice-roller engine only; the spatial engine derives those
+    // outcomes from geometry, so the corpus-hydration + reflexHooks wiring was
+    // removed with PATH B (#389).  agentReflex.ts is now unimported — a
+    // follow-up can delete it.
 
-    let reflexHooks: { agentCorpus: unknown; runDecision: typeof runDecision } | null = null;
-    try {
-      const agentCorpus = await prepareCorpusForMatch(supabase, involvedEntityIds);
-      reflexHooks = { agentCorpus, runDecision };
-      console.log(
-        `[match-worker] reflex corpus hydrated: ${agentCorpus.personas.size} personas, ` +
-        `${[...agentCorpus.memories.values()].reduce((n, rows) => n + rows.length, 0)} memories ` +
-        `(over ${involvedEntityIds.length} involved entities)`,
-      );
-    } catch (err) {
-      console.warn('[match-worker] reflex corpus hydration threw:', (err as Error)?.message ?? err);
-    }
-
-    // ── Simulation dispatch ────────────────────────────────────────────────
-    // Two engine paths share all downstream code (Architect interference,
-    // event persist, stat rows) because both emit the same result shape:
-    //   { events, finalScore, mvp, playerStats }
+    // ── Simulation ─────────────────────────────────────────────────────────
+    // Full agent-based spatial simulation: 22 autonomous players with Reynolds
+    // steering, formation slots, and possession physics.  Events (goals,
+    // tackles, saves) emerge from geometry rather than probability rolls, and
+    // real per-player (x,y) frames are stored in `match_positions` for the
+    // pitch viewer.
     //
-    // PATH A — spatial engine (USE_SPATIAL_ENGINE=true)
-    //   Full agent-based simulation: 22 autonomous players with Reynolds
-    //   steering behaviours, formation slots, and possession physics.
-    //   Events (goals, tackles, saves) emerge from geometry rather than
-    //   probability rolls.  Returns real per-player (x,y) frames stored in
-    //   `match_positions` for the high-res pitch viewer.
-    //
-    // PATH B — legacy dice-roller (USE_SPATIAL_ENGINE=false / default)
-    //   `simulateFullMatch` wrapping `genEvent` probability rolls with
-    //   Architect + reflex-hook wiring.  `refOverride` passes the assigned
-    //   referee identity; `reflexHooks` powers the Phase 8 shoot_or_pass /
-    //   card_severity resolvers.  `null` on either falls back gracefully.
-    //
-    // `result` is mutable because Architect interference may reassign
-    // `result.events` and `result.finalScore` further down this function.
-    // eslint-disable-next-line prefer-const
-    let result: ReturnType<typeof simulateFullMatch>;
-    // Position frames collected from the spatial engine; empty for Path B.
-    let positionFrames: PositionFrame[] = [];
+    // The spatial engine is the only engine.  Convert raw DB rows to its typed
+    // input, derive a deterministic 32-bit seed from the match UUID (same
+    // match_id → identical outcome on every worker retry), simulate, and adapt
+    // to the match_events shape.  `result` is mutated in place below by the
+    // Architect interference passes (result.events / finalScore / playerStats).
+    const homeInput = toSpatialTeamInput(homeData);
+    const awayInput = toSpatialTeamInput(awayData);
+    const seed = parseInt(match.id.replace(/-/g, '').slice(0, 8), 16);
 
-    if (USE_SPATIAL_ENGINE) {
-      // Convert raw DB rows to the typed input the spatial engine expects.
-      const homeInput = toSpatialTeamInput(homeData);
-      const awayInput = toSpatialTeamInput(awayData);
+    const spatialResult = simulateSpatialMatch(homeInput, awayInput, { seed });
 
-      // Derive a deterministic 32-bit seed from the first 8 hex chars of the
-      // match UUID.  Same match_id → identical simulation outcome on every
-      // worker retry, which is the spatial engine's equivalent of the legacy
-      // engine's seeded LCG guarantee.
-      const seed = parseInt(match.id.replace(/-/g, '').slice(0, 8), 16);
+    // Build the id → { name, teamName, side } index the adapter needs to map
+    // spatial player ids back to names (the worker's playerIndex join is keyed
+    // on name downstream); the adapter derives team display names from it.
+    const playerIdx = buildPlayerIndex(homeData, awayData);
+    const result = adaptSpatialResult(spatialResult, playerIdx);
+    const positionFrames: PositionFrame[] = spatialResult.frames;
 
-      const spatialResult = simulateSpatialMatch(homeInput, awayInput, { seed });
-
-      // Build the id → { name, teamName, side } index the adapter needs to
-      // map spatial player ids back to names (which the worker's playerIndex
-      // join is keyed on downstream).
-      const playerIdx = buildPlayerIndex(homeData, awayData);
-
-      const adapted = adaptSpatialResult(
-        spatialResult,
-        playerIdx,
-        homeData.short_name ?? homeData.name,
-        awayData.short_name ?? awayData.name,
-      );
-      // Cast is safe: AdaptedSpatialResult has the same runtime shape as
-      // SimulatedMatchResult — events, finalScore, mvp, playerStats — and
-      // all downstream consumers treat these fields as `any`.
-      result = adapted as unknown as ReturnType<typeof simulateFullMatch>;
-      positionFrames = spatialResult.frames;
-
-      console.log(
-        `[match-worker] Spatial sim: ${spatialResult.finalScore[0]}–${spatialResult.finalScore[1]}, ` +
-        `${spatialResult.events.length} events, ${positionFrames.length} position frames`,
-      );
-    } else {
-      // PATH B: legacy simulateFullMatch.
-      // `refOverride` is the isl-84e wiring — passes the assigned referee's
-      // identity (incl. entity_id) into createAIManager so the Phase 8
-      // card_severity resolver can find the referee persona.  `null` (no
-      // referee assigned to this match) falls back to a random fabricated
-      // official with `entity_id: null`.
-      // `reflexHooks` (isl-5kx) supplies the in-match shoot_or_pass +
-      // card_severity dispatcher; null falls back to legacy stat-driven
-      // decisions inside gameEngine.
-      result = simulateFullMatch(home, away, fanBoost, architect, reflexHooks, refOverride);
-    }
+    console.log(
+      `[match-worker] Spatial sim: ${spatialResult.finalScore[0]}–${spatialResult.finalScore[1]}, ` +
+      `${spatialResult.events.length} events, ${positionFrames.length} position frames`,
+    );
 
     console.log(`[match-worker] Simulation complete: ${result.finalScore[0]}–${result.finalScore[1]}, MVP: ${result.mvp}`);
 
@@ -788,9 +700,29 @@ async function processMatch(match: any): Promise<boolean> {
         );
         result.events     = mutated;
         result.finalScore = rederived;
+        // Reconcile per-player counters with the mutated stream so an annulled
+        // goal leaves its scorer's tally and a forced red card reaches
+        // match_player_stats / the idol leaderboard — otherwise statRows below
+        // would persist the pre-interference counts, diverging from the
+        // re-derived scoreline.
+        result.playerStats = reconcileStatsAfterInterference(result.playerStats, mutated);
       }
     } catch (err) {
       console.warn('[match-worker] generateInterferences threw (non-fatal):', err);
+    }
+
+    // ── Trim the spatial event flood (#519) ────────────────────────────────
+    // The spatial engine emits ~8,500 per-tick events/match (thousands of
+    // tackles/interceptions/passes).  Persist + show only the notable beats
+    // plus anything the Architect just touched.  Runs AFTER interference so
+    // force_red_card still found its tackle to promote, and so cursed/annulled
+    // goals (now interferenceApplied 'shot' events) survive the trim.  Stats
+    // were accumulated over the full stream in adaptSpatialResult and are
+    // unaffected.
+    const beforeFilterCount = result.events.length;
+    result.events = filterNotableEvents(result.events);
+    if (beforeFilterCount !== result.events.length) {
+      console.log(`[match-worker] Significance filter: ${beforeFilterCount} → ${result.events.length} events`);
     }
 
     // ── Persist events (batch-insert) ──────────────────────────────────────
@@ -818,9 +750,9 @@ async function processMatch(match: any): Promise<boolean> {
     console.log(`[match-worker] Inserted ${result.events.length} events`);
 
     // ── Persist spatial position frames ───────────────────────────────────
-    // Only populated when USE_SPATIAL_ENGINE=true.  The frames are written
-    // in the same batch-insert style as events (500 rows/call) and stored in
-    // `match_positions` keyed by (match_id, minute, second).
+    // The frames are written in the same batch-insert style as events
+    // (500 rows/call) and stored in `match_positions` keyed by
+    // (match_id, minute, second).
     //
     // Frame → row mapping:
     //   minute  = floor(tSec / 60) + 1, clamped to [1, 120] (extra time)

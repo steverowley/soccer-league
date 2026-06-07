@@ -1,0 +1,72 @@
+# ── Enact due seasons ─────────────────────────────────────────────────────────
+# WHY THIS EXISTS
+# ───────────────
+# End-of-season focus enactment ("the vote reshapes your club") used to ride an
+# in-browser `season.ended` listener that was removed in #372, so it stopped
+# firing on its own.  Re-porting it into the Deno match-worker would mean
+# hand-maintaining ~1,400 lines of TypeScript the Deno runtime can't import and
+# the compiler can't check.  Instead this scheduled job runs the existing,
+# unit-tested `enactSeasonFocuses` from Node via scripts/enact-due-seasons.ts —
+# the same service-role-script pattern as rollover-season.ts.
+#
+# The script is idempotent (it guards each team/tier on an existing
+# `focus_enacted` row before mutating), so running it daily — and retrying — is
+# safe: an already-enacted season is a no-op.
+#
+# REQUIRED SECRETS (add under Settings → Secrets and variables → Actions)
+# ──────────────────────────────────────────────────────────────────────
+#   SUPABASE_URL               Project REST URL (https://<ref>.supabase.co).
+#   SUPABASE_SERVICE_ROLE_KEY  Service-role key — bypasses RLS so server-side
+#                              enactment can write rosters/finances. Treat as a
+#                              high-value secret; rotate as you would any
+#                              admin credential. NEVER commit it.
+
+name: Enact due seasons
+
+on:
+  # Daily sweep. The voting window is 48h, so a once-a-day check enacts each
+  # season within ~24h of its window closing — well inside the rollover cadence.
+  schedule:
+    - cron: '0 6 * * *'
+  # Manual trigger (Actions tab), with an optional dry-run that only lists the
+  # seasons that WOULD be enacted.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List due seasons without enacting'
+        type: boolean
+        default: false
+
+# Read-only checkout; the script authenticates to Supabase via the service-role
+# secret, not the GITHUB_TOKEN.
+permissions:
+  contents: read
+
+# Never let two sweeps run concurrently — they'd both pass the idempotency guard
+# read before either writes the focus_enacted marker, risking a double-apply.
+concurrency:
+  group: enact-due-seasons
+  cancel-in-progress: false
+
+jobs:
+  enact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Enact due seasons
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          npx tsx scripts/enact-due-seasons.ts \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}

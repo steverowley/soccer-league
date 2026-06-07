@@ -30,7 +30,7 @@
 // goalkeeper_swap follow in later slices once the wiring is proven
 // on this pair.
 
-import type { SimulatedEvent } from './simulateFullMatch';
+import type { SimulatedEvent } from './simEvent';
 
 // ── Inputs ────────────────────────────────────────────────────────────────
 
@@ -396,6 +396,11 @@ const CARDABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
  *   a card flag. The engine's downstream stats accumulator reads
  *   `cardType === 'red'` and updates redCard accordingly.
  *
+ *   `payload.commentary` is overwritten with a sending-off line so the
+ *   live feed reads as a dismissal — without it a promoted spatial
+ *   tackle would still narrate "wins the ball with a clean tackle"
+ *   while carrying a red card, which reads as a bug to players.
+ *
  * FIZZLE BEHAVIOUR
  *   If the target player never has a card-able event in the
  *   remaining match, the intent silently fizzles. We intentionally
@@ -446,6 +451,7 @@ export function applyForceRedCards(
           cardType:              'red',
           interferenceApplied:   'force_red_card' satisfies InterferenceMark,
           interferenceMagnitude: intent.magnitude,
+          commentary:            `${player} is shown a straight red card.`,
         },
       };
       consumedIdx.add(i);
@@ -453,5 +459,76 @@ export function applyForceRedCards(
     }
   }
 
+  return out;
+}
+
+// ── Post-interference stat reconciliation (#530) ──────────────────────────
+
+/**
+ * The minimal per-player counters the reconciler reads and rewrites — a
+ * structural subset of the spatial adapter's `PlayerStatsEntry` and the
+ * dice-roller's stat slot.  Only the two fields the Architect's post-passes
+ * can change.
+ */
+export interface ReconcilableStats {
+  goals:   number;
+  redCard: boolean;
+}
+
+/**
+ * Reconcile per-player goal + red-card counters against a POST-interference
+ * event stream.
+ *
+ * The engine (and the spatial adapter) accumulate player stats from the
+ * ORIGINAL stream, before the curse / annul / bless / force_red_card
+ * post-passes run.  The worker re-derives the scoreline from the mutated
+ * stream afterwards — but the per-player counters still describe the
+ * pre-interference match, so an annulled goal stays on its scorer's tally and
+ * a forced red card never reaches `match_player_stats` / the idol leaderboard.
+ * This recomputes each known player's `goals` from the mutated stream's
+ * `isGoal===true` events and ORs in `redCard` for any `force_red_card` stamp,
+ * keeping the persisted stats consistent with the re-derived scoreline.
+ *
+ * Pure — returns a new map, never mutates input.  Keyed by player name (the
+ * engine / adapter convention).  Only players already present in
+ * `playerStats` are returned: interference can only touch a player who already
+ * produced a stat event (a cursed scorer, a blessed shooter, a red-carded
+ * tackler), so the keyset never grows.
+ *
+ * KNOWN LIMITATION: goals the engine left unattributed (deflections / own
+ * goals carry no `payload.player` — see #533) sit in neither the re-derived
+ * scoreline nor these stats, so an unattributed goal simply cannot be cursed
+ * or annulled.  Both stay self-consistent.
+ *
+ * @param playerStats  Per-player counters keyed by name (from the adapter).
+ * @param events       The mutated (post-interference) event stream.
+ * @returns            A new counters map reconciled with the mutated stream.
+ */
+export function reconcileStatsAfterInterference<T extends ReconcilableStats>(
+  playerStats: Record<string, T>,
+  events:      SimulatedEvent[],
+): Record<string, T> {
+  const goalsByPlayer = new Map<string, number>();
+  const sentOff       = new Set<string>();
+
+  for (const ev of events) {
+    const player = ev.payload['player'];
+    if (typeof player !== 'string' || player.length === 0) continue;
+    if (ev.payload['isGoal'] === true) {
+      goalsByPlayer.set(player, (goalsByPlayer.get(player) ?? 0) + 1);
+    }
+    if (ev.payload['interferenceApplied'] === 'force_red_card') {
+      sentOff.add(player);
+    }
+  }
+
+  const out: Record<string, T> = {};
+  for (const [name, stats] of Object.entries(playerStats)) {
+    out[name] = {
+      ...stats,
+      goals:   goalsByPlayer.get(name) ?? 0,
+      redCard: stats.redCard || sentOff.has(name),
+    } as T;
+  }
   return out;
 }
