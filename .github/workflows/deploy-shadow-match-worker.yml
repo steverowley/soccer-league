@@ -1,0 +1,70 @@
+# ── Deploy shadow-match-worker edge function ──────────────────────────────────
+# WHY THIS EXISTS
+# ───────────────
+# Edge functions are NOT deployed by the main deploy.yml workflow (that one only
+# ships the static site to GitHub Pages).  shadow-match-worker had no deploy
+# workflow at all, so merging changes to main left production running stale code
+# until someone deployed it by hand (this is exactly what happened after #389
+# made it Poisson-only).  This workflow closes that gap: any change to the
+# worker's source on main redeploys it automatically, and it can also be run on
+# demand from the Actions tab (workflow_dispatch).  It mirrors
+# deploy-match-worker.yml.
+#
+# REQUIRED SECRET
+# ───────────────
+#   SUPABASE_ACCESS_TOKEN — a Supabase Personal Access Token (Dashboard →
+#   Account → Access Tokens), already set for deploy-match-worker.yml.
+#
+# AUTH NOTE (--no-verify-jwt)
+# ───────────────────────────
+# shadow-match-worker implements its own shared-secret auth (WORKER_SHARED_SECRET)
+# and is invoked by pg_cron with a Bearer secret, NOT a Supabase JWT.  It must
+# therefore be deployed with JWT verification DISABLED — otherwise every cron
+# invocation would be rejected with 401.  Do not remove --no-verify-jwt.
+
+name: Deploy shadow-match-worker
+
+on:
+  # Manual trigger from the Actions tab (and via the GitHub API / MCP).
+  workflow_dispatch:
+  # Auto-deploy whenever the worker's source changes on main.
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/shadow-match-worker/**'
+      - '.github/workflows/deploy-shadow-match-worker.yml'
+
+# Least-privilege GITHUB_TOKEN: this workflow only needs to read the repo to
+# check it out — the Supabase deploy authenticates via SUPABASE_ACCESS_TOKEN.
+permissions:
+  contents: read
+
+# Serialize deploys so two runs can't race to publish different versions.
+concurrency:
+  group: deploy-shadow-match-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Production guardrail: only ever deploy from main, even when dispatched
+    # manually against another ref.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pin to the same version validated against match-worker's bundle.
+          version: 2.104.0
+
+      - name: Deploy shadow-match-worker
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy shadow-match-worker \
+            --project-ref ddtpbipkqamuxnvupddc \
+            --use-api \
+            --no-verify-jwt
