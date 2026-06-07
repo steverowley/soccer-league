@@ -2233,6 +2233,22 @@ export type Database = {
         Returns: undefined
       }
       bump_login_streak: { Args: never; Returns: number }
+      cast_focus_vote: {
+        Args: { p_credits: number; p_focus_option_id: string }
+        Returns: {
+          created_at: string
+          credits_spent: number
+          focus_option_id: string
+          id: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "focus_votes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       incinerate_player: {
         Args: {
           p_decree_text: string

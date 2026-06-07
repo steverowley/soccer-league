@@ -111,10 +111,7 @@ export async function castVote(
   focusOptionId: string,
   creditsSpent: number,
 ): Promise<FocusVote | null> {
-  // cast_focus_vote isn't in the generated database.ts yet; regenerate types
-  // once migration 0072 is applied, then drop this cast.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (db.rpc as any)('cast_focus_vote', {
+  const { data, error } = await db.rpc('cast_focus_vote', {
     p_focus_option_id: focusOptionId,
     p_credits: creditsSpent,
   });
