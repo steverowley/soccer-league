@@ -1,160 +1,186 @@
 # Intergalactic Soccer League — Roadmap
 
-> **The active roadmap lives in GitHub Issues** — issue bodies are self-contained (scope, tasks,
-> acceptance criteria). This file is the organized view on top: current state, execution order, and
-> how to run the work with Claude (Fable) sessions. Last reorganized **2026-06-11** against the live
-> issue tracker and codebase.
+> Tasks live in **GitHub Issues** (bodies are self-contained: scope, file refs, acceptance criteria).
+> This file is the strategy on top: the verified state of the world, the order of battle, and how to
+> execute it with Claude (Fable) sessions. Rebuilt **2026-06-11** from a first-hand audit —
+> production DB queries, Supabase security advisors, a full player-journey code walkthrough, an
+> engine capability map, and a clean-room `npm run check` + build.
 
-## Where the project stands
+## The strategy in one paragraph
 
-- **M0 (launch blockers): ✅ all closed.** Security holes, atomic betting/voting, onboarding,
-  account health — done.
-- **M1 (Architect wakes up): ✅ all closed code-side.** The spatial engine is the only engine (#389),
-  Architect interference mechanically bites it (#543), drift between the browser and worker engine
-  copies is CI-guarded (#554/#560).
-- **M2 (product foundation): one and a half issues left** (#378 final slice, #381 blocked on an
-  operator decision).
-- **M3 (cleanup) and M4 (depth & community)** are the open backlog: 7 + 9 issues.
-- **~1,330 Vitest tests green; CI gates typecheck + tests.** Lint still runs informationally
-  (230-error backlog, #407).
+Season 1 is over and the universe is stuck: the election ran, two focuses were enacted, and then
+nothing — no Season 2, no fixtures, both cups frozen, and every AI voice silent since May 21 for
+want of API credits. The order of battle is therefore: **resurrect** (operator, ~20 min), **make the
+season loop perpetual** (the game must run forever without surgery), **polish the first-fan funnel
+and make the Architect visible** (the soul is currently invisible during live matches), **then
+soft-launch** to the first real fans. Depth features follow once strangers are in the door.
 
-**⚠️ But production is dark.** Two things broke the live game and both need ~30 minutes of
-human (operator) action — no code is missing:
+## Verified state of the galaxy (production, 2026-06-11)
 
-1. **Every LLM voice has been silent since May 21** — the Anthropic account ran out of API credits
-   (#565). Pundits, journalists, whispers, decrees: all dead. Code fix + observability already
-   shipped (#515); it revives on recharge.
-2. **Match simulation and the galaxy tick stopped on June 2** — the `WORKER_SHARED_SECRET` isn't
-   set on the production project, so the cron workers reject their own invocations (#442).
+**Players & economy** — 1 user account, 4 wagers ever (1 won, 3 lost, all settled cleanly). This is
+pre-launch; retention/community features rank below launch features.
 
-Everything else on this roadmap lands into a frozen game until those two are done.
+**Season** — "Season 1 — 2600": 225/225 league fixtures completed (finished 2026-06-04); status
+stuck in `voting`; election ran; 2 focuses enacted for Earth United on 2026-06-07 (Sign a Star
+Player + Intensive Preseason Camp); the Election Night incineration ritual never fired (0 ever);
+**no Season 2 exists and no code path creates one** (#568).
 
-## Milestone views (live links)
+**Cups** — Celestial Cup + Solar Shield seeded their Rounds of 16 correctly… dated **2600-08-04**
+(the in-universe calendar). The worker claims `scheduled_at <= now()`, so those 8 fixtures are
+unreachable forever (#569). League fixtures used real 2026 dates — the bug is cup-seeder specific.
 
-- [M2 — Product Foundation](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM2-product-foundation)
-- [M3 — Architectural Cleanup](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM3-architectural-cleanup)
-- [M4 — Depth & Community](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM4-depth-community)
-- [Operator queue](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3Aoperator-action)
-  (human-only: dashboards, billing, secrets — an agent cannot do these)
+**Narrative layer** — galaxy-tick runs and writes (auth working again; 102 narratives in 7 days),
+but **459 LLM errors in 7 days**: credits are still empty (#565), so the feed is 78% one fallback
+kind (`cosmic_disturbance`). Cron live: match-worker + notify (1 min), galaxy-tick (2 h), enricher
+(1 h), drama (daily). The shadow worker is deployed but never scheduled (#566).
 
----
+**Security** — advisors report 7 ERROR-level `SECURITY DEFINER` views plus function/search-path and
+admin-RPC-grant warnings, none previously tracked (#572). HIBP toggle off (#443). npm audit: 2 high
+(react-router — exactly Dependabot PR #505) + 1 moderate.
 
-## Track 0 — Turn the universe back on (operator, ~30 min total)
+**Code health** — typecheck ✅, **1,337 tests ✅**, build ✅ (dist 4.4 MB; `public/img/` already
+optimized to 3.0 MB, so #393 is nearly done). ESLint backlog is 210 errors, **205 of them a single
+rule** (`no-explicit-any`) — #407 is one campaign, not sixty fires. 62k LOC in `src/`, 14k in the
+worker mirror.
 
-Do these first, in this order. None are code tasks.
+**Engine truth** — 22-agent spatial sim with stamina, possession physics, 4 formations; the
+fan-support boost genuinely reaches the engine. The Architect has **4 mechanical levers** (curse /
+bless / annul goal / force red) + 19 narrative-only kinds. Stored but unused by the sim: player
+personality, age, form, home advantage; no substitutions/cards/injuries in-sim. Worker catch-up
+after downtime is safe (5 matches claimed per minute).
+
+**Funnel truth** — signup → welcome wizard → bet → train → vote all work, but the wizard's "first
+bet" step dead-ends off-page, the 200-credit grant has no moment, teaching strips are
+dismissible-forever, odds/economy are unexplained (#571) — and **Architect interference never
+appears in the live match feed**, only later in `/news` (#570).
+
+## Phase 0 — Resurrection (operator: ~20 min, then one Fable verify session)
 
 | # | Action | Time |
 |---|--------|------|
-| #565 | **Recharge Anthropic credits** (Console → Billing; consider auto-reload) | 5 min |
-| #442 | Set `WORKER_SHARED_SECRET` Supabase secret + redeploy `match-worker` & `architect-galaxy-tick` | 15 min |
-| #443 | Toggle "Block compromised passwords" in Supabase Auth | 2 min |
-| #445 | Create a Sentry project, set `VITE_SENTRY_DSN` | 10 min |
-| #444 | **Decide** the email provider (recommendation in the issue: Resend free tier) | decision |
+| #565 | **Recharge Anthropic credits** (+ enable auto-reload) | 5 min |
+| #442 | Confirm `WORKER_SHARED_SECRET` is set correctly, then close (auth already works in practice — the tick executes) | 5 min |
+| #443 | Supabase Auth → "Block compromised passwords" toggle | 2 min |
+| #445 | Create Sentry project, set `VITE_SENTRY_DSN` | 10 min |
+| #444 | Decide the email provider (Resend recommended) — only gates #381 | decision |
 
-**Then run one Fable verification session**: confirm matches simulate again, the galaxy tick reports
-`llmErrors: 0` with `narrativesInserted > 0`, and fresh narratives reach the News feed. (Fable can do
-this end-to-end via the Supabase MCP: trigger ticks, read logs, query `agent_runs`.)
+**Fable verify session after the recharge**: galaxy-tick returns `llmErrors: 0` and
+`narrativesInserted > 0`; feed diversity returns (the `cosmic_disturbance` fallback stops
+dominating); **also trigger drama-tick and one in-match interference** — both call Sonnet model ids
+that have never been validated on this key (the credit outage masked them); pin or fix if rejected.
 
-## Track 1 — Finish M2 (product foundation)
+## Phase 1 — The perpetual season machine (Fable, ~3–4 sessions)
 
-| # | What | Notes for execution |
-|---|------|---------------------|
-| #378 | Final slice: migrate `MatchDetail` onto the shared primitives | **Combine with #390's MatchDetail split** (same file — doing them separately guarantees merge conflicts). Needs app-run visual verification against Figma. 9/12 primitives + Home migration already shipped (#562/#563). |
-| #381 | Weekly email digest | Unblocked the moment #444 is decided. Self-contained edge function + profile toggle. |
+The most valuable thing Fable can build now: after this phase the game runs forever without manual
+surgery.
 
-## Track 2 — M3 cleanup (the most agent-friendly work; run these as parallel sessions)
+1. **#569 — rescue the cups**: real-time cup scheduling + one-off fix for the 8 stranded fixtures;
+   decide the "do cups gate season end?" policy.
+2. **#568 — season rollover**: `voting → enacted → archived`, create Season 2, generate real-dated
+   fixtures for all 4 leagues, Election Night ritual decision, idempotent.
+3. **#566 — schedule the shadow worker**: one cron migration (after #442).
 
-Suggested order, with what can run simultaneously:
+Exit criterion: Season 2 kicks off on its own and the Celestial Cup crowns a champion.
 
-1. **#561 — diff the diverged worker twins** (`cosmicVoices`, `interferenceResolver`). Small, but it's
-   a *possible silent production bug* (untested logic running in the deployed worker) — do it first.
-   Closing it likely also closes **#547** (the remaining acceptance branch).
-2. **#386 — Zod schemas on betting/voting/match/architect/entities reads** (P1). Biggest correctness
-   win in the backlog; touches `api/` layers only, parallel-safe with everything below.
-3. **#390 — split the 1,000+ line pages** (MatchDetail part folds into #378 above), then
-   **#407 — clear the ESLint backlog and flip lint to gating in CI**. This order matters: #407's
-   `any`-typing work overlaps the same pages #390 restructures.
-4. **#393 — compress the 19 MB of PNGs to AVIF/WebP** and **#548 — delete fallow-flagged dead code**.
-   Independent of everything; run any time. Do #548 *after* #386/#390 merge to avoid deleting
-   exports those refactors touch.
-5. **#566 — schedule the shadow-match-worker** (one cron migration; after #442).
+## Phase 2 — The funnel and the soul (Fable, parallel-safe sessions)
 
-## Track 3 — M4 depth & community (one Fable session per issue)
+What a first-time visitor experiences, in priority order:
 
-All five P2 features are independent (different features, disjoint files) and can run as parallel
-sessions. Suggested order by player-visible impact:
+1. **#570 — Architect interference visible in live matches** (the soul pillar; the demo moment).
+2. **#571 — onboarding finish line**: inline starter bet, credit moment, persistent booth intro,
+   interface-not-mechanics explainers.
+3. **#378 final slice + #390's MatchDetail split — one combined session** (same file; done
+   separately they guarantee merge conflicts). Visual verification against Figma required.
+4. **#399 — username moderation + impersonation guard** (before any public link).
+5. **#403 — Supabase Pro + PITR (~$25/mo) + DR runbook** (operator billing; Fable drafts the
+   runbook) — pre-launch gate.
 
-1. #395 — training → newsfeed narrative wire (makes the clicker matter socially)
-2. #396 — personal narrative thread on `/profile` (first-person hook, pure DB reads)
-3. #394 — mid-season micro-votes (keeps the voting pillar warm weekly)
-4. #397 — feedback widget + Discord link + `/roadmap` page
-5. #399 — username moderation + impersonation guard (do before any public link goes out)
+## Phase 3 — Soft launch + early retention
 
-**Pre-public-launch gate (P1): #403** — upgrade Supabase to Pro (paid plan, ~$25/mo) for
-point-in-time recovery, then write the DR runbook. The upgrade is an operator/billing call; Fable
-can draft the runbook. Schedule alongside #399 before any public link goes out.
+Decide a soft-launch cohort (10–50 friendlies) once Phases 0–2 land. Then:
 
-P3 backlog, in rough order: #559 (bettor narratives server-side), #398 (share/OG images),
-#402 (cosmetic supporter tier — see Decisions).
+- #381 weekly email digest (needs #444)
+- #397 feedback widget + Discord link + `/roadmap` page
+- #396 personal narrative thread on `/profile`
+- #398 share/OG images (labelled P3, but it's the growth surface — revisit priority at launch)
+- Sentry triage habit once #445 is live
 
-## Open PR triage (state as of 2026-06-11)
+## Phase 4 — Depth (post-launch, audience-informed)
 
-- **#505** (dependabot: react-router 7.13 → 7.16) — merge once CI is green on it.
-- **Dependabot security alerts**: GitHub reports 6 open (4 high, 2 moderate) on `main` — triage at
-  [security/dependabot](https://github.com/steverowley/soccer-league/security/dependabot); #505 may
-  clear some. Good first Fable session: review each alert, bump or dismiss with justification.
-- **#456** (Wagers EmptyState consumer) — still valid but 2+ weeks stale; rebase or redo in the next
-  primitives session (it's a 5-line change).
-- **#475, #496** — closed during this reorg: both targeted `simulateFullMatch.ts`/`gameEngine.js`,
-  which were deleted when the project committed fully to the spatial engine (#389/#553). Their intent
-  (interference wiring, position snapshots) already shipped via #543 and migration 0061.
+#394 mid-season micro-votes · #395 training-narrative wire · #559 bettor narratives server-side ·
+#402 supporter tier (timing decision) · #510 Neptune lore decision.
 
-## Decisions queue (genuine choices only — everything else just proceeds)
+**Engine-depth backlog** (deliberately unticketed until prioritized; from the capability map):
+personality-modulated decision-making, age curves, home-advantage physics, form, substitutions/
+injuries/cards in-sim, and promoting more of the 19 narrative-only interference kinds into
+mechanical Architect levers — each is a new lever for the soul, and none needs a schema change.
 
-| Decision | Options | Recommendation |
-|----------|---------|----------------|
-| Email provider (#444) | Resend / Supabase SMTP relay / Postmark | Resend (free tier covers early traffic) |
-| Galaxy-tick voice model | Keep Haiku (current pin, ~10× cheaper) vs restore Sonnet richness | Keep Haiku until the feed is alive again, then A/B a week of Sonnet |
-| Neptune club (#510) | Add a 33rd club vs fix the lore/docs | Fix the lore (option 2) — adding a team breaks the 4×8 league math |
-| Supporter tier timing (#402) | Build now vs after public launch | After launch — no fans yet to support it |
+## Hygiene lane (continuous, parallel-safe with everything above)
+
+- **#505** merge the react-router bump (clears both high npm-audit vulns), then triage the remaining
+  [Dependabot alerts](https://github.com/steverowley/soccer-league/security/dependabot)
+- **#386** Zod boundary validation on the critical `api/` modules (P1 correctness)
+- **#561** worker-twin drift check (possible silent prod divergence) → then close **#547**
+- **#572** Supabase advisor pass (7 DEFINER views + function hardening)
+- **#407** lint gate — now effectively a `no-explicit-any` campaign (205 of 210 errors); after #390
+- **#548** dead code (+ the orphaned `roadmap` trigger functions) — after #386/#390 merge
+- **#393** images — verify (already at 3.0 MB) + add the CI size cap, then close
+- **#456** rebase or fold into the next primitives session
+
+## Cost picture (honest, from measured data)
+
+Exactly one healthy day of token telemetry exists (May 21: ~18.3K Haiku tokens ≈ **$0.05**). The
+structural burn is enricher hourly + galaxy-tick 2-hourly (Haiku) + drama-tick daily + in-match
+Architect (Sonnet) per live match — match days dominate. Pre-launch estimate: **single-digit
+dollars/month**; a ~$25/mo budget with small auto-reload gives ample headroom. Post-recharge, watch
+`agent_runs` token sums weekly (the telemetry now exists). Supabase Pro adds $25/mo at Phase 2;
+GitHub Pages hosting is free.
+
+## Decisions queue (genuine choices only)
+
+| Decision | When | Recommendation |
+|----------|------|----------------|
+| Email provider (#444) | Phase 3 | Resend free tier |
+| Galaxy-tick voice model | Post-recharge | Keep Haiku; trial Sonnet for a week later |
+| Do cups gate season end? (#569) | Phase 1 | Cups finish before voting opens |
+| Election Night ritual (#568) | Phase 1 | Wire it — it's the signature spectacle |
+| Soft-launch cohort + date | After Phase 2 | 10–50 friendlies |
+| Neptune club (#510) | Whenever | Fix the lore, keep 32 teams |
+| Supporter tier (#402) | Post-launch | Defer |
 
 ## Running this roadmap with Fable
 
-The repo is set up so an agent session can carry an issue end-to-end. Per session:
+1. **One issue = one session = one branch = one PR.** `<type>/<kebab-description>` off fresh
+   `main`, Conventional Commits, PR to `main`, squash-merge.
+2. Session prompt: *"Work issue #NNN in steverowley/soccer-league. Read the issue body + comments,
+   then CLAUDE.md. Implement with tests, run `npm run check`, push, open a PR, subscribe to PR
+   activity and fix CI/review feedback until merged. Close the issue when done."*
+3. **Parallel lanes**: Phase 2 items 1/2/4 are disjoint; the hygiene lane runs alongside anything.
+   Never run two sessions on the same feature or page (#378 + #390's MatchDetail = one session).
+4. **Verify sessions are first-class work**: after operator actions, point Fable at production via
+   the Supabase MCP ("trigger a tick, read `agent_runs`, confirm the feed") rather than assuming.
+5. UI sessions run the app and visually verify before pushing; Figma is the look-and-feel source of
+   truth.
+6. The `operator-action` label means human-only (billing, dashboards, secrets). Fable verifies the
+   outcome; you click the buttons.
 
-1. **One issue = one branch = one PR.** Branch `<type>/<kebab-description>` off fresh `main`;
-   Conventional Commit messages; PR targets `main`; squash-merge.
-2. Point the session at the issue: *"Work issue #NNN in steverowley/soccer-league. Read the issue
-   body and comments, then CLAUDE.md. Implement with tests, run `npm run check`, push, open a PR,
-   subscribe to PR activity, and fix CI/review feedback until it merges. Close the issue when done."*
-3. **Parallel sessions are safe when file surfaces are disjoint** — the groupings above call out
-   what can run simultaneously. Don't run two sessions that both touch the same page or feature.
-4. UI work (#378, #390, M4 features) should **run the app and visually verify** before pushing —
-   the Figma design system is the source of truth for look & feel.
-5. Anything labeled `operator-action` is human-only: billing, dashboard toggles, secrets. Fable can
-   *verify* the outcomes afterwards via the Supabase MCP but cannot perform them.
-
-## Horizon (designed in Notion, not yet ticketed)
-
-From the design doc, for after M4 — file issues when they become current:
-- **Positional play styles + personality-driven player agents** (the "fox-in-the-box vs target man"
-  idea) — natural next layer on the spatial engine.
-- **More entity types**: physios, doctors, scouts, analysts, the players' union, named broadcast
-  companies.
-- **Merch e-commerce** (Shopify) — explicitly "if the game becomes popular".
+Live filters: [operator queue](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3Aoperator-action) ·
+[M2](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM2-product-foundation) ·
+[M3](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM3-architectural-cleanup) ·
+[M4](https://github.com/steverowley/soccer-league/issues?q=is%3Aissue+is%3Aopen+label%3AM4-depth-community)
 
 ## Conventions
 
-- **Priority**: `P0` (critical) · `P1` (high) · `P2` (medium) · `P3` (low / backlog)
+- **Priority**: `P0` critical · `P1` high · `P2` medium · `P3` backlog
 - **Type**: `feature` · `fix` · `refactor` · `chore` · `docs` (+ `operator-action`)
 - **Milestone labels**: `M2-product-foundation` · `M3-architectural-cleanup` · `M4-depth-community`
-  (M0/M1 retired — closed out)
+  (M0/M1 closed out and retired)
 
-Branch + commit conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md): branch from `main`, PR to
-`main`, Conventional Commits.
+Branch + commit conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## Origin
 
-Issue structure produced by the 2026-05 multi-agent audit (architecture, gameplay, UI/UX, product,
-infra/security); milestones reconciled against the codebase 2026-06-06; this execution plan
-reorganized 2026-06-11 after M0/M1 closed out.
+Issue corpus from the 2026-05 multi-agent audits; codebase reconciled 2026-06-06; this plan rebuilt
+2026-06-11 from a first-hand production + code audit (DB state, security advisors, player-journey
+walkthrough, engine capability map, full check suite). The phases supersede milestone-label
+ordering; labels remain for filtering.
