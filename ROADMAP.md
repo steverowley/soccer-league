@@ -96,6 +96,9 @@ P3 backlog, in rough order: #559 (bettor narratives server-side), #398 (share/OG
 ## Open PR triage (state as of 2026-06-11)
 
 - **#505** (dependabot: react-router 7.13 → 7.16) — merge once CI is green on it.
+- **Dependabot security alerts**: GitHub reports 6 open (4 high, 2 moderate) on `main` — triage at
+  [security/dependabot](https://github.com/steverowley/soccer-league/security/dependabot); #505 may
+  clear some. Good first Fable session: review each alert, bump or dismiss with justification.
 - **#456** (Wagers EmptyState consumer) — still valid but 2+ weeks stale; rebase or redo in the next
   primitives session (it's a 5-line change).
 - **#475, #496** — closed during this reorg: both targeted `simulateFullMatch.ts`/`gameEngine.js`,
