@@ -90,8 +90,12 @@ sessions. Suggested order by player-visible impact:
 4. #397 — feedback widget + Discord link + `/roadmap` page
 5. #399 — username moderation + impersonation guard (do before any public link goes out)
 
+**Pre-public-launch gate (P1): #403** — upgrade Supabase to Pro (paid plan, ~$25/mo) for
+point-in-time recovery, then write the DR runbook. The upgrade is an operator/billing call; Fable
+can draft the runbook. Schedule alongside #399 before any public link goes out.
+
 P3 backlog, in rough order: #559 (bettor narratives server-side), #398 (share/OG images),
-#403 (Supabase Pro + DR runbook — operator + docs), #402 (cosmetic supporter tier — see Decisions).
+#402 (cosmetic supporter tier — see Decisions).
 
 ## Open PR triage (state as of 2026-06-11)
 
