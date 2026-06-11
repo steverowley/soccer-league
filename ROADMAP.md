@@ -1,6 +1,7 @@
 # Intergalactic Soccer League — Roadmap
 
 > **The active roadmap lives in GitHub Issues.** This file is a pointer.
+> The latest dated status snapshot + recommended sequencing: [`PLANNING.md`](./PLANNING.md).
 
 ## Milestones
 
