@@ -50,8 +50,8 @@ This is a TypeScript + React app talking to a Supabase backend, with Deno edge f
 - **AI** — Anthropic SDK. `claude-sonnet-4-6` for the in-match Architect and the daily drama beat; `claude-haiku-4-5-20251001` for the galaxy heartbeat, voice-library enrichment, and live commentary.
 - **Simulation** — a deterministic, agent-based spatial match engine (Reynolds-style steering, geometry-derived events), run by the `match-worker` edge function and seeded from each match's UUID so a fixture always replays identically.
 - **Hosting** — currently deployed via GitHub Pages on push; this will move to a proper domain when the league opens.
-- **Tests** — Vitest (~1,320 tests). CI gates on `tsc --noEmit` + Vitest; ESLint and Prettier are wired (lint is informational for now while a cleanup backlog is cleared).
-- **Issues** — tracked in **GitHub Issues** under milestone labels `M0`–`M4` (filter, e.g., `is:issue is:open label:M0-launch-blockers`).
+- **Tests** — Vitest (~1,340 tests). CI gates on `tsc --noEmit` + Vitest; ESLint and Prettier are wired (lint is informational for now while a cleanup backlog is cleared).
+- **Issues** — tracked in **GitHub Issues** under milestone + priority labels; the phase-based execution plan lives in [`ROADMAP.md`](./ROADMAP.md).
 
 The four core ideas the codebase is organised around:
 
@@ -79,7 +79,7 @@ Top 3 per league qualify for the **Celestial Cup**. 4th–6th qualify for the **
 
 ## Status
 
-**Construction site.** All core systems are wired (spatial match sim + 2D viewer, betting, voting, training, cups, architect lore, fan support, Galaxy Dispatch, entity graph, notifications, admin). What's left before public launch is operational polish — admin tooling, mobile refinement, performance, an architectural cleanup pass, and the hosting move to a real domain.
+**Construction site.** All core systems are wired (spatial match sim + 2D viewer, betting, voting, training, cups, architect lore, fan support, Galaxy Dispatch, entity graph, notifications, admin). What's left before public launch: making the season loop perpetual (automatic rollover + cup completion), finishing the first-fan onboarding, surfacing the Architect live in matches, and the hosting move to a real domain — the full plan lives in [`ROADMAP.md`](./ROADMAP.md).
 
 When the league opens, a link will appear at the top of this README. In the meantime: don't clone it, don't run it locally — just wait for the gates. It'll be worth it.
 

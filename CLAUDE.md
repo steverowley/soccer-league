@@ -91,8 +91,8 @@ known, or you're running tests/linters.
 ## Git Workflow & Branch Strategy
 
 **This project uses plain GitHub-flow on a single trunk. There is NO `dev` branch.** (Any doc, hook, or
-workflow that still references `dev` is stale — `setup-branch-protection.yml` and
-`scripts/validate-branch-name.sh` are known offenders, tracked for cleanup.)
+workflow that still references `dev` is stale — the known offenders were cleaned in #550, and the last
+straggler, a root-level `setup-branch-protection.sh`, was deleted in the 2026-06-11 cleanup.)
 
 - **`main`** — the default and only long-lived branch. Production-ready. Protected: requires a passing
   CI `quality` check and (where enabled) 1 review. No force-pushes.
@@ -474,8 +474,8 @@ Four workflows under `.github/workflows/`:
 - **`enact-due-seasons.yml`** — scheduled daily (06:00 UTC) + manual dispatch; runs end-of-season focus
   enactment as a service-role Node job (added in #529/#544). Needs the `SUPABASE_URL` +
   `SUPABASE_SERVICE_ROLE_KEY` repo secrets.
-- **`setup-branch-protection.yml`** — manual helper; **stale** (still references a nonexistent `dev`
-  branch; cleanup tracked in #549/#550).
+- **`setup-branch-protection.yml`** — manual-dispatch helper that (re)applies `main` branch protection
+  (the stale `dev` references were removed in #550).
 
 There is no CodeQL workflow file, though branch protection references `Analyze` checks (CodeQL is likely
 enabled via GitHub's repo-level default setup).
@@ -545,13 +545,13 @@ manually:
 > `TodoWrite`, or markdown TODO files for cross-session tracking — use **GitHub Issues**.
 
 Work is tracked in GitHub Issues with **label-based milestones** (not GitHub Milestone objects):
-- Milestone labels: `M0-launch-blockers`, `M1-architect-wakes-up`, `M2-product-foundation`,
-  `M3-architectural-cleanup`, `M4-depth-community`
+- Milestone labels: `M2-product-foundation`, `M3-architectural-cleanup`, `M4-depth-community`
+  (`M0-launch-blockers` and `M1-architect-wakes-up` are **closed out and retired**)
 - Priority labels: `P0` (critical) · `P1` (high) · `P2` (medium) · `P3` (low/backlog)
 - Type labels: `feature` · `fix` · `refactor` · `chore` · `docs` (+ `operator-action`)
 
-See `ROADMAP.md` for the milestone index, or filter directly, e.g.
-`is:issue is:open label:M0-launch-blockers label:P0`.
+See `ROADMAP.md` for the **phase-based execution plan** (phases supersede milestone-label ordering),
+or filter directly, e.g. `is:issue is:open label:M2-product-foundation label:P1`.
 
 ### Quick reference (GitHub MCP tools)
 - `mcp__github__list_issues` — find open work (filter by label)
@@ -560,8 +560,7 @@ See `ROADMAP.md` for the milestone index, or filter directly, e.g.
 - `mcp__github__add_issue_comment` — leave a note
 
 ### Session-start ritual
-1. List open issues, filtered to the current milestone (start at `M0-launch-blockers`, advance as it
-   closes).
+1. Read `ROADMAP.md` and work the **current phase**; list open issues for it, sorted by priority.
 2. Read this file for context.
 3. Check current branch + `git status`.
 
@@ -575,11 +574,12 @@ See `ROADMAP.md` for the milestone index, or filter directly, e.g.
 ## Current Implementation Status
 
 > **Last audited: 2026-06-06** against the codebase (a multi-agent ground-truth sweep). Numeric claims
-> in this file reflect that sweep. Next sweep due ~2026-09-06.
+> in this file reflect that sweep, spot-corrected by the **2026-06-11 production + code deep audit**
+> (whose findings live in `ROADMAP.md` and issues #565–#572). Next full sweep due ~2026-09-06.
 
 All core systems are wired and tested:
 - **Infrastructure** — strict TypeScript, 11-feature layout, event bus, generated typed client, GitHub
-  Pages deploy. **~1,325 Vitest tests** (the legacy `gameEngine.smoke.test.ts` was removed with the
+  Pages deploy. **~1,337 Vitest tests** (the legacy `gameEngine.smoke.test.ts` was removed with the
   engine in #389; the seed-divergence test was de-flaked in #541).
 - **Match simulation** — live spatial engine + 2D position viewer (the legacy `gameEngine.js` engine and
   its PATH B fallback were deleted in #389).
@@ -589,7 +589,9 @@ All core systems are wired and tested:
   (graph + referees), **Season lifecycle**, **Fan support & finance**, **Notifications** (web push),
   **Admin dashboard** — all live.
 
-**Known drift / cleanup (tracked under M3):** the spatial engine is duplicated between `src/` and the
-Deno worker (a runtime constraint — ~17% of the codebase is this src↔worker mirror; a drift-guard test
-is added in #547); ~230 pre-existing ESLint errors (lint is informationally-gated until cleared); stale
-`dev` references in `setup-branch-protection.yml` and `scripts/validate-branch-name.sh` (#549/#550).
+**Known drift / cleanup:** the spatial engine is duplicated between `src/` and the
+Deno worker (a runtime constraint — a drift-guard test guards the twins, #547/#554/#560; residual
+divergence under investigation in #561); ~210 pre-existing ESLint errors, 205 of them
+`@typescript-eslint/no-explicit-any` (lint is informationally-gated until cleared, #407). **Verified
+production gaps (2026-06-11):** no season-rollover path exists (#568) and cup fixtures are seeded with
+unreachable in-universe dates (#569) — Season 1 is stuck in `voting` until those land.

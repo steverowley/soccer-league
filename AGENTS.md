@@ -5,13 +5,14 @@ principles, architecture, and invariants — lives in [`CLAUDE.md`](./CLAUDE.md)
 
 ## Where the work lives
 
-Task tracking is **GitHub Issues**, organised by label-based milestones (`M0`–`M4`) and priority
-(`P0`–`P3`).
+Task tracking is **GitHub Issues**, organised by label-based milestones (`M2`–`M4`; `M0`/`M1` are
+closed out) and priority (`P0`–`P3`). **Execution order lives in [`ROADMAP.md`](./ROADMAP.md)** — a
+phase-based plan that supersedes milestone-label ordering.
 
 ```bash
-gh issue list --state open --label M0-launch-blockers   # current launch-blockers
-gh issue list --state open --label "M0-launch-blockers" --label P0   # top priority
-gh issue view <number>                                   # full body + acceptance criteria
+gh issue list --state open --label M2-product-foundation   # current product phase
+gh issue list --state open --label operator-action          # human-only queue
+gh issue view <number>                                       # full body + acceptance criteria
 ```
 
 Or use the GitHub MCP tools: `mcp__github__list_issues`, `mcp__github__issue_read`,
@@ -23,8 +24,8 @@ Or use the GitHub MCP tools: `mcp__github__list_issues`, `mcp__github__issue_rea
 
 ## Session ritual
 
-1. **Start** — pick an issue (start at the current milestone, sort by priority), read its body, then
-   check the current branch and `git status`.
+1. **Start** — pick an issue from the current phase in `ROADMAP.md` (sort by priority), read its body,
+   then check the current branch and `git status`.
 2. **Branch** — from `main`: `git checkout -b <type>/<short-description>`. There is **no `dev` branch**;
    ignore any doc/hook/workflow that mentions one.
 3. **Work** — follow the layer boundaries and import discipline in `CLAUDE.md`. Keep changes surgical.
