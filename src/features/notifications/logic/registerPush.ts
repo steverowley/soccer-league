@@ -177,7 +177,7 @@ function keysMatch(
  *          throws (typically because the file 404s in a dev build that
  *          forgot to copy `public/`).
  */
-export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null;
 
   try {

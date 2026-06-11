@@ -4,15 +4,14 @@
   "entry": [
     "scripts/*.ts",
     "supabase/functions/**/*.ts",
-    "src/App.jsx"
+    "src/main.tsx"
   ],
 
   "ignorePatterns": [
-    "src/lib/supabase.js",
-    "src/features/design-system/**",
     "supabase/migrations/**",
     "supabase/seed.sql",
-    "src/types/database.ts"
+    "src/types/database.ts",
+    "public/sw.js"
   ],
 
   "rules": {

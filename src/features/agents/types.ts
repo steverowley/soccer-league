@@ -80,8 +80,6 @@ export type SnippetInsert = TablesInsert<'entity_snippets'>;
 
 /** Row shape of `agent_runs`. */
 export type AgentRunRow = Tables<'agent_runs'>;
-/** Insert payload for `agent_runs`. */
-export type AgentRunInsert = TablesInsert<'agent_runs'>;
 
 /**
  * Snippet kinds — controlled vocabulary used for `entity_snippets.kind`.

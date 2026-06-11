@@ -16,7 +16,6 @@
 // Shared shapes for commentary + voice corpus.  Decision-layer types
 // (DecisionKind, …) will be added in Phase 6.
 export type {
-  AgentRunInsert,
   AgentRunKind,
   AgentRunRow,
   CommentaryActors,
@@ -64,12 +63,9 @@ export { composeNarrative, slotNames } from './logic/composer';
 // Cross-feature consumers should hit these via the barrel rather than
 // reaching into `api/*` directly.
 export {
-  bumpSnippetUsage,
-  insertSnippet,
   listSnippetsForEntity,
 } from './api/snippets';
 export {
-  bumpMemoryConsumed,
   insertMemory,
   listMemoriesForEntity,
 } from './api/memories';
@@ -78,7 +74,6 @@ export {
   listPersonasForEntities,
   upsertPersona,
 } from './api/personas';
-export { logAgentRun } from './api/agentRuns';
 // Pre-match in-memory hydration for reflex-tier resolvers (Phase 8 hot-path).
 // Caller batches every involved entity_id through this helper once before
 // kickoff; the returned snapshot lives on `genCtx.agentCorpus` and is read

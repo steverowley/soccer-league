@@ -32,16 +32,6 @@
  */
 export const DAYBREAK_KIND = 'daybreak';
 
-// ── Per-day cap ──────────────────────────────────────────────────────────────
-
-/**
- * Maximum daybreak digests per UTC calendar day.  Always 1 — the whole
- * point is that the Home page banner is *the* morning anchor.  Even if
- * the cron fires multiple times before the daybreak window opens, only
- * the first successful insert persists per day.
- */
-export const MAX_DAYBREAK_PER_DAY = 1;
-
 // ── UTC window when the daybreak should fire ────────────────────────────────
 //
 // The cron runs every 2 hours.  We want the daybreak to appear during

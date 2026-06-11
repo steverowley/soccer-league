@@ -27,7 +27,7 @@ type MsgHistory = Array<{ role: string; content: string }>;
 // Three distinct on-air voices. Each has a system-prompt shaping Claude's
 // responses. The colour field tints that commentator's feed cards in the UI.
 
-export const COMMENTATOR_PROFILES: CommentatorProfile[] = [
+const COMMENTATOR_PROFILES: CommentatorProfile[] = [
   {
     id:    'nexus7',
     name:  'Nexus-7',

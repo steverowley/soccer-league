@@ -7,8 +7,6 @@
 //   - The five named panels referenced from `/admin`:
 //       AdminAccessGate, OverviewPanel, SeasonControlsPanel,
 //       FixtureBrowser,  TestingPanel, ArchitectInterventionLog.
-//     Plus the SystemStatsCard re-export for future panels that may want the
-//     raw stats strip without the Overview wrapper.
 //   - The shared design tokens + small presentational primitives from
 //     `primitives.tsx` (PanelHeader, button + colour constants, etc.).
 //     Re-exporting them here means panel callers — and the Admin page
@@ -16,7 +14,7 @@
 
 // ── Panels ───────────────────────────────────────────────────────────────────
 export { AdminAccessGate }              from './AdminAccessGate';
-export { OverviewPanel, SystemStatsCard } from './SystemStatsCard';
+export { OverviewPanel }                from './SystemStatsCard';
 export { SeasonControlsPanel }          from './SeasonControlsPanel';
 export { FixtureBrowser }               from './FixtureBrowser';
 export { TestingPanel }                 from './TestingPanel';

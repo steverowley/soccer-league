@@ -56,46 +56,6 @@ const NotificationPreferencesSchema = z.object({
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
 /**
- * Fetch the currently authenticated user's push subscriptions.
- *
- * One row per device/browser the user has enabled push on.  Drives the
- * "subscribed devices" list on /profile.  Returns an empty array (not an
- * error) when the user has no rows — that's the normal pre-enrolment state.
- *
- * @param db  Injected Supabase client (via `useSupabase()`).
- * @returns   The list of validated rows, or `[]` + an error string.
- */
-export async function listOwnPushSubscriptions(
-  db: IslSupabaseClient,
-): Promise<{ data: PushSubscriptionRow[]; error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
-    return { data: [], error: 'Not authenticated' };
-  }
-
-  const { data, error } = await db
-    .from('push_subscriptions')
-    .select('*')
-    .eq('user_id', authData.user.id)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    return { data: [], error: error.message };
-  }
-
-  // Boundary parse — if any row fails we treat the whole response as a
-  // schema-drift error rather than silently dropping individual rows.
-  const parsed = z.array(PushSubscriptionRowSchema).safeParse(data ?? []);
-  if (!parsed.success) {
-    return {
-      data: [],
-      error: `push_subscriptions schema validation failed: ${parsed.error.message}`,
-    };
-  }
-  return { data: parsed.data, error: null };
-}
-
-/**
  * Fetch just the two opt-in toggles for the authenticated user.
  *
  * Extracted from the full profile read so the notifications UI does not

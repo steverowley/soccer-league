@@ -197,19 +197,3 @@ export function useMatchEventLatest(matchId: string | null | undefined): MatchEv
 
   return latest;
 }
-
-// ── Test seam ───────────────────────────────────────────────────────────────
-
-/**
- * Reset all module-level state — for tests only.  Production code
- * should never need this; the hook's refCount cleanup handles
- * lifecycle correctly on its own.
- */
-export function __resetMatchEventsBroadcastForTests(): void {
-  latestByMatch.clear();
-  subscribers.clear();
-  refCount = 0;
-  if (activeChannel && activeClient) activeClient.removeChannel(activeChannel);
-  activeChannel = null;
-  activeClient  = null;
-}

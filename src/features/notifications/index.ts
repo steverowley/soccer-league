@@ -16,7 +16,6 @@
 export { default as NotificationSettings } from './ui/NotificationSettings';
 
 export {
-  listOwnPushSubscriptions,
   getNotificationPreferences,
   upsertPushSubscription,
   deletePushSubscription,

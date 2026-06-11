@@ -37,7 +37,7 @@
 //   extend the feature.
 
 // ── AgentSystem (AI commentary dispatcher) ────────────────────────────────
-export { AgentSystem, COMMENTATOR_PROFILES } from './logic/AgentSystem';
+export { AgentSystem } from './logic/AgentSystem';
 
 // ── Shared match types ────────────────────────────────────────────────────
 export type {

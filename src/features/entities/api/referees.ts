@@ -29,20 +29,6 @@ export interface RefereeWithStrictness {
   strictness: number;
 }
 
-/**
- * A row from the `match_referee_v` view — the officiating context for a
- * single match.  All fields are nullable when the match has no referee
- * assigned yet (transitional state during seed-and-backfill cycles).
- */
-export interface MatchReferee {
-  match_id: string;
-  referee_id: string | null;
-  referee_name: string | null;
-  referee_display_name: string | null;
-  /** 1=lenient … 10=strict.  Defaults to 5 in the view when trait is missing. */
-  referee_strictness: number;
-}
-
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -102,64 +88,4 @@ export async function getRefereesWithStrictness(
       strictness,
     };
   });
-}
-
-/**
- * Fetch the officiating context for a single match.
- *
- * Returns null when the match exists but has no referee assigned yet (e.g.
- * during a fresh seed before the backfill DO block runs).  The MatchDetail
- * page treats null as "no referee badge to display" rather than an error.
- *
- * @param db       Injected Supabase client.
- * @param matchId  Match UUID.
- */
-export async function getMatchReferee(
-  db: IslSupabaseClient,
-  matchId: string,
-): Promise<MatchReferee | null> {
-  const { data, error } = await db
-    .from('match_referee_v')
-    .select('*')
-    .eq('match_id', matchId)
-    .maybeSingle();
-
-  if (error) {
-    console.warn('[getMatchReferee] failed:', error.message);
-    return null;
-  }
-  if (!data) return null;
-  // Treat "match exists but referee_id is null" as no-referee rather than
-  // returning a stub with all-null name fields.  Callers can rely on the
-  // narrowed presence of referee_id to decide whether to render.
-  if (data.referee_id == null) return null;
-  return data as MatchReferee;
-}
-
-// ── Writes ────────────────────────────────────────────────────────────────────
-
-/**
- * Assign a referee to a match via the SECURITY DEFINER `assign_match_referee`
- * RPC introduced in 0015.  The RPC validates that the target entity is of
- * kind='referee' before writing, so this function cannot accidentally store
- * a player or pundit ID in the FK column.
- *
- * Idempotent: re-running with the same arguments overwrites with the same
- * value.  Use this to (re-)assign during scheduling or to record manual
- * Architect-driven swaps.
- *
- * @param db          Injected Supabase client.
- * @param matchId     Match UUID.
- * @param refereeId   Referee entity UUID — must be entities.kind='referee'.
- */
-export async function assignMatchReferee(
-  db: IslSupabaseClient,
-  matchId: string,
-  refereeId: string,
-): Promise<void> {
-  const { error } = await db.rpc('assign_match_referee', {
-    p_match_id:   matchId,
-    p_referee_id: refereeId,
-  });
-  if (error) throw error;
 }

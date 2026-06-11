@@ -109,4 +109,3 @@ export {
   MIN_WAGERS_FOR_SIGNAL,
 } from './logic/wagerVolume';
 export type { WagerVolumeSummary, SideBreakdown } from './logic/wagerVolume';
-export { getWagerVolumeForMatch } from './api/wagerVolume';

@@ -38,7 +38,7 @@ export type {
 } from './types';
 
 // ── API (Supabase queries) ─────────────────────────────────────────────────
-export { getRecentNarratives, getRecentNarrativesByKinds } from './api/entities';
+export { getRecentNarratives } from './api/entities';
 
 // ── API — narrative profiles (entities.meta.profile) ───────────────────────
 // Zod-validated read of an entity's authored profile content, consumed by the
@@ -68,12 +68,9 @@ export {
 // migration 0015_match_referee.sql.
 export {
   getRefereesWithStrictness,
-  getMatchReferee,
-  assignMatchReferee,
 } from './api/referees';
 export type {
   RefereeWithStrictness,
-  MatchReferee,
 } from './api/referees';
 
 // ── API — referee narrative writer (Phase 5a) ──────────────────────────────
@@ -98,21 +95,13 @@ export {
   createEntity,
   createJournalistEntity,
   createManagerEntity,
-  createManagingStaffEntity,
   createMediaCompanyEntity,
   createMutualRelationship,
-  createOfficialsAssociationEntity,
   createPlayerEntity,
-  createPoliticalPartyEntity,
-  createPoliticianEntity,
   createPunditEntity,
   createRefereeEntity,
   createRelationship,
-  createSocialMediaEntity,
-  createSportsWriterEntity,
-  createStadiumEntity,
   createTrait,
-  createTrainingFacilityEntity,
   createTraits,
 } from './logic/entityFactory';
 export type {

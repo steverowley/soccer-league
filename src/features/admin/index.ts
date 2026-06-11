@@ -61,7 +61,6 @@ export type {
 export {
   AdminAccessGate,
   OverviewPanel,
-  SystemStatsCard,
   SeasonControlsPanel,
   FixtureBrowser,
   TestingPanel,
