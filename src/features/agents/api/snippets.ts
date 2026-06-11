@@ -22,10 +22,7 @@
 import { z } from 'zod';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
-import type {
-  SnippetInsert,
-  SnippetRow,
-} from '../types';
+import type { SnippetRow } from '../types';
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
 // Mirrors `Tables<'entity_snippets'>` exactly.  Drift between SQL and TS
@@ -101,89 +98,4 @@ export async function listSnippetsForEntity(
     }
   }
   return validated;
-}
-
-// ── Insert ──────────────────────────────────────────────────────────────────
-
-/**
- * Insert a single snippet row.  Used by:
- *   - Phase 3 personaFactory when seeding core_quotes as snippets.
- *   - Phase 5 corpus-enricher when an LLM enrichment pass yields snippets.
- *   - One-shot seed scripts.
- *
- * Writes through the service-role key per RLS in migration 0035; an
- * authenticated client will receive a permission error.
- *
- * @param db      Injected Supabase client (service-role for writes).
- * @param payload Insert payload with required fields populated.
- * @returns       The inserted row, or null on error.
- */
-export async function insertSnippet(
-  db: IslSupabaseClient,
-  payload: SnippetInsert,
-): Promise<SnippetRow | null> {
-  const { data, error } = await db
-    .from('entity_snippets')
-    .insert(payload)
-    .select('*')
-    .single();
-
-  if (error) {
-    console.warn('[insertSnippet] failed:', error.message);
-    return null;
-  }
-
-  const parsed = SnippetRowSchema.safeParse(data);
-  if (!parsed.success) {
-    console.warn('[insertSnippet] inserted row failed Zod:', parsed.error.message);
-    return null;
-  }
-  return parsed.data;
-}
-
-// ── Usage bookkeeping ───────────────────────────────────────────────────────
-
-/**
- * Increment `usage_count` and refresh `last_used_at` for a snippet that
- * was just served to the user.  Best-effort fire-and-forget — a failed
- * bump is annoying (the picker may re-serve the same snippet) but never
- * blocks the response.
- *
- * Called by the composer/news listener at publication time, NOT at
- * retrieval time, so previewing a corpus pick (e.g. an admin debug view)
- * doesn't poison the scoring weights.
- *
- * @param db         Injected Supabase client (service-role for writes).
- * @param snippetId  UUID of the snippet that was just used.
- * @returns          Promise that resolves once the update lands.  Never throws.
- */
-export async function bumpSnippetUsage(
-  db: IslSupabaseClient,
-  snippetId: string,
-): Promise<void> {
-  // Read-modify-write because Supabase JS doesn't expose `usage_count + 1`
-  // as a typed expression.  Race conditions yield a slightly stale count
-  // — acceptable for a soft scoring weight.
-  const { data: current, error: readErr } = await db
-    .from('entity_snippets')
-    .select('usage_count')
-    .eq('id', snippetId)
-    .single();
-
-  if (readErr || !current) {
-    console.warn('[bumpSnippetUsage] read failed:', readErr?.message);
-    return;
-  }
-
-  const { error: updateErr } = await db
-    .from('entity_snippets')
-    .update({
-      usage_count: current.usage_count + 1,
-      last_used_at: new Date().toISOString(),
-    })
-    .eq('id', snippetId);
-
-  if (updateErr) {
-    console.warn('[bumpSnippetUsage] update failed:', updateErr.message);
-  }
 }

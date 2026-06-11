@@ -30,13 +30,13 @@ const personFields = {
 // ── Per-kind profile schemas ────────────────────────────────────────────────
 
 /** Player / youth player. Age, nationality, position, stats live on `players`. */
-export const playerProfileSchema = z.object({
+const playerProfileSchema = z.object({
   ...personFields,
   injuries: z.string(), // current status + notable history, e.g. "Fully fit"
 });
 
 /** Manager. Nationality, style, preferred_formation live on `managers`. */
-export const managerProfileSchema = z.object({
+const managerProfileSchema = z.object({
   ...personFields,
   age: z.number(),
   nationality: z.string(),
@@ -45,10 +45,10 @@ export const managerProfileSchema = z.object({
 });
 
 /** Managing staff (assistant manager, coaches, fitness, set-piece, etc.). */
-export const managingStaffProfileSchema = managerProfileSchema;
+const managingStaffProfileSchema = managerProfileSchema;
 
 /** Match official. Strictness stays a numeric entity_trait; not duplicated here. */
-export const refereeProfileSchema = z.object({
+const refereeProfileSchema = z.object({
   ...personFields,
   age: z.number(),
   nationality: z.string(),
@@ -56,7 +56,7 @@ export const refereeProfileSchema = z.object({
 });
 
 /** Journalist / sports writer. Beat + employer stay in meta. */
-export const journalistProfileSchema = z.object({
+const journalistProfileSchema = z.object({
   ...personFields,
   age: z.number(),
   nationality: z.string(),
@@ -65,7 +65,7 @@ export const journalistProfileSchema = z.object({
 });
 
 /** Pundit / commentator. Specialty + era stay in meta. */
-export const punditProfileSchema = z.object({
+const punditProfileSchema = z.object({
   ...personFields,
   age: z.number(),
   nationality: z.string(),
@@ -74,7 +74,7 @@ export const punditProfileSchema = z.object({
 });
 
 /** Football club. Name, location, league, links to stadium/squad stay relational. */
-export const teamProfileSchema = z.object({
+const teamProfileSchema = z.object({
   date_founded: z.string(),
   fans_nickname: z.string(),
   number_of_fans: z.string(),
@@ -91,7 +91,7 @@ export const teamProfileSchema = z.object({
 });
 
 /** Stadium. Capacity + nickname already live in meta. */
-export const stadiumProfileSchema = z.object({
+const stadiumProfileSchema = z.object({
   date_built: z.string(),
   sponsors: z.string(),
   pitch_size: z.string(),
@@ -101,14 +101,14 @@ export const stadiumProfileSchema = z.object({
 });
 
 /** Training facility. Quality already lives in meta. */
-export const trainingFacilityProfileSchema = z.object({
+const trainingFacilityProfileSchema = z.object({
   date_built: z.string(),
   sponsors: z.string(),
   bio: z.string(),
 });
 
 /** Media company (newspaper / broadcaster / social platform owner). */
-export const mediaCompanyProfileSchema = z.object({
+const mediaCompanyProfileSchema = z.object({
   type: z.string(),
   owner: z.string(),
   date_founded: z.string(),

@@ -35,7 +35,7 @@ import {
  * @param db  Supabase client supplied by the parent (uses the active session;
  *            anon clients see zeros where RLS denies the underlying tables).
  */
-export function SystemStatsCard({ db }: { db: IslSupabaseClient }) {
+function SystemStatsCard({ db }: { db: IslSupabaseClient }) {
   const [stats, setStats] = useState<SystemStats | null>(null);
 
   // Single fetch on mount.  No interval — see file header for rationale.
