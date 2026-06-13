@@ -29,9 +29,10 @@
 //   to /profile or wherever they were heading.
 
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
+import { Button } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '../features/auth/api/profiles';
@@ -284,14 +285,9 @@ function StarterBetStep({ teamId, playerId, onDone }: {
             <div style={{ fontSize: 12, color: DUST_50, marginBottom: 16 }}>
               {nextMatch.scheduled_at ? new Date(nextMatch.scheduled_at).toLocaleString() : 'Scheduled soon'}
             </div>
-            <Link to={`/matches/${nextMatch.id}`} style={{
-              display: 'inline-block',
-              fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: DUST, background: QUANTUM, border: `1px solid ${QUANTUM}`,
-              padding: '12px 20px', textDecoration: 'none',
-            }}>
-              Place starter bet →
-            </Link>
+            <Button variant="active" to={`/matches/${nextMatch.id}`}>
+              Place starter bet
+            </Button>
           </div>
         )}
       </div>

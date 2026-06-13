@@ -37,10 +37,10 @@ import { getTeamFocusOptions, getTeamTally, castVote, getEnactedFocuses } from '
 import { getActiveSeason } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-// QUANTUM (focus) drives the Cast Vote submit button.  FLARE is
-// retained for the two genuine error surfaces on this page: the
-// voting-unavailable load error and the insufficient-credits hint.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+// ASTRO (action) drives the Cast Vote button — the page's loud call to
+// action.  FLARE is retained for the two genuine error surfaces on this
+// page: the voting-unavailable load error and the insufficient-credits hint.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -598,9 +598,9 @@ function OptionCard({ option, tally, tierTotal, credits, busy, onVote  }: any) {
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
-            color: submittable ? DUST : DUST_50,
-            background: submittable ? QUANTUM : 'transparent',
-            border: `1px solid ${submittable ? QUANTUM : HAIRLINE}`,
+            color: submittable ? ABYSS : DUST_50,
+            background: submittable ? ASTRO : 'transparent',
+            border: `1px solid ${submittable ? ASTRO : HAIRLINE}`,
             padding: '12px 24px',
             cursor: submittable ? 'pointer' : 'not-allowed',
             fontFamily: 'inherit',

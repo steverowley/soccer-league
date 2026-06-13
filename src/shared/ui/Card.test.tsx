@@ -3,6 +3,7 @@
 // future migrations consume a stable API.
 
 import { render } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { Card } from './Card';
 
@@ -43,5 +44,18 @@ describe('Card', () => {
     expect(root.style.minHeight).toBe('280px');
     // The primitive's own properties survive alongside the override.
     expect(root.style.padding).toBe('24px');
+  });
+
+  it('renders as a router link when `to` is set, with no underline', () => {
+    const { getByRole } = render(
+      <MemoryRouter>
+        <Card to="/leagues/x">clickable</Card>
+      </MemoryRouter>,
+    );
+    const link = getByRole('link', { name: 'clickable' });
+    expect(link.getAttribute('href')).toBe('/leagues/x');
+    // Surface, not hyperlink: dust text, no underline, but still bordered.
+    expect(link.style.textDecoration).toBe('none');
+    expect(link.style.border).toMatch(/1px solid/);
   });
 });

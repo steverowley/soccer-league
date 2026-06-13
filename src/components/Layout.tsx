@@ -248,10 +248,13 @@ export function PrimaryButton({ to, children }: { to: string; children: ReactNod
 }
 
 /**
- * Focus CTA — Quantum Purple fill, dust text, purple border.
- * THE primary-attention button: Sign Up, Watch Live, Cast Vote, Place Wager.
+ * Focus CTA — Astro Explorer (#FF6637) fill, abyss text, orange border.
+ * THE loud call to action: Sign Up, Watch Live, Cast Vote, Place Wager.
  *
- * Uses Quantum Purple (not Solar Flare) — flare is the ERROR colour.
+ * Matches the design system's "Active button": the loud action colour is
+ * Astro Explorer orange, NOT Quantum Purple (purple is the focus/live colour,
+ * never a button fill) and NOT Solar Flare (flare is error-only). Orange wants
+ * dark text for contrast, so the label is abyss rather than dust.
  * Touch-friendly: 44px+ minimum height for WCAG AAA tap target compliance.
  */
 export function FocusCTA({ to, children }: { to: string; children: ReactNode }) {
@@ -265,9 +268,9 @@ export function FocusCTA({ to, children }: { to: string; children: ReactNode }) 
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '0.12em',
-        color: COLORS.dust,
-        background: COLORS.quantum,
-        border: `1px solid ${COLORS.quantum}`,
+        color: COLORS.abyss,
+        background: COLORS.astro,
+        border: `1px solid ${COLORS.astro}`,
         padding: '16px 28px',
         textDecoration: 'none',
         whiteSpace: 'nowrap',

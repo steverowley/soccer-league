@@ -23,7 +23,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { useToast } from '../shared/ui';
+import { Button, useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../features/match';
@@ -39,7 +39,7 @@ import { NotificationSettings } from '../features/notifications';
 // could replace the "Saved." italic line below the form — kept dust
 // for now since the form's success state is already clear from the
 // disabled submit + the refresh.  FLARE stays for save-error text.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -335,9 +335,9 @@ export default function Profile() {
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
-              color: DUST,
-              background: busy ? 'transparent' : QUANTUM,
-              border: `1px solid ${QUANTUM}`,
+              color: busy ? DUST : ABYSS,
+              background: busy ? 'transparent' : ASTRO,
+              border: `1px solid ${ASTRO}`,
               padding: '12px 24px',
               cursor: busy ? 'wait' : 'pointer',
               fontFamily: 'inherit',
@@ -372,51 +372,13 @@ export default function Profile() {
         />
         <div style={{ marginTop: 24, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              style={{
-        ...(undefined as any),
-                display: 'inline-flex',
-                alignItems: 'center',
-                fontSize: 13,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.12em',
-                color: DUST,
-                background: QUANTUM,
-                border: `1px solid ${QUANTUM}`,
-                padding: '14px 28px',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                minHeight: 44,
-              }}
-            >
+            <Button variant="active" onClick={() => navigate('/admin')}>
               Admin Dashboard
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onSignOut}
-            style={{
-        ...(undefined as any),
-              display: 'inline-flex',
-              alignItems: 'center',
-              fontSize: 13,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-              color: DUST,
-              background: ABYSS,
-              border: `1px solid ${DUST}`,
-              padding: '14px 28px',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              minHeight: 44,
-            }}
-          >
+          <Button variant="primary" onClick={onSignOut}>
             Sign Out
-          </button>
+          </Button>
           <PrimaryButton to="/">Back To Home</PrimaryButton>
         </div>
       </div>

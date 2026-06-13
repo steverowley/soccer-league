@@ -63,3 +63,8 @@ export {
 export {
   SectionPanel,
 } from './SectionPanel';
+
+export {
+  Button,
+  type ButtonVariant,
+} from './Button';
