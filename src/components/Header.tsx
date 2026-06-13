@@ -18,7 +18,10 @@ import { useAuth } from '../features/auth';
 
 const DUST       = '#E3E0D5';
 const ABYSS      = '#111111';
-const QUANTUM    = '#9A5CF4';
+// Astro Explorer — the design system's loud action colour. Used for the auth
+// CTA and to highlight the live credit balance (a warm accent, not the focus
+// purple, which the design reserves for focus rings + live indicators).
+const ASTRO      = '#FF6637';
 const DUST_FAINT = 'rgba(227, 224, 213, 0.12)';
 const HAIRLINE   = 'rgba(227, 224, 213, 0.18)';
 
@@ -275,7 +278,7 @@ function AccountMenu() {
           cursor: 'pointer',
         }}
       >
-        <span style={{ color: QUANTUM, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: ASTRO, fontVariantNumeric: 'tabular-nums' }}>
           {credits.toLocaleString()}
         </span>
         <span style={{ color: 'rgba(227, 224, 213, 0.50)' }}>•</span>
@@ -415,9 +418,11 @@ interface FlareButtonProps {
 }
 
 /**
- * Quantum Purple auth CTA — purple fill + dust text + purple border.
- * Named FlareButton for legacy reasons; the fill was corrected to Quantum
- * Purple in PR 12 (Solar Flare is error-only per the design system).
+ * Astro-orange auth CTA — the design system's "Active button": orange fill +
+ * abyss text + orange border. This is the nav's loud call to action (Sign Up /
+ * Log In). Orange (not purple, not flare-red) is the action colour; orange
+ * wants dark text for contrast, so the label is abyss rather than dust. Named
+ * FlareButton for legacy reasons only.
  * Touch-friendly: 44px+ minimum height for mobile tap target compliance.
  */
 function FlareButton({ to, onClick, children }: FlareButtonProps) {
@@ -434,10 +439,10 @@ function FlareButton({ to, onClick, children }: FlareButtonProps) {
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '0.12em',
-        color: DUST,
+        color: ABYSS,
         textDecoration: 'none',
-        background: QUANTUM,
-        border: `1px solid ${QUANTUM}`,
+        background: ASTRO,
+        border: `1px solid ${ASTRO}`,
         padding: '12px 24px',
         whiteSpace: 'nowrap',
       }}
