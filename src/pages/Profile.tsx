@@ -23,7 +23,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { useToast } from '../shared/ui';
+import { Button, useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '../features/auth/api/profiles';
 import { getTeams, getPlayersForTeam } from '../features/match';
@@ -372,51 +372,13 @@ export default function Profile() {
         />
         <div style={{ marginTop: 24, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              style={{
-        ...(undefined as any),
-                display: 'inline-flex',
-                alignItems: 'center',
-                fontSize: 13,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.12em',
-                color: ABYSS,
-                background: ASTRO,
-                border: `1px solid ${ASTRO}`,
-                padding: '14px 28px',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                minHeight: 44,
-              }}
-            >
+            <Button variant="active" onClick={() => navigate('/admin')}>
               Admin Dashboard
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onSignOut}
-            style={{
-        ...(undefined as any),
-              display: 'inline-flex',
-              alignItems: 'center',
-              fontSize: 13,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-              color: DUST,
-              background: ABYSS,
-              border: `1px solid ${DUST}`,
-              padding: '14px 28px',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              minHeight: 44,
-            }}
-          >
+          <Button variant="primary" onClick={onSignOut}>
             Sign Out
-          </button>
+          </Button>
           <PrimaryButton to="/">Back To Home</PrimaryButton>
         </div>
       </div>

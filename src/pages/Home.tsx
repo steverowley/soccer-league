@@ -50,7 +50,7 @@ import {
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { Card, Chip, EmptyState, SectionPanel } from '../shared/ui';
+import { Button, Card, Chip, EmptyState, SectionPanel } from '../shared/ui';
 import { LEAGUES } from '../data/leagueData';
 import {
   fetchLeagueStandings,
@@ -70,7 +70,7 @@ import {
 // FLARE is kept for future error states.  Both are imported even when
 // only one is currently referenced so the alias block stays a stable
 // single source of truth for this page.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE   = COLORS.hairline;
 const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;
@@ -525,15 +525,9 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
               Kickoff {ko.toLocaleString()}
             </p>
           )}
-          <Link to={`/matches/${fallbackUpcoming.id}`} style={{
-            color: ABYSS, textDecoration: 'none',
-            border: `1px solid ${ASTRO}`, background: ASTRO,
-            fontSize: 12, fontWeight: 700, letterSpacing: '0.14em',
-            textTransform: 'uppercase', padding: '10px 18px',
-            marginTop: 'auto',
-          }}>
-            Watch the build-up →
-          </Link>
+          <Button variant="active" to={`/matches/${fallbackUpcoming.id}`} style={{ marginTop: 'auto' }}>
+            Watch the build-up
+          </Button>
         </div>
       );
     }

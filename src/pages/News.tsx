@@ -26,6 +26,7 @@
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { Button } from '../shared/ui';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
   getRecentNarratives,
@@ -613,26 +614,9 @@ function QuietWireNotice({ hours }: { hours: number }) {
  */
 function LoadMoreButton({ onClick  }: any) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
-        color: DUST,
-        background: ABYSS,
-        border: `1px solid ${DUST}`,
-        padding: '14px 28px',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-      }}
-    >
+    <Button variant="primary" onClick={onClick}>
       Load More
-    </button>
+    </Button>
   );
 }
 

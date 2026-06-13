@@ -30,10 +30,10 @@
 //     in migrations 0062–0064 (Phase 6 world-building).
 
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { Button } from '../shared/ui';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { listEntities, RelationshipGraph, kindColor } from '../features/entities';
@@ -382,20 +382,13 @@ export default function World() {
                       {selectedEntity.display_name ?? selectedEntity.name}
                     </span>
                     <KindBadge kind={selectedEntity.kind} />
-                    <Link
+                    <Button
+                      variant="tertiary"
                       to={`/entities/${selectedId}`}
-                      style={{
-                        marginLeft: 'auto',
-                        fontSize:   11,
-                        color:      DUST_70,
-                        textDecoration: 'none',
-                        letterSpacing: '0.04em',
-                        textTransform: 'uppercase',
-                        borderBottom: `1px solid ${HAIRLINE}`,
-                      }}
+                      style={{ marginLeft: 'auto' }}
                     >
-                      View full profile →
-                    </Link>
+                      View full profile
+                    </Button>
                   </div>
 
                   {/* The graph widget re-fetches whenever selectedId changes.
