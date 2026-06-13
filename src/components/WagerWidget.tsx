@@ -14,6 +14,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { COLORS } from './Layout';
+import { Card } from '../shared/ui';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { MIN_BET, canAffordBet } from '../features/auth';
@@ -276,9 +277,9 @@ function WagerWidget({ match }: { match: MatchRef }) {
  */
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, padding: 24, background: ABYSS }}>
+    <Card>
       {children}
-    </div>
+    </Card>
   );
 }
 

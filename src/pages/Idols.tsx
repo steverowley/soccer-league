@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { Card } from '../shared/ui';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard } from '../features/match';
 
@@ -255,18 +256,13 @@ function MoverCard({ mover  }: any) {
   const id    = mover.player_id ?? mover.id;
 
   return (
-    <Link
+    <Card
       to={id ? `/players/${id}` : '#'}
+      padding={20}
       style={{
-        ...(undefined as any),
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
-        padding: 20,
-        border: `1px solid ${HAIRLINE}`,
-        background: ABYSS,
-        color: DUST,
-        textDecoration: 'none',
       }}
     >
       <span style={{
@@ -308,7 +304,7 @@ function MoverCard({ mover  }: any) {
       }}>
         {recent} recent {recent === 1 ? 'click' : 'clicks'}
       </span>
-    </Link>
+    </Card>
   );
 }
 

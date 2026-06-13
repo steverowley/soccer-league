@@ -16,9 +16,9 @@
 // data already.  The detail page handles the live squad/manager fetch.
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { Card } from '../shared/ui';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { Team } from '../data/leagueData';
 
@@ -291,19 +291,14 @@ function TeamCard({ team }: TeamCardProps) {
   const accent = team.color ?? DUST;
 
   return (
-    <Link
+    <Card
       to={`/teams/${team.id}`}
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
-        padding: 24,
-        border: `1px solid ${HAIRLINE}`,
-        borderTop: `2px solid ${accent}`,
-        background: ABYSS,
-        color: DUST,
-        textDecoration: 'none',
         height: '100%',
+        borderTop: `2px solid ${accent}`,
       }}
     >
       {/* Header row — league chip + team name. */}
@@ -372,6 +367,6 @@ function TeamCard({ team }: TeamCardProps) {
       }}>
         View Club ►
       </div>
-    </Link>
+    </Card>
   );
 }

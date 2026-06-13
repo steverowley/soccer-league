@@ -28,6 +28,7 @@
 // this app renders (≤ 20 cards visible on any page).
 
 import type { CSSProperties, ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { COLORS } from '../../components/Layout';
 
 // ── Defaults ──────────────────────────────────────────────────────────────
@@ -83,6 +84,15 @@ interface CardProps {
   style?: CSSProperties;
   /** Optional className for legacy CSS targeting. */
   className?: string;
+  /**
+   * When set, the whole card becomes a react-router <Link> to this path — the
+   * click target for a surface like a league / team / idol card. The link
+   * defaults to dust text with no underline (overridable via `style`). Omit
+   * for a non-interactive <div>.
+   */
+  to?: string;
+  /** Accessible label, primarily useful when the card renders as a link. */
+  'aria-label'?: string;
 }
 
 // ── Card ──────────────────────────────────────────────────────────────────
@@ -109,17 +119,32 @@ export function Card({
   tone = 'hairline',
   style,
   className,
+  to,
+  'aria-label': ariaLabel,
 }: CardProps) {
+  // Border + abyss fill + padding are the primitive's own; a caller's `style`
+  // merges on top (flex layout, an accent border-top, a fixed height, …).
+  const composed: CSSProperties = {
+    border:     `1px solid ${TONE_BORDER[tone]}`,
+    background: COLORS.abyss,
+    padding,
+    // Link form: dust text, no underline — the whole card reads as a clickable
+    // surface, not a hyperlink. Both are overridable via `style`.
+    ...(to != null ? { color: COLORS.dust, textDecoration: 'none' } : null),
+    ...style,
+  };
+
+  // A `to` turns the whole card into a router link; otherwise a plain div.
+  if (to != null) {
+    return (
+      <Link to={to} aria-label={ariaLabel} className={className} style={composed}>
+        {children}
+      </Link>
+    );
+  }
+
   return (
-    <div
-      className={className}
-      style={{
-        border:     `1px solid ${TONE_BORDER[tone]}`,
-        background: COLORS.abyss,
-        padding,
-        ...style,
-      }}
-    >
+    <div className={className} style={composed}>
       {children}
     </div>
   );

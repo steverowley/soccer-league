@@ -19,9 +19,9 @@
 // The page uses only the shared COLORS object — no new hex literals.
 
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { Card } from '../shared/ui';
 import { LEAGUES } from '../data/leagueData';
 import type { League } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -209,17 +209,13 @@ function LeagueCard({ league, standings }: LeagueCardProps) {
   const excerpt = truncateAtWord(league.description ?? '', CARD_DESCRIPTION_MAX_CHARS);
 
   return (
-    <Link
+    <Card
       to={`/leagues/${league.id}`}
+      padding={32}
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 24,
-        padding: 32,
-        border: `1px solid ${HAIRLINE}`,
-        background: ABYSS,
-        color: DUST,
-        textDecoration: 'none',
         height: '100%',
       }}
     >
@@ -316,7 +312,7 @@ function LeagueCard({ league, standings }: LeagueCardProps) {
       }}>
         View Full Table ►
       </div>
-    </Link>
+    </Card>
   );
 }
 
