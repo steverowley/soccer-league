@@ -39,7 +39,7 @@ import { NotificationSettings } from '../features/notifications';
 // could replace the "Saved." italic line below the form — kept dust
 // for now since the form's success state is already clear from the
 // disabled submit + the refresh.  FLARE stays for save-error text.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -335,9 +335,9 @@ export default function Profile() {
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
-              color: DUST,
-              background: busy ? 'transparent' : QUANTUM,
-              border: `1px solid ${QUANTUM}`,
+              color: busy ? DUST : ABYSS,
+              background: busy ? 'transparent' : ASTRO,
+              border: `1px solid ${ASTRO}`,
               padding: '12px 24px',
               cursor: busy ? 'wait' : 'pointer',
               fontFamily: 'inherit',
@@ -383,9 +383,9 @@ export default function Profile() {
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.12em',
-                color: DUST,
-                background: QUANTUM,
-                border: `1px solid ${QUANTUM}`,
+                color: ABYSS,
+                background: ASTRO,
+                border: `1px solid ${ASTRO}`,
                 padding: '14px 28px',
                 cursor: 'pointer',
                 fontFamily: 'inherit',

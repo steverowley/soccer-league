@@ -39,7 +39,7 @@ import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { getPlayersForTeam, getUpcomingMatches } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
-const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, quantum: QUANTUM, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -287,7 +287,7 @@ function StarterBetStep({ teamId, playerId, onDone }: {
             <Link to={`/matches/${nextMatch.id}`} style={{
               display: 'inline-block',
               fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: DUST, background: QUANTUM, border: `1px solid ${QUANTUM}`,
+              color: ABYSS, background: ASTRO, border: `1px solid ${ASTRO}`,
               padding: '12px 20px', textDecoration: 'none',
             }}>
               Place starter bet →

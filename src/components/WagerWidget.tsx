@@ -24,10 +24,10 @@ import {
 } from '../features/betting';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-// QUANTUM (focus) drives every primary CTA + selection cue in this widget.
-// FLARE is reserved for genuine error states: "insufficient credits",
-// form-error message line.  Solar Flare is error-only per the design system.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+// ASTRO (action) drives the primary CTAs in this widget; QUANTUM stays the
+// focus / selection cue.  FLARE is reserved for genuine error states:
+// "insufficient credits", form-error message line.  Solar Flare is error-only.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -212,9 +212,9 @@ function WagerWidget({ match }: { match: MatchRef }) {
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
-            color: DUST,
-            background: QUANTUM,
-            border: `1px solid ${QUANTUM}`,
+            color: ABYSS,
+            background: ASTRO,
+            border: `1px solid ${ASTRO}`,
             padding: '12px 24px',
             textDecoration: 'none',
           }}
@@ -434,9 +434,9 @@ function StakeForm({
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
-            color: submittable ? DUST : DUST_50,
-            background: submittable ? QUANTUM : 'transparent',
-            border: `1px solid ${submittable ? QUANTUM : HAIRLINE}`,
+            color: submittable ? ABYSS : DUST_50,
+            background: submittable ? ASTRO : 'transparent',
+            border: `1px solid ${submittable ? ASTRO : HAIRLINE}`,
             padding: '14px 24px', cursor: submittable ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
           }}
         >

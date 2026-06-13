@@ -44,7 +44,7 @@ import type { NotificationPreferences } from '../types';
 // ── Local style aliases ─────────────────────────────────────────────────────
 // Mirrors the names used in Profile.tsx so the visual treatment matches
 // without re-deriving from the shared palette in two places.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -409,8 +409,8 @@ function ToggleRow({ id, label, hint, checked, disabled, onChange }: {
 // so the enable / disable button shells stay one-liners in the JSX.
 
 /**
- * Primary CTA style (Enable) — QUANTUM fill, matches Profile.tsx's
- * Save Allegiance button.
+ * Primary CTA style (Enable) — Astro-orange fill with dark text, matches
+ * Profile.tsx's Save Allegiance button.
  */
 function primaryButtonStyle(busy: boolean): React.CSSProperties {
   return {
@@ -421,9 +421,9 @@ function primaryButtonStyle(busy: boolean): React.CSSProperties {
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
-    color: DUST,
-    background: busy ? 'transparent' : QUANTUM,
-    border: `1px solid ${QUANTUM}`,
+    color: busy ? DUST : ABYSS,
+    background: busy ? 'transparent' : ASTRO,
+    border: `1px solid ${ASTRO}`,
     padding: '12px 24px',
     cursor: busy ? 'wait' : 'pointer',
     fontFamily: 'inherit',

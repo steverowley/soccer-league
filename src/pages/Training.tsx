@@ -41,12 +41,12 @@ import {
 import { getPlayersForTeam } from '../features/match';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
-// QUANTUM (focus) drives the click button.  TERRA_NOVA (confirmation)
-// borders the stat-bump toast — a stat threshold cross is the most
-// positive event in the training facility, so a confirmation-green
-// pip reads correctly.  FLARE stays for the error-reason text under
-// the click button.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, terraNova: TERRA_NOVA } = COLORS;
+// ASTRO (action) drives the click button — the loud call to action in the
+// training facility.  TERRA_NOVA (confirmation) borders the stat-bump toast —
+// a stat threshold cross is the most positive event here, so a confirmation-
+// green pip reads correctly.  FLARE stays for the error-reason text under the
+// click button.
+const { dust: DUST, abyss: ABYSS, flare: FLARE, terraNova: TERRA_NOVA, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -585,9 +585,9 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
-            color: DUST,
-            background: locked ? 'transparent' : QUANTUM,
-            border: `1px solid ${locked ? HAIRLINE : QUANTUM}`,
+            color: locked ? DUST : ABYSS,
+            background: locked ? 'transparent' : ASTRO,
+            border: `1px solid ${locked ? HAIRLINE : ASTRO}`,
             padding: '20px 24px',
             cursor: locked ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit',

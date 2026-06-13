@@ -13,6 +13,7 @@ export const {
   dust:      DUST,
   abyss:     ABYSS,
   quantum:   QUANTUM,
+  astro:     ASTRO,
   flare:     FLARE,
   terraNova: TERRA,
   hairline:  HAIRLINE,
@@ -131,7 +132,9 @@ export function AdminButton({
   disabled?: boolean;
   children:  ReactNode;
 }) {
-  const bg = variant === 'danger' ? FLARE : QUANTUM;
+  // Astro orange is the design system's action colour; danger keeps Solar
+  // Flare. Disabled falls back to a faint dust tint (set on `background` below).
+  const bg = variant === 'danger' ? FLARE : ASTRO;
   const isDisabled = busy || disabled;
   return (
     <button
@@ -143,7 +146,9 @@ export function AdminButton({
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '0.12em',
-        color: DUST,
+        // Dark text only on the solid orange (enabled primary); the faint
+        // disabled fill and the red danger fill keep light dust text.
+        color: isDisabled || variant === 'danger' ? DUST : ABYSS,
         background: isDisabled ? DUST_FAINT : bg,
         border: `1px solid ${isDisabled ? HAIRLINE : bg}`,
         padding: '10px 18px',
