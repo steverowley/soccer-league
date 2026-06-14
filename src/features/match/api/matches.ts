@@ -24,6 +24,9 @@
 // down, not here.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+// #386: drift-validate the live/upcoming list rows at the api boundary.
+// Malformed rows warn-log and drop, preserving the original (wide) row type.
+import { dropInvalidMatchListRows } from './matches.schema';
 
 // ── getMatch ──────────────────────────────────────────────────────────────
 
@@ -113,7 +116,7 @@ export async function getLiveMatches(db: IslSupabaseClient) {
     .neq('status', 'cancelled')
     .order('scheduled_at', { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return dropInvalidMatchListRows(data ?? [], 'getLiveMatches');
 }
 
 /**
@@ -148,5 +151,5 @@ export async function getUpcomingMatches(db: IslSupabaseClient, limit = 6) {
     .order('scheduled_at', { ascending: true })
     .limit(limit);
   if (error) throw error;
-  return data ?? [];
+  return dropInvalidMatchListRows(data ?? [], 'getUpcomingMatches');
 }
