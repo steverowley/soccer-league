@@ -158,7 +158,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   truth; existing narratives migrated without loss.
 - **Effort/risk:** M / medium (schema + many emit sites; do it before C/D depend on it).
 - **Depends on:** nothing hard; should land early because A3, B4, C1, C2 read from it.
-- **Issue:** **new** — "feat(chronicle): structured, queryable history log".
+- **Issue:** **#575** — "feat(chronicle): promote narratives into a structured, queryable history log".
 
 ### WS-A3 · Causal bookkeeping on match events
 - **Research basis:** Labov — "a narrative is the narrator's theory of the causes of the most reportable
@@ -178,7 +178,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   assemble a backward causal chain; commentary demonstrably references a prior-match cause in a test.
 - **Effort/risk:** M / low (additive; engine twins must stay byte-identical — guard with the drift test).
 - **Depends on:** WS-A2 (call-backs are richest when written to the chronicle too).
-- **Issue:** **new** — "feat(sim): causal bookkeeping tags on match_events".
+- **Issue:** **#576** — "feat(sim): causal bookkeeping tags on match_events".
 
 ### WS-A4 · Engine realism calibration test
 - **Research basis:** the soccer-sim report's calibration targets (~2.5–2.8 goals/game, ~25% draws,
@@ -193,7 +193,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   seeded batch; runs in CI within the existing time budget.
 - **Effort/risk:** S / low.
 - **Depends on:** none. Good first issue.
-- **Issue:** **new** — "test(sim): assert football-realistic match distributions".
+- **Issue:** **#577** — "test(sim): assert football-realistic match distributions".
 
 ### WS-A5 · Decouple focus-vote weight from raw bankroll
 - **Research basis:** the Baltimore Crabs runaway (fanbase size = voting power → fractured community);
@@ -212,7 +212,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   club's focus; tests cover the weighting; the median voter's influence is materially non-zero.
 - **Effort/risk:** M / medium (governance + economy; needs an owner decision on the curve — see §12).
 - **Depends on:** WS-A1 (Election Night must actually run to matter). Land before any public link.
-- **Issue:** **new** — "feat(voting): decouple focus-vote weight from bankroll".
+- **Issue:** **#578** — "feat(voting): decouple focus-vote weight from bankroll".
 
 ---
 
@@ -256,7 +256,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   are selectable and persisted.
 - **Effort/risk:** M / medium.
 - **Depends on:** WS-A2 (state lives in the Chronicle).
-- **Issue:** **new** — "feat(architect): state-aware pacing from league state".
+- **Issue:** **#582** — "feat(architect): state-aware pacing from league state".
 
 ### WS-B3 · Memory retrieval (recency · importance · relevance) + reflection pass
 - **Research basis:** the Stanford "Generative Agents" retrieval blend + a periodic reflection that
@@ -276,7 +276,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   higher-level memories that later retrieval surfaces; retrieval respects diegetic time.
 - **Effort/risk:** M / low–medium.
 - **Depends on:** WS-A2 helps but not required.
-- **Issue:** **new** — "feat(agents): importance-weighted memory retrieval + reflection".
+- **Issue:** **#579** — "feat(agents): importance-weighted memory retrieval + reflection pass".
 
 ### WS-B4 · LLM hardening: per-voice generation, exemplar banks, golden-set eval
 - **Research basis:** one model call *per voice* (never "write all three commentators" in one call);
@@ -296,7 +296,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   voice/canon regression; measured token cost drops via caching/batch (record in `agent_runs`).
 - **Effort/risk:** M / medium.
 - **Depends on:** none hard.
-- **Issue:** **new** — "feat(agents): per-voice gen, exemplar banks, golden-set CI eval".
+- **Issue:** **#583** — "feat(agents): per-voice generation, exemplar banks, golden-set CI eval".
 
 ---
 
@@ -324,7 +324,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   per-tick LLM calls added.
 - **Effort/risk:** M–L / medium (the flagship; reuses existing bus + persona).
 - **Depends on:** WS-B3 (mood-congruent retrieval rides on the retrieval upgrade).
-- **Issue:** **new** — "feat(entities): affect model (personality/mood/emotion)".
+- **Issue:** **#580** — "feat(entities): affect model — personality, mood, emotion".
 
 ### WS-C2 · Emergent feuds from the relationship graph
 - **Research basis:** CK3-style numeric opinion edges accreted from events and thresholded into
@@ -339,7 +339,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   produce a narrated storyline; relationships also decay/heal over time.
 - **Effort/risk:** M / low–medium.
 - **Depends on:** WS-A2, WS-C1 (value-similarity bonding uses personality).
-- **Issue:** **new** — "feat(entities): event-driven feuds from relationship strength".
+- **Issue:** **#584** — "feat(entities): event-driven feuds from relationship strength".
 
 ### WS-C3 · Worldbuilding pipeline (location → environment → species → hidden mechanic)
 - **Research basis:** every one of the 32 real bodies has gift-wrapped identity (Pluto the demoted
@@ -360,7 +360,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   diverse (anti-monoculture).
 - **Effort/risk:** M / low (mostly data + one engine hook). Compounds over years.
 - **Depends on:** WS-A2 (planet/feud entities feed the Chronicle).
-- **Issue:** **new** — "feat(world): location→environment→species→hidden-mechanic pipeline".
+- **Issue:** **#585** — "feat(world): location→environment→species→hidden-mechanic pipeline".
 
 ### WS-C4 · Lineage, involuntary loss, and memorials
 - **Research basis:** newgen/youth discovery is the #1 sports-sim attachment mechanic; involuntary loss
@@ -378,7 +378,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   memorialised record; the ethics note is published.
 - **Effort/risk:** M / medium.
 - **Depends on:** WS-A1, WS-A2.
-- **Issue:** **new** — "feat(world): lineage, involuntary loss, memorials".
+- **Issue:** **#586** — "feat(world): lineage, involuntary loss, and memorials".
 
 ---
 
@@ -398,7 +398,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
 - **Acceptance criteria:** the 8 styles produce measurably different shot/press/possession profiles in
   seeded tests; engine twins stay byte-identical; calibration (WS-A4) still passes.
 - **Effort/risk:** M / medium (twin-mirror discipline; keep determinism).
-- **Issue:** **new** — "feat(sim): wire manager play-styles into the spatial engine".
+- **Issue:** **#587** — "feat(sim): wire manager play-styles into the spatial engine".
 
 ### WS-D2 · Adaptive-highlight viewer (near-misses, juice, momentum)
 - **Research basis:** FM26 Dynamic Highlights; near-misses light reward circuitry almost like goals and
@@ -416,7 +416,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
 - **Acceptance criteria:** near-misses appear as first-class beats; playback density tracks match
   importance; the GK-corner rule fires; determinism preserved.
 - **Effort/risk:** M / medium.
-- **Issue:** **new** — "feat(match): adaptive highlights, near-misses, momentum".
+- **Issue:** **#588** — "feat(match): adaptive highlights — near-misses, juice, momentum".
 
 ### WS-D3 · Convex stat transform + finishing texture
 - **Research basis:** FM's non-linear rating scale; linear attribute feeds make a sim "feel flat";
@@ -428,7 +428,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
 - **Acceptance criteria:** favourite/underdog separation widens without killing upsets; calibration
   (WS-A4) still in-band; twins identical.
 - **Effort/risk:** S / low.
-- **Issue:** **new** — "feat(sim): convex stat transform + finishing weight".
+- **Issue:** **#589** — "feat(sim): convex stat transform + finishing weight".
 
 ### WS-D4 · Betting depth + free-to-play prediction
 - **Research basis:** velocity beats margin — in-play micro-markets, over/under, BTTS, bet-builders;
@@ -447,7 +447,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
   only "fixer").
 - **Effort/risk:** L / medium.
 - **Depends on:** responsible-design guardrails (WS-D5).
-- **Issue:** **new** — "feat(betting): over/under + BTTS + in-play + prediction game".
+- **Issue:** **#590** — "feat(betting): over/under + BTTS + in-play markets + free-to-play prediction".
 
 ### WS-D5 · Economy balance + responsible-design guardrails
 - **Research basis:** soft currency doesn't neutralise gambling-shaped harm (youth normalisation,
@@ -465,7 +465,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
 - **Acceptance criteria:** a credit-conservation invariant test passes (in = out + margin); limits exist;
   the ethics note is published; viewing is never paywalled by betting.
 - **Effort/risk:** M / medium. Land core guardrails before public launch.
-- **Issue:** **new** — "feat(economy): faucet/sink balance + responsible-design guardrails".
+- **Issue:** **#591** — "feat(economy): faucet/sink balance + responsible-design guardrails".
 
 ### WS-D6 · Community, sustainability & growth
 - **Research basis:** ship a sandbox not a story; seed Discord early; 90-9-1 (design for lurkers);
@@ -482,7 +482,7 @@ are deliberately *audience-informed* and should not be over-specified before lau
 - **Acceptance criteria:** Discord seeded and load-bearing; every fan gets a shareable weekly artifact;
   a public data surface exists; participation is low-friction for the 90% lurkers.
 - **Effort/risk:** ongoing.
-- **Issue:** roadmap Phase 3 (`#381`/`#396`/`#397`/`#398`); add the public-data-surface as **new**.
+- **Issue:** **#592** (public data surface) + roadmap Phase 3 growth issues `#381` / `#396` / `#397` / `#398`.
 
 ---
 
