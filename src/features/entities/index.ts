@@ -40,6 +40,15 @@ export type {
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export { getRecentNarratives } from './api/entities';
 
+// ── API — the Chronicle (structured history log, #575) ─────────────────────
+// Typed, queryable read over the narratives table after migration 0076 promoted
+// it into a structured history log. Filterable by club/planet/entity/season/
+// action; the substrate that feuds (#584), Architect pacing (#582), and the
+// public data surface (#592) read from. Distinct from the curated `/news` feed
+// (getRecentNarratives) in that it keeps every event regardless of source.
+export { getChronicle, ChronicleEventSchema, parseChronicleRows } from './api/chronicle';
+export type { ChronicleEvent, ChronicleQuery } from './api/chronicle';
+
 // ── API — narrative profiles (entities.meta.profile) ───────────────────────
 // Zod-validated read of an entity's authored profile content, consumed by the
 // player/team detail pages.

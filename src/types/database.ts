@@ -1314,33 +1314,54 @@ export type Database = {
       narratives: {
         Row: {
           acknowledged_by: Json | null
+          action: string | null
+          actor_entity_id: string | null
           composed_from: string[]
           created_at: string
           entities_involved: Json | null
           id: string
+          importance: number
           kind: string
+          place_entity_id: string | null
+          season_id: string | null
           source: string
           summary: string
+          target_entity_id: string | null
+          tick: number | null
         }
         Insert: {
           acknowledged_by?: Json | null
+          action?: string | null
+          actor_entity_id?: string | null
           composed_from?: string[]
           created_at?: string
           entities_involved?: Json | null
           id?: string
+          importance?: number
           kind: string
+          place_entity_id?: string | null
+          season_id?: string | null
           source?: string
           summary: string
+          target_entity_id?: string | null
+          tick?: number | null
         }
         Update: {
           acknowledged_by?: Json | null
+          action?: string | null
+          actor_entity_id?: string | null
           composed_from?: string[]
           created_at?: string
           entities_involved?: Json | null
           id?: string
+          importance?: number
           kind?: string
+          place_entity_id?: string | null
+          season_id?: string | null
           source?: string
           summary?: string
+          target_entity_id?: string | null
+          tick?: number | null
         }
         Relationships: []
       }
