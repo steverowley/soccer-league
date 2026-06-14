@@ -11,6 +11,10 @@
 // vs idol surfaces stay split by domain.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+// #386: validate the player row (Critical Invariant #1 columns) + the per-match
+// stat rows at the api boundary. The player row is checked for drift (warn,
+// then returned unchanged); malformed stat rows warn-log and drop.
+import { checkPlayerRow, parsePlayerStatRows } from './players.schema';
 
 // ── Internal types ────────────────────────────────────────────────────────
 
@@ -77,10 +81,19 @@ export async function getPlayer(
   if (playerResult.error) throw playerResult.error;
   if (statsResult.error)  throw statsResult.error;
 
+  // Drift-check the player row at the boundary (Critical Invariant #1: the
+  // engine reads attacking/defending/mental/athletic/technical). On drift we
+  // warn-log loudly but still return the raw row, so PlayerDetail keeps
+  // rendering rather than blanking on a non-critical column rename.
+  const playerCheck = checkPlayerRow(playerResult.data);
+  if (!playerCheck.success) {
+    console.warn('[getPlayer] player row failed schema validation:', playerCheck.error.issues);
+  }
+
   // Sum per-row. _rsum + _rcnt feed the average-rating divisor below;
   // we keep them on the same accumulator so the reducer stays single-
-  // pass.
-  const statRows = statsResult.data ?? [];
+  // pass. Stat rows are validated first — malformed rows drop with a warn.
+  const statRows = parsePlayerStatRows((statsResult.data ?? []) as unknown[], 'getPlayer');
   const agg = statRows.reduce(
     (acc: {
       goals: number; assists: number;
