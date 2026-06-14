@@ -28,6 +28,9 @@
 // means a hot-fix to the aggregation rules is just a TS edit.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+// #386: drift-validate both reads at the api boundary. Malformed rows
+// warn-log and drop instead of NaN-ing the whole table via a blind cast.
+import { parseStandingsMatchRows, parseStandingsTeamRows } from './standings.schema';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -63,27 +66,9 @@ export interface StandingsRow {
   form:     Array<'W' | 'D' | 'L'>;
 }
 
-// ── Internal: minimal row shape we read from Supabase ───────────────────────
-
-/**
- * The subset of `matches` columns this aggregation actually needs.  We
- * intentionally don't pull events / odds / stats — the standings only need
- * the scoreboard.  Joined `competitions(league_id, type)` lets us filter
- * to league fixtures in a single round-trip.
- */
-interface MatchRow {
-  home_team_id: string;
-  away_team_id: string;
-  home_score:   number | null;
-  away_score:   number | null;
-  played_at:    string | null;
-  competitions: { league_id: string | null; type: string } | null;
-}
-
-interface TeamRow {
-  id:   string;
-  name: string;
-}
+// The minimal row shapes this aggregation reads (matches + base teams) now
+// live in `standings.schema.ts` as Zod schemas, so the boundary is validated
+// rather than blind-cast. See `StandingsMatchRow` / `StandingsTeamRow` there.
 
 // ── Public entry point ──────────────────────────────────────────────────────
 
@@ -139,11 +124,11 @@ export async function fetchLeagueStandings(
     console.warn(`[fetchLeagueStandings] match fetch failed: ${matchErr.message}`);
     return [];
   }
-  // Defensive client-side filter retained as a belt-and-braces guard:
-  // PostgREST embedded-filter syntax is occasionally surprising on view
-  // joins / orphan rows, and the predicate is O(rows) so the cost is
-  // trivial compared to the round-trip we just saved.
-  const rows = ((matchRows ?? []) as MatchRow[]).filter(
+  // Validate at the boundary (#386), then keep the defensive client-side
+  // filter as a belt-and-braces guard: PostgREST embedded-filter syntax is
+  // occasionally surprising on view joins / orphan rows, and the predicate is
+  // O(rows) so the cost is trivial compared to the round-trip we just saved.
+  const rows = parseStandingsMatchRows((matchRows ?? []) as unknown[], 'fetchLeagueStandings').filter(
     (m) => m.competitions?.league_id === leagueId && m.competitions?.type === 'league',
   );
 
@@ -161,7 +146,7 @@ export async function fetchLeagueStandings(
     console.warn(`[fetchLeagueStandings] team fetch failed: ${teamErr.message}`);
     return [];
   }
-  const teams = (teamRows ?? []) as TeamRow[];
+  const teams = parseStandingsTeamRows((teamRows ?? []) as unknown[], 'fetchLeagueStandings');
 
   // ── Step 3: aggregate scoreboards per team ──────────────────────────────
   // `acc` keyed by team_id, initialised once we see the team in either a
