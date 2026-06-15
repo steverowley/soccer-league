@@ -127,6 +127,8 @@ export type {
 // MiniPitch chip on the Matches list still renders the static SVG surface.
 export { MatchViewer } from './ui/viewer/MatchViewer';
 export type { MatchViewerProps, MatchViewerPlayer } from './ui/viewer/MatchViewer';
+// Always-available admin showcase: a looping synthetic match in the viewer.
+export { MatchViewerDemo } from './ui/viewer/MatchViewerDemo';
 export { PitchSurface } from './ui/pitch/PitchSurface';
 
 // ── Mini-pitch chip + shared broadcast hook (issue isl-a8i) ───────────────

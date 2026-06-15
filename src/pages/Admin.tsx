@@ -31,6 +31,7 @@ import {
   TestingPanel,
   type AdminTab,
 } from '../features/admin/ui';
+import { MatchViewerDemo } from '../features/match';
 
 // ── Root page ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ export default function Admin() {
             {activeTab === 'fixtures'  && <FixtureBrowser             db={db} />}
             {activeTab === 'testing'   && <TestingPanel               db={db} />}
             {activeTab === 'architect' && <ArchitectInterventionLog   db={db} />}
+            {activeTab === 'viewer'    && <MatchViewerDemo />}
           </div>
         </Container>
       </main>
