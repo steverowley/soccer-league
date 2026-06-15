@@ -60,5 +60,7 @@ export {
 } from './appearance';
 export type { Appearance, HairStyle, Build, HatStyle } from './appearance';
 
+export type { ViewerMatch, ViewerRosterPlayer } from './buildMatch';
 export { generateDemoMatch } from './demoMatch';
-export type { DemoMatch, DemoPlayer } from './demoMatch';
+export { simulateMatchFromTeams } from './realMatch';
+export type { TeamSimData } from './realMatch';
