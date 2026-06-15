@@ -28,7 +28,7 @@ import {
  *   - testing    → TestingPanel         (danger zone + injectors)
  *   - architect  → ArchitectInterventionLog
  */
-export type AdminTab = 'overview' | 'season' | 'fixtures' | 'testing' | 'architect';
+export type AdminTab = 'overview' | 'season' | 'fixtures' | 'testing' | 'architect' | 'viewer';
 
 /**
  * Ordered tab descriptors driving the visual strip.  Order matches the
@@ -41,6 +41,7 @@ export const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: 'fixtures',  label: 'Fixtures'  },
   { id: 'testing',   label: 'Testing'   },
   { id: 'architect', label: 'Architect' },
+  { id: 'viewer',    label: 'Viewer'    },
 ];
 
 /** Default tab when no `?tab=…` query param is present in the URL. */
