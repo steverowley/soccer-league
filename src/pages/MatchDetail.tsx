@@ -47,11 +47,11 @@ import {
   getMatchDurationSeconds,
   subscribeToMatchEvents,
   DEFAULT_MATCH_DURATION_SECONDS,
-  PitchView,
+  MatchViewer,
+  type MatchViewerPlayer,
   type MatchEventRow,
 } from '../features/match';
 import { getMatchPositions, type PositionSnapshot } from '../features/match/api/matchPositions';
-import { useSpatialPlayback } from '../features/match/ui/useSpatialPlayback';
 import TeachingStrip from '../components/TeachingStrip';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -1397,121 +1397,36 @@ function prettifyEventType(key: string): string {
     .replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
-// ── MatchPitchPanel (issue isl-lfo) ─────────────────────────────────────────
-// Thin wrapper that owns its own match_events fetch + Realtime
-// subscription and feeds the result to <PitchView>.  Lives here rather
-// than as a generic component because the lift only makes sense in the
-// context of a MatchDetail layout — the same data path inside
-// LiveCommentary remains untouched.
-//
-// WHY A SECOND SUBSCRIPTION
-//   The cleaner refactor would lift LiveCommentary's state into a
-//   shared parent (`MatchLiveSection`) that renders both children, but
-//   LiveCommentary owns ~150 lines of intricate elapsed-minute logic
-//   that's working in production.  A second isolated subscription
-//   trades a small extra WebSocket channel for zero risk to the
-//   commentary feed.  Supabase Realtime multiplexes channels so the
-//   cost is minor; a future consolidation can land in its own commit.
+// ── MatchPitchPanel ─────────────────────────────────────────────────────────
+// Fetches a single match's metadata + spatial position frames and feeds them to
+// the canvas <MatchViewer>.  It owns NO event subscription — the viewer is
+// position-driven (the match sim writes every player + ball position to
+// `match_positions`), so the play-by-play feed remains LiveCommentary's job.
 
 /**
- * Map a raw `match_events` row into the shape the choreographer hook
- * expects.  Surfaces a `team` hint from `payload.team` (the engine
- * writes 'home' / 'away' short names there — we narrow to 'home' or
- * 'away' so the choreographer can pick the right attacking direction)
- * and the player name from `payload.player` (stable across rows).
- *
- * Unknown payload shapes degrade to no hints — the choreographer
- * defaults to home-side attacking, which is the least surprising fall-
- * back when we genuinely don't know who has the ball.
- *
- * @param row  Raw `match_events` row.
- * @param ctx  Home / away short_name strings used to resolve `payload.team`.
- * @returns    Shape ready to pass to `useChoreographyQueue`.
- */
-function toPitchEvent(
-  row: MatchEventRow,
-  ctx: { homeShort: string | null; awayShort: string | null },
-): { id: string; type: string; team?: 'home' | 'away'; playerId?: string; architectFlag?: string } {
-  // payload is JSON; cast at the boundary and read defensively.
-  const payload = (row.payload ?? {}) as {
-    team?:                unknown;
-    player?:              unknown;
-    architectAnnulled?:   unknown;
-    architectForced?:     unknown;
-    architectConjured?:   unknown;
-    architectStolen?:     unknown;
-    architectEcho?:       unknown;
-  };
-  const rawTeam = typeof payload.team === 'string' ? payload.team : null;
-  let team: 'home' | 'away' | undefined;
-  if (rawTeam) {
-    if (rawTeam === ctx.homeShort)      team = 'home';
-    else if (rawTeam === ctx.awayShort) team = 'away';
-  }
-  const playerId =
-    typeof payload.player === 'string' ? payload.player : undefined;
-
-  // ── Architect flair flags (isl-u8u) ─────────────────────────────────
-  // Engine writes any of five boolean flags directly into the payload;
-  // we collapse to a single string label PitchView uses to fire its
-  // halo + flicker + ball trail.  Priority order ('forced' → 'echo')
-  // matches the engine's narrative emphasis if two ever fire on the
-  // same event (which the engine doesn't currently produce but we
-  // want a deterministic resolution if it ever did).
-  let architectFlag: string | undefined;
-  if      (payload.architectForced   === true) architectFlag = 'forced';
-  else if (payload.architectAnnulled === true) architectFlag = 'annulled';
-  else if (payload.architectConjured === true) architectFlag = 'conjured';
-  else if (payload.architectStolen   === true) architectFlag = 'stolen';
-  else if (payload.architectEcho     === true) architectFlag = 'echo';
-
-  const out: {
-    id: string;
-    type: string;
-    team?: 'home' | 'away';
-    playerId?: string;
-    architectFlag?: string;
-  } = {
-    id:   row.id,
-    type: row.type,
-  };
-  if (team)          out.team          = team;
-  if (playerId)      out.playerId      = playerId;
-  if (architectFlag) out.architectFlag = architectFlag;
-  return out;
-}
-
-/**
- * One player row from getMatch's nested `teams.players` join — the
- * fields PitchView needs to render a dot with team colours, GK ring,
- * and jersey number (isl-6da).  Kept narrow on purpose so the loose
- * `getMatch` return type (Json-nested) narrows cleanly at this seam.
+ * One player row from getMatch's nested `teams.players` join.  Narrow on purpose
+ * so the loose (Json-nested) `getMatch` return narrows cleanly at this seam —
+ * only the viewer's needs (id + position) and the engine-aligned ordering keys
+ * (starter, overall_rating) are modelled.
  */
 interface MatchPlayerRow {
-  id:            string;
-  name:          string;
-  position:      string;
-  starter:       boolean;
-  jersey_number: number | null;
+  id:             string;
+  position:       string;
+  starter:        boolean;
   overall_rating: number | null;
 }
 
 /**
- * Supported formation keys as strings, mirroring the FormationKey
- * union from `@features/match/logic/pitch/formations.ts`.  The
- * manager column is checked at the DB layer (migration 0045) so
- * any value that lands here is already in this set — but we narrow
- * with a runtime guard before passing to FormationKey-typed code
- * so a future drift fails loud at the boundary, not silently in
- * the renderer.
+ * Supported formation keys, mirroring the FormationKey union.  The manager
+ * column is constrained at the DB layer (migration 0045), but we still narrow
+ * at this boundary so a future drift fails loud here, not in the renderer.
  */
 const SUPPORTED_FORMATIONS = ['4-4-2', '3-4-3', '4-5-1', '5-4-1'] as const;
 type SupportedFormation = (typeof SUPPORTED_FORMATIONS)[number];
 
 /**
- * Narrow a free-text formation column value to a SupportedFormation.
- * Falls back to '4-4-2' on miss so a malformed DB row or a future
- * formation added before this list is updated still paints.
+ * Narrow a free-text formation column value to a SupportedFormation, defaulting
+ * to '4-4-2' so a malformed or future value still paints a sensible shape.
  */
 function narrowFormation(raw: unknown): SupportedFormation {
   return typeof raw === 'string' && (SUPPORTED_FORMATIONS as readonly string[]).includes(raw)
@@ -1520,16 +1435,10 @@ function narrowFormation(raw: unknown): SupportedFormation {
 }
 
 /**
- * Pick the starting XI from a team's full roster in slot order
- * (GK first).  Mirrors the engine's selection rule from
- * `src/gameEngine.js` ≈ line 258: `ORDER BY starter DESC,
- * overall_rating DESC, id ASC` so the commentary feed and the
- * pitch view always name the same 11 players.
- *
- * Returns at most 11 rows.  Teams with fewer than 11 players
- * (legacy fixtures, a fresh expansion squad) return whatever
- * they have — PitchView pads the rest with synthetic ids so the
- * surface stays full.
+ * Pick the starting XI in slot order (GK first), mirroring the engine's
+ * `ORDER BY starter DESC, overall_rating DESC, id ASC` so the commentary feed
+ * and the viewer name the same 11 players.  Teams with fewer than 11 return what
+ * they have — <MatchViewer> pads the rest with synthetic ids so the pitch is full.
  *
  * @param players  Full roster array from getMatch.
  * @returns        Up to 11 players ordered for the formation slots.
@@ -1546,23 +1455,22 @@ function pickStartingXI(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
   return sorted.slice(0, 11);
 }
 
+/** Map a roster row to the minimal { id, position } shape the viewer consumes. */
+function toViewerPlayer(p: MatchPlayerRow): MatchViewerPlayer {
+  return { id: p.id, position: p.position };
+}
+
 /**
- * Standalone panel that fetches + subscribes to a single match's
- * events and renders the choreographed <PitchView>.
+ * Panel that fetches a match's formation/colours/starting-XI + position frames
+ * and renders the canvas <MatchViewer>.  Shows a static formation rest state
+ * until frames arrive, then replays the simulated match.
  *
- * Lifecycle mirrors LiveCommentary's pattern (initial fetch + Realtime
- * subscription) but doesn't share state — see the WHY block above for
- * the trade-off rationale.
- *
- * @param props.matchId       UUID of the match whose events drive the pitch.
- * @param props.homeTeamName  Optional home team display name — surfaced
- *                            in the SVG aria-label (isl-7rh).
- * @param props.awayTeamName  Optional away team display name.
- * @param props.homeScore     Current home score for the aria-label.
- * @param props.awayScore     Current away score for the aria-label.
- * @returns                   Pitch panel subtree.  Renders the rest
- *                            state while events haven't arrived yet,
- *                            then animates per-event as new rows land.
+ * @param props.matchId       UUID of the match to render.
+ * @param props.homeTeamName  Optional home name for the screen-reader label.
+ * @param props.awayTeamName  Optional away name for the label.
+ * @param props.homeScore     Optional home score for the label.
+ * @param props.awayScore     Optional away score for the label.
+ * @returns                   The viewer panel subtree.
  */
 function MatchPitchPanel({
   matchId,
@@ -1578,26 +1486,18 @@ function MatchPitchPanel({
   awayScore?:    number;
 }) {
   const db = useSupabase();
-  const [events, setEvents] = useState<MatchEventRow[]>([]);
   /**
-   * Cached match metadata used to drive both the choreographer
-   * (homeShort / awayShort resolve `payload.team` strings) and the
-   * isl-6da rendering (formation + colour + starting XI per side).
-   * Centralising into one state slot avoids three useState ping-
-   * pongs after the initial fetch lands.
+   * Match metadata that drives the viewer: per-side formation, kit colour, and
+   * the starting XI (id + position).  One state slot avoids multiple ping-pongs.
    */
   const [meta, setMeta] = useState<{
-    homeShort:     string | null;
-    awayShort:     string | null;
     homeFormation: SupportedFormation;
     awayFormation: SupportedFormation;
     homeColor:     string | null;
     awayColor:     string | null;
-    homePlayers:   MatchPlayerRow[];
-    awayPlayers:   MatchPlayerRow[];
+    homePlayers:   MatchViewerPlayer[];
+    awayPlayers:   MatchViewerPlayer[];
   }>({
-    homeShort:     null,
-    awayShort:     null,
     homeFormation: '4-4-2',
     awayFormation: '4-4-2',
     homeColor:     null,
@@ -1606,85 +1506,55 @@ function MatchPitchPanel({
     awayPlayers:   [],
   });
 
-  // ── Spatial position data (isl-phase5) ────────────────────────────────
-  // Pre-loaded from `match_positions` when the spatial engine ran.  Empty
-  // array means "legacy match" — the choreography hook drives positions
-  // instead.  `scheduledAt` is the real-time pacing anchor shared with
-  // LiveCommentary; `useSpatialPlayback` uses it to derive elapsed game
-  // seconds and advance through the frame array at 1× speed.
+  // ── Spatial position frames + pacing ───────────────────────────────────────
+  // Pre-loaded from `match_positions`; empty until the worker has simulated the
+  // match (or for a legacy match that never gets frames).  `scheduledAt` is the
+  // real-time pacing anchor and `duration` the season window — together they map
+  // wall-clock time onto the 90-minute replay, the same mapping the feed uses.
   const [positionFrames, setPositionFrames] = useState<PositionSnapshot[]>([]);
-  const [scheduledAt,   setScheduledAt]    = useState<string | null>(null);
-  // Season pacing knob (match_duration_seconds).  Drives the SAME real→game
-  // time compression the commentary feed uses so the dots stay in lockstep
-  // with the play-by-play.  Defaults to the production value until fetched.
-  const [duration,      setDuration]       = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
+  const [scheduledAt,    setScheduledAt]    = useState<string | null>(null);
+  const [duration,       setDuration]       = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
 
-  // ── Initial fetch ─────────────────────────────────────────────────────
-  // Three queries in parallel: the match row (formation + roster + colour),
-  // the full event log, and the spatial position snapshots.  All errors
-  // are logged + swallowed — the rest-state PitchView is a usable fallback
-  // and position data being absent just means we fall back to choreography.
+  // ── Initial fetch ─────────────────────────────────────────────────────────
+  // Match row (formation + roster + colour), position snapshots, and the season
+  // pacing knob in parallel.  Errors are logged + swallowed — the formation rest
+  // state is a usable fallback whenever anything is missing.
   useEffect(() => {
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: clear stale events before re-fetching for the new matchId
-    setEvents([]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: clear stale frames before re-fetching for the new matchId
     setPositionFrames([]);
     setScheduledAt(null);
     Promise.all([
       getMatch(db, matchId),
-      getMatchEvents(db, matchId),
       getMatchPositions(db, matchId),
       getMatchDurationSeconds(db, matchId),
     ])
-      .then(([m, evRows, posRows, durSeconds]) => {
+      .then(([m, posRows, durSeconds]) => {
         if (cancelled) return;
-        setEvents(evRows);
         setPositionFrames(posRows);
         setDuration(durSeconds);
 
-        // Narrow the loose getMatch return into the per-side shape
-        // PitchView consumes.  Each branch is independently optional
-        // so a half-joined row (e.g. RLS strips one column) still
-        // produces a renderable rest state instead of throwing.
+        // Narrow the loose getMatch return; each branch is independently optional
+        // so a half-joined row still produces a renderable rest state.
         const matchRow = (m ?? {}) as {
           scheduled_at?: string | null;
-          home_team?: {
-            short_name?: string | null;
-            color?:      string | null;
-            managers?:   Array<{ preferred_formation?: string | null }> | null;
-            players?:    MatchPlayerRow[] | null;
-          } | null;
-          away_team?: {
-            short_name?: string | null;
-            color?:      string | null;
-            managers?:   Array<{ preferred_formation?: string | null }> | null;
-            players?:    MatchPlayerRow[] | null;
-          } | null;
+          home_team?: { color?: string | null; managers?: Array<{ preferred_formation?: string | null }> | null; players?: MatchPlayerRow[] | null } | null;
+          away_team?: { color?: string | null; managers?: Array<{ preferred_formation?: string | null }> | null; players?: MatchPlayerRow[] | null } | null;
         };
         const homeTeam = matchRow.home_team ?? null;
         const awayTeam = matchRow.away_team ?? null;
 
-        // Manager formation: pick the first manager row's formation
-        // (a team has at most one manager today; the join returns an
-        // array because PostgREST embeds 1:N relations that way).
-        const homeFormation = narrowFormation(homeTeam?.managers?.[0]?.preferred_formation);
-        const awayFormation = narrowFormation(awayTeam?.managers?.[0]?.preferred_formation);
-
-        // Starting XI: deterministic engine-aligned ordering so the
-        // commentary and pitch reference the same 11 players.
-        const homePlayers = pickStartingXI(homeTeam?.players ?? []);
-        const awayPlayers = pickStartingXI(awayTeam?.players ?? []);
-
         setScheduledAt(matchRow.scheduled_at ?? null);
         setMeta({
-          homeShort:     homeTeam?.short_name ?? null,
-          awayShort:     awayTeam?.short_name ?? null,
-          homeFormation,
-          awayFormation,
+          // Manager formation: first manager row (a team has at most one; the
+          // join embeds 1:N relations as an array).
+          homeFormation: narrowFormation(homeTeam?.managers?.[0]?.preferred_formation),
+          awayFormation: narrowFormation(awayTeam?.managers?.[0]?.preferred_formation),
           homeColor:     homeTeam?.color ?? null,
           awayColor:     awayTeam?.color ?? null,
-          homePlayers,
-          awayPlayers,
+          // Engine-aligned ordering so commentary + viewer name the same XI.
+          homePlayers:   pickStartingXI(homeTeam?.players ?? []).map(toViewerPlayer),
+          awayPlayers:   pickStartingXI(awayTeam?.players ?? []).map(toViewerPlayer),
         });
       })
       .catch((err) => {
@@ -1693,14 +1563,6 @@ function MatchPitchPanel({
       });
     return () => { cancelled = true; };
   }, [db, matchId]);
-
-  // ── Spatial playback (isl-phase5) ─────────────────────────────────────
-  // Drives real agent-simulation positions when `positionFrames` is
-  // populated (i.e., the spatial engine ran for this match).  When
-  // `active` is false (legacy match or frames not yet loaded), the
-  // choreography hook inside PitchView drives positions instead — no
-  // conditional hook calls needed, we simply omit the override props.
-  const spatial = useSpatialPlayback(positionFrames, scheduledAt, duration);
 
   // ── Late-arriving frames (open-before-kickoff) ─────────────────────────
   // The worker writes every position frame in a single burst at kickoff, and
@@ -1761,61 +1623,24 @@ function MatchPitchPanel({
     return () => { cancelled = true; stop(); };
   }, [db, matchId, scheduledAt, duration, positionFrames.length]);
 
-  // ── Realtime subscription ──────────────────────────────────────────────
-  // Same channel the commentary feed subscribes to.  Supabase multiplexes
-  // identical filters so the extra channel is a negligible cost; the
-  // subscription unmounts cleanly when the panel hides (cancelled /
-  // completed matches don't render this component).
-  useEffect(() => {
-    return subscribeToMatchEvents(db, matchId, (row) => {
-      setEvents((prev) => [...prev, row]);
-    });
-  }, [db, matchId]);
-
-  // ── Map to choreographer input ─────────────────────────────────────────
-  // useMemo so identical event lists produce stable array references —
-  // the hook's `seenRef` doesn't re-process them but a fresh array
-  // would still wake the effect on every parent render.
-  const pitchEvents = useMemo(
-    () => events.map((e) => toPitchEvent(e, meta)),
-    [events, meta],
-  );
-
   return (
-    <PitchView
-      events={pitchEvents}
-      // Real tactical shape per team (isl-6da).  meta.homeFormation
-      // / awayFormation are seeded from the resolved match.managers
-      // rows; if the join missed they fall back to '4-4-2' via
-      // narrowFormation, so the prop is always a valid FormationKey.
+    <MatchViewer
+      frames={positionFrames}
+      scheduledAt={scheduledAt}
+      durationSeconds={duration}
+      // Tactical shape per team (falls back to 4-4-2 via narrowFormation), the
+      // starting XI (id + position), and kit colours.  Empty rosters are fine —
+      // <MatchViewer> pads with synthetic ids so the pitch stays full.
       homeFormation={meta.homeFormation}
       awayFormation={meta.awayFormation}
-      // Starting XI for each side, slot-ordered.  Empty arrays are
-      // tolerated downstream — PitchView synthesises ids when fewer
-      // than 11 players are supplied.
       homePlayers={meta.homePlayers}
       awayPlayers={meta.awayPlayers}
-      // Team brand colour drives the dot fill; null falls back to
-      // the canonical dust / quantum palette inside PitchView.
-      homeTeamColor={meta.homeColor}
-      awayTeamColor={meta.awayColor}
+      homeColor={meta.homeColor}
+      awayColor={meta.awayColor}
       {...(homeTeamName !== undefined && { homeTeamName })}
       {...(awayTeamName !== undefined && { awayTeamName })}
       {...(homeScore    !== undefined && { homeScore })}
       {...(awayScore    !== undefined && { awayScore })}
-      // ── Spatial overrides (isl-phase5) ──────────────────────────────
-      // When the spatial engine ran for this match, `spatial.active`
-      // is true once the frame array is loaded and the match clock is
-      // live.  Passing the overrides replaces PitchView's synthetic
-      // event-choreography positions with real agent-simulation
-      // positions for every player + the ball.  When `active` is
-      // false (legacy match or frames not yet arrived) these props are
-      // omitted entirely so PitchView falls back to its choreography
-      // hook — no visible difference for the viewer.
-      {...(spatial.active && {
-        positionOverrides: spatial.playerOverrides,
-        ballOverride:      spatial.ballOverride,
-      })}
     />
   );
 }
