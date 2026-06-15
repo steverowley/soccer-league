@@ -60,6 +60,9 @@ export {
 } from './appearance';
 export type { Appearance, HairStyle, Build, HatStyle } from './appearance';
 
+export { pickNearestId } from './hitTest';
+export type { HitTarget } from './hitTest';
+
 export type { ViewerMatch, ViewerRosterPlayer } from './buildMatch';
 export { generateDemoMatch } from './demoMatch';
 export { simulateMatchFromTeams } from './realMatch';

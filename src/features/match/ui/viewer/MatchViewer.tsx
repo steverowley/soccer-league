@@ -36,6 +36,7 @@ import {
   computePose,
   followAnchor,
   makeAppearance,
+  pickNearestId,
   projectBroadcast,
   projectFollow,
   realToGameSeconds,
@@ -44,6 +45,7 @@ import {
   smoothFollowCenter,
   STATIC_POSE,
   type Appearance,
+  type HitTarget,
   type ScreenPoint,
   type Viewport,
 } from '../../logic/viewer';
@@ -59,6 +61,9 @@ const VP: Viewport = { width: 320, height: 208 };
 
 /** Velocity (game m/s) above which we flip a dude's facing — avoids jitter at rest. */
 const FACE_FLIP_SPEED = 0.4;
+
+/** Click selection radius in backing-store pixels (a click within this of a dude selects it). */
+const SELECT_RADIUS = 16;
 
 /** Which camera is active.  Both share one world model; only the projection differs. */
 type CameraMode = 'broadcast' | 'follow';
@@ -94,6 +99,16 @@ export interface MatchViewerProps {
   awayTeamName?: string;
   homeScore?: number;
   awayScore?: number;
+  /**
+   * Id of the currently-selected player (highlighted on the pitch, others dimmed).
+   * Omit to disable selection visuals.
+   */
+  selectedPlayerId?: string | null;
+  /**
+   * Called when a player is clicked (id), or when empty pitch is clicked (null).
+   * When provided, the canvas becomes clickable.
+   */
+  onSelectPlayer?: (id: string | null) => void;
 }
 
 // ── Dude spec (static per match) ─────────────────────────────────────────────
@@ -163,6 +178,8 @@ export function MatchViewer({
   awayTeamName,
   homeScore,
   awayScore,
+  selectedPlayerId,
+  onSelectPlayer,
 }: MatchViewerProps) {
   const reducedMotion = useReducedMotion();
   const [cameraMode, setCameraMode] = useState<CameraMode>('broadcast');
@@ -176,6 +193,13 @@ export function MatchViewer({
   const followCenterRef = useRef<ScreenPoint | null>(null);
   /** Offscreen-baked broadcast pitch (static layer drawn once, blitted each frame). */
   const bakedPitchRef = useRef<HTMLCanvasElement | null>(null);
+  /** Latest selected id, read inside the loop without re-creating it on selection change. */
+  const selectedIdRef = useRef<string | null>(selectedPlayerId ?? null);
+  useEffect(() => {
+    selectedIdRef.current = selectedPlayerId ?? null;
+  }, [selectedPlayerId]);
+  /** Per-frame screen anchors for click hit-testing (rebuilt every frame). */
+  const hitTargetsRef = useRef<HitTarget[]>([]);
 
   // Kickoff anchor in epoch ms — parsed once so a same-string re-render is stable.
   const anchorMs = useMemo<number | null>(() => {
@@ -284,12 +308,29 @@ export function MatchViewer({
       // top of each other so the pitch stays legible; the match data is untouched.
       separatePositions(pending.map((p) => p.pos));
 
-      // Pass 2 — project the (possibly nudged) position + build the render record.
+      // Pass 2 — project the (possibly nudged) position, record a hit anchor for
+      // click selection, and build the render record (highlight/dim by selection).
+      const selectedId = selectedIdRef.current;
+      const hitTargets: HitTarget[] = [];
       const dudes: DudeRender[] = pending.map((p) => {
-        const sc = project(p.pos.x, p.pos.y, 0).sc;
+        const proj = project(p.pos.x, p.pos.y, 0);
+        const sc = proj.sc;
         const pose = reducedMotion ? STATIC_POSE : computePose(p.phase, p.state, sc);
-        return { wx: p.pos.x, wy: p.pos.y, pose, appearance: p.spec.appearance, kit: p.spec.kit, face: p.face };
+        const isSelected = selectedId != null && p.spec.id === selectedId;
+        // Anchor the click target at mid-body (above the feet) so clicking the torso/head registers.
+        hitTargets.push({ id: p.spec.id, sx: proj.x, sy: proj.y - 6 * sc });
+        return {
+          wx: p.pos.x,
+          wy: p.pos.y,
+          pose,
+          appearance: p.spec.appearance,
+          kit: p.spec.kit,
+          face: p.face,
+          highlighted: isSelected,
+          dimmed: selectedId != null && !isSelected,
+        };
       });
+      hitTargetsRef.current = hitTargets;
 
       // Depth-sort dudes + ball back-to-front by world y (far touchline first).
       const order: Array<{ k: number; dude: DudeRender | null }> = dudes.map((d) => ({ k: d.wy, dude: d }));
@@ -311,6 +352,19 @@ export function MatchViewer({
   const switchCamera = (mode: CameraMode): void => {
     if (mode === 'follow') followCenterRef.current = null;
     setCameraMode(mode);
+  };
+
+  // Translate a click (CSS px) into backing-store space and select the nearest
+  // dude (or null → deselect when the click misses everyone).
+  const selectAt = (clientX: number, clientY: number): void => {
+    if (!onSelectPlayer) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = (clientX - rect.left) * (VP.width / rect.width);
+    const y = (clientY - rect.top) * (VP.height / rect.height);
+    onSelectPlayer(pickNearestId(hitTargetsRef.current, x, y, SELECT_RADIUS));
   };
 
   // Screen-reader label — the sighted equivalent lives in the commentary feed.
@@ -336,7 +390,14 @@ export function MatchViewer({
         height={VP.height}
         role="img"
         aria-label={ariaLabel}
-        style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
+        onClick={onSelectPlayer ? (e) => selectAt(e.clientX, e.clientY) : undefined}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          imageRendering: 'pixelated',
+          cursor: onSelectPlayer ? 'pointer' : 'default',
+        }}
       />
 
       {/* In-game camera toggle. */}

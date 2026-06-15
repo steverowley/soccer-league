@@ -19,6 +19,7 @@ import {
   type ViewerMatch,
 } from '../../logic/viewer';
 import { MatchViewer } from './MatchViewer';
+import { PlayerThoughtsPanel } from './PlayerThoughtsPanel';
 
 /**
  * Real seconds to replay the full 90-minute match before looping.  720s ≈ 7.5×
@@ -47,6 +48,7 @@ export function MatchViewerDemo() {
 
   const [match, setMatch] = useState<ViewerMatch | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // Pacing anchor; resetting it restarts the replay from kickoff (loop).
   const [anchor, setAnchor] = useState<string>(() => new Date().toISOString());
@@ -100,6 +102,7 @@ export function MatchViewerDemo() {
           );
           setMatch(vm);
           setAnchor(new Date().toISOString());
+          setSelectedPlayerId(null); // new match ⇒ clear any selection
           setLoading(false);
         })
         .catch((err) => {
@@ -107,6 +110,7 @@ export function MatchViewerDemo() {
           console.warn('[MatchViewerDemo] real match failed, using synthetic:', err);
           setMatch(generateDemoMatch(seed));
           setAnchor(new Date().toISOString());
+          setSelectedPlayerId(null);
           setLoading(false);
         });
     }, 0);
@@ -133,7 +137,7 @@ export function MatchViewerDemo() {
   };
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 1040 }}>
       <p style={{ margin: '0 0 12px', color: COLORS.dust70, fontSize: 13, lineHeight: 1.6 }}>
         A full match <strong style={{ color: COLORS.dust }}>simulated live</strong> by the real engine —
         real rosters, stats, tactics and kits. Pick two clubs, then use the{' '}
@@ -185,36 +189,48 @@ export function MatchViewerDemo() {
         </div>
       )}
 
-      {match ? (
-        <MatchViewer
-          frames={match.frames}
-          scheduledAt={anchor}
-          durationSeconds={DEMO_DURATION_SECONDS}
-          homeFormation={match.homeFormation}
-          awayFormation={match.awayFormation}
-          homePlayers={match.homePlayers}
-          awayPlayers={match.awayPlayers}
-          homeColor={match.homeColor}
-          awayColor={match.awayColor}
-          homeTeamName={match.homeTeamName}
-          awayTeamName={match.awayTeamName}
-        />
-      ) : (
-        <div
-          style={{
-            aspectRatio: '320 / 208',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: COLORS.dust50,
-            fontSize: 13,
-            border: `1px solid ${COLORS.hairline}`,
-            background: COLORS.abyss,
-          }}
-        >
-          Simulating match…
+      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', flexWrap: 'wrap' }}>
+        {/* Pitch */}
+        <div style={{ flex: '2 1 460px', minWidth: 300 }}>
+          {match ? (
+            <MatchViewer
+              frames={match.frames}
+              scheduledAt={anchor}
+              durationSeconds={DEMO_DURATION_SECONDS}
+              homeFormation={match.homeFormation}
+              awayFormation={match.awayFormation}
+              homePlayers={match.homePlayers}
+              awayPlayers={match.awayPlayers}
+              homeColor={match.homeColor}
+              awayColor={match.awayColor}
+              homeTeamName={match.homeTeamName}
+              awayTeamName={match.awayTeamName}
+              selectedPlayerId={selectedPlayerId}
+              onSelectPlayer={setSelectedPlayerId}
+            />
+          ) : (
+            <div
+              style={{
+                aspectRatio: '320 / 208',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: COLORS.dust50,
+                fontSize: 13,
+                border: `1px solid ${COLORS.hairline}`,
+                background: COLORS.abyss,
+              }}
+            >
+              Simulating match…
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Inspect panel */}
+        <div style={{ flex: '1 1 240px', minWidth: 240 }}>
+          <PlayerThoughtsPanel playerId={selectedPlayerId} />
+        </div>
+      </div>
     </div>
   );
 }
