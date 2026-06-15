@@ -119,27 +119,15 @@ export type {
   PlayerDot,
 } from './logic/pitch/pitchState';
 
-// ── UI — pitch view (issues isl-5b6 + isl-lfo) ─────────────────────────────
-// Static SVG composition of the pitch surface + 22 dots + ball.  The
-// MatchDetail page renders this in a 2-column layout beside the
-// LiveCommentary feed for in_progress / scheduled matches; completed
-// matches keep the current commentary-only layout.  When the `events`
-// prop is supplied, the useChoreographyQueue hook (isl-lfo) drives
-// per-second dot motion in lockstep with the commentary feed.
-export { PitchView } from './ui/pitch/PitchView';
-export type { PitchViewProps } from './ui/pitch/PitchView';
+// ── UI — canvas match viewer (Tiny Terraces pixel-art) ─────────────────────
+// The MatchDetail page renders <MatchViewer> beside the LiveCommentary feed for
+// in_progress / scheduled matches.  It replays the spatial engine's
+// `match_positions` frames as animated little dudes on a to-scale pitch, with an
+// in-game broadcast ⇄ follow camera toggle.  PitchSurface is kept because the
+// MiniPitch chip on the Matches list still renders the static SVG surface.
+export { MatchViewer } from './ui/viewer/MatchViewer';
+export type { MatchViewerProps, MatchViewerPlayer } from './ui/viewer/MatchViewer';
 export { PitchSurface } from './ui/pitch/PitchSurface';
-export {
-  LIVE_TICK_MS as PITCH_LIVE_TICK_MS,
-  useChoreographyQueue,
-} from './ui/pitch/useChoreographyQueue';
-export type {
-  PitchEventInput,
-  UseChoreographyQueueInput,
-  UseChoreographyQueueOutput,
-} from './ui/pitch/useChoreographyQueue';
-export { PitchDebugOverlay } from './ui/pitch/PitchDebugOverlay';
-export type { PitchDebugOverlayProps } from './ui/pitch/PitchDebugOverlay';
 
 // ── Mini-pitch chip + shared broadcast hook (issue isl-a8i) ───────────────
 // MiniPitch is a tiny pitch preview for the Matches list page that
@@ -217,15 +205,11 @@ export type {
   MatchEventRow,
 } from './api/matchEvents';
 
-// ── Spatial position playback (isl-phase5) ────────────────────────────────
-// API read + React hook for replaying real agent-simulation positions in
-// <PitchView>.  `getMatchPositions` fetches the pre-computed frames from
-// `match_positions`; `useSpatialPlayback` converts them into per-tick
-// normalised overrides keyed by player id.
+// ── Spatial position playback ──────────────────────────────────────────────
+// `getMatchPositions` fetches the pre-computed `match_positions` frames; the
+// canvas <MatchViewer> replays them, interpolating between the 2-second snaps.
 export { getMatchPositions } from './api/matchPositions';
 export type { PositionSnapshot } from './api/matchPositions';
-export { useSpatialPlayback } from './ui/useSpatialPlayback';
-export type { SpatialPlaybackResult, NormalisedPosition } from './ui/useSpatialPlayback';
 
 // ── Per-player surfaces (powers /players/:playerId) ───────────────────────
 // Recent appearances + narrative mentions for the Player Detail page.
