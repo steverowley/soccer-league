@@ -40,6 +40,7 @@ import {
   projectFollow,
   realToGameSeconds,
   sampleFrames,
+  separatePositions,
   smoothFollowCenter,
   STATIC_POSE,
   type Appearance,
@@ -257,12 +258,12 @@ export function MatchViewer({
         drawPitch(ctx, project);
       }
 
-      // Resolve each dude's world position + pose for this frame.
-      const dudes: DudeRender[] = [];
-      for (const spec of dudeSpecs) {
+      // Pass 1 — resolve each dude's true world position + gait/facing/phase.
+      // Position lives in a mutable `pos` object so the separation pass can nudge
+      // it in place before we project + pose.
+      const pending = dudeSpecs.map((spec) => {
         const s = sampled.players.get(spec.id);
-        const wx = s ? s.x : spec.homeX;
-        const wy = s ? s.y : spec.homeY;
+        const pos = { x: s ? s.x : spec.homeX, y: s ? s.y : spec.homeY };
         const gameSpeed = s ? Math.hypot(s.vx, s.vy) : 0;
         const state = reducedMotion ? 'idle' : animStateFromSpeed(gameSpeed);
 
@@ -276,10 +277,19 @@ export function MatchViewer({
         if (s && Math.abs(s.vx) > FACE_FLIP_SPEED) face = s.vx > 0 ? 1 : -1;
         faceRef.current.set(spec.id, face);
 
-        const sc = project(wx, wy, 0).sc;
-        const pose = reducedMotion ? STATIC_POSE : computePose(phase, state, sc);
-        dudes.push({ wx, wy, pose, appearance: spec.appearance, kit: spec.kit, face });
-      }
+        return { spec, pos, state, phase, face };
+      });
+
+      // De-overlap (VISUAL ONLY) — spread sprites that the real positions stack on
+      // top of each other so the pitch stays legible; the match data is untouched.
+      separatePositions(pending.map((p) => p.pos));
+
+      // Pass 2 — project the (possibly nudged) position + build the render record.
+      const dudes: DudeRender[] = pending.map((p) => {
+        const sc = project(p.pos.x, p.pos.y, 0).sc;
+        const pose = reducedMotion ? STATIC_POSE : computePose(p.phase, p.state, sc);
+        return { wx: p.pos.x, wy: p.pos.y, pose, appearance: p.spec.appearance, kit: p.spec.kit, face: p.face };
+      });
 
       // Depth-sort dudes + ball back-to-front by world y (far touchline first).
       const order: Array<{ k: number; dude: DudeRender | null }> = dudes.map((d) => ({ k: d.wy, dude: d }));
