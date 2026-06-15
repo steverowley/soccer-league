@@ -18,15 +18,20 @@ export interface SepPoint {
 }
 
 /**
- * Minimum centre-to-centre gap (metres) between two drawn dudes.  ~2.6m is a hair
- * wider than a broadcast-camera sprite's on-pitch footprint, so a tight cluster
- * stops overlapping without visibly distorting the tactical shape (a player moves
- * at most ~1.3m for legibility).
+ * Minimum centre-to-centre gap (metres) between two drawn dudes.  ~4.2m comfortably
+ * clears a sprite's full on-pitch footprint (body + grounding shadow) at broadcast
+ * scale, so even a tight ball-scramble fans out into readable, distinct figures.
+ * Separation only acts on players closer than this, so open play is unaffected —
+ * it just spreads the clusters.
  */
-export const SEPARATION_MIN_DIST = 2.6;
+export const SEPARATION_MIN_DIST = 4.2;
 
-/** Relaxation passes per frame.  4 resolves a dense ball-scramble; trivial at n=22. */
-export const SEPARATION_ITERATIONS = 4;
+/**
+ * Relaxation passes per frame.  A dense ball-scramble (6-8 stacked players) needs
+ * several passes for the symmetric half-pushes to propagate through the cluster and
+ * actually reach the target gap; 12 converges cleanly.  Trivial cost at n=22.
+ */
+export const SEPARATION_ITERATIONS = 12;
 
 /**
  * Push apart, in place, any points closer than `minDist`, over a few relaxation

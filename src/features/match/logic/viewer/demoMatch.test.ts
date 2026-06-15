@@ -2,9 +2,14 @@
 // Verifies the synthetic showcase match: determinism, frame shape, in-range
 // coordinates, and that exactly one ball carrier (if any) is flagged per frame.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import { generateDemoMatch } from './demoMatch';
+
+// Each test runs at least one full 90-minute spatial sim (~2–3s); the
+// determinism test runs two.  A slower CI runner tips two sims past vitest's
+// 5s default, so give the whole file generous headroom.
+vi.setConfig({ testTimeout: 30000 });
 
 describe('generateDemoMatch', () => {
   it('is deterministic for a given seed', () => {
