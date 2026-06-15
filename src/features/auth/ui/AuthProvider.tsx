@@ -126,6 +126,24 @@ const TOUCH_DEBOUNCE_MS = 60_000;
  */
 const PRESENCE_HEARTBEAT_MS = 90_000;
 
+// ── Auth resolution failsafe ─────────────────────────────────────────────────
+/**
+ * Hard ceiling on how long the app blocks rendering behind `loading` while
+ * restoring the stored session on mount.
+ *
+ * The entire tree gates on this flag (every auth-aware page renders "Checking
+ * the void for an active session…" until it clears), so a hung or never-settling
+ * auth network call — a slow token refresh, a reload while briefly offline —
+ * would otherwise strand the user on that screen forever with no escape but a
+ * hard reload. After this window we stop blocking and render as logged-out; the
+ * `onAuthStateChange` listener still promotes the user to logged-in if the
+ * session resolves afterwards.
+ *
+ * 8 s comfortably clears even the slow auth responses observed in the wild
+ * (~7 s `GET /user`) without flashing the login form for a healthy connection.
+ */
+const AUTH_RESOLVE_TIMEOUT_MS = 8_000;
+
 // ── Provider component ──────────────────────────────────────────────────────
 
 /**
@@ -165,18 +183,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Initial session restore + auth state listener ───────────────────────
   useEffect(() => {
+    // `cancelled` guards every async setState below against firing after the
+    // effect is torn down (unmount / db swap) and stops the failsafe timer
+    // from racing a real resolution.
+    let cancelled = false;
+
+    // Failsafe: never let a slow or never-settling auth call pin the user on
+    // the loading screen. The whole app waits on `loading`, and a hung token
+    // refresh (or a reload while offline) has no `.catch`/timeout to fall back
+    // on, so without this the only recovery is a manual hard reload. If session
+    // restore hasn't settled within AUTH_RESOLVE_TIMEOUT_MS, drop the gate and
+    // render as logged-out; the onAuthStateChange listener still upgrades the
+    // user to logged-in if the session resolves later.
+    const failsafe = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, AUTH_RESOLVE_TIMEOUT_MS);
+
     // 1. Restore session from storage (cookie/localStorage depending on
     //    Supabase config). This is async but we don't want to block the
     //    first render — `loading` stays true until this resolves.
-    db.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        fetchProfile().finally(() => setLoading(false));
-      } else {
+    db.auth
+      .getSession()
+      .then(({ data: { session: s } }) => {
+        if (cancelled) return undefined;
+        setSession(s);
+        setUser(s?.user ?? null);
+        // Returning the profile fetch chains it into the `.finally` below so
+        // `loading` only clears once the profile is loaded (or the fetch
+        // settles); a logged-out restore skips straight to clearing the gate.
+        return s?.user ? fetchProfile() : undefined;
+      })
+      .catch((err: unknown) => {
+        // A failed session restore (network error, expired/revoked refresh
+        // token) must not leave the user stranded behind the loading gate —
+        // fall back to logged-out so they can reach the login form and retry.
+        console.warn('[AuthProvider] session restore failed:', err);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        clearTimeout(failsafe);
         setLoading(false);
-      }
-    });
+      });
 
     // 2. Listen for auth state changes (login, logout, token refresh).
     const {
@@ -201,6 +248,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      cancelled = true;
+      clearTimeout(failsafe);
       subscription.unsubscribe();
     };
   }, [db, fetchProfile]);
