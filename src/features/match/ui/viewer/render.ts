@@ -32,6 +32,7 @@ const LINE = 'rgba(227,224,213,0.30)';
 const GOAL_LINE = 'rgba(227,224,213,0.55)';
 const GRASS_A = '#1c241c'; // darker mowing stripe
 const GRASS_B = '#202a20'; // lighter mowing stripe
+const HIGHLIGHT = '#C9A6FF'; // bright quantum tint for the selected-player halo
 
 /** How many vertical mowing stripes to paint across the pitch length. */
 const GRASS_STRIPES = 10;
@@ -55,6 +56,10 @@ export interface DudeRender {
   kit: string;
   /** Facing: +1 right, −1 left. */
   face: number;
+  /** Draw a selection halo under this dude (the clicked player). */
+  highlighted?: boolean;
+  /** Fade this dude back (a different player is selected) so the focus stands out. */
+  dimmed?: boolean;
 }
 
 /** Everything the renderer needs to draw the ball this frame. */
@@ -343,6 +348,25 @@ function drawHat(
 export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: DudeRender): void {
   const pr = project(d.wx, d.wy, 0);
   const sc = pr.sc;
+
+  // Selection halo (drawn first, under the dude) marks the clicked player.
+  if (d.highlighted) {
+    ctx.save();
+    ctx.strokeStyle = HIGHLIGHT;
+    ctx.lineWidth = Math.max(1, 1.3 * sc);
+    ctx.beginPath();
+    ctx.ellipse(pr.x, pr.y, 6.5 * sc, 2.6 * sc, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Fade non-selected dudes so the selected one stands out (set once, restored
+  // at the end of the function).
+  const dimmed = d.dimmed === true;
+  if (dimmed) {
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+  }
+
   const { hop, h, scaleX: sx0, scaleY: sy0, swing, cosPhase } = d.pose;
   const a = d.appearance;
   const kit = d.kit;
@@ -416,6 +440,9 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
     rect(ctx, headX + head * 0.22 - aw * 0.3, headY - ah - aw, aw * 1.6, aw * 1.6);
     rect(ctx, headX + head * 0.72 - aw * 0.3, headY - ah - aw, aw * 1.6, aw * 1.6);
   }
+
+  // Restore the alpha we lowered for a dimmed (non-selected) dude.
+  if (dimmed) ctx.restore();
 }
 
 // ── Ball ─────────────────────────────────────────────────────────────────────
