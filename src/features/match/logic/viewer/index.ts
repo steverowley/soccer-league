@@ -43,6 +43,13 @@ export {
 export type { SampledPlayer, SampledBall, SampledFrame } from './playback';
 
 export {
+  SEPARATION_MIN_DIST,
+  SEPARATION_ITERATIONS,
+  separatePositions,
+} from './separation';
+export type { SepPoint } from './separation';
+
+export {
   SKIN_TONES,
   HUMAN_SKIN_COUNT,
   HAIR_COLORS,
