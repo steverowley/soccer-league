@@ -14,9 +14,11 @@ import { MatchViewer } from './MatchViewer';
 
 /**
  * Real seconds to replay the full 90-minute synthetic match before looping.
- * ~3 minutes is long enough to read the play, short enough to re-loop quickly.
+ * 720s ≈ 7.5× real-time (a 12-minute loop) — a relaxed, watchable jog rather
+ * than the frantic zip a short window produces.  This is the single knob that
+ * controls demo playback speed: larger = slower.
  */
-const DEMO_DURATION_SECONDS = 180;
+const DEMO_DURATION_SECONDS = 720;
 
 /**
  * Always-on demo of the match viewer.  Runs the spatial engine once to build a
