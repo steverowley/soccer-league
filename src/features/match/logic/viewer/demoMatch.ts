@@ -1,44 +1,21 @@
 // ── features/match/logic/viewer/demoMatch.ts ────────────────────────────────
-// Generates a self-contained showcase match for the on-demand viewer demo.
+// Synthetic fallback showcase match for the viewer demo.
 //
-// WHY
-//   The viewer only appears for a real match that has stored `match_positions`
-//   frames.  To demo it on the site at any time — independent of whether a live
-//   match exists — we run the REAL spatial engine client-side over two synthetic
-//   teams and map its replay frames into the exact `PositionSnapshot` shape the
-//   viewer consumes.  Authentic motion, no DB, no live fixture required.
-//
-// DETERMINISTIC: same seed ⇒ same match, so the demo is stable.
+// Preferred path is a REAL matchup (realMatch.ts); this synthetic generator is
+// the fallback used when no team data is available (fresh DB, offline).  It runs
+// the SAME spatial engine through the shared assembler, so it behaves like a real
+// match — just with anonymous, deterministically-generated players.
 
-import type { PositionSnapshot } from '../../api/matchPositions';
-import type { FormationKey } from '../pitch';
 import {
-  DEFAULT_CONFIG,
-  simulateSpatialMatch,
+  assembleMatch,
+  type ViewerMatch,
+} from './buildMatch';
+import {
   type SpatialPlayerInput,
   type SpatialTeamInput,
 } from '../spatial/simulateSpatialMatch';
 import type { Role, SimPlayerStats } from '../spatial/types';
 import { mulberry32 } from './appearance';
-
-/** Minimal player descriptor the viewer needs (structurally a MatchViewerPlayer). */
-export interface DemoPlayer {
-  id: string;
-  position: string;
-}
-
-/** Everything <MatchViewer> needs to replay the synthetic demo match. */
-export interface DemoMatch {
-  frames: PositionSnapshot[];
-  homePlayers: DemoPlayer[];
-  awayPlayers: DemoPlayer[];
-  homeFormation: FormationKey;
-  awayFormation: FormationKey;
-  homeColor: string | null;
-  awayColor: string | null;
-  /** Final score, handy if a caller wants to show it. */
-  finalScore: [number, number];
-}
 
 /** 4-4-2 role layout, GK first — supported by both the engine and the viewer. */
 const DEMO_ROLES: readonly Role[] = [
@@ -77,48 +54,27 @@ function buildTeam(side: 'home' | 'away', seed: number): SpatialTeamInput {
 }
 
 /**
- * Generate a full 90-minute showcase match by running the spatial engine over
- * two synthetic teams and converting its frames into `PositionSnapshot`s exactly
- * as the match-worker does (minute/second + `hasBall` derived from the owner).
+ * Generate a deterministic synthetic showcase match by running the spatial engine
+ * over two anonymous 4-4-2 teams.
  *
  * @param seed  Match seed; same seed ⇒ identical demo.
- * @returns     Frames + rosters + shape/colours for <MatchViewer>.
+ * @returns     A `ViewerMatch` ready for <MatchViewer>.
  */
-export function generateDemoMatch(seed = 7): DemoMatch {
-  const home = buildTeam('home', seed);
-  const away = buildTeam('away', seed + 1000);
-  const result = simulateSpatialMatch(home, away, { ...DEFAULT_CONFIG, seed });
-
-  const frames: PositionSnapshot[] = result.frames.map((frame) => {
-    // Same mapping the worker uses: minute = floor(tSec/60)+1 (clamped to extra
-    // time), second = tSec within the minute, hasBall = id matches the carrier.
-    const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
-    const second = Math.floor(frame.tSec % 60);
-    return {
-      minute,
-      second,
-      snapshots: {
-        players: frame.players.map((p) => ({
-          id: p.id,
-          x: p.x,
-          y: p.y,
-          hasBall: p.id === frame.ball.ownerId,
-        })),
-        ball: { x: frame.ball.x, y: frame.ball.y, ownerId: frame.ball.ownerId },
-      },
-    };
-  });
-
-  const toDemoPlayer = (p: SpatialPlayerInput): DemoPlayer => ({ id: p.id, position: p.role });
+export function generateDemoMatch(seed = 7): ViewerMatch {
+  const homeInput = buildTeam('home', seed);
+  const awayInput = buildTeam('away', seed + 1000);
+  const { frames, homePlayers, awayPlayers, finalScore } = assembleMatch(homeInput, awayInput, seed);
   return {
     frames,
-    homePlayers: home.players.map(toDemoPlayer),
-    awayPlayers: away.players.map(toDemoPlayer),
+    homePlayers,
+    awayPlayers,
     homeFormation: '4-4-2',
     awayFormation: '4-4-2',
     // Null colours → the viewer's canonical quantum / flare fallback.
     homeColor: null,
     awayColor: null,
-    finalScore: result.finalScore,
+    homeTeamName: 'Home XI',
+    awayTeamName: 'Away XI',
+    finalScore,
   };
 }
