@@ -13,6 +13,7 @@ import { rngGaussian, type Rng } from './rng';
 import {
   type SimPlayer, type SimWorld, type TeamSide,
   GOAL_Y_MIN, GOAL_Y_MAX, PITCH_WIDTH, PITCH_LENGTH,
+  PENALTY_AREA_DEPTH, PENALTY_AREA_Y_MIN, PENALTY_AREA_Y_MAX,
   attackingGoalX,
 } from './types';
 
@@ -307,6 +308,37 @@ export function cardForFoul(foulPos: Vec2, fouledSide: TeamSide, rng: Rng): 'yel
   const serious = rng() < 0.06;                    // share of bookings that are red
   if (draw >= yellowChance) return null;
   return serious ? 'red' : 'yellow';
+}
+
+/**
+ * Whether `pos` lies inside the penalty area that `attackingSide` is attacking —
+ * the box in front of the goal they shoot at.  Used to upgrade a foul on the
+ * carrier to a penalty kick.  Pure geometry, no rng.
+ *
+ * @param pos           Where the foul happened (pitch metres).
+ * @param attackingSide The fouled side (attacking toward their opponent's goal).
+ */
+export function isInPenaltyArea(pos: Vec2, attackingSide: TeamSide): boolean {
+  const goalX = attackingGoalX(attackingSide);
+  return Math.abs(pos.x - goalX) <= PENALTY_AREA_DEPTH
+    && pos.y >= PENALTY_AREA_Y_MIN
+    && pos.y <= PENALTY_AREA_Y_MAX;
+}
+
+/**
+ * Probability a penalty kick is scored.  Penalties convert far more often than
+ * open play (~75% in real football), so this is anchored high and nudged by the
+ * taker's shooting vs the keeper's goalkeeping, then clamped to a believable
+ * 55–92%.  An empty net (no keeper) is near-certain.
+ *
+ * @param taker   The penalty taker (the fouled attacker).
+ * @param keeper  The defending keeper, or undefined if the side has none.
+ * @returns       Goal probability in [0.55, 0.95].
+ */
+export function penaltyGoalProbability(taker: SimPlayer, keeper: SimPlayer | undefined): number {
+  if (!keeper) return 0.95;
+  const edge = (taker.stats.shooting - keeper.stats.goalkeeping) / 400; // ±~0.25 across the stat range
+  return Math.min(0.92, Math.max(0.55, 0.78 + edge));
 }
 
 /**

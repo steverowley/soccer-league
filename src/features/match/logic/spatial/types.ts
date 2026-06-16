@@ -33,6 +33,18 @@ export const GOAL_Y_MAX = (PITCH_WIDTH + GOAL_WIDTH) / 2; // ≈ 37.66
 /** Centre spot — kickoff position and the ball's rest point between goals. */
 export const CENTRE_SPOT: Vec2 = { x: PITCH_LENGTH / 2, y: PITCH_WIDTH / 2 };
 
+/** Penalty-area depth from the goal line (m) — the real-world "18-yard box". */
+export const PENALTY_AREA_DEPTH = 16.5;
+
+/** Penalty-area full width (m): the goal mouth + 16.5m either side ≈ 40.32m. */
+export const PENALTY_AREA_WIDTH = GOAL_WIDTH + 2 * 16.5;
+
+/** Lowest y of the penalty area. */
+export const PENALTY_AREA_Y_MIN = (PITCH_WIDTH - PENALTY_AREA_WIDTH) / 2; // ≈ 13.84
+
+/** Highest y of the penalty area. */
+export const PENALTY_AREA_Y_MAX = (PITCH_WIDTH + PENALTY_AREA_WIDTH) / 2; // ≈ 54.16
+
 /** Which side of the pitch a team attacks / defends. */
 export type TeamSide = 'home' | 'away';
 
@@ -218,6 +230,7 @@ export interface SimEvent {
     | 'tackle'      // possession won by a defender
     | 'interception'
     | 'foul'        // failed challenge that fouls the carrier → free kick (may carry a card)
+    | 'penalty'     // a foul inside the box → penalty kick (followed by a goal or save)
     | 'offside'     // attacker collected a teammate's pass while in an offside position
     | 'out_throw'   // ball left via touchline
     | 'out_goalkick'
