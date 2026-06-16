@@ -48,7 +48,33 @@ export const DEFAULT_CONFIG: SimConfig = {
   matchSeconds:  90 * 60,    // full regulation match
   frameEverySec: 2,          // 1 frame / 2s — match_positions PK is whole-second (match_id,minute,second)
   seed:          1,
+  stoppage:      true,       // play deterministic added time after regulation
 };
+
+/**
+ * Deterministic added-time allowance (in seconds) for a finished regulation
+ * period.  Real added time accrues mostly from goal celebrations and bookings
+ * on top of a base allowance for subs, knocks and ball retrieval; we mirror that
+ * from the regulation event stream so the same fixture always adds the same
+ * minutes.  No half-time split is modelled, so this single block stands in for
+ * the match's total added time.
+ *
+ * @param events  The regulation event stream (goals + carded fouls are counted).
+ * @returns       Whole seconds of stoppage time, clamped to a believable 1–6 min.
+ */
+function stoppageSeconds(events: SimEvent[]): number {
+  let goals = 0;
+  let cards = 0;
+  for (const e of events) {
+    if (e.type === 'goal') goals += 1;
+    else if (e.type === 'foul' && e.card) cards += 1;
+  }
+  const BASE = 45;      // baseline allowance (s)
+  const PER_GOAL = 25;  // celebration + restart per goal (s)
+  const PER_CARD = 20;  // booking admin per card (s)
+  const sec = BASE + goals * PER_GOAL + cards * PER_CARD;
+  return Math.min(360, Math.max(60, Math.round(sec))); // clamp to 1–6 minutes
+}
 
 // ── World construction ────────────────────────────────────────────────────────
 
@@ -230,18 +256,30 @@ export function simulateSpatialMatch(
   // Kickoff marker at t=0 so consumers have a clean "match started" beat.
   events.push({ tSec: 0, minute: 1, type: 'kickoff' });
 
-  const totalTicks = Math.round(cfg.matchSeconds / cfg.dtSec);
   let nextFrameAt = 0;
-
-  for (let i = 0; i < totalTicks; i++) {
-    // Sample a frame whenever we cross a frame boundary (before stepping, so
-    // the first frame is the kickoff arrangement at t=0).
+  // One physics tick: sample a frame on cadence (before stepping, so the first
+  // frame is the kickoff arrangement at t=0), then advance the world.  Shared by
+  // the regulation loop and the stoppage-time loop so they stay byte-identical.
+  const runTick = (): void => {
     if (world.clockSec >= nextFrameAt) {
       frames.push(sampleFrame(world));
       nextFrameAt += cfg.frameEverySec;
     }
     const tickEvents = step(world, rng, cfg.dtSec);
     if (tickEvents.length > 0) events.push(...tickEvents);
+  };
+
+  // ── Regulation ──────────────────────────────────────────────────────────────
+  const regulationTicks = Math.round(cfg.matchSeconds / cfg.dtSec);
+  for (let i = 0; i < regulationTicks; i++) runTick();
+
+  // ── Stoppage (added) time ─────────────────────────────────────────────────
+  // Play on past regulation for a deterministic allowance derived from the match
+  // so far.  Events here carry minute > 90 (the engine no longer clamps), which
+  // the DB and viewer already accommodate (match_events/positions allow 0–120).
+  if (cfg.stoppage) {
+    const stoppageTicks = Math.round(stoppageSeconds(events) / cfg.dtSec);
+    for (let i = 0; i < stoppageTicks; i++) runTick();
   }
 
   world.phase = 'finished';
