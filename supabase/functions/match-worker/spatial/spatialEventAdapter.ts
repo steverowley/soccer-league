@@ -97,6 +97,7 @@ function eventCommentary(ev: SimEvent, index: PlayerIndex): string {
     case 'foul':         return ev.card
                            ? `${pn} is shown a ${ev.card} card for a foul${o ? ` on ${on}` : ''}.`
                            : `${pn} fouls${o ? ` ${on}` : ''} — free kick.`;
+    case 'offside':      return `${pn} is caught offside.`;
     case 'interception': return `${pn} intercepts the ball.`;
     case 'pass':         return `${pn} plays the ball forward.`;
     case 'out_throw':    return `Ball out for a throw-in.`;
@@ -208,6 +209,7 @@ const NOTABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'goal',
   'save',
   'foul',
+  'offside',
   'out_corner',
 ]);
 

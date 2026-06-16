@@ -74,6 +74,17 @@ describe('adaptSpatialResult — fouls + cards', () => {
   });
 });
 
+describe('adaptSpatialResult — offside', () => {
+  it('keeps offside in the notable feed with caught-offside commentary and no stat change', () => {
+    const index = makeIndex([{ id: 'fw', name: 'Striker', teamName: 'Rovers', side: 'home' }]);
+    const result = baseResult([ev({ type: 'offside', playerId: 'fw', side: 'home' })]);
+    const adapted = adaptSpatialResult(result, index);
+    expect(adapted.events[0]!.payload['commentary']).toBe('Striker is caught offside.');
+    expect(filterNotableEvents(adapted.events).some((e) => e.type === 'offside')).toBe(true);
+    expect(adapted.playerStats['Striker']).toBeUndefined(); // offside isn't a player stat
+  });
+});
+
 // ── adaptSpatialResult ────────────────────────────────────────────────────────
 
 describe('adaptSpatialResult — event shape', () => {

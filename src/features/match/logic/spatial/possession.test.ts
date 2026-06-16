@@ -6,9 +6,9 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  shotQuality, pressureAt, tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach,
+  shotQuality, pressureAt, tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
 } from './possession';
-import { type SimPlayer, type SimPlayerStats, PITCH_WIDTH } from './types';
+import { type SimPlayer, type SimWorld, type SimPlayerStats, PITCH_WIDTH } from './types';
 import { vec } from './vec2';
 import { makeRng } from './rng';
 
@@ -131,6 +131,46 @@ describe('cardForFoul', () => {
     }
     expect(none).toBeGreaterThan(yellow + red); // most fouls are just a free kick
     expect(yellow).toBeGreaterThan(red);        // straight reds are rare
+  });
+});
+
+describe('isOffsidePosition (home attacks x=105)', () => {
+  // Away defenders: GK at x=102 (deepest), second-last DF at x=90 → offside line ≈ 90.
+  const world = {
+    home: [],
+    away: [
+      player({ id: 'gk-a', role: 'GK', side: 'away', pos: vec(102, 34) }),
+      player({ id: 'd1',   role: 'DF', side: 'away', pos: vec(90, 34) }),
+      player({ id: 'd2',   role: 'DF', side: 'away', pos: vec(80, 34) }),
+    ],
+  } as unknown as SimWorld;
+  const ballPos = vec(70, 34); // pass struck from deep
+
+  it('flags an attacker clearly beyond the second-last defender, ahead of the ball', () => {
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(95, 34) });
+    expect(isOffsidePosition(fw, ballPos, world)).toBe(true);
+  });
+
+  it('does not flag an attacker behind the offside line', () => {
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(88, 34) });
+    expect(isOffsidePosition(fw, ballPos, world)).toBe(false);
+  });
+
+  it('is not offside when the attacker is behind the ball', () => {
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(95, 34) });
+    expect(isOffsidePosition(fw, vec(98, 34), world)).toBe(false); // ball ahead of attacker
+  });
+
+  it('is not offside inside the attacking team’s own half', () => {
+    const deep = {
+      home: [],
+      away: [
+        player({ id: 'gk-a', role: 'GK', side: 'away', pos: vec(40, 34) }),
+        player({ id: 'd1',   role: 'DF', side: 'away', pos: vec(30, 34) }),
+      ],
+    } as unknown as SimWorld;
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(45, 34) }); // beyond line but x < 52.5
+    expect(isOffsidePosition(fw, vec(20, 34), deep)).toBe(false);
   });
 });
 
