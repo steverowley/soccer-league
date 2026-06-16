@@ -1,0 +1,65 @@
+/* ============================================================================
+   ISL — shared page shell (nav, header, buttons, footer)
+   Import AFTER colors_and_type.css. Used by the root-level screen pages.
+   ============================================================================ */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--isl-galactic-abyss);
+  color: var(--isl-lunar-dust);
+  font-family: var(--isl-font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); }
+a { color: inherit; text-decoration: none; }
+
+.page { max-width: 1320px; margin: 0 auto; padding: 0 64px; min-width: 1120px; }
+
+/* ---- top navigation (matches UI-kit Nav.jsx — the source of truth) ---- */
+.isl-nav { display: flex; align-items: flex-start; gap: 32px; padding: 32px 0; }
+.isl-nav img.logo { height: 132px; width: auto; display: block; flex: none; }
+.isl-nav .links { display: flex; gap: 28px; margin-top: 44px; margin-left: auto; font-weight: 700; font-size: 16px; text-transform: uppercase; flex-wrap: wrap; }
+.isl-nav .links a { color: var(--isl-lunar-dust); transition: text-shadow .12s linear; white-space: nowrap; }
+.isl-nav .links a:hover { text-shadow: 0 0 10px rgba(227,224,213,.6); }
+.isl-nav .links a.active { text-shadow: 0 0 12px rgba(227,224,213,.95), 0 0 4px rgba(227,224,213,.8); }
+.isl-nav .spacer { display: none; }
+.isl-nav .acct { margin-top: 38px; display: inline-flex; gap: 16px; border: 1px solid var(--isl-white); padding: 16px 28px; font-weight: 700; font-size: 16px; white-space: nowrap; flex: none; }
+.isl-nav .acct .bal { color: var(--isl-astro-explorer); text-shadow: 0 0 6px rgba(255,102,55,.7); }
+
+/* ---- page header ---- */
+.isl-head { padding: 40px 0 24px; }
+.isl-eyebrow { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .04em; flex-wrap: wrap; }
+.isl-head h1 { font-weight: 700; font-size: 56px; line-height: 1; margin: 20px 0 0; text-transform: uppercase; }
+.isl-lede { font-size: 16px; line-height: 1.6; max-width: 760px; margin: 20px 0 0; }
+
+/* ---- buttons ---- */
+.isl-btn { font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; text-transform: uppercase; line-height: 1; padding: 16px 28px; border: 1px solid var(--isl-lunar-dust); background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); cursor: pointer; transition: box-shadow .12s linear, filter .12s linear; }
+.isl-btn:hover { box-shadow: var(--isl-glow-light); }
+.isl-btn.primary { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); }
+.isl-btn.cta { background: var(--isl-astro-explorer); border-color: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); }
+.isl-btn.cta:hover { box-shadow: none; filter: brightness(1.1); }
+
+/* ---- pill / chip ---- */
+.isl-chip { border: 1px solid var(--isl-border); padding: 10px 16px; font-weight: 700; font-size: 14px; text-transform: uppercase; line-height: 1; }
+
+/* ---- live indicator ---- */
+.isl-live { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--isl-border); padding: 8px 14px; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+.isl-live .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-solar-flare); flex: none; }
+
+/* ---- crest (real art via <img>, or monogram fallback) ---- */
+.isl-crest { border-radius: 50%; background: var(--isl-phobos-ash); border: 1px solid var(--isl-border); display: grid; place-items: center; font-weight: 700; flex: none; overflow: hidden; }
+.isl-crest img { width: 100%; height: 100%; object-fit: contain; }
+
+/* ---- form strip (W/D/L) ---- */
+.isl-form { display: inline-flex; gap: 4px; }
+.isl-form span { width: 24px; height: 24px; border: 1px solid var(--isl-border); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+.isl-form span.d { color: rgba(227,224,213,.82); border-color: rgba(227,224,213,.45); }
+.isl-form span.l { color: var(--isl-solar-flare); border-color: var(--isl-solar-flare); }
+
+/* ---- footer ---- */
+.isl-foot { border-top: 2px solid var(--isl-white); margin-top: 64px; }
+.isl-foot .inner { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 36px 0 72px; }
+.isl-foot img { height: 36px; }
+.isl-foot span { font-weight: 700; font-size: 15px; text-transform: uppercase; }
+.isl-foot .sep { opacity: .5; }

@@ -1,0 +1,186 @@
+<!-- @startingPoint section="Web — Screens" subtitle="Idol leaderboard — pledge credits to players; over-idolised ones attract attention" viewport="1320x980" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Idols</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  .layout { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; padding: 24px 0 64px; }
+
+  /* leaderboard */
+  .board { border: 1px solid var(--isl-border); }
+  .lb-head { display: grid; grid-template-columns: 56px 1fr 150px 120px 150px; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--isl-border); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .lb-head .r { text-align: right; }
+  .idol { display: grid; grid-template-columns: 56px 1fr 150px 120px 150px; gap: 16px; align-items: center; padding: 20px 28px; border-bottom: 1px solid var(--isl-border-faint); transition: background .4s linear, box-shadow .2s linear; }
+  .idol:last-child { border-bottom: 0; }
+  .idol .rank { font-weight: 700; font-size: 20px; color: rgba(227,224,213,.82); }
+  .idol.top1 .rank { color: var(--isl-terra-nova); }
+  .idol .who { display: flex; flex-direction: column; gap: 4px; }
+  .idol .nm { font-weight: 700; font-size: 18px; }
+  .idol .sub { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  .idol .pledged { text-align: right; font-weight: 700; font-size: 16px; }
+  .idol .pledged .ic { color: var(--isl-astro-explorer); }
+  .idol .heat { text-align: right; }
+  .heatbar { display: inline-flex; gap: 3px; }
+  .heatbar i { width: 8px; height: 16px; background: var(--isl-border); }
+  .heatbar i.on { background: var(--isl-solar-flare); }
+  .idol.watched { box-shadow: inset 3px 0 0 var(--isl-solar-flare); }
+  .idol .act { text-align: right; }
+  .pledge-btn { font-family: var(--isl-font-mono); font-weight: 700; font-size: 13px; text-transform: uppercase; padding: 11px 18px; border: 1px solid var(--isl-astro-explorer); background: var(--isl-galactic-abyss); color: var(--isl-astro-explorer); cursor: pointer; transition: box-shadow .12s linear, background .12s linear; }
+  .pledge-btn:hover { background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); box-shadow: var(--isl-glow-cta); }
+  .tag-watch { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--isl-solar-flare); margin-top: 4px; }
+
+  /* side */
+  .side { display: flex; flex-direction: column; gap: 24px; }
+  .card { border: 1px solid var(--isl-border); padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .card .ph { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .myidol { display: flex; flex-direction: column; gap: 12px; }
+  .myidol .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; }
+  .myidol .row .v { font-weight: 700; }
+  .myidol .row .v.o { color: var(--isl-astro-explorer); }
+  .selname { font-weight: 700; font-size: 20px; }
+  .stepper { display: flex; border: 1px solid var(--isl-border); }
+  .stepper button { width: 44px; height: 44px; background: var(--isl-galactic-abyss); border: 0; color: var(--isl-lunar-dust); font-family: var(--isl-font-mono); font-weight: 700; font-size: 20px; cursor: pointer; transition: background .12s linear; }
+  .stepper button:hover { background: var(--isl-phobos-ash); }
+  .stepper .amt { flex: 1; display: grid; place-items: center; font-weight: 700; font-size: 16px; border-left: 1px solid var(--isl-border); border-right: 1px solid var(--isl-border); }
+  .pledge-go { font-family: var(--isl-font-mono); font-weight: 700; font-size: 15px; text-transform: uppercase; padding: 16px; border: 1px solid var(--isl-astro-explorer); background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); cursor: pointer; transition: box-shadow .12s linear; }
+  .pledge-go:hover { box-shadow: var(--isl-glow-cta); }
+  .pledge-go:disabled { background: var(--isl-galactic-abyss); color: var(--isl-fg-faint); border-color: var(--isl-border-faint); cursor: not-allowed; box-shadow: none; }
+  .note { font-size: 13px; line-height: 1.55; }
+  .note b { color: var(--isl-solar-flare); }
+  .booked { border: 1px solid var(--isl-terra-nova); padding: 14px 16px; display: none; gap: 10px; align-items: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }
+  .booked .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-terra-nova); flex: none; }
+  .booked.show { display: flex; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a href="Teams.html">Teams</a>
+        <a href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a class="active" href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal" id="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head">
+      <div class="isl-eyebrow"><span>Idols</span><span>•</span><span>Season cycle 014</span><span>•</span><span>512 souls pledging</span></div>
+      <h1>Pledge your idols</h1>
+      <p class="isl-lede">Commit credits to the players you believe in. Pledges move the idol board in real time — but a player who climbs too high draws the Architect's attention, and attention is rarely kind. Idolise carefully.</p>
+    </header>
+
+    <div class="layout">
+      <!-- LEADERBOARD -->
+      <div class="board">
+        <div class="lb-head"><span>#</span><span>Player</span><span class="r">Pledged</span><span class="r">Heat</span><span class="r">Pledge</span></div>
+        <div id="board"></div>
+      </div>
+
+      <!-- PLEDGE RAIL -->
+      <aside class="side">
+        <div class="card">
+          <span class="ph">Your pledge</span>
+          <div class="myidol">
+            <div class="selname" id="sel-name">No idol selected</div>
+            <div class="row"><span>Currently pledged to them</span><span class="v" id="sel-have">0 ic</span></div>
+            <div class="row"><span>Your balance</span><span class="v o" id="sel-bal">200 ic</span></div>
+          </div>
+          <div class="stepper">
+            <button id="minus">–</button>
+            <span class="amt" id="amt">10 ic</span>
+            <button id="plus">+</button>
+          </div>
+          <button class="pledge-go" id="pledge" disabled>Pledge credits</button>
+          <div class="booked" id="booked"><span class="dot"></span><span id="booked-txt"></span></div>
+        </div>
+        <div class="card">
+          <span class="ph">The risk</span>
+          <p class="note">A player whose heat fills to maximum is flagged <b>Under attention</b>. The Architect has, on prior cycles, removed such players from the record mid-match. Pledges are not refunded. The board does not warn twice.</p>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>Idols</span><span class="sep">•</span><span>Epoch MMXXXVII</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const IDOLS = [
+      { id: "okafor", nm: "T. Okafor", club: "Earth United", pos: "Striker", pledged: 1840 },
+      { id: "vex", nm: "Vex-9", club: "Mars Rovers", pos: "Synthetic Forward", pledged: 1610 },
+      { id: "mercer", nm: "A. Mercer", club: "Earth United", pos: "Midfield General", pledged: 1240 },
+      { id: "rhea", nm: "Rhea Sol", club: "Jupiter Royals", pos: "Goalkeeper", pledged: 980 },
+      { id: "nyx", nm: "Nyx Pallas", club: "Pluto Wanderers", pos: "Winger", pledged: 920 },
+      { id: "lune", nm: "Lune Marisol", club: "Jupiter Royals", pos: "Playmaker", pledged: 760 },
+      { id: "bask", nm: "Bask Orrin", club: "Ceres City FC", pos: "Defender", pledged: 540 },
+      { id: "corso", nm: "D. Corso", club: "Mars Rovers", pos: "Striker", pledged: 410 },
+    ];
+    const MAX_HEAT = 2000; // pledged at/above => "under attention"
+    let balance = 200, selId = null, amount = 10;
+    const myPledges = {};
+
+    const boardEl = document.getElementById("board");
+    function heatLevel(p) { return Math.min(5, Math.round((p.pledged / MAX_HEAT) * 5)); }
+    function render() {
+      const sorted = [...IDOLS].sort((a, b) => b.pledged - a.pledged);
+      boardEl.innerHTML = sorted.map((p, i) => {
+        const lvl = heatLevel(p), watched = p.pledged >= MAX_HEAT;
+        const bars = Array.from({ length: 5 }, (_, k) => `<i class="${k < lvl ? "on" : ""}"></i>`).join("");
+        return `<div class="idol ${i === 0 ? "top1" : ""} ${watched ? "watched" : ""}" data-id="${p.id}">
+          <span class="rank">${String(i + 1).padStart(2, "0")}</span>
+          <span class="who"><span class="nm">${p.nm}</span><span class="sub">${p.pos} • ${p.club}</span>${watched ? '<span class="tag-watch">● Under attention</span>' : ""}</span>
+          <span class="pledged"><span class="ic">${p.pledged.toLocaleString()} ic</span></span>
+          <span class="heat"><span class="heatbar">${bars}</span></span>
+          <span class="act"><button class="pledge-btn" data-pick="${p.id}">Pledge</button></span>
+        </div>`;
+      }).join("");
+      boardEl.querySelectorAll(".pledge-btn").forEach(b => b.onclick = () => select(b.dataset.pick));
+    }
+    function select(id) {
+      selId = id;
+      const p = IDOLS.find(x => x.id === id);
+      document.getElementById("sel-name").textContent = p.nm;
+      document.getElementById("sel-have").textContent = (myPledges[id] || 0) + " ic";
+      document.getElementById("pledge").disabled = false;
+    }
+    function setAmt(v) { amount = Math.max(10, Math.min(balance, v)); document.getElementById("amt").textContent = amount + " ic"; }
+    document.getElementById("plus").onclick = () => setAmt(amount + 10);
+    document.getElementById("minus").onclick = () => setAmt(amount - 10);
+    document.getElementById("pledge").onclick = () => {
+      if (!selId || balance < amount) return;
+      const p = IDOLS.find(x => x.id === selId);
+      p.pledged += amount;
+      myPledges[selId] = (myPledges[selId] || 0) + amount;
+      balance -= amount;
+      document.getElementById("bal").textContent = balance + " ic";
+      document.getElementById("sel-bal").textContent = balance + " ic";
+      document.getElementById("sel-have").textContent = myPledges[selId] + " ic";
+      const b = document.getElementById("booked");
+      const watched = p.pledged >= MAX_HEAT;
+      document.getElementById("booked-txt").textContent = watched
+        ? `${amount} ic pledged to ${p.nm}. They are now under attention.`
+        : `${amount} ic pledged to ${p.nm}. The board shifts.`;
+      b.classList.add("show");
+      if (amount > balance) setAmt(balance);
+      render();
+    };
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!-- @startingPoint section="Web — Screens" subtitle="Club dossier — honours, squad table (deep-links into World), fixtures, decrees" viewport="1320x980" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Earth United</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  /* club hero */
+  .club-hero { display: grid; grid-template-columns: 160px 1fr auto; gap: 40px; align-items: center; border: 1px solid var(--isl-border); padding: 40px; margin-top: 24px; }
+  .club-hero .crest { width: 160px; height: 160px; }
+  .club-hero .crest img { width: 100%; height: 100%; object-fit: contain; }
+  .club-hero h1 { font-weight: 700; font-size: 48px; line-height: 1; margin: 0; text-transform: uppercase; }
+  .club-hero .meta { display: flex; gap: 14px; flex-wrap: wrap; font-weight: 700; font-size: 14px; text-transform: uppercase; margin-top: 16px; }
+  .club-hero .honours { display: flex; gap: 32px; }
+  .club-hero .honour { text-align: center; }
+  .club-hero .honour .v { font-weight: 700; font-size: 32px; }
+  .club-hero .honour .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-top: 6px; }
+
+  /* stat strip */
+  .strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--isl-border-faint); border: 1px solid var(--isl-border-faint); margin-top: 1px; }
+  .strip .cell { background: var(--isl-galactic-abyss); padding: 24px; text-align: center; }
+  .strip .cell .v { font-weight: 700; font-size: 28px; }
+  .strip .cell .v.up { color: var(--isl-terra-nova); }
+  .strip .cell .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-top: 8px; }
+
+  /* layout */
+  .cols { display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; padding: 24px 0 64px; }
+  .sect-h { font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; margin: 0 0 16px; display: flex; justify-content: space-between; align-items: baseline; }
+  .sect-h a { font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+
+  /* squad table */
+  .squad { border: 1px solid var(--isl-border); }
+  .pl { display: grid; grid-template-columns: 40px 1fr 130px 64px 64px 24px; gap: 16px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--isl-border-faint); cursor: pointer; transition: background .12s linear; }
+  .pl:last-child { border-bottom: 0; }
+  .pl:hover { background: var(--isl-phobos-ash); }
+  .pl .no { font-weight: 700; font-size: 15px; color: rgba(227,224,213,.82); }
+  .pl .nm { font-weight: 700; font-size: 16px; }
+  .pl .nm .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; margin-top: 4px; color: var(--isl-solar-flare); }
+  .pl .pos { font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+  .pl .num { font-weight: 700; font-size: 16px; text-align: right; }
+  .pl .arrow { color: var(--isl-lunar-dust); display: flex; justify-content: flex-end; }
+  .pl-head { display: grid; grid-template-columns: 40px 1fr 130px 64px 64px 24px; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--isl-border); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .pl-head .r { text-align: right; }
+
+  /* side cards */
+  .side { display: flex; flex-direction: column; gap: 24px; }
+  .card { border: 1px solid var(--isl-border); padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+  .nextfx { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
+  .nextfx .vs { display: flex; align-items: center; gap: 18px; }
+  .nextfx .vs .isl-crest { width: 48px; height: 48px; }
+  .nextfx .vs .x { font-weight: 700; font-size: 14px; }
+  .nextfx .when { font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .nextfx .comp { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  .form-row { display: flex; align-items: center; justify-content: space-between; }
+  .decree { display: flex; flex-direction: column; gap: 6px; padding: 16px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .decree:last-of-type { border-bottom: 0; }
+  .decree .dt { font-weight: 700; font-size: 14px; }
+  .decree .dm { font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
+  .decree .dm .open { color: var(--isl-astro-explorer); }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a class="active" href="Teams.html">Teams</a>
+        <a href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head" style="padding-bottom:0">
+      <div class="isl-eyebrow"><span><a href="Teams.html">Teams</a></span><span>•</span><span>Rocky Inner League</span><span>•</span><span>Est. Solar Cycle 2390</span></div>
+    </header>
+
+    <!-- CLUB HERO -->
+    <div class="club-hero">
+      <div class="crest"><img src="assets/crest-earth-united.png" alt="Earth United"></div>
+      <div>
+        <h1>Earth United</h1>
+        <div class="meta"><span>Home • Terra Stadium</span><span>•</span><span>512 souls</span><span>•</span><span>Manager One</span></div>
+      </div>
+      <div class="honours">
+        <div class="honour"><div class="v">II</div><div class="k">League position</div></div>
+        <div class="honour"><div class="v">IV</div><div class="k">Titles</div></div>
+        <div class="honour"><div class="v">VII</div><div class="k">Seasons</div></div>
+      </div>
+    </div>
+
+    <!-- STAT STRIP -->
+    <div class="strip">
+      <div class="cell"><div class="v">14</div><div class="k">Played</div></div>
+      <div class="cell"><div class="v up">9</div><div class="k">Won</div></div>
+      <div class="cell"><div class="v">3</div><div class="k">Drawn</div></div>
+      <div class="cell"><div class="v">2</div><div class="k">Lost</div></div>
+      <div class="cell"><div class="v">+14</div><div class="k">Goal diff</div></div>
+      <div class="cell"><div class="v up">30</div><div class="k">Points</div></div>
+    </div>
+
+    <div class="cols">
+      <!-- SQUAD -->
+      <div>
+        <div class="sect-h"><span>Squad</span><a href="World.html">Trace the web in World <svg width="11" height="11" viewBox="0 0 12 12"><path d="M0 0 L9 5.196 L0 10.392 Z" fill="currentColor"/></svg></a></div>
+        <div class="squad">
+          <div class="pl-head"><span>#</span><span>Player</span><span>Position</span><span class="r">Apps</span><span class="r">Goals</span><span></span></div>
+          <div id="squad"></div>
+        </div>
+      </div>
+
+      <!-- SIDE -->
+      <aside class="side">
+        <div class="card">
+          <div class="sect-h" style="margin:0">Next fixture</div>
+          <div class="nextfx">
+            <div class="vs">
+              <span class="isl-crest"><img src="assets/crest-earth-united.png" alt="Earth United"></span>
+              <span class="x">v</span>
+              <span class="isl-crest">MR</span>
+            </div>
+            <div class="when">Earth United v Mars Rovers</div>
+            <div class="comp">Matchday XV • Tue 19:00 • Terra Stadium</div>
+            <a class="isl-btn cta" href="Match.html" style="width:100%;text-align:center">Watch &amp; stake</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="form-row"><div class="sect-h" style="margin:0">Form</div><span class="isl-form"><span>W</span><span class="d">D</span><span>W</span><span>W</span><span class="l">L</span></span></div>
+          <div style="font-size:14px;line-height:1.5">Five matches: three won, one drawn, one lost. Unbeaten at Terra Stadium this cycle — though the ground has not always cooperated.</div>
+        </div>
+
+        <div class="card">
+          <div class="sect-h" style="margin:0">Active decrees</div>
+          <div class="decree"><div class="dt">Rename the home ground</div><div class="dm"><span class="open">Open</span> • 40 ic min • closes Matchday XV</div></div>
+          <div class="decree"><div class="dt">Appease the Architect</div><div class="dm"><span class="open">Open</span> • 80 ic min • closes Matchday XV</div></div>
+          <a class="isl-btn" href="Voting.html" style="width:100%;text-align:center;margin-top:4px">Go to voting</a>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>Earth United</span><span class="sep">•</span><span>Season VII</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const SQUAD = [
+      { no: 1, nm: "Rhea Sol", pos: "Goalkeeper", apps: 14, goals: 0 },
+      { no: 4, nm: "Bask Orrin", pos: "Defender", apps: 13, goals: 1 },
+      { no: 6, nm: "A. Mercer", pos: "Midfield General", apps: 14, goals: 3, tag: "Captain" },
+      { no: 8, nm: "Lune Marisol", pos: "Playmaker", apps: 12, goals: 5 },
+      { no: 9, nm: "T. Okafor", pos: "Striker", apps: 14, goals: 12, tag: "Top scorer" },
+      { no: 11, nm: "Nyx Pallas", pos: "Winger", apps: 11, goals: 4, tag: "Under review" },
+      { no: 14, nm: "Corso Vane", pos: "Forward", apps: 9, goals: 2 },
+      { no: 17, nm: "D. Quill", pos: "Defender", apps: 10, goals: 0 },
+    ];
+    document.getElementById("squad").innerHTML = SQUAD.map(p => `
+      <a class="pl" href="World.html">
+        <span class="no">${String(p.no).padStart(2,"0")}</span>
+        <span class="nm">${p.nm}${p.tag ? `<div class="tag">${p.tag}</div>` : ""}</span>
+        <span class="pos">${p.pos}</span>
+        <span class="num">${p.apps}</span>
+        <span class="num">${p.goals}</span>
+        <span class="arrow"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M0 0 L9 5.196 L0 10.392 Z" fill="currentColor"/></svg></span>
+      </a>`).join("");
+  </script>
+</body>
+</html>

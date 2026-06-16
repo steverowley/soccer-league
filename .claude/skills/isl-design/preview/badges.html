@@ -1,0 +1,37 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+    display: flex; flex-wrap: wrap; gap: 32px; align-items: center;
+  }
+  .live { display: inline-flex; align-items: center; gap: 12px; border: 1px solid var(--isl-border); padding: 8px 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-solar-flare); }
+  .live span { font-weight: 700; font-size: 16px; color: var(--isl-fg); }
+  .form { display: inline-flex; gap: 4px; }
+  .cell { width: 26px; height: 26px; border: 1px solid var(--isl-border); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .cell.d { color: rgba(227,224,213,0.82); border-color: rgba(227,224,213,0.45); }
+  .cell.l { color: var(--isl-solar-flare); border-color: var(--isl-solar-flare); }
+  .chip { border: 1px solid var(--isl-border); padding: 8px 14px; font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .lab { width: 100%; font-size: 12px; color: var(--isl-fg-muted); }
+</style>
+</head>
+<body>
+  <span class="lab">LIVE indicator · form strip (W/D/L) · matchday chip</span>
+  <span class="live"><span class="dot"></span><span>LIVE · 73'</span></span>
+  <span class="form">
+    <span class="cell">W</span><span class="cell">W</span><span class="cell d">D</span><span class="cell">W</span><span class="cell l">L</span>
+  </span>
+  <span class="chip">Matchday 14</span>
+</body>
+</html>

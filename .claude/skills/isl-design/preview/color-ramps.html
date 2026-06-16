@@ -1,0 +1,40 @@
+<!-- @dsCard group="Colors" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--isl-fg-muted); margin-bottom: 10px; }
+  .ramp { display: flex; gap: 0; margin-bottom: 22px; }
+  .ramp:last-child { margin-bottom: 0; }
+  .chip { flex: 1; height: 54px; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; font-size: 11px; color: var(--isl-galactic-abyss); }
+  .chip.dark { color: var(--isl-lunar-dust); }
+</style>
+</head>
+<body>
+  <div class="label">Quantum Purple ramp — depth fills &amp; diamond gradients</div>
+  <div class="ramp">
+    <span class="chip dark" style="background: var(--isl-purple-900);">#3E2562</span>
+    <span class="chip dark" style="background: var(--isl-purple-700);">#5C3792</span>
+    <span class="chip dark" style="background: var(--isl-purple-500);">#7B4AC3</span>
+    <span class="chip" style="background: var(--isl-quantum-purple);">#9A5CF4</span>
+  </div>
+  <div class="label">Solar Flare ramp — live bars &amp; heat</div>
+  <div class="ramp">
+    <span class="chip dark" style="background: var(--isl-red-900);">#662026</span>
+    <span class="chip dark" style="background: var(--isl-red-700);">#992F38</span>
+    <span class="chip dark" style="background: var(--isl-red-500);">#CC3F4B</span>
+    <span class="chip" style="background: var(--isl-solar-flare);">#FF4F5E</span>
+  </div>
+</body>
+</html>

@@ -1,0 +1,185 @@
+/* ============================================================================
+   INTERGALACTIC SOCCER LEAGUE — Core Tokens (colours + type)
+   Source of truth: "Soccer Game.fig" → Design-System frame (node 233:3000)
+   ----------------------------------------------------------------------------
+   Fonts are Google Fonts (exact match to the Figma file — no substitution).
+   Load this once; everything else references the variables below.
+   ============================================================================ */
+
+/* Space Mono is self-hosted from the uploaded brand font files (fonts/). */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/SpaceMono-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/SpaceMono-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('fonts/SpaceMono-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('fonts/SpaceMono-BoldItalic.ttf') format('truetype');
+}
+
+:root {
+  /* ---- COLOUR PALETTE ---------------------------------------------------- */
+  /* Lunar Dust — primary light. Text, strokes, fills on dark. */
+  --isl-lunar-dust:      #E3E0D5;
+  /* Galactic Abyss — primary dark. The canvas everything sits on. */
+  --isl-galactic-abyss:  #111111;
+  /* Phobos Ash — secondary dark. Raised surfaces, inputs, hover fills. */
+  --isl-phobos-ash:      #1F1F1F;
+  /* Quantum Purple — focus / "the Architect". Glows, focus rings, accents. */
+  --isl-quantum-purple:  #9A5CF4;
+  /* Solar Flare — error / LIVE. The red of an active match. */
+  --isl-solar-flare:     #FF4F5E;
+  /* Astro Explorer — secondary focus / primary CTA fill. */
+  --isl-astro-explorer:  #FF6637;
+  /* Terra Nova — confirmation / success. */
+  --isl-terra-nova:      #A5D6A7;
+  /* Pure white — used for hard dividers and the "logged-in" outline. */
+  --isl-white:           #FFFFFF;
+
+  /* Purple ramp (diamond gradients / depth fills seen in the file) */
+  --isl-purple-900:      #3E2562;
+  --isl-purple-700:      #5C3792;
+  --isl-purple-500:      #7B4AC3;
+  /* Red ramp (live bars / heat) */
+  --isl-red-900:         #662026;
+  --isl-red-700:         #992F38;
+  --isl-red-500:         #CC3F4B;
+
+  /* ---- SEMANTIC ALIASES -------------------------------------------------- */
+  --isl-bg:              var(--isl-galactic-abyss);
+  --isl-surface:         var(--isl-galactic-abyss);
+  --isl-surface-raised:  var(--isl-phobos-ash);
+  --isl-fg:              var(--isl-lunar-dust);     /* primary text */
+  --isl-fg-muted:        rgba(227, 224, 213, 0.6);  /* secondary text */
+  --isl-fg-faint:        rgba(227, 224, 213, 0.35); /* tertiary / disabled */
+  --isl-border:          var(--isl-lunar-dust);     /* default 1px stroke */
+  --isl-border-faint:    rgba(227, 224, 213, 0.25);
+  --isl-focus:           var(--isl-quantum-purple);
+  --isl-cta:             var(--isl-astro-explorer);
+  --isl-live:            var(--isl-solar-flare);
+  --isl-success:         var(--isl-terra-nova);
+
+  /* ---- GLOWS / SHADOWS --------------------------------------------------- */
+  --isl-glow-purple:     0 0 6px 0 rgba(154, 92, 244, 0.8);
+  --isl-glow-purple-far: 0 0 100px 10px rgba(154, 92, 244, 0.4);
+  --isl-glow-live:       0 0 50px 6px rgba(255, 79, 94, 0.55);  /* momentum bar bloom */
+  --isl-glow-light:      0 0 18px 2px rgba(227, 224, 213, 0.65);
+  --isl-glow-cta:        0 0 18px 2px rgba(255, 102, 55, 0.65);   /* CTA hover — orange, same strength as glow-light */
+  --isl-shadow-card:     0 0 0 1px var(--isl-lunar-dust); /* the "card" is a hairline box */
+
+  /* ---- TYPE FAMILY ------------------------------------------------------- */
+  /* Space Mono is the ONLY brand typeface. It carries everything: headings,
+     labels, data, body, captions. There is no secondary face. */
+  --isl-font-mono:    'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  /* Back-compat alias — also Space Mono. Do not introduce a second family. */
+  --isl-font-grotesk: var(--isl-font-mono);
+
+  /* ---- TYPE SCALE (px, line-height 100%) --------------------------------- */
+  --isl-h1: 40px;   /* H1 — Space Mono Bold 40 */
+  --isl-h2: 32px;   /* H2 — Space Mono Bold 32 */
+  --isl-h3: 28px;   /* H3 — Space Mono Bold 28 */
+  --isl-body: 16px; /* P  — Space Mono 16 */
+  --isl-label: 16px;/* UI labels — Space Mono Bold 16, frequently UPPERCASE */
+  --isl-micro: 12px;/* annotations / arrows */
+
+  /* ---- SPACING (8pt rhythm; the file uses these almost exclusively) ------ */
+  --isl-space-1: 8px;
+  --isl-space-2: 16px;
+  --isl-space-3: 24px;
+  --isl-space-4: 32px;   /* card padding + section gap baseline */
+  --isl-space-5: 50px;
+  --isl-space-6: 64px;   /* major section gap */
+  --isl-space-7: 84px;   /* row label → value gutter */
+  --isl-gutter:  200px;  /* page side margin at 1920 */
+
+  /* ---- GEOMETRY ---------------------------------------------------------- */
+  --isl-radius: 0px;        /* the system is hard-edged. Only avatars are round. */
+  --isl-radius-round: 50%;  /* badges / status dots only */
+  --isl-stroke: 1px;
+  --isl-stroke-bold: 2px;   /* progress bars + score dividers */
+}
+
+/* ============================================================================
+   SEMANTIC TYPE CLASSES — apply directly to elements
+   ============================================================================ */
+.isl-h1 {
+  font-family: var(--isl-font-mono);
+  font-weight: 700;
+  font-size: var(--isl-h1);
+  line-height: 100%;
+  text-transform: uppercase;
+  color: var(--isl-fg);
+  margin: 0;
+}
+.isl-h2 {
+  font-family: var(--isl-font-mono);
+  font-weight: 700;
+  font-size: var(--isl-h2);
+  line-height: 100%;
+  text-transform: uppercase;
+  color: var(--isl-fg);
+  margin: 0;
+}
+.isl-h3 {
+  font-family: var(--isl-font-mono);
+  font-weight: 700;
+  font-size: var(--isl-h3);
+  line-height: 100%;
+  text-transform: uppercase;
+  color: var(--isl-fg);
+  margin: 0;
+}
+.isl-p {
+  font-family: var(--isl-font-mono);
+  font-weight: 400;
+  font-size: var(--isl-body);
+  line-height: 150%;
+  color: var(--isl-fg);
+  margin: 0;
+}
+/* Eyebrow / section index — "I  •  STANDINGS ACROSS THE ABYSS" */
+.isl-eyebrow {
+  font-family: var(--isl-font-mono);
+  font-weight: 700;
+  font-size: var(--isl-label);
+  line-height: 100%;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--isl-fg);
+}
+/* UI label — buttons, nav, data cells */
+.isl-label {
+  font-family: var(--isl-font-mono);
+  font-weight: 700;
+  font-size: var(--isl-label);
+  line-height: 100%;
+  text-transform: uppercase;
+  color: var(--isl-fg);
+}
+/* Quiet caption — Space Mono Regular, slightly looser leading */
+.isl-caption {
+  font-family: var(--isl-font-mono);
+  font-weight: 400;
+  font-size: var(--isl-body);
+  line-height: 140%;
+  color: var(--isl-fg);
+}

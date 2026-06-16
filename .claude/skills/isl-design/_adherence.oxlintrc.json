@@ -1,0 +1,168 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "match-sprites/**",
+              "tweaks-panel.jsx",
+              "ui_kits/web/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Space Mono))/i]",
+        "message": "Font not provided by the design system. Available: Space Mono."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {},
+    "tokens": [
+      "--isl-astro-explorer",
+      "--isl-bg",
+      "--isl-body",
+      "--isl-border",
+      "--isl-border-faint",
+      "--isl-cta",
+      "--isl-fg",
+      "--isl-fg-faint",
+      "--isl-fg-muted",
+      "--isl-focus",
+      "--isl-font-grotesk",
+      "--isl-font-mono",
+      "--isl-galactic-abyss",
+      "--isl-glow-cta",
+      "--isl-glow-light",
+      "--isl-glow-live",
+      "--isl-glow-purple",
+      "--isl-glow-purple-far",
+      "--isl-gutter",
+      "--isl-h1",
+      "--isl-h2",
+      "--isl-h3",
+      "--isl-label",
+      "--isl-live",
+      "--isl-lunar-dust",
+      "--isl-micro",
+      "--isl-phobos-ash",
+      "--isl-purple-500",
+      "--isl-purple-700",
+      "--isl-purple-900",
+      "--isl-quantum-purple",
+      "--isl-radius",
+      "--isl-radius-round",
+      "--isl-red-500",
+      "--isl-red-700",
+      "--isl-red-900",
+      "--isl-shadow-card",
+      "--isl-solar-flare",
+      "--isl-space-1",
+      "--isl-space-2",
+      "--isl-space-3",
+      "--isl-space-4",
+      "--isl-space-5",
+      "--isl-space-6",
+      "--isl-space-7",
+      "--isl-stroke",
+      "--isl-stroke-bold",
+      "--isl-success",
+      "--isl-surface",
+      "--isl-surface-raised",
+      "--isl-terra-nova",
+      "--isl-white"
+    ],
+    "tokenKinds": {
+      "--isl-lunar-dust": "color",
+      "--isl-galactic-abyss": "color",
+      "--isl-phobos-ash": "color",
+      "--isl-quantum-purple": "color",
+      "--isl-solar-flare": "color",
+      "--isl-astro-explorer": "color",
+      "--isl-terra-nova": "color",
+      "--isl-white": "color",
+      "--isl-purple-900": "color",
+      "--isl-purple-700": "color",
+      "--isl-purple-500": "color",
+      "--isl-red-900": "color",
+      "--isl-red-700": "color",
+      "--isl-red-500": "color",
+      "--isl-bg": "color",
+      "--isl-surface": "color",
+      "--isl-surface-raised": "color",
+      "--isl-fg": "color",
+      "--isl-fg-muted": "color",
+      "--isl-fg-faint": "color",
+      "--isl-border": "color",
+      "--isl-border-faint": "color",
+      "--isl-focus": "color",
+      "--isl-cta": "color",
+      "--isl-live": "color",
+      "--isl-success": "color",
+      "--isl-glow-purple": "shadow",
+      "--isl-glow-purple-far": "shadow",
+      "--isl-glow-live": "shadow",
+      "--isl-glow-light": "shadow",
+      "--isl-glow-cta": "shadow",
+      "--isl-shadow-card": "shadow",
+      "--isl-font-mono": "font",
+      "--isl-font-grotesk": "font",
+      "--isl-h1": "spacing",
+      "--isl-h2": "spacing",
+      "--isl-h3": "spacing",
+      "--isl-body": "spacing",
+      "--isl-label": "spacing",
+      "--isl-micro": "spacing",
+      "--isl-space-1": "spacing",
+      "--isl-space-2": "spacing",
+      "--isl-space-3": "spacing",
+      "--isl-space-4": "spacing",
+      "--isl-space-5": "spacing",
+      "--isl-space-6": "spacing",
+      "--isl-space-7": "spacing",
+      "--isl-gutter": "spacing",
+      "--isl-radius": "radius",
+      "--isl-radius-round": "radius",
+      "--isl-stroke": "color",
+      "--isl-stroke-bold": "color"
+    },
+    "fontFamilies": [
+      "Space Mono"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+<!-- @dsCard group="Colors" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .row { display: flex; align-items: center; gap: 24px; padding: 11px 0; }
+  .sw { width: 56px; height: 56px; flex: none; }
+  .name { font-weight: 700; font-size: 20px; width: 220px; }
+  .meta { color: var(--isl-fg-muted); font-size: 14px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-lunar-dust);"></span>
+    <span class="name">Lunar Dust</span>
+    <span class="meta">Primary light · #E3E0D5</span>
+  </div>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-galactic-abyss); border: 1px solid var(--isl-border-faint);"></span>
+    <span class="name">Galactic Abyss</span>
+    <span class="meta">Primary dark · #111111</span>
+  </div>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-phobos-ash); border: 1px solid var(--isl-border-faint);"></span>
+    <span class="name">Phobos Ash</span>
+    <span class="meta">Secondary dark · #1F1F1F</span>
+  </div>
+</body>
+</html>

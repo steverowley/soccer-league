@@ -1,0 +1,240 @@
+<!-- @startingPoint section="Web — Screens" subtitle="Live match theatre — commentary feed, event timeline, staking" viewport="1320x980" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Earth United v Mars Rovers</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  /* scoreboard */
+  .board { border: 1px solid var(--isl-border); padding: 32px; margin-top: 24px; display: flex; flex-direction: column; gap: 28px; }
+  .board .head { display: flex; justify-content: space-between; align-items: center; }
+  .board .lbl { font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .board .div { height: 0; border-top: 1px solid var(--isl-border-faint); }
+  .board .teams { display: flex; align-items: flex-start; justify-content: center; gap: 56px; }
+  .board .team { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 240px; }
+  .board .team img { height: 110px; width: auto; }
+  .board .team .nm { font-weight: 700; font-size: 26px; text-transform: uppercase; text-align: center; }
+  .board .team .sub { font-weight: 700; font-size: 13px; text-transform: uppercase; }
+  .board .score { font-weight: 700; font-size: 64px; padding-top: 30px; }
+  .bar { height: 14px; border: 2px solid var(--isl-border); padding: 3px; }
+  .bar .fill { height: 100%; background: var(--isl-solar-flare); box-shadow: var(--isl-glow-live); transition: width .8s linear; }
+  .bar-lab { display: flex; justify-content: space-between; font-weight: 700; font-size: 12px; text-transform: uppercase; margin-top: 10px; }
+
+  /* main grid */
+  .main { display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; padding: 24px 0 64px; }
+  .col-l { display: flex; flex-direction: column; gap: 24px; }
+
+  /* commentary feed */
+  .feed { border: 1px solid var(--isl-border); padding: 32px; display: flex; flex-direction: column; gap: 8px; }
+  .feed .fh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .feed .fh .t { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .feed .fh .s { font-size: 12px; text-transform: uppercase; }
+  .entries { display: flex; flex-direction: column; gap: 22px; max-height: 430px; overflow-y: auto; padding-right: 8px; }
+  .entry { border-left: 2px solid var(--isl-border-faint); padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+  .entry .by { display: flex; gap: 10px; align-items: baseline; font-size: 14px; }
+  .entry .by b { font-weight: 700; font-size: 15px; }
+  .entry .by .min { margin-left: auto; font-weight: 700; }
+  .entry p { font-style: italic; font-size: 15px; line-height: 1.55; margin: 0; }
+  .entry.arch { border-left-color: var(--isl-quantum-purple); }
+  .entry.arch .by b { color: var(--isl-quantum-purple); text-shadow: var(--isl-glow-purple); }
+  .entry.arch p { font-style: normal; text-transform: uppercase; font-weight: 700; font-size: 14px; letter-spacing: .04em; }
+
+  /* timeline */
+  .tl { border: 1px solid var(--isl-border); padding: 32px; }
+  .tl .t { font-weight: 700; font-size: 16px; text-transform: uppercase; margin-bottom: 20px; }
+  .tl-row { display: grid; grid-template-columns: 56px 28px 1fr; gap: 14px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .tl-row:last-child { border-bottom: 0; }
+  .tl-row .min { font-weight: 700; font-size: 15px; }
+  .tl-row .glyph { font-weight: 700; font-size: 15px; text-align: center; }
+  .tl-row .what { font-size: 15px; }
+  .tl-row .what b { font-weight: 700; }
+  .tl-row.goal .glyph { color: var(--isl-terra-nova); }
+  .tl-row.card .glyph { color: var(--isl-solar-flare); }
+  .tl-row.arch { background: linear-gradient(90deg, rgba(154,92,244,.10), transparent 70%); }
+  .tl-row.arch .glyph, .tl-row.arch .what b { color: var(--isl-quantum-purple); }
+
+  /* stake rail */
+  .rail { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 24px; }
+  .stake { border: 1px solid var(--isl-border); padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+  .stake .t { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .stake .sub { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  .odds { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .odd { display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 12px 6px; cursor: pointer; border: 1px solid var(--isl-border); background: var(--isl-galactic-abyss); font-family: var(--isl-font-mono); color: var(--isl-lunar-dust); transition: border-color .12s linear, box-shadow .12s linear; }
+  .odd:hover { box-shadow: var(--isl-glow-light); }
+  .odd.sel { border-color: var(--isl-astro-explorer); background: var(--isl-phobos-ash); box-shadow: 0 0 16px 1px rgba(255,102,55,.45); }
+  .odd .on { font-weight: 700; font-size: 12px; text-transform: uppercase; }
+  .odd .ov { font-weight: 700; font-size: 20px; }
+  .odd.sel .ov { color: var(--isl-astro-explorer); }
+  .amt-row { display: flex; gap: 10px; align-items: stretch; }
+  .amt-row .slider { flex: 1; display: flex; align-items: center; gap: 10px; border: 1px solid var(--isl-border); padding: 0 14px; }
+  .amt-row input[type="range"] { flex: 1; accent-color: var(--isl-astro-explorer); height: 4px; }
+  .amt-row .v { font-weight: 700; font-size: 15px; color: var(--isl-astro-explorer); min-width: 58px; text-align: right; }
+  .place { font-family: var(--isl-font-mono); font-weight: 700; font-size: 15px; text-transform: uppercase; padding: 16px; border: 1px solid var(--isl-astro-explorer); background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); cursor: pointer; transition: box-shadow .12s linear; }
+  .place:hover { box-shadow: var(--isl-glow-cta); }
+  .place:disabled { background: var(--isl-galactic-abyss); color: var(--isl-fg-faint); border-color: var(--isl-border-faint); cursor: not-allowed; box-shadow: none; }
+  .prop { border-top: 1px solid var(--isl-border-faint); padding-top: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .prop .q { font-weight: 700; font-size: 14px; }
+  .prop .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .booked { border: 1px solid var(--isl-terra-nova); padding: 14px 16px; display: none; gap: 10px; align-items: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }
+  .booked .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-terra-nova); flex: none; }
+  .booked.show { display: flex; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a href="Teams.html">Teams</a>
+        <a class="active" href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal" id="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head" style="padding-bottom:0">
+      <div class="isl-eyebrow"><span><a href="Matches.html">Matches</a></span><span>•</span><span>Rocky Inner</span><span>•</span><span>Matchday XIV</span></div>
+    </header>
+
+    <!-- SCOREBOARD -->
+    <div class="board">
+      <div class="head">
+        <span class="lbl">Terra Stadium • Attendance 512 souls</span>
+        <span class="isl-live"><span class="dot"></span><span id="clock">LIVE · 73'</span></span>
+      </div>
+      <div class="div"></div>
+      <div class="teams">
+        <div class="team"><img src="assets/crest-earth-united.png" alt="Earth United"><span class="nm">Earth United</span><span class="sub">Home • Earth</span></div>
+        <span class="score" id="score">2 · 1</span>
+        <div class="team"><img src="assets/crest-mars-rovers.png" alt="Mars Rovers"><span class="nm">Mars Rovers</span><span class="sub">Away • Mars</span></div>
+      </div>
+      <div>
+        <div class="bar"><div class="fill" id="momentum" style="width:58%"></div></div>
+        <div class="bar-lab"><span>Earth United momentum</span><span id="mom-v">58%</span></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="col-l">
+        <!-- COMMENTARY -->
+        <div class="feed">
+          <div class="fh"><span class="t">The booth</span><span class="s">Zara Bloom · Nexus-7 · live</span></div>
+          <div class="entries" id="entries"></div>
+        </div>
+
+        <!-- TIMELINE -->
+        <div class="tl">
+          <div class="t">Match record</div>
+          <div id="timeline"></div>
+        </div>
+      </div>
+
+      <!-- STAKE RAIL -->
+      <aside class="rail">
+        <div class="stake">
+          <div><div class="t">Match result</div><div class="sub">Prop line · open until 80'</div></div>
+          <div class="odds" id="odds">
+            <button class="odd" data-k="EU"><span class="on">Earth Utd</span><span class="ov">1.85</span></button>
+            <button class="odd" data-k="X"><span class="on">Draw</span><span class="ov">3.40</span></button>
+            <button class="odd" data-k="MR"><span class="on">Mars Rovers</span><span class="ov">2.10</span></button>
+          </div>
+          <div class="amt-row">
+            <div class="slider"><input type="range" id="amt" min="5" max="200" step="5" value="25"><span class="v" id="amt-v">25 ic</span></div>
+            <button class="place" id="place" disabled>Stake</button>
+          </div>
+          <div class="prop">
+            <div class="q">Will the Architect manifest before 80'?</div>
+            <div class="pair">
+              <button class="odd" data-k="ARCH-Y"><span class="on">It will</span><span class="ov">4.20</span></button>
+              <button class="odd" data-k="ARCH-N"><span class="on">It will not</span><span class="ov">1.22</span></button>
+            </div>
+          </div>
+          <div class="booked" id="booked"><span class="dot"></span><span id="booked-txt"></span></div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>Matchday XIV</span><span class="sep">•</span><span>Epoch MMXXXVII</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // ---- timeline (static record up to now) --------------------------------
+    const EVENTS = [
+      { min: "12'", glyph: "▲", cls: "goal", what: "<b>GOAL — Earth United.</b> Okafor, low through the keeper's gravity well. 1 · 0." },
+      { min: "27'", glyph: "■", cls: "card", what: "<b>Caution — Corso (MR).</b> Studs-up on Mercer. The booth disapproves." },
+      { min: "39'", glyph: "◆", cls: "arch", what: "<b>ARCHITECT MANIFESTATION.</b> Gravity reduced 4% for 90 seconds. Play continued." },
+      { min: "44'", glyph: "▲", cls: "goal", what: "<b>GOAL — Mars Rovers.</b> Vex-9 from distance. The trajectory was… unlikely. 1 · 1." },
+      { min: "61'", glyph: "▲", cls: "goal", what: "<b>GOAL — Earth United.</b> Mercer intercepts, feeds Okafor. 2 · 1." },
+      { min: "70'", glyph: "○", cls: "", what: "<b>Substitution — Mars Rovers.</b> Corso off, fuming in two languages." },
+    ];
+    document.getElementById("timeline").innerHTML = EVENTS.map(e =>
+      `<div class="tl-row ${e.cls}"><span class="min">${e.min}</span><span class="glyph">${e.glyph}</span><span class="what">${e.what}</span></div>`).join("");
+
+    // ---- live commentary feed ----------------------------------------------
+    const FEED = [
+      { by: "Zara Bloom", role: "Colour Analyst", min: 73, text: "There it is — Mercer's been reading Mars' final-third patterns all second half, and it shows. That's the interception that wins a draw when your striker's gone haywire." },
+      { by: "Nexus-7", role: "AI Analyst", min: 74, text: "Draw probability compresses to 31.2%. Manager One's touchline output measured at 92.1 decibels — a futile yet deeply human attempt to impose deterministic will upon settled mathematics." },
+      { by: "Zara Bloom", role: "Colour Analyst", min: 76, text: "Vex-9 hasn't moved for forty seconds. Not tired — listening. I've seen players wait for instructions before. Never from nobody." },
+      { by: "ARCHITECT", role: "", min: 77, arch: true, text: "Adjustment pending. Variables under review." },
+      { by: "Nexus-7", role: "AI Analyst", min: 78, text: "I am contractually obligated to describe that as weather." },
+      { by: "Zara Bloom", role: "Colour Analyst", min: 80, text: "Ten minutes plus whatever the void adds on. Earth United just have to keep their feet on the ground. Assuming the ground cooperates." },
+    ];
+    const entries = document.getElementById("entries");
+    let fi = 0;
+    function pushEntry() {
+      if (fi >= FEED.length) return;
+      const e = FEED[fi++];
+      const d = document.createElement("div");
+      d.className = "entry" + (e.arch ? " arch" : "");
+      d.innerHTML = `<div class="by"><b>${e.by}</b>${e.role ? `<span>• ${e.role}</span>` : ""}<span class="min">${e.min}'</span></div><p>${e.arch ? e.text : '"' + e.text + '"'}</p>`;
+      entries.appendChild(d);
+      entries.scrollTop = entries.scrollHeight;
+      // clock + momentum drift
+      document.getElementById("clock").textContent = "LIVE · " + e.min + "'";
+      const mom = 58 + (e.arch ? -9 : (Math.random() * 8 - 3));
+      document.getElementById("momentum").style.width = Math.round(mom) + "%";
+      document.getElementById("mom-v").textContent = Math.round(mom) + "%";
+      setTimeout(pushEntry, 5200);
+    }
+    pushEntry(); setTimeout(pushEntry, 2600);
+
+    // ---- staking -------------------------------------------------------------
+    let balance = 200, pick = null;
+    const odds = document.querySelectorAll(".odd");
+    odds.forEach(o => o.onclick = () => {
+      pick = pick === o.dataset.k ? null : o.dataset.k;
+      odds.forEach(x => x.classList.toggle("sel", x.dataset.k === pick));
+      document.getElementById("place").disabled = !pick;
+    });
+    const amt = document.getElementById("amt");
+    amt.oninput = () => document.getElementById("amt-v").textContent = amt.value + " ic";
+    document.getElementById("place").onclick = () => {
+      if (!pick) return;
+      const a = Math.min(+amt.value, balance);
+      balance -= a;
+      document.getElementById("bal").textContent = balance + " ic";
+      const names = { EU: "Earth United", X: "the draw", MR: "Mars Rovers", "ARCH-Y": "Architect manifestation", "ARCH-N": "no manifestation" };
+      const b = document.getElementById("booked");
+      document.getElementById("booked-txt").textContent = `${a} ic on ${names[pick]} — booked. No appeal.`;
+      b.classList.add("show");
+      pick = null; odds.forEach(x => x.classList.remove("sel"));
+      document.getElementById("place").disabled = true;
+    };
+  </script>
+</body>
+</html>

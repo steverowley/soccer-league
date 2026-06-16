@@ -1,0 +1,160 @@
+<!-- @startingPoint section="Web — Screens" subtitle="Matchday hub — live game, fixtures and results" viewport="1320x900" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Matches</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  .mdbar { display: flex; align-items: center; gap: 20px; padding: 16px 0 8px; }
+  .mdbar .nav-btn { width: 48px; height: 48px; border: 1px solid var(--isl-border); background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); font-family: var(--isl-font-mono); font-weight: 700; font-size: 18px; cursor: pointer; transition: background .12s linear; }
+  .mdbar .nav-btn:hover { background: var(--isl-phobos-ash); }
+  .mdbar .md { font-weight: 700; font-size: 24px; text-transform: uppercase; min-width: 260px; text-align: center; }
+  .mdbar .meta { margin-left: auto; font-size: 14px; text-transform: uppercase; letter-spacing: .03em; }
+
+  /* featured live match */
+  .feature { border: 1px solid var(--isl-border); padding: 32px; display: flex; flex-direction: column; gap: 28px; margin-top: 24px; }
+  .feature .head { display: flex; justify-content: space-between; align-items: center; }
+  .feature .head .lbl { font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .feature .div { height: 0; border-top: 1px solid var(--isl-border-faint); }
+  .feature .teams { display: flex; align-items: flex-start; justify-content: center; gap: 48px; }
+  .feature .team { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 220px; }
+  .feature .team .isl-crest { width: 96px; height: 96px; }
+  .feature .team .isl-crest img { padding: 4px; }
+  .feature .team .nm { font-weight: 700; font-size: 22px; text-transform: uppercase; text-align: center; }
+  .feature .team .sub { font-weight: 700; font-size: 13px; text-transform: uppercase; }
+  .feature .score { font-weight: 700; font-size: 52px; padding-top: 28px; }
+  .feature .bar { height: 14px; border: 2px solid var(--isl-border); padding: 3px; }
+  .feature .fill { height: 100%; background: var(--isl-solar-flare); }
+  .feature .actions { display: flex; gap: 16px; }
+
+  .sect { font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; margin: 48px 0 16px; }
+  .list { border: 1px solid var(--isl-border-faint); }
+  .fx { display: grid; grid-template-columns: 120px 1fr 96px 1fr 200px; align-items: center; gap: 20px; padding: 20px 28px; border-bottom: 1px solid var(--isl-border-faint); }
+  .fx:last-child { border-bottom: 0; }
+  .fx .status { font-weight: 700; font-size: 13px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+  .fx .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--isl-solar-flare); flex: none; }
+  .fx .status.ft { color: rgba(227,224,213,.82); }
+  .fx .home { display: flex; align-items: center; gap: 14px; justify-content: flex-end; text-align: right; }
+  .fx .away { display: flex; align-items: center; gap: 14px; }
+  .fx .nm { font-weight: 700; font-size: 16px; }
+  .fx .isl-crest { width: 36px; height: 36px; font-size: 12px; }
+  .fx .sc { text-align: center; font-weight: 700; font-size: 22px; }
+  .fx .sc.up { font-size: 15px; }
+  .fx .lg { text-align: right; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a href="Teams.html">Teams</a>
+        <a class="active" href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head">
+      <div class="isl-eyebrow"><span>Matches</span><span>•</span><span>Season VII</span><span>•</span><span id="eyebrow-md">Matchday XIV</span></div>
+      <h1>The fixture list</h1>
+      <p class="isl-lede">Every match this matchday across the four leagues. Live games sim in real time; results are written the instant the final whistle reaches the void.</p>
+    </header>
+
+    <div class="mdbar">
+      <button class="nav-btn" id="prev" aria-label="previous matchday">‹</button>
+      <span class="md" id="md">Matchday 14</span>
+      <button class="nav-btn" id="next" aria-label="next matchday">›</button>
+      <span class="meta">1 live · 3 full-time · 4 upcoming</span>
+    </div>
+
+    <!-- FEATURED LIVE -->
+    <div class="feature">
+      <div class="head">
+        <span class="lbl">Rocky Inner • Featured</span>
+        <span class="isl-live"><span class="dot"></span>LIVE · 73'</span>
+      </div>
+      <div class="div"></div>
+      <div class="teams">
+        <div class="team"><div class="isl-crest"><img src="assets/crest-earth-united.png" alt="Earth United"></div><span class="nm">Earth United</span><span class="sub">Home • Earth</span></div>
+        <span class="score">2 · 1</span>
+        <div class="team"><div class="isl-crest"><img src="assets/crest-mars-rovers.png" alt="Mars Rovers"></div><span class="nm">Mars Rovers</span><span class="sub">Away • Mars</span></div>
+      </div>
+      <div class="bar"><div class="fill" style="width:58%; box-shadow: var(--isl-glow-live);"></div></div>
+      <div class="div"></div>
+      <div class="actions">
+        <a class="isl-btn primary" href="Match.html">Watch live match</a>
+        <a class="isl-btn cta" href="Match.html">Place a stake</a>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="sect">Full time</div>
+    <div class="list" id="results"></div>
+
+    <!-- UPCOMING -->
+    <div class="sect">Upcoming</div>
+    <div class="list" id="upcoming"></div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>Matchday XIV</span><span class="sep">•</span><span>Epoch MMXXXVII</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const FT = [
+      { h: "Mercury Runners", hm: "ME", a: "Venus Inferno", am: "VI", hs: 3, as: 0, lg: "Rocky Inner" },
+      { h: "Jupiter Royals", hm: "JR", a: "Saturn Rings", am: "SR", hs: 1, as: 1, lg: "Gas & Ice Giant" },
+      { h: "Ceres City FC", hm: "CC", a: "Pallas Rovers", am: "PR", hs: 4, as: 2, lg: "Asteroid Belt" },
+    ];
+    const UP = [
+      { h: "Pluto Wanderers", hm: "PW", a: "Eris Rebels", am: "ER", t: "Tue 19:00", lg: "Kuiper Belt" },
+      { h: "Neptune Mariners", hm: "NM", a: "Uranus Athletic", am: "UA", t: "Tue 21:30", lg: "Gas & Ice Giant" },
+      { h: "Vesta United", hm: "VU", a: "Juno Athletic", am: "JA", t: "Wed 20:00", lg: "Asteroid Belt" },
+      { h: "Haumea Cyclones", hm: "HC", a: "Makemake United", am: "MU", t: "Wed 22:15", lg: "Kuiper Belt" },
+    ];
+    const crest = (m) => `<div class="isl-crest">${m}</div>`;
+    function rowFT(f) {
+      return `<div class="fx">
+        <span class="status ft">Full time</span>
+        <span class="home"><span class="nm">${f.h}</span>${crest(f.hm)}</span>
+        <span class="sc">${f.hs} · ${f.as}</span>
+        <span class="away">${crest(f.am)}<span class="nm">${f.a}</span></span>
+        <span class="lg">${f.lg}</span>
+      </div>`;
+    }
+    function rowUP(f) {
+      return `<div class="fx">
+        <span class="status">${f.t}</span>
+        <span class="home"><span class="nm">${f.h}</span>${crest(f.hm)}</span>
+        <span class="sc up">v</span>
+        <span class="away">${crest(f.am)}<span class="nm">${f.a}</span></span>
+        <span class="lg">${f.lg}</span>
+      </div>`;
+    }
+    document.getElementById("results").innerHTML = FT.map(rowFT).join("");
+    document.getElementById("upcoming").innerHTML = UP.map(rowUP).join("");
+
+    // matchday stepper (cosmetic)
+    const ROMAN = { 12: "XII", 13: "XIII", 14: "XIV", 15: "XV", 16: "XVI" };
+    let md = 14;
+    const mdEl = document.getElementById("md"), eb = document.getElementById("eyebrow-md");
+    function setMd(n) { md = Math.max(12, Math.min(16, n)); mdEl.textContent = "Matchday " + md; eb.textContent = "Matchday " + (ROMAN[md] || md); }
+    document.getElementById("prev").onclick = () => setMd(md - 1);
+    document.getElementById("next").onclick = () => setMd(md + 1);
+  </script>
+</body>
+</html>
