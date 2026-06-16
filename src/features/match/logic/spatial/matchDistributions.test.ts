@@ -13,13 +13,13 @@
 //
 // WHAT IT ASSERTS — AND WHAT IT DELIBERATELY DOES NOT
 //   It runs a fixed, seeded batch of balanced-but-varied-quality matches and
-//   asserts the aggregate lands inside football-PLAUSIBLE guard bands. The bands
-//   are intentionally wider than real-world ideals: the pure engine currently
-//   runs HOT (~5.3 goals and ~21 shots-on-target per match vs a ~2.5–2.8 goal
-//   ideal), and tightening to the ideal is an engine-tuning job, not a test job.
-//   A band breach is a TUNING SIGNAL — fix it by adjusting engine INPUTS, never
-//   by editing scorelines or outcomes (the only sanctioned outcome-bender is the
-//   Architect's rare, disguised rewrite).
+//   asserts the aggregate lands inside football-PLAUSIBLE guard bands. The 2026-06
+//   scoring calibration pass brought the pure engine to ~2.5 goals/match (it
+//   previously ran HOT at ~5.3), so the goal band is now tightened around the
+//   real-world ideal; the others stay wide to absorb the coarse 24-match
+//   quantisation. A band breach is a TUNING SIGNAL — fix it by adjusting engine
+//   INPUTS, never by editing scorelines or outcomes (the only sanctioned
+//   outcome-bender is the Architect's rare, disguised rewrite).
 //
 // Because the batch is seeded, the result is byte-stable run to run: this test
 // cannot flake. If it ever goes red, the engine's behaviour actually changed.
@@ -52,22 +52,23 @@ const FOOTBALL_REFERENCE = {
 } as const;
 
 // ── Engine guard bands (what the PURE engine must stay within today) ────────
-// Wide, football-plausible envelopes that the current engine satisfies AND that
-// still bracket FOOTBALL_REFERENCE, so calibrating down toward realism (#587,
-// #589) won't trip the guard. Anchored on the measured N=24 fingerprint:
-// goals 5.29, draws 0.125, shots-on-target 21.4, home tilt 1.15.
+// Football-plausible envelopes that the current engine satisfies AND that still
+// bracket FOOTBALL_REFERENCE. Anchored on the measured N=24 fingerprint after the
+// 2026-06 scoring calibration: goals 2.50, draws 0.333, shots-on-target 18.0,
+// home tilt 1.00.
 const ENGINE_GUARD = {
   /** Combined goals/match. Lower bound catches a dead/stalemate engine; upper
-   *  bound catches a runaway. Current ≈ 5.29. */
-  goalsPerMatch: [2.0, 7.0],
+   *  bound catches a runaway. Tightened after the 2026-06 calibration; still
+   *  brackets the 2.5–2.8 real-world ideal. Current ≈ 2.50. */
+  goalsPerMatch: [1.8, 3.8],
   /** Fraction of the batch finishing level. Wide because 24 matches quantises
-   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.125. */
+   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.333. */
   drawRate: [0.04, 0.42],
   /** On-target shots/match = goals + keeper saves (the only shot signals the
-   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 21.4. */
+   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 18.0. */
   shotsOnTargetPerMatch: [8, 32],
   /** Home÷away goals over the batch. Centred on ~1.0 because the pure engine is
-   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 1.15. */
+   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 1.00. */
   homeTilt: [0.8, 1.45],
 } as const;
 
