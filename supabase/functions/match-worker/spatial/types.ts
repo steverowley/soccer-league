@@ -134,6 +134,11 @@ export interface SimPlayer {
   vel: Vec2;
   /** Remaining energy in [0,1]; scales effective speed as it drains. */
   stamina: number;
+  /** Yellow cards this player has been shown; a second one becomes a red. */
+  yellowCards: number;
+  /** True once shown a red (or a second yellow) — parked off the pitch and
+   *  excluded from all play, so their team finishes a man down. */
+  sentOff: boolean;
 }
 
 // ── Ball ──────────────────────────────────────────────────────────────────

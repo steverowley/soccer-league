@@ -75,6 +75,7 @@ describe('dynamicAnchor', () => {
     },
     homePos: vec(PITCH_LENGTH / 2, PITCH_WIDTH / 2),
     maxSpeed: 8, pos: vec(0, 0), vel: vec(0, 0), stamina: 1,
+    yellowCards: 0, sentOff: false,
   };
 
   it('pushes the home block forward when the ball is in the attacking third', () => {

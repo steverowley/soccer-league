@@ -149,7 +149,7 @@ export function chooseBestPass(
  * @param rng        Seeded source.
  */
 export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): CarrierAction {
-  const teammates = (carrier.side === 'home' ? world.home : world.away).filter((p) => p.id !== carrier.id);
+  const teammates = (carrier.side === 'home' ? world.home : world.away).filter((p) => p.id !== carrier.id && !p.sentOff);
   const opponents = carrier.side === 'home' ? world.away : world.home;
 
   const sq = shotQuality(carrier.pos, carrier.side);
