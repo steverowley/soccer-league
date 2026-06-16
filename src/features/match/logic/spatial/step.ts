@@ -182,7 +182,9 @@ function kickoffReset(world: SimWorld, concedingSide: TeamSide): void {
 export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
   const events: SimEvent[] = [];
   world.clockSec += dt;
-  const minute = Math.max(1, Math.min(90, Math.ceil(world.clockSec / 60)));
+  // No upper clamp: stoppage time runs past 90:00, so added-time events read as
+  // minute 91+ (the DB allows 0–120).  The tick loop bounds how far this goes.
+  const minute = Math.max(1, Math.ceil(world.clockSec / 60));
 
   // ── Dead-ball pause (post-goal breather) ──────────────────────────────────
   // Players drift home; nobody acts on the ball until the pause elapses.

@@ -54,31 +54,31 @@ const FOOTBALL_REFERENCE = {
 // ── Engine guard bands (what the PURE engine must stay within today) ────────
 // Football-plausible envelopes that the current engine satisfies AND that still
 // bracket FOOTBALL_REFERENCE. Anchored on the measured N=24 fingerprint after the
-// 2026-06 scoring calibration + fouls + offside + movement: goals 2.46,
-// draws 0.292, shots-on-target ~18, home tilt 0.97, fouls 24.1, cards 3.38,
-// offsides 2.4.
+// 2026-06 scoring calibration + fouls + offside + movement + stoppage: goals
+// 2.58, draws 0.333, shots-on-target ~19, home tilt 0.94, fouls 25.0, cards
+// 3.46, offsides 2.5.  (Matches now include ~3.4 min of added time.)
 const ENGINE_GUARD = {
   /** Combined goals/match. Lower bound catches a dead/stalemate engine; upper
-   *  bound catches a runaway. Brackets the 2.5–2.8 real-world ideal. Current ≈ 2.46. */
+   *  bound catches a runaway. Brackets the 2.5–2.8 real-world ideal. Current ≈ 2.58. */
   goalsPerMatch: [1.8, 3.8],
   /** Fraction of the batch finishing level. Wide because 24 matches quantises
-   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.292. */
+   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.333. */
   drawRate: [0.04, 0.42],
   /** On-target shots/match = goals + keeper saves (the only shot signals the
-   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 18. */
+   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 19. */
   shotsOnTargetPerMatch: [8, 32],
   /** Home÷away goals over the batch. Centred on ~1.0 because the pure engine is
-   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 0.97. */
+   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 0.94. */
   homeTilt: [0.75, 1.45],
   /** Fouls/match. Guards the foul model both ways: the floor catches a dead
    *  model, the ceiling catches per-tick foul spam (the bug where the challenge
-   *  re-rolled every 0.1s and racked up hundreds). Real ≈ 20-30. Current ≈ 24.1. */
+   *  re-rolled every 0.1s and racked up hundreds). Real ≈ 20-30. Current ≈ 25.0. */
   foulsPerMatch: [12, 42],
-  /** Bookings (yellows + reds)/match. Real ≈ 3-5. Current ≈ 3.38. */
+  /** Bookings (yellows + reds)/match. Real ≈ 3-5. Current ≈ 3.46. */
   cardsPerMatch: [1, 9],
   /** Offsides/match. Guards the offside rule both ways: the floor catches a dead
    *  rule, the ceiling catches phantom-flag spam from too tight a margin.
-   *  Real ≈ 1.5-3. Current ≈ 2.4. */
+   *  Real ≈ 1.5-3. Current ≈ 2.5. */
   offsidesPerMatch: [0.3, 8],
 } as const;
 

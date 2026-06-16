@@ -269,6 +269,11 @@ export interface SimConfig {
   frameEverySec: number;
   /** Random seed — same seed + same teams ⇒ identical match. */
   seed:         number;
+  /**
+   * Whether to play deterministic added (stoppage) time after regulation.
+   * On for real matches; tests that assert an exact frame count switch it off.
+   */
+  stoppage:     boolean;
 }
 
 /** The full output of one simulated match. */

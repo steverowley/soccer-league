@@ -107,11 +107,24 @@ describe('simulateSpatialMatch — structural invariants', () => {
   });
 
   it('samples frames at roughly the configured cadence', () => {
-    const r = simulateSpatialMatch(team('H', 70), team('A', 70), { matchSeconds: 600, frameEverySec: 1, seed: 3 });
+    // stoppage off so the frame count maps cleanly to the configured length.
+    const r = simulateSpatialMatch(team('H', 70), team('A', 70), { matchSeconds: 600, frameEverySec: 1, seed: 3, stoppage: false });
     // 600s at 1 frame/sec ≈ 600 frames (+1 final).  Allow slack for the
     // boundary-crossing sampling logic.
     expect(r.frames.length).toBeGreaterThan(580);
     expect(r.frames.length).toBeLessThan(640);
+  });
+
+  it('plays deterministic stoppage time past 90:00, capped at ~6 min', () => {
+    const withStop = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 7 });
+    const noStop = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 7, stoppage: false });
+    // Regulation is byte-identical; stoppage only appends extra ticks/events.
+    expect(withStop.events.length).toBeGreaterThan(noStop.events.length);
+    const maxMinute = Math.max(...withStop.events.map((e) => e.minute));
+    expect(maxMinute).toBeGreaterThan(90);   // added time really plays
+    expect(maxMinute).toBeLessThanOrEqual(96); // 90 + the 6-min clamp
+    // Without stoppage the match ends in regulation.
+    expect(Math.max(...noStop.events.map((e) => e.minute))).toBeLessThanOrEqual(90);
   });
 });
 
