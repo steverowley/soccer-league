@@ -348,7 +348,16 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
     // already done; instead we set their velocity target implicitly through
     // the glued ball.  To actually advance, give the owner a goal-ward shove.
     if (ball.ownerId === owner.id) {
-      const goalPt = vec(attackingGoalX(owner.side), PITCH_WIDTH / 2);
+      // Carry FORWARD toward the goal line, drifting only gently toward the
+      // centre so wide players keep the width instead of every carrier
+      // funnelling through the middle.  The lateral pull sharpens as the carrier
+      // nears the goal — wingers stay wide in build-up and cut inside in the
+      // final third to shoot.
+      const goalX = attackingGoalX(owner.side);
+      const goalProximity = 1 - Math.min(1, Math.abs(owner.pos.x - goalX) / 35); // 0 far … 1 at the line
+      const centreBias = 0.22 + 0.5 * goalProximity;                             // 0.22 wide → 0.72 in the box
+      const aimY = owner.pos.y * (1 - centreBias) + (PITCH_WIDTH / 2) * centreBias;
+      const goalPt = vec(goalX, aimY);
       const carryTarget = add(owner.pos, scale(normalize(sub(goalPt, owner.pos)), DRIBBLE_REACH));
       const drive = seek(owner, carryTarget);
       // Re-integrate the owner with the dribble drive (overrides the placeholder).
