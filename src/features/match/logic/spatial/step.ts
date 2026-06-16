@@ -81,11 +81,16 @@ const LOOSE_POP_COOLDOWN_TICKS = 3;
  *  box.  Drawn only on box fouls, so open-play scoring is left undisturbed. */
 const PENALTY_AWARD_RATE = 0.13;
 
+/** Multiplier on the foul chance of a player who is ALREADY on a yellow card.
+ *  A booked player jockeys rather than dives in (a second yellow means a red), so
+ *  they foul far less — which keeps second-yellow dismissals realistic. */
+const BOOKED_FOUL_FACTOR = 0.45;
+
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
-/** Outfield players (everyone but the keeper) of a side. */
+/** Outfield players (everyone but the keeper) of a side, sent-off players excluded. */
 function outfield(players: readonly SimPlayer[]): SimPlayer[] {
-  return players.filter((p) => p.role !== 'GK');
+  return players.filter((p) => p.role !== 'GK' && !p.sentOff);
 }
 
 /** The keeper of a side, or undefined if (defensively) none is flagged GK. */
@@ -147,9 +152,11 @@ function integratePlayer(p: SimPlayer, desired: Vec2, dt: number): void {
 
 // ── Restarts ──────────────────────────────────────────────────────────────────
 
-/** Reset both teams to their formation home positions (used after a goal). */
+/** Reset both teams to their formation home positions (used after a goal).
+ *  Sent-off players are left parked off the pitch — they don't re-join. */
 function resetToFormation(world: SimWorld): void {
   for (const p of [...world.home, ...world.away]) {
+    if (p.sentOff) continue;
     p.pos = p.homePos;
     p.vel = ZERO;
   }
@@ -175,6 +182,19 @@ function awardBall(world: SimWorld, side: TeamSide, spot: Vec2): void {
 function kickoffReset(world: SimWorld, concedingSide: TeamSide): void {
   resetToFormation(world);
   awardBall(world, concedingSide, CENTRE_SPOT);
+}
+
+/**
+ * Send a player off (a red card, or a second yellow).  They're parked on the
+ * nearest touchline and flagged `sentOff`, which excludes them from role
+ * assignment, integration, challenges and ball collection — so their team
+ * finishes the match a man down.  They stay in the roster (and in replay frames)
+ * so the viewer simply renders them off the field of play.  Mutates `player`.
+ */
+function sendOff(player: SimPlayer): void {
+  player.sentOff = true;
+  player.vel = ZERO;
+  player.pos = vec(player.pos.x, player.pos.y < PITCH_WIDTH / 2 ? 0 : PITCH_WIDTH);
 }
 
 /**
@@ -235,6 +255,7 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
   if (world.phase === 'dead_ball') {
     world.deadBallTicks -= 1;
     for (const p of [...world.home, ...world.away]) {
+      if (p.sentOff) continue; // sent off — stays parked, doesn't reset to shape
       integratePlayer(p, arrive(p, p.homePos, ANCHOR_SLOW_RADIUS), dt);
     }
     if (world.deadBallTicks <= 0) world.phase = 'open_play';
@@ -265,6 +286,9 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
     const nearest = side === 'home' ? nearestHome : nearestAway;
 
     for (const p of team) {
+      // A sent-off player takes no part: no role, no desired velocity — they sit
+      // parked on the touchline (skipped in integration below).
+      if (p.sentOff) continue;
       // Keeper logic: rush a nearby loose ball, else hold the line.
       if (p.role === 'GK') {
         const ballNear = dist(ball.pos, vec(defendingGoalX(side), PITCH_WIDTH / 2)) < KEEPER_RUSH_DIST;
@@ -309,6 +333,7 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
 
   // ── 3. Integrate all players ──────────────────────────────────────────────
   for (const p of [...world.home, ...world.away]) {
+    if (p.sentOff) continue; // parked off the pitch — frozen in place
     integratePlayer(p, desired.get(p.id) ?? ZERO, dt);
   }
 
@@ -344,9 +369,16 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
         ball.offsideFor = null;
         events.push({ tSec: world.clockSec, minute, type: 'tackle', side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id });
         challengeResolved = true;
-      } else if (rng() < foulProbability(challenger.player, owner)) {
-        // Foul.  A cynical foul near goal may draw a yellow or (rarely) red.
-        const card = cardForFoul(owner.pos, owner.side, rng);
+      } else if (rng() < foulProbability(challenger.player, owner) * (challenger.player.yellowCards > 0 ? BOOKED_FOUL_FACTOR : 1)) {
+        // Foul.  A cynical foul near goal may draw a yellow or (rarely) red; a
+        // SECOND yellow to the same player becomes a red, and any red sends them
+        // off (no extra rng draw — the count is deterministic on the cards shown).
+        let card = cardForFoul(owner.pos, owner.side, rng);
+        if (card === 'yellow') {
+          challenger.player.yellowCards += 1;
+          if (challenger.player.yellowCards >= 2) card = 'red'; // second booking → off
+        }
+        if (card === 'red') sendOff(challenger.player);
         events.push({
           tSec: world.clockSec, minute, type: 'foul',
           side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id,
@@ -551,6 +583,7 @@ function resolveLooseBall(
     let claimer: SimPlayer | null = null;
     let claimerD2 = Infinity;
     for (const p of [...world.home, ...world.away]) {
+      if (p.sentOff) continue; // off the pitch — can't reach the ball
       if (ballPathWithinReach(p.pos, from, to, CONTROL_RADIUS)) {
         const d2 = dist2(p.pos, to);
         if (d2 < claimerD2) { claimerD2 = d2; claimer = p; }

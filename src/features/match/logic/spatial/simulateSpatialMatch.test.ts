@@ -203,3 +203,37 @@ describe('simulateSpatialMatch — goal attribution (#522)', () => {
     expect(statGoals).toBe(attributed);
   }, 60000);
 });
+
+describe('simulateSpatialMatch — sending-off (red card)', () => {
+  it('parks a sent-off player on the touchline and freezes them out of play', () => {
+    // Scan seeds for a full match whose red card lands early enough (< 80') to
+    // leave plenty of post-dismissal frames to check. A lopsided fixture makes
+    // fouls — and the occasional dismissal — plentiful.
+    let playerId = '';
+    let redTSec = 0;
+    let result: ReturnType<typeof simulateSpatialMatch> | null = null;
+    for (let seed = 1; seed < 80 && !result; seed++) {
+      const r = simulateSpatialMatch(team('H', 78), team('A', 60), { ...FULL, seed });
+      const redEv = r.events.find((e) => e.type === 'foul' && e.card === 'red' && e.playerId && e.tSec < 4800);
+      if (redEv?.playerId) { playerId = redEv.playerId; redTSec = redEv.tSec; result = r; }
+    }
+    expect(result, 'expected an early red card across the scanned seeds').not.toBeNull();
+
+    // Frames sampled after the dismissal (allow ~2s for the next sample).
+    const afterRed = result!.frames.filter((f) => f.tSec >= redTSec + 2.5);
+    expect(afterRed.length).toBeGreaterThan(3);
+
+    // The sent-off player sits ON a touchline (y ≈ 0 or y ≈ 68)…
+    const first = afterRed[0]!.players.find((p) => p.id === playerId);
+    expect(first, 'sent-off player must still appear in frames').toBeDefined();
+    const onTouchline = first!.y <= 0.6 || first!.y >= PITCH_WIDTH - 0.6;
+    expect(onTouchline, `sent-off player should sit on a touchline, was y=${first!.y}`).toBe(true);
+
+    // …and is frozen there for the rest of the match (no movement, no play).
+    for (const f of afterRed) {
+      const fp = f.players.find((p) => p.id === playerId)!;
+      expect(fp.x).toBeCloseTo(first!.x, 4);
+      expect(fp.y).toBeCloseTo(first!.y, 4);
+    }
+  }, 30000);
+});

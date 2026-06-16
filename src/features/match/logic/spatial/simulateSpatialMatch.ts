@@ -167,6 +167,8 @@ function makeSimPlayer(
     pos:      home,
     vel:      { x: 0, y: 0 },
     stamina:  1,
+    yellowCards: 0,
+    sentOff:  false,
   };
 }
 
