@@ -105,9 +105,11 @@ The deterministic persona is only the *substrate*. The richer voice library
   are written from `match.completed` events, so kinds that never appear in a match
   (journalists, pundits, politicians, staff, media…) never accumulate memories → the enricher never
   selects them → they never get snippets. This is structural, not a bug.
-- **`personality_vec` is uniform.** All personas (including the 172 new ones) share one neutral
-  Big-Five vector, because `entity_traits` is sparse and the factory defaults every unmapped axis to
-  `0.5`. Real per-entity personality variation is the job of the affect model (**#580**).
+- **`personality_vec` was uniform — FIXED.** All personas used to share one neutral Big-Five vector
+  (only a referee's `strictness` ever moved an axis), which silently neutered the persona-aware
+  resolvers (`oddsSlant`/`cardSeverity`/`shootOrPass` read 0.5 as "no effect"). The factory now seeds
+  each axis from the entity UUID (migration 0079 backfilled all 836); every resolver-relevant actor is
+  now distinct. The richer *mood/emotion* runtime remains the affect model's job (**#580**).
 
 **Takeaway:** once credits are restored (#565), the enricher will begin filling snippets again — but
 only for entities that receive memories. Giving non-match entities a memory source is its own task
@@ -127,10 +129,10 @@ Three distinct flavours:
    duplicate `nationality`/`position` into `meta`. Some of this is load-bearing — e.g.
    `entityRoute.ts` resolves a team click via `meta.team_id`, not the entity UUID — so it cannot be
    blindly removed.
-3. **Internal `meta` drift (a real bug).** 64 rows store `nationality` at both the top level and
-   under `meta.profile`; **13 of them disagree** (e.g. "Callistoan" vs "Callistian", "Orcean" vs
-   "Orcian", "Mining Colony" vs "Belt Colonist"). Cosmetic lore inconsistency, low-risk to fix.
-   See `docs/` follow-up list below — left out of this PR to keep it focused.
+3. **Internal `meta` drift (a real bug) — FIXED.** 64 rows stored `nationality` at both the top level
+   and under `meta.profile`; **13 disagreed** (e.g. "Callistoan" vs "Callistian", "Orcean" vs "Orcian",
+   "Mining Colony" vs "Belt Colonist"). Migration 0077 aligned the redundant top-level copy to the
+   canonical `meta.profile.nationality`; 0 conflicts remain.
 
 ---
 
@@ -138,10 +140,10 @@ Three distinct flavours:
 
 - **`cosmic_voice` (FIXED).** Present in the DB (3 rows: Fate/Balance/Chaos) and used by the match
   engine's `cosmicVoices.ts`, but the literal was missing from the `EntityKind` union. Added.
-- **6 phantom kinds.** `coach`, `physio`, `doctor`, `scout`, `owner`, `analyst` are declared in the
-  `EntityKind` union (and pinned by `kindColor.test.ts` as fallback examples) but are **never seeded
-  by any migration** — `managing_staff` is the real implementation of "club backroom staff." These
-  are harmless placeholders; recommend removing them in a dedicated cleanup (see below).
+- **6 phantom kinds — FIXED.** `coach`, `physio`, `doctor`, `scout`, `owner`, `analyst` were declared
+  in the `EntityKind` union but **never seeded by any migration** (`managing_staff` is the real
+  implementation of "club backroom staff"). Removed from the union; the `kindColor`/`entityRoute`
+  tests now exercise the fallback with genuinely hypothetical kinds.
 
 ---
 
@@ -157,31 +159,34 @@ This layer is solid and is the foundation that the event-driven feuds feature (*
 
 ## 7. What this PR changed
 
-| Change | File(s) | Risk |
+| Change | File(s) / artefact | Risk |
 |---|---|---|
-| 10 new persona archetypes (politician, political_party, officials_association, commentator, sports_writer, social_media, managing_staff, team, stadium, training_facility) | `src/features/agents/logic/personaFactory.ts` | pure logic, unit-tested |
-| Lock the new archetypes in tests | `src/features/agents/logic/personaFactory.test.ts` | — |
-| Add `cosmic_voice` to `EntityKind` | `src/features/entities/types.ts` | type-only |
-| Re-seed 172 voiceless entities in production (deterministic, idempotent) | data only (via `seed-personas.ts` logic) | additive; reversible |
+| 10 new persona archetypes (politician, political_party, officials_association, commentator, sports_writer, social_media, managing_staff, team, stadium, training_facility) + tests | `src/features/agents/logic/personaFactory.ts`, `…/personaFactory.test.ts` | pure logic, unit-tested |
+| Add `cosmic_voice` to `EntityKind`; remove 6 phantom kinds + test updates | `src/features/entities/types.ts`, `…/kindColor.*`, `…/entityRoute.test.ts` | type-only / test-only |
+| Re-seed 172 voiceless entities in production (deterministic, idempotent) → **836/836 coverage** | data (via `seed-personas.ts` logic) | additive; reversible |
+| Align 13 conflicting `meta.nationality` values → **0 conflicts** | `supabase/migrations/0077` | data; targeted |
+| Sync player/manager renames → entity shadow row (guarded `AFTER UPDATE OF name` trigger) | `supabase/migrations/0078` | DDL; reversible (`DROP TRIGGER`) |
+| Derive distinct `personality_vec` per entity (UUID-seeded) + backfill all 836 → **702 distinct, all resolver actors distinct** | `src/features/agents/logic/personaFactory.ts`, `supabase/migrations/0079` | activates dormant resolvers |
 | This audit | `docs/entities-audit.md` | docs |
 
-`npm run check` (typecheck + lint + 1,424 tests) is green.
+`npm run check` (typecheck + lint + **1,425 tests**) is green.
 
 ---
 
-## 8. Recommended follow-ups (prioritised)
+## 8. Follow-ups
 
-1. **[operator] Restore API credits (#565)** — unfreezes the enricher; the single biggest lever on
-   "nothing there" for snippets/memories.
-2. **Give non-match entities a memory source** — without it, journalists/pundits/politicians/staff
-   never get enriched. Candidates: the `drama-tick` and `architect-galaxy-tick` could write a memory
-   when they feature an entity. (Feeds #579, #583.)
-3. **Affect model (#580)** — replace the uniform `personality_vec` with real per-entity
-   personality/mood so the 836 voices stop sharing one neutral vector.
-4. **Fix the 13 conflicting `meta.nationality` values** — small data-hygiene migration; align
-   top-level to `meta.profile.nationality`.
-5. **Remove the 6 phantom kinds** (`coach`/`physio`/`doctor`/`scout`/`owner`/`analyst`) — dedicated
-   cleanup touching the `EntityKind` union + `kindColor.test.ts` (use a clearly-hypothetical kind for
-   the fallback test instead).
-6. **Trigger-sync player/manager → entity name** (or document the accepted drift) so renames do not
-   diverge the shadow row.
+**Done in this PR:** persona coverage 836/836 · phantom kinds removed · `cosmic_voice` typed ·
+13 nationalities aligned · player/manager name-sync trigger · personality vectors diversified
+(the personality half of #580).
+
+**Remaining (deliberately not bundled here):**
+
+1. **[operator] Restore API credits (#565)** — the single biggest lever on the remaining "nothing
+   there": with credits dead since May 21 the `corpus-enricher` cannot generate snippets for *any*
+   entity. Operator-only; cannot be done from a code session.
+2. **Give non-match entities a memory source** — journalists/pundits/politicians/staff never appear in
+   a match, so they never accrue `entity_memories`, so the enricher never selects them. The fix lives
+   in the `architect-galaxy-tick` / `drama-tick` edge functions (write a memory when an entity is
+   featured). Left out here because (a) its payoff is **gated on #565**, and (b) it means deploying a
+   critical narrative edge function that cannot be verified without live credits. Best done together
+   with #565; it dovetails with the planned #579/#583 enrichment workstreams.
