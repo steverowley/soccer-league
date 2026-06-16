@@ -76,6 +76,15 @@ export interface PositionSnapshot {
  * The returned array is already sorted by (minute, second) ascending, making
  * it suitable for binary-search playback in `useSpatialPlayback`.
  *
+ * PAGINATION
+ *   PostgREST caps a single response at its `max-rows` setting (1000 by default
+ *   on Supabase).  A 90-minute match stores ~2 700 snapshots (one per 2
+ *   game-seconds), so a single un-paged select silently returns only the first
+ *   ~1000 rows ≈ 33 minutes — the viewer then runs out of frames and freezes
+ *   there while the clock keeps ticking.  We page through with `.range()`,
+ *   advancing by the rows actually returned and stopping on the first empty
+ *   page, so the whole match is loaded regardless of the server's row cap.
+ *
  * @param db       Supabase client (anon or authenticated — read is public).
  * @param matchId  UUID of the match to load positions for.
  * @returns        Sorted array of position snapshots, or [] on error / not-found.
@@ -84,33 +93,45 @@ export async function getMatchPositions(
   db: SupabaseClient,
   matchId: string,
 ): Promise<PositionSnapshot[]> {
-  const { data, error } = await db
-    .from('match_positions')
-    .select('minute, second, snapshots')
-    .eq('match_id', matchId)
-    .order('minute',  { ascending: true })
-    .order('second',  { ascending: true });
-
-  if (error) {
-    console.warn('[getMatchPositions] query failed:', error.message);
-    return [];
-  }
-  if (!data || data.length === 0) return [];
-
-  // Validate at the DB boundary so a malformed JSONB row fails loud here
-  // rather than silently producing NaN coordinates in the renderer.
+  // Request size per page.  The loop advances by the count actually returned,
+  // so a server cap below this value still pages correctly (just in more hops).
+  const PAGE_SIZE = 1000;
   const rows: PositionSnapshot[] = [];
-  for (const row of data) {
-    const parsed = SnapshotsSchema.safeParse(row.snapshots);
-    if (!parsed.success) {
-      console.warn('[getMatchPositions] malformed snapshot row skipped:', parsed.error.issues[0]);
-      continue;
+
+  for (let from = 0; ; ) {
+    const { data, error } = await db
+      .from('match_positions')
+      .select('minute, second, snapshots')
+      .eq('match_id', matchId)
+      .order('minute', { ascending: true })
+      .order('second', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.warn('[getMatchPositions] query failed:', error.message);
+      // Degrade gracefully: a first-page failure yields [], a later-page
+      // failure returns the frames gathered so far rather than nothing.
+      break;
     }
-    rows.push({
-      minute:    row.minute as number,
-      second:    row.second as number,
-      snapshots: parsed.data,
-    });
+    if (!data || data.length === 0) break;
+
+    // Validate at the DB boundary so a malformed JSONB row fails loud here
+    // rather than silently producing NaN coordinates in the renderer.
+    for (const row of data) {
+      const parsed = SnapshotsSchema.safeParse(row.snapshots);
+      if (!parsed.success) {
+        console.warn('[getMatchPositions] malformed snapshot row skipped:', parsed.error.issues[0]);
+        continue;
+      }
+      rows.push({
+        minute:    row.minute as number,
+        second:    row.second as number,
+        snapshots: parsed.data,
+      });
+    }
+
+    from += data.length;
   }
+
   return rows;
 }
