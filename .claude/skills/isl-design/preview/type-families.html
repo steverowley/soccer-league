@@ -1,0 +1,32 @@
+<!-- @dsCard group="Type" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .head { font-weight: 700; font-size: 30px; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--isl-fg-muted); margin-bottom: 20px; }
+  .row { display: flex; align-items: baseline; gap: 24px; padding: 11px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .row:last-child { border-bottom: 0; }
+  .tag { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--isl-fg-muted); width: 130px; flex: none; }
+  .spec { font-family: var(--isl-font-mono); font-size: 24px; }
+</style>
+</head>
+<body>
+  <p class="head">Space Mono</p>
+  <p class="sub">One typeface carries the entire brand — headings, labels, data, and body.</p>
+  <div class="row"><span class="tag">Bold 700</span><span class="spec" style="font-weight:700">Soccer, charted across the stars</span></div>
+  <div class="row"><span class="tag">Regular 400</span><span class="spec" style="font-weight:400">Position updates every ninety seconds</span></div>
+  <div class="row"><span class="tag">Italic 400</span><span class="spec" style="font-weight:400;font-style:italic">There it is — Mercer's been reading Mars</span></div>
+</body>
+</html>

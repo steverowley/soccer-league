@@ -1,0 +1,164 @@
+<!-- @startingPoint section="Web — Screens" subtitle="The league news wire — dated dispatches in the deadpan house voice" viewport="1320x980" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Galaxy Dispatch</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  .wire { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; padding: 24px 0 64px; }
+  /* lead dispatch */
+  .lead { border: 1px solid var(--isl-border); }
+  .lead .img { aspect-ratio: 16/7; background: url(assets/img-moon-broadcast.png) center / cover no-repeat; filter: grayscale(1) contrast(1.06); border-bottom: 1px solid var(--isl-border); }
+  .lead .body { padding: 32px; display: flex; flex-direction: column; gap: 16px; }
+  .lead .tags { display: flex; gap: 12px; flex-wrap: wrap; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  .lead .tags .id { color: var(--isl-astro-explorer); }
+  .lead h2 { font-weight: 700; font-size: 34px; line-height: 1.05; margin: 0; text-transform: uppercase; }
+  .lead p { font-size: 16px; line-height: 1.6; margin: 0; }
+  .lead .by { font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+
+  /* feed list */
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filt { font-family: var(--isl-font-mono); font-weight: 700; font-size: 13px; text-transform: uppercase; padding: 10px 16px; border: 1px solid var(--isl-border); background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); cursor: pointer; transition: box-shadow .12s linear; }
+  .filt:hover { box-shadow: var(--isl-glow-light); }
+  .filt.on { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); }
+  .feed { border: 1px solid var(--isl-border-faint); margin-top: 16px; }
+  .item { display: grid; grid-template-columns: 130px 1fr auto; gap: 24px; align-items: baseline; padding: 22px 28px; border-bottom: 1px solid var(--isl-border-faint); cursor: pointer; transition: background .12s linear; }
+  .item:last-child { border-bottom: 0; }
+  .item:hover { background: var(--isl-phobos-ash); }
+  .item .id { font-weight: 700; font-size: 13px; letter-spacing: .02em; }
+  .item .hl { display: flex; flex-direction: column; gap: 6px; }
+  .item .hl .h { font-weight: 700; font-size: 17px; line-height: 1.2; }
+  .item .hl .d { font-size: 14px; line-height: 1.45; }
+  .item .cat { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .item .cat.architect { color: var(--isl-quantum-purple); }
+  .item .cat.contested { color: var(--isl-solar-flare); }
+
+  /* side rail */
+  .rail { display: flex; flex-direction: column; gap: 24px; }
+  .panel { border: 1px solid var(--isl-border); padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .panel .ph { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .ticker { display: flex; flex-direction: column; gap: 0; }
+  .tk { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .tk:last-child { border-bottom: 0; }
+  .tk .l { font-weight: 700; font-size: 14px; }
+  .tk .r { font-size: 12px; text-transform: uppercase; }
+  .tk .r.up { color: var(--isl-terra-nova); }
+  .tk .r.dn { color: var(--isl-solar-flare); }
+  .quote { font-style: italic; font-size: 16px; line-height: 1.55; }
+  .quote .src { display: block; font-style: normal; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a href="Teams.html">Teams</a>
+        <a href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a class="active" href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head">
+      <div class="isl-eyebrow"><span>Galaxy Dispatch</span><span>•</span><span>The league wire</span><span>•</span><span>Season cycle 014</span></div>
+      <h1>Dispatches from the void</h1>
+      <p class="isl-lede">The official record, filed as it happens. No correction is ever issued — the wire is presumed accurate the moment it is written.</p>
+    </header>
+
+    <div class="wire">
+      <div>
+        <!-- LEAD -->
+        <article class="lead">
+          <div class="img"></div>
+          <div class="body">
+            <div class="tags"><span class="id">Dispatch 014.07</span><span>•</span><span>SOL 4,712</span><span>•</span><span class="cat" style="color:var(--isl-quantum-purple)">Architect</span></div>
+            <h2>The Architect declined comment. It always declines comment.</h2>
+            <p>For the fourth consecutive cycle, the Cosmic Architect failed to respond to the Orbital Senate's request for an interview. Minister Drex, the only official it answers, reported the silence as "consistent with prior silences." Gravity over Terra Stadium was briefly reduced during the request. The Senate has logged this as weather.</p>
+            <div class="by">Filed by the Wire • Unattributed by statute</div>
+          </div>
+        </article>
+
+        <!-- FEED -->
+        <div class="filters" id="filters" style="margin-top:24px">
+          <button class="filt on" data-c="all">All</button>
+          <button class="filt" data-c="match">Match</button>
+          <button class="filt" data-c="transfer">Transfer</button>
+          <button class="filt" data-c="senate">Senate</button>
+          <button class="filt" data-c="architect">Architect</button>
+        </div>
+        <div class="feed" id="feed"></div>
+      </div>
+
+      <!-- RAIL -->
+      <aside class="rail">
+        <div class="panel">
+          <span class="ph">Credit ticker</span>
+          <div class="ticker">
+            <div class="tk"><span class="l">Earth United</span><span class="r up">1.85 ▲</span></div>
+            <div class="tk"><span class="l">Mars Rovers</span><span class="r dn">2.10 ▼</span></div>
+            <div class="tk"><span class="l">Architect &lt; 80'</span><span class="r up">4.20 ▲</span></div>
+            <div class="tk"><span class="l">Belt Syndicate idx</span><span class="r dn">−3.4% ▼</span></div>
+            <div class="tk"><span class="l">Idol pledge vol.</span><span class="r up">+18% ▲</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <span class="ph">Overheard in the booth</span>
+          <p class="quote">"I am contractually obligated to describe that as weather."<span class="src">Nexus-7 • AI Analyst</span></p>
+        </div>
+        <div class="panel">
+          <span class="ph">Standing notice</span>
+          <p style="font-size:14px;line-height:1.55;margin:0">Affiliation is permanent. The club may transfer leagues, dissolve, or be erased from the record — but you cannot leave. Creating an account is easy. Escaping the league? Not so much.</p>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>Galaxy Dispatch</span><span class="sep">•</span><span>Epoch MMXXXVII</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const NEWS = [
+      { id: "014.06", cat: "transfer", catl: "Transfer", h: "Mars Rovers sign rogue striker Vex-9 over dressing-room objection.", d: "Manager K. Saga confirmed the synthetic forward's registration. Three teammates declined to share a pitch; all three were fined.", flag: "contested" },
+      { id: "014.05", cat: "match", catl: "Match", h: "Earth United lead Mars Rovers 2–1 at the interval of the cycle's marquee fixture.", d: "Okafor and Mercer combined for the decisive goal on 61'. The Rovers equaliser, scored by Vex-9 from distance, remains under trajectory review." },
+      { id: "014.04", cat: "senate", catl: "Senate", h: "Senator Calla's motion to audit the Architect fails for the eleventh time.", d: "The motion lost 30–14. Senator Thorne, who voted against, denies the Belt money funding his bloc is anything but a campaign donation.", flag: "contested" },
+      { id: "014.03", cat: "architect", catl: "Architect", h: "Gravity reduced 4% over Terra Stadium for ninety seconds. Play continued.", d: "The manifestation coincided with no goal, no card, and no explanation. Minister Drex described it as 'a gesture, not a message.'", flag: "architect" },
+      { id: "014.02", cat: "match", catl: "Match", h: "Ceres City FC go top of the Asteroid Belt with a 4–2 win over Pallas Rovers.", d: "The Belt Syndicate index moved sharply in the eighty-first minute, before the fourth goal was scored. The wire notes this without comment.", flag: "contested" },
+      { id: "014.01", cat: "transfer", catl: "Transfer", h: "Pluto Wanderers' Nyx Pallas placed under review for irregular betting on her own matches.", d: "The investigation is described as routine. Pallas has idolled at a rate the league calls 'statistically interesting.'" },
+      { id: "013.19", cat: "senate", catl: "Senate", h: "Commissioner Vance reaffirms that the Architect does not exist.", d: "The statement was issued from a podium that, observers noted, was levitating slightly." },
+    ];
+    const feed = document.getElementById("feed");
+    let active = "all";
+    function render() {
+      const list = NEWS.filter(n => active === "all" || n.cat === active);
+      feed.innerHTML = list.map(n => `
+        <div class="item">
+          <span class="id">Dispatch ${n.id}</span>
+          <span class="hl"><span class="h">${n.h}</span><span class="d">${n.d}</span></span>
+          <span class="cat ${n.flag || ""}">${n.catl}</span>
+        </div>`).join("");
+    }
+    document.getElementById("filters").addEventListener("click", e => {
+      const b = e.target.closest(".filt"); if (!b) return;
+      active = b.dataset.c;
+      document.querySelectorAll(".filt").forEach(f => f.classList.toggle("on", f === b));
+      render();
+    });
+    render();
+  </script>
+</body>
+</html>

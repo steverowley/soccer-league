@@ -1,0 +1,38 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--isl-fg-muted); padding-bottom: 14px; letter-spacing: .03em; }
+  td { font-weight: 700; font-size: 15px; padding: 9px 0; }
+  th.r, td.r { text-align: right; }
+  .idx { color: var(--isl-fg-muted); }
+  .cup .idx { color: var(--isl-terra-nova); }
+  .rel .idx { color: var(--isl-solar-flare); }
+  .form { display: inline-flex; gap: 4px; justify-content: flex-end; }
+  .fc { width: 22px; height: 22px; border: 1px solid var(--isl-border); display: inline-grid; place-items: center; font-size: 11px; }
+  .fc.d { color: rgba(227,224,213,0.82); border-color: rgba(227,224,213,0.45); }
+  .fc.l { color: var(--isl-solar-flare); border-color: var(--isl-solar-flare); }
+</style>
+</head>
+<body>
+  <table>
+    <tr><th style="width:48px">#</th><th>Club</th><th class="r">P</th><th class="r">W</th><th class="r">GD</th><th class="r" style="padding-right:8px">Form</th><th class="r">Pts</th></tr>
+    <tr class="cup"><td class="idx">| 01</td><td>Earth United</td><td class="r">14</td><td class="r">10</td><td class="r">+18</td><td class="r"><span class="form"><span class="fc">W</span><span class="fc">W</span><span class="fc d">D</span><span class="fc l">L</span></span></td><td class="r">32</td></tr>
+    <tr class="cup"><td class="idx">| 02</td><td>Venus Inferno</td><td class="r">14</td><td class="r">9</td><td class="r">+14</td><td class="r"><span class="form"><span class="fc">W</span><span class="fc d">D</span><span class="fc">W</span><span class="fc">W</span></span></td><td class="r">30</td></tr>
+    <tr class="rel"><td class="idx">| 08</td><td>Ceres Belt FC</td><td class="r">14</td><td class="r">2</td><td class="r">−25</td><td class="r"><span class="form"><span class="fc l">L</span><span class="fc l">L</span><span class="fc l">L</span><span class="fc d">D</span></span></td><td class="r">9</td></tr>
+  </table>
+</body>
+</html>

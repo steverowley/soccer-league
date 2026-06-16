@@ -6,8 +6,10 @@
 // to the far right via `marginLeft: auto`.  No bottom border — the strip
 // bleeds straight into the page below.
 //
-// Active-page indicator: a faint dust-tinted rectangle behind the label
-// (NOT a coloured underline; NOT a purple pill).
+// Active-page indicator: a Lunar-Dust text glow behind the label — the
+// canonical nav treatment (see Nav.jsx / isl-pages.css in the isl-design
+// skill). Hover lights a subtle glow; the active page burns brighter. No
+// background chip, no coloured underline, no purple pill.
 //
 // Mobile (<768 px) collapses the cluster into a hamburger drawer.
 
@@ -22,8 +24,17 @@ const ABYSS      = '#111111';
 // CTA and to highlight the live credit balance (a warm accent, not the focus
 // purple, which the design reserves for focus rings + live indicators).
 const ASTRO      = '#FF6637';
+// Pure white — the design system reserves it for hard dividers and the
+// "logged-in nav outline" (the account chip border). Nowhere else.
+const WHITE      = '#FFFFFF';
+// Faint dust wash — used for the open-state fill on the account-menu trigger.
 const DUST_FAINT = 'rgba(227, 224, 213, 0.12)';
 const HAIRLINE   = 'rgba(227, 224, 213, 0.18)';
+// Nav-link glow — the canonical hover/active treatment (see Nav.jsx /
+// isl-pages.css in the isl-design skill). Hierarchy comes from glow
+// intensity, not a background chip.
+const NAV_GLOW_HOVER  = '0 0 10px rgba(227, 224, 213, 0.60)';
+const NAV_GLOW_ACTIVE = '0 0 12px rgba(227, 224, 213, 0.95), 0 0 4px rgba(227, 224, 213, 0.80)';
 
 const NAV_LINKS = [
   { label: 'Home',    to: '/'        },
@@ -85,10 +96,14 @@ export default function Header() {
         }}
       >
         <Link to="/" aria-label="ISL home" style={{ display: 'block', flexShrink: 0 }}>
+          {/* The ISL badge is portrait (142×189). Render at a fixed height with
+              width:auto so it keeps its aspect ratio (the old 56×56 squished it
+              into a square) and reads as the prominent brand mark the design
+              system calls for. */}
           <img
             src={`${import.meta.env.BASE_URL}isl-logo.svg`}
             alt="Intergalactic Soccer League"
-            style={{ width: 56, height: 56, display: 'block' }}
+            style={{ height: 72, width: 'auto', display: 'block' }}
           />
         </Link>
 
@@ -197,15 +212,28 @@ interface NavLinkProps {
 }
 
 /**
- * Single nav link with a subtle dust-tinted active chip.
- * Active state paints a faint dust rectangle behind the label.
+ * Single nav link with the canonical Lunar-Dust text glow.
+ *
+ * Resting links are flat dust; hover lights a subtle glow and the active
+ * page burns brighter still (see NAV_GLOW_* constants). Hierarchy comes
+ * from glow intensity, never a background chip — matching the design
+ * system's Nav.jsx. Hover is tracked in local state so the same treatment
+ * works for mouse and keyboard focus.
+ *
  * Touch-friendly: 44px+ minimum height for mobile tap target compliance.
  */
 function NavLink({ to, active, onClick, children }: NavLinkProps) {
+  const [hovered, setHovered] = useState(false);
+  // Active always wins; otherwise glow only while hovered/focused.
+  const textShadow = active ? NAV_GLOW_ACTIVE : hovered ? NAV_GLOW_HOVER : 'none';
   return (
     <Link
       to={to}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -217,8 +245,8 @@ function NavLink({ to, active, onClick, children }: NavLinkProps) {
         color: DUST,
         textDecoration: 'none',
         padding: '12px 16px',
-        background: active ? DUST_FAINT : 'transparent',
-        transition: 'background 0.12s ease',
+        textShadow,
+        transition: 'text-shadow 0.12s linear',
       }}
     >
       {children}
@@ -267,7 +295,8 @@ function AccountMenu() {
           alignItems: 'center',
           gap: 8,
           background: open ? DUST_FAINT : 'transparent',
-          border: `1px solid ${HAIRLINE}`,
+          // White outline — the design system's "logged-in nav outline".
+          border: `1px solid ${WHITE}`,
           color: DUST,
           padding: '12px 14px',
           minHeight: 44,
@@ -278,7 +307,9 @@ function AccountMenu() {
           cursor: 'pointer',
         }}
       >
-        <span style={{ color: ASTRO, fontVariantNumeric: 'tabular-nums' }}>
+        {/* Credit balance in Astro Explorer with a matching warm glow — the
+            one lit accent in the otherwise monochrome chip. */}
+        <span style={{ color: ASTRO, textShadow: '0 0 6px rgba(255, 102, 55, 0.70)', fontVariantNumeric: 'tabular-nums' }}>
           {credits.toLocaleString()}
         </span>
         <span style={{ color: 'rgba(227, 224, 213, 0.50)' }}>•</span>

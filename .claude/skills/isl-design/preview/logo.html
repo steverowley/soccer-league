@@ -1,0 +1,41 @@
+<!-- @dsCard group="Brand" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 32px 40px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+    display: flex; align-items: center; gap: 48px;
+  }
+  .primary { height: 168px; width: auto; display: block; }
+  .scales { display: flex; align-items: flex-end; gap: 36px; }
+  .scales img { width: auto; display: block; }
+  .cap { font-size: 13px; color: var(--isl-fg-muted); margin-top: 14px; }
+  .sep { width: 1px; align-self: stretch; background: var(--isl-border-faint); }
+  .col { display: flex; flex-direction: column; align-items: center; }
+</style>
+</head>
+<body>
+  <div class="col">
+    <img class="primary" src="../assets/isl-logo-full.png" alt="ISL logo">
+    <span class="cap">Primary mark — ISL badge</span>
+  </div>
+  <div class="sep"></div>
+  <div class="col">
+    <div class="scales">
+      <img src="../assets/isl-logo-full.png" alt="ISL" style="height:96px">
+      <img src="../assets/isl-logo-full.png" alt="ISL" style="height:56px">
+      <img src="../assets/isl-logo-full.png" alt="ISL" style="height:32px">
+    </div>
+    <span class="cap">Holds up across sizes</span>
+  </div>
+</body>
+</html>

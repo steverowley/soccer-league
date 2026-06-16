@@ -1,0 +1,288 @@
+<!-- @startingPoint section="Web — Screens" subtitle="End-of-cycle voting — allocate credits across irreversible decrees" viewport="1320x900" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Voting</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); font-family: var(--isl-font-mono); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); }
+  .page { max-width: 1320px; margin: 0 auto; padding: 0 64px; min-width: 1120px; }
+
+  /* nav */
+  .nav { display: flex; align-items: flex-start; gap: 32px; padding: 28px 0; }
+  .nav img.logo { height: 84px; width: auto; display: block; }
+  .nav .links { display: flex; gap: 24px; margin-top: 30px; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .nav .links a { color: var(--isl-lunar-dust); text-decoration: none; transition: text-shadow .12s linear; }
+  .nav .links a:hover { text-shadow: 0 0 12px rgba(227,224,213,.9); }
+  .nav .links a.active { text-shadow: 0 0 12px rgba(227,224,213,.95), 0 0 4px rgba(227,224,213,.8); }
+  .nav .spacer { flex: 1; }
+  .nav .acct { margin-top: 22px; display: inline-flex; gap: 14px; border: 1px solid var(--isl-white); padding: 14px 22px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .nav .acct .bal { color: var(--isl-astro-explorer); text-shadow: 0 0 6px rgba(255,102,55,.7); }
+
+  /* header */
+  header.hd { padding: 40px 0 24px; }
+  .eyebrow { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .04em; }
+  h1 { font-weight: 700; font-size: 56px; line-height: 1; margin: 20px 0 0; text-transform: uppercase; }
+  .lede { font-size: 16px; line-height: 1.6; max-width: 720px; margin: 20px 0 0; }
+  .warn { display: inline-flex; align-items: center; gap: 12px; border: 1px solid var(--isl-solar-flare); padding: 10px 16px; margin-top: 24px; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .warn .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-solar-flare); flex: none; }
+
+  /* layout */
+  .grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; padding: 32px 0 96px; }
+  .ballot { display: flex; flex-direction: column; gap: 24px; }
+
+  /* decree card */
+  .decree { border: 1px solid var(--isl-border); padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+  .decree .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .decree .idx { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .decree h2 { font-weight: 700; font-size: 28px; line-height: 1.05; margin: 8px 0 0; }
+  .decree .desc { font-size: 16px; line-height: 1.5; margin: 12px 0 0; max-width: 640px; }
+  .decree .cost { text-align: right; flex: none; }
+  .decree .cost .k { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .decree .cost .v { font-weight: 700; font-size: 20px; margin-top: 6px; white-space: nowrap; }
+
+  .options { display: grid; gap: 12px; }
+  .opt { border: 1px solid var(--isl-border); background: var(--isl-galactic-abyss); padding: 18px 20px; cursor: pointer; display: flex; flex-direction: column; gap: 12px; transition: border-color .12s linear, box-shadow .12s linear; text-align: left; font-family: var(--isl-font-mono); color: var(--isl-lunar-dust); }
+  .opt:hover { box-shadow: var(--isl-glow-light); }
+  .opt.sel { border-color: var(--isl-astro-explorer); box-shadow: 0 0 16px 1px rgba(255,102,55,.45); background: var(--isl-phobos-ash); }
+  .opt .line { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .opt .name { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .opt .pct { font-weight: 700; font-size: 16px; }
+  .opt.sel .pct { color: var(--isl-astro-explorer); }
+  .opt .bar { height: 8px; border: 1px solid var(--isl-border-faint); }
+  .opt .fill { height: 100%; background: var(--isl-lunar-dust); }
+  .opt.sel .fill { background: var(--isl-astro-explorer); }
+
+  .stake { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--isl-border-faint); padding-top: 24px; }
+  .stake .lab { font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .stepper { display: inline-flex; border: 1px solid var(--isl-border); }
+  .stepper button { width: 44px; height: 44px; background: var(--isl-galactic-abyss); border: 0; color: var(--isl-lunar-dust); font-family: var(--isl-font-mono); font-weight: 700; font-size: 20px; cursor: pointer; transition: background .12s linear; }
+  .stepper button:hover { background: var(--isl-phobos-ash); }
+  .stepper .amt { min-width: 110px; display: grid; place-items: center; font-weight: 700; font-size: 16px; border-left: 1px solid var(--isl-border); border-right: 1px solid var(--isl-border); }
+  .stake .muted { font-size: 14px; margin-left: auto; }
+
+  /* tally sidebar */
+  .tally { position: sticky; top: 24px; border: 1px solid var(--isl-border); padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+  .tally h3 { font-weight: 700; font-size: 16px; text-transform: uppercase; margin: 0; }
+  .tally .div { height: 0; border-top: 1px solid var(--isl-border-faint); }
+  .tally .row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: 15px; }
+  .tally .row .n { font-weight: 700; }
+  .tally .row.big { font-size: 16px; }
+  .tally .row.big .n { font-size: 24px; }
+  .tally .row .o { color: var(--isl-astro-explorer); }
+  .tally .empty { font-size: 14px; line-height: 1.5; }
+  .btn { font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; text-transform: uppercase; line-height: 1; padding: 18px 24px; border: 1px solid var(--isl-astro-explorer); background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); cursor: pointer; transition: filter .12s linear; width: 100%; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:disabled { background: var(--isl-galactic-abyss); color: var(--isl-fg-faint); border-color: var(--isl-border-faint); cursor: not-allowed; filter: none; }
+  .tally .fine { font-size: 12px; line-height: 1.5; text-transform: uppercase; letter-spacing: .03em; }
+
+  .cast { border: 1px solid var(--isl-terra-nova); padding: 18px; display: none; gap: 12px; align-items: center; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .cast.show { display: flex; }
+  .cast .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-terra-nova); flex: none; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <!-- NAV -->
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a href="Teams.html">Teams</a>
+        <a href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a class="active" href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal" id="bal">200 ic</span></div>
+    </nav>
+
+    <!-- HEADER -->
+    <header class="hd">
+      <div class="eyebrow"><span>VOTING</span><span>•</span><span>Season cycle 014 / 030</span><span>•</span><span>Earth United</span></div>
+      <h1>Decide the future</h1>
+      <p class="lede">End-of-cycle decrees. Commit Intergalactic Credits behind the outcomes you want. The ballot closes when the Architect manifests at the heat-death of Matchday XV.</p>
+      <span class="warn"><span class="dot"></span>Outcomes are permanent. Affiliation cannot be undone.</span>
+    </header>
+
+    <!-- BALLOT + TALLY -->
+    <div class="grid">
+      <div class="ballot" id="ballot"><!-- decrees injected --></div>
+
+      <aside class="tally">
+        <h3>Your ballot</h3>
+        <div class="div"></div>
+        <div id="summary">
+          <p class="empty">No decrees committed. Select an outcome on any decree and commit credits to add it to your ballot.</p>
+        </div>
+        <div class="div"></div>
+        <div class="row"><span>Balance</span><span class="n" id="t-bal">200 ic</span></div>
+        <div class="row"><span>Committed</span><span class="n o" id="t-commit">0 ic</span></div>
+        <div class="row big"><span>Remaining</span><span class="n" id="t-remain">200 ic</span></div>
+        <button class="btn" id="cast" disabled>Cast votes</button>
+        <p class="fine">Once cast, credits are burned and the result is written to the record. There is no appeal.</p>
+        <div class="cast" id="done"><span class="dot"></span><span id="done-txt">Ballot cast — written to the record.</span></div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const DECREES = [
+      {
+        idx: "Decree I", cost: 40,
+        title: "Rename the home ground",
+        desc: "The board petitions to rechristen the stadium. The name is etched into every fixture record from Season VIII onward.",
+        options: [
+          { name: "The Phosphor Bowl", pct: 47 },
+          { name: "Gravity Well Arena", pct: 31 },
+          { name: "Keep: Terra Stadium", pct: 22 },
+        ],
+      },
+      {
+        idx: "Decree II", cost: 60,
+        title: "Sign the rogue striker",
+        desc: "A free agent drifts in from a dissolved Kuiper club. Prolific, unstable, and rumoured to be partly synthetic. Commit to pursue.",
+        options: [
+          { name: "Pursue at any cost", pct: 58 },
+          { name: "Pursue if cheap", pct: 27 },
+          { name: "Do not sign", pct: 15 },
+        ],
+      },
+      {
+        idx: "Decree III", cost: 50,
+        title: "Petition to change leagues",
+        desc: "Abandon the Rocky Inner League for the Asteroid Belt. Permanent relocation; rivalries reset, the table is wiped.",
+        options: [
+          { name: "Defect to the Belt", pct: 34 },
+          { name: "Remain in Rocky Inner", pct: 66 },
+        ],
+      },
+      {
+        idx: "Decree IV", cost: 80,
+        title: "Appease the Architect",
+        desc: "Offer a tithe of credits to the Cosmic Architect in exchange for one rewritten result this cycle. It may accept. It may not.",
+        options: [
+          { name: "Offer the tithe", pct: 41 },
+          { name: "Withhold — accept fate", pct: 59 },
+        ],
+      },
+    ];
+
+    const BALANCE = 200;
+    const ballot = {}; // idx -> { optIndex, amount }
+
+    const fmt = (n) => n + " ic";
+
+    function render() {
+      const root = document.getElementById("ballot");
+      root.innerHTML = "";
+      DECREES.forEach((d, di) => {
+        const card = document.createElement("div");
+        card.className = "decree";
+        const sel = ballot[di];
+        card.innerHTML = `
+          <div class="top">
+            <div>
+              <div class="idx">${d.idx}</div>
+              <h2>${d.title}</h2>
+              <p class="desc">${d.desc}</p>
+            </div>
+            <div class="cost"><div class="k">Min. stake</div><div class="v">${fmt(d.cost)}</div></div>
+          </div>
+          <div class="options">
+            ${d.options.map((o, oi) => `
+              <button class="opt ${sel && sel.optIndex === oi ? "sel" : ""}" data-d="${di}" data-o="${oi}">
+                <div class="line"><span class="name">${o.name}</span><span class="pct">${o.pct}%</span></div>
+                <div class="bar"><div class="fill" style="width:${o.pct}%"></div></div>
+              </button>`).join("")}
+          </div>
+          <div class="stake">
+            <span class="lab">Commit</span>
+            <div class="stepper" data-d="${di}">
+              <button data-step="-1" aria-label="less">–</button>
+              <span class="amt">${sel ? fmt(sel.amount) : fmt(d.cost)}</span>
+              <button data-step="1" aria-label="more">+</button>
+            </div>
+            <span class="muted">${sel ? "Committed to your ballot" : "Select an outcome above, then commit"}</span>
+          </div>`;
+        root.appendChild(card);
+      });
+      bind();
+      summarise();
+    }
+
+    function bind() {
+      document.querySelectorAll(".opt").forEach((el) => {
+        el.onclick = () => {
+          const di = +el.dataset.d, oi = +el.dataset.o;
+          if (ballot[di] && ballot[di].optIndex === oi) { delete ballot[di]; }
+          else { ballot[di] = { optIndex: oi, amount: (ballot[di] && ballot[di].amount) || DECREES[di].cost }; }
+          render();
+        };
+      });
+      document.querySelectorAll(".stepper").forEach((st) => {
+        const di = +st.dataset.d;
+        st.querySelectorAll("button").forEach((b) => {
+          b.onclick = () => {
+            if (!ballot[di]) { ballot[di] = { optIndex: 0, amount: DECREES[di].cost }; }
+            const step = +b.dataset.step * 10;
+            const min = DECREES[di].cost;
+            ballot[di].amount = Math.max(min, ballot[di].amount + step);
+            render();
+          };
+        });
+      });
+    }
+
+    function summarise() {
+      const entries = Object.entries(ballot);
+      const committed = entries.reduce((s, [, v]) => s + v.amount, 0);
+      const remaining = BALANCE - committed;
+      const over = remaining < 0;
+
+      document.getElementById("bal").textContent = fmt(BALANCE);
+      document.getElementById("t-bal").textContent = fmt(BALANCE);
+      document.getElementById("t-commit").textContent = fmt(committed);
+      const rem = document.getElementById("t-remain");
+      rem.textContent = (over ? "−" : "") + fmt(Math.abs(remaining)).replace("ic", "ic");
+      rem.style.color = over ? "var(--isl-solar-flare)" : "var(--isl-lunar-dust)";
+
+      const sum = document.getElementById("summary");
+      if (entries.length === 0) {
+        sum.innerHTML = `<p class="empty">No decrees committed. Select an outcome on any decree and commit credits to add it to your ballot.</p>`;
+      } else {
+        sum.innerHTML = entries.map(([di, v]) => {
+          const d = DECREES[di];
+          return `<div class="row"><span>${d.idx} — ${d.options[v.optIndex].name}</span><span class="n o">${fmt(v.amount)}</span></div>`;
+        }).join('<div style="height:12px"></div>');
+      }
+
+      const cast = document.getElementById("cast");
+      cast.disabled = entries.length === 0 || over;
+      cast.textContent = over ? "Insufficient credits" : "Cast votes";
+    }
+
+    document.getElementById("cast").onclick = () => {
+      const n = Object.keys(ballot).length;
+      if (!n) return;
+      const committed = Object.values(ballot).reduce((s, v) => s + v.amount, 0);
+      const done = document.getElementById("done");
+      document.getElementById("done-txt").textContent = `${n} decree${n > 1 ? "s" : ""} cast · ${fmt(committed)} burned · written to the record.`;
+      done.classList.add("show");
+      for (const k in ballot) delete ballot[k];
+      render();
+      document.getElementById("done").classList.add("show");
+    };
+
+    render();
+  </script>
+</body>
+</html>

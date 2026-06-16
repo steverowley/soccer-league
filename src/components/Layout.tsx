@@ -33,6 +33,9 @@ export const COLORS = Object.freeze({
   flare:      '#FF4F5E',
   terraNova:  '#A5D6A7',
   astro:      '#FF6637',
+  // Pure white — reserved by the design system for hard dividers (the footer
+  // rule) and the logged-in nav outline. Never a fill or body-text colour.
+  white:      '#FFFFFF',
   hairline:   'rgba(227, 224, 213, 0.18)',
   dust50:     'rgba(227, 224, 213, 0.50)',
   dust70:     'rgba(227, 224, 213, 0.70)',
@@ -170,14 +173,18 @@ export function SectionHeader({
 }
 
 /**
- * Site-wide footer. Hairline-bordered band carrying brand, tagline, version,
- * and legal links. Legal links (about / privacy / terms) live here rather
- * than in the header so the main nav stays focused on gameplay surfaces.
+ * Site-wide footer. Carries the ISL badge over a 2px white rule, then brand,
+ * tagline, version, and legal links. The white top rule + centred badge are
+ * the design system's canonical footer treatment (white is reserved for hard
+ * dividers). Legal links (about / privacy / terms) live here rather than in
+ * the header so the main nav stays focused on gameplay surfaces.
  */
 export function Footer() {
   return (
     <footer style={{
-      borderTop: `1px solid ${COLORS.hairline}`,
+      // 2px white rule — the one place the design system uses a bold white
+      // divider (everywhere else dividers are 1px Lunar Dust hairlines).
+      borderTop: `2px solid ${COLORS.white}`,
       padding: '32px',
       textAlign: 'center',
       fontSize: 11,
@@ -185,6 +192,12 @@ export function Footer() {
       textTransform: 'uppercase',
       color: COLORS.dust50,
     }}>
+      {/* Brand badge — leads the footer, centred above the text rows. */}
+      <img
+        src={`${import.meta.env.BASE_URL}isl-logo.svg`}
+        alt="Intergalactic Soccer League"
+        style={{ height: 40, width: 'auto', display: 'block', margin: '0 auto 16px' }}
+      />
       {/* Row 1: brand / tagline / version */}
       <div>
         <span>Intergalactic Soccer League</span>

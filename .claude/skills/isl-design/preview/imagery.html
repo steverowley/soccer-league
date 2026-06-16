@@ -1,0 +1,30 @@
+<!-- @dsCard group="Brand" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 24px 28px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .strip div { aspect-ratio: 1 / 1; background-size: cover; background-position: center; border: 1px solid var(--isl-border-faint); }
+  .cap { font-size: 12px; color: var(--isl-fg-muted); margin-top: 14px; }
+</style>
+</head>
+<body>
+  <div class="strip">
+    <div style="background-image:url(../assets/img-spacewalk.png)"></div>
+    <div style="background-image:url(../assets/img-earth-united-flag.png)"></div>
+    <div style="background-image:url(../assets/img-moon-broadcast.png)"></div>
+  </div>
+  <p class="cap">Brand imagery — high-contrast halftone B&amp;W space photography. Grippy grain, deep blacks. Text never sits over it; pair beside or below.</p>
+</body>
+</html>

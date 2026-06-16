@@ -1,0 +1,53 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 24px 28px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+    display: flex; flex-direction: column; gap: 26px;
+  }
+  .nav { display: flex; align-items: flex-start; gap: 20px; }
+  .logo { height: 96px; width: auto; display: block; flex: none; }
+  .links { display: flex; gap: 14px; font-weight: 700; font-size: 12px; text-transform: uppercase; margin-top: 22px; }
+  .links span { color: var(--isl-fg); }
+  .links span.active { text-shadow: 0 0 12px rgba(227,224,213,0.95), 0 0 4px rgba(227,224,213,0.8); }
+  .spacer { flex: 1; }
+  .pill { font-weight: 700; font-size: 12px; text-transform: uppercase; padding: 12px 18px; line-height: 1; white-space: nowrap; flex: none; margin-top: 12px; }
+  .new { background: var(--isl-quantum-purple); color: var(--isl-galactic-abyss); }
+  .out { background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); }
+  .in { border: 1px solid var(--isl-white); display: inline-flex; gap: 10px; }
+  .in .bal { color: var(--isl-astro-explorer); text-shadow: var(--isl-glow-purple); }
+  .lab { font-size: 12px; color: var(--isl-fg-muted); }
+</style>
+</head>
+<body>
+  <span class="lab">Three nav states — new user · logged out · logged in. Active page glows; others stay full-strength.</span>
+  <div class="nav">
+    <img class="logo" src="../assets/isl-logo-full.png" alt="ISL">
+    <span class="links"><span class="active">Home</span><span>Leagues</span><span>Teams</span><span>Matches</span><span>News</span><span>Idols</span><span>Voting</span></span>
+    <span class="spacer"></span>
+    <span class="pill new">Create account</span>
+  </div>
+  <div class="nav">
+    <img class="logo" src="../assets/isl-logo-full.png" alt="ISL">
+    <span class="links"><span class="active">Home</span><span>Leagues</span><span>Teams</span><span>Matches</span><span>News</span><span>Idols</span><span>Voting</span></span>
+    <span class="spacer"></span>
+    <span class="pill out">Log in</span>
+  </div>
+  <div class="nav">
+    <img class="logo" src="../assets/isl-logo-full.png" alt="ISL">
+    <span class="links"><span class="active">Home</span><span>Leagues</span><span>Teams</span><span>Matches</span><span>News</span></span>
+    <span class="spacer"></span>
+    <span class="pill in"><span>USER</span><span>BALANCE</span><span class="bal">200 ic</span></span>
+  </div>
+</body>
+</html>

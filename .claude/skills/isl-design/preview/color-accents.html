@@ -1,0 +1,45 @@
+<!-- @dsCard group="Colors" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .row { display: flex; align-items: center; gap: 22px; padding: 9px 0; }
+  .sw { width: 48px; height: 48px; flex: none; }
+  .name { font-weight: 700; font-size: 18px; width: 190px; }
+  .meta { color: var(--isl-fg-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-quantum-purple);"></span>
+    <span class="name">Quantum Purple</span>
+    <span class="meta">Focus / the Architect · #9A5CF4</span>
+  </div>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-astro-explorer);"></span>
+    <span class="name">Astro Explorer</span>
+    <span class="meta">Primary CTA · #FF6637</span>
+  </div>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-solar-flare);"></span>
+    <span class="name">Solar Flare</span>
+    <span class="meta">Live / error · #FF4F5E</span>
+  </div>
+  <div class="row">
+    <span class="sw" style="background: var(--isl-terra-nova);"></span>
+    <span class="name">Terra Nova</span>
+    <span class="meta">Confirmation · #A5D6A7</span>
+  </div>
+</body>
+</html>

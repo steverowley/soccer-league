@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Whole-Sprite Style Studies</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  html, body { margin: 0; background: var(--isl-bg); color: var(--isl-fg); font-family: var(--isl-font-mono); }
+  * { box-sizing: border-box; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 64px 40px 96px; }
+  canvas { image-rendering: pixelated; display: block; }
+
+  .eyebrow { display: flex; gap: 10px; align-items: center; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--isl-fg-muted); }
+  .eyebrow .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-quantum-purple); box-shadow: var(--isl-glow-purple), var(--isl-glow-purple-far); }
+  h1 { font-size: var(--isl-h1); font-weight: 700; line-height: 1.02; margin: 22px 0 0; text-transform: uppercase; }
+  .lede { font-size: 16px; line-height: 1.55; color: var(--isl-fg-muted); max-width: 680px; margin: 18px 0 0; }
+  .rule { border: 0; border-top: 1px solid var(--isl-border-faint); margin: 56px 0; }
+
+  .principles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 40px; margin: 28px 0 0; }
+  .principles .p { display: grid; grid-template-columns: 24px 1fr; gap: 12px; padding: 14px 0; border-top: 1px solid var(--isl-border-faint); }
+  .principles .p .n { font-weight: 700; color: var(--isl-quantum-purple); }
+  .principles .p .d { font-size: 13px; line-height: 1.5; color: var(--isl-fg-muted); }
+  .principles .p .d b { color: var(--isl-fg); }
+
+  .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 28px 0 0; }
+  .card { border: 1px solid var(--isl-border-faint); display: flex; flex-direction: column; }
+  .card.rec { border-color: var(--isl-terra-nova); }
+  .card .stage { background: #0d0f0d; display: flex; align-items: center; justify-content: center; padding: 14px; min-height: 170px; }
+  .card .stage canvas { width: 100%; height: auto; }
+  .card .meta { padding: 14px 14px; border-top: 1px solid var(--isl-border-faint); }
+  .card .meta .nm { font-weight: 700; font-size: 14px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .card .meta .nm .rectag { font-size: 10px; color: var(--isl-galactic-abyss); background: var(--isl-terra-nova); padding: 3px 7px; letter-spacing: .04em; }
+  .card .meta .ref { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--isl-fg-faint); margin-top: 4px; }
+  .card .meta .sp { font-size: 12px; line-height: 1.55; color: var(--isl-fg-muted); margin-top: 12px; }
+  .card .meta .sp b { color: var(--isl-fg); }
+
+  @media (max-width: 720px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 460px) { .cards, .principles { grid-template-columns: 1fr 1fr; } .wrap { padding: 40px 20px 72px; } }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow"><span class="dot"></span><span>Sprite Studies</span><span>·</span><span>Whole-figure style</span></div>
+    <h1>Five ways to draw<br>the little men</h1>
+    <p class="lede">Not the rig this time — the whole character. A pixel-sprite style is a locked spec: resolution, palette size, one outline rule, a shading model, and proportions. Below are the principles, then the same ISL footballer built to five different specs. Same silhouette, five identities — pick one and I'll make it the house style.</p>
+
+    <hr class="rule">
+    <div class="eyebrow"><span>The style spec — what we'd lock</span></div>
+    <div class="principles">
+      <div class="p"><span class="n">I</span><span class="d"><b>Outline rule.</b> Hard black, hue-shifted ("sel-out"), or none — pick one and never mix. It's the single biggest driver of era and mood.</span></div>
+      <div class="p"><span class="n">II</span><span class="d"><b>Shading model.</b> Flat (1 tone), cel (base + shadow + highlight), or dithered. 2–3 tones per part, ~6–12 per figure.</span></div>
+      <div class="p"><span class="n">III</span><span class="d"><b>Proportions.</b> 2-head chibi reads friendliest at tiny sizes; 2.5–3 heads feels more athletic. Consistency across the roster matters more than the number.</span></div>
+      <div class="p"><span class="n">IV</span><span class="d"><b>Silhouette &amp; value.</b> It must read in pure black, and survive desaturation. Kit colour stays the one accent so the brand holds.</span></div>
+    </div>
+
+    <hr class="rule">
+    <div class="eyebrow"><span>Five directions</span><span>·</span><span>one footballer, five specs</span></div>
+    <div class="cards" id="cards"></div>
+
+    <p class="lede" style="margin-top:40px"><b style="color:var(--isl-fg)">My pick: Phosphor cel.</b> It's the only one that's unmistakably <i>ISL</i> rather than generic-retro — Lunar Dust values, Galactic-Abyss outline, kit as the single rationed accent — while the cel shading gives it real craft and weight. Flat-8bit is the safe fallback; Sel-out modern if we want it softer and more premium.</p>
+  </div>
+
+  <script>
+    const cv = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+    function shade(hex, amt) {
+      let h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+      const n = parseInt(h, 16); let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      const f = v => Math.max(0, Math.min(255, Math.round(v + 255 * amt)));
+      return `rgb(${f(r)},${f(g)},${f(b)})`;
+    }
+
+    // Figure defined in pixel units (≈16 wide × 22 tall incl. arms). Light from top-left.
+    // A "part" = filled rect with optional outline, cel shadow (right + bottom) and highlight (top-left).
+    function makeDrawer(style) {
+      const S = style;
+      return function (ctx, cw, ch, bob) {
+        ctx.clearRect(0, 0, cw, ch);
+        const UW = 18, UH = 24, px = Math.floor(Math.min(cw / UW, ch / UH));
+        const ox = Math.round((cw - UW * px) / 2);
+        const oy = Math.round((ch - UH * px) / 2) + (bob || 0) * px;
+        const tall = S.proportions === 'tall';
+
+        function part(x, y, w, h, base) {
+          const X = ox + x * px, Y = oy + y * px, W = w * px, H = h * px;
+          if (S.outline) { ctx.fillStyle = S.outline === 'selout' ? shade(base, -0.5) : S.outline; ctx.fillRect(X - px, Y - px, W + 2 * px, H + 2 * px); }
+          ctx.fillStyle = base; ctx.fillRect(X, Y, W, H);
+          if (S.shade === 'cel') {
+            ctx.fillStyle = shade(base, -0.16); ctx.fillRect(X + Math.ceil(W * 0.6), Y, W - Math.ceil(W * 0.6), H);
+            ctx.fillStyle = shade(base, -0.16); ctx.fillRect(X, Y + Math.ceil(H * 0.72), W, H - Math.ceil(H * 0.72));
+            ctx.fillStyle = shade(base, 0.16); ctx.fillRect(X, Y, Math.max(px, Math.floor(W * 0.3)), Math.max(px, Math.floor(H * 0.24)));
+          }
+          if (S.shade === 'selout') { ctx.fillStyle = shade(base, 0.18); ctx.fillRect(X, Y, W, px); ctx.fillRect(X, Y, px, Math.floor(H * 0.5)); }
+        }
+        function dot(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(ox + x * px, oy + y * px, w * px, h * px); }
+
+        // proportion sets
+        const P = tall
+          ? { headY: 1, headH: 6, headX: 5, headW: 6, bodyY: 8, bodyH: 7, legY: 16, legH: 6 }
+          : { headY: 0, headH: 8, headX: 4, headW: 8, bodyY: 9, bodyH: 6, legY: 16, legH: 5 };
+
+        // legs + boots
+        const lw = 2, lgap = tall ? 2 : 2;
+        part(P.headX + 1, P.legY, lw, P.legH - 2, S.shorts);
+        part(P.headX + P.headW - 3, P.legY, lw, P.legH - 2, S.shorts);
+        part(P.headX + 1, P.legY + P.legH - 2, lw, 2, S.boot);
+        part(P.headX + P.headW - 3, P.legY + P.legH - 2, lw, 2, S.boot);
+        // arms (skin) at the body sides
+        part(P.headX - 2, P.bodyY + 1, 2, P.bodyH - 1, S.skin);
+        part(P.headX + P.headW, P.bodyY + 1, 2, P.bodyH - 1, S.skin);
+        // torso / jersey
+        part(P.headX - 1, P.bodyY, P.headW + 2, P.bodyH, S.jersey);
+        // shorts band
+        part(P.headX - 1, P.bodyY + P.bodyH, P.headW + 2, 2, S.shorts);
+        // hair cap
+        if (S.hair) part(P.headX, P.headY, P.headW, 2, S.hair);
+        // head
+        part(P.headX, P.headY + (S.hair ? 2 : 0), P.headW, P.headH - (S.hair ? 2 : 0), S.skin);
+        // eyes
+        if (S.eyes) {
+          const ey = P.headY + Math.floor(P.headH * 0.55);
+          dot(P.headX + 2, ey, 1, 1, S.eye);
+          dot(P.headX + P.headW - 3, ey, 1, 1, S.eye);
+        }
+        // number pip on the chest (kit accent's contrast)
+        if (S.number) dot(P.headX + Math.floor(P.headW / 2) - 1, P.bodyY + 2, 2, 2, S.number);
+      };
+    }
+
+    const KIT = '#C9603F';
+    const STYLES = [
+      { key: 'Flat 8-bit', ref: 'NES-era · 4 colours · hard outline', spec: '<b>Flat, hard black 1px outline, 4 colours, 2-head chibi.</b> Maximum readability, zero shading. Cheap to draw and animate; reads a little plain.',
+        cfg: { outline: '#161616', skin: '#E7B48F', hair: '#5B3A29', jersey: KIT, shorts: '#2B2B2B', boot: '#161616', eye: '#161616', number: '#E3E0D5', shade: 'flat', eyes: true, proportions: 'chibi' } },
+      { key: 'Cel 16-bit', ref: 'SNES JRPG · 8 colours · cel shaded', spec: '<b>Base + shadow + highlight per part, hard outline, ~2.5 heads.</b> The classic crafted look — volume and weight without fuss.',
+        cfg: { outline: '#161616', skin: '#E7B48F', hair: '#5B3A29', jersey: KIT, shorts: '#2B2B2B', boot: '#222', eye: '#161616', number: '#E3E0D5', shade: 'cel', eyes: true, proportions: 'tall' } },
+      { key: 'Sel-out modern', ref: 'Indie · hue-shifted outline · rim light', spec: '<b>Coloured (hue-shifted) outline, top-edge rim light, softer contrast.</b> The premium, contemporary read — no harsh black anywhere.',
+        cfg: { outline: 'selout', skin: '#E3A883', hair: '#6A4630', jersey: '#C06A4A', shorts: '#3A3A42', boot: '#33323A', eye: '#3A2F2A', number: '#F2EFE6', shade: 'selout', eyes: true, proportions: 'tall' } },
+      { key: 'Phosphor cel', ref: 'ISL brand · Lunar Dust · kit accent', spec: '<b>Mono Lunar-Dust values, Galactic-Abyss outline, kit as the one accent.</b> Cel-shaded for craft. The only direction that is unmistakably ISL.',
+        cfg: { outline: '#111111', skin: '#E3E0D5', hair: '#9C9A90', jersey: KIT, shorts: '#9C9A90', boot: '#6E6B62', eye: '#111111', number: '#111111', shade: 'cel', eyes: true, proportions: 'tall' } },
+      { key: 'Blob', ref: 'Blaseball · 2 colours · no face', spec: '<b>Silhouette only — one body tone, thin outline, dot eyes, no detail.</b> Ultra-minimal and charming; least work, least identity.',
+        cfg: { outline: '#161616', skin: '#C9603F', hair: null, jersey: '#C9603F', shorts: '#C9603F', boot: '#8a4029', eye: '#161616', number: null, shade: 'flat', eyes: true, proportions: 'chibi' } },
+    ];
+
+    const host = document.getElementById('cards');
+    const drawers = [];
+    STYLES.forEach((st, i) => {
+      const card = document.createElement('div'); card.className = 'card' + (st.key === 'Phosphor cel' ? ' rec' : '');
+      const stage = document.createElement('div'); stage.className = 'stage';
+      const c = cv(168, 224); c.style.width = '100%';
+      stage.appendChild(c);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.innerHTML = '<div class="nm">' + st.key + (st.key === 'Phosphor cel' ? '<span class="rectag">PICK</span>' : '') + '</div><div class="ref">' + st.ref + '</div><div class="sp">' + st.spec + '</div>';
+      card.appendChild(stage); card.appendChild(meta); host.appendChild(card);
+      drawers.push({ draw: makeDrawer(st.cfg), ctx: c.getContext('2d'), c });
+    });
+
+    // gentle 2-frame idle bob (on 2s — held, not smooth)
+    let frame = 0, t0 = performance.now();
+    function loop(now) {
+      if (now - t0 > 360) { frame = (frame + 1) % 2; t0 = now; }
+      const bob = frame === 0 ? 0 : -1;
+      drawers.forEach(d => { d.ctx.imageSmoothingEnabled = false; d.draw(d.ctx, d.c.width, d.c.height, bob); });
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

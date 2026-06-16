@@ -1,0 +1,44 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 30px 40px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .teams { display: flex; align-items: center; justify-content: center; gap: 48px; }
+  .team { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 180px; }
+  .crest { height: 64px; width: auto; display: block; }
+  .nm { font-weight: 700; font-size: 22px; }
+  .score { display: flex; align-items: center; gap: 18px; font-weight: 700; font-size: 48px; color: var(--isl-fg); }
+  .bars { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; }
+  .barrow { display: flex; align-items: center; gap: 16px; }
+  .barlab { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--isl-fg-muted); width: 92px; flex: none; }
+  .bar { flex: 1; height: 14px; border: 2px solid var(--isl-border); padding: 3px; }
+  .fill { height: 100%; background: var(--isl-solar-flare); }
+  .lab { text-align: center; font-size: 12px; color: var(--isl-fg-muted); margin-top: 16px; }
+  .ph { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--isl-fg); }
+</style>
+</head>
+<body>
+  <div class="teams">
+    <div class="team"><img class="crest" src="../assets/crest-earth-united.png" alt="Earth United"><span class="nm">Earth United</span><span class="ph">Home · Earth</span></div>
+    <div class="score">2 · 1</div>
+    <div class="team"><img class="crest" src="../assets/crest-mars-rovers.png" alt="Mars Rovers"><span class="nm">Mars Rovers</span><span class="ph">Away · Mars</span></div>
+  </div>
+  <div class="bars">
+    <div class="barrow"><span class="barlab">Low · 24%</span><div class="bar"><div class="fill" style="width:24%; box-shadow: 0 0 8px 0 rgba(255,79,94,0.30);"></div></div></div>
+    <div class="barrow"><span class="barlab">Even · 52%</span><div class="bar"><div class="fill" style="width:52%; box-shadow: 0 0 26px 3px rgba(255,79,94,0.5);"></div></div></div>
+    <div class="barrow"><span class="barlab">High · 81%</span><div class="bar"><div class="fill" style="width:81%; box-shadow: 0 0 60px 10px rgba(255,79,94,0.75);"></div></div></div>
+  </div>
+  <div class="lab">Live score + momentum bar — red bloom intensifies with possession</div>
+</body>
+</html>

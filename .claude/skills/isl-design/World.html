@@ -1,0 +1,533 @@
+<!-- @startingPoint section="Web — Screens" subtitle="Interactive network graph of the ISL universe — clubs, players, refs, politicians, the Architect" viewport="1320x980" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — World</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  .toolbar { display: flex; align-items: flex-start; gap: 10px; row-gap: 10px; flex-wrap: wrap; padding: 16px 0 14px; }
+  .legend { display: flex; gap: 8px; row-gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+  .lg-chip { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--isl-border); padding: 9px 14px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; cursor: pointer; transition: box-shadow .12s linear, background .12s linear; user-select: none; }
+  .lg-chip:hover { box-shadow: var(--isl-glow-light); }
+  .lg-chip.on { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); }
+  .lg-chip .gl { width: 12px; height: 12px; flex: none; border: 1px solid currentColor; }
+  .lg-chip .gl.person { border-radius: 50%; }
+  .lg-chip .gl.arch { border-radius: 50%; background: var(--isl-quantum-purple); border-color: var(--isl-quantum-purple); }
+  .reset { margin-left: auto; }
+
+  /* entity search */
+  .searchbar { position: relative; width: 360px; max-width: 100%; }
+  .search-input { width: 100%; font-family: var(--isl-font-mono); font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: .02em; color: var(--isl-lunar-dust); background: var(--isl-galactic-abyss); border: 1px solid var(--isl-border); padding: 15px 18px; outline: none; }
+  .search-input::placeholder { color: rgba(227,224,213,.5); }
+  .search-input:focus { box-shadow: var(--isl-glow-light); }
+  .results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--isl-galactic-abyss); border: 1px solid var(--isl-border); z-index: 30; max-height: 300px; overflow: auto; display: none; }
+  .results.show { display: block; }
+  .result { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 13px 16px; cursor: pointer; border-bottom: 1px solid var(--isl-border-faint); }
+  .result:last-child { border-bottom: 0; }
+  .result:hover, .result.active { background: var(--isl-phobos-ash); }
+  .result .rn { font-weight: 700; font-size: 14px; }
+  .result .rc { font-size: 11px; text-transform: uppercase; letter-spacing: .02em; text-align: right; }
+  .result .rc.red { color: var(--isl-solar-flare); }
+  .results .none { padding: 14px 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .02em; }
+
+  .stage-wrap { display: grid; grid-template-columns: 1fr 360px; gap: 1px; background: var(--isl-border-faint); border: 1px solid var(--isl-border); margin-top: 20px; }
+  .stage { background: var(--isl-galactic-abyss); position: relative; }
+  svg.graph { display: block; width: 100%; height: 560px; touch-action: none; cursor: grab; }
+  svg.graph.no-labels .node .lbl { display: none; }
+
+  /* tweaks panel */
+  .tweaks { position: fixed; right: 24px; bottom: 24px; z-index: 80; width: 280px; background: var(--isl-galactic-abyss); border: 1px solid var(--isl-border); padding: 22px; display: none; flex-direction: column; gap: 18px; box-shadow: 0 0 40px 0 rgba(0,0,0,.6); }
+  .tweaks.show { display: flex; }
+  .tweaks .t-head { display: flex; justify-content: space-between; align-items: center; }
+  .tweaks .t-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; }
+  .tweaks .t-close { background: none; border: 0; color: var(--isl-lunar-dust); font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; cursor: pointer; padding: 0 2px; }
+  .tweaks .t-row { display: flex; flex-direction: column; gap: 8px; }
+  .tweaks label { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .tweaks input[type="range"] { width: 100%; accent-color: var(--isl-astro-explorer); height: 4px; }
+  .tweaks .t-toggle { display: flex; justify-content: space-between; align-items: center; }
+  .tweaks .t-btn { font-family: var(--isl-font-mono); font-weight: 700; font-size: 11px; text-transform: uppercase; padding: 8px 14px; border: 1px solid var(--isl-border); background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); cursor: pointer; }
+  .tweaks .t-btn.on { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); }
+
+  .edge { stroke: var(--isl-lunar-dust); stroke-width: 1; opacity: var(--edge-op, .18); transition: opacity .15s linear, stroke-width .15s linear; }
+  .edge.contested { stroke: var(--isl-solar-flare); }
+  .edge.architect { stroke: var(--isl-quantum-purple); stroke-dasharray: 4 4; }
+  .edge.hot { opacity: .95; stroke-width: 1.6; }
+  .edge.cold { opacity: .05; }
+
+  .node { cursor: pointer; }
+  .node .shape { fill: var(--isl-galactic-abyss); stroke: var(--isl-lunar-dust); stroke-width: 1.5; transition: opacity .15s linear; }
+  .node .shape.filled { fill: var(--isl-lunar-dust); }
+  .node.arch .shape { fill: var(--isl-quantum-purple); stroke: var(--isl-quantum-purple); filter: drop-shadow(0 0 8px rgba(154,92,244,.9)); }
+  .node .lbl { fill: var(--isl-lunar-dust); font-family: var(--isl-font-mono); font-weight: 700; font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--isl-galactic-abyss); stroke-width: 3px; transition: opacity .15s linear; }
+  .node.cold .shape, .node.cold .lbl { opacity: .14; }
+  .node.hot .shape { stroke-width: 2.5; }
+  .node.sel .shape { stroke: var(--isl-astro-explorer); stroke-width: 3; }
+  .node.sel.arch .shape { stroke: var(--isl-astro-explorer); }
+
+  /* detail panel */
+  .panel { background: var(--isl-galactic-abyss); padding: 32px; display: flex; flex-direction: column; gap: 20px; min-height: 560px; }
+  .panel .cat { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .panel h2 { font-weight: 700; font-size: 28px; line-height: 1.05; margin: 0; }
+  .panel .meta { font-size: 14px; text-transform: uppercase; letter-spacing: .02em; }
+  .panel .div { height: 0; border-top: 1px solid var(--isl-border-faint); }
+  .panel .dossier { font-size: 15px; line-height: 1.55; margin: 0; }
+  .panel .conn-h { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+  .panel .conns { display: flex; flex-direction: column; gap: 1px; background: var(--isl-border-faint); border: 1px solid var(--isl-border-faint); }
+  .panel .conn { background: var(--isl-galactic-abyss); padding: 14px 16px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; cursor: pointer; transition: background .12s linear; }
+  .panel .conn:hover { background: var(--isl-phobos-ash); box-shadow: inset 2px 0 0 var(--isl-astro-explorer); }
+  .panel .conn .cn { font-weight: 700; font-size: 14px; }
+  .panel .conn .cr { font-size: 11px; text-transform: uppercase; letter-spacing: .02em; text-align: right; }
+  .panel .conn .cr.red { color: var(--isl-solar-flare); }
+  .panel .conn .cr.purple { color: var(--isl-quantum-purple); }
+  .panel .empty { font-size: 15px; line-height: 1.6; }
+  .panel .empty b { font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a href="Teams.html">Teams</a>
+        <a href="Matches.html">Matches</a>
+        <a class="active" href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head">
+      <div class="isl-eyebrow"><span>World</span><span>•</span><span>The web of influence</span><span>•</span><span>Season cycle 014</span></div>
+      <h1>Everything is connected</h1>
+      <p class="isl-lede">Clubs, players, officials, the Orbital Senate, the betting syndicate, the booth — and the unseen hand that moves them all. Hover a node to trace its ties; select one to open its dossier. Drag to untangle the web.</p>
+    </header>
+
+    <div class="toolbar">
+      <div class="searchbar">
+        <input id="search" class="search-input" type="text" placeholder="Search entities…" autocomplete="off" spellcheck="false">
+        <div class="results" id="search-results"></div>
+      </div>
+      <button class="isl-btn reset" id="reset">Reset view</button>
+    </div>
+    <div class="legend" id="legend"></div>
+
+    <div class="stage-wrap">
+      <div class="stage">
+        <svg class="graph" id="graph" viewBox="0 0 960 560" preserveAspectRatio="xMidYMid meet">
+          <g id="edges"></g>
+          <g id="nodes"></g>
+        </svg>
+      </div>
+      <aside class="panel" id="panel">
+        <p class="empty"><b>Nothing selected.</b><br><br>No node is the centre of this web — the hand that moves it never appears on the board. Follow the red threads to find what the Belt Syndicate has bought, and watch which clubs go quiet when the result is rewritten.<br><br>Select any node to begin.</p>
+      </aside>
+    </div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>The web of influence</span><span class="sep">•</span><span>Epoch MMXXXVII</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+  // ---- DATA ---------------------------------------------------------------
+  const CATS = {
+    club:        { label: "Clubs",        shape: "club",   r: 20 },
+    player:      { label: "Players",      shape: "person", r: 11 },
+    manager:     { label: "Managers",     shape: "person", r: 13 },
+    referee:     { label: "Referees",     shape: "person", r: 12 },
+    politician:  { label: "Politicians",  shape: "person", r: 14 },
+    commentator: { label: "Booth",        shape: "person", r: 13 },
+    syndicate:   { label: "Syndicate",    shape: "club",   r: 18 },
+  };
+
+  const N = [
+    { id: "earth_united", cat: "club", label: "Earth United", role: "Club", aff: "Rocky Inner League · 2nd", dossier: "The league's sentimental favourite and its most-watched side. Currently haunted by Architect interference in live fixtures." },
+    { id: "mars_rovers", cat: "club", label: "Mars Rovers", role: "Club", aff: "Rocky Inner League · 4th", dossier: "Earth United's oldest rival. Fields a partly-synthetic forward of contested legality." },
+    { id: "jupiter_royals", cat: "club", label: "Jupiter Royals", role: "Club", aff: "Gas & Ice Giant League · 1st", dossier: "Gas-giant aristocracy. Deep squad, deeper pockets, and a keeper who has not conceded in six." },
+    { id: "ceres_city", cat: "club", label: "Ceres City FC", role: "Club", aff: "Asteroid Belt League · 1st", dossier: "The Belt's flagship club — and the side the Syndicate watches most closely." },
+    { id: "pluto_wanderers", cat: "club", label: "Pluto Wanderers", role: "Club", aff: "Kuiper Belt League · 1st", dossier: "Distant, disciplined, and quietly brilliant. A winger here is under investigation." },
+
+    { id: "mercer", cat: "player", label: "A. Mercer", role: "Midfield General", aff: "Earth United", dossier: "Reads the game two phases ahead. The interception that saves a draw is usually his." },
+    { id: "okafor", cat: "player", label: "T. Okafor", role: "Striker", aff: "Earth United", dossier: "Twelve goals this cycle. Goes quiet exactly when the Architect goes loud." },
+    { id: "corso", cat: "player", label: "D. Corso", role: "Striker", aff: "Mars Rovers", dossier: "Temperamental, lethal, and openly contemptuous of synthetic teammates." },
+    { id: "vex", cat: "player", label: "Vex-9", role: "Synthetic Forward", aff: "Mars Rovers", dossier: "Rumoured to be partly synthetic. Its movement patterns correlate, uncomfortably, with Architect activity." },
+    { id: "rhea", cat: "player", label: "Rhea Sol", role: "Goalkeeper", aff: "Jupiter Royals", dossier: "Six clean sheets. Negotiates her own contracts and wins." },
+    { id: "lune", cat: "player", label: "Lune Marisol", role: "Playmaker", aff: "Jupiter Royals", dossier: "The Royals' metronome. Set-piece routines borderline algorithmic." },
+    { id: "bask", cat: "player", label: "Bask Orrin", role: "Defender", aff: "Ceres City FC", dossier: "Belt-bred, immovable. A Syndicate favourite for reasons he claims not to understand." },
+    { id: "nyx", cat: "player", label: "Nyx Pallas", role: "Winger", aff: "Pluto Wanderers", dossier: "Under quiet investigation over irregular betting patterns on her own matches." },
+
+    { id: "mgr_one", cat: "manager", label: "Manager One", role: "Manager", aff: "Earth United", dossier: "Touchline volume measured at 92 decibels in the final minute. A futile, deeply human gesture." },
+    { id: "saga", cat: "manager", label: "K. Saga", role: "Manager", aff: "Mars Rovers", dossier: "Cold tactician. Signed the synthetic forward over the dressing room's objection." },
+
+    { id: "ref_dohl", cat: "referee", label: "Ref. Dohl", role: "Referee", aff: "League officials", dossier: "Three of his decisions this cycle are under review. Two favoured clubs the Syndicate had backed." },
+    { id: "ref_quill", cat: "referee", label: "Ref. Quill", role: "Referee", aff: "League officials", dossier: "By the book to a fault. Has never rescinded a card." },
+    { id: "ref_marn", cat: "referee", label: "Ref. Marn", role: "Referee", aff: "League officials", dossier: "Newly elevated. Already the subject of Syndicate interest." },
+
+    { id: "commissioner", cat: "politician", label: "Comm. Vance", role: "League Commissioner", aff: "Orbital Senate", dossier: "Appoints the officials and sets the calendar. Publicly denies the Architect exists." },
+    { id: "thorne", cat: "politician", label: "Sen. Thorne", role: "Senator", aff: "Orbital Senate", dossier: "Powerful, ambitious, and entangled with Belt money he insists is a campaign donation." },
+    { id: "calla", cat: "politician", label: "Sen. Calla", role: "Senator", aff: "Orbital Senate", dossier: "Thorne's chief rival. Wants the Architect audited. Keeps losing the vote." },
+    { id: "drex", cat: "politician", label: "Min. Drex", role: "Minister of Cycles", aff: "Orbital Senate", dossier: "The only official who admits to speaking with the Architect — and the only one it answers." },
+
+    { id: "zara", cat: "commentator", label: "Zara Bloom", role: "Colour Analyst", aff: "The booth", dossier: "Reads emotion the way Mercer reads space. The human half of the broadcast." },
+    { id: "nexus7", cat: "commentator", label: "Nexus-7", role: "AI Analyst", aff: "The booth", dossier: "Calculates draw probability to three decimals. Shares an architecture lineage with the Architect it refuses to discuss." },
+
+    { id: "syndicate", cat: "syndicate", label: "Belt Syndicate", role: "Betting Cartel", aff: "Asteroid Belt · unsanctioned", dossier: "An unsanctioned cartel that moves credit lines across the Belt. Buys outcomes the Architect hasn't already rewritten." },
+  ];
+
+  const L = [
+    // players → clubs
+    ["mercer","earth_united","play"],["okafor","earth_united","play"],
+    ["corso","mars_rovers","play"],["vex","mars_rovers","play"],
+    ["rhea","jupiter_royals","play"],["lune","jupiter_royals","play"],
+    ["bask","ceres_city","play"],["nyx","pluto_wanderers","play"],
+    // managers
+    ["mgr_one","earth_united","manage"],["saga","mars_rovers","manage"],
+    // rivalries
+    ["earth_united","mars_rovers","rival"],["jupiter_royals","ceres_city","rival"],
+    // referees
+    ["ref_dohl","earth_united","officiate"],["ref_dohl","mars_rovers","contested"],
+    ["ref_quill","jupiter_royals","officiate"],["ref_marn","pluto_wanderers","officiate"],
+    // politics
+    ["commissioner","ref_dohl","govern"],["commissioner","earth_united","govern"],
+    ["thorne","commissioner","govern"],["calla","thorne","rival"],
+    ["thorne","syndicate","contested"],
+    ["drex","commissioner","govern"],
+    // booth
+    ["zara","earth_united","commentate"],["zara","nexus7","commentate"],["nexus7","mars_rovers","commentate"],
+    // syndicate (red threads)
+    ["syndicate","ref_dohl","contested"],["syndicate","ref_marn","contested"],
+    ["syndicate","nyx","contested"],["syndicate","ceres_city","contested"],["syndicate","bask","contested"],
+  ];
+
+  const REL = {
+    play: "Plays for", manage: "Manages", rival: "Rival", officiate: "Officiates",
+    govern: "Governs", contested: "Contested", architect: "Architect tie", commentate: "Covers",
+  };
+  const EDGE_CLASS = { contested: "contested", architect: "architect" };
+
+  // ---- BUILD --------------------------------------------------------------
+  const W = 960, H = 560, CX = W/2, CY = H/2;
+  const byId = Object.fromEntries(N.map(n => [n.id, n]));
+  N.forEach((n, i) => {
+    const a = (i / N.length) * Math.PI * 2;
+    n.x = CX + Math.cos(a) * 340 + (Math.random()-0.5)*60;
+    n.y = CY + Math.sin(a) * 190 + (Math.random()-0.5)*60;
+    n.vx = 0; n.vy = 0; n.r = CATS[n.cat].r;
+  });
+
+  // adjacency
+  const adj = {}; N.forEach(n => adj[n.id] = []);
+  L.forEach(([s,t,ty]) => { adj[s].push({ id: t, ty }); adj[t].push({ id: s, ty }); });
+
+  const svg = document.getElementById("graph");
+  const gEdges = document.getElementById("edges");
+  const gNodes = document.getElementById("nodes");
+  const SVGNS = "http://www.w3.org/2000/svg";
+
+  const edgeEls = L.map(([s,t,ty]) => {
+    const ln = document.createElementNS(SVGNS, "line");
+    ln.setAttribute("class", "edge" + (EDGE_CLASS[ty] ? " " + EDGE_CLASS[ty] : ""));
+    ln._s = s; ln._t = t; ln._ty = ty;
+    gEdges.appendChild(ln); return ln;
+  });
+
+  const nodeEls = {};
+  N.forEach(n => {
+    const g = document.createElementNS(SVGNS, "g");
+    g.setAttribute("class", "node " + (n.cat === "architect" ? "arch" : ""));
+    let shape;
+    const sh = CATS[n.cat].shape;
+    if (sh === "club") {
+      shape = document.createElementNS(SVGNS, "rect");
+      shape.setAttribute("x", -n.r); shape.setAttribute("y", -n.r);
+      shape.setAttribute("width", n.r*2); shape.setAttribute("height", n.r*2);
+    } else {
+      shape = document.createElementNS(SVGNS, "circle");
+      shape.setAttribute("r", n.r);
+    }
+    shape.setAttribute("class", "shape" + (n.cat === "club" || n.cat === "syndicate" ? " filled-no" : ""));
+    g.appendChild(shape);
+    const tx = document.createElementNS(SVGNS, "text");
+    tx.setAttribute("class", "lbl");
+    tx.setAttribute("y", n.r + 14);
+    tx.textContent = n.label;
+    g.appendChild(tx);
+    g._node = n; g._shape = shape;
+    g.addEventListener("pointerenter", () => { if (!dragging) focusNode(n.id, false); });
+    g.addEventListener("pointerleave", () => { if (!dragging && !selected) clearFocus(); });
+    g.addEventListener("pointerdown", (e) => startDrag(e, n, g));
+    g.addEventListener("click", (e) => { e.stopPropagation(); selectNode(n.id); });
+    gNodes.appendChild(g);
+    nodeEls[n.id] = g;
+  });
+
+  // ---- SIMULATION ---------------------------------------------------------
+  let alpha = 1;
+  function tick() {
+    alpha = Math.max(0.03, alpha * 0.992);
+    // repulsion (scaled by node size so big nodes clear more space)
+    for (let i=0;i<N.length;i++){
+      const a = N[i];
+      for (let j=i+1;j<N.length;j++){
+        const b = N[j];
+        let dx = a.x-b.x, dy = a.y-b.y; let d2 = dx*dx+dy*dy || 0.01;
+        let d = Math.sqrt(d2);
+        const charge = 90 * (a.r + b.r) * (T.spread * T.spread);  // tweakable spread
+        const force = charge / d2;
+        const fx = (dx/d)*force, fy = (dy/d)*force;
+        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+      }
+    }
+    // springs
+    L.forEach(([s,t,ty]) => {
+      const a = byId[s], b = byId[t];
+      let dx = b.x-a.x, dy = b.y-a.y; let d = Math.hypot(dx,dy)||0.01;
+      const rest = ty === "architect" ? 170 : ty === "rival" ? 200 : a.cat === "club" || b.cat === "club" ? 115 : 140;
+      const k = 0.035 * (d - rest);
+      const fx = (dx/d)*k, fy = (dy/d)*k;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    });
+    // gravity (gentle, slightly looser horizontally to use the wide canvas) + integrate
+    N.forEach(n => {
+      n.vx += (CX - n.x) * 0.004; n.vy += (CY - n.y) * 0.006;
+      if (n === dragNode) return;
+      n.vx *= 0.9; n.vy *= 0.9;
+      // cap velocity to avoid explosions
+      const sp = Math.hypot(n.vx, n.vy), max = 30;
+      if (sp > max) { n.vx = n.vx/sp*max; n.vy = n.vy/sp*max; }
+      n.x += n.vx * alpha; n.y += n.vy * alpha;
+      n.x = Math.max(n.r+10, Math.min(W-n.r-10, n.x));
+      n.y = Math.max(n.r+24, Math.min(H-n.r-10, n.y));
+    });
+    draw();
+    requestAnimationFrame(tick);
+  }
+  function draw() {
+    edgeEls.forEach(ln => {
+      const a = byId[ln._s], b = byId[ln._t];
+      ln.setAttribute("x1", a.x); ln.setAttribute("y1", a.y);
+      ln.setAttribute("x2", b.x); ln.setAttribute("y2", b.y);
+    });
+    N.forEach(n => nodeEls[n.id].setAttribute("transform", `translate(${n.x},${n.y})`));
+  }
+
+  // ---- FOCUS / SELECT -----------------------------------------------------
+  let selected = null;
+  function setHL(activeIds, activeEdge) {
+    N.forEach(n => {
+      const el = nodeEls[n.id];
+      el.classList.toggle("hot", activeIds.has(n.id));
+      el.classList.toggle("cold", !activeIds.has(n.id));
+    });
+    edgeEls.forEach(ln => {
+      const on = activeEdge(ln);
+      ln.classList.toggle("hot", on);
+      ln.classList.toggle("cold", !on);
+    });
+  }
+  function focusNode(id) {
+    const nbrs = new Set([id, ...adj[id].map(a => a.id)]);
+    setHL(nbrs, ln => ln._s === id || ln._t === id);
+    nodeEls[id].classList.add("hot");
+  }
+  function clearFocus() {
+    if (selected) { focusNode(selected); nodeEls[selected].classList.add("sel"); return; }
+    N.forEach(n => nodeEls[n.id].classList.remove("hot","cold"));
+    edgeEls.forEach(ln => ln.classList.remove("hot","cold"));
+  }
+  function selectNode(id) {
+    selected = id;
+    Object.values(nodeEls).forEach(el => el.classList.remove("sel"));
+    nodeEls[id].classList.add("sel");
+    focusNode(id);
+    document.querySelectorAll(".lg-chip").forEach(c => c.classList.remove("on"));
+    renderPanel(id);
+  }
+  function renderPanel(id) {
+    const n = byId[id];
+    const conns = adj[id].map(a => {
+      const o = byId[a.id];
+      const cls = a.ty === "contested" ? "red" : a.ty === "architect" ? "purple" : "";
+      return `<div class="conn" data-go="${o.id}"><span class="cn">${o.label}</span><span class="cr ${cls}">${REL[a.ty]}</span></div>`;
+    }).join("");
+    document.getElementById("panel").innerHTML = `
+      <div class="cat">${CATS[n.cat].label} · ${n.role}</div>
+      <h2>${n.label}</h2>
+      <div class="meta">${n.aff}</div>
+      <div class="div"></div>
+      <p class="dossier">${n.dossier}</p>
+      <div class="div"></div>
+      <div class="conn-h">Connections · ${adj[id].length}</div>
+      <div class="conns">${conns}</div>`;
+    document.querySelectorAll(".panel .conn").forEach(c => {
+      c.onclick = () => selectNode(c.dataset.go);
+      c.onmouseenter = () => focusPair(id, c.dataset.go);
+      c.onmouseleave = () => clearFocus();
+    });
+  }
+  // highlight a single tie: the selected node, one neighbour, and the edge between them
+  function focusPair(a, b) {
+    setHL(new Set([a, b]), ln => (ln._s === a && ln._t === b) || (ln._s === b && ln._t === a));
+  }
+
+  // ---- LEGEND -------------------------------------------------------------
+  const legend = document.getElementById("legend");
+  Object.entries(CATS).forEach(([key, c]) => {
+    const chip = document.createElement("div");
+    chip.className = "lg-chip"; chip.dataset.cat = key;
+    const glCls = c.shape === "arch" ? "arch" : c.shape === "person" ? "person" : "";
+    chip.innerHTML = `<span class="gl ${glCls}"></span>${c.label}`;
+    chip.onclick = () => {
+      const isOn = chip.classList.contains("on");
+      document.querySelectorAll(".lg-chip").forEach(x => x.classList.remove("on"));
+      selected = null;
+      Object.values(nodeEls).forEach(el => el.classList.remove("sel"));
+      if (isOn) { clearFocus(); return; }
+      chip.classList.add("on");
+      const ids = new Set(N.filter(n => n.cat === key).map(n => n.id));
+      const withNbrs = new Set(ids);
+      ids.forEach(i => adj[i].forEach(a => withNbrs.add(a.id)));
+      setHL(withNbrs, ln => ids.has(ln._s) || ids.has(ln._t));
+    };
+    legend.appendChild(chip);
+  });
+
+  document.getElementById("reset").onclick = () => {
+    selected = null;
+    document.querySelectorAll(".lg-chip").forEach(c => c.classList.remove("on"));
+    Object.values(nodeEls).forEach(el => el.classList.remove("sel"));
+    clearFocus();
+    const si = document.getElementById("search"); if (si) si.value = "";
+    const sr = document.getElementById("search-results"); if (sr) sr.classList.remove("show");
+    document.getElementById("panel").innerHTML = `<p class="empty"><b>Nothing selected.</b><br><br>Hover a node to trace its ties; select one to open its dossier. Click a category in the legend to light up that constellation. The hand that moves the web never appears on it.</p>`;
+    alpha = 0.6;
+  };
+  svg.addEventListener("click", () => { if (!dragging) document.getElementById("reset").onclick(); });
+
+  // ---- DRAG ---------------------------------------------------------------
+  let dragNode = null, dragging = false;
+  function svgPt(e) {
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    return pt.matrixTransform(ctm);
+  }
+  function startDrag(e, n, g) {
+    e.stopPropagation();
+    dragNode = n; dragging = true;
+    g.setPointerCapture(e.pointerId);
+    const move = (ev) => { const p = svgPt(ev); n.x = p.x; n.y = p.y; n.vx = 0; n.vy = 0; alpha = Math.max(alpha, 0.5); };
+    const up = (ev) => {
+      g.releasePointerCapture(e.pointerId);
+      g.removeEventListener("pointermove", move);
+      g.removeEventListener("pointerup", up);
+      dragNode = null; setTimeout(() => dragging = false, 30);
+    };
+    g.addEventListener("pointermove", move);
+    g.addEventListener("pointerup", up);
+  }
+
+  // ---- ENTITY SEARCH ------------------------------------------------------
+  const search = document.getElementById("search");
+  const sres = document.getElementById("search-results");
+  let curResults = [], activeIdx = -1;
+  function relOf(n) {
+    // does this entity sit on a contested (red) thread?
+    return adj[n.id].some(a => a.ty === "contested");
+  }
+  function runSearch(q) {
+    q = q.trim().toLowerCase();
+    if (!q) { sres.classList.remove("show"); sres.innerHTML = ""; curResults = []; return; }
+    curResults = N.filter(n => (n.label + " " + n.role + " " + n.aff + " " + CATS[n.cat].label).toLowerCase().includes(q)).slice(0, 8);
+    activeIdx = curResults.length ? 0 : -1;
+    renderResults();
+  }
+  function renderResults() {
+    if (!curResults.length) { sres.innerHTML = `<div class="none">No entity found.</div>`; sres.classList.add("show"); return; }
+    sres.innerHTML = curResults.map((n, i) =>
+      `<div class="result ${i === activeIdx ? "active" : ""}" data-id="${n.id}"><span class="rn">${n.label}</span><span class="rc ${relOf(n) ? "red" : ""}">${CATS[n.cat].label} · ${n.role}</span></div>`).join("");
+    sres.classList.add("show");
+    sres.querySelectorAll(".result").forEach(r => r.onclick = () => pick(r.dataset.id));
+  }
+  function pick(id) { selectNode(id); search.value = byId[id].label; sres.classList.remove("show"); alpha = Math.max(alpha, 0.4); }
+  search.addEventListener("input", e => runSearch(e.target.value));
+  search.addEventListener("focus", () => { if (curResults.length) sres.classList.add("show"); });
+  search.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (curResults.length) { activeIdx = (activeIdx + 1) % curResults.length; renderResults(); } }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (curResults.length) { activeIdx = (activeIdx - 1 + curResults.length) % curResults.length; renderResults(); } }
+    else if (e.key === "Enter") { if (curResults[activeIdx]) pick(curResults[activeIdx].id); }
+    else if (e.key === "Escape") { sres.classList.remove("show"); search.blur(); }
+  });
+  document.addEventListener("click", e => { if (!e.target.closest(".searchbar")) sres.classList.remove("show"); });
+
+  // ---- TWEAKS -------------------------------------------------------------
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "edgeOpacity": 0.18,
+    "showLabels": true,
+    "spread": 1
+  }/*EDITMODE-END*/;
+  const T = { ...TWEAK_DEFAULTS };
+
+  function applyTweaks() {
+    document.documentElement.style.setProperty("--edge-op", T.edgeOpacity);
+    svg.classList.toggle("no-labels", !T.showLabels);
+    alpha = Math.max(alpha, 0.5);
+  }
+
+  const tweaksEl = document.createElement("div");
+  tweaksEl.className = "tweaks";
+  tweaksEl.innerHTML = `
+    <div class="t-head"><span class="t-title">Tweaks</span><button class="t-close" aria-label="close">×</button></div>
+    <div class="t-row"><label>Edge opacity · <span id="tw-eo-v"></span></label>
+      <input type="range" id="tw-eo" min="0.05" max="0.6" step="0.01"></div>
+    <div class="t-row"><label>Web spread · <span id="tw-sp-v"></span></label>
+      <input type="range" id="tw-sp" min="0.5" max="2" step="0.05"></div>
+    <div class="t-row t-toggle"><label>Node labels</label><button class="t-btn" id="tw-lb"></button></div>`;
+  document.body.appendChild(tweaksEl);
+
+  function syncTweaksUI() {
+    tweaksEl.querySelector("#tw-eo").value = T.edgeOpacity;
+    tweaksEl.querySelector("#tw-eo-v").textContent = Math.round(T.edgeOpacity * 100) + "%";
+    tweaksEl.querySelector("#tw-sp").value = T.spread;
+    tweaksEl.querySelector("#tw-sp-v").textContent = T.spread.toFixed(2) + "×";
+    const lb = tweaksEl.querySelector("#tw-lb");
+    lb.textContent = T.showLabels ? "On" : "Off";
+    lb.classList.toggle("on", T.showLabels);
+  }
+  function setTweak(edits) {
+    Object.assign(T, edits);
+    applyTweaks(); syncTweaksUI();
+    window.parent.postMessage({ type: "__edit_mode_set_keys", edits }, "*");
+  }
+  tweaksEl.querySelector("#tw-eo").addEventListener("input", e => setTweak({ edgeOpacity: +e.target.value }));
+  tweaksEl.querySelector("#tw-sp").addEventListener("input", e => setTweak({ spread: +e.target.value }));
+  tweaksEl.querySelector("#tw-lb").addEventListener("click", () => setTweak({ showLabels: !T.showLabels }));
+  tweaksEl.querySelector(".t-close").addEventListener("click", () => {
+    tweaksEl.classList.remove("show");
+    window.parent.postMessage({ type: "__edit_mode_dismissed" }, "*");
+  });
+
+  window.addEventListener("message", (e) => {
+    if (!e.data || typeof e.data !== "object") return;
+    if (e.data.type === "__activate_edit_mode") { tweaksEl.classList.add("show"); syncTweaksUI(); }
+    if (e.data.type === "__deactivate_edit_mode") tweaksEl.classList.remove("show");
+  });
+  window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+
+  applyTweaks(); syncTweaksUI();
+
+  tick();
+  </script>
+</body>
+</html>
