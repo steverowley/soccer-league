@@ -44,6 +44,36 @@ function ev(
   };
 }
 
+// ── adaptSpatialResult: fouls + cards ──────────────────────────────────────────
+
+describe('adaptSpatialResult — fouls + cards', () => {
+  const index = makeIndex([
+    { id: 'd1', name: 'Defender', teamName: 'Rovers', side: 'home' },
+    { id: 'a1', name: 'Attacker', teamName: 'City',   side: 'away' },
+  ]);
+
+  it('books the fouler on a yellow-card foul and tags the payload', () => {
+    const result = baseResult([ev({ type: 'foul', playerId: 'd1', otherId: 'a1', side: 'home', card: 'yellow' })]);
+    const adapted = adaptSpatialResult(result, index);
+    expect(adapted.playerStats['Defender']?.yellowCard).toBe(true);
+    expect(adapted.playerStats['Defender']?.redCard).toBe(false);
+    expect(adapted.events[0]!.payload['cardType']).toBe('yellow');
+  });
+
+  it('sends off the fouler on a red-card foul', () => {
+    const result = baseResult([ev({ type: 'foul', playerId: 'd1', otherId: 'a1', side: 'home', card: 'red' })]);
+    const adapted = adaptSpatialResult(result, index);
+    expect(adapted.playerStats['Defender']?.redCard).toBe(true);
+  });
+
+  it('a cardless foul books nobody but still surfaces in the notable feed', () => {
+    const result = baseResult([ev({ type: 'foul', playerId: 'd1', otherId: 'a1', side: 'home' })]);
+    const adapted = adaptSpatialResult(result, index);
+    expect(adapted.playerStats['Defender']).toBeUndefined(); // no card ⇒ no stat row created
+    expect(filterNotableEvents(adapted.events).some((e) => e.type === 'foul')).toBe(true);
+  });
+});
+
 // ── adaptSpatialResult ────────────────────────────────────────────────────────
 
 describe('adaptSpatialResult — event shape', () => {

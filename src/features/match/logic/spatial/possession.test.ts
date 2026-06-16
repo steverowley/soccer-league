@@ -6,10 +6,11 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  shotQuality, pressureAt, tackleProbability, saveProbability, ballPathWithinReach,
+  shotQuality, pressureAt, tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach,
 } from './possession';
 import { type SimPlayer, type SimPlayerStats, PITCH_WIDTH } from './types';
 import { vec } from './vec2';
+import { makeRng } from './rng';
 
 function stats(overrides: Partial<SimPlayerStats> = {}): SimPlayerStats {
   return {
@@ -87,6 +88,49 @@ describe('saveProbability', () => {
     const good = player({ role: 'GK', stats: stats({ goalkeeping: 90 }) });
     const weak = player({ role: 'GK', stats: stats({ goalkeeping: 45 }) });
     expect(saveProbability(good, 0.5)).toBeGreaterThan(saveProbability(weak, 0.5));
+  });
+});
+
+describe('foulProbability', () => {
+  it('rises when the carrier outclasses the defender, clamped to [0.002, 0.012] per tick', () => {
+    const slickCarrier = player({ stats: stats({ dribbling: 95 }) });
+    const beatenDefender = player({ stats: stats({ tackling: 40 }) });
+    const matchedDefender = player({ stats: stats({ tackling: 95 }) });
+    const high = foulProbability(beatenDefender, slickCarrier);
+    const low = foulProbability(matchedDefender, slickCarrier);
+    expect(high).toBeGreaterThan(low);
+    // Tiny by design — it fires every 0.1s a defender is in range.
+    expect(high).toBeLessThanOrEqual(0.012);
+    expect(low).toBeGreaterThanOrEqual(0.002);
+  });
+});
+
+describe('cardForFoul', () => {
+  it('books cynical fouls near the attacked goal more than fouls deep in own half', () => {
+    // home attacks x=105: a foul on a home attacker at x=100 is advanced/cynical.
+    const rng = makeRng(42);
+    let nearGoal = 0;
+    let deep = 0;
+    for (let i = 0; i < 2000; i++) {
+      if (cardForFoul(vec(100, PITCH_WIDTH / 2), 'home', rng)) nearGoal++;
+      if (cardForFoul(vec(10, PITCH_WIDTH / 2), 'home', rng)) deep++;
+    }
+    expect(nearGoal).toBeGreaterThan(deep);
+  });
+
+  it('mostly gives no card, and reds are rarer than yellows', () => {
+    const rng = makeRng(7);
+    let none = 0;
+    let yellow = 0;
+    let red = 0;
+    for (let i = 0; i < 3000; i++) {
+      const c = cardForFoul(vec(70, PITCH_WIDTH / 2), 'home', rng);
+      if (c === null) none++;
+      else if (c === 'yellow') yellow++;
+      else red++;
+    }
+    expect(none).toBeGreaterThan(yellow + red); // most fouls are just a free kick
+    expect(yellow).toBeGreaterThan(red);        // straight reds are rare
   });
 });
 

@@ -209,6 +209,7 @@ export interface SimEvent {
     | 'pass'        // completed pass (sampled, not every pass)
     | 'tackle'      // possession won by a defender
     | 'interception'
+    | 'foul'        // failed challenge that fouls the carrier → free kick (may carry a card)
     | 'out_throw'   // ball left via touchline
     | 'out_goalkick'
     | 'out_corner'
@@ -219,6 +220,8 @@ export interface SimEvent {
   playerId?: string;
   /** Secondary player id (e.g. the defender on a tackle, keeper on a save). */
   otherId?:  string;
+  /** Card shown on a foul, when one is given.  Absent = no card. */
+  card?:     'yellow' | 'red';
 }
 
 // ── Position frames (the viewer payload) ──────────────────────────────────

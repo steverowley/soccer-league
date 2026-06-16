@@ -94,6 +94,9 @@ function eventCommentary(ev: SimEvent, index: PlayerIndex): string {
                            : `${pn} fires at goal — off target.`;
     case 'save':         return `${on} makes a brilliant save!`;
     case 'tackle':       return `${pn} wins the ball with a clean tackle.`;
+    case 'foul':         return ev.card
+                           ? `${pn} is shown a ${ev.card} card for a foul${o ? ` on ${on}` : ''}.`
+                           : `${pn} fouls${o ? ` ${on}` : ''} — free kick.`;
     case 'interception': return `${pn} intercepts the ball.`;
     case 'pass':         return `${pn} plays the ball forward.`;
     case 'out_throw':    return `Ball out for a throw-in.`;
@@ -143,6 +146,9 @@ export function adaptSpatialResult(
       if (ev.type === 'shot')    slot(p.name).shots++;
       if (ev.type === 'tackle')  slot(p.name).tackles++;
       if (ev.type === 'save')    slot(p.name).saves++;
+      // A foul that drew a card books the fouler (playerId).
+      if (ev.type === 'foul' && ev.card === 'yellow') slot(p.name).yellowCard = true;
+      if (ev.type === 'foul' && ev.card === 'red')    slot(p.name).redCard = true;
     }
     // Keeper saves are tracked on the otherId player when the event type is 'shot'
     // (the keeper who stopped it) — avoids double-counting when type === 'save'.
@@ -164,6 +170,7 @@ export function adaptSpatialResult(
         isGoal:  ev.type === 'goal',
         ...(p ? { player: p.name, team: p.teamName } : {}),
         ...(o ? { keeper: o.name }                  : {}),
+        ...(ev.type === 'foul' && ev.card ? { cardType: ev.card } : {}),
       },
     };
   });
@@ -200,6 +207,7 @@ const NOTABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'kickoff',
   'goal',
   'save',
+  'foul',
   'out_corner',
 ]);
 
