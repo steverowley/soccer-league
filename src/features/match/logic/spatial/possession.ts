@@ -157,12 +157,12 @@ export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): Car
   // ── 1. Shoot? ──────────────────────────────────────────────────────────
   // Only consider it from a genuinely promising position.  The urge scales
   // with shot quality and the finisher's shooting stat; under pressure a
-  // shooter is a touch more likely to just hit it.  The gate (sq > 0.28) and
-  // modest coefficients keep shot VOLUME realistic — calibrated alongside
-  // saveProbability so matches land near real-world goal rates rather than
-  // arcade scorelines.
-  if (sq > 0.32) {
-    const shootUrge = sq * (0.24 + carrier.stats.shooting / 360) + pressure * 0.06;
+  // shooter is a touch more likely to just hit it.  The gate (sq > 0.50) and
+  // low coefficients keep shot VOLUME realistic — calibrated (2026-06) alongside
+  // placement error and saveProbability so a seeded batch lands near real-world
+  // goal rates (~2.5–2.8/match), not the ~5+ arcade scorelines the first cut gave.
+  if (sq > 0.50) {
+    const shootUrge = sq * (0.075 + carrier.stats.shooting / 750) + pressure * 0.03;
     if (rng() < shootUrge) return { kind: 'shoot' };
   }
 
@@ -233,7 +233,7 @@ export function shotKick(carrier: SimPlayer, rng: Rng): Vec2 {
   // shooter is angled, with placement error scaled by shooting skill.
   const towardTop = carrier.pos.y < PITCH_WIDTH / 2;
   const aimY = towardTop ? GOAL_Y_MIN + 1.2 : GOAL_Y_MAX - 1.2;
-  const placementErr = 2.6 * (1 - carrier.stats.shooting / 115); // metres std
+  const placementErr = 4.6 * (1 - carrier.stats.shooting / 135); // metres std (~1.5m elite, ~2.2m average — weaker efforts fly off-frame)
   const aimPoint = vec(goalX, aimY + rngGaussian(rng, 0, placementErr));
   const speed = 24 + (carrier.stats.shooting / 100) * 8; // 24–32 m/s
   // Low lateral flight error since placement noise already lives in aimY.
@@ -255,17 +255,17 @@ export function tackleProbability(defender: SimPlayer, carrier: SimPlayer): numb
 /**
  * Probability the keeper saves an on-target shot.  Higher goalkeeping saves
  * more; higher shot quality (closer, better angle) saves less.  Clamped to
- * [5%, 92%] — even a worldie can be tipped over, even a tap-in can be saved.
+ * [10%, 94%] — even a worldie can be tipped over, even a tap-in can be saved.
  *
  * @param keeper  The goalkeeper (uses goalkeeping stat).
  * @param sq      Shot quality of the strike, in [0,1].
  */
 export function saveProbability(keeper: SimPlayer, sq: number): number {
-  // base ~0.72–0.95 across the goalkeeping range; a great chance (sq→1) still
-  // pulls it down by ~0.4.  Tuned with the shot-selection gate so converted
-  // chances stay scarce enough for believable scorelines (~2–3 goals/match).
-  const base = 0.50 + keeper.stats.goalkeeping / 180;
-  return Math.min(0.92, Math.max(0.10, base - sq * 0.40));
+  // base ~0.79–0.94 across the goalkeeping range; a great chance (sq→1) pulls
+  // it down by ~0.33.  Tuned (2026-06) with the shot gate + placement error so
+  // converted chances stay scarce enough for believable scorelines (~2.5–2.8/match).
+  const base = 0.57 + keeper.stats.goalkeeping / 185;
+  return Math.min(0.94, Math.max(0.10, base - sq * 0.33));
 }
 
 /**

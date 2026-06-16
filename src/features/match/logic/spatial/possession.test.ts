@@ -74,13 +74,13 @@ describe('tackleProbability', () => {
 });
 
 describe('saveProbability', () => {
-  it('falls as shot quality rises, clamped to [0.05, 0.92]', () => {
+  it('falls as shot quality rises, clamped to [0.10, 0.94]', () => {
     const keeper = player({ role: 'GK', stats: stats({ goalkeeping: 80 }) });
     const easy = saveProbability(keeper, 0.1);
     const worldie = saveProbability(keeper, 0.95);
     expect(easy).toBeGreaterThan(worldie);
-    expect(worldie).toBeGreaterThanOrEqual(0.05);
-    expect(easy).toBeLessThanOrEqual(0.92);
+    expect(worldie).toBeGreaterThanOrEqual(0.10);
+    expect(easy).toBeLessThanOrEqual(0.94);
   });
 
   it('a better keeper saves more at equal shot quality', () => {
