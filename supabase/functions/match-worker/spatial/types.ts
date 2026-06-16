@@ -156,6 +156,14 @@ export interface SimBall {
    * keeper's job is.  null before the first kick of a possession.
    */
   lastTouch: { side: TeamSide; isShot: boolean; sq: number; playerId?: string } | null;
+  /**
+   * Offside flag for a pass in flight.  Set to the receiver's id when a pass is
+   * struck to a player who is in an offside position at that instant; if that
+   * same player collects the ball, the engine calls offside.  null whenever the
+   * ball is not a pass-in-flight to a flagged attacker — it is set only on a
+   * pass and cleared on any collection, restart, shot or tackle.
+   */
+  offsideFor: string | null;
 }
 
 // ── World ─────────────────────────────────────────────────────────────────
@@ -210,6 +218,7 @@ export interface SimEvent {
     | 'tackle'      // possession won by a defender
     | 'interception'
     | 'foul'        // failed challenge that fouls the carrier → free kick (may carry a card)
+    | 'offside'     // attacker collected a teammate's pass while in an offside position
     | 'out_throw'   // ball left via touchline
     | 'out_goalkick'
     | 'out_corner'

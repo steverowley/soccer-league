@@ -175,6 +175,7 @@ function buildWorld(
       loosePopCooldown: 0,
       heldSec: 0,
       lastTouch: null,
+      offsideFor: null,
     },
     score: [0, 0],
     clockSec: 0,

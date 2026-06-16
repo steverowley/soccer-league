@@ -309,6 +309,40 @@ export function cardForFoul(foulPos: Vec2, fouledSide: TeamSide, rng: Rng): 'yel
 }
 
 /**
+ * Whether `target` is in an offside position for an in-flight pass: clearly
+ * beyond the second-last defender, ahead of the ball, and inside the attacking
+ * half.  A forgiveness MARGIN means only unambiguous offsides are flagged — the
+ * blob sim can't adjudicate millimetres, and phantom flags feel worse than the
+ * occasional one let go.  Pure geometry, no rng.
+ *
+ * The "second-last defender" is the standard offside reference (usually, but not
+ * necessarily, the keeper); we read it from ALL opponents by depth, so a keeper
+ * who has rushed off their line is handled correctly.
+ *
+ * @param target   The intended pass receiver.
+ * @param ballPos  Position the pass is struck from.
+ * @param world    Current world (for the opposing defenders).
+ */
+export function isOffsidePosition(target: SimPlayer, ballPos: Vec2, world: SimWorld): boolean {
+  const goalX = attackingGoalX(target.side); // the goal the receiver attacks
+  const defenders = target.side === 'home' ? world.away : world.home;
+  const xs = defenders.map((d) => d.pos.x);
+  const MARGIN = 1.5; // metres of clear daylight required before we flag it
+
+  if (goalX === PITCH_LENGTH) {
+    // Attacking x=105: a deeper defender has a larger x; the second-deepest sets
+    // the line. Offside = beyond it, ahead of the ball, in the attacking half.
+    const desc = [...xs].sort((a, b) => b - a);
+    const lineX = desc[1] ?? desc[0] ?? PITCH_LENGTH;
+    return target.pos.x > lineX + MARGIN && target.pos.x > ballPos.x && target.pos.x > PITCH_LENGTH / 2;
+  }
+  // Attacking x=0: a deeper defender has a smaller x; the second-deepest is the line.
+  const asc = [...xs].sort((a, b) => a - b);
+  const lineX = asc[1] ?? asc[0] ?? 0;
+  return target.pos.x < lineX - MARGIN && target.pos.x < ballPos.x && target.pos.x < PITCH_LENGTH / 2;
+}
+
+/**
  * Whether a moving ball passes within `reach` of a stationary player on this
  * tick's segment — the geometric test behind interceptions and ball
  * collection.  Uses point-to-segment distance from the player to the ball's

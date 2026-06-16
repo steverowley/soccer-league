@@ -28,7 +28,7 @@ import {
 } from './steering.ts';
 import {
   chooseAction, passKick, shotKick, shotQuality,
-  tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach,
+  tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
 } from './possession.ts';
 import { dynamicAnchor } from './formation.ts';
 
@@ -160,6 +160,7 @@ function awardBall(world: SimWorld, side: TeamSide, spot: Vec2): void {
   world.ball.heldSec = 0;
   world.ball.loosePopCooldown = 0;
   world.ball.lastTouch = null;
+  world.ball.offsideFor = null;
 }
 
 /** Full kickoff reset after a goal: shape reset + ball to centre for conceder. */
@@ -294,6 +295,7 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
         ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
         ball.heldSec = 0;
         ball.lastTouch = { side: challenger.player.side, isShot: false, sq: 0 };
+        ball.offsideFor = null;
         events.push({ tSec: world.clockSec, minute, type: 'tackle', side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id });
         challengeResolved = true;
       } else if (rng() < foulProbability(challenger.player, owner)) {
@@ -321,12 +323,18 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
         ball.vel = shotKick(owner, rng);
         ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
         ball.lastTouch = { side: owner.side, isShot: true, sq, playerId: owner.id };
+        ball.offsideFor = null;
         // The 'shot' vs 'goal'/'save' event is emitted on resolution below.
       } else if (action.kind === 'pass') {
         ball.ownerId = null;
         ball.vel = passKick(owner, action.target, rng);
         ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
         ball.lastTouch = { side: owner.side, isShot: false, sq: 0 };
+        // Flag the pass if it's played to a player standing in an offside
+        // position; offside is only CALLED if that same player collects it
+        // (resolveLooseBall).  An onside teammate or a defender collecting it
+        // clears the flag with no whistle.
+        ball.offsideFor = isOffsidePosition(action.target, owner.pos, world) ? action.target.id : null;
         events.push({ tSec: world.clockSec, minute, type: 'pass', side: owner.side, playerId: owner.id, otherId: action.target.id });
       } else {
         // Dribble: aim a carry toward goal; ball stays glued next tick.
@@ -424,6 +432,7 @@ function resolveLooseBall(
         ball.heldSec = 0;
         ball.loosePopCooldown = 0;
         ball.lastTouch = null;
+        ball.offsideFor = null;
         return true;
       }
       // GOAL.  Credit the scorer's side, reset for kickoff, and start the
@@ -488,12 +497,21 @@ function resolveLooseBall(
       }
     }
     if (claimer) {
+      // Offside: the flagged attacker collecting their own team's pass is caught
+      // offside → indirect free kick to the defending side at the spot.
+      if (ball.offsideFor === claimer.id) {
+        const defendingSide: TeamSide = claimer.side === 'home' ? 'away' : 'home';
+        events.push({ tSec: world.clockSec, minute, type: 'offside', side: claimer.side, playerId: claimer.id });
+        awardBall(world, defendingSide, claimer.pos); // awardBall clears offsideFor
+        return true;
+      }
       const wasAttackingSide = ball.lastTouch?.side ?? null;
       ball.ownerId = claimer.id;
       ball.pos = claimer.pos;
       ball.vel = ZERO;
       ball.heldSec = 0;
       ball.lastTouch = null;
+      ball.offsideFor = null;
       // If the claimer is the OPPONENT of whoever last kicked it, that's an
       // interception (a defensive read), worth surfacing as an event.
       if (wasAttackingSide && claimer.side !== wasAttackingSide) {
