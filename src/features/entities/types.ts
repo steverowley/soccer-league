@@ -53,7 +53,12 @@ export type EntityKind =
   | 'social_media'
   | 'sports_writer'
   | 'stadium'
-  | 'training_facility';
+  | 'training_facility'
+  // The three Cosmic Voices (Fate / Balance / Chaos) — seeded with fixed
+  // UUIDs and referenced by the match engine's `cosmicVoices.ts`. Present in
+  // the DB and the relationship graph since the engine's inception, but the
+  // literal was never added to this union (a long-standing type/data gap).
+  | 'cosmic_voice';
 
 /**
  * Core entity row — matches the `entities` table from 0002_entities.sql.

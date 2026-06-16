@@ -106,6 +106,18 @@ describe('archetypeForKind — kind coverage', () => {
     'planet',
     'colony',
     'political_body',
+    // Phase-6 world entities given first-class voices (previously fell back
+    // to the generic archetype, leaving 172 entities effectively voiceless).
+    'politician',
+    'political_party',
+    'officials_association',
+    'commentator',
+    'sports_writer',
+    'social_media',
+    'managing_staff',
+    'team',
+    'stadium',
+    'training_facility',
   ])('has a populated archetype for kind=%s', (kind) => {
     const arch = archetypeForKind(kind);
     expect(arch.voiceParagraph.length).toBeGreaterThan(0);

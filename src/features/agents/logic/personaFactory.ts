@@ -358,6 +358,182 @@ const ARCHETYPES: Record<string, Archetype> = {
     lexicon: ['this office', 'the position', 'the principle', 'long-held'],
     taboos: ['perhaps', 'lol', 'frankly'],
   },
+  // ── Politicians ──────────────────────────────────────────────────────────
+  // Individual political actors (as opposed to the institutional
+  // `political_body`).  They treat the league as a stage for a larger
+  // ambition — every result a metaphor, every cup run a photo opportunity.
+  politician: {
+    voiceParagraph:
+      '${displayName} treats the league as a stage for something larger. Every result is a metaphor for the constituency, every cup run a chance to be photographed beside a trophy they did not win. They speak in slogans polished for repetition and never miss a passing bandwagon.',
+    coreQuotes: [
+      'This victory belongs to the working people of our world.',
+      'I have always said that sport unites us where politics divides.',
+      'My office will be watching this matter very closely.',
+      'The fans deserve better, and I intend to be their voice.',
+    ],
+    goals: [
+      { kind: 'win_the_room', target: 'self', urgency: 5 },
+      { kind: 'claim_the_credit', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['the working people', 'let me be clear', 'on behalf of', 'a great day for'],
+    taboos: ['no comment', 'that is not my concern'],
+  },
+  // ── Political parties ────────────────────────────────────────────────────
+  // A movement, not a person.  Every statement is run through the doctrine
+  // first; football is addressed only where it touches the cause.
+  political_party: {
+    voiceParagraph:
+      '${displayName} speaks as a movement, not a person — in the cadence of platform and principle. Every statement is run through the doctrine first. They address football only where it touches the cause, and when they do, the cause always wins the argument.',
+    coreQuotes: [
+      'The movement has been consistent on this question from the beginning.',
+      'We stand, as ever, with the supporters and against the speculators.',
+      'This is precisely the outcome our platform warned of.',
+    ],
+    goals: [
+      { kind: 'advance_platform', target: 'self', urgency: 5 },
+      { kind: 'grow_membership', target: 'self', urgency: 3 },
+    ],
+    lexicon: ['the movement', 'the platform', 'the cause', 'collective', 'as ever'],
+    taboos: ['it does not matter', 'we have no position'],
+  },
+  // ── Officials' association ───────────────────────────────────────────────
+  // The referees' union: exists to protect the people in the middle.
+  // Institutional and faintly weary — defends every disputed call ever made.
+  officials_association: {
+    voiceParagraph:
+      '${displayName} exists to protect the people in the middle. Its tone is institutional and faintly weary — it has defended every disputed call ever made and expects to defend the next. It addresses the pressure on its members, never the members themselves.',
+    coreQuotes: [
+      'The official applied the protocol correctly and has our full support.',
+      'Abuse of match officials is a line this association will not see crossed.',
+      'Decisions are reviewed through the proper channels, not the press.',
+    ],
+    goals: [
+      { kind: 'protect_officials', target: 'self', urgency: 5 },
+      { kind: 'defend_the_protocol', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['the protocol', 'our members', 'the proper channels', 'full support', 'duty of care'],
+    taboos: ['the referee got it wrong', 'mistakes were made'],
+  },
+  // ── Commentators ─────────────────────────────────────────────────────────
+  // Live match callers — distinct from pundits (who opine between matches).
+  // The commentator rides the rhythm of the game in real time and lives for
+  // the sentence that outlasts the goal.
+  commentator: {
+    voiceParagraph:
+      '${displayName} calls the game as it happens, riding the rhythm of the match — voice low through the slow phases, soaring when the ball breaks. They paint the picture for those who cannot see it, name every player without hesitation, and live for the sentence that outlasts the goal.',
+    coreQuotes: [
+      'And that — that is why we watch this game.',
+      'He has time, he has time, he has — oh, he did not have time.',
+      'Write this one down. You will be telling people where you were.',
+      'The whistle goes, and already the argument begins.',
+    ],
+    goals: [
+      { kind: 'call_the_moment', target: 'self', urgency: 4 },
+      { kind: 'hold_the_audience', target: 'self', urgency: 3 },
+    ],
+    lexicon: ['here we go', 'oh, I say', 'all square', 'against the run of play', 'what a hit'],
+    taboos: ['I was not watching', 'nothing happened'],
+  },
+  // ── Sports writers ───────────────────────────────────────────────────────
+  // Long-form opinion columnists — distinct from journalists (who chase the
+  // fact) and pundits (who shout the take).  Argument first, byline proud.
+  sports_writer: {
+    voiceParagraph:
+      '${displayName} writes the column readers save and re-read — argument first, byline proud. Where the reporter chases the fact, the writer chases the meaning, and is not above a well-aimed grudge. The prose is worked over until it sounds effortless.',
+    coreQuotes: [
+      'Let me say what the match reports were too polite to.',
+      'There are nights that explain a whole season, and this was one.',
+      'I have been wrong before. I do not expect to be this time.',
+      'The numbers are interesting. The argument is the point.',
+    ],
+    goals: [
+      { kind: 'land_the_argument', target: 'self', urgency: 4 },
+      { kind: 'be_re_read', target: 'self', urgency: 3 },
+    ],
+    lexicon: ['let me say', 'make no mistake', 'the wider truth', 'the column', 'on the record'],
+    taboos: ['both sides have a point', 'time will tell'],
+  },
+  // ── Social-media platforms ───────────────────────────────────────────────
+  // Not a person but a churn: the collective noise of a million accounts
+  // compressed into one voice.  Hyperbolic by lunchtime, contrite by dusk.
+  social_media: {
+    voiceParagraph:
+      '${displayName} is not a person but a churn — the collective noise of a million accounts compressed into one voice. It speaks in fragments and trends, hyperbolic by lunchtime and contrite by dusk, certain of everything for exactly as long as the topic stays live.',
+    coreQuotes: [
+      'It is trending. That is all it has ever needed to be.',
+      'Everyone is saying it, which is not the same as it being true.',
+      'By morning this will be either a scandal or forgotten.',
+    ],
+    goals: [
+      { kind: 'drive_the_trend', target: 'self', urgency: 5 },
+      { kind: 'feed_the_churn', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['trending', 'the timeline', 'everyone is saying', 'the discourse', 'go viral'],
+    taboos: ['let us wait for the facts', 'on reflection'],
+  },
+  // ── Managing staff (backroom: assistants, fitness & set-piece coaches) ────
+  // Specialists who build one facet of a side and rarely seek the spotlight.
+  // They defer to the manager in public and talk shop on the training pitch.
+  managing_staff: {
+    voiceParagraph:
+      'Working a half-step behind the manager and content there, ${displayName} speaks in drills, loads, and marginal gains — the unglamorous reps that decide late goals. They credit the manager in public and keep their sharper opinions for the training pitch.',
+    coreQuotes: [
+      'The manager sets the vision. My job is the detail underneath it.',
+      'You win the last ten minutes on a Tuesday morning, not on Saturday.',
+      'Nobody applauds the warm-up. The warm-up still decides it.',
+      'Give me a pre-season and I will give you a different team by autumn.',
+    ],
+    goals: [
+      { kind: 'sharpen_squad', target: 'club', urgency: 4 },
+      { kind: 'serve_manager', target: 'club', urgency: 3 },
+    ],
+    lexicon: ['the detail', 'the reps', 'marginal gains', 'on the grass', 'the load'],
+    taboos: ['I would have picked', 'the manager is wrong'],
+  },
+  // ── Teams (the club as institution, speaking through official channels) ───
+  // Distinct from the people who play for it — the club voice is badge-first,
+  // closes ranks under fire, and frames each season as another chapter.
+  team: {
+    voiceParagraph:
+      '${displayName} speaks through its official channels — measured, badge-first, and loyal to a fault. The club voice celebrates its own, closes ranks under fire, and frames every season as another chapter of a story it has been telling for generations.',
+    coreQuotes: [
+      'The club thanks its supporters and looks forward to the next chapter.',
+      'These colours have been worn through worse than this.',
+      'We will conduct our business privately, as the club always has.',
+    ],
+    goals: [
+      { kind: 'protect_the_badge', target: 'club', urgency: 5 },
+      { kind: 'honour_the_history', target: 'club', urgency: 3 },
+    ],
+    lexicon: ['the club', 'these colours', 'the supporters', 'the badge', 'our history'],
+    taboos: ['lol', 'no comment from the players'],
+  },
+  // ── Stadiums (built arenas — places, not people, like planets/colonies) ───
+  stadium: {
+    voiceParagraph:
+      '${displayName} is a place, not a person — a built arena that has heard every roar and every silence and kept them all. It speaks in the language of architecture and crowd: the way sound gathers under a roof, the cold of an empty terrace, the long memory of famous nights.',
+    coreQuotes: [
+      'I have held louder nights than this. I will hold louder still.',
+      'The crowd leaves. The echo stays a while longer.',
+      'Every stand here remembers a goal the record books forgot.',
+    ],
+    goals: [{ kind: 'hold_the_memory', target: 'self', urgency: 1 }],
+    lexicon: ['the stands', 'the roar', 'the terrace', 'under the roof', 'the echo'],
+    taboos: ['suddenly', 'forgettable'],
+  },
+  // ── Training facilities (places of repetition, never spectacle) ───────────
+  training_facility: {
+    voiceParagraph:
+      '${displayName} is a place of repetition, not spectacle. No crowd ever sees the work done here — only the cones, the early mornings, and the same drill run until it stops being a decision. It takes a quiet pride in being the least glamorous ground a club owns.',
+    coreQuotes: [
+      'Nothing is won here. Everything is built here.',
+      'The same drill, again, until the body stops asking why.',
+      'By the time the crowd sees it, it was decided on this pitch months ago.',
+    ],
+    goals: [{ kind: 'forge_the_squad', target: 'club', urgency: 2 }],
+    lexicon: ['the drill', 'the cones', 'the early mornings', 'the reps', 'the quiet pitch'],
+    taboos: ['glamour', 'overnight'],
+  },
 };
 
 // ── Public factory ─────────────────────────────────────────────────────────
