@@ -29,8 +29,8 @@
 //     colony               → DUST 50       (places — quietest tier)
 //     stadium              → DUST 70       (venue — background context, like a place)
 //     training_facility    → DUST 50       (venue — quieter than a stadium)
-//     <everything else (coach/physio/doctor/scout/owner/analyst)>
-//                          → DUST 70       (support entities — visible but muted)
+//     <unmapped / future kinds>
+//                          → DUST 70       (defensive default — visible but muted)
 //
 // The seed node ignores this mapping — it always renders in DUST (full
 // opacity) regardless of kind so it stays visually anchored.

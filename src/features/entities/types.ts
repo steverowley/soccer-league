@@ -23,12 +23,6 @@
 export type EntityKind =
   | 'player'
   | 'manager'
-  | 'coach'
-  | 'physio'
-  | 'doctor'
-  | 'scout'
-  | 'owner'
-  | 'analyst'
   | 'referee'
   | 'pundit'
   | 'commentator'
