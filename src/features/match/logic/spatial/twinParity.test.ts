@@ -48,6 +48,7 @@ const TWINS = [
   'vec2',
   'types',
   'simulateSpatialMatch',
+  'traitModifiers',
 ] as const;
 
 /**
