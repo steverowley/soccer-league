@@ -8,6 +8,7 @@
 import { assembleMatch, type ViewerMatch } from './buildMatch';
 import { isFormationKey, type FormationKey } from '../pitch';
 import { toSpatialTeamInput } from '../spatial/spatialEventAdapter';
+import { applyTeamTraits } from '../spatial/traitModifiers';
 
 /**
  * The slice of a team row (from getTeam) needed to simulate + label a match.
@@ -28,7 +29,21 @@ export interface TeamSimData {
     mental?: number | null;
     athletic?: number | null;
     technical?: number | null;
+    /** Personality archetype (getTeam's players(*) returns it); nudges sim stats. */
+    personality?: string | null;
   }> | null;
+}
+
+/**
+ * Build a player-id → personality map from a team row so the trait bridge can
+ * nudge each player's sim stats.  The preview reads the flat `players.personality`
+ * column (identical today to `entity_traits.personality` by backfill); the
+ * authoritative worker reads it through the entities layer.
+ */
+function personalityById(team: TeamSimData): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const p of team.players ?? []) map.set(p.id, p.personality ?? null);
+  return map;
 }
 
 /** Narrow a free-text manager formation to a supported key, defaulting to 4-4-2. */
@@ -49,8 +64,8 @@ export function simulateMatchFromTeams(
   away: TeamSimData,
   seed = 1,
 ): ViewerMatch {
-  const homeInput = toSpatialTeamInput(home);
-  const awayInput = toSpatialTeamInput(away);
+  const homeInput = applyTeamTraits(toSpatialTeamInput(home), personalityById(home));
+  const awayInput = applyTeamTraits(toSpatialTeamInput(away), personalityById(away));
   const { frames, homePlayers, awayPlayers, finalScore } = assembleMatch(homeInput, awayInput, seed);
   return {
     frames,
