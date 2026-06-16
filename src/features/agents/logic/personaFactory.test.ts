@@ -168,16 +168,39 @@ describe('createPersona — personality_vec from traits', () => {
     expect(vec.cosmic.cosmic_devotion).toBeCloseTo(0.9, 5);
   });
 
-  /** Non-numeric trait values are skipped — defensive. */
+  /** Non-numeric trait values are skipped — the axis keeps its UUID-derived
+   *  value (i.e. identical to the no-trait case), rather than being corrupted. */
   it('ignores non-numeric trait values', () => {
-    const persona = createPersona(
+    const withBad = createPersona(
       makeArgs({
         traits: [{ trait_key: 'aggression', trait_value: 'high' }],
       }),
     );
-    const vec = persona.personality_vec as { bigFive: Record<string, number> };
-    // Should remain at the neutral default of 0.5 since 'high' was not numeric.
-    expect(vec.bigFive.extraversion).toBe(0.5);
+    const noTraits = createPersona(makeArgs());
+    const a = withBad.personality_vec as { bigFive: Record<string, number> };
+    const b = noTraits.personality_vec as { bigFive: Record<string, number> };
+    expect(a.bigFive.extraversion).toBe(b.bigFive.extraversion);
+  });
+
+  /**
+   * Distinct entities must get distinct vectors — the whole point of deriving
+   * from the UUID. Before this, ~800 entities shared one neutral vector, which
+   * neutered every persona-aware resolver.
+   */
+  it('derives distinct vectors for distinct entity ids', () => {
+    const mk = (id: string) =>
+      createPersona(
+        makeArgs({ entity: { id, kind: 'pundit', name: 'X', display_name: null, meta: null } }),
+      ).personality_vec as { bigFive: Record<string, number>; cosmic: Record<string, number> };
+    const a = mk('11111111-2222-3333-4444-555566667777');
+    const b = mk('89abcdef-0123-4567-89ab-cdef01234567');
+    expect(a.bigFive.openness).not.toBe(b.bigFive.openness);
+    expect(a.cosmic.dread).not.toBe(b.cosmic.dread);
+    // Every axis stays a well-formed float in [0,1].
+    for (const v of [...Object.values(a.bigFive), ...Object.values(a.cosmic)]) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
   });
 });
 

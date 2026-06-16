@@ -78,19 +78,47 @@ export interface CreatePersonaArgs {
 }
 
 // ── Personality vector helpers ─────────────────────────────────────────────
-// The personality_vec JSONB stores Big-Five floats in [0,1].  When a
-// matching entity_trait exists (e.g. 'aggression' on a player), we lift
-// it into 'extraversion' or 'agreeableness' as appropriate.  Trait names
-// without a Big-Five mapping go into the "cosmic" sub-object so they're
-// still visible to downstream resolvers.
+// The personality_vec JSONB stores five Big-Five floats + three "cosmic" axes
+// (devotion / hubris / dread), each in [0,1].
 //
-// 0.5 is the neutral default for any axis we have no signal on — keeps
-// the vector well-formed so Zod / future drift checks don't trip.
+// WHY DERIVE FROM THE ENTITY UUID
+//   Before, every axis defaulted to 0.5 unless a numeric entity_trait mapped to
+//   it — and the only numeric trait that exists in the world is a referee's
+//   `strictness`. So ~800 of 836 entities shared one identical neutral vector,
+//   which silently neutered every persona-aware decision resolver: oddsSlant,
+//   cardSeverity, and shootOrPass all treat 0.5 as "no effect", so an undiffer-
+//   entiated world produced undifferentiated behaviour. We instead seed each
+//   axis from a stable 4-hex-digit slice of the entity's own UUID, giving every
+//   entity a distinct-but-deterministic innate personality at zero cost. A real
+//   numeric trait still overrides its mapped axis.
+//
+//   The derivation is intentionally simple enough to reproduce in SQL (see
+//   migration 0079_diversify_personality_vec.sql) so a one-time backfill can
+//   diversify existing rows without a round-trip through this factory.
 
-/** Default Big-Five midpoint used when no trait maps to an axis. */
+/** Midpoint fallback, used only when an id yields no usable hex slice. */
 const NEUTRAL_AXIS = 0.5;
 
-/** Mapping from raw trait_key to Big-Five axis name. */
+/**
+ * The eight personality axes in the fixed order they map to consecutive
+ * 4-hex-digit slices of the entity UUID. This order is load-bearing: the SQL
+ * backfill in migration 0079 reads the same slices in the same order, so any
+ * reordering here must be mirrored there.
+ */
+const BIG_FIVE_AXES = [
+  'openness',
+  'conscientiousness',
+  'extraversion',
+  'agreeableness',
+  'neuroticism',
+] as const;
+const COSMIC_AXES = ['devotion', 'hubris', 'dread'] as const;
+
+/**
+ * Mapping from raw trait_key to Big-Five axis name. A genuine numeric trait on
+ * this list overrides the UUID-derived value for its axis (e.g. a referee's
+ * `strictness` becomes their conscientiousness).
+ */
 const TRAIT_TO_BIG_FIVE: Record<string, string> = {
   // Player traits
   aggression: 'extraversion',
@@ -104,26 +132,49 @@ const TRAIT_TO_BIG_FIVE: Record<string, string> = {
 };
 
 /**
- * Build a personality vector from raw entity_trait values.  Numeric traits
- * are normalised to [0,1] assuming the source range was [0,100] (players)
- * or [1,10] (referees) — both common scales in the existing schema.
+ * Derive a stable float in [0,1] for axis number `index` (0-7) from an entity
+ * UUID. Reads the 4 hex digits at offset `index*4` of the dash-stripped UUID
+ * and scales that 16-bit value to [0,1], rounded to 4dp. Non-hex or too-short
+ * ids (e.g. synthetic test ids) fall back to the neutral midpoint so the
+ * function never returns NaN.
  *
+ * @param entityId  The entity's UUID (dashes optional).
+ * @param index     Axis index 0-7 (5 Big-Five, then 3 cosmic).
+ * @returns         Deterministic float in [0,1].
+ */
+function axisFromUuid(entityId: string, index: number): number {
+  const hex = entityId.replace(/-/g, '');
+  const slice = hex.slice(index * 4, index * 4 + 4);
+  if (slice.length < 4) return NEUTRAL_AXIS;
+  const n = parseInt(slice, 16);
+  if (!Number.isFinite(n)) return NEUTRAL_AXIS;
+  // 0xffff scales the 16-bit slice to [0,1]; round to 4dp so storage stays tidy
+  // and the SQL backfill (which rounds identically) produces matching values.
+  return Math.round((n / 0xffff) * 10000) / 10000;
+}
+
+/**
+ * Build a personality vector for an entity. Each axis starts from a stable
+ * slice of the entity UUID (so every entity differs), then any numeric trait
+ * that maps to a Big-Five axis overrides it. Unmapped numeric traits land in
+ * the cosmic bag so their signal is not lost.
+ *
+ * @param entity  The entity (only `id` is read here).
  * @param traits  The entity's trait rows.
  * @returns       JSONB-ready object with `bigFive` and `cosmic` sub-maps.
  */
-function buildPersonalityVec(traits: readonly FactoryTraitInput[]) {
-  const bigFive: Record<string, number> = {
-    openness: NEUTRAL_AXIS,
-    conscientiousness: NEUTRAL_AXIS,
-    extraversion: NEUTRAL_AXIS,
-    agreeableness: NEUTRAL_AXIS,
-    neuroticism: NEUTRAL_AXIS,
-  };
-  const cosmic: Record<string, number> = {
-    devotion: NEUTRAL_AXIS,
-    hubris: NEUTRAL_AXIS,
-    dread: NEUTRAL_AXIS,
-  };
+function buildPersonalityVec(
+  entity: FactoryEntityInput,
+  traits: readonly FactoryTraitInput[],
+) {
+  const bigFive: Record<string, number> = {};
+  BIG_FIVE_AXES.forEach((axis, i) => {
+    bigFive[axis] = axisFromUuid(entity.id, i);
+  });
+  const cosmic: Record<string, number> = {};
+  COSMIC_AXES.forEach((axis, i) => {
+    cosmic[axis] = axisFromUuid(entity.id, BIG_FIVE_AXES.length + i);
+  });
 
   for (const t of traits) {
     if (typeof t.trait_value !== 'number') continue;
@@ -561,7 +612,7 @@ export function createPersona(args: CreatePersonaArgs): PersonaInsert {
   // persona, not generating it.
   const substitute = (s: string) => s.split('${displayName}').join(displayName);
 
-  const personalityVec = buildPersonalityVec(traits);
+  const personalityVec = buildPersonalityVec(entity, traits);
 
   // Goals: start from the archetype palette.  Relationships might
   // introduce additional goals — e.g. a 'rival' relationship adds a
