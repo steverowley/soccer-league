@@ -101,19 +101,25 @@ The deterministic persona is only the *substrate*. The richer voice library
 
 - **`entity_snippets`: 85 rows across 20 entities, all dated 2026-05-21** — first *and* last
   snippet the same day. The enricher stopped the moment API credits ran out (#565).
-- **`entity_memories`: 32 rows across 25 entities (managers + referees only).** By design, memories
-  are written from `match.completed` events, so kinds that never appear in a match
-  (journalists, pundits, politicians, staff, media…) never accumulate memories → the enricher never
-  selects them → they never get snippets. This is structural, not a bug.
+- **`entity_memories`: 32 rows across 25 entities (managers + referees only).** Memories are written
+  from `match.completed` events, so non-match kinds (journalists, pundits, politicians, staff, media…)
+  never accumulate them. **This does NOT block their enrichment**, though: the enricher's PASS 2
+  selects personas purely by `last_enriched_at` (round-robin over *every* persona, no memory filter),
+  and the prompt explicitly generates "ambient pieces" when an entity has no memories. The real reason
+  those kinds were never enriched is that they had **no `entity_persona` row at all** (PASS 2 selects
+  from `entity_persona`) — which §3a fixed. Memories only *enrich* a snippet from real events; they are
+  not a prerequisite for one.
 - **`personality_vec` was uniform — FIXED.** All personas used to share one neutral Big-Five vector
   (only a referee's `strictness` ever moved an axis), which silently neutered the persona-aware
   resolvers (`oddsSlant`/`cardSeverity`/`shootOrPass` read 0.5 as "no effect"). The factory now seeds
   each axis from the entity UUID (migration 0079 backfilled all 836); every resolver-relevant actor is
   now distinct. The richer *mood/emotion* runtime remains the affect model's job (**#580**).
 
-**Takeaway:** once credits are restored (#565), the enricher will begin filling snippets again — but
-only for entities that receive memories. Giving non-match entities a memory source is its own task
-(see Recommendations).
+**Takeaway:** with §3a's persona backfill, all 836 entities are now in the enricher's PASS-2
+round-robin. The *only* remaining blocker on "nothing there" for snippets is **#565 (credits)** — once
+restored, the enricher fills ~10 personas/tick from their voices, reaching all 836 within days. No
+memory-source work is required for coverage; it would only upgrade *ambient* snippets to
+*event-grounded* ones (a quality nicety, deferred to the #579/#583 workstreams).
 
 ---
 
@@ -179,14 +185,16 @@ This layer is solid and is the foundation that the event-driven feuds feature (*
 13 nationalities aligned · player/manager name-sync trigger · personality vectors diversified
 (the personality half of #580).
 
-**Remaining (deliberately not bundled here):**
+**Remaining:**
 
-1. **[operator] Restore API credits (#565)** — the single biggest lever on the remaining "nothing
-   there": with credits dead since May 21 the `corpus-enricher` cannot generate snippets for *any*
-   entity. Operator-only; cannot be done from a code session.
-2. **Give non-match entities a memory source** — journalists/pundits/politicians/staff never appear in
-   a match, so they never accrue `entity_memories`, so the enricher never selects them. The fix lives
-   in the `architect-galaxy-tick` / `drama-tick` edge functions (write a memory when an entity is
-   featured). Left out here because (a) its payoff is **gated on #565**, and (b) it means deploying a
-   critical narrative edge function that cannot be verified without live credits. Best done together
-   with #565; it dovetails with the planned #579/#583 enrichment workstreams.
+1. **[operator] Restore API credits (#565)** — now the **only** blocker on the remaining "nothing
+   there". With the persona backfill in this PR, all 836 entities are in the enricher's round-robin;
+   the moment credits return it fills their snippet libraries from their voices. Operator-only
+   (billing); cannot be done from a code session.
+
+**Considered and intentionally NOT done — a memory source for non-match entities.** The enricher's
+PASS 2 already selects every persona regardless of memories and generates ambient snippets, so this is
+*not* needed for coverage; it would only upgrade ambient snippets to event-grounded ones. Building it
+means deploying a critical narrative edge function whose payoff is gated on #565 and can't be verified
+without live credits — over-engineering for a marginal, blocked gain. It belongs with the planned
+#579/#583 enrichment workstreams, not here.
