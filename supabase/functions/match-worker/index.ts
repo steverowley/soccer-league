@@ -19,13 +19,20 @@
 // only one worker can flip status to 'in_progress' for a given match.
 // On error, status reverts to 'scheduled' for retry.
 //
-// BATCH SIZES
-// ───────────
-// MATCH_BATCH_SIZE=5: fetch up to 5 due matches per cron invocation.
-//   Keeps memory footprint low and spreads compute across invocations.
-// EVENT_INSERT_BATCH_SIZE=500: insert up to 500 events in a single
-//   Supabase call.  A typical 90-minute match generates 30–60 events,
-//   so one batch usually handles the entire match.
+// PACING, BUDGET & RECOVERY
+// ─────────────────────────
+// Matches are claimed and simulated ONE AT A TIME within CLAIM_TIME_BUDGET_MS,
+//   never pre-claimed as a batch — the spatial sim is CPU-heavy and a run of
+//   several in one isolate used to trip the WORKER_LIMIT (HTTP 546) and orphan
+//   every already-claimed match in 'in_progress'.  Whatever doesn't fit a tick
+//   stays 'scheduled' for the next minute.
+// requeueStaleInProgress() recovers any match a killed isolate still left
+//   stranded in 'in_progress' (older than STALE_IN_PROGRESS_MS), requeuing it
+//   so it completes on a later tick instead of staying stuck (and scoreless,
+//   which silently breaks the league table) forever.
+// EVENT_INSERT_BATCH_SIZE=500: insert up to 500 events in a single Supabase
+//   call.  A typical 90-minute match generates 30–60 events, so one batch
+//   usually handles the entire match.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
 import { normalizeTeamForEngine } from './normalizeTeam.ts';
@@ -61,8 +68,34 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
  */
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
-const MATCH_BATCH_SIZE = 5;          // Fetch up to 5 due matches per invocation
 const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
+
+/**
+ * Wall-clock budget (ms) for claiming + simulating matches in a single cron
+ * invocation.  Matches are claimed and processed ONE AT A TIME (see
+ * claimNextDueMatch), so when this budget is spent we simply stop claiming new
+ * work and return — any remaining due matches stay `status='scheduled'` and are
+ * picked up on the next minute's tick.
+ *
+ * WHY: the spatial sim is CPU-heavy and a run of several matches in one isolate
+ * overruns Supabase's per-invocation CPU limit (the isolate is killed with HTTP
+ * 546 WORKER_LIMIT).  When that happened mid-batch it orphaned every
+ * already-claimed-but-unprocessed match in `in_progress` with no data.  10s
+ * leaves comfortable headroom below the observed kill threshold (~16s+) while
+ * still draining the queue across successive ticks.
+ */
+const CLAIM_TIME_BUDGET_MS = 10_000;
+
+/**
+ * How long a match may sit in `status='in_progress'` before it's treated as
+ * orphaned and requeued (see requeueStaleInProgress).  A real simulation
+ * completes inside a single short-lived isolate (seconds), so a match still
+ * `in_progress` minutes later was abandoned by an isolate that was killed
+ * mid-run.  2 minutes is far above any genuine processing time (a live isolate
+ * is killed long before then), so an actively-simulating match is never reaped,
+ * yet a stuck one rejoins the queue within a couple of ticks.
+ */
+const STALE_IN_PROGRESS_MS = 2 * 60_000;
 
 // ── Supabase client (service role — full access) ──────────────────────────
 
@@ -70,57 +103,57 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
-// ── Helper: Claim and fetch due matches ────────────────────────────────────
+// ── Helper: Claim the next due match ───────────────────────────────────────
 
 /**
- * Fetch up to MATCH_BATCH_SIZE matches where status='scheduled' and
- * scheduled_at <= now(), then claim them by setting status='in_progress'.
+ * Claim exactly ONE due match (status='scheduled', scheduled_at <= now) by
+ * atomically flipping it to 'in_progress', and return the claimed row.
  *
- * Returns the *actually claimed* rows — i.e. only matches whose UPDATE
- * succeeded under the `status='scheduled'` predicate.  Any rows that another
- * worker race-grabbed between our SELECT and UPDATE are excluded, so we never
- * double-simulate or duplicate event inserts.
+ * Returns null when nothing is due, or when another worker won the race for the
+ * candidate (the optimistic-lock UPDATE matched zero rows) — in both cases the
+ * caller stops claiming for this tick.
  *
- * CONCURRENCY
- * ───────────
- * The original implementation returned `matches.filter(m => matchIds.includes(m.id))`,
- * which silently included every row from the SELECT regardless of who actually
- * won the UPDATE race — meaning two concurrent worker invocations could both
- * "claim" the same match, run two simulations against it, and double-insert
- * match_events.  Chaining `.select(...)` on the UPDATE returns exactly the
- * rows whose `status='scheduled'` predicate matched, making the claim
- * authoritative.
+ * WHY ONE AT A TIME: claiming a single match we immediately simulate — rather
+ * than pre-claiming a batch — means a mid-invocation stop (time budget spent,
+ * or the isolate being killed) can strand at most the one match currently in
+ * flight, which requeueStaleInProgress() then recovers.  The old batch claim
+ * orphaned every already-claimed-but-unprocessed match when the isolate died.
  *
- * @returns Array of match rows this worker owns for the duration of the call.
+ * CONCURRENCY: the `.eq('status','scheduled')` predicate on the UPDATE is the
+ * optimistic lock — only the worker whose UPDATE matched the still-'scheduled'
+ * row gets it back from `.select()`, so two overlapping invocations can never
+ * both simulate the same match or double-insert its events.
+ *
+ * @returns The claimed match row, or null if there's nothing to claim.
  */
-async function claimDueMatches() {
+async function claimNextDueMatch() {
   const now = new Date().toISOString();
 
-  // Fetch due matches. Intentionally no UPDATE lock here — the next step
-  // claims them atomically via the predicate on the UPDATE.
+  // Pick the single oldest due candidate. Intentionally no UPDATE lock here —
+  // the claim below is atomic via the predicate on the UPDATE.
   const { data: candidates, error: selectError } = await supabase
     .from('matches')
     .select('id')
     .eq('status', 'scheduled')
     .lte('scheduled_at', now)
-    .limit(MATCH_BATCH_SIZE)
-    .order('scheduled_at', { ascending: true });
+    .order('scheduled_at', { ascending: true })
+    .limit(1);
 
   if (selectError) {
     console.error('[match-worker] SELECT matches failed:', selectError);
-    return [];
+    return null;
   }
-  if (!candidates || candidates.length === 0) return [];
+  if (!candidates || candidates.length === 0) return null;
 
-  // Atomically claim. The .select() on the UPDATE returns only the rows
-  // whose `status='scheduled'` predicate matched — i.e. rows we actually
-  // won.  This is the race-safe variant of the old "filter by candidate IDs"
-  // approach, which credulously trusted the SELECT result set.
-  const candidateIds = candidates.map((m) => m.id);
+  // Atomically claim. The `.eq('status','scheduled')` predicate is the
+  // optimistic lock: the UPDATE's `.select()` returns the row only if it was
+  // still 'scheduled' when we flipped it, so two overlapping invocations can
+  // never both simulate the same match.  An empty result ⇒ we lost the race;
+  // the caller stops for this tick and the next one re-tries.
   const { data: claimed, error: claimError } = await supabase
     .from('matches')
     .update({ status: 'in_progress', played_at: new Date().toISOString() })
-    .in('id', candidateIds)
+    .eq('id', candidates[0].id)
     .eq('status', 'scheduled')
     // `round` is read post-match by postMatchLoreSave to surface the matchday
     // in the Architect verdict prompt (e.g. 'Matchday 7', 'Final').  Absent
@@ -129,11 +162,70 @@ async function claimDueMatches() {
 
   if (claimError) {
     console.error('[match-worker] UPDATE claim failed:', claimError);
-    return [];
+    return null;
   }
+  return claimed && claimed.length > 0 ? claimed[0] : null;
+}
 
-  console.log(`[match-worker] Claimed ${claimed?.length ?? 0} of ${candidateIds.length} candidate matches`);
-  return claimed ?? [];
+// ── Helper: Recover orphaned matches ───────────────────────────────────────
+
+/**
+ * Requeue matches that a killed isolate left stranded in `status='in_progress'`.
+ *
+ * A healthy simulation runs to completion inside one short-lived isolate, so
+ * any match still `in_progress` longer than STALE_IN_PROGRESS_MS was abandoned
+ * when its isolate was killed mid-run (CPU/wall-clock limit).  Because claiming
+ * only ever looks at `scheduled` rows, such a match would otherwise stay stuck
+ * forever — never completing, never scoring, and silently leaving a hole in the
+ * league table.  This reverts it to `scheduled` so a later tick re-simulates it.
+ *
+ * Before requeuing it deletes any partial rows the killed run may have written
+ * (mirrors processMatch's error-path cleanup): `match_positions` has a
+ * (match_id, minute, second) primary key and `match_events` has no per-event
+ * unique index, so leftover rows would otherwise conflict or duplicate on the
+ * re-simulation.  The `.eq('status','in_progress')` predicate on the UPDATE
+ * guards against racing a worker that legitimately finished one between our
+ * SELECT and UPDATE.
+ *
+ * Runs at the top of every cron tick; cheap (one indexed SELECT) when nothing
+ * is stale.
+ *
+ * @returns Number of matches requeued.
+ */
+async function requeueStaleInProgress(): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_IN_PROGRESS_MS).toISOString();
+
+  const { data: stale, error: selectError } = await supabase
+    .from('matches')
+    .select('id')
+    .eq('status', 'in_progress')
+    .lt('played_at', cutoff);
+
+  if (selectError) {
+    console.error('[match-worker] SELECT stale in_progress failed:', selectError);
+    return 0;
+  }
+  if (!stale || stale.length === 0) return 0;
+
+  const ids = stale.map((m) => m.id);
+
+  // Clear partial rows so the retry starts from a clean slate.
+  await supabase.from('match_events').delete().in('match_id', ids);
+  await supabase.from('match_player_stats').delete().in('match_id', ids);
+  await supabase.from('match_positions').delete().in('match_id', ids);
+
+  const { data: reverted, error: updateError } = await supabase
+    .from('matches')
+    .update({ status: 'scheduled', played_at: null })
+    .in('id', ids)
+    .eq('status', 'in_progress')
+    .select('id');
+
+  if (updateError) {
+    console.error('[match-worker] Requeue stale in_progress failed:', updateError);
+    return 0;
+  }
+  return reverted?.length ?? 0;
 }
 
 // ── Helper: Fetch teams with rosters ───────────────────────────────────────
@@ -1059,10 +1151,12 @@ function isAuthorized(req: Request): boolean {
 
 /**
  * HTTP handler invoked by pg_cron every minute.
- * Processes all due matches in the current batch.
  *
- * Returns 200 always (success) so pg_cron doesn't backoff on transient errors.
- * Failures are logged per-match and reverted for retry.
+ * Per tick: prices any unpriced upcoming matches, requeues orphaned
+ * `in_progress` matches a killed isolate stranded, then claims + simulates due
+ * matches one at a time until CLAIM_TIME_BUDGET_MS is spent (the rest wait for
+ * the next tick).  Returns 200 always so pg_cron doesn't back off on transient
+ * errors; per-match failures are logged and reverted to 'scheduled' for retry.
  */
 Deno.serve(async (req: Request) => {
   if (!isAuthorized(req)) {
@@ -1086,27 +1180,48 @@ Deno.serve(async (req: Request) => {
       console.warn('[match-worker] ensureOddsForUpcoming threw:', (err as Error)?.message ?? err);
     }
 
-    const matches = await claimDueMatches();
-    if (matches.length === 0) {
-      console.log('[match-worker] No due matches');
-      return new Response(JSON.stringify({ processed: 0 }), { status: 200 });
+    // ── Recover orphans: requeue matches a killed isolate left in_progress ──
+    // Runs before claiming so a previously-stranded match rejoins the queue
+    // this same tick.  Non-fatal: a failure here must not block fresh work.
+    try {
+      const requeued = await requeueStaleInProgress();
+      if (requeued > 0) {
+        console.log(`[match-worker] Requeued ${requeued} stale in_progress match(es)`);
+      }
+    } catch (err) {
+      console.warn('[match-worker] requeueStaleInProgress threw:', (err as Error)?.message ?? err);
     }
 
-    // Process all claimed matches
+    // ── Claim + simulate one match at a time, within a wall-clock budget ────
+    // One-at-a-time claiming (never a pre-claimed batch) plus the time budget
+    // is what keeps a CPU-heavy run from getting the isolate killed mid-batch
+    // and orphaning every already-claimed match.  We re-check the budget BEFORE
+    // each claim so we never start a match we may not be able to finish;
+    // whatever doesn't fit stays 'scheduled' for the next minute's tick.
+    const startedAt = Date.now();
+    let processed = 0;
     let successCount = 0;
     let failureCount = 0;
 
-    for (const match of matches) {
+    while (Date.now() - startedAt < CLAIM_TIME_BUDGET_MS) {
+      const match = await claimNextDueMatch();
+      if (!match) break; // nothing due (or we lost the claim race) — done this tick
+      processed++;
       const ok = await processMatch(match);
       if (ok) successCount++;
       else failureCount++;
+    }
+
+    if (processed === 0) {
+      console.log('[match-worker] No due matches');
+      return new Response(JSON.stringify({ processed: 0 }), { status: 200 });
     }
 
     console.log(`[match-worker] Batch complete: ${successCount} succeeded, ${failureCount} failed`);
 
     return new Response(
       JSON.stringify({
-        processed: matches.length,
+        processed,
         succeeded: successCount,
         failed: failureCount,
       }),

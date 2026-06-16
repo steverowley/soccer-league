@@ -218,7 +218,7 @@ export async function ensureOddsForUpcoming(supabase: any): Promise<OddsGenerati
   // The `.gte(scheduled_at, nowISO)` lower bound is essential: without it,
   // any stale `status='scheduled'` rows from the past (delayed/backlogged
   // fixtures, post-reset backlog) would be iterated on every cron tick, each
-  // one running a per-match SELECT against match_odds before claimDueMatches
+  // one running a per-match SELECT against match_odds before the match claim
   // even gets to fire.  Overdue matches don't need fresh odds either — the
   // betting UI closes the market at kickoff, so pricing them is wasted work.
   const { data: upcoming, error: upcomingErr } = await supabase
