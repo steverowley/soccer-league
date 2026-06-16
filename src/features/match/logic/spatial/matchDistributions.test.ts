@@ -54,32 +54,38 @@ const FOOTBALL_REFERENCE = {
 // ── Engine guard bands (what the PURE engine must stay within today) ────────
 // Football-plausible envelopes that the current engine satisfies AND that still
 // bracket FOOTBALL_REFERENCE. Anchored on the measured N=24 fingerprint after the
-// 2026-06 scoring calibration + fouls + offside + movement + stoppage: goals
-// 2.58, draws 0.333, shots-on-target ~19, home tilt 0.94, fouls 25.0, cards
-// 3.46, offsides 2.5.  (Matches now include ~3.4 min of added time.)
+// 2026-06 scoring calibration + fouls + offside + movement + stoppage +
+// penalties: goals 2.88, draws 0.292, shots-on-target ~17, home tilt 1.16,
+// fouls 25.2, cards 3.50, offsides 2.0, penalties 0.29.
 const ENGINE_GUARD = {
-  /** Combined goals/match. Lower bound catches a dead/stalemate engine; upper
-   *  bound catches a runaway. Brackets the 2.5–2.8 real-world ideal. Current ≈ 2.58. */
+  /** Combined goals/match (open play + penalties). Lower bound catches a
+   *  dead/stalemate engine; upper bound catches a runaway. Brackets the 2.5–2.8
+   *  real-world ideal, allowing for the goals penalties add. Current ≈ 2.88. */
   goalsPerMatch: [1.8, 3.8],
   /** Fraction of the batch finishing level. Wide because 24 matches quantises
-   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.333. */
+   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.292. */
   drawRate: [0.04, 0.42],
   /** On-target shots/match = goals + keeper saves (the only shot signals the
-   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 19. */
+   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 17. */
   shotsOnTargetPerMatch: [8, 32],
   /** Home÷away goals over the batch. Centred on ~1.0 because the pure engine is
-   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 0.94. */
+   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 1.16. */
   homeTilt: [0.75, 1.45],
   /** Fouls/match. Guards the foul model both ways: the floor catches a dead
    *  model, the ceiling catches per-tick foul spam (the bug where the challenge
-   *  re-rolled every 0.1s and racked up hundreds). Real ≈ 20-30. Current ≈ 25.0. */
+   *  re-rolled every 0.1s and racked up hundreds). Real ≈ 20-30. Current ≈ 25.2. */
   foulsPerMatch: [12, 42],
-  /** Bookings (yellows + reds)/match. Real ≈ 3-5. Current ≈ 3.46. */
+  /** Bookings (yellows + reds)/match. Real ≈ 3-5. Current ≈ 3.50. */
   cardsPerMatch: [1, 9],
   /** Offsides/match. Guards the offside rule both ways: the floor catches a dead
    *  rule, the ceiling catches phantom-flag spam from too tight a margin.
-   *  Real ≈ 1.5-3. Current ≈ 2.5. */
+   *  Real ≈ 1.5-3. Current ≈ 2.0. */
   offsidesPerMatch: [0.3, 8],
+  /** Penalties/match. Guards the box-foul → penalty rate both ways: the floor
+   *  catches a dead rule, the ceiling catches over-production (the early bug
+   *  where every box foul became a penalty, at ~1.5/match). Real ≈ 0.25-0.35.
+   *  Current ≈ 0.29. */
+  penaltiesPerMatch: [0.04, 1.1],
 } as const;
 
 /** Full 90-minute matches at the production frame cadence. ~1.5s each, so 24
@@ -131,6 +137,7 @@ describe('spatial engine — football-realistic distribution fingerprint (#577)'
     let fouls = 0;
     let cards = 0;
     let offsides = 0;
+    let penalties = 0;
 
     // Balanced-but-varied-quality matches: both teams share an overall rating
     // that sweeps 60→80 across the batch, so the fingerprint spans the league's
@@ -150,6 +157,7 @@ describe('spatial engine — football-realistic distribution fingerprint (#577)'
       fouls += r.events.filter((e) => e.type === 'foul').length;
       cards += r.events.filter((e) => e.type === 'foul' && e.card != null).length;
       offsides += r.events.filter((e) => e.type === 'offside').length;
+      penalties += r.events.filter((e) => e.type === 'penalty').length;
     }
 
     const goalsPerMatch = (homeGoals + awayGoals) / MATCH_COUNT;
@@ -159,6 +167,7 @@ describe('spatial engine — football-realistic distribution fingerprint (#577)'
     const foulsPerMatch = fouls / MATCH_COUNT;
     const cardsPerMatch = cards / MATCH_COUNT;
     const offsidesPerMatch = offsides / MATCH_COUNT;
+    const penaltiesPerMatch = penalties / MATCH_COUNT;
 
     assertInBand('goalsPerMatch', goalsPerMatch, ENGINE_GUARD.goalsPerMatch);
     assertInBand('drawRate', drawRate, ENGINE_GUARD.drawRate);
@@ -167,6 +176,7 @@ describe('spatial engine — football-realistic distribution fingerprint (#577)'
     assertInBand('foulsPerMatch', foulsPerMatch, ENGINE_GUARD.foulsPerMatch);
     assertInBand('cardsPerMatch', cardsPerMatch, ENGINE_GUARD.cardsPerMatch);
     assertInBand('offsidesPerMatch', offsidesPerMatch, ENGINE_GUARD.offsidesPerMatch);
+    assertInBand('penaltiesPerMatch', penaltiesPerMatch, ENGINE_GUARD.penaltiesPerMatch);
   }, 90000);
 
   it('keeps guard bands wide enough to still permit the real-world ideal', () => {

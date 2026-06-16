@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   shotQuality, pressureAt, tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
+  isInPenaltyArea, penaltyGoalProbability,
 } from './possession';
 import { type SimPlayer, type SimWorld, type SimPlayerStats, PITCH_WIDTH } from './types';
 import { vec } from './vec2';
@@ -187,5 +188,36 @@ describe('ballPathWithinReach', () => {
   it('handles a stationary ball as a point check', () => {
     expect(ballPathWithinReach(vec(50, 34), vec(50.5, 34), vec(50.5, 34), 1.4)).toBe(true);
     expect(ballPathWithinReach(vec(60, 34), vec(50, 34), vec(50, 34), 1.4)).toBe(false);
+  });
+});
+
+describe('isInPenaltyArea (home attacks x=105, away attacks x=0)', () => {
+  it('flags positions inside the box the side attacks', () => {
+    expect(isInPenaltyArea(vec(100, PITCH_WIDTH / 2), 'home')).toBe(true); // 5m out, central
+    expect(isInPenaltyArea(vec(5, PITCH_WIDTH / 2), 'away')).toBe(true);   // away's box at x=0
+  });
+
+  it('rejects positions outside the box (too deep, too wide, or wrong end)', () => {
+    expect(isInPenaltyArea(vec(80, PITCH_WIDTH / 2), 'home')).toBe(false); // 25m out — beyond box depth
+    expect(isInPenaltyArea(vec(100, 5), 'home')).toBe(false);             // corner — outside box width
+    expect(isInPenaltyArea(vec(100, PITCH_WIDTH / 2), 'away')).toBe(false); // away attacks the OTHER end
+  });
+});
+
+describe('penaltyGoalProbability', () => {
+  it('anchors high, and a stronger taker against the same keeper edges higher', () => {
+    const keeper = player({ stats: stats({ goalkeeping: 70 }) });
+    const weak = player({ stats: stats({ shooting: 40 }) });
+    const strong = player({ stats: stats({ shooting: 95 }) });
+    expect(penaltyGoalProbability(weak, keeper)).toBeGreaterThan(0.5);
+    expect(penaltyGoalProbability(strong, keeper)).toBeGreaterThan(penaltyGoalProbability(weak, keeper));
+  });
+
+  it('clamps to [0.55, 0.92] against a keeper and is near-certain with none', () => {
+    const upper = penaltyGoalProbability(player({ stats: stats({ shooting: 99 }) }), player({ stats: stats({ goalkeeping: 5 }) }));
+    const lower = penaltyGoalProbability(player({ stats: stats({ shooting: 5 }) }), player({ stats: stats({ goalkeeping: 99 }) }));
+    expect(upper).toBeLessThanOrEqual(0.92);
+    expect(lower).toBeGreaterThanOrEqual(0.55);
+    expect(penaltyGoalProbability(player(), undefined)).toBeGreaterThan(0.92); // empty net
   });
 });

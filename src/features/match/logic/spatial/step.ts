@@ -29,6 +29,7 @@ import {
 import {
   chooseAction, passKick, shotKick, shotQuality,
   tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
+  isInPenaltyArea, penaltyGoalProbability,
 } from './possession';
 import { dynamicAnchor } from './formation';
 
@@ -72,6 +73,13 @@ const SEPARATION_RADIUS = 4.5;
 /** Cooldown ticks applied to a freshly-loose ball so the kicker can't instantly
  *  re-collect their own pass/shot. */
 const LOOSE_POP_COOLDOWN_TICKS = 3;
+
+/** Share of fouls committed inside the box that are given as a penalty.  Most
+ *  box contact is waved away or advantage is played; only clear fouls are given,
+ *  the rest become a quick free kick (as before).  Tuned so penalties land at a
+ *  realistic ~0.25-0.3/match given how much play this engine funnels into the
+ *  box.  Drawn only on box fouls, so open-play scoring is left undisturbed. */
+const PENALTY_AWARD_RATE = 0.13;
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -167,6 +175,42 @@ function awardBall(world: SimWorld, side: TeamSide, spot: Vec2): void {
 function kickoffReset(world: SimWorld, concedingSide: TeamSide): void {
   resetToFormation(world);
   awardBall(world, concedingSide, CENTRE_SPOT);
+}
+
+/**
+ * Resolve a penalty kick awarded for a foul in the box: the fouled side's taker
+ * against the defending keeper.  Emits a `penalty` award beat, then resolves on a
+ * single rng draw weighted by taker-vs-keeper quality:
+ *   - GOAL → credit the side, then the normal post-goal reset + dead-ball pause
+ *     (identical to an open-play goal, so the restart looks the same).
+ *   - SAVE → the keeper gathers and play restarts with the defending side.
+ * Mutates the world in place.
+ *
+ * @param world  The match world.
+ * @param taker  The fouled attacker, who takes the kick.
+ * @param minute The current match minute (for the emitted events).
+ * @param rng    Seeded source (exactly one draw — keeps the twin streams aligned).
+ * @param events The tick's event sink.
+ */
+function resolvePenalty(world: SimWorld, taker: SimPlayer, minute: number, rng: Rng, events: SimEvent[]): void {
+  const attackingSide = taker.side;
+  const defendingSide: TeamSide = attackingSide === 'home' ? 'away' : 'home';
+  const keeper = keeperOf(defendingSide === 'home' ? world.home : world.away);
+  events.push({ tSec: world.clockSec, minute, type: 'penalty', side: attackingSide, playerId: taker.id });
+
+  if (rng() < penaltyGoalProbability(taker, keeper)) {
+    if (attackingSide === 'home') world.score[0] += 1; else world.score[1] += 1;
+    events.push({ tSec: world.clockSec, minute, type: 'goal', side: attackingSide, playerId: taker.id });
+    kickoffReset(world, defendingSide);
+    world.deadBallTicks = Math.round(GOAL_PAUSE_SEC / world.dtSec);
+    world.phase = 'dead_ball';
+  } else if (keeper) {
+    // Saved: keeper gathers, play restarts with the defending side.
+    events.push({ tSec: world.clockSec, minute, type: 'save', side: defendingSide, playerId: keeper.id, otherId: taker.id });
+    awardBall(world, defendingSide, keeper.pos);
+  } else {
+    awardBall(world, defendingSide, CENTRE_SPOT);
+  }
 }
 
 // ── The tick ───────────────────────────────────────────────────────────────
@@ -301,15 +345,20 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
         events.push({ tSec: world.clockSec, minute, type: 'tackle', side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id });
         challengeResolved = true;
       } else if (rng() < foulProbability(challenger.player, owner)) {
-        // Foul: a quick free kick restores the ball to the fouled side at the
-        // spot; a cynical foul near goal may draw a yellow or (rarely) red.
+        // Foul.  A cynical foul near goal may draw a yellow or (rarely) red.
         const card = cardForFoul(owner.pos, owner.side, rng);
         events.push({
           tSec: world.clockSec, minute, type: 'foul',
           side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id,
           ...(card ? { card } : {}),
         });
-        awardBall(world, owner.side, owner.pos);
+        // A clear foul inside the box is a penalty (the rng draw fires only there,
+        // so open-play stays undisturbed); otherwise a quick free kick at the spot.
+        if (isInPenaltyArea(owner.pos, owner.side) && rng() < PENALTY_AWARD_RATE) {
+          resolvePenalty(world, owner, minute, rng, events);
+        } else {
+          awardBall(world, owner.side, owner.pos);
+        }
         challengeResolved = true;
       }
       // else: challenge missed — fall through to the carrier's decision.
