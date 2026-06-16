@@ -261,10 +261,11 @@ export function tackleProbability(defender: SimPlayer, carrier: SimPlayer): numb
  * @param sq      Shot quality of the strike, in [0,1].
  */
 export function saveProbability(keeper: SimPlayer, sq: number): number {
-  // base ~0.76–0.94 across the goalkeeping range; a great chance (sq→1) pulls
-  // it down by ~0.33.  Tuned (2026-06) with the shot gate + placement error so
-  // converted chances stay scarce enough for believable scorelines (~2.5/match).
-  const base = 0.54 + keeper.stats.goalkeeping / 185;
+  // base ~0.74–0.92 across the goalkeeping range; a great chance (sq→1) pulls
+  // it down by ~0.33.  Tuned (2026-06) with the shot gate + placement error and
+  // re-centred after the width/movement change so converted chances stay scarce
+  // enough for believable scorelines (~2.5–2.8/match).
+  const base = 0.52 + keeper.stats.goalkeeping / 185;
   return Math.min(0.94, Math.max(0.10, base - sq * 0.33));
 }
 
