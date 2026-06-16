@@ -28,7 +28,7 @@ import {
 } from './steering.ts';
 import {
   chooseAction, passKick, shotKick, shotQuality,
-  tackleProbability, saveProbability, ballPathWithinReach,
+  tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach,
 } from './possession.ts';
 import { dynamicAnchor } from './formation.ts';
 
@@ -280,18 +280,38 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
     ball.vel = owner.vel;
     ball.heldSec += dt;
 
-    // A defender in range may dispossess the carrier before they decide.
+    // A defender in range challenges: win the ball cleanly, foul (free kick),
+    // or miss and let the carrier play on.  RNG draws are ordered tackle →
+    // foul → card so the seeded stream stays deterministic across both twins.
     const defenders = owner.side === 'home' ? awayOut : homeOut;
     const challenger = nearestTo(defenders, owner.pos);
-    if (challenger && challenger.d < TACKLE_RADIUS && rng() < tackleProbability(challenger.player, owner)) {
-      // Tackle won: ball pops loose toward the tackler.
-      ball.ownerId = null;
-      ball.vel = scale(normalize(sub(challenger.player.pos, owner.pos)), 6);
-      ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
-      ball.heldSec = 0;
-      ball.lastTouch = { side: challenger.player.side, isShot: false, sq: 0 };
-      events.push({ tSec: world.clockSec, minute, type: 'tackle', side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id });
-    } else if (ball.heldSec >= DECISION_INTERVAL_SEC) {
+    let challengeResolved = false;
+    if (challenger && challenger.d < TACKLE_RADIUS) {
+      if (rng() < tackleProbability(challenger.player, owner)) {
+        // Tackle won: ball pops loose toward the tackler.
+        ball.ownerId = null;
+        ball.vel = scale(normalize(sub(challenger.player.pos, owner.pos)), 6);
+        ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
+        ball.heldSec = 0;
+        ball.lastTouch = { side: challenger.player.side, isShot: false, sq: 0 };
+        events.push({ tSec: world.clockSec, minute, type: 'tackle', side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id });
+        challengeResolved = true;
+      } else if (rng() < foulProbability(challenger.player, owner)) {
+        // Foul: a quick free kick restores the ball to the fouled side at the
+        // spot; a cynical foul near goal may draw a yellow or (rarely) red.
+        const card = cardForFoul(owner.pos, owner.side, rng);
+        events.push({
+          tSec: world.clockSec, minute, type: 'foul',
+          side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id,
+          ...(card ? { card } : {}),
+        });
+        awardBall(world, owner.side, owner.pos);
+        challengeResolved = true;
+      }
+      // else: challenge missed — fall through to the carrier's decision.
+    }
+
+    if (!challengeResolved && ball.heldSec >= DECISION_INTERVAL_SEC) {
       // Time to decide.
       ball.heldSec = 0;
       const action = chooseAction(owner, world, rng);

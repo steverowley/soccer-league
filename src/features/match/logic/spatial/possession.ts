@@ -12,7 +12,7 @@ import {
 import { rngGaussian, type Rng } from './rng';
 import {
   type SimPlayer, type SimWorld, type TeamSide,
-  GOAL_Y_MIN, GOAL_Y_MAX, PITCH_WIDTH,
+  GOAL_Y_MIN, GOAL_Y_MAX, PITCH_WIDTH, PITCH_LENGTH,
   attackingGoalX,
 } from './types';
 
@@ -261,11 +261,51 @@ export function tackleProbability(defender: SimPlayer, carrier: SimPlayer): numb
  * @param sq      Shot quality of the strike, in [0,1].
  */
 export function saveProbability(keeper: SimPlayer, sq: number): number {
-  // base ~0.79–0.94 across the goalkeeping range; a great chance (sq→1) pulls
+  // base ~0.76–0.94 across the goalkeeping range; a great chance (sq→1) pulls
   // it down by ~0.33.  Tuned (2026-06) with the shot gate + placement error so
-  // converted chances stay scarce enough for believable scorelines (~2.5–2.8/match).
-  const base = 0.57 + keeper.stats.goalkeeping / 185;
+  // converted chances stay scarce enough for believable scorelines (~2.5/match).
+  const base = 0.54 + keeper.stats.goalkeeping / 185;
   return Math.min(0.94, Math.max(0.10, base - sq * 0.33));
+}
+
+/**
+ * PER-TICK probability that a defender who FAILED to win a clean tackle fouls
+ * the carrier instead of simply missing.  Because the carrier is challenged
+ * every 0.1s while a defender is in range, this is deliberately TINY — a few
+ * tenths of a percent — so a full match yields a realistic ~20-30 fouls rather
+ * than thousands.  A defender badly beaten for skill clips the dribbler a touch
+ * more often.  Clamped to [0.2%, 1.2%] per tick.
+ *
+ * @param defender  The challenging player.
+ * @param carrier   The player on the ball.
+ */
+export function foulProbability(defender: SimPlayer, carrier: SimPlayer): number {
+  // How badly the defender is beaten for skill (0 = matched, → 1 = outclassed).
+  const outmatched = Math.max(0, (carrier.stats.dribbling - defender.stats.tackling) / 100);
+  return Math.min(0.012, Math.max(0.002, 0.003 + outmatched * 0.012));
+}
+
+/**
+ * The card (if any) a foul draws.  Cynical fouls that stop an attacker in a
+ * threatening position are likelier to be booked, and a small share of bookable
+ * fouls are serious enough for a straight red.  Most fouls return null (a free
+ * kick, no card).  Always consumes exactly two rng draws so the seeded stream
+ * stays stable regardless of outcome.
+ *
+ * @param foulPos     Where the foul happened (pitch metres).
+ * @param fouledSide  The side that was fouled (attacking toward their goal).
+ * @param rng         Seeded source.
+ */
+export function cardForFoul(foulPos: Vec2, fouledSide: TeamSide, rng: Rng): 'yellow' | 'red' | null {
+  // Advancement: 0 deep in the fouled side's own half, → 1 right at the goal
+  // they attack.  A foul that halts a genuine attack is the cynical, bookable one.
+  const goalX = attackingGoalX(fouledSide);
+  const advancement = 1 - Math.abs(foulPos.x - goalX) / PITCH_LENGTH;
+  const yellowChance = 0.08 + advancement * 0.12; // ~8% midfield … ~20% near goal
+  const draw = rng();
+  const serious = rng() < 0.06;                    // share of bookings that are red
+  if (draw >= yellowChance) return null;
+  return serious ? 'red' : 'yellow';
 }
 
 /**
