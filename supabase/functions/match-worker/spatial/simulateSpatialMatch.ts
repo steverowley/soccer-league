@@ -30,10 +30,12 @@ export interface SpatialPlayerInput {
   stats: SimPlayerStats;
 }
 
-/** One team: a formation key + its starting XI (extra players are ignored). */
+/** One team: a formation key, its starting XI, and an optional bench. */
 export interface SpatialTeamInput {
   formation: string;        // free-text from DB; narrowed internally
   players:   SpatialPlayerInput[];
+  /** Substitutes available to bring on (up to 5); omitted ⇒ no bench. */
+  bench?:    SpatialPlayerInput[];
 }
 
 // ── Default config ──────────────────────────────────────────────────────────
@@ -50,6 +52,9 @@ export const DEFAULT_CONFIG: SimConfig = {
   seed:          1,
   stoppage:      true,       // play deterministic added time after regulation
 };
+
+/** Substitutions each side may make in a match (the standard three changes). */
+const MAX_SUBSTITUTIONS = 3;
 
 /**
  * Deterministic added-time allowance (in seconds) for a finished regulation
@@ -184,6 +189,12 @@ function buildWorld(
   const homePlayers = buildTeam(home.players, narrowFormation(home.formation), 'home');
   const awayPlayers = buildTeam(away.players, narrowFormation(away.formation), 'away');
 
+  // Bench players are built but kept off the pitch (not in frames) until a
+  // substitution brings one on; their home position is a placeholder — a sub
+  // inherits the formation slot of the player they replace.
+  const homeBench = (home.bench ?? []).map((p) => makeSimPlayer(p, p.role, 'home', CENTRE_SPOT));
+  const awayBench = (away.bench ?? []).map((p) => makeSimPlayer(p, p.role, 'away', CENTRE_SPOT));
+
   // Kickoff taker: the home player nearest the centre spot (a central MF).
   let taker = homePlayers[0];
   let bestD2 = Infinity;
@@ -196,6 +207,10 @@ function buildWorld(
   return {
     home: homePlayers,
     away: awayPlayers,
+    homeBench,
+    awayBench,
+    homeSubsLeft: MAX_SUBSTITUTIONS,
+    awaySubsLeft: MAX_SUBSTITUTIONS,
     ball: {
       pos: CENTRE_SPOT,
       vel: { x: 0, y: 0 },

@@ -83,11 +83,14 @@ export function applyTeamTraits(
   team: SpatialTeamInput,
   personalityById: ReadonlyMap<string, string | null | undefined>,
 ): SpatialTeamInput {
+  const nudge = (player: SpatialTeamInput['players'][number]) => ({
+    ...player,
+    stats: applyTraitModifiers(player.stats, { personality: personalityById.get(player.id) ?? null }),
+  });
   return {
     ...team,
-    players: team.players.map((player) => ({
-      ...player,
-      stats: applyTraitModifiers(player.stats, { personality: personalityById.get(player.id) ?? null }),
-    })),
+    players: team.players.map(nudge),
+    // Bench players get the same nudge so a sub plays to their personality too.
+    ...(team.bench ? { bench: team.bench.map(nudge) } : {}),
   };
 }
