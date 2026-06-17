@@ -98,6 +98,7 @@ function eventCommentary(ev: SimEvent, index: PlayerIndex): string {
                            ? `${pn} is shown a ${ev.card} card for a foul${o ? ` on ${on}` : ''}.`
                            : `${pn} fouls${o ? ` ${on}` : ''} — free kick.`;
     case 'penalty':      return `Penalty to ${tn}! ${pn} steps up to take it.`;
+    case 'substitution': return `${tn} make a change — ${pn} comes on${o ? ` for ${on}` : ''}.`;
     case 'offside':      return `${pn} is caught offside.`;
     case 'interception': return `${pn} intercepts the ball.`;
     case 'pass':         return `${pn} plays the ball forward.`;
@@ -211,6 +212,7 @@ const NOTABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'save',
   'foul',
   'penalty',
+  'substitution',
   'offside',
   'out_corner',
 ]);
@@ -361,15 +363,23 @@ export function toSpatialTeamInput(teamData: {
 
   const allActive = (teamData.players ?? []).filter((p) => p.is_active !== false);
   const starters  = allActive.filter((p) => p.starter !== false);
+  // Up to five substitutes are eligible to come on.
+  const subs      = allActive.filter((p) => p.starter === false).slice(0, 5);
 
+  // position is DB-constrained to 'GK'|'DF'|'MF'|'FW' (migration 0000 CHECK), so
+  // the role cast is safe; 'MF' is the fallback for any pre-constraint rows.
   const players: SpatialPlayerInput[] = starters.map((p) => ({
     id:    p.id,
     name:  p.name,
-    // position is DB-constrained to 'GK'|'DF'|'MF'|'FW' (migration 0000 CHECK),
-    // so this cast is safe; 'MF' is the fallback for any pre-constraint rows.
+    role:  (p.position as Role | undefined) ?? 'MF',
+    stats: deriveSimStats(p),
+  }));
+  const bench: SpatialPlayerInput[] = subs.map((p) => ({
+    id:    p.id,
+    name:  p.name,
     role:  (p.position as Role | undefined) ?? 'MF',
     stats: deriveSimStats(p),
   }));
 
-  return { formation, players };
+  return { formation, players, bench };
 }

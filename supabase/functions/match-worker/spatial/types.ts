@@ -198,6 +198,12 @@ export type SimPhase =
 export interface SimWorld {
   home: SimPlayer[];
   away: SimPlayer[];
+  /** Unused substitutes for each side; players move from here onto the pitch. */
+  homeBench: SimPlayer[];
+  awayBench: SimPlayer[];
+  /** Substitutions still available to each side (starts at 3). */
+  homeSubsLeft: number;
+  awaySubsLeft: number;
   ball: SimBall;
   /** Goals as [home, away]. */
   score: [number, number];
@@ -236,6 +242,7 @@ export interface SimEvent {
     | 'interception'
     | 'foul'        // failed challenge that fouls the carrier → free kick (may carry a card)
     | 'penalty'     // a foul inside the box → penalty kick (followed by a goal or save)
+    | 'substitution'// a fresh sub replaces a tiring player (playerId on, otherId off)
     | 'offside'     // attacker collected a teammate's pass while in an offside position
     | 'out_throw'   // ball left via touchline
     | 'out_goalkick'

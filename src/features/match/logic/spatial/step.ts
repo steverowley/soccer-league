@@ -86,6 +86,17 @@ const PENALTY_AWARD_RATE = 0.13;
  *  they foul far less — which keeps second-yellow dismissals realistic. */
 const BOOKED_FOUL_FACTOR = 0.45;
 
+/** Earliest match-clock second a tactical substitution is considered (≈ 55'). */
+const SUB_MIN_SEC = 55 * 60;
+
+/** Spacing (s) between a side's changes so all three don't fire at once (≈ 9'),
+ *  giving a realistic ~55' / 64' / 73' cadence. */
+const SUB_SPACING_SEC = 9 * 60;
+
+/** A tiring starter is replaced once their stamina drops below this. Tuned so a
+ *  side makes ~2-3 changes over a full match. */
+const SUB_STAMINA_THRESHOLD = 0.55;
+
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
 /** Outfield players (everyone but the keeper) of a side, sent-off players excluded. */
@@ -198,6 +209,52 @@ function sendOff(player: SimPlayer): void {
 }
 
 /**
+ * Consider a tactical substitution for one side.  After the hour mark (and with
+ * the three changes spaced out), the most tired outfield starter — never the
+ * keeper, the ball-carrier or an already sent-off player — is replaced by a
+ * fresh bench player who inherits their formation slot and comes on with full
+ * stamina.  The outgoing player simply leaves the pitch (and the replay frames);
+ * the team stays eleven strong.  Deterministic (no rng), so it's twin-identical.
+ * Mutates the world and emits a `substitution` event when a change is made.
+ *
+ * @param world   The match world.
+ * @param side    Which side to consider subbing.
+ * @param minute  Current match minute (for the emitted event).
+ * @param events  The tick's event sink.
+ */
+function maybeSubstitute(world: SimWorld, side: TeamSide, minute: number, events: SimEvent[]): void {
+  const subsLeft = side === 'home' ? world.homeSubsLeft : world.awaySubsLeft;
+  const bench = side === 'home' ? world.homeBench : world.awayBench;
+  if (subsLeft <= 0 || bench.length === 0) return;
+  // Space the changes: the Nth change waits until ≈ 55' + N·spacing (the 3 is
+  // the standard change allowance the world is seeded with).
+  const made = 3 - subsLeft;
+  if (world.clockSec < SUB_MIN_SEC + made * SUB_SPACING_SEC) return;
+
+  const team = side === 'home' ? world.home : world.away;
+  let off: SimPlayer | null = null;
+  for (const p of team) {
+    if (p.role === 'GK' || p.sentOff || p.id === world.ball.ownerId) continue;
+    if (!off || p.stamina < off.stamina) off = p;
+  }
+  if (!off || off.stamina > SUB_STAMINA_THRESHOLD) return;
+
+  // Prefer a like-for-like bench player; fall back to whoever's available.
+  let bi = bench.findIndex((b) => b.role === off!.role);
+  if (bi < 0) bi = 0;
+  const fresh = bench.splice(bi, 1)[0]!;
+  // The sub inherits the outgoing player's slot (role + home anchor) and comes
+  // on where they left, with a full tank.
+  const on: SimPlayer = {
+    ...fresh, role: off.role, homePos: off.homePos, pos: off.pos,
+    vel: ZERO, stamina: 1, yellowCards: 0, sentOff: false,
+  };
+  team[team.indexOf(off)] = on;
+  if (side === 'home') world.homeSubsLeft -= 1; else world.awaySubsLeft -= 1;
+  events.push({ tSec: world.clockSec, minute, type: 'substitution', side, playerId: on.id, otherId: off.id });
+}
+
+/**
  * Resolve a penalty kick awarded for a foul in the box: the fouled side's taker
  * against the defending keeper.  Emits a `penalty` award beat, then resolves on a
  * single rng draw weighted by taker-vs-keeper quality:
@@ -261,6 +318,11 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
     if (world.deadBallTicks <= 0) world.phase = 'open_play';
     return events;
   }
+
+  // ── Substitutions ─────────────────────────────────────────────────────────
+  // Once players tire in the second half, each side may bring on fresh legs.
+  maybeSubstitute(world, 'home', minute, events);
+  maybeSubstitute(world, 'away', minute, events);
 
   const ball = world.ball;
   if (ball.loosePopCooldown > 0) ball.loosePopCooldown -= 1;

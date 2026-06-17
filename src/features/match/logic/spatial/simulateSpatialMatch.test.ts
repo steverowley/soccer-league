@@ -237,3 +237,39 @@ describe('simulateSpatialMatch — sending-off (red card)', () => {
     }
   }, 30000);
 });
+
+describe('simulateSpatialMatch — substitutions', () => {
+  /** A team plus a 5-strong bench (GK + outfield mix). */
+  const withBench = (prefix: string, base: number): SpatialTeamInput => ({
+    ...team(prefix, base),
+    bench: (['GK', 'DF', 'MF', 'MF', 'FW'] as Role[]).map((role, i) => ({
+      id: `${prefix}-s${i}`, name: `${prefix} s${i}`, role, stats: stats(base),
+    })),
+  });
+
+  it('brings on fresh legs, at most three per side, replacing tiring starters 1-for-1', () => {
+    const r = simulateSpatialMatch(withBench('H', 70), withBench('A', 70), { ...FULL, seed: 5 });
+    const subs = r.events.filter((e) => e.type === 'substitution');
+    expect(subs.length).toBeGreaterThan(0); // a well-stocked bench gets used
+
+    // At most three changes per side.
+    const perSide: Record<'home' | 'away', number> = { home: 0, away: 0 };
+    for (const s of subs) perSide[s.side as 'home' | 'away']++;
+    expect(perSide.home).toBeLessThanOrEqual(3);
+    expect(perSide.away).toBeLessThanOrEqual(3);
+
+    // The first change is 1-for-1: the incoming player joins the pitch (checked
+    // in a short window right after — they could later be subbed off again), and
+    // the outgoing player never reappears in any subsequent frame.
+    const first = subs[0]!;
+    const after = r.frames.filter((f) => f.tSec >= first.tSec + 2.5);
+    expect(after.length).toBeGreaterThan(2);
+    const justAfter = after.slice(0, 5);
+    expect(justAfter.every((f) => f.players.some((p) => p.id === first.playerId))).toBe(true);
+    expect(after.every((f) => !f.players.some((p) => p.id === first.otherId))).toBe(true);
+
+    // The pitch is always eleven-a-side in frames (subs swap 1-for-1; sent-off
+    // players stay parked on the line), so the count never drops.
+    expect(r.frames[r.frames.length - 1]!.players.length).toBe(22);
+  }, 30000);
+});
