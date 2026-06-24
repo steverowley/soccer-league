@@ -1194,12 +1194,8 @@ function CommentaryFeed({ events }: { events: MatchEventRow[] }) {
  *                     defensively destructure.
  */
 function CommentaryRow({ event }: { event: MatchEventRow }) {
-  const payload = (event.payload ?? {}) as Record<string, unknown>;
-  const text =
-    typeof payload.commentary === 'string' && payload.commentary.length > 0
-      ? payload.commentary
-      : prettifyEventType(event.type);
-  const isArchitect = isArchitectEvent(payload);
+  const text = eventProse(event) ?? prettifyEventType(event.type);
+  const isArchitect = isArchitectEvent(event);
 
   return (
     <div style={{
@@ -1218,7 +1214,7 @@ function CommentaryRow({ event }: { event: MatchEventRow }) {
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
         }}>
-          {prettifyEventType(event.type)}
+          {eventHeading(event)}
         </b>
         <span style={{ marginLeft: 'auto', fontWeight: 700, color: DUST_70, fontVariantNumeric: 'tabular-nums' }}>
           {event.minute}{event.minute > 90 ? '+' : "'"}
@@ -1257,11 +1253,15 @@ const TIMELINE_GLYPH: Record<TimelineKind, string> = {
 };
 
 /**
- * True when any of the architect-interference flags is set on an event's
- * jsonb payload.  Any single flag triggers the purple cue — we never try to
- * convey *which* kind of interference to the user (hidden-mechanics pillar).
+ * True when an event is an Architect beat — either a first-class
+ * `architect_interference` event (the cosmos acting in-match, #570) or a regular
+ * event the Architect mechanically rewrote (the legacy `architect*` payload
+ * flags).  Any match triggers the purple cosmic cue; we never convey *which*
+ * interference it was (hidden-mechanics pillar).
  */
-function isArchitectEvent(payload: Record<string, unknown>): boolean {
+export function isArchitectEvent(event: MatchEventRow): boolean {
+  if (event.type === 'architect_interference') return true;
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
   return (
     payload.architectAnnulled === true ||
     payload.architectForced   === true ||
@@ -1269,6 +1269,29 @@ function isArchitectEvent(payload: Record<string, unknown>): boolean {
     payload.architectStolen   === true ||
     payload.architectEcho     === true
   );
+}
+
+/**
+ * The human prose for an event row, or null when it carries none.  Booth events
+ * keep their line in `payload.commentary`; Architect-interference beats keep
+ * theirs in `payload.proclamation` — surface whichever is present so the
+ * cosmos's own words reach the feed instead of a bare type label (#570).
+ */
+export function eventProse(event: MatchEventRow): string | null {
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  if (typeof payload.commentary === 'string' && payload.commentary.length > 0) return payload.commentary;
+  if (typeof payload.proclamation === 'string' && payload.proclamation.length > 0) return payload.proclamation;
+  return null;
+}
+
+/**
+ * Heading label for an event row.  Architect beats read as the cast name —
+ * "The Architect" — never the interference mechanic, matching the /news feed's
+ * treatment and preserving the mystery.
+ */
+function eventHeading(event: MatchEventRow): string {
+  if (event.type === 'architect_interference') return 'The Architect';
+  return prettifyEventType(event.type);
 }
 
 /**
@@ -1281,9 +1304,9 @@ function isArchitectEvent(payload: Record<string, unknown>): boolean {
  * or `payload.isGoal`; cards are `type==='foul'` carrying `payload.cardType`,
  * or any type whose key mentions a card; subs / saves fall through to 'other'.
  */
-function classifyTimelineEvent(event: MatchEventRow): TimelineKind {
+export function classifyTimelineEvent(event: MatchEventRow): TimelineKind {
+  if (isArchitectEvent(event)) return 'arch';
   const payload = (event.payload ?? {}) as Record<string, unknown>;
-  if (isArchitectEvent(payload)) return 'arch';
   if (payload.isGoal === true || event.type === 'goal') return 'goal';
   const isCard =
     typeof payload.cardType === 'string' ||
@@ -1333,12 +1356,8 @@ function MatchTimeline({ events }: { events: MatchEventRow[] }) {
  * @param props.last   True for the final row (drops the bottom hairline).
  */
 function TimelineRow({ event, last }: { event: MatchEventRow; last: boolean }) {
-  const kind    = classifyTimelineEvent(event);
-  const payload = (event.payload ?? {}) as Record<string, unknown>;
-  const text =
-    typeof payload.commentary === 'string' && payload.commentary.length > 0
-      ? payload.commentary
-      : '';
+  const kind = classifyTimelineEvent(event);
+  const text = eventProse(event) ?? '';
 
   const isArch = kind === 'arch';
   const glyphColour =
@@ -1368,7 +1387,7 @@ function TimelineRow({ event, last }: { event: MatchEventRow; last: boolean }) {
       </span>
       <span style={{ fontSize: 15, color: DUST }}>
         <b style={{ fontWeight: 700, color: isArch ? QUANTUM : DUST }}>
-          {prettifyEventType(event.type)}.
+          {eventHeading(event)}.
         </b>
         {text && <> {text}</>}
       </span>
