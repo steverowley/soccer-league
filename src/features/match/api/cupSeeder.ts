@@ -54,12 +54,32 @@ export const CELESTIAL_CUP_COMPETITION_ID = '20000000-0000-0000-0000-00000000000
 export const SOLAR_SHIELD_COMPETITION_ID  = '20000000-0000-0000-0000-000000000003';
 
 /**
- * Cup R1 kickoff date (Season 1). League round-robin schedule ends mid-July;
- * cups start the following week. Matches are then spaced by 7 days per round,
- * mirroring the cadence used by `0009_seed_league_fixtures.sql`.
+ * Real-time delay from cup seeding to the Round-of-16 kickoff. Cups are seeded
+ * the instant the league season flips to 'voting', so anchoring kickoffs to
+ * seed-time — NOT an in-universe calendar date — keeps every fixture inside the
+ * worker's `scheduled_at <= now()` claim horizon. (#569: 2600-dated fixtures
+ * were unreachable forever, freezing both cups at the Round of 16.) 24h lets the
+ * final standings settle before the knockout begins.
  */
-const CUP_R1_KICKOFF_ISO = '2600-08-04T19:00:00Z';
-const ROUND_INTERVAL_MS  = 7 * 24 * 60 * 60 * 1000;
+const CUP_R1_OFFSET_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Real-time gap between successive cup rounds. Each later round is scheduled
+ * relative to NOW the moment the prior round completes (advanceCupRound), so it
+ * is always reachable. 24h tracks the league's roughly-daily matchday cadence,
+ * so a cup plays out over a few days instead of stalling for in-universe weeks.
+ */
+const ROUND_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** R16 kickoff ISO for a cup seeded at `nowMs` (seed-time + the R1 offset). */
+export function cupR1KickoffIso(nowMs: number): string {
+  return new Date(nowMs + CUP_R1_OFFSET_MS).toISOString();
+}
+
+/** Next-round kickoff ISO, one cadence-interval after `nowMs` (round-completion time). */
+export function cupNextRoundKickoffIso(nowMs: number): string {
+  return new Date(nowMs + ROUND_INTERVAL_MS).toISOString();
+}
 
 // ── Standings query ──────────────────────────────────────────────────────────
 
@@ -370,7 +390,7 @@ async function seedOneCup(
   // Insert Round 1 matches: any match where BOTH teams are already known.
   // Later-round matches stay TBD until advanceCupRound creates them.
   const r1 = bracket.rounds[0];
-  const r1KickoffMs = Date.parse(CUP_R1_KICKOFF_ISO);
+  const r1KickoffIso = cupR1KickoffIso(Date.now());
 
   if (r1) {
     for (const m of r1.matches) {
@@ -381,7 +401,7 @@ async function seedOneCup(
           m.home_team_id,
           m.away_team_id,
           r1.name,
-          new Date(r1KickoffMs).toISOString(),
+          r1KickoffIso,
         );
         m.match_db_id = id;
       }
@@ -556,12 +576,10 @@ export async function advanceCupRound(
     nextMatch.away_team_id !== null &&
     nextMatch.match_db_id  === null
   ) {
-    // Schedule this round one week after the previous round's R1 base time
-    // for simplicity. Real product would compute from the previous round's
-    // actual scheduled_at; for the seeded cup that's the R1 base + n weeks.
-    const baseMs    = Date.parse(CUP_R1_KICKOFF_ISO);
-    const offsetMs  = (completedRound) * ROUND_INTERVAL_MS; // next round is +N weeks
-    const kickoff   = new Date(baseMs + offsetMs).toISOString();
+    // Schedule the next round one cadence-interval from NOW (the moment this
+    // round completed), so the fixture is always within the worker's claim
+    // horizon — never an absolute in-universe date that drifts unreachable (#569).
+    const kickoff = cupNextRoundKickoffIso(Date.now());
 
     const insertedId = await insertCupMatch(
       db,
