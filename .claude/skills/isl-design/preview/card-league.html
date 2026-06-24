@@ -1,0 +1,41 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+    display: flex; gap: 24px;
+  }
+  .card { flex: 1; border: 1px solid var(--isl-border); padding: 32px; display: flex; flex-direction: column; gap: 32px; }
+  .card h3 { font-weight: 700; font-size: 28px; line-height: 100%; margin: 0; text-transform: uppercase; }
+  .card p { font-family: var(--isl-font-mono); font-size: 16px; line-height: 140%; margin: 0; color: var(--isl-fg); }
+  .top { display: flex; flex-direction: column; gap: 8px; }
+  .btn { align-self: flex-start; font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; text-transform: uppercase; padding: 16px 32px; border: 1px solid var(--isl-border); background: none; color: var(--isl-fg); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <h3>rocky inner league</h3>
+      <p>Teams from the inner rocky planets, including Earth, Mars, Venus, and Mercury.</p>
+    </div>
+    <button class="btn">View league</button>
+  </div>
+  <div class="card">
+    <div class="top">
+      <h3>kuiper belt league</h3>
+      <p>Clubs from distant dwarf planets emphasise endurance and tactical finesse.</p>
+    </div>
+    <button class="btn">View league</button>
+  </div>
+</body>
+</html>

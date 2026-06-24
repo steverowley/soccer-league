@@ -107,11 +107,24 @@ describe('simulateSpatialMatch — structural invariants', () => {
   });
 
   it('samples frames at roughly the configured cadence', () => {
-    const r = simulateSpatialMatch(team('H', 70), team('A', 70), { matchSeconds: 600, frameEverySec: 1, seed: 3 });
+    // stoppage off so the frame count maps cleanly to the configured length.
+    const r = simulateSpatialMatch(team('H', 70), team('A', 70), { matchSeconds: 600, frameEverySec: 1, seed: 3, stoppage: false });
     // 600s at 1 frame/sec ≈ 600 frames (+1 final).  Allow slack for the
     // boundary-crossing sampling logic.
     expect(r.frames.length).toBeGreaterThan(580);
     expect(r.frames.length).toBeLessThan(640);
+  });
+
+  it('plays deterministic stoppage time past 90:00, capped at ~6 min', () => {
+    const withStop = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 7 });
+    const noStop = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 7, stoppage: false });
+    // Regulation is byte-identical; stoppage only appends extra ticks/events.
+    expect(withStop.events.length).toBeGreaterThan(noStop.events.length);
+    const maxMinute = Math.max(...withStop.events.map((e) => e.minute));
+    expect(maxMinute).toBeGreaterThan(90);   // added time really plays
+    expect(maxMinute).toBeLessThanOrEqual(96); // 90 + the 6-min clamp
+    // Without stoppage the match ends in regulation.
+    expect(Math.max(...noStop.events.map((e) => e.minute))).toBeLessThanOrEqual(90);
   });
 });
 
@@ -189,4 +202,74 @@ describe('simulateSpatialMatch — goal attribution (#522)', () => {
     expect(attributed).toBeGreaterThan(0);
     expect(statGoals).toBe(attributed);
   }, 60000);
+});
+
+describe('simulateSpatialMatch — sending-off (red card)', () => {
+  it('parks a sent-off player on the touchline and freezes them out of play', () => {
+    // Scan seeds for a full match whose red card lands early enough (< 80') to
+    // leave plenty of post-dismissal frames to check. A lopsided fixture makes
+    // fouls — and the occasional dismissal — plentiful.
+    let playerId = '';
+    let redTSec = 0;
+    let result: ReturnType<typeof simulateSpatialMatch> | null = null;
+    for (let seed = 1; seed < 80 && !result; seed++) {
+      const r = simulateSpatialMatch(team('H', 78), team('A', 60), { ...FULL, seed });
+      const redEv = r.events.find((e) => e.type === 'foul' && e.card === 'red' && e.playerId && e.tSec < 4800);
+      if (redEv?.playerId) { playerId = redEv.playerId; redTSec = redEv.tSec; result = r; }
+    }
+    expect(result, 'expected an early red card across the scanned seeds').not.toBeNull();
+
+    // Frames sampled after the dismissal (allow ~2s for the next sample).
+    const afterRed = result!.frames.filter((f) => f.tSec >= redTSec + 2.5);
+    expect(afterRed.length).toBeGreaterThan(3);
+
+    // The sent-off player sits ON a touchline (y ≈ 0 or y ≈ 68)…
+    const first = afterRed[0]!.players.find((p) => p.id === playerId);
+    expect(first, 'sent-off player must still appear in frames').toBeDefined();
+    const onTouchline = first!.y <= 0.6 || first!.y >= PITCH_WIDTH - 0.6;
+    expect(onTouchline, `sent-off player should sit on a touchline, was y=${first!.y}`).toBe(true);
+
+    // …and is frozen there for the rest of the match (no movement, no play).
+    for (const f of afterRed) {
+      const fp = f.players.find((p) => p.id === playerId)!;
+      expect(fp.x).toBeCloseTo(first!.x, 4);
+      expect(fp.y).toBeCloseTo(first!.y, 4);
+    }
+  }, 30000);
+});
+
+describe('simulateSpatialMatch — substitutions', () => {
+  /** A team plus a 5-strong bench (GK + outfield mix). */
+  const withBench = (prefix: string, base: number): SpatialTeamInput => ({
+    ...team(prefix, base),
+    bench: (['GK', 'DF', 'MF', 'MF', 'FW'] as Role[]).map((role, i) => ({
+      id: `${prefix}-s${i}`, name: `${prefix} s${i}`, role, stats: stats(base),
+    })),
+  });
+
+  it('brings on fresh legs, at most three per side, replacing tiring starters 1-for-1', () => {
+    const r = simulateSpatialMatch(withBench('H', 70), withBench('A', 70), { ...FULL, seed: 5 });
+    const subs = r.events.filter((e) => e.type === 'substitution');
+    expect(subs.length).toBeGreaterThan(0); // a well-stocked bench gets used
+
+    // At most three changes per side.
+    const perSide: Record<'home' | 'away', number> = { home: 0, away: 0 };
+    for (const s of subs) perSide[s.side as 'home' | 'away']++;
+    expect(perSide.home).toBeLessThanOrEqual(3);
+    expect(perSide.away).toBeLessThanOrEqual(3);
+
+    // The first change is 1-for-1: the incoming player joins the pitch (checked
+    // in a short window right after — they could later be subbed off again), and
+    // the outgoing player never reappears in any subsequent frame.
+    const first = subs[0]!;
+    const after = r.frames.filter((f) => f.tSec >= first.tSec + 2.5);
+    expect(after.length).toBeGreaterThan(2);
+    const justAfter = after.slice(0, 5);
+    expect(justAfter.every((f) => f.players.some((p) => p.id === first.playerId))).toBe(true);
+    expect(after.every((f) => !f.players.some((p) => p.id === first.otherId))).toBe(true);
+
+    // The pitch is always eleven-a-side in frames (subs swap 1-for-1; sent-off
+    // players stay parked on the line), so the count never drops.
+    expect(r.frames[r.frames.length - 1]!.players.length).toBe(22);
+  }, 30000);
 });

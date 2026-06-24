@@ -1,0 +1,42 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; align-items: center; }
+  .cell { display: flex; align-items: center; gap: 18px; }
+  .btn {
+    font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; text-transform: uppercase;
+    padding: 16px 32px; border: 1px solid var(--isl-border); line-height: 1; cursor: pointer;
+  }
+  .primary { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); }
+  .primary-hover { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); box-shadow: var(--isl-glow-light); }
+  .secondary { background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); }
+  .secondary-hover { background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); box-shadow: var(--isl-glow-light); }
+  .meta { font-size: 12px; color: var(--isl-fg-muted); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell"><button class="btn primary">Lorem ipsum</button></div>
+    <span class="meta">Primary — Lunar Dust fill</span>
+    <div class="cell"><button class="btn primary-hover">Lorem ipsum</button></div>
+    <span class="meta">Primary · hover (glow)</span>
+    <div class="cell"><button class="btn secondary">Lorem ipsum</button></div>
+    <span class="meta">Secondary — hairline outline</span>
+    <div class="cell"><button class="btn secondary-hover">Lorem ipsum</button></div>
+    <span class="meta">Secondary · hover (glow)</span>
+  </div>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!-- @startingPoint section="Web — Screens" subtitle="Club directory across the four orbital leagues, filterable" viewport="1320x900" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL — Teams</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="isl-pages.css">
+<style>
+  .filters { display: flex; gap: 12px; flex-wrap: wrap; padding: 16px 0 8px; }
+  .filt { font-family: var(--isl-font-mono); font-weight: 700; font-size: 14px; text-transform: uppercase; padding: 12px 20px; border: 1px solid var(--isl-border); background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); cursor: pointer; transition: box-shadow .12s linear; }
+  .filt:hover { box-shadow: var(--isl-glow-light); }
+  .filt.on { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); }
+  .count { margin-left: auto; align-self: center; font-size: 14px; text-transform: uppercase; letter-spacing: .03em; }
+
+  /* Cards are separated hairline boxes with real spacing between them (8pt rhythm). */
+  .grid { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: var(--card-gap, 16px); margin: 24px 0 0; }
+  .team { background: var(--isl-galactic-abyss); border: var(--card-border, 1px) solid var(--isl-border-faint); padding: var(--card-pad, 28px); display: flex; flex-direction: column; gap: 22px; cursor: pointer; transition: background .12s linear, border-color .12s linear; }
+  .team:hover { background: var(--isl-phobos-ash); border-color: var(--isl-border); }
+  .team .top { display: flex; align-items: center; gap: 18px; }
+  .team .isl-crest { width: 64px; height: 64px; font-size: 20px; }
+  .team .nm { font-weight: 700; font-size: 20px; line-height: 1.1; }
+  .team .lg { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; }
+  .team .div { height: 0; border-top: 1px solid var(--isl-border-faint); }
+  .team .stats { display: flex; justify-content: space-between; }
+  .team .stat { text-align: center; }
+  .team .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .team .stat .v { font-weight: 700; font-size: 18px; margin-top: 6px; }
+  .team .foot { display: flex; align-items: center; justify-content: space-between; }
+  .team .pos { font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .team .pos.rel { color: var(--isl-solar-flare); }
+  .team .go { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="isl-nav">
+      <a href="ui_kits/web/index.html"><img class="logo" src="assets/isl-logo-full.png" alt="ISL"></a>
+      <div class="links">
+        <a href="ui_kits/web/index.html">Home</a>
+        <a href="ui_kits/web/index.html#Leagues">Leagues</a>
+        <a class="active" href="Teams.html">Teams</a>
+        <a href="Matches.html">Matches</a>
+        <a href="World.html">World</a>
+        <a href="Dispatch.html">Galaxy Dispatch</a>
+        <a href="Idols.html">Idols</a>
+        <a href="Voting.html">Voting</a>
+      </div>
+      <div class="spacer"></div>
+      <div class="acct"><span>USER</span><span>BALANCE</span><span class="bal">200 ic</span></div>
+    </nav>
+
+    <header class="isl-head">
+      <div class="isl-eyebrow"><span>Teams</span><span>•</span><span>32 clubs</span><span>•</span><span>4 orbital leagues</span></div>
+      <h1>The roster of worlds</h1>
+      <p class="isl-lede">Every club chartered to the league, from the terrestrial inner planets to the scattered dark of the Kuiper Belt. Affiliation is permanent — choose carefully.</p>
+    </header>
+
+    <div class="filters" id="filters">
+      <button class="filt on" data-lg="all">All</button>
+      <button class="filt" data-lg="rocky">Rocky Inner</button>
+      <button class="filt" data-lg="giant">Gas &amp; Ice Giant</button>
+      <button class="filt" data-lg="belt">Asteroid Belt</button>
+      <button class="filt" data-lg="kuiper">Kuiper Belt</button>
+      <span class="count" id="count"></span>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <footer class="isl-foot">
+      <div class="inner">
+        <img src="assets/isl-logo-full.png" alt="ISL">
+        <span>© 2026 Intergalactic Soccer League</span><span class="sep">•</span>
+        <span>Season VII</span><span class="sep">•</span><span>EST. Solar Cycle 2401</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const LG = { rocky: "Rocky Inner League", giant: "Gas & Ice Giant League", belt: "Asteroid Belt League", kuiper: "Kuiper Belt League" };
+    const TEAMS = [
+      { nm: "Earth United", lg: "rocky", crest: "assets/crest-earth-united.png", pos: 2, p: 14, w: 9, gd: "+14", form: ["W","D","W","W","D"] },
+      { nm: "Mars Rovers", lg: "rocky", crest: "assets/crest-mars-rovers.png", pos: 4, p: 14, w: 7, gd: "+5", form: ["D","W","D","W","L"] },
+      { nm: "Mercury Runners FC", lg: "rocky", mono: "MR", pos: 1, p: 14, w: 10, gd: "+18", form: ["W","W","D","W","L"] },
+      { nm: "Venus Inferno", lg: "rocky", mono: "VI", pos: 7, p: 14, w: 3, gd: "−12", form: ["L","L","D","L","W"] },
+      { nm: "Jupiter Royals", lg: "giant", mono: "JR", pos: 1, p: 14, w: 10, gd: "+18", form: ["W","W","D","W","L"] },
+      { nm: "Saturn Rings United", lg: "giant", mono: "SR", pos: 3, p: 14, w: 9, gd: "+8", form: ["W","L","W","L","W"] },
+      { nm: "Neptune Mariners", lg: "giant", mono: "NM", pos: 6, p: 14, w: 4, gd: "−7", form: ["L","D","L","W","D"] },
+      { nm: "Uranus Athletic", lg: "giant", mono: "UA", pos: 5, p: 14, w: 6, gd: "−1", form: ["L","W","D","L","W"] },
+      { nm: "Ceres City FC", lg: "belt", mono: "CC", pos: 1, p: 14, w: 10, gd: "+18", form: ["W","W","D","W","L"] },
+      { nm: "Vesta United", lg: "belt", mono: "VU", pos: 2, p: 14, w: 9, gd: "+14", form: ["W","D","W","W","D"] },
+      { nm: "Pallas Rovers FC", lg: "belt", mono: "PR", pos: 8, p: 14, w: 2, gd: "−25", form: ["L","L","L","D","L"] },
+      { nm: "Juno Athletic", lg: "belt", mono: "JA", pos: 7, p: 14, w: 3, gd: "−12", form: ["L","L","D","L","W"] },
+      { nm: "Pluto FC Wanderers", lg: "kuiper", mono: "PW", pos: 1, p: 14, w: 10, gd: "+18", form: ["W","W","D","W","L"] },
+      { nm: "Eris FC Rebels", lg: "kuiper", mono: "ER", pos: 2, p: 14, w: 9, gd: "+14", form: ["W","D","W","W","D"] },
+      { nm: "Haumea Cyclones", lg: "kuiper", mono: "HC", pos: 3, p: 14, w: 9, gd: "+8", form: ["W","L","W","L","W"] },
+      { nm: "Makemake United", lg: "kuiper", mono: "MU", pos: 4, p: 14, w: 7, gd: "+5", form: ["D","W","D","W","L"] },
+    ];
+
+    let active = "all";
+    const grid = document.getElementById("grid");
+    const countEl = document.getElementById("count");
+
+    function crestHTML(t) {
+      return t.crest
+        ? `<div class="isl-crest"><img src="${t.crest}" alt="${t.nm}"></div>`
+        : `<div class="isl-crest">${t.mono}</div>`;
+    }
+    function formHTML(f) {
+      return `<span class="isl-form">${f.map(r => `<span class="${r === 'D' ? 'd' : r === 'L' ? 'l' : ''}">${r}</span>`).join("")}</span>`;
+    }
+    function render() {
+      const list = TEAMS.filter(t => active === "all" || t.lg === active);
+      countEl.textContent = list.length + " clubs";
+      grid.innerHTML = list.map(t => `
+        <div class="team">
+          <div class="top">
+            ${crestHTML(t)}
+            <div><div class="nm">${t.nm}</div><div class="lg">${LG[t.lg]}</div></div>
+          </div>
+          <div class="div"></div>
+          <div class="stats">
+            <div class="stat"><div class="k">Played</div><div class="v">${t.p}</div></div>
+            <div class="stat"><div class="k">Won</div><div class="v">${t.w}</div></div>
+            <div class="stat"><div class="k">GD</div><div class="v">${t.gd}</div></div>
+            <div class="stat"><div class="k">Form</div><div class="v">${formHTML(t.form)}</div></div>
+          </div>
+          <div class="div"></div>
+          <div class="foot">
+            <span class="pos ${t.pos >= 7 ? 'rel' : ''}">${t.pos >= 7 ? 'Relegation · ' : ''}${String(t.pos).padStart(2,"0")} in league</span>
+            <span class="go">View club <svg width="11" height="11" viewBox="0 0 12 12"><path d="M0 0 L9 5.196 L0 10.392 Z" fill="currentColor"/></svg></span>
+          </div>
+        </div>`).join("");
+    }
+    document.getElementById("filters").addEventListener("click", (e) => {
+      const b = e.target.closest(".filt"); if (!b) return;
+      active = b.dataset.lg;
+      document.querySelectorAll(".filt").forEach(f => f.classList.toggle("on", f === b));
+      render();
+    });
+    render();
+  </script>
+
+  <div id="tweaks-root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel">
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "cardGap": 16,
+      "columns": "3",
+      "cardPadding": 28,
+      "cardOutline": true
+    }/*EDITMODE-END*/;
+
+    function TeamsTweaks() {
+      const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      React.useEffect(() => {
+        const r = document.documentElement.style;
+        r.setProperty('--card-gap', t.cardGap + 'px');
+        r.setProperty('--cols', String(t.columns));
+        r.setProperty('--card-pad', t.cardPadding + 'px');
+        r.setProperty('--card-border', t.cardOutline ? '1px' : '0px');
+      }, [t]);
+      return (
+        <TweaksPanel title="Tweaks">
+          <TweakSection label="Card layout" />
+          <TweakSlider label="Card spacing" value={t.cardGap} min={0} max={48} step={2} unit="px"
+                       onChange={(v) => setTweak('cardGap', v)} />
+          <TweakRadio label="Columns" value={t.columns} options={['2', '3', '4']}
+                      onChange={(v) => setTweak('columns', v)} />
+          <TweakSlider label="Card padding" value={t.cardPadding} min={16} max={40} step={2} unit="px"
+                       onChange={(v) => setTweak('cardPadding', v)} />
+          <TweakToggle label="Card outline" value={t.cardOutline}
+                       onChange={(v) => setTweak('cardOutline', v)} />
+        </TweaksPanel>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('tweaks-root')).render(<TeamsTweaks />);
+  </script>
+</body>
+</html>

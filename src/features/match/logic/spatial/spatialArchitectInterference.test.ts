@@ -66,23 +66,29 @@ const firstAttributedGoal = (a: { events: AdaptedEvent[] }, t: 'HOME' | 'AWAY') 
   a.events.find((e) => e.type === 'goal' && e.payload['team'] === t && typeof e.payload['player'] === 'string');
 
 describe('spatial engine × Architect interference (#530)', () => {
-  // Closeish ratings so BOTH sides score — makes the "other side untouched"
-  // assertion non-vacuous and guarantees an away co-scorer to preserve.
-  const home = team('H', 76);
-  const away = team('A', 72);
+  // Near-equal ratings so BOTH sides score often — makes the "other side
+  // untouched" assertion non-vacuous and guarantees an away co-scorer to
+  // preserve.  (Post-calibration the engine scores ~2.5/match, so we scan a few
+  // seeds for one where both teams found the net AND a tackle occurred.)
+  const home = team('H', 75);
+  const away = team('A', 74);
   const index = indexOf(home, away);
 
   let adapted: ReturnType<typeof adaptSpatialResult>;
 
   beforeAll(() => {
-    for (let seed = 1; seed <= 30; seed++) {
+    // Both teams scoring ATTRIBUTED goals (the deriveScore criterion) is sparse
+    // at these strong, near-equal ratings — high keepers save most chances — so
+    // we scan a wide seed range and stop at the first qualifier (returns early,
+    // typically well inside the range).
+    for (let seed = 1; seed <= 150; seed++) {
       const a = adaptSpatialResult(simulateSpatialMatch(home, away, { ...FULL, seed }), index);
       const [h, aw] = deriveScore(a.events);
       const hasTackle = a.events.some((e) => e.type === 'tackle' && typeof e.payload['player'] === 'string');
       if (h > 0 && aw > 0 && hasTackle) { adapted = a; return; }
     }
     throw new Error('no seed produced a both-sides-scoring spatial match with a tackle');
-  }, 30000);
+  }, 120000);
 
   it('curse_player annuls the scorer’s goal in scoreline AND stats, leaving the other side intact', () => {
     const before = deriveScore(adapted.events);
@@ -114,7 +120,13 @@ describe('spatial engine × Architect interference (#530)', () => {
   });
 
   it('force_red_card promotes a real spatial tackle to a red card in feed + stats (criterion b)', () => {
-    const tackle = adapted.events.find((e) => e.type === 'tackle' && typeof e.payload['player'] === 'string')!;
+    // Pick a tackler who isn't ALREADY sent off — the engine now issues real red
+    // cards, so a naive "first tackle" could land on a player who was dismissed.
+    const tackle = adapted.events.find((e) =>
+      e.type === 'tackle'
+      && typeof e.payload['player'] === 'string'
+      && adapted.playerStats[e.payload['player'] as string]?.redCard !== true,
+    )!;
     const tackler = tackle.payload['player'] as string;
     expect(adapted.playerStats[tackler]?.redCard).toBe(false); // not sent off pre-interference
 

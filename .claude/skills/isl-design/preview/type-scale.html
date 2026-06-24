@@ -1,0 +1,29 @@
+<!-- @dsCard group="Type" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .row { display: flex; align-items: baseline; gap: 24px; padding: 11px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .row:last-child { border-bottom: 0; }
+  .tag { font-weight: 400; font-size: 16px; color: var(--isl-fg-muted); width: 36px; flex: none; }
+  .meta { color: var(--isl-fg-muted); font-size: 13px; margin-left: auto; align-self: center; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <div class="row"><span class="tag">H1</span><span class="isl-h1">Lorem ipsum</span><span class="meta">Space Mono Bold · 40 / 100%</span></div>
+  <div class="row"><span class="tag">H2</span><span class="isl-h2">Lorem ipsum</span><span class="meta">Space Mono Bold · 32 / 100%</span></div>
+  <div class="row"><span class="tag">H3</span><span class="isl-h3">Lorem ipsum</span><span class="meta">Space Mono Bold · 28 / 100%</span></div>
+  <div class="row"><span class="tag">P</span><span class="isl-p">Lorem ipsum dolor sit amet</span><span class="meta">Space Mono · 16 / 150%</span></div>
+</body>
+</html>

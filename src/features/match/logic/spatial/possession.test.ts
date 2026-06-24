@@ -6,10 +6,12 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  shotQuality, pressureAt, tackleProbability, saveProbability, ballPathWithinReach,
+  shotQuality, pressureAt, tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
+  isInPenaltyArea, penaltyGoalProbability,
 } from './possession';
-import { type SimPlayer, type SimPlayerStats, PITCH_WIDTH } from './types';
+import { type SimPlayer, type SimWorld, type SimPlayerStats, PITCH_WIDTH } from './types';
 import { vec } from './vec2';
+import { makeRng } from './rng';
 
 function stats(overrides: Partial<SimPlayerStats> = {}): SimPlayerStats {
   return {
@@ -74,19 +76,102 @@ describe('tackleProbability', () => {
 });
 
 describe('saveProbability', () => {
-  it('falls as shot quality rises, clamped to [0.05, 0.92]', () => {
+  it('falls as shot quality rises, clamped to [0.10, 0.94]', () => {
     const keeper = player({ role: 'GK', stats: stats({ goalkeeping: 80 }) });
     const easy = saveProbability(keeper, 0.1);
     const worldie = saveProbability(keeper, 0.95);
     expect(easy).toBeGreaterThan(worldie);
-    expect(worldie).toBeGreaterThanOrEqual(0.05);
-    expect(easy).toBeLessThanOrEqual(0.92);
+    expect(worldie).toBeGreaterThanOrEqual(0.10);
+    expect(easy).toBeLessThanOrEqual(0.94);
   });
 
   it('a better keeper saves more at equal shot quality', () => {
     const good = player({ role: 'GK', stats: stats({ goalkeeping: 90 }) });
     const weak = player({ role: 'GK', stats: stats({ goalkeeping: 45 }) });
     expect(saveProbability(good, 0.5)).toBeGreaterThan(saveProbability(weak, 0.5));
+  });
+});
+
+describe('foulProbability', () => {
+  it('rises when the carrier outclasses the defender, clamped to [0.002, 0.012] per tick', () => {
+    const slickCarrier = player({ stats: stats({ dribbling: 95 }) });
+    const beatenDefender = player({ stats: stats({ tackling: 40 }) });
+    const matchedDefender = player({ stats: stats({ tackling: 95 }) });
+    const high = foulProbability(beatenDefender, slickCarrier);
+    const low = foulProbability(matchedDefender, slickCarrier);
+    expect(high).toBeGreaterThan(low);
+    // Tiny by design — it fires every 0.1s a defender is in range.
+    expect(high).toBeLessThanOrEqual(0.012);
+    expect(low).toBeGreaterThanOrEqual(0.002);
+  });
+});
+
+describe('cardForFoul', () => {
+  it('books cynical fouls near the attacked goal more than fouls deep in own half', () => {
+    // home attacks x=105: a foul on a home attacker at x=100 is advanced/cynical.
+    const rng = makeRng(42);
+    let nearGoal = 0;
+    let deep = 0;
+    for (let i = 0; i < 2000; i++) {
+      if (cardForFoul(vec(100, PITCH_WIDTH / 2), 'home', rng)) nearGoal++;
+      if (cardForFoul(vec(10, PITCH_WIDTH / 2), 'home', rng)) deep++;
+    }
+    expect(nearGoal).toBeGreaterThan(deep);
+  });
+
+  it('mostly gives no card, and reds are rarer than yellows', () => {
+    const rng = makeRng(7);
+    let none = 0;
+    let yellow = 0;
+    let red = 0;
+    for (let i = 0; i < 3000; i++) {
+      const c = cardForFoul(vec(70, PITCH_WIDTH / 2), 'home', rng);
+      if (c === null) none++;
+      else if (c === 'yellow') yellow++;
+      else red++;
+    }
+    expect(none).toBeGreaterThan(yellow + red); // most fouls are just a free kick
+    expect(yellow).toBeGreaterThan(red);        // straight reds are rare
+  });
+});
+
+describe('isOffsidePosition (home attacks x=105)', () => {
+  // Away defenders: GK at x=102 (deepest), second-last DF at x=90 → offside line ≈ 90.
+  const world = {
+    home: [],
+    away: [
+      player({ id: 'gk-a', role: 'GK', side: 'away', pos: vec(102, 34) }),
+      player({ id: 'd1',   role: 'DF', side: 'away', pos: vec(90, 34) }),
+      player({ id: 'd2',   role: 'DF', side: 'away', pos: vec(80, 34) }),
+    ],
+  } as unknown as SimWorld;
+  const ballPos = vec(70, 34); // pass struck from deep
+
+  it('flags an attacker clearly beyond the second-last defender, ahead of the ball', () => {
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(95, 34) });
+    expect(isOffsidePosition(fw, ballPos, world)).toBe(true);
+  });
+
+  it('does not flag an attacker behind the offside line', () => {
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(88, 34) });
+    expect(isOffsidePosition(fw, ballPos, world)).toBe(false);
+  });
+
+  it('is not offside when the attacker is behind the ball', () => {
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(95, 34) });
+    expect(isOffsidePosition(fw, vec(98, 34), world)).toBe(false); // ball ahead of attacker
+  });
+
+  it('is not offside inside the attacking team’s own half', () => {
+    const deep = {
+      home: [],
+      away: [
+        player({ id: 'gk-a', role: 'GK', side: 'away', pos: vec(40, 34) }),
+        player({ id: 'd1',   role: 'DF', side: 'away', pos: vec(30, 34) }),
+      ],
+    } as unknown as SimWorld;
+    const fw = player({ id: 'fw', role: 'FW', side: 'home', pos: vec(45, 34) }); // beyond line but x < 52.5
+    expect(isOffsidePosition(fw, vec(20, 34), deep)).toBe(false);
   });
 });
 
@@ -103,5 +188,36 @@ describe('ballPathWithinReach', () => {
   it('handles a stationary ball as a point check', () => {
     expect(ballPathWithinReach(vec(50, 34), vec(50.5, 34), vec(50.5, 34), 1.4)).toBe(true);
     expect(ballPathWithinReach(vec(60, 34), vec(50, 34), vec(50, 34), 1.4)).toBe(false);
+  });
+});
+
+describe('isInPenaltyArea (home attacks x=105, away attacks x=0)', () => {
+  it('flags positions inside the box the side attacks', () => {
+    expect(isInPenaltyArea(vec(100, PITCH_WIDTH / 2), 'home')).toBe(true); // 5m out, central
+    expect(isInPenaltyArea(vec(5, PITCH_WIDTH / 2), 'away')).toBe(true);   // away's box at x=0
+  });
+
+  it('rejects positions outside the box (too deep, too wide, or wrong end)', () => {
+    expect(isInPenaltyArea(vec(80, PITCH_WIDTH / 2), 'home')).toBe(false); // 25m out — beyond box depth
+    expect(isInPenaltyArea(vec(100, 5), 'home')).toBe(false);             // corner — outside box width
+    expect(isInPenaltyArea(vec(100, PITCH_WIDTH / 2), 'away')).toBe(false); // away attacks the OTHER end
+  });
+});
+
+describe('penaltyGoalProbability', () => {
+  it('anchors high, and a stronger taker against the same keeper edges higher', () => {
+    const keeper = player({ stats: stats({ goalkeeping: 70 }) });
+    const weak = player({ stats: stats({ shooting: 40 }) });
+    const strong = player({ stats: stats({ shooting: 95 }) });
+    expect(penaltyGoalProbability(weak, keeper)).toBeGreaterThan(0.5);
+    expect(penaltyGoalProbability(strong, keeper)).toBeGreaterThan(penaltyGoalProbability(weak, keeper));
+  });
+
+  it('clamps to [0.55, 0.92] against a keeper and is near-certain with none', () => {
+    const upper = penaltyGoalProbability(player({ stats: stats({ shooting: 99 }) }), player({ stats: stats({ goalkeeping: 5 }) }));
+    const lower = penaltyGoalProbability(player({ stats: stats({ shooting: 5 }) }), player({ stats: stats({ goalkeeping: 99 }) }));
+    expect(upper).toBeLessThanOrEqual(0.92);
+    expect(lower).toBeGreaterThanOrEqual(0.55);
+    expect(penaltyGoalProbability(player(), undefined)).toBeGreaterThan(0.92); // empty net
   });
 });

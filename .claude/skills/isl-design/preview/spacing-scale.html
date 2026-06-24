@@ -1,0 +1,32 @@
+<!-- @dsCard group="Spacing" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: var(--isl-bg);
+    color: var(--isl-fg);
+    padding: 28px 32px;
+    box-sizing: border-box;
+    width: 700px;
+    font-family: var(--isl-font-mono);
+  }
+  .row { display: flex; align-items: center; gap: 20px; padding: 6px 0; }
+  .tok { width: 70px; font-size: 13px; color: var(--isl-fg-muted); flex: none; }
+  .bar { height: 16px; background: var(--isl-lunar-dust); }
+  .val { font-size: 13px; color: var(--isl-fg-muted); margin-left: auto; }
+</style>
+</head>
+<body>
+  <div class="row"><span class="tok">space-1</span><span class="bar" style="width:8px"></span><span class="val">8px</span></div>
+  <div class="row"><span class="tok">space-2</span><span class="bar" style="width:16px"></span><span class="val">16px</span></div>
+  <div class="row"><span class="tok">space-3</span><span class="bar" style="width:24px"></span><span class="val">24px</span></div>
+  <div class="row"><span class="tok">space-4</span><span class="bar" style="width:32px"></span><span class="val">32px · card padding</span></div>
+  <div class="row"><span class="tok">space-5</span><span class="bar" style="width:50px"></span><span class="val">50px</span></div>
+  <div class="row"><span class="tok">space-6</span><span class="bar" style="width:64px"></span><span class="val">64px · section gap</span></div>
+  <div class="row"><span class="tok">space-7</span><span class="bar" style="width:84px"></span><span class="val">84px · label gutter</span></div>
+</body>
+</html>

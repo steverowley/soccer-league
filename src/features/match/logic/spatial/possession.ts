@@ -12,7 +12,8 @@ import {
 import { rngGaussian, type Rng } from './rng';
 import {
   type SimPlayer, type SimWorld, type TeamSide,
-  GOAL_Y_MIN, GOAL_Y_MAX, PITCH_WIDTH,
+  GOAL_Y_MIN, GOAL_Y_MAX, PITCH_WIDTH, PITCH_LENGTH,
+  PENALTY_AREA_DEPTH, PENALTY_AREA_Y_MIN, PENALTY_AREA_Y_MAX,
   attackingGoalX,
 } from './types';
 
@@ -148,7 +149,7 @@ export function chooseBestPass(
  * @param rng        Seeded source.
  */
 export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): CarrierAction {
-  const teammates = (carrier.side === 'home' ? world.home : world.away).filter((p) => p.id !== carrier.id);
+  const teammates = (carrier.side === 'home' ? world.home : world.away).filter((p) => p.id !== carrier.id && !p.sentOff);
   const opponents = carrier.side === 'home' ? world.away : world.home;
 
   const sq = shotQuality(carrier.pos, carrier.side);
@@ -157,12 +158,12 @@ export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): Car
   // ── 1. Shoot? ──────────────────────────────────────────────────────────
   // Only consider it from a genuinely promising position.  The urge scales
   // with shot quality and the finisher's shooting stat; under pressure a
-  // shooter is a touch more likely to just hit it.  The gate (sq > 0.28) and
-  // modest coefficients keep shot VOLUME realistic — calibrated alongside
-  // saveProbability so matches land near real-world goal rates rather than
-  // arcade scorelines.
-  if (sq > 0.32) {
-    const shootUrge = sq * (0.24 + carrier.stats.shooting / 360) + pressure * 0.06;
+  // shooter is a touch more likely to just hit it.  The gate (sq > 0.50) and
+  // low coefficients keep shot VOLUME realistic — calibrated (2026-06) alongside
+  // placement error and saveProbability so a seeded batch lands near real-world
+  // goal rates (~2.5–2.8/match), not the ~5+ arcade scorelines the first cut gave.
+  if (sq > 0.50) {
+    const shootUrge = sq * (0.075 + carrier.stats.shooting / 750) + pressure * 0.03;
     if (rng() < shootUrge) return { kind: 'shoot' };
   }
 
@@ -233,7 +234,7 @@ export function shotKick(carrier: SimPlayer, rng: Rng): Vec2 {
   // shooter is angled, with placement error scaled by shooting skill.
   const towardTop = carrier.pos.y < PITCH_WIDTH / 2;
   const aimY = towardTop ? GOAL_Y_MIN + 1.2 : GOAL_Y_MAX - 1.2;
-  const placementErr = 2.6 * (1 - carrier.stats.shooting / 115); // metres std
+  const placementErr = 4.6 * (1 - carrier.stats.shooting / 135); // metres std (~1.5m elite, ~2.2m average — weaker efforts fly off-frame)
   const aimPoint = vec(goalX, aimY + rngGaussian(rng, 0, placementErr));
   const speed = 24 + (carrier.stats.shooting / 100) * 8; // 24–32 m/s
   // Low lateral flight error since placement noise already lives in aimY.
@@ -255,17 +256,123 @@ export function tackleProbability(defender: SimPlayer, carrier: SimPlayer): numb
 /**
  * Probability the keeper saves an on-target shot.  Higher goalkeeping saves
  * more; higher shot quality (closer, better angle) saves less.  Clamped to
- * [5%, 92%] — even a worldie can be tipped over, even a tap-in can be saved.
+ * [10%, 94%] — even a worldie can be tipped over, even a tap-in can be saved.
  *
  * @param keeper  The goalkeeper (uses goalkeeping stat).
  * @param sq      Shot quality of the strike, in [0,1].
  */
 export function saveProbability(keeper: SimPlayer, sq: number): number {
-  // base ~0.72–0.95 across the goalkeeping range; a great chance (sq→1) still
-  // pulls it down by ~0.4.  Tuned with the shot-selection gate so converted
-  // chances stay scarce enough for believable scorelines (~2–3 goals/match).
-  const base = 0.50 + keeper.stats.goalkeeping / 180;
-  return Math.min(0.92, Math.max(0.10, base - sq * 0.40));
+  // base ~0.74–0.92 across the goalkeeping range; a great chance (sq→1) pulls
+  // it down by ~0.33.  Tuned (2026-06) with the shot gate + placement error and
+  // re-centred after the width/movement change so converted chances stay scarce
+  // enough for believable scorelines (~2.5–2.8/match).
+  const base = 0.52 + keeper.stats.goalkeeping / 185;
+  return Math.min(0.94, Math.max(0.10, base - sq * 0.33));
+}
+
+/**
+ * PER-TICK probability that a defender who FAILED to win a clean tackle fouls
+ * the carrier instead of simply missing.  Because the carrier is challenged
+ * every 0.1s while a defender is in range, this is deliberately TINY — a few
+ * tenths of a percent — so a full match yields a realistic ~20-30 fouls rather
+ * than thousands.  A defender badly beaten for skill clips the dribbler a touch
+ * more often.  Clamped to [0.2%, 1.2%] per tick.
+ *
+ * @param defender  The challenging player.
+ * @param carrier   The player on the ball.
+ */
+export function foulProbability(defender: SimPlayer, carrier: SimPlayer): number {
+  // How badly the defender is beaten for skill (0 = matched, → 1 = outclassed).
+  const outmatched = Math.max(0, (carrier.stats.dribbling - defender.stats.tackling) / 100);
+  return Math.min(0.012, Math.max(0.002, 0.003 + outmatched * 0.012));
+}
+
+/**
+ * The card (if any) a foul draws.  Cynical fouls that stop an attacker in a
+ * threatening position are likelier to be booked, and a small share of bookable
+ * fouls are serious enough for a straight red.  Most fouls return null (a free
+ * kick, no card).  Always consumes exactly two rng draws so the seeded stream
+ * stays stable regardless of outcome.
+ *
+ * @param foulPos     Where the foul happened (pitch metres).
+ * @param fouledSide  The side that was fouled (attacking toward their goal).
+ * @param rng         Seeded source.
+ */
+export function cardForFoul(foulPos: Vec2, fouledSide: TeamSide, rng: Rng): 'yellow' | 'red' | null {
+  // Advancement: 0 deep in the fouled side's own half, → 1 right at the goal
+  // they attack.  A foul that halts a genuine attack is the cynical, bookable one.
+  const goalX = attackingGoalX(fouledSide);
+  const advancement = 1 - Math.abs(foulPos.x - goalX) / PITCH_LENGTH;
+  const yellowChance = 0.08 + advancement * 0.12; // ~8% midfield … ~20% near goal
+  const draw = rng();
+  const serious = rng() < 0.06;                    // share of bookings that are red
+  if (draw >= yellowChance) return null;
+  return serious ? 'red' : 'yellow';
+}
+
+/**
+ * Whether `pos` lies inside the penalty area that `attackingSide` is attacking —
+ * the box in front of the goal they shoot at.  Used to upgrade a foul on the
+ * carrier to a penalty kick.  Pure geometry, no rng.
+ *
+ * @param pos           Where the foul happened (pitch metres).
+ * @param attackingSide The fouled side (attacking toward their opponent's goal).
+ */
+export function isInPenaltyArea(pos: Vec2, attackingSide: TeamSide): boolean {
+  const goalX = attackingGoalX(attackingSide);
+  return Math.abs(pos.x - goalX) <= PENALTY_AREA_DEPTH
+    && pos.y >= PENALTY_AREA_Y_MIN
+    && pos.y <= PENALTY_AREA_Y_MAX;
+}
+
+/**
+ * Probability a penalty kick is scored.  Penalties convert far more often than
+ * open play (~75% in real football), so this is anchored high and nudged by the
+ * taker's shooting vs the keeper's goalkeeping, then clamped to a believable
+ * 55–92%.  An empty net (no keeper) is near-certain.
+ *
+ * @param taker   The penalty taker (the fouled attacker).
+ * @param keeper  The defending keeper, or undefined if the side has none.
+ * @returns       Goal probability in [0.55, 0.95].
+ */
+export function penaltyGoalProbability(taker: SimPlayer, keeper: SimPlayer | undefined): number {
+  if (!keeper) return 0.95;
+  const edge = (taker.stats.shooting - keeper.stats.goalkeeping) / 400; // ±~0.25 across the stat range
+  return Math.min(0.92, Math.max(0.55, 0.78 + edge));
+}
+
+/**
+ * Whether `target` is in an offside position for an in-flight pass: clearly
+ * beyond the second-last defender, ahead of the ball, and inside the attacking
+ * half.  A forgiveness MARGIN means only unambiguous offsides are flagged — the
+ * blob sim can't adjudicate millimetres, and phantom flags feel worse than the
+ * occasional one let go.  Pure geometry, no rng.
+ *
+ * The "second-last defender" is the standard offside reference (usually, but not
+ * necessarily, the keeper); we read it from ALL opponents by depth, so a keeper
+ * who has rushed off their line is handled correctly.
+ *
+ * @param target   The intended pass receiver.
+ * @param ballPos  Position the pass is struck from.
+ * @param world    Current world (for the opposing defenders).
+ */
+export function isOffsidePosition(target: SimPlayer, ballPos: Vec2, world: SimWorld): boolean {
+  const goalX = attackingGoalX(target.side); // the goal the receiver attacks
+  const defenders = target.side === 'home' ? world.away : world.home;
+  const xs = defenders.map((d) => d.pos.x);
+  const MARGIN = 1.5; // metres of clear daylight required before we flag it
+
+  if (goalX === PITCH_LENGTH) {
+    // Attacking x=105: a deeper defender has a larger x; the second-deepest sets
+    // the line. Offside = beyond it, ahead of the ball, in the attacking half.
+    const desc = [...xs].sort((a, b) => b - a);
+    const lineX = desc[1] ?? desc[0] ?? PITCH_LENGTH;
+    return target.pos.x > lineX + MARGIN && target.pos.x > ballPos.x && target.pos.x > PITCH_LENGTH / 2;
+  }
+  // Attacking x=0: a deeper defender has a smaller x; the second-deepest is the line.
+  const asc = [...xs].sort((a, b) => a - b);
+  const lineX = asc[1] ?? asc[0] ?? 0;
+  return target.pos.x < lineX - MARGIN && target.pos.x < ballPos.x && target.pos.x < PITCH_LENGTH / 2;
 }
 
 /**

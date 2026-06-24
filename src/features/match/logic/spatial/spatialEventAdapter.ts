@@ -94,6 +94,12 @@ function eventCommentary(ev: SimEvent, index: PlayerIndex): string {
                            : `${pn} fires at goal — off target.`;
     case 'save':         return `${on} makes a brilliant save!`;
     case 'tackle':       return `${pn} wins the ball with a clean tackle.`;
+    case 'foul':         return ev.card
+                           ? `${pn} is shown a ${ev.card} card for a foul${o ? ` on ${on}` : ''}.`
+                           : `${pn} fouls${o ? ` ${on}` : ''} — free kick.`;
+    case 'penalty':      return `Penalty to ${tn}! ${pn} steps up to take it.`;
+    case 'substitution': return `${tn} make a change — ${pn} comes on${o ? ` for ${on}` : ''}.`;
+    case 'offside':      return `${pn} is caught offside.`;
     case 'interception': return `${pn} intercepts the ball.`;
     case 'pass':         return `${pn} plays the ball forward.`;
     case 'out_throw':    return `Ball out for a throw-in.`;
@@ -143,6 +149,9 @@ export function adaptSpatialResult(
       if (ev.type === 'shot')    slot(p.name).shots++;
       if (ev.type === 'tackle')  slot(p.name).tackles++;
       if (ev.type === 'save')    slot(p.name).saves++;
+      // A foul that drew a card books the fouler (playerId).
+      if (ev.type === 'foul' && ev.card === 'yellow') slot(p.name).yellowCard = true;
+      if (ev.type === 'foul' && ev.card === 'red')    slot(p.name).redCard = true;
     }
     // Keeper saves are tracked on the otherId player when the event type is 'shot'
     // (the keeper who stopped it) — avoids double-counting when type === 'save'.
@@ -164,6 +173,7 @@ export function adaptSpatialResult(
         isGoal:  ev.type === 'goal',
         ...(p ? { player: p.name, team: p.teamName } : {}),
         ...(o ? { keeper: o.name }                  : {}),
+        ...(ev.type === 'foul' && ev.card ? { cardType: ev.card } : {}),
       },
     };
   });
@@ -200,6 +210,10 @@ const NOTABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'kickoff',
   'goal',
   'save',
+  'foul',
+  'penalty',
+  'substitution',
+  'offside',
   'out_corner',
 ]);
 
@@ -349,15 +363,23 @@ export function toSpatialTeamInput(teamData: {
 
   const allActive = (teamData.players ?? []).filter((p) => p.is_active !== false);
   const starters  = allActive.filter((p) => p.starter !== false);
+  // Up to five substitutes are eligible to come on.
+  const subs      = allActive.filter((p) => p.starter === false).slice(0, 5);
 
+  // position is DB-constrained to 'GK'|'DF'|'MF'|'FW' (migration 0000 CHECK), so
+  // the role cast is safe; 'MF' is the fallback for any pre-constraint rows.
   const players: SpatialPlayerInput[] = starters.map((p) => ({
     id:    p.id,
     name:  p.name,
-    // position is DB-constrained to 'GK'|'DF'|'MF'|'FW' (migration 0000 CHECK),
-    // so this cast is safe; 'MF' is the fallback for any pre-constraint rows.
+    role:  (p.position as Role | undefined) ?? 'MF',
+    stats: deriveSimStats(p),
+  }));
+  const bench: SpatialPlayerInput[] = subs.map((p) => ({
+    id:    p.id,
+    name:  p.name,
     role:  (p.position as Role | undefined) ?? 'MF',
     stats: deriveSimStats(p),
   }));
 
-  return { formation, players };
+  return { formation, players, bench };
 }

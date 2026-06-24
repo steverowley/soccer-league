@@ -33,6 +33,18 @@ export const GOAL_Y_MAX = (PITCH_WIDTH + GOAL_WIDTH) / 2; // ≈ 37.66
 /** Centre spot — kickoff position and the ball's rest point between goals. */
 export const CENTRE_SPOT: Vec2 = { x: PITCH_LENGTH / 2, y: PITCH_WIDTH / 2 };
 
+/** Penalty-area depth from the goal line (m) — the real-world "18-yard box". */
+export const PENALTY_AREA_DEPTH = 16.5;
+
+/** Penalty-area full width (m): the goal mouth + 16.5m either side ≈ 40.32m. */
+export const PENALTY_AREA_WIDTH = GOAL_WIDTH + 2 * 16.5;
+
+/** Lowest y of the penalty area. */
+export const PENALTY_AREA_Y_MIN = (PITCH_WIDTH - PENALTY_AREA_WIDTH) / 2; // ≈ 13.84
+
+/** Highest y of the penalty area. */
+export const PENALTY_AREA_Y_MAX = (PITCH_WIDTH + PENALTY_AREA_WIDTH) / 2; // ≈ 54.16
+
 /** Which side of the pitch a team attacks / defends. */
 export type TeamSide = 'home' | 'away';
 
@@ -122,6 +134,11 @@ export interface SimPlayer {
   vel: Vec2;
   /** Remaining energy in [0,1]; scales effective speed as it drains. */
   stamina: number;
+  /** Yellow cards this player has been shown; a second one becomes a red. */
+  yellowCards: number;
+  /** True once shown a red (or a second yellow) — parked off the pitch and
+   *  excluded from all play, so their team finishes a man down. */
+  sentOff: boolean;
 }
 
 // ── Ball ──────────────────────────────────────────────────────────────────
@@ -156,6 +173,14 @@ export interface SimBall {
    * keeper's job is.  null before the first kick of a possession.
    */
   lastTouch: { side: TeamSide; isShot: boolean; sq: number; playerId?: string } | null;
+  /**
+   * Offside flag for a pass in flight.  Set to the receiver's id when a pass is
+   * struck to a player who is in an offside position at that instant; if that
+   * same player collects the ball, the engine calls offside.  null whenever the
+   * ball is not a pass-in-flight to a flagged attacker — it is set only on a
+   * pass and cleared on any collection, restart, shot or tackle.
+   */
+  offsideFor: string | null;
 }
 
 // ── World ─────────────────────────────────────────────────────────────────
@@ -173,6 +198,12 @@ export type SimPhase =
 export interface SimWorld {
   home: SimPlayer[];
   away: SimPlayer[];
+  /** Unused substitutes for each side; players move from here onto the pitch. */
+  homeBench: SimPlayer[];
+  awayBench: SimPlayer[];
+  /** Substitutions still available to each side (starts at 3). */
+  homeSubsLeft: number;
+  awaySubsLeft: number;
   ball: SimBall;
   /** Goals as [home, away]. */
   score: [number, number];
@@ -209,6 +240,10 @@ export interface SimEvent {
     | 'pass'        // completed pass (sampled, not every pass)
     | 'tackle'      // possession won by a defender
     | 'interception'
+    | 'foul'        // failed challenge that fouls the carrier → free kick (may carry a card)
+    | 'penalty'     // a foul inside the box → penalty kick (followed by a goal or save)
+    | 'substitution'// a fresh sub replaces a tiring player (playerId on, otherId off)
+    | 'offside'     // attacker collected a teammate's pass while in an offside position
     | 'out_throw'   // ball left via touchline
     | 'out_goalkick'
     | 'out_corner'
@@ -219,6 +254,8 @@ export interface SimEvent {
   playerId?: string;
   /** Secondary player id (e.g. the defender on a tackle, keeper on a save). */
   otherId?:  string;
+  /** Card shown on a foul, when one is given.  Absent = no card. */
+  card?:     'yellow' | 'red';
 }
 
 // ── Position frames (the viewer payload) ──────────────────────────────────
@@ -257,6 +294,11 @@ export interface SimConfig {
   frameEverySec: number;
   /** Random seed — same seed + same teams ⇒ identical match. */
   seed:         number;
+  /**
+   * Whether to play deterministic added (stoppage) time after regulation.
+   * On for real matches; tests that assert an exact frame count switch it off.
+   */
+  stoppage:     boolean;
 }
 
 /** The full output of one simulated match. */

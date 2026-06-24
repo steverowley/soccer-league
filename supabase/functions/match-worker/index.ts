@@ -62,6 +62,7 @@ import { computeFanBoost } from './fanBoost.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
 import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
+import { applyTeamTraits } from './spatial/traitModifiers.ts';
 import type { PositionFrame } from './spatial/types.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
@@ -331,7 +332,9 @@ async function fetchTeamForSimulation(teamId: string) {
     // `preferred_formation` on the manager row is read by `toSpatialTeamInput`
     // to assign each player to their correct formation slot (e.g. '4-4-2').
     // The legacy `normalizeTeamForEngine` path ignores it safely.
-    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id, preferred_formation), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active)')
+    // `personality` is the flat-column fallback for the trait bridge; the
+    // authoritative value is read from `entity_traits` in buildPersonalityMap.
+    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id, preferred_formation), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active, personality)')
     .eq('id', teamId)
     .single();
 
@@ -341,6 +344,63 @@ async function fetchTeamForSimulation(teamId: string) {
   }
 
   return data;
+}
+
+// ── Helper: Personality trait bridge (entities → engine) ────────────────────
+
+/**
+ * Resolve a player-id → personality map for a fetched team, reading the
+ * archetype from the unified entities layer.
+ *
+ * This is the entities → engine bridge: we query `entity_traits` for the
+ * 'personality' trait keyed on each player's `entity_id` (the surface the
+ * Cosmic Architect writes to), and fall back to the player's flat
+ * `personality` column when no linked entity / trait row exists (pre-entity
+ * rows).  The map is handed to `applyTeamTraits`, which nudges each player's
+ * sim stats before kickoff — inputs only, so determinism is untouched.
+ *
+ * A separate query (rather than a PostgREST embed inside fetchTeamForSimulation)
+ * keeps the main team fetch robust: the players→entities relationship is not an
+ * enforced FK, so an embed could 400 the whole fetch and revert the batch; a
+ * failed traits query here merely leaves the flat-column fallback in place.
+ *
+ * @param teamData  A team row from fetchTeamForSimulation (needs players[]).
+ * @returns         player id → personality archetype (or null when unknown).
+ */
+async function buildPersonalityMap(
+  teamData: { players?: Array<{ id: string; entity_id?: string | null; personality?: string | null }> | null },
+): Promise<Map<string, string | null>> {
+  const players = teamData.players ?? [];
+  const entityIds = players
+    .map((p) => p.entity_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  // entity_id → personality from the entities layer (empty when nothing linked).
+  const traitByEntity = new Map<string, string>();
+  if (entityIds.length > 0) {
+    const { data, error } = await supabase
+      .from('entity_traits')
+      .select('entity_id, trait_value')
+      .eq('trait_key', 'personality')
+      .in('entity_id', entityIds);
+    if (error) {
+      console.error('[match-worker] Failed to fetch personality traits:', error);
+    } else {
+      for (const row of data ?? []) {
+        // trait_value is JSONB; the backfill stored the archetype as a JSON
+        // string, so it round-trips to a plain string here.
+        if (typeof row.trait_value === 'string') traitByEntity.set(row.entity_id, row.trait_value);
+      }
+    }
+  }
+
+  // Prefer the entities-layer value; fall back to the flat column, else null.
+  const map = new Map<string, string | null>();
+  for (const p of players) {
+    const fromEntity = p.entity_id ? traitByEntity.get(p.entity_id) ?? null : null;
+    map.set(p.id, fromEntity ?? p.personality ?? null);
+  }
+  return map;
 }
 
 // ── Helper: Post-match lore save ───────────────────────────────────────────
@@ -638,8 +698,11 @@ async function processMatch(match: any): Promise<boolean> {
     // match_id → identical outcome on every worker retry), simulate, and adapt
     // to the match_events shape.  `result` is mutated in place below by the
     // Architect interference passes (result.events / finalScore / playerStats).
-    const homeInput = toSpatialTeamInput(homeData);
-    const awayInput = toSpatialTeamInput(awayData);
+    // Personality archetypes (read from the entities layer) nudge each player's
+    // derived sim stats before kickoff — inputs only, so the seeded engine below
+    // stays byte-identical for an unchanged roster.
+    const homeInput = applyTeamTraits(toSpatialTeamInput(homeData), await buildPersonalityMap(homeData));
+    const awayInput = applyTeamTraits(toSpatialTeamInput(awayData), await buildPersonalityMap(awayData));
     const seed = parseInt(match.id.replace(/-/g, '').slice(0, 8), 16);
 
     const spatialResult = simulateSpatialMatch(homeInput, awayInput, { seed });

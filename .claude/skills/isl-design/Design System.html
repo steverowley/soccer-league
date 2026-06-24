@@ -1,0 +1,442 @@
+<!-- @dsCard group="Brand" name="Design System — Overview" subtitle="The full ISL styleguide, one page" viewport="1320x900" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intergalactic Soccer League — Design System</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--isl-galactic-abyss);
+    color: var(--isl-lunar-dust);
+    font-family: var(--isl-font-mono);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); }
+  a { color: inherit; text-decoration: none; }
+
+  /* ---- layout ---- */
+  .page { max-width: 1320px; margin: 0 auto; padding: 0 64px; }
+  section { padding: 96px 0; border-top: 1px solid var(--isl-border-faint); }
+  section:first-of-type { border-top: 0; }
+
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 32px; flex-wrap: wrap; margin-bottom: 48px; }
+  .eyebrow { display: flex; align-items: center; gap: 16px; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .04em; }
+  .eyebrow .idx { font-size: 16px; }
+  h2.sec-title { font-weight: 700; font-size: 40px; line-height: 1; margin: 16px 0 0; text-transform: uppercase; }
+  .sec-note { font-size: 16px; line-height: 1.55; max-width: 520px; margin: 0; }
+
+  /* ---- top bar ---- */
+  .topbar { position: sticky; top: 0; z-index: 50; background: rgba(17,17,17,0.86); backdrop-filter: blur(8px); border-bottom: 1px solid var(--isl-border-faint); }
+  .topbar .inner { max-width: 1320px; margin: 0 auto; padding: 16px 64px; display: flex; align-items: center; gap: 28px; }
+  .topbar img { height: 48px; width: auto; display: block; }
+  .topbar nav { display: flex; gap: 24px; margin-left: auto; font-weight: 700; font-size: 13px; text-transform: uppercase; }
+  .topbar nav a { transition: text-shadow .12s linear; }
+  .topbar nav a:hover { text-shadow: 0 0 12px rgba(227,224,213,.9); }
+  .topbar .ver { font-weight: 700; font-size: 13px; text-transform: uppercase; padding: 8px 14px; border: 1px solid var(--isl-border); }
+
+  /* ---- hero ---- */
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 64px; align-items: stretch; padding-top: 80px; }
+  .hero-img { background: url(assets/img-spacewalk.png) center / cover no-repeat; border: 1px solid var(--isl-border-faint); min-height: 520px; filter: grayscale(1) contrast(1.06); }
+  .hero-copy { display: flex; flex-direction: column; justify-content: center; gap: 28px; }
+  .hero h1 { font-weight: 700; font-size: 64px; line-height: .98; margin: 0; text-transform: uppercase; }
+  .hero .coords { display: flex; gap: 16px; flex-wrap: wrap; font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .hero p { font-size: 16px; line-height: 1.6; margin: 0; max-width: 540px; }
+  .hero .meta { display: flex; gap: 56px; flex-wrap: wrap; padding-top: 8px; }
+  .hero .meta .k { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .hero .meta .v { font-weight: 700; font-size: 20px; margin-top: 6px; }
+
+  /* ---- generic grid + tile ---- */
+  .grid { display: grid; gap: 1px; background: var(--isl-border-faint); border: 1px solid var(--isl-border-faint); }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: 1fr 1fr 1fr; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .tile { background: var(--isl-galactic-abyss); padding: 32px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---- colour ---- */
+  .sw { height: 132px; display: flex; align-items: flex-end; padding: 16px; }
+  .sw .hex { font-weight: 700; font-size: 14px; }
+  .swatch-name { font-weight: 700; font-size: 18px; }
+  .swatch-role { font-size: 13px; }
+  .ramp { display: flex; height: 56px; margin-top: 8px; }
+  .ramp span { flex: 1; }
+
+  /* ---- type ---- */
+  .type-row { display: flex; align-items: baseline; gap: 32px; padding: 22px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .type-row:last-child { border-bottom: 0; }
+  .type-row .tag { width: 64px; flex: none; font-size: 13px; text-transform: uppercase; }
+  .type-row .meta { margin-left: auto; font-size: 13px; white-space: nowrap; }
+  .specimen { line-height: 1; }
+
+  /* ---- spacing ---- */
+  .sp-row { display: flex; align-items: center; gap: 24px; padding: 10px 0; }
+  .sp-row .tok { width: 92px; flex: none; font-size: 13px; }
+  .sp-bar { height: 18px; background: var(--isl-lunar-dust); }
+  .sp-row .val { margin-left: auto; font-size: 13px; }
+
+  /* ---- components ---- */
+  .btn { font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; text-transform: uppercase; line-height: 1; padding: 16px 32px; border: 1px solid transparent; cursor: pointer; transition: box-shadow .12s linear, filter .12s linear; }
+  .btn-primary { background: var(--isl-lunar-dust); color: var(--isl-galactic-abyss); border-color: var(--isl-lunar-dust); }
+  .btn-primary:hover { box-shadow: var(--isl-glow-light); }
+  .btn-secondary { background: var(--isl-galactic-abyss); color: var(--isl-lunar-dust); border-color: var(--isl-lunar-dust); }
+  .btn-secondary:hover { box-shadow: var(--isl-glow-light); }
+  .btn-cta { background: var(--isl-astro-explorer); color: var(--isl-galactic-abyss); border-color: var(--isl-astro-explorer); }
+  .btn-cta:hover { filter: brightness(1.1); }
+  .btn-tertiary { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: var(--isl-lunar-dust); font-family: var(--isl-font-mono); font-weight: 700; font-size: 16px; text-transform: uppercase; cursor: pointer; }
+  .row-wrap { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+
+  .live { display: inline-flex; align-items: center; gap: 12px; border: 1px solid var(--isl-border); padding: 10px 16px; }
+  .live .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--isl-solar-flare); }
+  .live b { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+  .form { display: inline-flex; gap: 4px; }
+  .fc { width: 26px; height: 26px; border: 1px solid var(--isl-border); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+  .fc.d { color: rgba(227,224,213,.82); border-color: rgba(227,224,213,.45); }
+  .fc.l { color: var(--isl-solar-flare); border-color: var(--isl-solar-flare); }
+  .chip { border: 1px solid var(--isl-border); padding: 10px 16px; font-weight: 700; font-size: 16px; text-transform: uppercase; }
+
+  .league-card { display: flex; flex-direction: column; gap: 28px; }
+  .league-card h3 { font-weight: 700; font-size: 28px; text-transform: uppercase; margin: 0; }
+  .league-card p { font-size: 16px; line-height: 1.4; margin: 0; }
+
+  /* ---- match preview ---- */
+  .match { border: 1px solid var(--isl-border); padding: 32px; display: flex; flex-direction: column; gap: 28px; }
+  .match .head { display: flex; justify-content: space-between; align-items: center; }
+  .match .teams { display: flex; align-items: flex-start; justify-content: center; gap: 40px; }
+  .match .team { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 220px; }
+  .match .team img { height: 104px; width: auto; }
+  .match .team .nm { font-weight: 700; font-size: 24px; text-transform: uppercase; }
+  .match .team .sub { font-weight: 700; font-size: 14px; text-transform: uppercase; }
+  .match .score { font-weight: 700; font-size: 52px; padding-top: 28px; }
+  .commentary { border-left: 2px solid var(--isl-border-faint); padding-left: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .commentary .by { display: flex; gap: 12px; align-items: center; font-size: 16px; }
+  .commentary em { font-style: italic; font-size: 16px; line-height: 1.5; }
+
+  /* ---- iconography ---- */
+  .glyphs { display: flex; flex-wrap: wrap; gap: 12px; }
+  .glyph { width: 72px; height: 72px; border: 1px solid var(--isl-border-faint); display: grid; place-items: center; font-weight: 700; font-size: 26px; }
+  .glyph small { font-size: 11px; }
+
+  /* ---- imagery ---- */
+  .img-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .img-strip div { aspect-ratio: 4/3; background-size: cover; background-position: center; border: 1px solid var(--isl-border-faint); filter: grayscale(1) contrast(1.05); }
+
+  /* ---- footer ---- */
+  footer { border-top: 2px solid var(--isl-white); }
+  footer .inner { max-width: 1320px; margin: 0 auto; padding: 40px 64px 80px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  footer img { height: 40px; }
+  footer span { font-weight: 700; font-size: 16px; text-transform: uppercase; }
+
+  .principle { display: flex; gap: 20px; padding: 24px 0; border-bottom: 1px solid var(--isl-border-faint); }
+  .principle:last-child { border-bottom: 0; }
+  .principle .n { font-weight: 700; font-size: 16px; width: 40px; flex: none; }
+  .principle .t { font-weight: 700; font-size: 20px; width: 240px; flex: none; }
+  .principle .d { font-size: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="inner">
+      <img src="assets/isl-logo-full.png" alt="ISL">
+      <nav>
+        <a href="#foundations">Foundations</a>
+        <a href="#colour">Colour</a>
+        <a href="#type">Type</a>
+        <a href="#components">Components</a>
+        <a href="#assets">Assets</a>
+        <a href="ui_kits/web/index.html">UI Kit ▸</a>
+      </nav>
+      <span class="ver">DS v0.7.0</span>
+    </div>
+  </header>
+
+  <div class="page">
+
+    <!-- HERO -->
+    <section class="hero" style="border-top:0">
+      <div class="hero-img"></div>
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="idx">I</span><span>•</span><span>The Design System</span></div>
+        <h1>Charted across the stars</h1>
+        <div class="coords">
+          <span>RA 14ʰ 04ᵐ 12ˢ</span><span>•</span><span>EPOCH MMXXXVII</span><span>•</span><span>DEC −27° 19′</span>
+        </div>
+        <p>The visual language of the Intergalactic Soccer League. One typeface, two base tones, and a palette of accents that only ever appear to mean something. Hard-edged, monospace, and quietly ominous — an interface printed in phosphor on the inside of a spacecraft.</p>
+        <div class="meta">
+          <div><div class="k">Typeface</div><div class="v">Space Mono</div></div>
+          <div><div class="k">Surfaces</div><div class="v">2 tones</div></div>
+          <div><div class="k">Radius</div><div class="v">0px</div></div>
+          <div><div class="k">Solar cycle</div><div class="v">2401</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRINCIPLES -->
+    <section id="foundations">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">II</span><span>•</span><span>Principles</span></div>
+          <h2 class="sec-title">Five laws of the league</h2>
+        </div>
+        <p class="sec-note">The rules every ISL surface obeys. Break them only with intent.</p>
+      </div>
+      <div class="principles">
+        <div class="principle"><span class="n">01</span><span class="t">One voice, one face</span><span class="d">Space Mono carries everything — headline to data cell. Hierarchy comes from size and case, never from fading text.</span></div>
+        <div class="principle"><span class="n">02</span><span class="t">Ration the colour</span><span class="d">~90% of any screen is Lunar Dust on Galactic Abyss. Accents are reserved for meaning: live, focus, action, success.</span></div>
+        <div class="principle"><span class="n">03</span><span class="t">Square by default</span><span class="d">Zero corner radius. Cards are hairline boxes — no fill, no shadow. Only avatars and status dots are round.</span></div>
+        <div class="principle"><span class="n">04</span><span class="t">Glow, don't drop</span><span class="d">Elevation and energy are shown with glow, not drop shadows. Purple blooms signal the Architect; light glows signal hover.</span></div>
+        <div class="principle"><span class="n">05</span><span class="t">Imagery beside, never beneath</span><span class="d">High-contrast halftone space photography sits next to copy — text is never laid over an image.</span></div>
+      </div>
+    </section>
+
+    <!-- COLOUR -->
+    <section id="colour">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">III</span><span>•</span><span>Colour</span></div>
+          <h2 class="sec-title">A rationed palette</h2>
+        </div>
+        <p class="sec-note">Two base tones do almost all the work. Four accents each carry a single, fixed meaning.</p>
+      </div>
+
+      <div class="grid g3" style="margin-bottom:1px">
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-lunar-dust);color:var(--isl-galactic-abyss)"><span class="hex">#E3E0D5</span></div>
+          <span class="swatch-name">Lunar Dust</span><span class="swatch-role">Primary light · text, strokes, fills on dark</span>
+        </div>
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-galactic-abyss);border:1px solid var(--isl-border-faint)"><span class="hex">#111111</span></div>
+          <span class="swatch-name">Galactic Abyss</span><span class="swatch-role">Primary dark · the canvas</span>
+        </div>
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-phobos-ash);border:1px solid var(--isl-border-faint)"><span class="hex">#1F1F1F</span></div>
+          <span class="swatch-name">Phobos Ash</span><span class="swatch-role">Secondary dark · raised surfaces, inputs</span>
+        </div>
+      </div>
+      <div class="grid g4">
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-astro-explorer);color:var(--isl-galactic-abyss)"><span class="hex">#FF6637</span></div>
+          <span class="swatch-name">Astro Explorer</span><span class="swatch-role">Action · the primary CTA &amp; focus accent</span>
+        </div>
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-solar-flare);color:var(--isl-galactic-abyss)"><span class="hex">#FF4F5E</span></div>
+          <span class="swatch-name">Solar Flare</span><span class="swatch-role">Live / error</span>
+        </div>
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-quantum-purple);color:var(--isl-galactic-abyss)"><span class="hex">#9A5CF4</span></div>
+          <span class="swatch-name">Quantum Purple</span><span class="swatch-role">The Architect · atmospheric glow</span>
+        </div>
+        <div class="tile">
+          <div class="sw" style="background:var(--isl-terra-nova);color:var(--isl-galactic-abyss)"><span class="hex">#A5D6A7</span></div>
+          <span class="swatch-name">Terra Nova</span><span class="swatch-role">Confirmation / success</span>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:1px">
+        <div class="tile">
+          <span class="swatch-role">Quantum Purple ramp — depth fills &amp; blooms</span>
+          <div class="ramp"><span style="background:var(--isl-purple-900)"></span><span style="background:var(--isl-purple-700)"></span><span style="background:var(--isl-purple-500)"></span><span style="background:var(--isl-quantum-purple)"></span></div>
+        </div>
+        <div class="tile">
+          <span class="swatch-role">Solar Flare ramp — live bars &amp; heat</span>
+          <div class="ramp"><span style="background:var(--isl-red-900)"></span><span style="background:var(--isl-red-700)"></span><span style="background:var(--isl-red-500)"></span><span style="background:var(--isl-solar-flare)"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TYPE -->
+    <section id="type">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">IV</span><span>•</span><span>Typography</span></div>
+          <h2 class="sec-title">Space Mono, alone</h2>
+        </div>
+        <p class="sec-note">A single self-hosted typeface. Bold for nearly everything; Regular for prose; Italic for the commentary booth.</p>
+      </div>
+      <div class="type-row"><span class="tag">H1</span><span class="specimen" style="font-weight:700;font-size:40px">Soccer, charted across the stars</span><span class="meta">Bold · 40 / 100%</span></div>
+      <div class="type-row"><span class="tag">H2</span><span class="specimen" style="font-weight:700;font-size:32px">Live from the void</span><span class="meta">Bold · 32 / 100%</span></div>
+      <div class="type-row"><span class="tag">H3</span><span class="specimen" style="font-weight:700;font-size:28px">Three steps to enter</span><span class="meta">Bold · 28 / 100%</span></div>
+      <div class="type-row"><span class="tag">Label</span><span class="specimen" style="font-weight:700;font-size:16px;text-transform:uppercase">Browse leagues · View all matches</span><span class="meta">Bold · 16 · UPPER</span></div>
+      <div class="type-row"><span class="tag">Body</span><span class="specimen" style="font-weight:400;font-size:16px">Position updates every ninety seconds.</span><span class="meta">Regular · 16 / 150%</span></div>
+      <div class="type-row"><span class="tag">Quote</span><span class="specimen" style="font-weight:400;font-style:italic;font-size:16px">"There it is — Mercer's been reading Mars all half."</span><span class="meta">Italic · 16 / 150%</span></div>
+    </section>
+
+    <!-- SPACING + GEOMETRY -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">V</span><span>•</span><span>Space &amp; geometry</span></div>
+          <h2 class="sec-title">An 8-pt grid</h2>
+        </div>
+        <p class="sec-note">Everything aligns to eight. Hard corners, hairline strokes, glow instead of shadow.</p>
+      </div>
+      <div class="grid g2">
+        <div class="tile" style="gap:0">
+          <div class="sp-row"><span class="tok">space-1</span><span class="sp-bar" style="width:8px"></span><span class="val">8</span></div>
+          <div class="sp-row"><span class="tok">space-2</span><span class="sp-bar" style="width:16px"></span><span class="val">16</span></div>
+          <div class="sp-row"><span class="tok">space-3</span><span class="sp-bar" style="width:24px"></span><span class="val">24</span></div>
+          <div class="sp-row"><span class="tok">space-4</span><span class="sp-bar" style="width:32px"></span><span class="val">32 · card pad</span></div>
+          <div class="sp-row"><span class="tok">space-6</span><span class="sp-bar" style="width:64px"></span><span class="val">64 · section</span></div>
+          <div class="sp-row"><span class="tok">space-7</span><span class="sp-bar" style="width:84px"></span><span class="val">84 · gutter</span></div>
+        </div>
+        <div class="tile" style="flex-direction:row;flex-wrap:wrap;gap:32px;align-items:center;justify-content:space-around">
+          <div style="text-align:center"><div style="width:84px;height:64px;border:1px solid var(--isl-border);margin:0 auto 12px"></div><span class="swatch-role">radius 0</span></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;border:1px solid var(--isl-border);margin:0 auto 12px"></div><span class="swatch-role">round · avatars</span></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--isl-quantum-purple);box-shadow:var(--isl-glow-purple);margin:0 auto 12px"></div><span class="swatch-role">glow · purple</span></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--isl-lunar-dust);box-shadow:var(--isl-glow-light);margin:0 auto 12px"></div><span class="swatch-role">glow · light</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPONENTS -->
+    <section id="components">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">VI</span><span>•</span><span>Components</span></div>
+          <h2 class="sec-title">Built from hairlines</h2>
+        </div>
+        <p class="sec-note">Buttons, status, data, cards — all assembled from the same 1px box and the rationed palette.</p>
+      </div>
+
+      <div class="grid g2">
+        <div class="tile" style="gap:24px">
+          <span class="swatch-role">Buttons</span>
+          <div class="row-wrap">
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-cta">Place stake</button>
+            <button class="btn btn-tertiary">View all matches <svg width="12" height="12" viewBox="0 0 12 12"><path d="M0 0 L9 5.196 L0 10.392 Z" fill="currentColor"/></svg></button>
+          </div>
+        </div>
+        <div class="tile" style="gap:24px">
+          <span class="swatch-role">Status &amp; data</span>
+          <div class="row-wrap">
+            <span class="live"><span class="dot"></span><b>LIVE · 73'</b></span>
+            <span class="form"><span class="fc">W</span><span class="fc">W</span><span class="fc d">D</span><span class="fc">W</span><span class="fc l">L</span></span>
+            <span class="chip">Matchday 14</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:1px">
+        <div class="tile league-card">
+          <h3>rocky inner league</h3>
+          <p>Teams from the inner rocky planets, including Earth, Mars, Venus, and Mercury.</p>
+          <button class="btn btn-secondary" style="align-self:flex-start">View league</button>
+        </div>
+        <div class="tile league-card">
+          <h3>kuiper belt league</h3>
+          <p>Clubs from distant dwarf planets emphasise endurance and tactical finesse.</p>
+          <button class="btn btn-secondary" style="align-self:flex-start">View league</button>
+        </div>
+      </div>
+
+      <div style="margin-top:1px" class="match">
+        <div class="head">
+          <span style="font-weight:700;font-size:16px;text-transform:uppercase">Rocky Inner • Matchday 14</span>
+          <span class="live"><span class="dot"></span><b>LIVE · 73'</b></span>
+        </div>
+        <div style="height:0;border-top:1px solid var(--isl-border-faint)"></div>
+        <div class="teams">
+          <div class="team"><img src="assets/crest-earth-united.png" alt="Earth United"><span class="nm">Earth United</span><span class="sub">Home • Earth</span></div>
+          <span class="score">2 · 1</span>
+          <div class="team"><img src="assets/crest-mars-rovers.png" alt="Mars Rovers"><span class="nm">Mars Rovers</span><span class="sub">Away • Mars</span></div>
+        </div>
+        <div style="height:0;border-top:1px solid var(--isl-border-faint)"></div>
+        <div class="commentary">
+          <div class="by"><b style="font-weight:700">Zara Bloom</b><span>•</span><span>Colour Analyst</span><span style="margin-left:auto">73'</span></div>
+          <em>"There it is — Mercer's been reading Mars' final-third patterns all second half. That's the interception that wins a draw when your striker's gone haywire."</em>
+        </div>
+        <button class="btn btn-primary" style="align-self:flex-start">Watch live match</button>
+      </div>
+    </section>
+
+    <!-- ICONOGRAPHY + ASSETS -->
+    <section id="assets">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">VII</span><span>•</span><span>Iconography &amp; assets</span></div>
+          <h2 class="sec-title">Glyphs, not icons</h2>
+        </div>
+        <p class="sec-note">The brand is near-icon-free. Typographic glyphs and Roman numerals do the signalling. Never emoji.</p>
+      </div>
+      <div class="grid g2">
+        <div class="tile" style="gap:20px">
+          <span class="swatch-role">Working glyph set</span>
+          <div class="glyphs">
+            <div class="glyph">·</div>
+            <div class="glyph">°</div>
+            <div class="glyph">′</div>
+            <div class="glyph">—</div>
+            <div class="glyph"><svg width="16" height="16" viewBox="0 0 12 12"><path d="M0 0 L9 5.196 L0 10.392 Z" fill="currentColor"/></svg></div>
+            <div class="glyph" style="color:var(--isl-solar-flare)">●</div>
+            <div class="glyph" style="font-size:18px">VII</div>
+            <div class="glyph" style="font-size:18px">XIV</div>
+          </div>
+        </div>
+        <div class="tile" style="gap:20px;align-items:flex-start">
+          <span class="swatch-role">Logo &amp; crests</span>
+          <div class="row-wrap" style="gap:32px">
+            <img src="assets/isl-logo-full.png" alt="ISL" style="height:96px">
+            <img src="assets/crest-earth-united.png" alt="Earth United" style="height:72px">
+            <img src="assets/crest-mars-rovers.png" alt="Mars Rovers" style="height:72px">
+          </div>
+        </div>
+      </div>
+      <div class="tile" style="margin-top:1px;border:1px solid var(--isl-border-faint)">
+        <span class="swatch-role" style="margin-bottom:16px">Imagery — high-contrast halftone B&amp;W space photography</span>
+        <div class="img-strip">
+          <div style="background-image:url(assets/img-spacewalk.png)"></div>
+          <div style="background-image:url(assets/img-earth-united-flag.png)"></div>
+          <div style="background-image:url(assets/img-moon-broadcast.png)"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BUILD WITH -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="idx">VIII</span><span>•</span><span>Build with it</span></div>
+          <h2 class="sec-title">Where to go next</h2>
+        </div>
+        <p class="sec-note">The system ships as tokens, specimen cards, and a working UI kit.</p>
+      </div>
+      <div class="grid g3">
+        <a class="tile" href="ui_kits/web/index.html" style="gap:12px;min-height:160px;justify-content:space-between">
+          <span class="swatch-name">Web UI Kit ▸</span>
+          <span class="swatch-role">Interactive recreation of the ISL web app — home, live match, standings.</span>
+        </a>
+        <div class="tile" style="gap:12px;min-height:160px;justify-content:space-between">
+          <span class="swatch-name">colors_and_type.css</span>
+          <span class="swatch-role">The token layer. Import first — palette, type scale, spacing, glows.</span>
+        </div>
+        <div class="tile" style="gap:12px;min-height:160px;justify-content:space-between">
+          <span class="swatch-name">README · SKILL</span>
+          <span class="swatch-role">Voice, visual foundations, and the Agent-Skill manifest.</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    <div class="inner">
+      <img src="assets/isl-logo-full.png" alt="ISL">
+      <span>© 2026 Intergalactic Soccer League</span><span style="opacity:.5">•</span>
+      <span>Design System v0.7.0</span><span style="opacity:.5">•</span>
+      <span>EST. Solar Cycle 2401</span><span style="opacity:.5">•</span>
+      <span>Epoch MMXXXVII</span>
+    </div>
+  </footer>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#111111"/><text x="50" y="58" font-family="monospace" font-weight="700" font-size="34" fill="#E3E0D5" text-anchor="middle">ISL</text></svg>
+  </template>
+
+</body>
+</html>
