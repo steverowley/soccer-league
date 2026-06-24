@@ -1,38 +1,41 @@
 // ── MatchDetail.tsx ─────────────────────────────────────────────────────────
-// Single-match detail page — `/matches/:matchId` route, rebuilt in PR 5.
+// Single-match detail page — `/matches/:matchId` route. Relaid out to match the
+// design system's `Match.html` worked screen (the "live match theatre").
 //
-// Layout:
+// Layout (matches the prototype top → bottom):
 //   Header (global)
-//   I.   Hero          — backlink, kicker (competition + round), two-team
-//                        score row with brand-colour crests, status pip,
-//                        kickoff / FT timestamp, weather + stadium meta
-//   II.  Bookie        — WagerWidget — five render branches (closed /
-//                        loading / no odds / anonymous CTA / picker)
-//                        keyed off match.status + auth state.  Added
-//                        in PR 10.
-//   III. Live Feed     — LiveCommentary — pre-simulated match_events log
-//                        revealed at wall-clock pace for in_progress
-//                        matches, dumped wholesale for completed ones,
-//                        omitted entirely for scheduled / cancelled.
-//                        Added in Phase A (live match event streaming).
-//   IV.  Stats         — match_player_stats table (goals / assists /
-//                        cards / minutes / rating) grouped by side,
-//                        sorted by rating DESC
+//   I.   Eyebrow head  — backlink + breadcrumb (Matches • competition • round)
+//   II.  Scoreboard    — `.board`: stadium + attendance / status clock, a
+//                        divider, then a crest-name-score teams row. NO
+//                        momentum bar (no momentum data exists — omitted, not
+//                        faked).
+//   III. `.main` grid  — two columns, `1fr 380px`, collapsing to one under
+//                        ~900px:
+//          LEFT (`.col-l`):
+//            • 2D pitch panel (`MatchPitchPanel`) — rehomed here from the old
+//              pitch-grid; the prototype omits it but it's a real feature.
+//            • Live commentary feed (`LiveCommentary` → `.feed`) — pre-simulated
+//              `match_events` revealed at wall-clock pace.
+//            • Match record timeline (`.tl`) — derived from the SAME events the
+//              commentary already holds (goals / cards / architect / subs).
+//          RIGHT (`.rail`, sticky):
+//            • `<WagerWidget/>` — the real credit-betting picker, rendered
+//              UNCHANGED. The prop bet ("Will the Architect manifest?") is
+//              omitted — there's no backend bet type for it.
+//   IV.  Stats         — match_player_stats table grouped by side
 //   Footer (shared)
 //
-// Data sources:
+// Data sources (all UNCHANGED from the previous build):
 //   - getMatch(db, matchId) — joins home_team, away_team, competitions,
 //     and match_player_stats (with player meta)
 //   - getMatchEvents(db, matchId) — full pre-simulated event log
-//     (Section III)
-//   - getMatchDurationSeconds(db, matchId) — season pacing knob; how
-//     long the viewer takes to reveal a 90-minute match (Section III)
-//   - subscribeToMatchEvents(db, matchId, onInsert) — Realtime stream
-//     of new events while a match is in_progress (Section III)
+//   - getMatchDurationSeconds(db, matchId) — season pacing knob
+//   - subscribeToMatchEvents(db, matchId, onInsert) — Realtime event stream
+//   - getMatchPositions(db, matchId) — spatial frames for the 2D viewer
 //
 // 404 case: matchId returns no row → renders an "Unknown Match" surface.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink, TeamCrest } from '../components/Layout';
@@ -59,13 +62,16 @@ import TeachingStrip from '../components/TeachingStrip';
 // the genuine fetch-failure error and the Cancelled status pip
 // (cancellation is the only match status that genuinely is an error
 // outcome — every wager on it gets voided).
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, terraNova: TERRA } = COLORS;
 const HAIRLINE = COLORS.hairline;
+// border-faint from the design system (0.25) — the brighter inner divider the
+// prototype uses inside the scoreboard / feed / timeline.
+const BORDER_FAINT = 'rgba(227, 224, 213, 0.25)';
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
 
 // ── Status mapping ──────────────────────────────────────────────────────────
-// STATUS_LABELS — display copy for the status pip on the score row.
+// STATUS_LABELS — display copy for the status chip on the scoreboard.
 // Matches the wording used on the Matches index so the two surfaces
 // agree on terminology.
 const STATUS_LABELS: Record<string, string> = {
@@ -74,6 +80,22 @@ const STATUS_LABELS: Record<string, string> = {
   scheduled:   'Scheduled',
   cancelled:   'Cancelled',
 };
+
+// ── Loose match row ─────────────────────────────────────────────────────────
+// getMatch() returns a deeply-nested join (home_team / away_team / managers /
+// players / competitions / match_player_stats) the page reads defensively. The
+// page-level state stays `any` (the pre-existing pattern), but the section
+// components below take this index-signature alias instead of a fresh `any`
+// per component — the same loose-but-named shape, with no net-new `no-explicit-
+// any`. Reads are still per-field, so nothing here is type-checked beyond
+// "this is an object" — but it keeps the lint surface flat.
+type MatchRow = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+// The exact match-row shape WagerWidget consumes (id / status / team refs),
+// derived from its prop type so the cast at the call site stays in sync if the
+// widget's contract changes. We never reshape the row — the cast only narrows
+// the loose MatchRow to the typed boundary WagerWidget already enforces.
+type WagerMatch = ComponentProps<typeof WagerWidget>['match'];
 
 /**
  * Match detail page.
@@ -89,8 +111,8 @@ export default function MatchDetail() {
   const { matchId } = useParams();
   const db          = useSupabase();
 
-  const [match,     setMatch]     = useState<any>(null);
-  const [loadError, setLoadError] = useState<any>(null);
+  const [match,     setMatch]     = useState<MatchRow | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [loaded,    setLoaded]    = useState<boolean>(false);
   // Cosmos-wide watcher count for the live presence badge (#382). 0 ≡
   // no watchers OR fetch error — both rendered the same (no badge).
@@ -107,7 +129,7 @@ export default function MatchDetail() {
     setLoadError(null);
     setLoaded(false);
     getMatch(db, matchId)
-      .then((data: any) => {
+      .then((data: MatchRow | null) => {
         if (cancelled) return;
         setMatch(data);
         setLoaded(true);
@@ -146,43 +168,40 @@ export default function MatchDetail() {
   if (loaded && !match && !loadError) return <UnknownMatch matchId={matchId} />;
 
   return (
-    <div style={{
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
+    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
 
-      <section style={{ padding: '48px 16px 24px' }}>
-        <Container>
+      <Container>
+        {/* Section I — eyebrow head: backlink + breadcrumb. */}
+        <header style={{ padding: '48px 0 0' }}>
           <BackLink to="/matches">All Matches</BackLink>
 
           {!loaded && (
-            <p style={{
-              marginTop: 32, color: DUST_50, fontStyle: 'italic', fontSize: 13,
-            }}>
+            <p style={{ marginTop: 32, color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
               Loading match…
             </p>
           )}
 
-          {loadError && (
-            <p style={{
-              marginTop: 32, color: FLARE, fontStyle: 'italic', fontSize: 13,
-            }}>
+          {loadError != null && (
+            <p style={{ marginTop: 32, color: FLARE, fontStyle: 'italic', fontSize: 13 }}>
               Match data unavailable. The void has swallowed the result.
             </p>
           )}
 
-          {match && !loadError && <MatchHero match={match} />}
+          {match && !loadError && <MatchBreadcrumb match={match} />}
+        </header>
 
-          {/* First-match teaching strip — "Meet the booth" (#379).
-              One-time dismissible strip that introduces the three
-              commentator voices + the two cosmic voices. Vision says
-              "hide the mechanics", but the *cast* should still be
-              introduced — fans need to know who Vox / Nexus-7 / Zara
-              are before they can hear them in the live feed below.
-              Persistence: localStorage; never blocks the page. */}
-          {match && !loadError && (
+        {match && !loadError && (
+          <>
+            {/* Section II — scoreboard (the prototype's `.board`). */}
+            <Scoreboard match={match} watcherCount={watcherCount} />
+
+            {/* First-match teaching strip — "Meet the booth" (#379).
+                One-time dismissible strip that introduces the three
+                commentator voices + the two cosmic voices. Vision says
+                "hide the mechanics", but the *cast* should still be
+                introduced — fans need to know who Vox / Nexus-7 / Zara
+                are before they can hear them in the live feed below. */}
             <TeachingStrip
               accent
               storageKey="match_meet_the_booth"
@@ -197,206 +216,135 @@ export default function MatchDetail() {
                 the match deserves it.
               </>}
             />
-          )}
-        </Container>
-      </section>
 
-      {/* Section II — Wager placement.
-          WagerWidget renders all five branches internally (closed
-          status, loading, no odds, anonymous CTA, full picker) so
-          this section always appears on every match — same visual
-          weight whether the user can or cannot bet. */}
-      {match && !loadError && (
-        <section style={{ padding: '0 0 48px' }}>
-          <Container>
-            <SectionHeader
-              kicker="II"
-              label="The Bookie"
-              title="Place A Wager"
-              subtitle="Stake at least 10 credits on any of the three outcomes. Odds lock in at the moment you place — the bookie's later re-pricing won't claw your potential payout back."
-            />
-            {/* First-time betting intro strip (#379). Brief reminder
-                that stakes lock at placement and the minimum bet is
-                10 IC — the wager widget itself enforces both, but
-                a teaching strip up-front saves a first-time user from
-                wondering why their 5-IC bet failed. */}
-            <TeachingStrip
-              storageKey="match_betting_intro"
-              title="How betting works"
-              body={<>
-                Pick an outcome (home, draw, or away) and stake at least
-                10 IC. The odds you see in the picker lock the moment you
-                place — the bookie&apos;s later re-pricing won&apos;t claw your
-                potential payout back. You can bet on multiple matches.
-              </>}
-            />
-            <div style={{ marginTop: 24 }}>
-              <WagerWidget match={match} />
+            {/* Section III — two-column `.main` grid: theatre + stake rail. */}
+            <div
+              className="match-main"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 380px',
+                gap: 24,
+                alignItems: 'start',
+                padding: '24px 0 64px',
+              }}
+            >
+              {/* LEFT column — pitch + commentary feed + timeline. */}
+              <div className="match-col-l" style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
+                <MatchTheatre match={match} watcherCount={watcherCount} />
+              </div>
+
+              {/* RIGHT column — sticky stake rail. WagerWidget unchanged. */}
+              <aside
+                className="match-rail"
+                style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 24 }}
+              >
+                {/* First-time betting intro strip (#379). Brief reminder
+                    that stakes lock at placement and the minimum bet is
+                    10 IC — the wager widget itself enforces both. */}
+                <TeachingStrip
+                  storageKey="match_betting_intro"
+                  title="How betting works"
+                  body={<>
+                    Pick an outcome (home, draw, or away) and stake at least
+                    10 IC. The odds you see lock the moment you place — the
+                    bookie&apos;s later re-pricing won&apos;t claw your
+                    potential payout back.
+                  </>}
+                />
+                {/* The loose MatchRow is the real getMatch() row — it carries
+                    the id / status / team refs WagerWidget needs at runtime;
+                    the cast just re-states that to the typed prop boundary.
+                    WagerWidget + its place_wager logic are unchanged. */}
+                <WagerWidget match={match as WagerMatch} />
+              </aside>
             </div>
-          </Container>
-        </section>
-      )}
 
-      {/* Section III — Live commentary (Phase A) + static pitch (isl-5b6).
-          Renders nothing for scheduled / cancelled matches (no event log
-          exists to show).  For in_progress, ticks once per second and
-          reveals events as wall-clock crosses each minute boundary; for
-          completed, dumps the full pre-simulated log so the user can
-          replay the match's narrative arc end-to-end.
-
-          Layout:
-            • Live / scheduled matches → 2-column grid: pitch ~60% +
-              commentary ~40% on desktop, stacked on mobile (<768px).
-              Pitch shows the 4-4-2 rest state via <PitchView />.
-            • Completed / cancelled matches → unchanged single-column
-              commentary layout (no pitch — the match is over). */}
-      {match && !loadError && (() => {
-        // The pitch belongs on screen while the match is LIVE from the
-        // viewer's perspective — a wall-clock window, NOT the raw DB status.
-        // The worker flips status → 'completed' ~90s into a 10-minute paced
-        // window, so gating on status alone would yank the pitch away
-        // mid-match.  Show it for scheduled / in-progress rows AND for any
-        // match still inside its pacing window (kickoff … kickoff + duration).
-        // The page doesn't fetch the season knob, so use the default duration
-        // as a proxy — same approximation the hero pip makes
-        // (PERCEIVED_LIVE_WINDOW_MS); a non-default season only shifts the
-        // pitch's disappearance by a few minutes.
-        const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
-        // eslint-disable-next-line react-hooks/purity -- wall-clock read; a stale value only mis-decides the pitch near the window edge and self-corrects on the next render / nav
-        const nowMs = Date.now();
-        const withinPacingWindow = kickoffMs != null
-          && nowMs >= kickoffMs
-          && nowMs < kickoffMs + DEFAULT_MATCH_DURATION_SECONDS * 1000;
-        const liveOrScheduled =
-          match.status === 'in_progress' || match.status === 'scheduled' || match.status === 'live'
-          || withinPacingWindow;
-        return (
-          <section style={{ padding: '0 0 48px' }}>
-            <Container>
-              {/* Live presence badge (#382) — only rendered when the
-                  match is in_progress (the badge is meaningful only
-                  while a match is actually being watched live). Counts
-                  cosmos-wide active users rather than per-match; per-
-                  match presence would need a separate aggregate, which
-                  the audit explicitly deferred. */}
-              {match.status === 'in_progress' && watcherCount > 0 && (
-                <p style={{
-                  fontSize: 11,
-                  letterSpacing: '0.18em',
-                  textTransform: 'uppercase',
-                  color: COLORS.dust50,
-                  margin: '0 0 16px',
-                }}>
-                  <span aria-hidden="true" style={{ color: COLORS.quantum }}>●</span>{' '}
-                  <strong style={{ color: COLORS.dust70 }}>{watcherCount}</strong>{' '}
-                  {watcherCount === 1 ? 'fan' : 'fans'} watching now
-                </p>
-              )}
-              {liveOrScheduled ? (
-                <div className="match-detail-pitch-grid">
-                  <div className="match-detail-pitch-col">
-                    {/* Pitch view consumes the same match_events stream
-                        the commentary feed does, via its own isolated
-                        fetch + Realtime subscription (isl-lfo).  Two
-                        subscriptions per match page is acceptable —
-                        Supabase Realtime multiplexes channels and the
-                        pitch should never block on the commentary's
-                        render path.  A future lift could consolidate
-                        them into a shared parent.
-                        Team names + scores are passed through so the
-                        SVG's aria-label can read out the scoreline for
-                        screen readers (isl-7rh polish). */}
-                    {(() => {
-                      // Pull team names + scores defensively from the
-                      // (loosely typed) match row so the aria-label
-                      // gets real values whenever they're available.
-                      // Conditional spread keeps strict-optional-prop
-                      // types happy by NOT setting a key when the
-                      // value would be undefined.
-                      const homeName = (match.home_team as { name?: string } | null | undefined)?.name;
-                      const awayName = (match.away_team as { name?: string } | null | undefined)?.name;
-                      const hs = typeof match.home_score === 'number' ? match.home_score : undefined;
-                      const as = typeof match.away_score === 'number' ? match.away_score : undefined;
-                      return (
-                        <MatchPitchPanel
-                          matchId={match.id}
-                          {...(homeName != null && { homeTeamName: homeName })}
-                          {...(awayName != null && { awayTeamName: awayName })}
-                          {...(hs != null && { homeScore: hs })}
-                          {...(as != null && { awayScore: as })}
-                        />
-                      );
-                    })()}
-                  </div>
-                  <div className="match-detail-commentary-col">
-                    <LiveCommentary match={match} />
-                  </div>
-                </div>
-              ) : (
-                <LiveCommentary match={match} />
-              )}
-              {/* Responsive grid styles for live/scheduled matches only.
-                  At desktop the pitch takes ~60% of the row and the
-                  commentary ~40%; at <768px the grid collapses to a
-                  single stacked column so neither side is squeezed
-                  below readability on phone widths. */}
-              <style>{`
-                .match-detail-pitch-grid {
-                  display: grid;
-                  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-                  gap: 24px;
-                  align-items: start;
-                }
-                @media (max-width: 768px) {
-                  .match-detail-pitch-grid {
-                    grid-template-columns: 1fr;
-                  }
-                }
-              `}</style>
-            </Container>
-          </section>
-        );
-      })()}
-
-      {match && !loadError && (
-        <section style={{ padding: '0 0 80px' }}>
-          <Container>
-            <SectionHeader
-              kicker="IV"
-              label="The Stats"
-              title="Player Performance"
-              subtitle="Aggregated match stats per player.  Ratings reflect engine assessment — interpret them as the booth would."
-            />
-            <PlayerStats
-              homeTeam={match.home_team}
-              awayTeam={match.away_team}
-              stats={match.match_player_stats ?? []}
-            />
-          </Container>
-        </section>
-      )}
+            {/* Section IV — player stats. */}
+            <section style={{ padding: '0 0 80px' }}>
+              <SectionHeader
+                kicker="IV"
+                label="The Stats"
+                title="Player Performance"
+                subtitle="Aggregated match stats per player.  Ratings reflect engine assessment — interpret them as the booth would."
+              />
+              <PlayerStats
+                homeTeam={match.home_team}
+                awayTeam={match.away_team}
+                stats={match.match_player_stats ?? []}
+              />
+            </section>
+          </>
+        )}
+      </Container>
 
       <Footer />
+
+      {/* The `.main` grid collapses to a single column on tablet/mobile; the
+          stake rail drops below the theatre and stops sticking. */}
+      <style>{`
+        @media (max-width: 899px) {
+          .match-main { grid-template-columns: 1fr !important; }
+          .match-rail { position: static !important; }
+        }
+      `}</style>
     </div>
   );
 }
 
 /**
- * Hero block at the top of the match page.
- *
- * Carries the kicker (competition + round), the two-team score row
- * with brand-colour crest silhouettes, a status pip, and a meta row
- * with kickoff time, weather, and stadium.  Scheduled matches show
- * "v" in place of the score; cancelled matches show the original
- * scheduled time + a cancelled pip.
+ * Eyebrow breadcrumb under the backlink: Matches • competition • round.
+ * Segments with no real value are omitted rather than rendered blank.
  *
  * @param {{ match: object }} props
  */
-function MatchHero({ match  }: any) {
+function MatchBreadcrumb({ match }: { match: MatchRow }) {
   const competition = match.competitions?.name ?? 'League';
   const round       = match.round ?? '';
-  const rawStatus   = match.status ?? 'scheduled';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
+        marginTop: 24,
+        fontSize: 14,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        color: DUST,
+      }}
+    >
+      <Link to="/matches" style={{ color: DUST, textDecoration: 'none' }}>Matches</Link>
+      <span style={{ color: DUST_50 }}>•</span>
+      <span>{competition}</span>
+      {round && (
+        <>
+          <span style={{ color: DUST_50 }}>•</span>
+          <span>{round}</span>
+        </>
+      )}
+    </div>
+  );
+}
 
+/**
+ * Scoreboard block (the prototype's `.board`).
+ *
+ * A 1px-bordered, 32px-padded panel with:
+ *   • head row — "{stadium} • Attendance {n}" on the left, a LIVE/status +
+ *     clock chip on the right (uses the same time-based status override the
+ *     old hero pip made);
+ *   • a faint divider;
+ *   • a teams row — crest + uppercase name + "Home/Away • {location}" sub,
+ *     flanking a 64px score ("{home} · {away}").
+ *
+ * NO momentum bar: there is no momentum signal in the data, so the prototype's
+ * `.bar` is omitted entirely (rendering a random bar would fabricate data).
+ *
+ * @param {{ match: object, watcherCount: number }} props
+ */
+function Scoreboard({ match, watcherCount }: { match: MatchRow; watcherCount: number }) {
   const homeName  = match.home_team?.name     ?? '?';
   const awayName  = match.away_team?.name     ?? '?';
   const homeColor = match.home_team?.color    ?? null;
@@ -406,142 +354,103 @@ function MatchHero({ match  }: any) {
   const homeScore = match.home_score ?? 0;
   const awayScore = match.away_score ?? 0;
 
-  // ── Perceived status (time-based override of the DB status) ───────────────
-  // The match-worker pre-simulates the entire 90 minutes in ~10–60 s and
-  // flips `status` to `completed` long before the viewer is done pacing the
-  // event log on the wall clock.  For the hero pip and the pulsing score dot
-  // we want the answer to "is this match live RIGHT NOW from the user's
-  // perspective?", not "has the worker finished writing rows?".
-  //
-  // PERCEIVED_LIVE_WINDOW_MS is the wall-clock budget the viewer uses to
-  // reveal the match minute-by-minute.  Mirrors season_config.
-  // match_duration_seconds default (600 s = 10 minutes).  Sourcing the
-  // actual season knob would require an extra DB roundtrip the hero doesn't
-  // currently make; LiveCommentary fetches it for the event filter and a
-  // mismatch here would only show "Full Time" up to a few minutes early on
-  // non-default seasons, which is acceptable for v1.
-  const PERCEIVED_LIVE_WINDOW_MS = 600 * 1000;
-  const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
-  // Snapshot Date.now() once for both boundary checks.  React-hooks's purity
-  // rule flags Date.now() in render — we accept that here for the same reason
-  // LiveCommentary does (lines 790/810 in this file): the hero re-renders
-  // when the parent's match state changes, and stale "Live" past the pacing
-  // window is harmless (it resolves on refresh / nav).  Hero has no per-second
-  // tick because the pip / pulse don't need sub-minute precision.
-  // eslint-disable-next-line react-hooks/purity
-  const nowMs = Date.now();
-  const inPacingWindow = kickoffMs != null
-    && nowMs >= kickoffMs
-    && nowMs < kickoffMs + PERCEIVED_LIVE_WINDOW_MS;
-  // 'completed' rows get upgraded to 'in_progress' while still inside the
-  // pacing window so the pip reads "Live" and the score pulses.  Scheduled
-  // and cancelled rows are untouched — a scheduled match should never read
-  // as live, and a cancelled match was never played.
-  const status = (rawStatus === 'completed' && inPacingWindow)
-    ? 'in_progress'
-    : rawStatus;
+  const status = perceivedStatus(match);
 
-  const ts = match.played_at
-    ? new Date(match.played_at)
-    : match.scheduled_at
-      ? new Date(match.scheduled_at)
-      : null;
-  const tsLabel = match.played_at ? 'Played' : 'Kickoff';
+  // Attendance — only shown when a real count exists.
+  const attendance = typeof match.attendance === 'number' ? match.attendance : null;
 
   return (
-    <>
-      {/* Kicker row — competition + round + status pip aligned right. */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        gap: 16,
+    <div
+      style={{
+        border: `1px solid ${HAIRLINE}`,
+        padding: 32,
         marginTop: 24,
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-      }}>
-        <span>
-          {competition}
-          {round && <> <span style={{ color: DUST_50 }}>•</span> {round}</>}
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 28,
+      }}
+    >
+      {/* Head row — stadium + attendance / status clock. */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.04em', color: DUST_70 }}>
+          {match.stadium ?? 'Unknown Ground'}
+          {attendance != null && (
+            <>
+              {' '}<span style={{ color: DUST_50 }}>•</span>{' '}
+              Attendance {attendance.toLocaleString()}
+            </>
+          )}
         </span>
-        <StatusPip status={status} />
+        <StatusChip status={status} />
       </div>
 
-      {/* Score row — three-column grid: home block / score / away block.
-          Crests are placeholder shield silhouettes coloured by each
-          team's brand colour (same pattern as Home's LiveMatchPanel). */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center',
-        gap: 32,
-        margin: '24px 0 0',
-        padding: '40px 0',
-        borderTop: `1px solid ${HAIRLINE}`,
-        borderBottom: `1px solid ${HAIRLINE}`,
-      }}>
+      <div style={{ height: 0, borderTop: `1px solid ${BORDER_FAINT}` }} />
+
+      {/* Teams row — crest / name / sub … score … crest / name / sub. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          alignItems: 'flex-start',
+          gap: 32,
+        }}
+      >
         <TeamScoreBlock side="Home" name={homeName} location={homeLoc} color={homeColor} />
         <ScoreDisplay status={status} home={homeScore} away={awayScore} />
         <TeamScoreBlock side="Away" name={awayName} location={awayLoc} color={awayColor} />
       </div>
 
-      {/* Meta row — timestamp + weather + stadium.  Bullets at 50 % dust
-          so the row reads as one continuous data band. */}
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 16,
-        marginTop: 24,
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-      }}>
-        {ts && (
-          <span>
-            {tsLabel}: {ts.toLocaleString(undefined, {
-              weekday: 'short', month: 'short', day: 'numeric',
-              hour: '2-digit', minute: '2-digit',
-            })}
+      {/* Live presence badge (#382) — only while the match is live, counting
+          cosmos-wide active users. Kept inside the scoreboard so the "alive"
+          cue sits next to the live clock. */}
+      {status === 'in_progress' && watcherCount > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <span style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: DUST_50 }}>
+            <span aria-hidden="true" style={{ color: QUANTUM }}>●</span>{' '}
+            <strong style={{ color: DUST_70 }}>{watcherCount}</strong>{' '}
+            {watcherCount === 1 ? 'fan' : 'fans'} watching now
           </span>
-        )}
-        {match.stadium && (
-          <>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>{match.stadium}</span>
-          </>
-        )}
-        {match.weather && (
-          <>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>{prettifyWeather(match.weather)}</span>
-          </>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }
 
 /**
- * Prettify a snake_case weather key into a Title-Case label.  Used in
- * the meta row so raw seed keys (`dust_storm`, `magnetic_storm`) don't
- * leak to the user.  Inverse of nothing — there's no parser back the
- * other way; this is a one-way display transform.
+ * Perceived status (time-based override of the DB status).
  *
- * @param {string} key
- * @returns {string}
+ * The match-worker pre-simulates the entire 90 minutes in ~10–60 s and flips
+ * `status` to `completed` long before the viewer is done pacing the event log
+ * on the wall clock.  For the status chip and the pulsing score dot we want
+ * "is this match live RIGHT NOW from the user's perspective?", not "has the
+ * worker finished writing rows?".  A `completed` row inside its pacing window
+ * is upgraded to `in_progress`; scheduled / cancelled rows are untouched.
+ *
+ * PERCEIVED_LIVE_WINDOW_MS mirrors season_config.match_duration_seconds default
+ * (600 s); sourcing the real season knob would need an extra round-trip the
+ * scoreboard doesn't make, and a mismatch only shows "Full Time" a few minutes
+ * early on non-default seasons — acceptable for v1.
+ *
+ * @param {object} match
+ * @returns {string} The status to render the chip / score from.
  */
-function prettifyWeather(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+function perceivedStatus(match: MatchRow): string {
+  const rawStatus = match.status ?? 'scheduled';
+  const PERCEIVED_LIVE_WINDOW_MS = 600 * 1000;
+  const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  // Wall-clock read in a plain helper (not a component render), so the
+  // react-hooks/purity rule doesn't apply here. A stale "Live" past the window
+  // is harmless and resolves on the next render / nav.
+  const nowMs = Date.now();
+  const inPacingWindow = kickoffMs != null
+    && nowMs >= kickoffMs
+    && nowMs < kickoffMs + PERCEIVED_LIVE_WINDOW_MS;
+  return (rawStatus === 'completed' && inPacingWindow) ? 'in_progress' : rawStatus;
 }
 
 /**
  * Centred score display.  Two render branches:
- *   in_progress / completed → big bold score with optional flare pip
+ *   in_progress / completed → big bold score with optional live pip
  *   scheduled / cancelled   → faded "v" glyph
  *
  * @param {object} props
@@ -549,7 +458,7 @@ function prettifyWeather(key: string): string {
  * @param {number} props.home
  * @param {number} props.away
  */
-function ScoreDisplay({ status, home, away  }: any) {
+function ScoreDisplay({ status, home, away }: { status: string; home: number; away: number }) {
   if (status === 'scheduled' || status === 'cancelled') {
     return (
       <div style={{
@@ -558,6 +467,7 @@ function ScoreDisplay({ status, home, away  }: any) {
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '0.14em',
+        paddingTop: 30,
       }}>
         v
       </div>
@@ -569,17 +479,18 @@ function ScoreDisplay({ status, home, away  }: any) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 16,
-      fontSize: 56,
+      fontSize: 64,
       fontWeight: 700,
       fontVariantNumeric: 'tabular-nums',
       lineHeight: 1,
+      paddingTop: 30,
     }}>
       {status === 'in_progress' && (
         <span
           aria-hidden="true"
           style={{
-            width: 10,
-            height: 10,
+            width: 12,
+            height: 12,
             borderRadius: '50%',
             background: QUANTUM,
             boxShadow: `0 0 8px ${QUANTUM}`,
@@ -587,16 +498,14 @@ function ScoreDisplay({ status, home, away  }: any) {
         />
       )}
       <span>
-        {home} <span style={{ color: DUST_50, fontSize: 40 }}>·</span> {away}
+        {home} <span style={{ color: DUST_50, fontSize: 44 }}>·</span> {away}
       </span>
     </div>
   );
 }
 
 /**
- * Single-team score block — crest silhouette, name, side + location.
- * Mirrors Home's TeamScoreBlock at slightly larger weight so the
- * detail page has a clear hierarchical bump over the index.
+ * Single-team score block — crest silhouette, uppercase name, side + location.
  *
  * @param {object} props
  * @param {'Home'|'Away'} props.side
@@ -604,12 +513,14 @@ function ScoreDisplay({ status, home, away  }: any) {
  * @param {string} props.location
  * @param {string|null} props.color
  */
-function TeamScoreBlock({ side, name, location, color  }: any) {
+function TeamScoreBlock(
+  { side, name, location, color }: { side: 'Home' | 'Away'; name: string; location: string; color: string | null },
+) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <TeamCrest color={color} />
       <h2 style={{
-        fontSize: 22,
+        fontSize: 26,
         fontWeight: 700,
         textTransform: 'uppercase',
         textAlign: 'center',
@@ -619,10 +530,12 @@ function TeamScoreBlock({ side, name, location, color  }: any) {
         {name}
       </h2>
       <div style={{
-        fontSize: 11,
-        color: DUST_50,
-        letterSpacing: '0.14em',
+        fontSize: 13,
+        fontWeight: 700,
+        color: DUST_70,
+        letterSpacing: '0.04em',
         textTransform: 'uppercase',
+        textAlign: 'center',
       }}>
         {side}
         {location && <> <span style={{ color: DUST_50 }}>•</span> {location}</>}
@@ -632,33 +545,25 @@ function TeamScoreBlock({ side, name, location, color  }: any) {
 }
 
 /**
- * Status pip — small bordered chip in the kicker row.  Per-status
- * colour assignment:
- *   in_progress → Quantum Purple (focus / attention cue)
- *   cancelled   → Solar Flare    (error — every wager voided)
- *   completed   → Lunar Dust     (neutral, no special cue needed)
- *   scheduled   → Lunar Dust     (neutral)
- *
- * Status values are the raw DB enum, mapped through STATUS_LABELS
- * for display.  PR 12 split the Live + Cancelled cases — they used
- * to share Solar Flare under the old "flare = attention" rule.
+ * Status chip — the prototype's `.isl-live` pill in the scoreboard head.  Live
+ * matches get a Quantum pulse dot; cancelled use Solar Flare (the genuine error
+ * outcome — every wager voided); others read neutral dust.
  *
  * @param {{ status: string }} props
  */
-function StatusPip({ status  }: any) {
+function StatusChip({ status }: { status: string }) {
   const isLive      = status === 'in_progress';
   const isCancelled = status === 'cancelled';
-  // Live = quantum (focus); cancelled = flare (genuine error outcome).
   const colour      = isLive ? QUANTUM : isCancelled ? FLARE : DUST;
   return (
     <span style={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: 6,
-      padding: '4px 10px',
+      gap: 8,
+      padding: '6px 12px',
       border: `1px solid ${colour}`,
       color:  colour,
-      fontSize: 10,
+      fontSize: 11,
       letterSpacing: '0.14em',
       textTransform: 'uppercase',
       fontWeight: 700,
@@ -682,24 +587,45 @@ function StatusPip({ status  }: any) {
 }
 
 /**
+ * One row of the nested `match_player_stats` join the stats section reads.
+ * Loosely modelled (every field optional / nullable) because the row arrives
+ * from a deeply-nested Supabase join and the table renders each cell
+ * defensively with `?? 0` / `?? '—'` fallbacks.
+ */
+interface PlayerStatRow {
+  id: string;
+  team_id?: string | null;
+  player_id?: string | null;
+  players?: { name?: string | null } | null;
+  goals?: number | null;
+  assists?: number | null;
+  yellow_cards?: number | null;
+  red_cards?: number | null;
+  minutes_played?: number | null;
+  rating?: number | null;
+}
+
+/** Minimal team reference the stats tables read (id for bucketing, name for the header). */
+interface TeamRef {
+  id?: string | null;
+  name?: string | null;
+}
+
+/**
  * Player stats section.  Splits the match_player_stats array by team
  * (home vs away based on team_id) and renders each side as its own
- * sub-table, sorted by rating DESC then by goals DESC.  Pre-match
- * rows render a single italic placeholder so the section still
- * paints (matches the "we checked, no data yet" pattern from
- * MatchSection).
+ * sub-table, sorted by rating DESC then by goals DESC.
  *
- * @param {object} props
- * @param {object} props.homeTeam
- * @param {object} props.awayTeam
- * @param {Array<object>} props.stats
+ * @param props.homeTeam  Home team reference (id + name).
+ * @param props.awayTeam  Away team reference (id + name).
+ * @param props.stats     The flat match_player_stats array for both sides.
  */
-function PlayerStats({ homeTeam, awayTeam, stats  }: any) {
+function PlayerStats(
+  { homeTeam, awayTeam, stats }: { homeTeam: TeamRef | null; awayTeam: TeamRef | null; stats: PlayerStatRow[] },
+) {
   if (stats.length === 0) {
     return (
-      <p style={{
-        marginTop: 24, color: DUST_50, fontSize: 13, fontStyle: 'italic',
-      }}>
+      <p style={{ marginTop: 24, color: DUST_50, fontSize: 13, fontStyle: 'italic' }}>
         Player stats unavailable for this match.
       </p>
     );
@@ -708,9 +634,10 @@ function PlayerStats({ homeTeam, awayTeam, stats  }: any) {
   // Bucket by team_id so home / away tables render side-by-side.  The
   // sort is stable (rating DESC → goals DESC) so MVPs surface at the
   // top of each list.
-  const sortStats = (a: any, b: any) => (b.rating ?? 0) - (a.rating ?? 0) || (b.goals ?? 0) - (a.goals ?? 0);
-  const homeStats = stats.filter((s: any) => s.team_id === homeTeam?.id).sort(sortStats);
-  const awayStats = stats.filter((s: any) => s.team_id === awayTeam?.id).sort(sortStats);
+  const sortStats = (a: PlayerStatRow, b: PlayerStatRow) =>
+    (b.rating ?? 0) - (a.rating ?? 0) || (b.goals ?? 0) - (a.goals ?? 0);
+  const homeStats = stats.filter((s) => s.team_id === homeTeam?.id).sort(sortStats);
+  const awayStats = stats.filter((s) => s.team_id === awayTeam?.id).sort(sortStats);
 
   return (
     <div
@@ -737,14 +664,12 @@ function PlayerStats({ homeTeam, awayTeam, stats  }: any) {
 /**
  * Per-team stats sub-table.  Column set: Player / G / A / Y / R / Min /
  * Rating.  Rating is bold + tabular-nums so the right-most column
- * scans as the "MVP" column.  Player names link to /players/:id which
- * 404s today (wired up in a later PR).
+ * scans as the "MVP" column.
  *
- * @param {object} props
- * @param {object} props.team   Home or away team row.
- * @param {Array<object>} props.rows
+ * @param props.team   Home or away team reference (id + name).
+ * @param props.rows   The team's player-stat rows, pre-sorted by rating.
  */
-function StatsTable({ team, rows  }: any) {
+function StatsTable({ team, rows }: { team: TeamRef | null; rows: PlayerStatRow[] }) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}` }}>
       <header style={{
@@ -774,7 +699,7 @@ function StatsTable({ team, rows  }: any) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((s: any) => (
+          {rows.map((s) => (
             <tr key={s.id} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
               <td style={statsTd}>
                 <Link
@@ -805,8 +730,8 @@ function StatsTable({ team, rows  }: any) {
   );
 }
 
-const statsTd: React.CSSProperties = { textAlign: 'left', padding: '10px 12px' };
-const statsTh = (width?: number | string): React.CSSProperties => ({
+const statsTd: CSSProperties = { textAlign: 'left', padding: '10px 12px' };
+const statsTh = (width?: number | string): CSSProperties => ({
   textAlign: 'left',
   padding: '10px 12px',
   fontSize: 11,
@@ -839,7 +764,7 @@ function formatRating(rating: number | null | undefined): string {
  *
  * @param {{ matchId?: string }} props
  */
-function UnknownMatch({ matchId  }: any) {
+function UnknownMatch({ matchId }: { matchId?: string | undefined }) {
   return (
     <div style={{
       background: ABYSS,
@@ -883,12 +808,16 @@ function UnknownMatch({ matchId  }: any) {
   );
 }
 
-// ── Live commentary section (Phase A) ────────────────────────────────────────
+// ── Match theatre (left column: pitch + commentary feed + timeline) ──────────
+//
+// MatchTheatre owns the wall-clock window decision (is the pitch on screen?)
+// and threads the SAME `match_events` stream LiveCommentary already holds into
+// the new "Match record" timeline, so the timeline needs no extra fetch.
 //
 // The match worker pre-simulates a fixture at its kickoff_at instant, writing
-// every `genEvent()` output into `match_events` with a monotone (minute,
-// subminute) ordering.  This section reads that pre-simulated stream and
-// reveals it client-side via two complementary mechanisms:
+// every notable beat into `match_events` with a monotone (minute, subminute)
+// ordering.  LiveCommentary reads that pre-simulated stream and reveals it
+// client-side via two complementary mechanisms:
 //
 //   1. computeElapsedGameMinute(kickoff, now, durationSeconds) — pure helper
 //      from features/match/logic that maps wall-clock seconds onto the
@@ -896,11 +825,8 @@ function UnknownMatch({ matchId  }: any) {
 //      per second so freshly-elapsed events appear without a page refresh.
 //
 //   2. subscribeToMatchEvents(db, matchId, onInsert) — Supabase Realtime
-//      filtered to `match_id=eq.<id>`.  Late-joining a live match means the
-//      initial getMatchEvents() fetch covered everything up to "now", but
-//      events the worker writes *after* the page loaded would otherwise be
-//      missed.  The subscription fills that gap so the in-memory `events`
-//      array always mirrors the DB.
+//      filtered to `match_id=eq.<id>` so a late-joining viewer doesn't miss
+//      events the worker writes after the page loaded.
 //
 // THE FOUR RENDER BRANCHES (driven by match.status):
 //   • scheduled  → nothing renders (no events to show pre-kickoff)
@@ -908,13 +834,62 @@ function UnknownMatch({ matchId  }: any) {
 //   • in_progress → ticking commentary feed, capped at elapsedMinute
 //   • completed   → the full event log dumped at once
 
+/**
+ * Left-column theatre: the 2D pitch panel above the live commentary feed and
+ * the derived match-record timeline.
+ *
+ * The pitch belongs on screen while the match is LIVE from the viewer's
+ * perspective — a wall-clock window, NOT the raw DB status.  The worker flips
+ * status → 'completed' ~90 s into a 10-minute paced window, so gating on status
+ * alone would yank the pitch away mid-match.  Show it for scheduled /
+ * in-progress rows AND for any match still inside its pacing window.
+ *
+ * @param props.match  Full match row from getMatch().
+ */
+function MatchTheatre({ match }: { match: MatchRow; watcherCount: number }) {
+  const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  // eslint-disable-next-line react-hooks/purity -- wall-clock read; a stale value only mis-decides the pitch near the window edge and self-corrects on the next render / nav
+  const nowMs = Date.now();
+  const withinPacingWindow = kickoffMs != null
+    && nowMs >= kickoffMs
+    && nowMs < kickoffMs + DEFAULT_MATCH_DURATION_SECONDS * 1000;
+  const showPitch =
+    match.status === 'in_progress' || match.status === 'scheduled' || match.status === 'live'
+    || withinPacingWindow;
+
+  return (
+    <>
+      {showPitch && (() => {
+        // Pull team names + scores defensively from the (loosely typed) match
+        // row so the SVG's aria-label reads the scoreline for screen readers.
+        // Conditional spread keeps strict-optional-prop types happy by NOT
+        // setting a key when the value would be undefined.
+        const homeName = (match.home_team as { name?: string } | null | undefined)?.name;
+        const awayName = (match.away_team as { name?: string } | null | undefined)?.name;
+        const hs = typeof match.home_score === 'number' ? match.home_score : undefined;
+        const as = typeof match.away_score === 'number' ? match.away_score : undefined;
+        return (
+          <MatchPitchPanel
+            matchId={match.id}
+            {...(homeName != null && { homeTeamName: homeName })}
+            {...(awayName != null && { awayTeamName: awayName })}
+            {...(hs != null && { homeScore: hs })}
+            {...(as != null && { awayScore: as })}
+          />
+        );
+      })()}
+
+      <LiveCommentary match={match} />
+    </>
+  );
+}
+
 // ── Wall-clock tick rate ────────────────────────────────────────────────────
 /**
  * Milliseconds between elapsed-minute recomputations during a live match.
  * 1000 ms = once per real-time second.  Game minutes advance at roughly
  * 6.7 real seconds each (600 s / 90 min) under the production default, so
  * any tick rate ≤ 1 s is fast enough to never miss a minute boundary.
- * Faster ticks would just burn CPU re-running an identical filter.
  */
 const LIVE_TICK_MS = 1000;
 
@@ -925,37 +900,17 @@ const LIVE_TICK_MS = 1000;
  * pass — that uniformity is what makes `filterEventsByElapsedMinute` correct
  * regardless of which source delivered a given row first.
  *
- * WHY DEDUP IS NECESSARY
- *   The two sources can deliver the same row twice in a narrow window:
- *     - Worker batch-inserts events → Realtime fires for each row
- *     - A late-mounting viewer's initial fetch may complete *after* the
- *       Realtime subscription has already captured those same rows
- *   Identifying by `id` (the `match_events.id` UUID) is the only stable
- *   join key — `(match_id, minute, subminute)` is not unique because the
- *   gameEngine can emit multiple events at the same subminute.
- *
- * WHY WE RE-SORT EVERY MERGE
- *   `filterEventsByElapsedMinute` preserves input order; downstream
- *   `CommentaryFeed` reverses the array to show newest-first.  Both contracts
- *   assume chronological input.  Keeping the merged list sorted here saves a
- *   sort in the visible-event memo on every tick (which fires every second
- *   during the paced window).
- *
  * @param existing  The current event list held in React state.
- * @param incoming  Newly arrived events from either the initial fetch
- *                  (potentially the full pre-simulated log) or the Realtime
- *                  channel (one row at a time).
- * @returns         A new array — never the same reference as either input —
- *                  containing every unique-by-id event from both sources,
- *                  ordered by (minute ASC, subminute ASC).
+ * @param incoming  Newly arrived events from either the initial fetch or the
+ *                  Realtime channel.
+ * @returns         A new array (never the same reference as either input)
+ *                  containing every unique-by-id event, ordered by (minute
+ *                  ASC, subminute ASC).
  */
 export function mergeAndSortEvents(
   existing: MatchEventRow[],
   incoming: MatchEventRow[],
 ): MatchEventRow[] {
-  // Build a set of existing IDs in O(n) so the dedup pass below is O(m) over
-  // the incoming batch.  This matters for the initial-fetch case where
-  // `incoming` may contain ~150 rows.
   const seen = new Set(existing.map((e) => e.id));
   const merged: MatchEventRow[] = existing.slice();
   for (const row of incoming) {
@@ -963,9 +918,6 @@ export function mergeAndSortEvents(
     seen.add(row.id);
     merged.push(row);
   }
-  // Stable chronological sort: (minute ASC, then subminute ASC as numeric).
-  // subminute is `numeric` in PostgREST which can surface as a string in the
-  // typed row — Number() normalises so the comparator never compares strings.
   return merged.sort(
     (a, b) => a.minute - b.minute || Number(a.subminute) - Number(b.subminute),
   );
@@ -974,13 +926,7 @@ export function mergeAndSortEvents(
 /**
  * Subset of the matches row this component actually reads.  Declared loosely
  * because `getMatch()` returns the full joined row with many more fields the
- * commentary feed doesn't need — narrowing here keeps the prop contract
- * honest about what we depend on without pulling in the entire join shape.
- *
- * All fields are optional / nullable because the only render branch that
- * touches `scheduled_at` is the in_progress one (which the worker guarantees
- * has a non-null kickoff), and the showSection guard skips early if status
- * or id are missing.
+ * commentary feed doesn't need.
  */
 interface LiveCommentaryMatch {
   id?:           string;
@@ -989,18 +935,16 @@ interface LiveCommentaryMatch {
 }
 
 /**
- * Live commentary feed for a single match.
+ * Live commentary feed for a single match, plus the derived match-record
+ * timeline beneath it.
  *
  * Pulls the full pre-simulated event log on mount, looks up the season's
  * pacing knob, then either ticks once per second (in_progress) or paints
  * the full log immediately (completed).  Scheduled and cancelled matches
- * return null so the section disappears from the page entirely — there
- * is no "events haven't started" placeholder because the empty section
- * would just be noise.
+ * return null so the section disappears entirely.
  *
- * Realtime subscription is only attached while the match is in_progress;
- * completed matches have no further events incoming so a long-lived
- * WebSocket channel would be wasted bandwidth.
+ * Realtime subscription is only attached while the paced window is open;
+ * completed-and-past matches have no further events incoming.
  *
  * @param props.match  Match row from getMatch() — needs id, status, and
  *                     scheduled_at (the kickoff anchor for elapsed math).
@@ -1008,27 +952,16 @@ interface LiveCommentaryMatch {
 export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   const db = useSupabase();
 
-  // ── Guard derivations ─────────────────────────────────────────────────────
   // The "live experience" anchors on wall-clock vs scheduled_at, NOT on the
-  // match's row status.  This decouples the viewer's pacing from the worker's
-  // 30-second simulation burst: a match that completed in the DB ten minutes
-  // before a viewer opens the page should still play out at the viewer's
-  // pace from kickoff if the elapsed wall-clock is < match_duration_seconds.
-  //
-  // STATUS still gates a few things:
+  // match's row status.  STATUS still gates a few things:
   //   • Cancelled matches never render this section (no events to show).
-  //   • Pre-kickoff scheduled matches in the *future* don't render either —
-  //     there's nothing to fetch yet.
-  // Otherwise everything is time-driven via `scheduled_at + duration`.
+  //   • Pre-kickoff scheduled matches in the *future* don't render either.
   const status      = match?.status ?? 'scheduled';
   const isCancelled = status === 'cancelled';
   const kickoffMs   = match?.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
   // eslint-disable-next-line react-hooks/purity -- intentional wall-clock read; re-renders are driven by the per-second elapsedMinute tick below
   const kickoffPassed = kickoffMs != null && kickoffMs <= Date.now();
 
-  // Render the section once kickoff has passed for any non-cancelled match,
-  // OR for any completed match (covers retroactive replays of matches whose
-  // scheduled_at metadata was lost / never set).
   const showSection = !isCancelled && (kickoffPassed || status === 'completed');
 
   const [events,        setEvents]        = useState<MatchEventRow[]>([]);
@@ -1038,27 +971,13 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   const [loadError,     setLoadError]     = useState<unknown>(null);
 
   // Derived "is the viewer still inside the paced window?" — true while
-  // wall-clock elapsed-from-kickoff is < match_duration_seconds.  Used to
-  // (a) keep the per-second tick going only while it can change anything,
-  // (b) keep the Realtime subscription open only while new events are
-  // expected, and (c) decide between "Live" headings and "Replay" headings.
+  // wall-clock elapsed-from-kickoff is < match_duration_seconds.
   const livePacingWindowOpen =
     kickoffMs != null &&
     // eslint-disable-next-line react-hooks/purity -- intentional wall-clock read; the per-second elapsedMinute tick re-renders to keep this fresh
     Date.now() < kickoffMs + duration * 1000;
 
   // ── Initial fetch: event log + season pacing knob ─────────────────────────
-  // Both queries fire in parallel — they hit independent tables and the page
-  // can't render anything useful until both settle.  Promise.all keeps total
-  // wall-clock latency to the slower of the two.  Skipped for cancelled and
-  // pre-kickoff scheduled matches because the empty section won't render.
-  //
-  // Reset-on-match-change: when the user navigates between /matches/:a and
-  // /matches/:b without the component unmounting (client-side routing), the
-  // `events` state from match A would otherwise leak into match B's feed —
-  // dedup-by-id won't catch them because the ids differ.  Clearing first
-  // guarantees a clean slate, so the fetched rows can be assigned directly
-  // (the Realtime stream still merges its own arrivals).
   useEffect(() => {
     if (!showSection || !match?.id) return undefined;
     let cancelled = false;
@@ -1087,20 +1006,9 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   }, [db, match?.id, showSection]);
 
   // ── Elapsed-minute clock ──────────────────────────────────────────────────
-  // Always anchors on `scheduled_at + duration`.  Three branches:
-  //   1. No scheduled_at metadata → fall back to "show all" via 120 so
-  //      legacy / malformed rows still render their full event log.
-  //   2. Paced window still open (now < kickoff + duration) → tick every
-  //      LIVE_TICK_MS so freshly-elapsed events appear without a refresh.
-  //   3. Paced window has closed (replay state) → jump straight to 120 so
-  //      filterEventsByElapsedMinute returns the full log on first paint.
   useEffect(() => {
     const kickoff = match?.scheduled_at;
     if (!kickoff) {
-      // No anchor → defer to status for the "show everything" behaviour.
-      // Completed matches with no scheduled_at still display fully; pre-
-      // kickoff scheduled matches without metadata won't render at all
-      // (showSection is false above).
       if (status === 'completed') setElapsedMinute(120);
       return undefined;
     }
@@ -1109,20 +1017,13 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
     const endAtMs     = kickoffAtMs + duration * 1000;
 
     if (Date.now() >= endAtMs) {
-      // Paced window already closed — render as replay (full log).
       setElapsedMinute(120);
       return undefined;
     }
 
-    // SELF-TERMINATING INTERVAL: this effect's deps never change as the
-    // wall clock advances, so without an internal `clearInterval` the
-    // setInterval would keep firing every second forever once the page
-    // sits past `endAtMs` — React would bail out of the duplicate
-    // setState updates but the timer itself would leak for the entire
-    // tab lifetime, burning CPU + battery on long-lived sessions.  The
-    // tick function self-clears the moment wall-clock crosses endAtMs,
-    // emits one final `setElapsedMinute(120)` to flip the section into
-    // its replay state, and then returns.
+    // SELF-TERMINATING INTERVAL: the tick self-clears the moment wall-clock
+    // crosses endAtMs, emits one final setElapsedMinute(120) to flip the
+    // section into its replay state, and then returns.
     let interval: ReturnType<typeof setInterval> | null = null;
     const tick = (): void => {
       if (Date.now() >= endAtMs) {
@@ -1143,20 +1044,7 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   }, [status, match?.scheduled_at, duration]);
 
   // ── Realtime subscription (whenever new events may still arrive) ──────────
-  // Worker writes events as it simulates; without this a viewer who landed
-  // on the page mid-simulation would miss everything written after fetch.
-  //
-  // We keep the subscription open whenever the paced window is still open
-  // (not just for `status='in_progress'` as the old code did) because the
-  // worker may flip a match to `completed` within seconds of kickoff while
-  // the viewer is still pacing through minutes 1–89.  Closed after the
-  // window because no further events can arrive then.  De-dupe by id —
-  // Realtime payloads can arrive while the initial fetch is still in flight.
   useEffect(() => {
-    // showSection mirrors the render-side guard so we don't open a WebSocket
-    // channel for cancelled / not-yet-kicked-off matches — those branches
-    // return null below and would never display anything the subscription
-    // delivered anyway.
     if (!showSection || !livePacingWindowOpen || !match?.id) return undefined;
     return subscribeToMatchEvents(db, match.id, (row) => {
       setEvents((prev) => mergeAndSortEvents(prev, [row]));
@@ -1164,13 +1052,6 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   }, [db, match?.id, showSection, livePacingWindowOpen]);
 
   // ── Visible-event derivation ─────────────────────────────────────────────
-  // Recomputed only when events / elapsedMinute change.  Memoised to avoid
-  // re-running filterEventsByElapsedMinute on every parent render (cheap
-  // today but the list can grow to ~150 rows per match).
-  //
-  // No special-case for completed matches: the elapsed-minute effect above
-  // already jumps elapsedMinute → 120 once the paced window closes, which
-  // makes filterEventsByElapsedMinute return everything anyway.
   const visibleEvents = useMemo(
     () => filterEventsByElapsedMinute(events, elapsedMinute),
     [events, elapsedMinute],
@@ -1179,107 +1060,104 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
   if (!showSection) return null;
 
   // ── Section copy ──────────────────────────────────────────────────────────
-  // The kicker / label / subtitle differ by status so the section reads as
-  // either "the match is happening right now" or "here's what happened".
-  // Kept inline (not extracted) because each status branch only ever appears
-  // once per page render and pulling it out adds indirection without reuse.
   const heading = livePacingWindowOpen
     ? {
-        kicker:   'III',
-        label:    'Live Feed',
-        title:    'The Cosmos Watches',
-        subtitle: 'Events surface as wall-clock elapsed-from-kickoff crosses each minute. What you read is what just happened.',
+        title:    'The booth',
+        sub:      'Vox · Nexus-7 · Zara · live',
+        empty:    'The void is silent. Awaiting the first whistle…',
+        // Kept verbatim — the commentary tests assert on the "Live Feed" string.
+        stateTag: 'Live Feed',
       }
     : {
-        kicker:   'III',
-        label:    'The Replay',
-        title:    'Ninety Minutes In The Void',
-        subtitle: 'Full event log from the match. Read top-down for the chronological arc; the most recent minute appears at the top.',
+        title:    'The booth',
+        sub:      'Vox · Nexus-7 · Zara · replay',
+        empty:    'No events were recorded for this match.',
+        // Kept verbatim — the commentary tests assert on the "The Replay" string.
+        stateTag: 'The Replay',
       };
 
   return (
     <>
-      <SectionHeader
-        kicker={heading.kicker}
-        label={heading.label}
-        title={heading.title}
-        subtitle={heading.subtitle}
-      />
-
-      {/* Live-only minute indicator — visible only while the match is in
-          progress so the viewer can see the clock is ticking even during
-          a quiet patch of play.  Hidden on completed matches because the
-          static "90" would just read as decorative chrome. */}
-      {livePacingWindowOpen && loaded && (
-        <div style={{
-          marginTop: 24,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '8px 14px',
-          border: `1px solid ${QUANTUM}`,
-          color: QUANTUM,
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          fontWeight: 700,
-        }}>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: QUANTUM,
-              boxShadow: `0 0 4px ${QUANTUM}`,
-              display: 'inline-block',
-            }}
-          />
-          Minute {Math.min(elapsedMinute, 90)}
-          {elapsedMinute > 90 && <> + {elapsedMinute - 90}</>}
+      {/* COMMENTARY FEED (the prototype's `.feed`). */}
+      <div style={feedShellStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: 16, textTransform: 'uppercase' }}>{heading.title}</span>
+          <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: DUST_70 }}>
+            {heading.sub}
+          </span>
         </div>
-      )}
 
-      {loadError && (
-        <p style={{
-          marginTop: 24, color: FLARE, fontSize: 13, fontStyle: 'italic',
-        }}>
-          Commentary feed unavailable. The cosmic broadcast has cut out.
-        </p>
-      )}
+        {/* State tag — preserves the "Live Feed" / "The Replay" copy the
+            commentary tests assert on, plus the live minute indicator. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <span style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: livePacingWindowOpen ? QUANTUM : DUST_70 }}>
+            {heading.stateTag}
+          </span>
+          {livePacingWindowOpen && loaded && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              fontWeight: 700,
+              color: QUANTUM,
+            }}>
+              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: QUANTUM, boxShadow: `0 0 4px ${QUANTUM}`, display: 'inline-block' }} />
+              Minute {Math.min(elapsedMinute, 90)}
+              {elapsedMinute > 90 && <> + {elapsedMinute - 90}</>}
+            </span>
+          )}
+        </div>
 
-      {!loadError && !loaded && (
-        <p style={{
-          marginTop: 24, color: DUST_50, fontSize: 13, fontStyle: 'italic',
-        }}>
-          Tuning into the cosmic broadcast…
-        </p>
-      )}
+        {loadError != null && (
+          <p style={{ color: FLARE, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
+            Commentary feed unavailable. The cosmic broadcast has cut out.
+          </p>
+        )}
 
-      {!loadError && loaded && visibleEvents.length === 0 && (
-        <p style={{
-          marginTop: 24, color: DUST_50, fontSize: 13, fontStyle: 'italic',
-        }}>
-          {livePacingWindowOpen
-            ? 'The void is silent. Awaiting the first whistle…'
-            : 'No events were recorded for this match.'}
-        </p>
-      )}
+        {!loadError && !loaded && (
+          <p style={{ color: DUST_50, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
+            Tuning into the cosmic broadcast…
+          </p>
+        )}
 
-      {!loadError && loaded && visibleEvents.length > 0 && (
-        <CommentaryFeed events={visibleEvents} />
+        {!loadError && loaded && visibleEvents.length === 0 && (
+          <p style={{ color: DUST_50, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
+            {heading.empty}
+          </p>
+        )}
+
+        {!loadError && loaded && visibleEvents.length > 0 && (
+          <CommentaryFeed events={visibleEvents} />
+        )}
+      </div>
+
+      {/* MATCH RECORD TIMELINE (the prototype's `.tl`) — derived from the same
+          paced events the feed shows, so it never spoils beats the viewer
+          hasn't reached and needs no extra fetch. */}
+      {!loadError && loaded && (
+        <MatchTimeline events={visibleEvents} />
       )}
     </>
   );
 }
 
+const feedShellStyle: CSSProperties = {
+  border: `1px solid ${HAIRLINE}`,
+  padding: 32,
+  display: 'flex',
+  flexDirection: 'column',
+};
+
 /**
- * Vertical feed of pre-simulated match events, rendered most-recent-first.
+ * Vertical feed of pre-simulated match events, rendered most-recent-first
+ * (the prototype's scrollable `.entries`).
  *
- * Reverses the chronological input so the latest minute appears at the top
- * of the visible viewport — matches the "scroll to bottom to read history"
- * inversion common to live-game UIs.  No virtualisation: a 90-minute match
- * yields ~100–150 events which renders fine without windowing.
+ * Reverses the chronological input so the latest minute appears at the top.
+ * No virtualisation: a 90-minute match yields ~100–150 events which renders
+ * fine without windowing.
  *
  * @param props.events  Visible events (already filtered by elapsed minute).
  */
@@ -1289,10 +1167,12 @@ function CommentaryFeed({ events }: { events: MatchEventRow[] }) {
   const ordered = [...events].reverse();
   return (
     <div style={{
-      marginTop: 24,
-      border: `1px solid ${HAIRLINE}`,
       display: 'flex',
       flexDirection: 'column',
+      gap: 22,
+      maxHeight: 430,
+      overflowY: 'auto',
+      paddingRight: 8,
     }}>
       {ordered.map((ev) => (
         <CommentaryRow key={ev.id} event={ev} />
@@ -1302,80 +1182,195 @@ function CommentaryFeed({ events }: { events: MatchEventRow[] }) {
 }
 
 /**
- * Single event row in the commentary feed.
+ * Single event entry in the commentary feed (the prototype's `.entry`).
  *
- * Three columns: minute pip / event-type chip / commentary text.  The
- * minute column uses tabular-nums so the column edge scans cleanly down
- * the list.  Architect-touched events get a Quantum-purple left border so
- * the cosmic interference is visible without explaining the mechanic in
- * words (per the "hidden mechanics" design pillar — the colour cue reads
- * as "something's off" without naming what).
+ * A left-bordered card: a byline row (event-type label + minute) over the
+ * commentary text.  Architect-touched events get the Quantum-purple left
+ * border + uppercase heading treatment so the cosmic interference is visible
+ * without explaining the mechanic (per the "hidden mechanics" pillar — the
+ * colour cue reads as "something's off" without naming what).
  *
  * @param props.event  One row from match_events.  Payload is jsonb so we
  *                     defensively destructure.
  */
 function CommentaryRow({ event }: { event: MatchEventRow }) {
-  // Payload is jsonb in Supabase → `unknown` in TS.  We narrow to a
-  // string-keyed record-of-unknown so individual field reads still demand
-  // a per-field type assertion (no implicit any leakage), but the .key
-  // syntax stays terse.  Shape is documented by gameEngine.types.ts:MatchEvent.
   const payload = (event.payload ?? {}) as Record<string, unknown>;
-  // Commentary text comes from gameEngine's `commentary` field when present;
-  // fall back to the event type as a graceful last-resort label so the row
-  // never renders blank for novel event types we haven't styled yet.
   const text =
     typeof payload.commentary === 'string' && payload.commentary.length > 0
       ? payload.commentary
       : prettifyEventType(event.type);
-  const isGoal = payload.isGoal === true || event.type === 'goal';
-  // Architect interference is signalled by any of the architect* booleans
-  // in the payload.  Any single flag triggers the purple accent — we don't
-  // try to convey *which* kind of interference to the user.
-  const isArchitect =
+  const isArchitect = isArchitectEvent(payload);
+
+  return (
+    <div style={{
+      borderLeft: `2px solid ${isArchitect ? QUANTUM : BORDER_FAINT}`,
+      paddingLeft: 22,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 14 }}>
+        <b style={{
+          fontWeight: 700,
+          fontSize: 15,
+          color: isArchitect ? QUANTUM : DUST,
+          textShadow: isArchitect ? `0 0 6px rgba(154, 92, 244, 0.8)` : 'none',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+        }}>
+          {prettifyEventType(event.type)}
+        </b>
+        <span style={{ marginLeft: 'auto', fontWeight: 700, color: DUST_70, fontVariantNumeric: 'tabular-nums' }}>
+          {event.minute}{event.minute > 90 ? '+' : "'"}
+        </span>
+      </div>
+      <p style={{
+        margin: 0,
+        fontSize: isArchitect ? 14 : 15,
+        lineHeight: 1.55,
+        color: DUST,
+        fontStyle: isArchitect ? 'normal' : 'italic',
+        textTransform: isArchitect ? 'uppercase' : 'none',
+        fontWeight: isArchitect ? 700 : 400,
+        letterSpacing: isArchitect ? '0.04em' : 'normal',
+      }}>
+        {isArchitect ? text : `“${text}”`}
+      </p>
+    </div>
+  );
+}
+
+// ── Match record timeline ────────────────────────────────────────────────────
+
+/** Per-row classification for the timeline. Drives glyph + accent colour. */
+type TimelineKind = 'goal' | 'card' | 'arch' | 'other';
+
+/**
+ * Glyphs mirror the prototype's `.tl-row` markers:
+ *   goal ▲  card ■  architect ◆  substitution ○  other ·
+ */
+const TIMELINE_GLYPH: Record<TimelineKind, string> = {
+  goal:  '▲',
+  card:  '■',
+  arch:  '◆',
+  other: '·',
+};
+
+/**
+ * True when any of the architect-interference flags is set on an event's
+ * jsonb payload.  Any single flag triggers the purple cue — we never try to
+ * convey *which* kind of interference to the user (hidden-mechanics pillar).
+ */
+function isArchitectEvent(payload: Record<string, unknown>): boolean {
+  return (
     payload.architectAnnulled === true ||
     payload.architectForced   === true ||
     payload.architectConjured === true ||
     payload.architectStolen   === true ||
-    payload.architectEcho     === true;
+    payload.architectEcho     === true
+  );
+}
 
-  // Accent colour priority: architect > goal > none.  Architect wins because
-  // a cosmic-touched goal is more narratively significant than an ordinary
-  // goal, and the purple accent is the established "something's off" cue.
-  const accent = isArchitect ? QUANTUM : isGoal ? DUST : 'transparent';
+/**
+ * Classify one `match_events` row into a timeline kind.  Priority:
+ * architect > goal > card > other — a cosmic-touched goal is more narratively
+ * significant than an ordinary goal, and the purple accent is the established
+ * "something's off" cue.
+ *
+ * Event taxonomy (from the spatial engine's adapter): goals are `type==='goal'`
+ * or `payload.isGoal`; cards are `type==='foul'` carrying `payload.cardType`,
+ * or any type whose key mentions a card; subs / saves fall through to 'other'.
+ */
+function classifyTimelineEvent(event: MatchEventRow): TimelineKind {
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  if (isArchitectEvent(payload)) return 'arch';
+  if (payload.isGoal === true || event.type === 'goal') return 'goal';
+  const isCard =
+    typeof payload.cardType === 'string' ||
+    /card|yellow|red|booking|sending/i.test(event.type);
+  if (isCard) return 'card';
+  return 'other';
+}
+
+/**
+ * "Match record" timeline (the prototype's `.tl`).  One `.tl-row` per notable
+ * event in `56px 28px 1fr` (minute / glyph / description), derived from the
+ * SAME paced events the commentary feed shows — so it stays a real record and
+ * never spoils a beat the viewer hasn't reached.  Goals tint Terra-Nova, cards
+ * Solar-Flare, architect rows take the Quantum-purple glyph + a faint purple
+ * row wash; everything else reads neutral.
+ *
+ * Subs ('substitution') resolve to 'other' but are first-class timeline beats
+ * — they surface with the neutral ○ glyph, matching the prototype's sub row.
+ *
+ * @param props.events  Visible (paced) events, chronological.
+ */
+function MatchTimeline({ events }: { events: MatchEventRow[] }) {
+  return (
+    <div style={{ border: `1px solid ${HAIRLINE}`, padding: 32 }}>
+      <div style={{ fontWeight: 700, fontSize: 16, textTransform: 'uppercase', marginBottom: 20 }}>
+        Match record
+      </div>
+      {events.length === 0 ? (
+        <p style={{ color: DUST_50, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
+          No beats recorded yet.
+        </p>
+      ) : (
+        events.map((ev, idx) => (
+          <TimelineRow key={ev.id} event={ev} last={idx === events.length - 1} />
+        ))
+      )}
+    </div>
+  );
+}
+
+/**
+ * One timeline row: minute · glyph · description.  Description leads with a
+ * bold prettified event-type label, then the commentary text (matching the
+ * prototype's `<b>…</b> …` markup).
+ *
+ * @param props.event  The event row.
+ * @param props.last   True for the final row (drops the bottom hairline).
+ */
+function TimelineRow({ event, last }: { event: MatchEventRow; last: boolean }) {
+  const kind    = classifyTimelineEvent(event);
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  const text =
+    typeof payload.commentary === 'string' && payload.commentary.length > 0
+      ? payload.commentary
+      : '';
+
+  const isArch = kind === 'arch';
+  const glyphColour =
+    kind === 'goal' ? TERRA :
+    kind === 'card' ? FLARE :
+    isArch          ? QUANTUM :
+    DUST_70;
 
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '64px 120px 1fr',
-      gap: 16,
-      padding: '14px 16px',
-      borderBottom: `1px solid ${HAIRLINE}`,
-      borderLeft: `2px solid ${accent}`,
+      gridTemplateColumns: '56px 28px 1fr',
+      gap: 14,
       alignItems: 'baseline',
+      padding: '10px 0',
+      borderBottom: last ? 0 : `1px solid ${BORDER_FAINT}`,
+      // Faint purple row wash for architect beats (the prototype's `.tl-row.arch`).
+      background: isArch
+        ? 'linear-gradient(90deg, rgba(154,92,244,.10), transparent 70%)'
+        : 'transparent',
     }}>
-      <span style={{
-        fontVariantNumeric: 'tabular-nums',
-        fontWeight: 700,
-        fontSize: 13,
-        color: isGoal || isArchitect ? DUST : DUST_70,
-      }}>
+      <span style={{ fontWeight: 700, fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>
         {event.minute}{event.minute > 90 ? '+' : "'"}
       </span>
-      <span style={{
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: isArchitect ? QUANTUM : DUST_70,
-        fontWeight: 700,
-      }}>
-        {prettifyEventType(event.type)}
+      <span style={{ fontWeight: 700, fontSize: 15, textAlign: 'center', color: glyphColour }}>
+        {TIMELINE_GLYPH[kind]}
       </span>
-      <span style={{
-        fontSize: 14,
-        lineHeight: 1.5,
-        color: DUST,
-      }}>
-        {text}
+      <span style={{ fontSize: 15, color: DUST }}>
+        <b style={{ fontWeight: 700, color: isArch ? QUANTUM : DUST }}>
+          {prettifyEventType(event.type)}.
+        </b>
+        {text && <> {text}</>}
       </span>
     </div>
   );
@@ -1383,12 +1378,9 @@ function CommentaryRow({ event }: { event: MatchEventRow }) {
 
 /**
  * Prettify a snake_case event-type key into a Title-Case display label.
- * Mirrors prettifyWeather() above — kept as a separate function (rather than
- * generalising) so a future change to event-type display rules doesn't
- * inadvertently shift the weather chip wording.
  *
  * @param key  Raw event.type string from match_events (e.g. 'penalty_kick').
- * @returns    Title-Case label suitable for the event-type chip.
+ * @returns    Title-Case label suitable for display.
  */
 function prettifyEventType(key: string): string {
   if (!key) return '—';
