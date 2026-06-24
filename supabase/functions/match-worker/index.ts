@@ -12,20 +12,26 @@
 // 7. Update match status to 'completed' with final score + MVP
 // 8. Gracefully handle per-match errors without crashing the worker
 //
+// DISPATCHER / WORKER MODES
+// ─────────────────────────
+// The pg_cron tick hits this function in DISPATCHER mode (body {}): it does the
+//   once-per-tick housekeeping (price odds, requeue orphans) then fans out one
+//   self-invocation per due match — body {"mode":"one"} — in parallel waves of
+//   FANOUT_CONCURRENCY.  Each WORKER-mode invocation simulates exactly one match
+//   in its OWN isolate (own CPU budget), so a whole matchday's simultaneous
+//   kickoffs all finish within seconds and are every one watchable live, rather
+//   than draining ~1–2/min.  The CPU-heavy sims never stack up in one isolate,
+//   which is what tripped the WORKER_LIMIT (HTTP 546) before.
+// The in-process loop (processWithinBudget, CLAIM_TIME_BUDGET_MS) runs as the
+//   dispatcher's backstop after fan-out: it no-ops when the queue is drained but
+//   guarantees progress if self-invocation is disabled or a wave failed.
+//
 // CONCURRENCY & LOCKING
 // ────────────────────
-// Multiple worker instances can run simultaneously. Optimistic locking
-// (UPDATE ... WHERE status='scheduled') prevents duplicate processing:
-// only one worker can flip status to 'in_progress' for a given match.
-// On error, status reverts to 'scheduled' for retry.
-//
-// PACING, BUDGET & RECOVERY
-// ─────────────────────────
-// Matches are claimed and simulated ONE AT A TIME within CLAIM_TIME_BUDGET_MS,
-//   never pre-claimed as a batch — the spatial sim is CPU-heavy and a run of
-//   several in one isolate used to trip the WORKER_LIMIT (HTTP 546) and orphan
-//   every already-claimed match in 'in_progress'.  Whatever doesn't fit a tick
-//   stays 'scheduled' for the next minute.
+// Workers run in parallel but claim atomically: the optimistic lock
+// (UPDATE ... WHERE status='scheduled') means only one worker can flip a given
+// match to 'in_progress', so racing workers never double-simulate.  On error a
+// match reverts to 'scheduled' for retry.
 // requeueStaleInProgress() recovers any match a killed isolate still left
 //   stranded in 'in_progress' (older than STALE_IN_PROGRESS_MS), requeuing it
 //   so it completes on a later tick instead of staying stuck (and scoreless,
@@ -96,6 +102,40 @@ const CLAIM_TIME_BUDGET_MS = 10_000;
  * yet a stuck one rejoins the queue within a couple of ticks.
  */
 const STALE_IN_PROGRESS_MS = 2 * 60_000;
+
+/**
+ * How many single-match worker invocations the dispatcher runs CONCURRENTLY per
+ * fan-out wave.  Each one simulates exactly one match in its OWN isolate (its
+ * own CPU budget), so a whole matchday's simultaneous kickoffs finish within
+ * seconds — every match watchable live from minute 0 — instead of draining
+ * ~1–2/min sequentially.  Kept conservative so the fan-out (dispatcher + this
+ * many workers) stays well under Supabase's per-project concurrent-isolate cap;
+ * raise it if the plan's concurrency limit comfortably allows more.
+ */
+const FANOUT_CONCURRENCY = 6;
+
+/**
+ * Hard cap on fan-out waves per dispatcher tick.  FANOUT_CONCURRENCY ×
+ * FANOUT_MAX_WAVES is the most matches one tick drains via fan-out; 6 × 5 = 30
+ * comfortably covers a full 16-match matchday in a single tick.  Also stops a
+ * runaway loop if a match keeps failing back to 'scheduled' and re-qualifying.
+ */
+const FANOUT_MAX_WAVES = 5;
+
+/**
+ * Wall-clock ceiling (ms) on the dispatcher's whole fan-out phase, so it can
+ * never approach the function's request timeout while awaiting waves.  45s
+ * leaves generous room for ~3 waves of single-match sims (~8–10s each).
+ */
+const FANOUT_TIME_BUDGET_MS = 45_000;
+
+/**
+ * This function's own absolute URL, used for dispatcher → worker fan-out.
+ * Derived from SUPABASE_URL so it tracks the project without a hard-coded host.
+ * Empty only if SUPABASE_URL is unset, in which case fan-out is skipped and the
+ * dispatcher falls back to its in-process loop (never worse than before).
+ */
+const SELF_INVOKE_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/match-worker` : '';
 
 // ── Supabase client (service role — full access) ──────────────────────────
 
@@ -1147,86 +1187,221 @@ function isAuthorized(req: Request): boolean {
   return timingSafeEqual(header.slice('Bearer '.length).trim(), WORKER_SHARED_SECRET);
 }
 
+// ── Fan-out orchestration ──────────────────────────────────────────────────
+
+/**
+ * Count matches due for simulation right now (status='scheduled', scheduled_at
+ * <= now).  Used by the dispatcher to size each fan-out wave.  Returns 0 on a
+ * query error so a transient failure just means "nothing to fan out this pass"
+ * rather than crashing the tick.
+ */
+async function countDueMatches(): Promise<number> {
+  const now = new Date().toISOString();
+  const { count, error } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'scheduled')
+    .lte('scheduled_at', now);
+  if (error) {
+    console.error('[match-worker] COUNT due matches failed:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
+ * Fire a single worker-mode self-invocation and resolve once it responds.  The
+ * call lands in its OWN isolate (own CPU budget) and simulates exactly one
+ * match.  Returns true if that isolate reported it processed a match; false on
+ * an empty claim, a non-200, or any transport error (the caller treats false as
+ * "this slot made no progress").
+ */
+async function spawnWorker(): Promise<boolean> {
+  try {
+    const res = await fetch(SELF_INVOKE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${WORKER_SHARED_SECRET}`,
+      },
+      body: JSON.stringify({ mode: 'one' }),
+    });
+    if (!res.ok) {
+      console.warn(`[match-worker] worker invocation returned ${res.status}`);
+      return false;
+    }
+    const json = (await res.json().catch(() => null)) as { processed?: number } | null;
+    return (json?.processed ?? 0) > 0;
+  } catch (err) {
+    console.warn('[match-worker] worker invocation failed:', (err as Error)?.message ?? err);
+    return false;
+  }
+}
+
+/**
+ * Drain the due queue by fanning out parallel single-match worker invocations.
+ *
+ * Each wave launches up to FANOUT_CONCURRENCY workers at once — every one its
+ * own isolate, so the CPU-heavy sims run truly in parallel instead of stacking
+ * up in one isolate (which is what tripped the WORKER_LIMIT before).  We
+ * re-count between waves so we launch exactly what's left, and stop as soon as
+ * the queue is empty, a wave makes no progress, or the wave/time caps are hit.
+ *
+ * Claims are atomic (claimNextDueMatch), so two workers can never grab the same
+ * match even though they race in parallel.
+ *
+ * @returns Number of matches processed across all waves this tick.
+ */
+async function fanOutDueMatches(): Promise<number> {
+  const startedAt = Date.now();
+  let totalProcessed = 0;
+
+  for (let wave = 0; wave < FANOUT_MAX_WAVES; wave++) {
+    if (Date.now() - startedAt >= FANOUT_TIME_BUDGET_MS) break;
+    const due = await countDueMatches();
+    if (due === 0) break;
+
+    const slots = Math.min(due, FANOUT_CONCURRENCY);
+    const results = await Promise.all(Array.from({ length: slots }, () => spawnWorker()));
+    const processedThisWave = results.filter(Boolean).length;
+    totalProcessed += processedThisWave;
+
+    // Every worker came back empty/errored — don't spin further this tick.
+    if (processedThisWave === 0) break;
+  }
+
+  return totalProcessed;
+}
+
+/**
+ * In-process fallback: claim + simulate matches one at a time within
+ * CLAIM_TIME_BUDGET_MS.  Runs as the dispatcher's backstop AFTER fan-out, so it
+ * no-ops (one empty claim) when fan-out already drained the queue, but still
+ * guarantees forward progress if self-invocation is disabled or a wave failed —
+ * degrading at worst to the pre-fan-out behaviour, never to "nothing happens".
+ *
+ * @returns Per-match tallies for the tick summary.
+ */
+async function processWithinBudget(): Promise<{ processed: number; succeeded: number; failed: number }> {
+  const startedAt = Date.now();
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  while (Date.now() - startedAt < CLAIM_TIME_BUDGET_MS) {
+    const match = await claimNextDueMatch();
+    if (!match) break; // nothing due (or we lost the claim race) — done this tick
+    processed++;
+    const ok = await processMatch(match);
+    if (ok) succeeded++;
+    else failed++;
+  }
+  return { processed, succeeded, failed };
+}
+
+/**
+ * Worker mode (dispatcher → self, body {"mode":"one"}): claim and simulate
+ * exactly ONE due match, then return.  Runs in its own isolate so a single
+ * 90-minute sim has the whole CPU budget to itself.  Skips the odds/reaper
+ * housekeeping — that's the dispatcher's once-per-tick job.
+ */
+async function runWorkerMode(): Promise<Response> {
+  const match = await claimNextDueMatch();
+  if (!match) return new Response(JSON.stringify({ processed: 0 }), { status: 200 });
+  const ok = await processMatch(match);
+  return new Response(
+    JSON.stringify({ processed: 1, succeeded: ok ? 1 : 0, failed: ok ? 0 : 1 }),
+    { status: 200 },
+  );
+}
+
+/**
+ * Dispatcher mode (the cron tick, body {}): do the once-per-tick housekeeping
+ * (price upcoming odds, requeue orphaned in_progress matches), then fan out
+ * parallel single-match workers to drain the due queue in seconds — so a whole
+ * matchday's simultaneous kickoffs are all watchable live — with the in-process
+ * loop as a guaranteed backstop.
+ */
+async function runDispatcherMode(): Promise<Response> {
+  // ── Pre-claim: ensure odds exist for upcoming matches ────────────────────
+  // Cheap when nothing's new to price.  Without odds the WagerWidget can't
+  // render and placeWager has no snapshot.  Non-blocking — we still simulate
+  // even if pricing the horizon failed entirely.
+  try {
+    const oddsSummary = await ensureOddsForUpcoming(supabase);
+    if (oddsSummary.priced > 0) {
+      console.log(`[match-worker] Priced ${oddsSummary.priced} new matches (${oddsSummary.skipped} already had odds, ${oddsSummary.considered} considered)`);
+    }
+  } catch (err) {
+    console.warn('[match-worker] ensureOddsForUpcoming threw:', (err as Error)?.message ?? err);
+  }
+
+  // ── Recover orphans before claiming, so a stranded match rejoins the queue
+  // this same tick.  Non-fatal: a failure here must not block fresh work.
+  try {
+    const requeued = await requeueStaleInProgress();
+    if (requeued > 0) console.log(`[match-worker] Requeued ${requeued} stale in_progress match(es)`);
+  } catch (err) {
+    console.warn('[match-worker] requeueStaleInProgress threw:', (err as Error)?.message ?? err);
+  }
+
+  // ── Fan out: parallel single-match isolates drain the round in seconds so a
+  // whole matchday's simultaneous kickoffs are all watchable live.  Skipped
+  // only if self-invocation isn't configured (SUPABASE_URL unset).
+  let fannedOut = 0;
+  if (SELF_INVOKE_URL) {
+    fannedOut = await fanOutDueMatches();
+  }
+
+  // ── Backstop: drain anything fan-out left (disabled/misconfigured self-call,
+  // a failed wave, or a match that became due mid-tick).  No-ops when the queue
+  // is already empty, so it's always safe to run.
+  const local = await processWithinBudget();
+
+  const processed = fannedOut + local.processed;
+  if (processed === 0) {
+    console.log('[match-worker] No due matches');
+  } else {
+    console.log(`[match-worker] Tick complete: ${fannedOut} via fan-out, ${local.processed} in-process`);
+  }
+  return new Response(
+    JSON.stringify({ processed, fannedOut, inProcess: local.processed }),
+    { status: 200 },
+  );
+}
+
 // ── Main handler (Deno.serve entrypoint) ───────────────────────────────────
 
 /**
- * HTTP handler invoked by pg_cron every minute.
+ * HTTP entrypoint.  Two modes, both gated by the shared secret:
  *
- * Per tick: prices any unpriced upcoming matches, requeues orphaned
- * `in_progress` matches a killed isolate stranded, then claims + simulates due
- * matches one at a time until CLAIM_TIME_BUDGET_MS is spent (the rest wait for
- * the next tick).  Returns 200 always so pg_cron doesn't back off on transient
- * errors; per-match failures are logged and reverted to 'scheduled' for retry.
+ *   • Dispatcher (the pg_cron tick, body {}) — once-per-tick housekeeping then
+ *     parallel fan-out; see runDispatcherMode.
+ *   • Worker (dispatcher → self, body {"mode":"one"}) — simulate one match in
+ *     its own isolate; see runWorkerMode.
+ *
+ * Returns 200 even on internal error so pg_cron doesn't back off; failures are
+ * logged (and per-match work reverts to 'scheduled' for retry).
  */
 Deno.serve(async (req: Request) => {
   if (!isAuthorized(req)) {
     return new Response('Unauthorized', { status: 401 });
   }
+
+  // Mode discriminator: the dispatcher self-calls with {"mode":"one"}; the cron
+  // job posts {} (→ dispatcher).  A malformed/empty body defaults to dispatcher.
+  let workerMode = false;
   try {
-    console.log('[match-worker] Cron invocation');
+    const body = (await req.json().catch(() => null)) as { mode?: string } | null;
+    workerMode = body?.mode === 'one';
+  } catch {
+    workerMode = false;
+  }
 
-    // ── Pre-claim: ensure odds exist for upcoming matches ──────────────────
-    // Runs at the top of every cron tick (cheap when there's nothing new
-    // to price — a few SELECTs against match_odds and out).  Without odds
-    // the WagerWidget cannot render a bet form and placeWager has no
-    // snapshot to lock in.  Failures are non-blocking: we still process
-    // due matches even if pricing the horizon failed entirely.
-    try {
-      const oddsSummary = await ensureOddsForUpcoming(supabase);
-      if (oddsSummary.priced > 0) {
-        console.log(`[match-worker] Priced ${oddsSummary.priced} new matches (${oddsSummary.skipped} already had odds, ${oddsSummary.considered} considered)`);
-      }
-    } catch (err) {
-      console.warn('[match-worker] ensureOddsForUpcoming threw:', (err as Error)?.message ?? err);
-    }
-
-    // ── Recover orphans: requeue matches a killed isolate left in_progress ──
-    // Runs before claiming so a previously-stranded match rejoins the queue
-    // this same tick.  Non-fatal: a failure here must not block fresh work.
-    try {
-      const requeued = await requeueStaleInProgress();
-      if (requeued > 0) {
-        console.log(`[match-worker] Requeued ${requeued} stale in_progress match(es)`);
-      }
-    } catch (err) {
-      console.warn('[match-worker] requeueStaleInProgress threw:', (err as Error)?.message ?? err);
-    }
-
-    // ── Claim + simulate one match at a time, within a wall-clock budget ────
-    // One-at-a-time claiming (never a pre-claimed batch) plus the time budget
-    // is what keeps a CPU-heavy run from getting the isolate killed mid-batch
-    // and orphaning every already-claimed match.  We re-check the budget BEFORE
-    // each claim so we never start a match we may not be able to finish;
-    // whatever doesn't fit stays 'scheduled' for the next minute's tick.
-    const startedAt = Date.now();
-    let processed = 0;
-    let successCount = 0;
-    let failureCount = 0;
-
-    while (Date.now() - startedAt < CLAIM_TIME_BUDGET_MS) {
-      const match = await claimNextDueMatch();
-      if (!match) break; // nothing due (or we lost the claim race) — done this tick
-      processed++;
-      const ok = await processMatch(match);
-      if (ok) successCount++;
-      else failureCount++;
-    }
-
-    if (processed === 0) {
-      console.log('[match-worker] No due matches');
-      return new Response(JSON.stringify({ processed: 0 }), { status: 200 });
-    }
-
-    console.log(`[match-worker] Batch complete: ${successCount} succeeded, ${failureCount} failed`);
-
-    return new Response(
-      JSON.stringify({
-        processed,
-        succeeded: successCount,
-        failed: failureCount,
-      }),
-      { status: 200 },
-    );
+  try {
+    if (workerMode) return await runWorkerMode();
+    console.log('[match-worker] Cron invocation (dispatcher)');
+    return await runDispatcherMode();
   } catch (err) {
     console.error('[match-worker] Unhandled error:', err);
     // Return 200 so cron doesn't backoff; full error is in logs only
