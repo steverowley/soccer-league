@@ -19,6 +19,7 @@ import {
   type Formation, FORMATION_SLOTS, slotToAbsolute, narrowFormation,
 } from './formation';
 import { step } from './step';
+import { resolveStyle } from './playStyle';
 
 // ── Input shapes ──────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ export interface SpatialTeamInput {
   players:   SpatialPlayerInput[];
   /** Substitutes available to bring on (up to 5); omitted ⇒ no bench. */
   bench?:    SpatialPlayerInput[];
+  /** Manager's `managers.style` string; omitted/unknown ⇒ Balanced (no effect). */
+  playStyle?: string;
 }
 
 // ── Default config ──────────────────────────────────────────────────────────
@@ -211,6 +214,8 @@ function buildWorld(
     awayBench,
     homeSubsLeft: MAX_SUBSTITUTIONS,
     awaySubsLeft: MAX_SUBSTITUTIONS,
+    homeStyle: resolveStyle(home.playStyle),
+    awayStyle: resolveStyle(away.playStyle),
     ball: {
       pos: CENTRE_SPOT,
       vel: { x: 0, y: 0 },

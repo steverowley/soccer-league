@@ -97,6 +97,11 @@ const SUB_SPACING_SEC = 9 * 60;
  *  side makes ~2-3 changes over a full match. */
 const SUB_STAMINA_THRESHOLD = 0.55;
 
+/** How strongly a play-style's press+tackle deltas scale tackle commitment.
+ *  With the summed deltas in ±0.30, K=2 spans ≈ ×0.80 (Counter) … ×1.60 (High
+ *  Pressing) — visible differences in tackles won and where the ball is won. */
+const STYLE_PRESS_K = 2;
+
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
 /** Outfield players (everyone but the keeper) of a side, sent-off players excluded. */
@@ -421,7 +426,12 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
     const challenger = nearestTo(defenders, owner.pos);
     let challengeResolved = false;
     if (challenger && challenger.d < TACKLE_RADIUS) {
-      if (rng() < tackleProbability(challenger.player, owner)) {
+      // STYLE: the defending manager's press/tackle deltas scale how committed
+      // the challenge is — High Pressing & Aggressive win the ball more often
+      // (and higher up), Counterattacking sits off.  Balanced = 1×.
+      const dStyle = challenger.player.side === 'home' ? world.homeStyle : world.awayStyle;
+      const pressFactor = 1 + (dStyle.press + dStyle.tackle) * STYLE_PRESS_K;
+      if (rng() < tackleProbability(challenger.player, owner) * pressFactor) {
         // Tackle won: ball pops loose toward the tackler.
         ball.ownerId = null;
         ball.vel = scale(normalize(sub(challenger.player.pos, owner.pos)), 6);

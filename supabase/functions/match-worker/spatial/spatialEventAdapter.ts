@@ -345,7 +345,7 @@ export function deriveSimStats(p: {
  * simulateSpatialMatch's slot-assignment logic.
  */
 export function toSpatialTeamInput(teamData: {
-  managers?: Array<{ preferred_formation?: string | null }> | null;
+  managers?: Array<{ preferred_formation?: string | null; style?: string | null }> | null;
   players?:  Array<{
     id:           string;
     name:         string;
@@ -360,6 +360,8 @@ export function toSpatialTeamInput(teamData: {
   }> | null;
 }): SpatialTeamInput {
   const formation = teamData.managers?.[0]?.preferred_formation ?? '4-4-2';
+  // Manager play-style (Balanced/unknown ⇒ no effect, resolved in the engine).
+  const playStyle = teamData.managers?.[0]?.style ?? undefined;
 
   const allActive = (teamData.players ?? []).filter((p) => p.is_active !== false);
   const starters  = allActive.filter((p) => p.starter !== false);
@@ -381,5 +383,5 @@ export function toSpatialTeamInput(teamData: {
     stats: deriveSimStats(p),
   }));
 
-  return { formation, players, bench };
+  return { formation, players, bench, ...(playStyle ? { playStyle } : {}) };
 }

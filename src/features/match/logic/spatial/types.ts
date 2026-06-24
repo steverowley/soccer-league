@@ -195,6 +195,20 @@ export type SimPhase =
 /**
  * The complete mutable world the engine steps forward.  One instance per match.
  */
+/**
+ * Additive tendency deltas for a manager's play-style (shoot / pass / dribble /
+ * tackle / press), bounded ±0.20.  The engine applies them as multiplicative
+ * nudges on the matching knobs.  Defined here (not in playStyle.ts) so SimWorld
+ * can hold them without an import cycle.
+ */
+export interface StyleModifier {
+  readonly shoot:   number;
+  readonly pass:    number;
+  readonly dribble: number;
+  readonly tackle:  number;
+  readonly press:   number;
+}
+
 export interface SimWorld {
   home: SimPlayer[];
   away: SimPlayer[];
@@ -204,6 +218,9 @@ export interface SimWorld {
   /** Substitutions still available to each side (starts at 3). */
   homeSubsLeft: number;
   awaySubsLeft: number;
+  /** Each side's manager play-style deltas (Balanced zeros if none set). */
+  homeStyle: StyleModifier;
+  awayStyle: StyleModifier;
   ball: SimBall;
   /** Goals as [home, away]. */
   score: [number, number];
