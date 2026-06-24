@@ -16,15 +16,19 @@
 // ─────────────────────────
 // The pg_cron tick hits this function in DISPATCHER mode (body {}): it does the
 //   once-per-tick housekeeping (price odds, requeue orphans) then fans out one
-//   self-invocation per due match — body {"mode":"one"} — in parallel waves of
-//   FANOUT_CONCURRENCY.  Each WORKER-mode invocation simulates exactly one match
-//   in its OWN isolate (own CPU budget), so a whole matchday's simultaneous
-//   kickoffs all finish within seconds and are every one watchable live, rather
-//   than draining ~1–2/min.  The CPU-heavy sims never stack up in one isolate,
-//   which is what tripped the WORKER_LIMIT (HTTP 546) before.
+//   self-invocation per due LEAGUE match — body {"mode":"one"} — in parallel
+//   waves of FANOUT_CONCURRENCY.  Each WORKER-mode invocation simulates exactly
+//   one match in its OWN isolate (own CPU budget), so a whole matchday's
+//   simultaneous kickoffs all finish within seconds and are every one watchable
+//   live, rather than draining ~1–2/min.  The CPU-heavy sims never stack up in
+//   one isolate, which is what tripped the WORKER_LIMIT (HTTP 546) before.
+// Cup ties are kept OFF the parallel path: they share their competition's single
+//   `bracket` JSON, whose post-match read-modify-write isn't concurrency-safe.
+//   They drain via the in-process backstop instead, one at a time.
 // The in-process loop (processWithinBudget, CLAIM_TIME_BUDGET_MS) runs as the
-//   dispatcher's backstop after fan-out: it no-ops when the queue is drained but
-//   guarantees progress if self-invocation is disabled or a wave failed.
+//   dispatcher's backstop after fan-out: it drains cups + any league leftovers
+//   sequentially, no-ops when the queue is empty, and guarantees progress if
+//   self-invocation is disabled or a wave failed.
 //
 // CONCURRENCY & LOCKING
 // ────────────────────
@@ -123,6 +127,15 @@ const FANOUT_CONCURRENCY = 6;
 const FANOUT_MAX_WAVES = 5;
 
 /**
+ * How many due candidates each claim pulls before trying to lock one.  A
+ * fan-out wave runs FANOUT_CONCURRENCY claims at once; if each only looked at
+ * the single oldest row they'd all fight over it and the wave would process one
+ * match instead of many.  Pulling a pool ≥ FANOUT_CONCURRENCY (with headroom for
+ * a whole matchday) lets concurrent workers spread across distinct rows.
+ */
+const CLAIM_CANDIDATE_POOL = 32;
+
+/**
  * Wall-clock ceiling (ms) on the dispatcher's whole fan-out phase, so it can
  * never approach the function's request timeout while awaiting waves.  45s
  * leaves generous room for ~3 waves of single-match sims (~8–10s each).
@@ -145,66 +158,83 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 // ── Helper: Claim the next due match ───────────────────────────────────────
 
+/** In-place Fisher–Yates shuffle; returns the same array for chaining. */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
+}
+
 /**
- * Claim exactly ONE due match (status='scheduled', scheduled_at <= now) by
- * atomically flipping it to 'in_progress', and return the claimed row.
+ * Claim ONE due match (status='scheduled', scheduled_at <= now) by atomically
+ * flipping it to 'in_progress', and return the claimed row — or null when
+ * nothing claimable is left.
  *
- * Returns null when nothing is due, or when another worker won the race for the
- * candidate (the optimistic-lock UPDATE matched zero rows) — in both cases the
- * caller stops claiming for this tick.
- *
- * WHY ONE AT A TIME: claiming a single match we immediately simulate — rather
- * than pre-claiming a batch — means a mid-invocation stop (time budget spent,
- * or the isolate being killed) can strand at most the one match currently in
- * flight, which requeueStaleInProgress() then recovers.  The old batch claim
- * orphaned every already-claimed-but-unprocessed match when the isolate died.
+ * DISTINCT CLAIMS UNDER FAN-OUT: a fan-out wave runs FANOUT_CONCURRENCY of these
+ * concurrently.  If each only looked at the single oldest due row they'd all
+ * contend on it — one wins, the rest come back empty, and the wave processes
+ * just one match.  So we pull a POOL of due candidates, shuffle it (claim order
+ * is irrelevant — the sim seed is the match UUID), and try to claim each until
+ * one succeeds; concurrent workers therefore spread across distinct rows and a
+ * lost race simply advances to the next candidate.
  *
  * CONCURRENCY: the `.eq('status','scheduled')` predicate on the UPDATE is the
  * optimistic lock — only the worker whose UPDATE matched the still-'scheduled'
- * row gets it back from `.select()`, so two overlapping invocations can never
- * both simulate the same match or double-insert its events.
+ * row gets it back from `.select()`, so two workers can never both simulate the
+ * same match or double-insert its events.
  *
- * @returns The claimed match row, or null if there's nothing to claim.
+ * @param opts.leagueOnly  Restrict to league matches (competitions.type =
+ *   'league').  The dispatcher fans out league matches only — cup ties share
+ *   their competition's single `bracket` JSON, whose post-match read-modify-
+ *   write is not concurrency-safe, so cups are drained by the sequential
+ *   backstop instead of in parallel.
+ * @returns The claimed match row, or null if nothing claimable remains.
  */
-async function claimNextDueMatch() {
+async function claimNextDueMatch(opts?: { leagueOnly?: boolean }): Promise<any | null> {
   const now = new Date().toISOString();
 
-  // Pick the single oldest due candidate. Intentionally no UPDATE lock here —
-  // the claim below is atomic via the predicate on the UPDATE.
-  const { data: candidates, error: selectError } = await supabase
+  // Pull a pool of due candidates (oldest first) so concurrent claimers can
+  // pick DISTINCT rows.  league-only uses an inner join on competitions so a
+  // cup tie is never handed to a parallel worker.
+  let query = supabase
     .from('matches')
-    .select('id')
+    .select(opts?.leagueOnly ? 'id, competitions!inner(type)' : 'id')
     .eq('status', 'scheduled')
     .lte('scheduled_at', now)
     .order('scheduled_at', { ascending: true })
-    .limit(1);
+    .limit(CLAIM_CANDIDATE_POOL);
+  if (opts?.leagueOnly) query = query.eq('competitions.type', 'league');
 
+  const { data: candidates, error: selectError } = await query;
   if (selectError) {
     console.error('[match-worker] SELECT matches failed:', selectError);
     return null;
   }
   if (!candidates || candidates.length === 0) return null;
 
-  // Atomically claim. The `.eq('status','scheduled')` predicate is the
-  // optimistic lock: the UPDATE's `.select()` returns the row only if it was
-  // still 'scheduled' when we flipped it, so two overlapping invocations can
-  // never both simulate the same match.  An empty result ⇒ we lost the race;
-  // the caller stops for this tick and the next one re-tries.
-  const { data: claimed, error: claimError } = await supabase
-    .from('matches')
-    .update({ status: 'in_progress', played_at: new Date().toISOString() })
-    .eq('id', candidates[0].id)
-    .eq('status', 'scheduled')
-    // `round` is read post-match by postMatchLoreSave to surface the matchday
-    // in the Architect verdict prompt (e.g. 'Matchday 7', 'Final').  Absent
-    // matches still process — the field is treated as 0 downstream.
-    .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round');
+  // Shuffle so parallel workers don't all attempt the same first id, then try
+  // to claim each candidate until one succeeds (or the pool is exhausted).
+  for (const id of shuffle(candidates.map((c: { id: string }) => c.id))) {
+    const { data: claimed, error: claimError } = await supabase
+      .from('matches')
+      .update({ status: 'in_progress', played_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('status', 'scheduled')
+      // `round` is read post-match by postMatchLoreSave to surface the matchday
+      // in the Architect verdict prompt (e.g. 'Matchday 7', 'Final').  Absent
+      // matches still process — the field is treated as 0 downstream.
+      .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round');
 
-  if (claimError) {
-    console.error('[match-worker] UPDATE claim failed:', claimError);
-    return null;
+    if (claimError) {
+      console.error('[match-worker] UPDATE claim failed:', claimError);
+      return null;
+    }
+    if (claimed && claimed.length > 0) return claimed[0];
+    // Lost the race for this candidate — try the next one in the pool.
   }
-  return claimed && claimed.length > 0 ? claimed[0] : null;
+  return null; // every candidate was claimed by someone else
 }
 
 // ── Helper: Recover orphaned matches ───────────────────────────────────────
@@ -1194,14 +1224,19 @@ function isAuthorized(req: Request): boolean {
  * <= now).  Used by the dispatcher to size each fan-out wave.  Returns 0 on a
  * query error so a transient failure just means "nothing to fan out this pass"
  * rather than crashing the tick.
+ *
+ * @param opts.leagueOnly  Count only league matches — matches what the fan-out
+ *   actually claims, so a queue of cup-only ties never spins empty waves.
  */
-async function countDueMatches(): Promise<number> {
+async function countDueMatches(opts?: { leagueOnly?: boolean }): Promise<number> {
   const now = new Date().toISOString();
-  const { count, error } = await supabase
+  let query = supabase
     .from('matches')
-    .select('id', { count: 'exact', head: true })
+    .select(opts?.leagueOnly ? 'id, competitions!inner(type)' : 'id', { count: 'exact', head: true })
     .eq('status', 'scheduled')
     .lte('scheduled_at', now);
+  if (opts?.leagueOnly) query = query.eq('competitions.type', 'league');
+  const { count, error } = await query;
   if (error) {
     console.error('[match-worker] COUNT due matches failed:', error);
     return 0;
@@ -1212,9 +1247,9 @@ async function countDueMatches(): Promise<number> {
 /**
  * Fire a single worker-mode self-invocation and resolve once it responds.  The
  * call lands in its OWN isolate (own CPU budget) and simulates exactly one
- * match.  Returns true if that isolate reported it processed a match; false on
- * an empty claim, a non-200, or any transport error (the caller treats false as
- * "this slot made no progress").
+ * LEAGUE match (leagueOnly — cups are kept off the parallel path).  Returns true
+ * if that isolate reported it processed a match; false on an empty claim, a
+ * non-200, or any transport error (the caller treats false as "no progress").
  */
 async function spawnWorker(): Promise<boolean> {
   try {
@@ -1224,7 +1259,7 @@ async function spawnWorker(): Promise<boolean> {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${WORKER_SHARED_SECRET}`,
       },
-      body: JSON.stringify({ mode: 'one' }),
+      body: JSON.stringify({ mode: 'one', leagueOnly: true }),
     });
     if (!res.ok) {
       console.warn(`[match-worker] worker invocation returned ${res.status}`);
@@ -1247,6 +1282,10 @@ async function spawnWorker(): Promise<boolean> {
  * re-count between waves so we launch exactly what's left, and stop as soon as
  * the queue is empty, a wave makes no progress, or the wave/time caps are hit.
  *
+ * LEAGUE ONLY: workers claim league matches only (cup ties are drained by the
+ * sequential backstop), so the count that sizes each wave must also be
+ * league-only — otherwise a queue of cup ties would spin empty waves.
+ *
  * Claims are atomic (claimNextDueMatch), so two workers can never grab the same
  * match even though they race in parallel.
  *
@@ -1258,7 +1297,7 @@ async function fanOutDueMatches(): Promise<number> {
 
   for (let wave = 0; wave < FANOUT_MAX_WAVES; wave++) {
     if (Date.now() - startedAt >= FANOUT_TIME_BUDGET_MS) break;
-    const due = await countDueMatches();
+    const due = await countDueMatches({ leagueOnly: true });
     if (due === 0) break;
 
     const slots = Math.min(due, FANOUT_CONCURRENCY);
@@ -1304,9 +1343,12 @@ async function processWithinBudget(): Promise<{ processed: number; succeeded: nu
  * exactly ONE due match, then return.  Runs in its own isolate so a single
  * 90-minute sim has the whole CPU budget to itself.  Skips the odds/reaper
  * housekeeping — that's the dispatcher's once-per-tick job.
+ *
+ * @param leagueOnly  Forwarded from the request body; the dispatcher fans out
+ *   with leagueOnly=true so parallel workers never claim cup ties.
  */
-async function runWorkerMode(): Promise<Response> {
-  const match = await claimNextDueMatch();
+async function runWorkerMode(leagueOnly: boolean): Promise<Response> {
+  const match = await claimNextDueMatch({ leagueOnly });
   if (!match) return new Response(JSON.stringify({ processed: 0 }), { status: 200 });
   const ok = await processMatch(match);
   return new Response(
@@ -1345,17 +1387,20 @@ async function runDispatcherMode(): Promise<Response> {
     console.warn('[match-worker] requeueStaleInProgress threw:', (err as Error)?.message ?? err);
   }
 
-  // ── Fan out: parallel single-match isolates drain the round in seconds so a
-  // whole matchday's simultaneous kickoffs are all watchable live.  Skipped
-  // only if self-invocation isn't configured (SUPABASE_URL unset).
+  // ── Fan out LEAGUE matches: parallel single-match isolates drain the round
+  // in seconds so a whole matchday's simultaneous kickoffs are all watchable
+  // live.  Cup ties are deliberately excluded (see claimNextDueMatch) — their
+  // shared bracket JSON isn't safe to advance concurrently.  Skipped only if
+  // self-invocation isn't configured (SUPABASE_URL unset).
   let fannedOut = 0;
   if (SELF_INVOKE_URL) {
     fannedOut = await fanOutDueMatches();
   }
 
-  // ── Backstop: drain anything fan-out left (disabled/misconfigured self-call,
-  // a failed wave, or a match that became due mid-tick).  No-ops when the queue
-  // is already empty, so it's always safe to run.
+  // ── Backstop: sequentially drain whatever fan-out didn't — cup ties (kept off
+  // the parallel path on purpose, so their bracket advances one at a time),
+  // plus any league leftovers or a match that became due mid-tick.  No-ops when
+  // the queue is already empty, so it's always safe to run.
   const local = await processWithinBudget();
 
   const processed = fannedOut + local.processed;
@@ -1388,18 +1433,21 @@ Deno.serve(async (req: Request) => {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  // Mode discriminator: the dispatcher self-calls with {"mode":"one"}; the cron
-  // job posts {} (→ dispatcher).  A malformed/empty body defaults to dispatcher.
+  // Mode discriminator: the dispatcher self-calls with {"mode":"one"} (plus
+  // leagueOnly); the cron job posts {} (→ dispatcher).  A malformed/empty body
+  // defaults to dispatcher.
   let workerMode = false;
+  let leagueOnly = false;
   try {
-    const body = (await req.json().catch(() => null)) as { mode?: string } | null;
+    const body = (await req.json().catch(() => null)) as { mode?: string; leagueOnly?: boolean } | null;
     workerMode = body?.mode === 'one';
+    leagueOnly = body?.leagueOnly === true;
   } catch {
     workerMode = false;
   }
 
   try {
-    if (workerMode) return await runWorkerMode();
+    if (workerMode) return await runWorkerMode(leagueOnly);
     console.log('[match-worker] Cron invocation (dispatcher)');
     return await runDispatcherMode();
   } catch (err) {
