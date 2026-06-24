@@ -431,7 +431,11 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
       // (and higher up), Counterattacking sits off.  Balanced = 1×.
       const dStyle = challenger.player.side === 'home' ? world.homeStyle : world.awayStyle;
       const pressFactor = 1 + (dStyle.press + dStyle.tackle) * STYLE_PRESS_K;
-      if (rng() < tackleProbability(challenger.player, owner) * pressFactor) {
+      // Clamp so a high press is a BOUNDED nudge, never a guaranteed tackle: the
+      // miss/foul branches must stay reachable.  tackleProbability maxes at 0.88,
+      // so ×1.6 (High Pressing) would otherwise exceed 1.0 and suppress fouls.
+      const styledTackleP = Math.min(0.94, tackleProbability(challenger.player, owner) * pressFactor);
+      if (rng() < styledTackleP) {
         // Tackle won: ball pops loose toward the tackler.
         ball.ownerId = null;
         ball.vel = scale(normalize(sub(challenger.player.pos, owner.pos)), 6);
