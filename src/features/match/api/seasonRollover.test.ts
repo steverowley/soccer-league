@@ -189,6 +189,14 @@ describe('rolloverSeason', () => {
       (u) => u.table === 'seasons' && u.where['id'] === FROM_SEASON_ID,
     );
     expect(deactivate?.patch).toMatchObject({ is_active: false });
+
+    // Galaxy Dispatch announces the new season (#568): exactly one cosmic line,
+    // tagged as the Architect's voice and stamped to the new season.
+    expect(result.announced).toBe(true);
+    const narratives = state.inserted['narratives'] ?? [];
+    expect(narratives).toHaveLength(1);
+    expect(narratives[0]).toMatchObject({ kind: 'architect_whisper', season_id: result.newSeasonId });
+    expect(narratives[0]?.['summary']).toContain('Season 2 — 2601');
   });
 
   it('anchors every fixture at or after firstKickoffMs (#569 real-time guard)', async () => {
@@ -221,5 +229,8 @@ describe('rolloverSeason', () => {
     expect(result.fixturesCreated).toBe(0);
     expect(result.focusOptionRows).toBe(0);
     expect(state.updates).toHaveLength(0);
+    // No announcement on the no-op path — the season is announced exactly once.
+    expect(result.announced).toBe(false);
+    expect(state.inserted['narratives'] ?? []).toHaveLength(0);
   });
 });
