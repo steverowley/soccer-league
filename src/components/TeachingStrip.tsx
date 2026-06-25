@@ -10,7 +10,10 @@
 // DESIGN
 // ──────
 // • Hairline-bordered rectangle, optional Quantum accent.
-// • One-line title + 1-2 line body + a × dismiss button.
+// • One-line title + 1-2 line body + an explicit "Got it" confirm button.
+//   (#571: the old bare × let a stray click dismiss a tip a brand-new fan
+//   hadn't read yet; an intentional "Got it" makes the acknowledgement
+//   deliberate so first exposure to the cast/rituals is preserved.)
 // • Dismissal persists in localStorage under a caller-provided storage
 //   key so a fan never sees the same strip twice (no schema change).
 // • Falls back to ALWAYS-VISIBLE when localStorage is unavailable
@@ -135,19 +138,24 @@ export default function TeachingStrip({ storageKey, title, body, accent }: Teach
       </div>
       <button
         onClick={dismiss}
-        aria-label={`Dismiss: ${title}`}
+        aria-label={`Got it — dismiss: ${title}`}
         style={{
+          alignSelf: 'flex-start',
           background: 'transparent',
-          border: 'none',
-          color: COLORS.dust50,
+          border: `1px solid ${COLORS.hairline}`,
+          color: COLORS.dust70,
           cursor: 'pointer',
-          fontSize: 18,
-          lineHeight: 1,
-          padding: 4,
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          padding: '6px 12px',
           flexShrink: 0,
+          fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
         }}
       >
-        ×
+        Got it
       </button>
     </aside>
   );
