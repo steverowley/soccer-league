@@ -197,10 +197,9 @@ async function resolveCurrentSeason(): Promise<SeasonRow> {
  * Idempotent: if the season's cup brackets are already written, `seedOneCup`
  * returns `already_seeded` and no DB writes occur.
  *
- * NOTE: for Season 1 → 2, `seedCupCompetitions` resolves league comp IDs
- * from its internal hardcoded Season 1 constants.  Generalising to dynamic
- * comp-ID resolution is tracked as a follow-up so Season 2 → 3 works here
- * without changes to cupSeeder.ts.
+ * `seedCupCompetitions` resolves the season's OWN league + cup competitions
+ * dynamically (by season_id + canonical league order; cups matched by name), so
+ * this works for any season — Season 1 → 2, Season 2 → 3, and beyond.
  *
  * @param seasonId UUID of the season whose cups we are seeding.
  */
