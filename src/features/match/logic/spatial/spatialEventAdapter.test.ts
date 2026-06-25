@@ -443,6 +443,25 @@ describe('deriveSimStats', () => {
     const explicit = deriveSimStats({ attacking: 70, defending: 70, mental: 70, athletic: 70, technical: 70 });
     expect(defaults).toEqual(explicit);
   });
+
+  it('leaves a league-average (70) rating unchanged — the contrast pivot (#589)', () => {
+    const s = deriveSimStats({ attacking: 70, defending: 70, mental: 70, athletic: 70, technical: 70 });
+    expect(s.shooting).toBe(70);
+    expect(s.passing).toBe(70);
+    expect(s.tackling).toBe(70);
+    expect(s.goalkeeping).toBe(70);
+  });
+
+  it('widens elite-vs-great separation beyond the raw rating gap, and pushes the weak down (#589)', () => {
+    const elite = deriveSimStats({ attacking: 90, defending: 70, mental: 70, athletic: 70, technical: 90 });
+    const great = deriveSimStats({ attacking: 80, defending: 70, mental: 70, athletic: 70, technical: 80 });
+    const weak  = deriveSimStats({ attacking: 50, defending: 70, mental: 70, athletic: 70, technical: 50 });
+    // The convex transform + finishing weight stretch the top: the elite→great
+    // shooting gap exceeds the raw 10-point composite gap a linear blend gives.
+    expect(elite.shooting - great.shooting).toBeGreaterThan(10);
+    // ...and a sub-average finisher lands below their raw rating.
+    expect(weak.shooting).toBeLessThan(50);
+  });
 });
 
 // ── toSpatialTeamInput ────────────────────────────────────────────────────────

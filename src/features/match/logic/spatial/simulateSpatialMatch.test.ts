@@ -15,7 +15,7 @@ import {
 } from './simulateSpatialMatch';
 import type { SimPlayerStats, Role } from './types';
 import { PITCH_LENGTH, PITCH_WIDTH } from './types';
-import { adaptSpatialResult, type PlayerIndex } from './spatialEventAdapter';
+import { adaptSpatialResult, deriveSimStats, type PlayerIndex } from './spatialEventAdapter';
 
 // ── Fixture builders ──────────────────────────────────────────────────────────
 
@@ -272,4 +272,37 @@ describe('simulateSpatialMatch — substitutions', () => {
     // players stay parked on the line), so the count never drops.
     expect(r.frames[r.frames.length - 1]!.players.length).toBe(22);
   }, 30000);
+});
+
+describe('simulateSpatialMatch — favourite/underdog separation (#589)', () => {
+  /** A uniform team built from a single COMPOSITE rating through deriveSimStats
+   *  (the real path), so the convex transform is exercised end-to-end. */
+  function compositeTeam(prefix: string, composite: number): SpatialTeamInput {
+    const s = deriveSimStats({
+      attacking: composite, defending: composite, mental: composite, athletic: composite, technical: composite,
+    });
+    const roles: Role[] = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
+    return { formation: '4-4-2', players: roles.map((role, i) => ({ id: `${prefix}-${i}`, name: `${prefix} ${i}`, role, stats: s })) };
+  }
+
+  it('a clear favourite dominates, but the underdog stays competitive (no determinism)', () => {
+    // Strong (composite 80) vs weak (60) over a seeded batch.
+    let strongGoals = 0;
+    let weakGoals = 0;
+    let strongWins = 0;
+    let nonStrongResults = 0; // underdog wins or draws
+    const N = 10;
+    for (let s = 0; s < N; s++) {
+      const r = simulateSpatialMatch(compositeTeam('S', 80), compositeTeam('W', 60), { ...FULL, seed: 500 + s });
+      strongGoals += r.finalScore[0];
+      weakGoals += r.finalScore[1];
+      if (r.finalScore[0] > r.finalScore[1]) strongWins++; else nonStrongResults++;
+    }
+    // Separation reaches outcomes: the favourite wins the clear majority...
+    expect(strongWins).toBeGreaterThan(nonStrongResults);
+    // ...and dominates on goal difference...
+    expect(strongGoals).toBeGreaterThan(weakGoals * 2);
+    // ...but the underdog is not crushed to nothing (upsets/variance survive).
+    expect(weakGoals).toBeGreaterThan(0);
+  }, 45000);
 });
