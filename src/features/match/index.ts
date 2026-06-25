@@ -255,3 +255,11 @@ export {
   getActiveSeason,
 } from './api/seasons';
 export type { SeasonSummary } from './api/seasons';
+
+// ── Automatic season rollover (#568) ───────────────────────────────────────
+// The idempotent "create season N+1" engine lives in api/seasonRollover.ts.
+// It is intentionally NOT re-exported from this barrel: it is SERVER-ONLY
+// (it imports node:crypto for randomUUID) and is consumed directly via its
+// deep path by the scheduled scripts (scripts/rollover-season.ts and
+// scripts/enact-due-seasons.ts). Re-exporting it here would drag node:crypto
+// into the browser bundle and break the Vite build.

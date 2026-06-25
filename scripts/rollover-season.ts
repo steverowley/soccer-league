@@ -53,14 +53,9 @@
 // IMPORTANT: never commit SUPABASE_SERVICE_ROLE_KEY to version control.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { randomUUID }                         from 'crypto';
 import type { Database }                      from '../src/types/database';
 import { seedCupCompetitions }                from '../src/features/match/api/cupSeeder';
-import { generateFocusOptions }               from '../src/features/voting/api/focuses';
-import {
-  generateRoundRobinFixtures,
-  DEFAULT_PAIRS_PER_MATCHDAY,
-} from '../src/features/match/logic/roundRobinDraw';
+import { rolloverSeason }                     from '../src/features/match/api/seasonRollover';
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
@@ -101,20 +96,6 @@ const DEFAULT_CADENCE_MINUTES = 20_160;
  */
 const DEFAULT_FIRST_KICKOFF_MS = Date.now() + 7 * 24 * 60 * 60_000;
 
-/**
- * Number of fixture rows per Supabase upsert batch.  PostgREST's default
- * payload cap is ~1 MB; at ~300 bytes per fixture row 50 rows ≈ 15 KB —
- * well within limits while keeping the number of round-trips low.
- */
-const FIXTURE_BATCH_SIZE = 50;
-
-/**
- * Season year offset.  ISL Season 1 is year 2600, so Season N is year
- * 2599 + N.  Used to derive the human-readable season number from the
- * year column (e.g. year 2601 → "Season 2").
- */
-const SEASON_YEAR_OFFSET = 2599;
-
 const ARG_FROM_SEASON   = getArg('from-season');
 const ARG_CADENCE       = getArg('cadence-minutes');
 const ARG_FIRST_KICKOFF = getArg('first-kickoff');
@@ -148,36 +129,6 @@ const db: WorkerDb = createClient<Database>(
 // next `generate_typescript_types` run following schema changes.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = any;
-
-// ── League catalogue ──────────────────────────────────────────────────────────
-
-/**
- * The 4 permanent ISL league divisions.  `id` is the `teams.league_id`
- * foreign key — stable across seasons.  `name` drives the competition
- * display name in the new season's rows.
- *
- * Sorted in the canonical ISL tier order (inner → gas giants → asteroid
- * belt → Kuiper fringe) to match the Notion doc and seed.sql ordering.
- */
-const LEAGUES = [
-  { id: 'rocky-inner',   name: 'Rocky Inner League'   },
-  { id: 'gas-giants',    name: 'Gas/Ice Giants League' },
-  { id: 'outer-reaches', name: 'Outer Reaches League'  },
-  { id: 'kuiper-belt',   name: 'Kuiper Belt League'    },
-] as const;
-
-/**
- * The two cup tiers seeded from the top half of the final league table.
- * `key` is used for salt strings in the deterministic bracket draw;
- * `name` becomes the competition display name for the new season.
- *
- * Cup rows are created empty at rollover time — their brackets are drawn
- * at the END of the new season's league phase (when standings are final).
- */
-const CUP_TIERS = [
-  { key: 'celestial', name: 'Celestial Cup' },
-  { key: 'shield',    name: 'Solar Shield'  },
-] as const;
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -269,270 +220,27 @@ async function seedCurrentSeasonCups(seasonId: string): Promise<void> {
   }
 }
 
-// ── Step 3: insert the new season row ────────────────────────────────────────
-
-/**
- * Create the Season N+1 row and deactivate Season N.
- *
- * The new season gets:
- *   • A fresh random UUID.
- *   • `is_active = true` (used by the legacy `getActiveSeason()` path).
- *   • `status = 'active'` (the lifecycle state machine from migration 0014).
- *   • `started_at = now()`.
- *
- * The previous season gets `is_active = false` so `getActiveSeason()` queries
- * return the new season immediately.  Its `status` column stays 'enacted' —
- * changing it would break the admin recovery path that expects enacted seasons
- * to be retrievable by status.
- *
- * Exits the process (code 3) if the INSERT fails — continuing without a valid
- * season row would leave all subsequent steps orphaned.
- *
- * @param current  The season row being closed out.
- * @returns        UUID of the newly created season.
- */
-async function createNextSeason(current: SeasonRow): Promise<string> {
-  const newYear = current.year + 1;
-  const newId   = randomUUID();
-
-  // Derive the human-readable season number from the year.
-  // Season 1 = 2600, Season 2 = 2601, ... Season N = 2599 + N.
-  const seasonNumber = newYear - SEASON_YEAR_OFFSET;
-  const newName      = `Season ${seasonNumber} — ${newYear}`;
-
-  const { error: deactivateErr } = await db
-    .from('seasons')
-    .update({ is_active: false })
-    .eq('id', current.id);
-
-  if (deactivateErr) {
-    // Non-fatal: the new season row is inserted regardless.  An admin can
-    // manually flip is_active on the old row if the UI shows duplicates.
-    console.warn('[rollover-season] warning: failed to deactivate current season:', deactivateErr.message);
-  }
-
-  const { error: insertErr } = await (db as AnyDb)
-    .from('seasons')
-    .insert({
-      id:         newId,
-      name:       newName,
-      year:       newYear,
-      is_active:  true,
-      start_date: `${newYear}-01-01`,
-      end_date:   `${newYear}-12-31`,
-      status:     'active',
-      started_at: new Date().toISOString(),
-    });
-
-  if (insertErr) {
-    console.error('[rollover-season] season insert failed:', insertErr.message);
-    process.exit(3);
-  }
-
-  console.log(`[rollover-season] created season: ${newName} (${newId.slice(0, 8)})`);
-  return newId;
-}
-
-// ── Step 4: league competitions + team rosters + fixtures ─────────────────────
-
-/**
- * For each of the 4 ISL leagues, create a competition row for the new
- * season, populate competition_teams from the current `teams.league_id`
- * FK, and bulk-insert all round-robin fixtures.
- *
- * Each sub-step (competition insert, team roster, fixture batch) is guarded
- * individually so a single-league failure doesn't abort the others.
- *
- * @param newSeasonId  UUID of the newly created season.
- * @param seasonName   Human-readable season name (used in competition names).
- */
-async function createLeagueInfrastructure(
-  newSeasonId: string,
-  seasonName:  string,
-): Promise<void> {
-  for (const league of LEAGUES) {
-    // ── Competition row ─────────────────────────────────────────────────────
-    const compId   = randomUUID();
-    const compName = `${league.name} — ${seasonName}`;
-
-    const { error: compErr } = await (db as AnyDb)
-      .from('competitions')
-      .insert({
-        id:        compId,
-        season_id: newSeasonId,
-        league_id: league.id,
-        name:      compName,
-        type:      'league',
-        format:    'round_robin',
-        status:    'upcoming',
-      });
-
-    if (compErr) {
-      console.error(
-        `[rollover-season] competition insert failed (${league.id}):`,
-        compErr.message,
-      );
-      continue;
-    }
-
-    // ── Resolve this league's teams from the teams table ────────────────────
-    // We query `teams.league_id` rather than re-using the previous season's
-    // competition_teams so the roster reflects any team-league reassignments
-    // (e.g. promotion/relegation, which doesn't exist yet but keeps the code
-    // future-proof).
-    const { data: teams, error: teamsErr } = await db
-      .from('teams')
-      .select('id')
-      .eq('league_id', league.id);
-
-    if (teamsErr || !teams || teams.length === 0) {
-      console.warn(
-        `[rollover-season] no teams found for league ${league.id}:`,
-        teamsErr?.message ?? 'empty result',
-      );
-      continue;
-    }
-
-    const teamIds = teams.map((t) => t.id);
-
-    // ── competition_teams ───────────────────────────────────────────────────
-    // Upsert so a re-run after partial failure is safe.
-    const { error: ctErr } = await (db as AnyDb)
-      .from('competition_teams')
-      .upsert(
-        teamIds.map((tid) => ({ competition_id: compId, team_id: tid })),
-        { onConflict: 'competition_id,team_id' },
-      );
-
-    if (ctErr) {
-      console.warn(
-        `[rollover-season] competition_teams insert failed (${league.id}):`,
-        ctErr.message,
-      );
-    }
-
-    // ── Fixtures ────────────────────────────────────────────────────────────
-    // Upsert in batches of FIXTURE_BATCH_SIZE to avoid PostgREST payload
-    // limits.  ON CONFLICT (competition_id, home_team_id, away_team_id)
-    // makes repeat runs safe — existing rows are left untouched.
-    const fixtures = generateRoundRobinFixtures(compId, teamIds, {
-      pairsPerMatchday: DEFAULT_PAIRS_PER_MATCHDAY,
-      firstKickoffMs:   FIRST_KICKOFF_MS,
-      cadenceMs:        CADENCE_MS,
-    });
-    let inserted   = 0;
-
-    for (let off = 0; off < fixtures.length; off += FIXTURE_BATCH_SIZE) {
-      const batch = fixtures.slice(off, off + FIXTURE_BATCH_SIZE);
-      const { error: fixErr } = await (db as AnyDb)
-        .from('matches')
-        .upsert(batch, { onConflict: 'competition_id,home_team_id,away_team_id' });
-
-      if (fixErr) {
-        console.warn(
-          `[rollover-season] fixture batch ${off}–${off + batch.length - 1} ` +
-          `failed (${league.id}):`,
-          fixErr.message,
-        );
-      } else {
-        inserted += batch.length;
-      }
-    }
-
-    console.log(
-      `[rollover-season] ${league.name}: comp=${compId.slice(0, 8)}, ` +
-      `teams=${teamIds.length}, fixtures=${inserted}/${fixtures.length}`,
-    );
-  }
-}
-
-// ── Step 5: empty cup competition rows for the new season ─────────────────────
-
-/**
- * Insert placeholder Celestial Cup and Solar Shield competition rows for the
- * new season.  Their `bracket` column stays NULL until the new season's
- * league phase completes, at which point the rollover script (or a future
- * variant of maybeTransitionSeason) will call seedCupCompetitions to draw
- * the bracket from fresh standings.
- *
- * Exits silently if an insert fails — the cup rows can be re-inserted by
- * re-running the script; the rest of the season infrastructure is unaffected.
- *
- * @param newSeasonId  UUID of the newly created season.
- * @param seasonName   Human-readable season name (used in competition names).
- */
-async function createCupRows(newSeasonId: string, seasonName: string): Promise<void> {
-  for (const cup of CUP_TIERS) {
-    const cupId   = randomUUID();
-    const cupName = `${cup.name} — ${seasonName}`;
-
-    const { error } = await (db as AnyDb)
-      .from('competitions')
-      .insert({
-        id:        cupId,
-        season_id: newSeasonId,
-        league_id: null,   // Cross-league cup — no single-league affiliation
-        name:      cupName,
-        type:      'cup',
-        format:    'knockout',
-        status:    'upcoming',
-        // `bracket` column intentionally omitted — defaults to NULL.
-        // The seeder writes it after the new season's league phase ends.
-      });
-
-    if (error) {
-      console.warn(`[rollover-season] cup insert failed (${cup.key}):`, error.message);
-    } else {
-      console.log(`[rollover-season] created cup: ${cupName} (${cupId.slice(0, 8)})`);
-    }
-  }
-}
-
-// ── Step 6: focus_options for all 32 teams ────────────────────────────────────
-
-/**
- * Generate the full set of voting focus options for every team for the new
- * season.  Delegates to `generateFocusOptions`, which upserts the 9 static
- * templates (4 major + 5 minor) per team via ON CONFLICT — safe to re-run.
- *
- * Teams are queried from the `teams` table rather than a competition roster
- * so every club — including any that failed to get a competition_teams row
- * in step 4 — still receives voting options.
- *
- * @param newSeasonId UUID of the newly created season.
- */
-async function generateAllFocusOptions(newSeasonId: string): Promise<void> {
-  const { data: teams, error } = await db.from('teams').select('id');
-
-  if (error || !teams) {
-    console.warn('[rollover-season] teams read failed — skipping focus_options:', error?.message);
-    return;
-  }
-
-  let total = 0;
-  for (const team of teams) {
-    const count = await generateFocusOptions(db as AnyDb, team.id, newSeasonId);
-    total += count;
-  }
-
-  console.log(
-    `[rollover-season] generated focus_options: ${total} row(s) for ${teams.length} team(s)`,
-  );
-}
+// ── Steps 3–6: build the new season (delegated to the shared module) ──────────
+//
+// The season/competition/fixture/cup/focus-option creation logic used to live
+// inline in this script.  It now lives in the unit-tested, idempotent
+// `rolloverSeason` (src/features/match/api/seasonRollover.ts), shared with the
+// scheduled `enact-due-seasons` job (#568).  This CLI keeps only the operator
+// surface — env, flags, cup-seeding of the OLD season, and exit codes.
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 /**
- * Orchestrates the full season rollover.  Runs steps 1–6 sequentially so
- * each step can depend on outputs of earlier steps (e.g. newSeasonId).
- * Individual sub-step failures are logged but do not abort the run unless
- * they are structural (e.g. missing season row = can't create competitions).
+ * Orchestrates the full season rollover.  Runs the steps sequentially:
+ *   1. Resolve the season being closed out (CLI flag or auto-detect).
+ *   2. Seed the OLD season's cup brackets from its final standings.
+ *   3–6. Build the NEW season via `rolloverSeason` (idempotent).
  *
  * Exit codes:
- *   0  — all steps completed (including partial-success sub-steps).
+ *   0  — completed (including an idempotent already-rolled no-op).
  *   1  — env vars missing or invalid CLI args.
  *   2  — source season not found.
- *   3  — new season INSERT failed (structurally fatal).
+ *   3  — new season build failed (no new season id returned).
  *   5  — unexpected thrown error.
  */
 async function run(): Promise<void> {
@@ -555,18 +263,32 @@ async function run(): Promise<void> {
   // Step 2: seed cup brackets for the ending season from its final standings.
   await seedCurrentSeasonCups(currentSeason.id);
 
-  // Step 3: create the new season row.
-  const newSeasonId   = await createNextSeason(currentSeason);
-  const seasonNumber  = (currentSeason.year + 1) - SEASON_YEAR_OFFSET;
-  const newSeasonName = `Season ${seasonNumber} — ${currentSeason.year + 1}`;
+  // Steps 3–6: build the new season (idempotent — re-runs are no-ops).
+  const result = await rolloverSeason(db, currentSeason.id, {
+    firstKickoffMs: FIRST_KICKOFF_MS,
+    cadenceMs:      CADENCE_MS,
+  });
 
-  // Steps 4–6: populate the new season's data.
-  await createLeagueInfrastructure(newSeasonId, newSeasonName);
-  await createCupRows(newSeasonId, newSeasonName);
-  await generateAllFocusOptions(newSeasonId);
+  if (result.alreadyRolled) {
+    console.log(
+      `[rollover-season] already rolled — ${result.newSeasonName} ` +
+      `(${result.newSeasonId?.slice(0, 8)}) exists; nothing to do.`,
+    );
+    return;
+  }
+
+  if (!result.newSeasonId) {
+    console.error('[rollover-season] season build failed — no new season created.');
+    process.exit(3);
+  }
 
   console.log(
-    `[rollover-season] done — ${newSeasonName} ready. ` +
+    `[rollover-season] created ${result.newSeasonName} (${result.newSeasonId.slice(0, 8)}): ` +
+    `${result.competitionsCreated} leagues, ${result.fixturesCreated} fixtures, ` +
+    `${result.cupRowsCreated} cups, ${result.focusOptionRows} focus_options`,
+  );
+  console.log(
+    `[rollover-season] done — ${result.newSeasonName} ready. ` +
     `Fixtures span ${firstKickoffIso} → ${lastKickoffIso}. ` +
     `Start the match worker to begin simulation.`,
   );
