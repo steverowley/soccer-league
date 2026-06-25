@@ -104,14 +104,20 @@ export function assembleMatch(
         : { id: fp.id, position };
     });
 
+  // Bench labels (appended after the XI) so the viewer can draw a substitute the
+  // moment one comes on — without them the sub's frame id has no roster entry.
+  const benchRoster = (input: SpatialTeamInput): ViewerRosterPlayer[] =>
+    (input.bench ?? []).map((p) =>
+      p.name !== undefined ? { id: p.id, position: p.role, name: p.name } : { id: p.id, position: p.role });
+
   // first.players is [home XI (11), away XI (11)] in slot order; slot 0 is GK.
   const homeFrame = first ? first.players.slice(0, 11) : [];
   const awayFrame = first ? first.players.slice(11, 22) : [];
 
   return {
     frames: framesToSnapshots(result.frames),
-    homePlayers: roster(homeInput, homeFrame, true),
-    awayPlayers: roster(awayInput, awayFrame, true),
+    homePlayers: [...roster(homeInput, homeFrame, true), ...benchRoster(homeInput)],
+    awayPlayers: [...roster(awayInput, awayFrame, true), ...benchRoster(awayInput)],
     finalScore: result.finalScore,
   };
 }
