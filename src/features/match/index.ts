@@ -257,9 +257,9 @@ export {
 export type { SeasonSummary } from './api/seasons';
 
 // ── Automatic season rollover (#568) ───────────────────────────────────────
-// Idempotent "create season N+1" engine: deactivates the prior season, inserts
-// the next active season, and builds its 4 league competitions + round-robin
-// fixtures (real-dated, worker-claimable), 2 empty cup shells, and per-team
-// focus_options.  Consumed by the rollover CLI and the enact-due-seasons job.
-export { rolloverSeason } from './api/seasonRollover';
-export type { RolloverResult, RolloverOptions } from './api/seasonRollover';
+// The idempotent "create season N+1" engine lives in api/seasonRollover.ts.
+// It is intentionally NOT re-exported from this barrel: it is SERVER-ONLY
+// (it imports node:crypto for randomUUID) and is consumed directly via its
+// deep path by the scheduled scripts (scripts/rollover-season.ts and
+// scripts/enact-due-seasons.ts). Re-exporting it here would drag node:crypto
+// into the browser bundle and break the Vite build.

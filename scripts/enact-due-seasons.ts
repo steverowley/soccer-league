@@ -45,7 +45,12 @@ import {
   DEFAULT_ENACTMENT_WINDOW_HOURS,
   type SchedulableSeason,
 } from '../src/features/voting/logic/enactmentSchedule';
-import { transitionSeasonStatus, rolloverSeason } from '../src/features/match';
+import { transitionSeasonStatus } from '../src/features/match';
+// rolloverSeason is imported via its deep path (not the @features/match barrel)
+// because it is server-only — it imports node:crypto, which must never reach the
+// browser bundle. Scripts live outside src/, so the barrel-only import rule
+// doesn't apply here.
+import { rolloverSeason } from '../src/features/match/api/seasonRollover';
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
