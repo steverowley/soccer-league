@@ -6,6 +6,7 @@
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type { MatchOdds } from '../types';
+import { parseMatchOddsRow } from './oddsRepo.schema';
 
 /**
  * Fetch computed odds for a single match. Returns null if odds haven't
@@ -27,7 +28,9 @@ export async function getMatchOdds(
     .single();
 
   if (error) return null;
-  return data as MatchOdds;
+  // Validate at the boundary (#386): DB drift fails loud → documented null
+  // fallback rather than `undefined` odds leaking into the WagerWidget.
+  return parseMatchOddsRow(data, 'getMatchOdds') as MatchOdds | null;
 }
 
 /**
@@ -68,5 +71,6 @@ export async function saveMatchOdds(
     console.warn('[saveMatchOdds] failed:', error.message);
     return null;
   }
-  return data as MatchOdds;
+  // Validate the upsert's returned row at the boundary (#386), same as the read.
+  return parseMatchOddsRow(data, 'saveMatchOdds') as MatchOdds | null;
 }
