@@ -32,7 +32,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
-import { Button } from '../shared/ui';
+import WagerWidget from '../components/WagerWidget';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '../features/auth/api/profiles';
@@ -265,32 +265,47 @@ function StarterBetStep({ teamId, playerId, onDone }: {
     <>
       <StepImage src="/img/step-03-watch-bet" alt="Watch and bet" />
 
-      <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
-        {loading && <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>Finding your next match…</p>}
+      {loading && (
+        <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
+          <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>Finding your next match…</p>
+        </div>
+      )}
 
-        {!loading && !nextMatch && (
+      {!loading && !nextMatch && (
+        <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
           <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
             No fixtures yet for your club. Browse the schedule and place a bet whenever you&apos;re ready — your 200 credits are sitting safe in your account.
           </p>
-        )}
+        </div>
+      )}
 
-        {!loading && nextMatch && (
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_50, marginBottom: 8 }}>
-              YOUR NEXT MATCH
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-              {nextMatch.home_team_id} vs {nextMatch.away_team_id}
-            </div>
-            <div style={{ fontSize: 12, color: DUST_50, marginBottom: 16 }}>
-              {nextMatch.scheduled_at ? new Date(nextMatch.scheduled_at).toLocaleString() : 'Scheduled soon'}
-            </div>
-            <Button variant="active" to={`/matches/${nextMatch.id}`}>
-              Place starter bet
-            </Button>
+      {!loading && nextMatch && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_50, marginBottom: 8 }}>
+            Your next match
           </div>
-        )}
-      </div>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+            {nextMatch.home_team?.name ?? 'Home'} vs {nextMatch.away_team?.name ?? 'Away'}
+          </div>
+          <div style={{ fontSize: 12, color: DUST_50, marginBottom: 16 }}>
+            {nextMatch.scheduled_at ? new Date(nextMatch.scheduled_at).toLocaleString() : 'Scheduled soon'}
+          </div>
+
+          {/* Inline starter bet — place a real wager without leaving the wizard
+              (#571). WagerWidget owns its own odds fetch + placement, and the
+              signed-in onboarding user lands straight in its picker branch, so
+              the funnel no longer dead-ends on a link to the full match page. */}
+          <WagerWidget match={nextMatch} />
+
+          {/* Economy note (#571): credits fund BOTH wagers and the end-of-season
+              focus vote — the one line that ties the two halves of the game
+              together for a first-time fan. */}
+          <p style={{ fontSize: 12, lineHeight: 1.6, color: DUST_50, margin: '16px 0 0' }}>
+            Your credits ride on every wager — and at season&rsquo;s end you&rsquo;ll pool what&rsquo;s
+            left with other fans to vote on your club&rsquo;s future.
+          </p>
+        </div>
+      )}
 
       <SkipFooter onSkip={onDone} label="Done — take me home" />
     </>
