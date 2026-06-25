@@ -286,12 +286,45 @@ export function buildPlayerIndex(
 // ── Stat derivation ───────────────────────────────────────────────────────────
 
 /**
+ * Convex "contrast" transform around the league-average pivot (70): widens the
+ * spread of ratings so good separates from great and great from elite, while
+ * staying mean-preserving for a symmetric spread (a value AT the pivot is
+ * unchanged).  A linear feed makes the sim feel flat — every team plays alike;
+ * this stretches the tails so favourites pull clear and minnows drop off,
+ * without flattening the middle.  The quadratic term is odd around the pivot
+ * (pushes high up, low down by the same shape), so a balanced 70-rated match is
+ * untouched and the calibration fingerprint (which feeds the engine uniform
+ * stats, bypassing this function entirely) is unaffected.
+ *
+ * @param x     A 0–100 rating.
+ * @param gain  Strength of the stretch (0 = identity); kept modest so a star is
+ *              sharper, never deterministic.
+ * @returns     The contrasted rating, clamped to [1, 99].
+ */
+function contrastRating(x: number, gain: number): number {
+  const PIVOT = 70; // league-average rating — the neutral, unchanged point
+  const SPAN = 30;  // ~rating distance to the elite/minnow extremes
+  const d = x - PIVOT;
+  const stretched = PIVOT + d + gain * d * Math.abs(d) / SPAN;
+  return Math.max(1, Math.min(99, stretched));
+}
+
+/** Spread gain applied to every composite — widens favourite/underdog separation. */
+const STAT_CONTRAST_GAIN = 0.30;
+
+/** Extra spread on shooting only — the modest finishing weight (stars convert
+ *  more, upsets still survive because the gain is small and saves/variance remain). */
+const FINISH_CONTRAST_GAIN = 0.15;
+
+/**
  * Derive the 9 fine-grained SimPlayerStats from the 5 composite DB stats.
  *
  * The players table stores composite stats (attacking / defending / mental /
  * athletic / technical) that map to multiple fine-grained dimensions each.
  * This function blends them via documented weights so the spatial engine sees
- * differentiated players without a DB schema change.
+ * differentiated players without a DB schema change.  Each composite is first
+ * passed through `contrastRating` so ratings separate non-linearly (WS-D3); the
+ * shooting output gets an additional finishing-weight pass.
  *
  * Weights (rows sum to 1.0 per output stat):
  *   shooting    = 0.65·attacking  + 0.35·technical
@@ -312,15 +345,18 @@ export function deriveSimStats(p: {
   technical?: number | null;
 }): SimPlayerStats {
   // 70 is the neutral baseline throughout the codebase (fillerStats, normalizeTeamForEngine
-  // defaults) — a "replacement-level" player who is competent but unremarkable.
-  const a   = p.attacking  ?? 70;
-  const d   = p.defending  ?? 70;
-  const m   = p.mental     ?? 70;
-  const ath = p.athletic   ?? 70;
-  const t   = p.technical  ?? 70;
+  // defaults) — a "replacement-level" player who is competent but unremarkable, and the
+  // pivot the contrast transform leaves untouched.  Each composite is contrasted before
+  // blending so quality separates non-linearly (a 70-rated team is unchanged).
+  const a   = contrastRating(p.attacking  ?? 70, STAT_CONTRAST_GAIN);
+  const d   = contrastRating(p.defending  ?? 70, STAT_CONTRAST_GAIN);
+  const m   = contrastRating(p.mental     ?? 70, STAT_CONTRAST_GAIN);
+  const ath = contrastRating(p.athletic   ?? 70, STAT_CONTRAST_GAIN);
+  const t   = contrastRating(p.technical  ?? 70, STAT_CONTRAST_GAIN);
 
   return {
-    shooting:    Math.round(0.65 * a   + 0.35 * t),
+    // Shooting gets an extra finishing-weight pass: elite attackers convert more.
+    shooting:    Math.round(contrastRating(0.65 * a + 0.35 * t, FINISH_CONTRAST_GAIN)),
     passing:     Math.round(0.55 * t   + 0.45 * m),
     dribbling:   Math.round(0.55 * t   + 0.45 * ath),
     speed:       Math.round(0.80 * ath + 0.20 * m),
