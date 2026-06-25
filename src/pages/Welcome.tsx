@@ -66,12 +66,37 @@ export default function Welcome() {
 // ── Wizard body ─────────────────────────────────────────────────────────────
 
 function WelcomeWizard({ onDone }: { onDone: () => void }) {
+  const { profile } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [pickedTeam, setPickedTeam]     = useState<string | null>(null);
   const [pickedPlayer, setPickedPlayer] = useState<string | null>(null);
 
+  // New accounts are granted 200 Intergalactic Credits at signup; fall back to
+  // that canonical grant if the profile hasn't hydrated yet.
+  const credits = profile?.credits ?? 200;
+
   return (
     <Shell>
+      {/* Credit-grant moment (#571): make the opening 200-credit stake a visible
+          beat during onboarding — previously the bankroll stayed invisible until
+          a fan found /profile. Persists across all three steps so the stake (and
+          what's left after a starter bet) stays in view. */}
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'baseline',
+        gap: 10,
+        border: `1px solid ${QUANTUM}`,
+        padding: '8px 14px',
+        marginBottom: 24,
+      }}>
+        <strong style={{ fontSize: 16, fontWeight: 700, color: QUANTUM, fontVariantNumeric: 'tabular-nums' }}>
+          {credits.toLocaleString()}
+        </strong>
+        <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70 }}>
+          Intergalactic Credits — your opening stake from the cosmos
+        </span>
+      </div>
+
       <SectionHeader
         pageKicker={`STEP ${step} OF ${TOTAL_STEPS}`}
         kicker={`I • WELCOME`}
