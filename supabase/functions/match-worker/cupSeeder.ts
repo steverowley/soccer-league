@@ -34,19 +34,21 @@ import {
 // ── Constants ────────────────────────────────────────────────────────────
 
 /**
- * Well-known UUIDs of the 4 league competitions seeded in migration 0009.
- * Mirrors the constant in src/features/match/api/cupSeeder.ts — if one of
- * these IDs ever changes both copies need to update in lock-step (UUIDs are
- * stable in migrations so this is a write-once concern).
+ * Canonical ISL league order, by stable `teams.league_id` slug.  This is the
+ * order in which league standings are interleaved into the cup seed list
+ * (Rocky Inner #1 = overall seed 1, Gas/Ice Giants #1 = seed 2, etc.), so it
+ * is load-bearing: changing it would reshuffle every bracket.
+ *
+ * It MUST equal the order of the old hardcoded `LEAGUE_COMPETITION_IDS`
+ * (Rocky Inner → Gas/Ice Giants → Asteroid Belt → Kuiper Belt).  The third
+ * slug is `outer-reaches`, which is the slug carrying the Asteroid Belt clubs
+ * (see src/data/leagueData.ts).  Season-scoped league competitions are sorted
+ * by their `league_id`'s index here before seeding, so the qualifier
+ * interleaving is byte-identical to the Season-1 hardcoded path.
  */
-const LEAGUE_COMPETITION_IDS = [
-  '10000000-0000-0000-0000-000000000001', // Rocky Inner
-  '10000000-0000-0000-0000-000000000002', // Gas/Ice Giants
-  '10000000-0000-0000-0000-000000000003', // Asteroid Belt
-  '10000000-0000-0000-0000-000000000004', // Kuiper Belt
-] as const;
+const LEAGUE_ID_ORDER = ['rocky-inner', 'gas-giants', 'outer-reaches', 'kuiper-belt'] as const;
 
-/** Cup competition UUIDs from migration 0012. */
+/** Cup competition UUIDs from migration 0012 (Season 1). */
 export const CELESTIAL_CUP_COMPETITION_ID = '20000000-0000-0000-0000-000000000002';
 export const SOLAR_SHIELD_COMPETITION_ID  = '20000000-0000-0000-0000-000000000003';
 
@@ -403,6 +405,100 @@ async function seedOneCup(
   };
 }
 
+// ── Season-scoped competition resolution ─────────────────────────────────
+
+/**
+ * Resolve the 4 league competition IDs for a given season, sorted into the
+ * canonical {@link LEAGUE_ID_ORDER}.
+ *
+ * WHY: the seeder used to read a hardcoded list of Season-1 league UUIDs, so
+ * it only ever worked for Season 1.  Season 2+ competitions get fresh random
+ * UUIDs (see seasonRollover.ts), so we must resolve them dynamically by
+ * `(season_id, type='league')` and re-impose the canonical league order — the
+ * downstream qualifier interleaving depends on that order, NOT on row order.
+ *
+ * Any competition whose `league_id` is not one of the four canonical slugs is
+ * dropped (defensive — keeps a stray row from skewing the seeds).  Returns []
+ * on DB error or empty result so the caller degrades gracefully.
+ *
+ * @param db        Supabase service-role client.
+ * @param seasonId  Season UUID to resolve league competitions for.
+ * @returns         Up to 4 competition IDs in canonical league order.
+ */
+async function resolveSeasonLeagueCompIds(
+  db: any,
+  seasonId: string,
+): Promise<string[]> {
+  const { data, error } = await db
+    .from('competitions')
+    .select('id, league_id')
+    .eq('season_id', seasonId)
+    .eq('type', 'league');
+
+  if (error) {
+    console.warn(`[resolveSeasonLeagueCompIds] ${seasonId} failed:`, error.message);
+    return [];
+  }
+
+  type Row = { id: string; league_id: string | null };
+  const rows = (data ?? []) as Row[];
+
+  // Keep only canonical leagues, then sort by their canonical index so the
+  // interleaving (Rocky Inner #1 → seed 1, …) matches the old hardcoded path.
+  return rows
+    .filter((r) => r.league_id !== null && LEAGUE_ID_ORDER.includes(r.league_id as any))
+    .sort(
+      (a, b) =>
+        LEAGUE_ID_ORDER.indexOf(a.league_id as any) -
+        LEAGUE_ID_ORDER.indexOf(b.league_id as any),
+    )
+    .map((r) => r.id);
+}
+
+/**
+ * Resolve a season's two cup competition IDs by NAME.
+ *
+ * WHY name-matching (not a hardcoded UUID): Season 2+ cup rows carry fresh
+ * random UUIDs but a stable, name-derived label.  seasonRollover names them
+ * `Celestial Cup — Season N` / `Solar Shield — Season N`; Season 1 uses the
+ * bare `Celestial Cup` / `Solar Shield`.  Substring matching covers both.
+ *
+ * A name containing "Celestial" maps to `celestialId`; a name containing
+ * "Shield" (matches both "Solar Shield" and any future shield variant) maps to
+ * `shieldId`.  Either is null when no matching cup row exists for the season.
+ *
+ * @param db        Supabase service-role client.
+ * @param seasonId  Season UUID to resolve cup competitions for.
+ * @returns         `{ celestialId, shieldId }`, each null when unresolved.
+ */
+async function resolveSeasonCupCompIds(
+  db: any,
+  seasonId: string,
+): Promise<{ celestialId: string | null; shieldId: string | null }> {
+  const { data, error } = await db
+    .from('competitions')
+    .select('id, name')
+    .eq('season_id', seasonId)
+    .eq('type', 'cup');
+
+  if (error) {
+    console.warn(`[resolveSeasonCupCompIds] ${seasonId} failed:`, error.message);
+    return { celestialId: null, shieldId: null };
+  }
+
+  type Row = { id: string; name: string | null };
+  const rows = (data ?? []) as Row[];
+
+  let celestialId: string | null = null;
+  let shieldId: string | null = null;
+  for (const r of rows) {
+    const name = r.name ?? '';
+    if (celestialId === null && name.includes('Celestial')) celestialId = r.id;
+    else if (shieldId === null && name.includes('Shield')) shieldId = r.id;
+  }
+  return { celestialId, shieldId };
+}
+
 // ── Public: seed both cups for a season ──────────────────────────────────
 
 export interface SeedSeasonCupsResult {
@@ -411,29 +507,61 @@ export interface SeedSeasonCupsResult {
 }
 
 /**
+ * SeedCupResult for a cup tier whose competition row could not be resolved for
+ * the season (e.g. a missing or misnamed cup competition).  Carries an empty
+ * competitionId and `no_qualifiers` so the return type stays valid and the
+ * caller's logging/accounting still sees a row instead of a crash.
+ */
+function unresolvedCupResult(): SeedCupResult {
+  return { competitionId: '', status: 'no_qualifiers', qualifiers: 0, round1Matches: 0 };
+}
+
+/**
  * Seed both Celestial Cup (top 3 per league) and Solar Shield (4th–6th per
- * league) for a season.  Reads each league's current standings, splits
- * qualifiers, draws both brackets, and persists everything.  Idempotent:
- * re-running for the same season is a no-op for any cup that already has a
- * stored bracket.
+ * league) for a season.  Resolves the season's OWN league + cup competitions
+ * dynamically (works for any season, not just Season 1), reads each league's
+ * current standings, splits qualifiers, draws both brackets, and persists
+ * everything.  Idempotent: re-running for the same season is a no-op for any
+ * cup that already has a stored bracket.
+ *
+ * If a cup competition cannot be resolved for the season, that tier returns an
+ * {@link unresolvedCupResult} (a `no_qualifiers` row, logged) instead of
+ * crashing — the other tier still seeds.
  *
  * @param db        Supabase service-role client.
- * @param seasonId  Season UUID (used in the deterministic draw salt).
+ * @param seasonId  Season UUID (used to resolve competitions + as the draw salt).
  */
 export async function seedCupCompetitions(
   db: any,
   seasonId: string,
 ): Promise<SeedSeasonCupsResult> {
+  // Resolve THIS season's league competitions (in canonical order) and pull
+  // their standings in parallel, preserving the resolved order.
+  const leagueCompIds = await resolveSeasonLeagueCompIds(db, seasonId);
   const allStandings = await Promise.all(
-    LEAGUE_COMPETITION_IDS.map((id) => getLeagueStandings(db, id)),
+    leagueCompIds.map((id) => getLeagueStandings(db, id)),
   );
 
   const celestialQualifiers   = buildQualifierSeeding(allStandings, [1, 2, 3]);
   const solarShieldQualifiers = buildQualifierSeeding(allStandings, [4, 5, 6]);
 
+  // Resolve THIS season's cup competitions by name — fresh UUIDs each season.
+  const { celestialId, shieldId } = await resolveSeasonCupCompIds(db, seasonId);
+
+  if (celestialId === null) {
+    console.warn(`[seedCupCompetitions] no Celestial Cup competition for season ${seasonId}`);
+  }
+  if (shieldId === null) {
+    console.warn(`[seedCupCompetitions] no Solar Shield competition for season ${seasonId}`);
+  }
+
   const [celestial, solarShield] = await Promise.all([
-    seedOneCup(db, CELESTIAL_CUP_COMPETITION_ID, celestialQualifiers, `${seasonId}:celestial`),
-    seedOneCup(db, SOLAR_SHIELD_COMPETITION_ID,  solarShieldQualifiers, `${seasonId}:shield`),
+    celestialId !== null
+      ? seedOneCup(db, celestialId, celestialQualifiers, `${seasonId}:celestial`)
+      : Promise.resolve(unresolvedCupResult()),
+    shieldId !== null
+      ? seedOneCup(db, shieldId, solarShieldQualifiers, `${seasonId}:shield`)
+      : Promise.resolve(unresolvedCupResult()),
   ]);
 
   return { celestial, solarShield };
