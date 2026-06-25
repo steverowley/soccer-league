@@ -1446,15 +1446,17 @@ function narrowFormation(raw: unknown): SupportedFormation {
 }
 
 /**
- * Pick the starting XI in slot order (GK first), mirroring the engine's
- * `ORDER BY starter DESC, overall_rating DESC, id ASC` so the commentary feed
- * and the viewer name the same 11 players.  Teams with fewer than 11 return what
- * they have — <MatchViewer> pads the rest with synthetic ids so the pitch is full.
+ * Pick the match squad in slot order: the starting XI (GK first) followed by up
+ * to five substitutes, mirroring the engine's `ORDER BY starter DESC,
+ * overall_rating DESC, id ASC` (and its bench selection).  The first 11 map to
+ * the formation slots; the rest are bench labels so <MatchViewer> can draw a
+ * substitute once they come on.  Teams with fewer than 11 return what they have
+ * — the viewer pads missing slots with synthetic ids so the pitch is full.
  *
  * @param players  Full roster array from getMatch.
- * @returns        Up to 11 players ordered for the formation slots.
+ * @returns        Up to 16 players: the XI in slot order, then the bench.
  */
-function pickStartingXI(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
+function pickSquad(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
   // Stable sort: clone first because Array.prototype.sort mutates.
   const sorted = [...players].sort((a, b) => {
     if (a.starter !== b.starter) return a.starter ? -1 : 1;
@@ -1463,7 +1465,7 @@ function pickStartingXI(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
     if (ra !== rb) return rb - ra;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
-  return sorted.slice(0, 11);
+  return sorted.slice(0, 16); // 11 starters (slot order) + up to 5 bench
 }
 
 /** Map a roster row to the minimal { id, position } shape the viewer consumes. */
@@ -1564,8 +1566,8 @@ function MatchPitchPanel({
           homeColor:     homeTeam?.color ?? null,
           awayColor:     awayTeam?.color ?? null,
           // Engine-aligned ordering so commentary + viewer name the same XI.
-          homePlayers:   pickStartingXI(homeTeam?.players ?? []).map(toViewerPlayer),
-          awayPlayers:   pickStartingXI(awayTeam?.players ?? []).map(toViewerPlayer),
+          homePlayers:   pickSquad(homeTeam?.players ?? []).map(toViewerPlayer),
+          awayPlayers:   pickSquad(awayTeam?.players ?? []).map(toViewerPlayer),
         });
       })
       .catch((err) => {
