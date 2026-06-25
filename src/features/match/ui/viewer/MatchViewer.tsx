@@ -88,7 +88,9 @@ export interface MatchViewerProps {
   /** Home / away tactical shape (drives rest-state home positions). */
   homeFormation: FormationKey;
   awayFormation: FormationKey;
-  /** Starting XI per side in slot order (GK first); short squads pad with synthetic ids. */
+  /** Each side's squad: the starting XI in slot order (GK first) followed by any
+   *  bench players, so substitutes can be drawn once they come on.  Short squads
+   *  pad with synthetic ids. */
   homePlayers: readonly MatchViewerPlayer[];
   awayPlayers: readonly MatchViewerPlayer[];
   /** Team kit colours (null ⇒ canonical fallback). */
@@ -125,13 +127,17 @@ interface DudeSpec {
   appearance: Appearance;
   /** Default facing when stationary (home faces +x, away faces −x). */
   faceDefault: number;
+  /** True for a substitute: no home slot, rendered ONLY once they're in a frame. */
+  bench: boolean;
 }
 
 /**
- * Resolve 11 dude specs for one side: formation slot → metre-space home position,
- * kit colour (GK gets a distinct colour), and a deterministic appearance keyed by
- * player id.  Slots beyond the supplied roster get synthetic ids so the pitch is
- * always full.
+ * Resolve the dude specs for one side: the starting XI (one per formation slot,
+ * slot 0 = GK) plus any bench players supplied beyond the slot count.  Each gets
+ * a metre-space home position (bench players have none — they sit off the pitch
+ * until subbed on), a kit colour (GK distinct), and a deterministic appearance
+ * keyed by player id.  Empty slots in a short XI get synthetic ids so the pitch
+ * is always full.
  */
 function buildSide(
   side: 'home' | 'away',
@@ -143,7 +149,8 @@ function buildSide(
 ): DudeSpec[] {
   const slots = getFormationSlots(formation, side);
   const faceDefault = side === 'home' ? 1 : -1;
-  return slots.map((slot, i) => {
+  // Starters: one dude per formation slot, keyed by the XI ids in slot order.
+  const starters: DudeSpec[] = slots.map((slot, i) => {
     const id = players[i]?.id ?? `${side}-${i}`;
     const isGK = i === 0;
     return {
@@ -153,8 +160,22 @@ function buildSide(
       kit: isGK ? gkColor : (teamColor ?? outfieldFallback),
       appearance: makeAppearance(id),
       faceDefault,
+      bench: false,
     };
   });
+  // Bench: players supplied beyond the slot count.  They have no home slot and
+  // render only once a substitution puts their id into the frames (the render
+  // loop's frame-presence check), so their home position is a never-used filler.
+  const bench: DudeSpec[] = players.slice(slots.length).map((p) => ({
+    id: p.id,
+    homeX: PITCH_LENGTH / 2,
+    homeY: PITCH_WIDTH / 2,
+    kit: p.position === 'GK' ? gkColor : (teamColor ?? outfieldFallback),
+    appearance: makeAppearance(p.id),
+    faceDefault,
+    bench: true,
+  }));
+  return [...starters, ...bench];
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -285,8 +306,15 @@ export function MatchViewer({
       // Pass 1 — resolve each dude's true world position + gait/facing/phase.
       // Position lives in a mutable `pos` object so the separation pass can nudge
       // it in place before we project + pose.
-      const pending = dudeSpecs.map((spec) => {
+      // Once the match is being played, the frame set is the source of truth for
+      // who is ON the pitch: a subbed-off (or not-yet-on) player is simply absent
+      // and isn't drawn, while a substitute appears the moment their id arrives.
+      // Before kickoff (no sampled players) the starters stand at their home
+      // slots; bench players never show in that rest state.
+      const playing = sampled.players.size > 0;
+      const pending = dudeSpecs.flatMap((spec) => {
         const s = sampled.players.get(spec.id);
+        if (!s && (playing || spec.bench)) return [];
         const pos = { x: s ? s.x : spec.homeX, y: s ? s.y : spec.homeY };
         const gameSpeed = s ? Math.hypot(s.vx, s.vy) : 0;
         const state = reducedMotion ? 'idle' : animStateFromSpeed(gameSpeed);
@@ -301,7 +329,7 @@ export function MatchViewer({
         if (s && Math.abs(s.vx) > FACE_FLIP_SPEED) face = s.vx > 0 ? 1 : -1;
         faceRef.current.set(spec.id, face);
 
-        return { spec, pos, state, phase, face };
+        return [{ spec, pos, state, phase, face }];
       });
 
       // De-overlap (VISUAL ONLY) — spread sprites that the real positions stack on

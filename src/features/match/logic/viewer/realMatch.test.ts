@@ -71,4 +71,35 @@ describe('simulateMatchFromTeams', () => {
     expect(m.homePlayers).toHaveLength(11); // synthesised reserves fill the XI
     expect(m.frames.length).toBeGreaterThan(0);
   });
+
+  it('labels the bench so substitutes can be rendered when they come on', () => {
+    // A full XI plus five substitutes (starter: false) — the engine's bench.
+    const withBench = (prefix: string): TeamSimData => {
+      const base = team(prefix, '#333', '4-4-2');
+      return {
+        ...base,
+        players: [
+          ...(base.players ?? []),
+          ...['GK', 'DF', 'MF', 'MF', 'FW'].map((position, i) => ({
+            id: `${prefix}-sub-${i}`, name: `${prefix} Sub ${i}`, position,
+            starter: false, is_active: true,
+            attacking: 70, defending: 70, mental: 70, athletic: 70, technical: 70,
+          })),
+        ],
+      };
+    };
+    const m = simulateMatchFromTeams(withBench('h'), withBench('a'), 5);
+
+    // The XI (11) and the bench (5) are both labelled, per side.
+    expect(m.homePlayers).toHaveLength(16);
+    expect(m.awayPlayers).toHaveLength(16);
+    expect(m.homePlayers.some((p) => p.id === 'h-sub-0')).toBe(true);
+
+    // A substitute isn't on the pitch at kickoff but takes the field later, so
+    // their frame id now resolves to a label the viewer can draw.
+    const subOnPitch = (f: { snapshots: { players: Array<{ id: string }> } }) =>
+      f.snapshots.players.some((p) => p.id.includes('-sub-'));
+    expect(subOnPitch(m.frames[0]!)).toBe(false);
+    expect(m.frames.some(subOnPitch)).toBe(true);
+  });
 });
