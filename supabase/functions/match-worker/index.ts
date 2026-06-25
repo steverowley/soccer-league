@@ -330,11 +330,12 @@ async function fetchTeamForSimulation(teamId: string) {
     // PLANET_WX table — every weather-keyed mechanic was running off the
     // wrong distribution.
     // `preferred_formation` on the manager row is read by `toSpatialTeamInput`
-    // to assign each player to their correct formation slot (e.g. '4-4-2').
-    // The legacy `normalizeTeamForEngine` path ignores it safely.
+    // to assign each player to their correct formation slot (e.g. '4-4-2'); the
+    // manager's `style` drives the play-style nudges (#587).  The legacy
+    // `normalizeTeamForEngine` path ignores both safely.
     // `personality` is the flat-column fallback for the trait bridge; the
     // authoritative value is read from `entity_traits` in buildPersonalityMap.
-    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id, preferred_formation), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active, personality)')
+    .select('id, name, short_name, color, location, home_ground, capacity, managers(id, name, entity_id, preferred_formation, style), players(id, entity_id, name, position, age, jersey_number, starter, attacking, defending, mental, technical, athletic, is_active, personality)')
     .eq('id', teamId)
     .single();
 

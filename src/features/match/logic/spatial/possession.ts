@@ -17,6 +17,14 @@ import {
   attackingGoalX,
 } from './types';
 
+/** How strongly a play-style's shoot delta scales the shot urge.  With deltas in
+ *  ±0.12, K=4 spans roughly ×0.68 (Possession) … ×1.48 (Offensive) shot volume. */
+const STYLE_SHOOT_K = 4;
+
+/** How strongly a play-style's pass delta scales the pass urge.  With deltas in
+ *  ±0.18, K=2.5 spans roughly ×0.80 (Aggressive) … ×1.45 (Possession). */
+const STYLE_PASS_K = 2.5;
+
 /** The carrier's chosen action for this decision tick. */
 export type CarrierAction =
   | { kind: 'shoot' }
@@ -151,6 +159,8 @@ export function chooseBestPass(
 export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): CarrierAction {
   const teammates = (carrier.side === 'home' ? world.home : world.away).filter((p) => p.id !== carrier.id && !p.sentOff);
   const opponents = carrier.side === 'home' ? world.away : world.home;
+  // The carrier's manager play-style nudges what they reach for (Balanced = 1×).
+  const style = carrier.side === 'home' ? world.homeStyle : world.awayStyle;
 
   const sq = shotQuality(carrier.pos, carrier.side);
   const pressure = pressureAt(carrier.pos, opponents);
@@ -162,8 +172,9 @@ export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): Car
   // low coefficients keep shot VOLUME realistic — calibrated (2026-06) alongside
   // placement error and saveProbability so a seeded batch lands near real-world
   // goal rates (~2.5–2.8/match), not the ~5+ arcade scorelines the first cut gave.
+  // STYLE: an Offensive/Direct manager lifts the shoot urge, Possession trims it.
   if (sq > 0.50) {
-    const shootUrge = sq * (0.075 + carrier.stats.shooting / 750) + pressure * 0.03;
+    const shootUrge = (sq * (0.075 + carrier.stats.shooting / 750) + pressure * 0.03) * (1 + style.shoot * STYLE_SHOOT_K);
     if (rng() < shootUrge) return { kind: 'shoot' };
   }
 
@@ -173,7 +184,8 @@ export function chooseAction(carrier: SimPlayer, world: SimWorld, rng: Rng): Car
     const goalX = attackingGoalX(carrier.side);
     const advances = Math.abs(best.pos.x - goalX) < Math.abs(carrier.pos.x - goalX) - 4;
     // Pass when squeezed, or when a teammate is meaningfully further forward.
-    const passUrge = pressure * 0.7 + (advances ? 0.35 : 0.05);
+    // STYLE: Possession lifts the pass urge; Direct/Aggressive trim it.
+    const passUrge = (pressure * 0.7 + (advances ? 0.35 : 0.05)) * (1 + style.pass * STYLE_PASS_K);
     if (rng() < passUrge) return { kind: 'pass', target: best };
   }
 
