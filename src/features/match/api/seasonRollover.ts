@@ -75,6 +75,8 @@ export interface RolloverResult {
   cupRowsCreated: number;
   /** Number of focus_option rows upserted across all teams. */
   focusOptionRows: number;
+  /** True when the Galaxy Dispatch new-season announcement was written. */
+  announced: boolean;
 }
 
 /**
@@ -152,6 +154,25 @@ function seasonNameForYear(year: number): string {
   return `Season ${seasonNumber} — ${year}`;
 }
 
+/**
+ * Compose the Galaxy Dispatch new-season announcement — the Cosmic Architect's
+ * voice marking the rollover (#568: "the Galaxy Dispatch announces the new
+ * season; give the Architect a lever here").  A new season is the cosmos
+ * resetting its board.  The line is DETERMINISTIC (no LLM) so the scheduled job
+ * never blocks on a model call; it's written under the `architect_whisper` kind
+ * so it surfaces with the Architect's purple accent in /news.
+ *
+ * @param seasonName  The new season's display name (e.g. "Season 2 — 2601").
+ * @returns           The narrative summary prose.
+ */
+export function composeSeasonDawnNarrative(seasonName: string): string {
+  return (
+    `A new season dawns. ${seasonName} opens across the solar system — ` +
+    `fresh fixtures etched into the dark, every club's ledger scoured back to zero. ` +
+    `The Architect leans over its reset board, and the cosmos holds its breath.`
+  );
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
@@ -188,6 +209,7 @@ export async function rolloverSeason(
     fixturesCreated:     0,
     cupRowsCreated:      0,
     focusOptionRows:     0,
+    announced:           false,
   };
 
   // ── Step 1: fetch the prior season ─────────────────────────────────────────
@@ -388,6 +410,29 @@ export async function rolloverSeason(
     for (const team of allTeams) {
       result.focusOptionRows += await generateFocusOptions(db, team.id, newSeasonId);
     }
+  }
+
+  // ── Step 7: Galaxy Dispatch new-season announcement (#568) ──────────────────
+  // Give the Architect a lever: one cosmic line in the news feed marking the new
+  // season, stamped to it. Fire-and-forget — a missing announcement is a lore
+  // gap, not a reason to fail a rollover that already created the season +
+  // fixtures. Only ever reached on the create path (the alreadyRolled guard
+  // returns far above), so the season is announced exactly once.
+  const { error: narrativeErr } = await db
+    .from('narratives')
+    .insert({
+      kind:              'architect_whisper',
+      summary:           composeSeasonDawnNarrative(newName),
+      source:            'season_rollover',
+      season_id:         newSeasonId,
+      importance:        9, // a new season is among the most significant cosmic events
+      entities_involved: [],
+    });
+
+  if (narrativeErr) {
+    console.warn('[rolloverSeason] season-dawn narrative insert failed:', narrativeErr.message);
+  } else {
+    result.announced = true;
   }
 
   return result;
