@@ -231,6 +231,11 @@ describe('filterNotableEvents (#519)', () => {
     expect(events).toHaveLength(2); // input untouched
     expect(out).toHaveLength(1);
   });
+
+  it('keeps woodwork near-misses as first-class beats (#588)', () => {
+    const out = filterNotableEvents([aev('woodwork'), aev('pass'), aev('tackle')]);
+    expect(out.map((e) => e.type)).toEqual(['woodwork']);
+  });
 });
 
 describe('adaptSpatialResult — playerStats accumulation', () => {

@@ -259,6 +259,7 @@ export interface SimEvent {
     | 'interception'
     | 'foul'        // failed challenge that fouls the carrier → free kick (may carry a card)
     | 'penalty'     // a foul inside the box → penalty kick (followed by a goal or save)
+    | 'woodwork'    // a shot that crossed the line a whisker outside a post (near-miss)
     | 'substitution'// a fresh sub replaces a tiring player (playerId on, otherId off)
     | 'offside'     // attacker collected a teammate's pass while in an offside position
     | 'out_throw'   // ball left via touchline

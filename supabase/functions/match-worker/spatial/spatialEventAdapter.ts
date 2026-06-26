@@ -98,6 +98,7 @@ function eventCommentary(ev: SimEvent, index: PlayerIndex): string {
                            ? `${pn} is shown a ${ev.card} card for a foul${o ? ` on ${on}` : ''}.`
                            : `${pn} fouls${o ? ` ${on}` : ''} — free kick.`;
     case 'penalty':      return `Penalty to ${tn}! ${pn} steps up to take it.`;
+    case 'woodwork':     return `Off the woodwork! ${pn} is inches away.`;
     case 'substitution': return `${tn} make a change — ${pn} comes on${o ? ` for ${on}` : ''}.`;
     case 'offside':      return `${pn} is caught offside.`;
     case 'interception': return `${pn} intercepts the ball.`;
@@ -212,6 +213,7 @@ const NOTABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'save',
   'foul',
   'penalty',
+  'woodwork',
   'substitution',
   'offside',
   'out_corner',

@@ -306,3 +306,27 @@ describe('simulateSpatialMatch — favourite/underdog separation (#589)', () => 
     expect(weakGoals).toBeGreaterThan(0);
   }, 45000);
 });
+
+describe('simulateSpatialMatch — near-miss woodwork (#588)', () => {
+  it('emits woodwork beats for shots that rattle the frame, kept through the adapter', () => {
+    // Woodwork is a rare, special beat (~1 every several matches), so scan a
+    // seeded batch and stop at the first match that produces one.
+    let sample: ReturnType<typeof simulateSpatialMatch> | null = null;
+    for (let s = 0; s < 24 && !sample; s++) {
+      const base = 60 + (s % 21);
+      const r = simulateSpatialMatch(team('H', base), team('A', base), { ...FULL, seed: 1000 + s });
+      if (r.events.some((e) => e.type === 'woodwork')) sample = r;
+    }
+    expect(sample, 'expected at least one woodwork near-miss across the batch').not.toBeNull();
+
+    // Each near-miss is attributed to a side...
+    const wood = sample!.events.filter((e) => e.type === 'woodwork');
+    for (const e of wood) expect(e.side === 'home' || e.side === 'away').toBe(true);
+
+    // ...and survives into the commentary feed as its own beat.
+    const adapted = adaptSpatialResult(sample!, new Map());
+    const beats = adapted.events.filter((e) => e.type === 'woodwork');
+    expect(beats.length).toBeGreaterThan(0);
+    expect(String(beats[0]!.payload['commentary']).toLowerCase()).toContain('woodwork');
+  }, 50000);
+});
