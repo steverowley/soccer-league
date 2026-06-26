@@ -62,15 +62,11 @@ describe('kindColor', () => {
   });
 
   // ── Fallback ──────────────────────────────────────────────────────────
+  // Any kind not in the explicit map renders in the muted DUST 70 default so
+  // a future migration that adds a kind never throws or renders invisibly.
   it('falls back to DUST 70 for unknown / future kinds', () => {
-    expect(kindColor('coach')).toBe(COLORS.dust70);
-    expect(kindColor('physio')).toBe(COLORS.dust70);
-    expect(kindColor('doctor')).toBe(COLORS.dust70);
-    expect(kindColor('owner')).toBe(COLORS.dust70);
-    expect(kindColor('analyst')).toBe(COLORS.dust70);
-    expect(kindColor('scout')).toBe(COLORS.dust70);
-    // Hypothetical future kind — still renders, no exception thrown.
     expect(kindColor('cyborg_overlord')).toBe(COLORS.dust70);
+    expect(kindColor('hive_mind')).toBe(COLORS.dust70);
     expect(kindColor('')).toBe(COLORS.dust70);
   });
 });

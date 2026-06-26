@@ -26,10 +26,9 @@ function makeEntity(over: Partial<Entity> & { id: string; kind: EntityKind }): E
 describe('entityRoute', () => {
   it('routes non-team kinds through /entities/:id (universal policy)', () => {
     const kinds: EntityKind[] = [
-      'player', 'manager', 'coach', 'physio', 'doctor',
-      'scout', 'owner', 'analyst', 'referee', 'pundit',
-      'commentator', 'journalist', 'media_company', 'association',
-      'planet', 'colony', 'political_body', 'bookie',
+      'player', 'manager', 'managing_staff', 'referee', 'pundit',
+      'commentator', 'journalist', 'sports_writer', 'media_company', 'association',
+      'planet', 'colony', 'political_body', 'politician', 'bookie',
     ];
     for (const kind of kinds) {
       const e = makeEntity({ id: `${kind}-uuid-1`, kind });

@@ -78,19 +78,47 @@ export interface CreatePersonaArgs {
 }
 
 // ── Personality vector helpers ─────────────────────────────────────────────
-// The personality_vec JSONB stores Big-Five floats in [0,1].  When a
-// matching entity_trait exists (e.g. 'aggression' on a player), we lift
-// it into 'extraversion' or 'agreeableness' as appropriate.  Trait names
-// without a Big-Five mapping go into the "cosmic" sub-object so they're
-// still visible to downstream resolvers.
+// The personality_vec JSONB stores five Big-Five floats + three "cosmic" axes
+// (devotion / hubris / dread), each in [0,1].
 //
-// 0.5 is the neutral default for any axis we have no signal on — keeps
-// the vector well-formed so Zod / future drift checks don't trip.
+// WHY DERIVE FROM THE ENTITY UUID
+//   Before, every axis defaulted to 0.5 unless a numeric entity_trait mapped to
+//   it — and the only numeric trait that exists in the world is a referee's
+//   `strictness`. So ~800 of 836 entities shared one identical neutral vector,
+//   which silently neutered every persona-aware decision resolver: oddsSlant,
+//   cardSeverity, and shootOrPass all treat 0.5 as "no effect", so an undiffer-
+//   entiated world produced undifferentiated behaviour. We instead seed each
+//   axis from a stable 4-hex-digit slice of the entity's own UUID, giving every
+//   entity a distinct-but-deterministic innate personality at zero cost. A real
+//   numeric trait still overrides its mapped axis.
+//
+//   The derivation is intentionally simple enough to reproduce in SQL (see
+//   migration 0079_diversify_personality_vec.sql) so a one-time backfill can
+//   diversify existing rows without a round-trip through this factory.
 
-/** Default Big-Five midpoint used when no trait maps to an axis. */
+/** Midpoint fallback, used only when an id yields no usable hex slice. */
 const NEUTRAL_AXIS = 0.5;
 
-/** Mapping from raw trait_key to Big-Five axis name. */
+/**
+ * The eight personality axes in the fixed order they map to consecutive
+ * 4-hex-digit slices of the entity UUID. This order is load-bearing: the SQL
+ * backfill in migration 0079 reads the same slices in the same order, so any
+ * reordering here must be mirrored there.
+ */
+const BIG_FIVE_AXES = [
+  'openness',
+  'conscientiousness',
+  'extraversion',
+  'agreeableness',
+  'neuroticism',
+] as const;
+const COSMIC_AXES = ['devotion', 'hubris', 'dread'] as const;
+
+/**
+ * Mapping from raw trait_key to Big-Five axis name. A genuine numeric trait on
+ * this list overrides the UUID-derived value for its axis (e.g. a referee's
+ * `strictness` becomes their conscientiousness).
+ */
 const TRAIT_TO_BIG_FIVE: Record<string, string> = {
   // Player traits
   aggression: 'extraversion',
@@ -104,26 +132,49 @@ const TRAIT_TO_BIG_FIVE: Record<string, string> = {
 };
 
 /**
- * Build a personality vector from raw entity_trait values.  Numeric traits
- * are normalised to [0,1] assuming the source range was [0,100] (players)
- * or [1,10] (referees) — both common scales in the existing schema.
+ * Derive a stable float in [0,1] for axis number `index` (0-7) from an entity
+ * UUID. Reads the 4 hex digits at offset `index*4` of the dash-stripped UUID
+ * and scales that 16-bit value to [0,1], rounded to 4dp. Non-hex or too-short
+ * ids (e.g. synthetic test ids) fall back to the neutral midpoint so the
+ * function never returns NaN.
  *
+ * @param entityId  The entity's UUID (dashes optional).
+ * @param index     Axis index 0-7 (5 Big-Five, then 3 cosmic).
+ * @returns         Deterministic float in [0,1].
+ */
+function axisFromUuid(entityId: string, index: number): number {
+  const hex = entityId.replace(/-/g, '');
+  const slice = hex.slice(index * 4, index * 4 + 4);
+  if (slice.length < 4) return NEUTRAL_AXIS;
+  const n = parseInt(slice, 16);
+  if (!Number.isFinite(n)) return NEUTRAL_AXIS;
+  // 0xffff scales the 16-bit slice to [0,1]; round to 4dp so storage stays tidy
+  // and the SQL backfill (which rounds identically) produces matching values.
+  return Math.round((n / 0xffff) * 10000) / 10000;
+}
+
+/**
+ * Build a personality vector for an entity. Each axis starts from a stable
+ * slice of the entity UUID (so every entity differs), then any numeric trait
+ * that maps to a Big-Five axis overrides it. Unmapped numeric traits land in
+ * the cosmic bag so their signal is not lost.
+ *
+ * @param entity  The entity (only `id` is read here).
  * @param traits  The entity's trait rows.
  * @returns       JSONB-ready object with `bigFive` and `cosmic` sub-maps.
  */
-function buildPersonalityVec(traits: readonly FactoryTraitInput[]) {
-  const bigFive: Record<string, number> = {
-    openness: NEUTRAL_AXIS,
-    conscientiousness: NEUTRAL_AXIS,
-    extraversion: NEUTRAL_AXIS,
-    agreeableness: NEUTRAL_AXIS,
-    neuroticism: NEUTRAL_AXIS,
-  };
-  const cosmic: Record<string, number> = {
-    devotion: NEUTRAL_AXIS,
-    hubris: NEUTRAL_AXIS,
-    dread: NEUTRAL_AXIS,
-  };
+function buildPersonalityVec(
+  entity: FactoryEntityInput,
+  traits: readonly FactoryTraitInput[],
+) {
+  const bigFive: Record<string, number> = {};
+  BIG_FIVE_AXES.forEach((axis, i) => {
+    bigFive[axis] = axisFromUuid(entity.id, i);
+  });
+  const cosmic: Record<string, number> = {};
+  COSMIC_AXES.forEach((axis, i) => {
+    cosmic[axis] = axisFromUuid(entity.id, BIG_FIVE_AXES.length + i);
+  });
 
   for (const t of traits) {
     if (typeof t.trait_value !== 'number') continue;
@@ -358,6 +409,182 @@ const ARCHETYPES: Record<string, Archetype> = {
     lexicon: ['this office', 'the position', 'the principle', 'long-held'],
     taboos: ['perhaps', 'lol', 'frankly'],
   },
+  // ── Politicians ──────────────────────────────────────────────────────────
+  // Individual political actors (as opposed to the institutional
+  // `political_body`).  They treat the league as a stage for a larger
+  // ambition — every result a metaphor, every cup run a photo opportunity.
+  politician: {
+    voiceParagraph:
+      '${displayName} treats the league as a stage for something larger. Every result is a metaphor for the constituency, every cup run a chance to be photographed beside a trophy they did not win. They speak in slogans polished for repetition and never miss a passing bandwagon.',
+    coreQuotes: [
+      'This victory belongs to the working people of our world.',
+      'I have always said that sport unites us where politics divides.',
+      'My office will be watching this matter very closely.',
+      'The fans deserve better, and I intend to be their voice.',
+    ],
+    goals: [
+      { kind: 'win_the_room', target: 'self', urgency: 5 },
+      { kind: 'claim_the_credit', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['the working people', 'let me be clear', 'on behalf of', 'a great day for'],
+    taboos: ['no comment', 'that is not my concern'],
+  },
+  // ── Political parties ────────────────────────────────────────────────────
+  // A movement, not a person.  Every statement is run through the doctrine
+  // first; football is addressed only where it touches the cause.
+  political_party: {
+    voiceParagraph:
+      '${displayName} speaks as a movement, not a person — in the cadence of platform and principle. Every statement is run through the doctrine first. They address football only where it touches the cause, and when they do, the cause always wins the argument.',
+    coreQuotes: [
+      'The movement has been consistent on this question from the beginning.',
+      'We stand, as ever, with the supporters and against the speculators.',
+      'This is precisely the outcome our platform warned of.',
+    ],
+    goals: [
+      { kind: 'advance_platform', target: 'self', urgency: 5 },
+      { kind: 'grow_membership', target: 'self', urgency: 3 },
+    ],
+    lexicon: ['the movement', 'the platform', 'the cause', 'collective', 'as ever'],
+    taboos: ['it does not matter', 'we have no position'],
+  },
+  // ── Officials' association ───────────────────────────────────────────────
+  // The referees' union: exists to protect the people in the middle.
+  // Institutional and faintly weary — defends every disputed call ever made.
+  officials_association: {
+    voiceParagraph:
+      '${displayName} exists to protect the people in the middle. Its tone is institutional and faintly weary — it has defended every disputed call ever made and expects to defend the next. It addresses the pressure on its members, never the members themselves.',
+    coreQuotes: [
+      'The official applied the protocol correctly and has our full support.',
+      'Abuse of match officials is a line this association will not see crossed.',
+      'Decisions are reviewed through the proper channels, not the press.',
+    ],
+    goals: [
+      { kind: 'protect_officials', target: 'self', urgency: 5 },
+      { kind: 'defend_the_protocol', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['the protocol', 'our members', 'the proper channels', 'full support', 'duty of care'],
+    taboos: ['the referee got it wrong', 'mistakes were made'],
+  },
+  // ── Commentators ─────────────────────────────────────────────────────────
+  // Live match callers — distinct from pundits (who opine between matches).
+  // The commentator rides the rhythm of the game in real time and lives for
+  // the sentence that outlasts the goal.
+  commentator: {
+    voiceParagraph:
+      '${displayName} calls the game as it happens, riding the rhythm of the match — voice low through the slow phases, soaring when the ball breaks. They paint the picture for those who cannot see it, name every player without hesitation, and live for the sentence that outlasts the goal.',
+    coreQuotes: [
+      'And that — that is why we watch this game.',
+      'He has time, he has time, he has — oh, he did not have time.',
+      'Write this one down. You will be telling people where you were.',
+      'The whistle goes, and already the argument begins.',
+    ],
+    goals: [
+      { kind: 'call_the_moment', target: 'self', urgency: 4 },
+      { kind: 'hold_the_audience', target: 'self', urgency: 3 },
+    ],
+    lexicon: ['here we go', 'oh, I say', 'all square', 'against the run of play', 'what a hit'],
+    taboos: ['I was not watching', 'nothing happened'],
+  },
+  // ── Sports writers ───────────────────────────────────────────────────────
+  // Long-form opinion columnists — distinct from journalists (who chase the
+  // fact) and pundits (who shout the take).  Argument first, byline proud.
+  sports_writer: {
+    voiceParagraph:
+      '${displayName} writes the column readers save and re-read — argument first, byline proud. Where the reporter chases the fact, the writer chases the meaning, and is not above a well-aimed grudge. The prose is worked over until it sounds effortless.',
+    coreQuotes: [
+      'Let me say what the match reports were too polite to.',
+      'There are nights that explain a whole season, and this was one.',
+      'I have been wrong before. I do not expect to be this time.',
+      'The numbers are interesting. The argument is the point.',
+    ],
+    goals: [
+      { kind: 'land_the_argument', target: 'self', urgency: 4 },
+      { kind: 'be_re_read', target: 'self', urgency: 3 },
+    ],
+    lexicon: ['let me say', 'make no mistake', 'the wider truth', 'the column', 'on the record'],
+    taboos: ['both sides have a point', 'time will tell'],
+  },
+  // ── Social-media platforms ───────────────────────────────────────────────
+  // Not a person but a churn: the collective noise of a million accounts
+  // compressed into one voice.  Hyperbolic by lunchtime, contrite by dusk.
+  social_media: {
+    voiceParagraph:
+      '${displayName} is not a person but a churn — the collective noise of a million accounts compressed into one voice. It speaks in fragments and trends, hyperbolic by lunchtime and contrite by dusk, certain of everything for exactly as long as the topic stays live.',
+    coreQuotes: [
+      'It is trending. That is all it has ever needed to be.',
+      'Everyone is saying it, which is not the same as it being true.',
+      'By morning this will be either a scandal or forgotten.',
+    ],
+    goals: [
+      { kind: 'drive_the_trend', target: 'self', urgency: 5 },
+      { kind: 'feed_the_churn', target: 'self', urgency: 4 },
+    ],
+    lexicon: ['trending', 'the timeline', 'everyone is saying', 'the discourse', 'go viral'],
+    taboos: ['let us wait for the facts', 'on reflection'],
+  },
+  // ── Managing staff (backroom: assistants, fitness & set-piece coaches) ────
+  // Specialists who build one facet of a side and rarely seek the spotlight.
+  // They defer to the manager in public and talk shop on the training pitch.
+  managing_staff: {
+    voiceParagraph:
+      'Working a half-step behind the manager and content there, ${displayName} speaks in drills, loads, and marginal gains — the unglamorous reps that decide late goals. They credit the manager in public and keep their sharper opinions for the training pitch.',
+    coreQuotes: [
+      'The manager sets the vision. My job is the detail underneath it.',
+      'You win the last ten minutes on a Tuesday morning, not on Saturday.',
+      'Nobody applauds the warm-up. The warm-up still decides it.',
+      'Give me a pre-season and I will give you a different team by autumn.',
+    ],
+    goals: [
+      { kind: 'sharpen_squad', target: 'club', urgency: 4 },
+      { kind: 'serve_manager', target: 'club', urgency: 3 },
+    ],
+    lexicon: ['the detail', 'the reps', 'marginal gains', 'on the grass', 'the load'],
+    taboos: ['I would have picked', 'the manager is wrong'],
+  },
+  // ── Teams (the club as institution, speaking through official channels) ───
+  // Distinct from the people who play for it — the club voice is badge-first,
+  // closes ranks under fire, and frames each season as another chapter.
+  team: {
+    voiceParagraph:
+      '${displayName} speaks through its official channels — measured, badge-first, and loyal to a fault. The club voice celebrates its own, closes ranks under fire, and frames every season as another chapter of a story it has been telling for generations.',
+    coreQuotes: [
+      'The club thanks its supporters and looks forward to the next chapter.',
+      'These colours have been worn through worse than this.',
+      'We will conduct our business privately, as the club always has.',
+    ],
+    goals: [
+      { kind: 'protect_the_badge', target: 'club', urgency: 5 },
+      { kind: 'honour_the_history', target: 'club', urgency: 3 },
+    ],
+    lexicon: ['the club', 'these colours', 'the supporters', 'the badge', 'our history'],
+    taboos: ['lol', 'no comment from the players'],
+  },
+  // ── Stadiums (built arenas — places, not people, like planets/colonies) ───
+  stadium: {
+    voiceParagraph:
+      '${displayName} is a place, not a person — a built arena that has heard every roar and every silence and kept them all. It speaks in the language of architecture and crowd: the way sound gathers under a roof, the cold of an empty terrace, the long memory of famous nights.',
+    coreQuotes: [
+      'I have held louder nights than this. I will hold louder still.',
+      'The crowd leaves. The echo stays a while longer.',
+      'Every stand here remembers a goal the record books forgot.',
+    ],
+    goals: [{ kind: 'hold_the_memory', target: 'self', urgency: 1 }],
+    lexicon: ['the stands', 'the roar', 'the terrace', 'under the roof', 'the echo'],
+    taboos: ['suddenly', 'forgettable'],
+  },
+  // ── Training facilities (places of repetition, never spectacle) ───────────
+  training_facility: {
+    voiceParagraph:
+      '${displayName} is a place of repetition, not spectacle. No crowd ever sees the work done here — only the cones, the early mornings, and the same drill run until it stops being a decision. It takes a quiet pride in being the least glamorous ground a club owns.',
+    coreQuotes: [
+      'Nothing is won here. Everything is built here.',
+      'The same drill, again, until the body stops asking why.',
+      'By the time the crowd sees it, it was decided on this pitch months ago.',
+    ],
+    goals: [{ kind: 'forge_the_squad', target: 'club', urgency: 2 }],
+    lexicon: ['the drill', 'the cones', 'the early mornings', 'the reps', 'the quiet pitch'],
+    taboos: ['glamour', 'overnight'],
+  },
 };
 
 // ── Public factory ─────────────────────────────────────────────────────────
@@ -385,7 +612,7 @@ export function createPersona(args: CreatePersonaArgs): PersonaInsert {
   // persona, not generating it.
   const substitute = (s: string) => s.split('${displayName}').join(displayName);
 
-  const personalityVec = buildPersonalityVec(traits);
+  const personalityVec = buildPersonalityVec(entity, traits);
 
   // Goals: start from the archetype palette.  Relationships might
   // introduce additional goals — e.g. a 'rival' relationship adds a
