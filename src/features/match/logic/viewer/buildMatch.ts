@@ -28,6 +28,9 @@ export interface ViewerMatch {
   awayPlayers: ViewerRosterPlayer[];
   homeFormation: FormationKey;
   awayFormation: FormationKey;
+  /** Club kit colours for the shirt accent (null ⇒ muted fallback). */
+  homeColor: string | null;
+  awayColor: string | null;
   homeTeamName: string;
   awayTeamName: string;
   finalScore: [number, number];

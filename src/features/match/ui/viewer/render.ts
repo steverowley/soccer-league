@@ -5,16 +5,19 @@
 // rAF loop, or which camera is live.  All per-frame MATH lives in logic/viewer;
 // this file only turns positions + poses into pixels.
 //
-// STYLE — "PHOSPHOR TERRACES" (the ISL design-system Match Sprites handoff,
-// locked config: terraces silhouette · eyes · squad numbers · phosphor accent ·
-// calm motion · nub limbs):
+// STYLE — "PHOSPHOR TERRACES" (the ISL design-system Match Sprites study,
+// config: terraces silhouette · eyes · squad numbers · kit accent · calm
+// motion · nub limbs):
 //   Every being is a Lunar-Dust phosphor figure on Galactic Abyss.  The chunky
 //   big-headed Tiny-Terraces silhouette carries the charm; variety comes from
 //   SPECIES (head shape, eye configuration, antennae, mandibles), build and
-//   phosphor-tone hair — never from hue.  Home wears full phosphor, away wears
-//   the dimmed phosphor; the goalkeeper is the hollow (abyss-filled) figure.
-//   Squad numbers in Space Mono are the brand's data motif on every chest, and
-//   the selected player glows under a Quantum-Purple halo (the Architect's eye).
+//   phosphor-tone hair — never from hue.  The KIT SHIRT is the single rationed
+//   accent: each side's torso wears its club colour (muted fallbacks when a
+//   club has none), which is what separates the teams at broadcast scale — the
+//   pure-phosphor accent mode shipped first and the sides were too hard to tell
+//   apart.  The goalkeeper is the hollow (abyss-filled) figure.  Squad numbers
+//   in Space Mono are the brand's data motif on every chest, and the selected
+//   player glows under a Quantum-Purple halo (the Architect's eye).
 
 import { PITCH_LENGTH, PITCH_WIDTH } from '../../logic/spatial/types';
 import {
@@ -36,12 +39,15 @@ export type ProjectFn = (wx: number, wy: number, wz: number) => Projected;
 
 // ── Palette (ISL tokens — the phosphor monochrome) ────────────────────────────
 
-/** Lunar Dust — the phosphor body (and the home side's shirt). */
+/** Lunar Dust — the phosphor body. */
 const PHOS = '#E3E0D5';
 /** Galactic Abyss — outline, eyes, and the GK's hollow shirt fill. */
 const ABYSS = '#111111';
-/** Mid phosphor — legs/shorts, the away side's shirt, antennae stems. */
+/** Mid phosphor — legs/shorts and antennae stems. */
 const PHOS_DIM = '#9C9A90';
+/** Fallback kit shirts when a club has no colour — the study's muted pair. */
+const KIT_HOME_FALLBACK = '#C9603F'; // muted astro terracotta
+const KIT_AWAY_FALLBACK = '#4E7E8C'; // muted slate-cyan
 /** Quantum Purple — the focus halo (the Architect's eye on the selected soul). */
 const QUANTUM = '#9A5CF4';
 
@@ -70,8 +76,10 @@ export interface DudeRender {
   pose: Pose;
   /** Deterministic appearance (species/build/hair). */
   appearance: Appearance;
-  /** Which side the player is on — home wears phosphor, away wears dim phosphor. */
+  /** Which side the player is on — picks the fallback shirt when `kit` is null. */
   team: 'home' | 'away';
+  /** Club shirt colour, or null to use the side's muted fallback. */
+  kit: string | null;
   /** Goalkeepers render as the hollow (abyss-filled, phosphor-outlined) figure. */
   gk: boolean;
   /** Squad number printed on the chest (the brand's data motif). */
@@ -186,6 +194,18 @@ function shade(hex: string, amt: number): string {
   if (!c) return hex;
   const f = (v: number): number => Math.max(0, Math.min(255, Math.round(v + 255 * amt)));
   return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`;
+}
+
+/**
+ * True when a hex colour is light enough that abyss (dark) digits read on it.
+ * Rec. 709 relative-luminance weights; the 0.55 threshold splits the phosphor
+ * dust tones (light → abyss digits) from typical saturated club colours
+ * (dark → phosphor digits).  Unparseable strings count as dark.
+ */
+function isLight(hex: string): boolean {
+  const c = parseHex(hex);
+  if (!c) return false;
+  return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255 > 0.55;
 }
 
 /**
@@ -606,10 +626,10 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
   const u = sc;
   const feetY = pr.y - hop;
 
-  // Shirt tone: home = full phosphor, away = dim phosphor (the `accent:
-  // phosphor` decision — team kits stay monochrome; the HUD carries club
-  // colour).  The GK is the hollow figure instead.
-  const shirt = d.team === 'away' ? PHOS_DIM : PHOS;
+  // Shirt = the kit accent: the club colour (or the side's muted fallback),
+  // the one place team colour appears on a sprite.  The GK is the hollow
+  // figure instead.
+  const shirt = d.kit ?? (d.team === 'away' ? KIT_AWAY_FALLBACK : KIT_HOME_FALLBACK);
 
   // Grounding shadow (no hop), shrinking as the body rises.
   ctx.fillStyle = SHADOW;
@@ -659,15 +679,16 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
     celShade(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, shirt);
   }
 
-  // Squad number on the chest, in the brand's mono.  Contrast follows the
-  // shirt: abyss digits on the phosphor shirts, phosphor digits on the GK's
-  // hollow abyss shirt.  Skipped when the sprite is too small to read.
+  // Squad number on the chest, in the brand's mono.  Digit colour is picked
+  // by shirt luminance so the number stays legible on ANY club colour: abyss
+  // digits on light shirts, phosphor digits on dark shirts (and on the GK's
+  // hollow abyss shirt).  Skipped when the sprite is too small to read.
   if (sc > 1.0) {
     const fs = Math.max(4, Math.round(bodyH * 0.4));
     ctx.font = `700 ${fs}px "Space Mono", monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = d.gk ? PHOS : ABYSS;
+    ctx.fillStyle = d.gk ? PHOS : (isLight(shirt) ? ABYSS : PHOS);
     ctx.fillText(String(d.number), pr.x, bodyTop + bodyH * 0.52);
   }
 

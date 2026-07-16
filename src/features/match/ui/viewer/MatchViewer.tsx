@@ -100,6 +100,9 @@ export interface MatchViewerProps {
    *  pad with synthetic ids. */
   homePlayers: readonly MatchViewerPlayer[];
   awayPlayers: readonly MatchViewerPlayer[];
+  /** Club kit colours for the shirt accent (null ⇒ the side's muted fallback). */
+  homeColor?: string | null;
+  awayColor?: string | null;
   /** Names + scores for the screen-reader label. */
   homeTeamName?: string;
   awayTeamName?: string;
@@ -125,8 +128,10 @@ interface DudeSpec {
   /** Formation home position in metres (used for the rest state / missing frames). */
   homeX: number;
   homeY: number;
-  /** Which side the player is on — home wears phosphor, away wears dim phosphor. */
+  /** Which side the player is on — picks the fallback shirt when `kit` is null. */
   team: 'home' | 'away';
+  /** Club shirt colour, or null for the side's muted fallback (see render.ts). */
+  kit: string | null;
   /** Goalkeepers render as the hollow (abyss-filled) figure. */
   gk: boolean;
   /** Squad number printed on the chest (slot order: GK #1, then 2–11, bench 12+). */
@@ -143,7 +148,7 @@ interface DudeSpec {
  * Resolve the dude specs for one side: the starting XI (one per formation slot,
  * slot 0 = GK) plus any bench players supplied beyond the slot count.  Each gets
  * a metre-space home position (bench players have none — they sit off the pitch
- * until subbed on), its side + GK flag (which drive the phosphor shirt tones),
+ * until subbed on), its side + club kit colour + GK flag (which drive the shirt),
  * a slot-order squad number (GK #1 — football convention; real `jersey_number`
  * plumbing can replace this without touching the renderer), and a deterministic
  * appearance keyed by player id.  Empty slots in a short XI get synthetic ids so
@@ -153,6 +158,7 @@ function buildSide(
   side: 'home' | 'away',
   formation: FormationKey,
   players: readonly MatchViewerPlayer[],
+  teamColor: string | null,
 ): DudeSpec[] {
   const slots = getFormationSlots(formation, side);
   const faceDefault = side === 'home' ? 1 : -1;
@@ -164,6 +170,7 @@ function buildSide(
       homeX: slot.x * PITCH_LENGTH,
       homeY: slot.y * PITCH_WIDTH,
       team: side,
+      kit: teamColor,
       gk: i === 0,
       number: i + 1,
       appearance: makeAppearance(id),
@@ -179,6 +186,7 @@ function buildSide(
     homeX: PITCH_LENGTH / 2,
     homeY: PITCH_WIDTH / 2,
     team: side,
+    kit: teamColor,
     gk: p.position === 'GK',
     number: slots.length + i + 1,
     appearance: makeAppearance(p.id),
@@ -203,6 +211,8 @@ export function MatchViewer({
   awayFormation,
   homePlayers,
   awayPlayers,
+  homeColor,
+  awayColor,
   homeTeamName,
   awayTeamName,
   homeScore,
@@ -237,15 +247,15 @@ export function MatchViewer({
     return Number.isNaN(t) ? null : t;
   }, [scheduledAt]);
 
-  // Resolve the 22 dude specs once per match shape.  Sides read as phosphor vs
-  // dim-phosphor and the keeper as the hollow figure (see render.ts) — kit
-  // colour stays in the HUD, never on the sprites, per the phosphor accent rule.
+  // Resolve the 22 dude specs once per match shape.  The shirt is the kit
+  // accent — each side's club colour (muted fallbacks when absent) — and the
+  // keeper is the hollow figure; everything else stays phosphor (see render.ts).
   const dudeSpecs = useMemo<DudeSpec[]>(
     () => [
-      ...buildSide('home', homeFormation, homePlayers),
-      ...buildSide('away', awayFormation, awayPlayers),
+      ...buildSide('home', homeFormation, homePlayers, homeColor ?? null),
+      ...buildSide('away', awayFormation, awayPlayers, awayColor ?? null),
     ],
-    [homeFormation, awayFormation, homePlayers, awayPlayers],
+    [homeFormation, awayFormation, homePlayers, awayPlayers, homeColor, awayColor],
   );
 
   // Bake the broadcast pitch once (the static layer never moves under that camera).
@@ -361,6 +371,7 @@ export function MatchViewer({
           pose,
           appearance: p.spec.appearance,
           team: p.spec.team,
+          kit: p.spec.kit,
           gk: p.spec.gk,
           number: p.spec.number,
           face: p.face,
