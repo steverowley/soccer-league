@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Intergalactic Soccer League</title>
+  <rect width="64" height="64" fill="#111111"/>
+  <rect x="3.5" y="3.5" width="57" height="57" fill="none" stroke="#E3E0D5" stroke-width="2.5"/>
+  <circle cx="32" cy="32" r="19.5" fill="#E3E0D5"/>
+  <g fill="#111111" stroke="#111111" stroke-width="2.6" stroke-linejoin="round">
+    <polygon points="32,23.5 39.5,29 36.6,38 27.4,38 24.5,29"/>
+  </g>
+  <g stroke="#111111" stroke-width="2.6" stroke-linecap="round">
+    <line x1="32" y1="23.5" x2="32" y2="13"/>
+    <line x1="39.5" y1="29" x2="49" y2="24.5"/>
+    <line x1="36.6" y1="38" x2="42.5" y2="47"/>
+    <line x1="27.4" y1="38" x2="21.5" y2="47"/>
+    <line x1="24.5" y1="29" x2="15" y2="24.5"/>
+  </g>
+</svg>

@@ -13,9 +13,13 @@
     <meta name="theme-color" content="#111" />
 
     <!-- ── Icons ───────────────────────────────────────────────────────────── -->
-    <link rel="icon" type="image/svg+xml" href="/isl-logo.svg" />
-    <link rel="alternate icon" type="image/png" href="/isl-logo.png" />
-    <link rel="apple-touch-icon" href="/isl-logo.png" />
+    <!-- Dedicated square mark (soccer ball on Galactic Abyss, lunar-dust hairline
+         box) — legible down to 16px, unlike the tall isl-logo crest. SVG is
+         preferred by modern browsers; the .ico (16/32/48) is the legacy fallback
+         (sizes="any" nudges Chrome to pick the SVG). -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- ── Open Graph (Facebook, LinkedIn, Slack, Discord) ─────────────────── -->
     <meta property="og:type" content="website" />
