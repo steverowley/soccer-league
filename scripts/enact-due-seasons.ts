@@ -87,9 +87,22 @@ const ROLLOVER_FIRST_KICKOFF_OFFSET_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Real-world gap (ms) between consecutive matchdays in the new season.
- * 14 days matches the production Season 1 cadence (one matchday a fortnight).
+ * ONE DAY: a matchday every day keeps matches (and betting) live daily and a
+ * 14-matchday league season completes in two weeks.  The previous value here
+ * was 14 days, justified by a comment claiming it "matches the production
+ * Season 1 cadence" — that was wrong (Season 1 ran daily) and it left betting
+ * dark 13 days out of 14.  Owner decision 2026-07-16: daily.
  */
-const ROLLOVER_CADENCE_MS = 14 * 24 * 60 * 60 * 1000;
+const ROLLOVER_CADENCE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Gap (ms) between kickoffs within a matchday (see RolloverOptions).
+ * 15 minutes × 4 slots/league, with leagues interleaved a quarter-slot apart,
+ * yields one kickoff roughly every 3–4 minutes across a ~1-hour window — the
+ * match worker claims a steady trickle instead of 16 fixtures at one instant
+ * (the 2026-07-16 worker/database outage).
+ */
+const ROLLOVER_KICKOFF_STAGGER_MS = 15 * 60 * 1000;
 
 const db = createClient<Database>(
   SUPABASE_URL,
@@ -155,8 +168,9 @@ async function run(): Promise<void> {
 
     // 2b. Build the next season (idempotent — guards on year+1 existence).
     const rollover = await rolloverSeason(db, s.id, {
-      firstKickoffMs: Date.now() + ROLLOVER_FIRST_KICKOFF_OFFSET_MS,
-      cadenceMs:      ROLLOVER_CADENCE_MS,
+      firstKickoffMs:   Date.now() + ROLLOVER_FIRST_KICKOFF_OFFSET_MS,
+      cadenceMs:        ROLLOVER_CADENCE_MS,
+      kickoffStaggerMs: ROLLOVER_KICKOFF_STAGGER_MS,
     });
     console.log(
       `[enact-due-seasons] season ${s.id.slice(0, 8)}: ` +

@@ -99,14 +99,30 @@ const CLAIM_TIME_BUDGET_MS = 10_000;
 
 /**
  * How long a match may sit in `status='in_progress'` before it's treated as
- * orphaned and requeued (see requeueStaleInProgress).  A real simulation
- * completes inside a single short-lived isolate (seconds), so a match still
- * `in_progress` minutes later was abandoned by an isolate that was killed
- * mid-run.  2 minutes is far above any genuine processing time (a live isolate
- * is killed long before then), so an actively-simulating match is never reaped,
- * yet a stuck one rejoins the queue within a couple of ticks.
+ * orphaned and requeued (see requeueStaleInProgress).  MUST exceed the
+ * worst-case wall-clock of a live, slowed-but-healthy sim: under database
+ * contention a single-match isolate has been observed to take ~112s (healthy)
+ * and up to the 150s isolate ceiling (struggling).  The previous 2-minute
+ * window sat INSIDE that range, so during the 2026-07-16 storm the reaper
+ * repeatedly stole matches from isolates that were still simulating them —
+ * doubling load and feeding the death spiral.  10 minutes is far above any
+ * genuine run (isolates are hard-killed at 150s) while still recovering a
+ * truly orphaned match within a few ticks.
  */
-const STALE_IN_PROGRESS_MS = 2 * 60_000;
+const STALE_IN_PROGRESS_MS = 10 * 60_000;
+
+/**
+ * Global ceiling on matches simultaneously `in_progress` across ALL isolates
+ * and ALL (possibly overlapping) dispatcher ticks.  pg_cron fires a fresh
+ * dispatcher every minute with no mutual exclusion, so per-tick caps alone
+ * cannot bound total concurrency — during the 2026-07-16 storm overlapping
+ * ticks stacked dozens of 150s isolates and starved the database.  The
+ * `in_progress` count is the natural cross-isolate semaphore: claims flip a
+ * match to `in_progress` atomically, and the reaper (above) frees leaked slots
+ * within STALE_IN_PROGRESS_MS.  4 keeps the worker fleet well inside the
+ * small-instance database's comfort zone.
+ */
+const MAX_IN_FLIGHT = 4;
 
 /**
  * How many single-match worker invocations the dispatcher runs CONCURRENTLY per
@@ -114,18 +130,23 @@ const STALE_IN_PROGRESS_MS = 2 * 60_000;
  * own CPU budget), so a whole matchday's simultaneous kickoffs finish within
  * seconds — every match watchable live from minute 0 — instead of draining
  * ~1–2/min sequentially.  Kept conservative so the fan-out (dispatcher + this
- * many workers) stays well under Supabase's per-project concurrent-isolate cap;
- * raise it if the plan's concurrency limit comfortably allows more.
+ * many workers) stays well under Supabase's per-project concurrent-isolate cap
+ * AND under the database's write throughput: 3 concurrent sims (each streaming
+ * events + ~2,700 position frames) is what the small instance sustains without
+ * slowing every isolate past its CPU budget (see the 2026-07-16 storm).
+ * Fan-out is additionally bounded by MAX_IN_FLIGHT across overlapping ticks.
  */
-const FANOUT_CONCURRENCY = 6;
+const FANOUT_CONCURRENCY = 3;
 
 /**
  * Hard cap on fan-out waves per dispatcher tick.  FANOUT_CONCURRENCY ×
- * FANOUT_MAX_WAVES is the most matches one tick drains via fan-out; 6 × 5 = 30
- * comfortably covers a full 16-match matchday in a single tick.  Also stops a
- * runaway loop if a match keeps failing back to 'scheduled' and re-qualifying.
+ * FANOUT_MAX_WAVES is the most matches one tick drains via fan-out; 3 × 2 = 6
+ * per tick.  Kickoffs are staggered at rollover (one every ~3–4 min), so a
+ * matchday never NEEDS more than this per minute — a backlog simply drains
+ * across successive ticks instead of stacking isolates.  Also stops a runaway
+ * loop if a match keeps failing back to 'scheduled' and re-qualifying.
  */
-const FANOUT_MAX_WAVES = 5;
+const FANOUT_MAX_WAVES = 2;
 
 /**
  * How many due candidates each claim pulls before trying to lock one.  A
@@ -1292,6 +1313,27 @@ function isAuthorized(req: Request): boolean {
  * @param opts.leagueOnly  Count only league matches — matches what the fan-out
  *   actually claims, so a queue of cup-only ties never spins empty waves.
  */
+/**
+ * Count matches currently `in_progress` — the cross-isolate concurrency
+ * gauge behind MAX_IN_FLIGHT.  Every claim flips a row to `in_progress`
+ * atomically and every completion/requeue flips it back, so this count is the
+ * number of sims the fleet believes are running right now (a leaked slot from
+ * a killed isolate is reclaimed by the reaper within STALE_IN_PROGRESS_MS).
+ * Fails open to 0 — a transient count error must not stall the queue, and the
+ * per-tick FANOUT caps still bound the blast radius.
+ */
+async function countInFlight(): Promise<number> {
+  const { count, error } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'in_progress');
+  if (error) {
+    console.error('[match-worker] COUNT in_progress failed:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 async function countDueMatches(opts?: { leagueOnly?: boolean }): Promise<number> {
   const now = new Date().toISOString();
   let query = supabase
@@ -1364,7 +1406,17 @@ async function fanOutDueMatches(): Promise<number> {
     const due = await countDueMatches({ leagueOnly: true });
     if (due === 0) break;
 
-    const slots = Math.min(due, FANOUT_CONCURRENCY);
+    // Global brake: never let the whole fleet (across overlapping dispatcher
+    // ticks) exceed MAX_IN_FLIGHT concurrent sims.  Re-counted every wave —
+    // in-flight rises as this wave's workers claim and falls as they finish.
+    const inFlight  = await countInFlight();
+    const available = MAX_IN_FLIGHT - inFlight;
+    if (available <= 0) {
+      console.log(`[match-worker] Fan-out deferred: ${inFlight} sims already in flight (cap ${MAX_IN_FLIGHT})`);
+      break;
+    }
+
+    const slots = Math.min(due, FANOUT_CONCURRENCY, available);
     const results = await Promise.all(Array.from({ length: slots }, () => spawnWorker()));
     const processedThisWave = results.filter(Boolean).length;
     totalProcessed += processedThisWave;
@@ -1464,8 +1516,16 @@ async function runDispatcherMode(): Promise<Response> {
   // ── Backstop: sequentially drain whatever fan-out didn't — cup ties (kept off
   // the parallel path on purpose, so their bracket advances one at a time),
   // plus any league leftovers or a match that became due mid-tick.  No-ops when
-  // the queue is already empty, so it's always safe to run.
-  const local = await processWithinBudget();
+  // the queue is already empty.  Skipped entirely when the fleet is already at
+  // the MAX_IN_FLIGHT cap — under load the backstop's own sim would just be one
+  // more isolate competing for the same starved database (2026-07-16 lesson);
+  // whatever it would have claimed simply waits for a later, calmer tick.
+  let local = { processed: 0, succeeded: 0, failed: 0 };
+  if ((await countInFlight()) < MAX_IN_FLIGHT) {
+    local = await processWithinBudget();
+  } else {
+    console.log(`[match-worker] Backstop deferred: fleet at in-flight cap (${MAX_IN_FLIGHT})`);
+  }
 
   const processed = fannedOut + local.processed;
   if (processed === 0) {
