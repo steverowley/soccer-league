@@ -14,3 +14,6 @@ supabase/.temp/
 # Beads tool artifacts (tool removed in #357 but state can regenerate locally)
 .beads/
 public/bd-snapshot.json
+
+# Standalone match-viewer demo build output
+demo/dist/
