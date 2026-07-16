@@ -201,8 +201,6 @@ export function MatchViewerDemo() {
               awayFormation={match.awayFormation}
               homePlayers={match.homePlayers}
               awayPlayers={match.awayPlayers}
-              homeColor={match.homeColor}
-              awayColor={match.awayColor}
               homeTeamName={match.homeTeamName}
               awayTeamName={match.awayTeamName}
               selectedPlayerId={selectedPlayerId}

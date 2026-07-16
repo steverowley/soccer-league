@@ -28,8 +28,6 @@ export interface ViewerMatch {
   awayPlayers: ViewerRosterPlayer[];
   homeFormation: FormationKey;
   awayFormation: FormationKey;
-  homeColor: string | null;
-  awayColor: string | null;
   homeTeamName: string;
   awayTeamName: string;
   finalScore: [number, number];

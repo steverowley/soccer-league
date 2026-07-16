@@ -50,15 +50,25 @@ export {
 export type { SepPoint } from './separation';
 
 export {
-  SKIN_TONES,
-  HUMAN_SKIN_COUNT,
-  HAIR_COLORS,
-  HAT_COLORS,
+  SPECIES,
+  SPECIES_KEYS,
+  HAIR_TONE,
   hashStringToSeed,
   mulberry32,
+  parseDescription,
   makeAppearance,
 } from './appearance';
-export type { Appearance, HairStyle, Build, HatStyle } from './appearance';
+export type {
+  Appearance,
+  AppearanceHints,
+  HairStyle,
+  Build,
+  Species,
+  SpeciesSpec,
+  HeadShape,
+  EyeKind,
+  AntennaKind,
+} from './appearance';
 
 export { pickNearestId } from './hitTest';
 export type { HitTarget } from './hitTest';
