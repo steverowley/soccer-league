@@ -74,6 +74,11 @@ const SEPARATION_RADIUS = 4.5;
  *  re-collect their own pass/shot. */
 const LOOSE_POP_COOLDOWN_TICKS = 3;
 
+/** How close to a post (m) a shot must cross the line to count as hitting the
+ *  woodwork — a near-miss highlight beat.  Purely a label on a shot that was
+ *  already going out; the restart (corner / goal kick) is unchanged. */
+const WOODWORK_MARGIN = 1.3;
+
 /** Share of fouls committed inside the box that are given as a penalty.  Most
  *  box contact is waved away or advantage is played; only clear fouls are given,
  *  the rest become a quick free kick (as before).  Tuned so penalties land at a
@@ -624,6 +629,17 @@ function resolveLooseBall(
       world.deadBallTicks = Math.round(GOAL_PAUSE_SEC / world.dtSec);
       world.phase = 'dead_ball';
       return true;
+    }
+
+    // Near-miss: a SHOT that crossed the line a whisker outside a post rattled
+    // the woodwork — a first-class highlight beat (#588).  It changes nothing
+    // about the restart (still the corner / goal kick below), only adds the beat.
+    if (ball.lastTouch?.isShot
+      && (Math.abs(yAt - GOAL_Y_MIN) <= WOODWORK_MARGIN || Math.abs(yAt - GOAL_Y_MAX) <= WOODWORK_MARGIN)) {
+      events.push({
+        tSec: world.clockSec, minute, type: 'woodwork', side: attackingSide,
+        ...(ball.lastTouch.playerId ? { playerId: ball.lastTouch.playerId } : {}),
+      });
     }
 
     // Crossed the goal line OUTSIDE the mouth → corner or goal kick.
