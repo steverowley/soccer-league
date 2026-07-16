@@ -1500,18 +1500,22 @@ function MatchPitchPanel({
 }) {
   const db = useSupabase();
   /**
-   * Match metadata that drives the viewer: per-side formation and the starting
-   * XI (id + position).  One state slot avoids multiple ping-pongs.  Kit colour
-   * stays in the scoreboard HUD — sprites are monochrome phosphor by design.
+   * Match metadata that drives the viewer: per-side formation, kit colour (the
+   * sprite shirt accent), and the starting XI (id + position).  One state slot
+   * avoids multiple ping-pongs.
    */
   const [meta, setMeta] = useState<{
     homeFormation: SupportedFormation;
     awayFormation: SupportedFormation;
+    homeColor:     string | null;
+    awayColor:     string | null;
     homePlayers:   MatchViewerPlayer[];
     awayPlayers:   MatchViewerPlayer[];
   }>({
     homeFormation: '4-4-2',
     awayFormation: '4-4-2',
+    homeColor:     null,
+    awayColor:     null,
     homePlayers:   [],
     awayPlayers:   [],
   });
@@ -1560,6 +1564,8 @@ function MatchPitchPanel({
           // join embeds 1:N relations as an array).
           homeFormation: narrowFormation(homeTeam?.managers?.[0]?.preferred_formation),
           awayFormation: narrowFormation(awayTeam?.managers?.[0]?.preferred_formation),
+          homeColor:     homeTeam?.color ?? null,
+          awayColor:     awayTeam?.color ?? null,
           // Engine-aligned ordering so commentary + viewer name the same XI.
           homePlayers:   pickSquad(homeTeam?.players ?? []).map(toViewerPlayer),
           awayPlayers:   pickSquad(awayTeam?.players ?? []).map(toViewerPlayer),
@@ -1643,6 +1649,8 @@ function MatchPitchPanel({
       awayFormation={meta.awayFormation}
       homePlayers={meta.homePlayers}
       awayPlayers={meta.awayPlayers}
+      homeColor={meta.homeColor}
+      awayColor={meta.awayColor}
       {...(homeTeamName !== undefined && { homeTeamName })}
       {...(awayTeamName !== undefined && { awayTeamName })}
       {...(homeScore    !== undefined && { homeScore })}

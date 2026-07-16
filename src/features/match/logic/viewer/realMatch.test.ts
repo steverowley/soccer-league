@@ -11,10 +11,11 @@ import { simulateMatchFromTeams, type TeamSimData } from './realMatch';
 vi.setConfig({ testTimeout: 30000 });
 
 /** Build a full 4-4-2 team row with neutral composite stats. */
-function team(prefix: string, formation: string): TeamSimData {
+function team(prefix: string, formation: string, color?: string): TeamSimData {
   const roles = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
   return {
     name: prefix,
+    color: color ?? null,
     managers: [{ preferred_formation: formation }],
     players: roles.map((position, i) => ({
       id: `${prefix}-${i}`,
@@ -32,8 +33,8 @@ function team(prefix: string, formation: string): TeamSimData {
 }
 
 describe('simulateMatchFromTeams', () => {
-  it('carries real names, positions and formation through', () => {
-    const m = simulateMatchFromTeams(team('home', '4-4-2'), team('away', '3-4-3'), 5);
+  it('carries real names, positions, colours and formation through', () => {
+    const m = simulateMatchFromTeams(team('home', '4-4-2', '#112233'), team('away', '3-4-3', '#445566'), 5);
     expect(m.homePlayers).toHaveLength(11);
     expect(m.awayPlayers).toHaveLength(11);
     // Slot 0 is the keeper on both sides.
@@ -41,6 +42,8 @@ describe('simulateMatchFromTeams', () => {
     expect(m.awayPlayers[0]!.position).toBe('GK');
     // Real display names propagate (no anonymous fillers for a full XI).
     expect(m.homePlayers.every((p) => !!p.name)).toBe(true);
+    expect(m.homeColor).toBe('#112233');
+    expect(m.awayColor).toBe('#445566');
     expect(m.homeFormation).toBe('4-4-2');
     expect(m.awayFormation).toBe('3-4-3');
     expect(m.homeTeamName).toBe('home');

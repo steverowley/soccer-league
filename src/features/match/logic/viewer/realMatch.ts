@@ -3,8 +3,7 @@
 // rosters with composite stats + the manager's formation.  This runs the actual
 // spatial engine client-side — exactly what the match-worker does server-side —
 // so the demo plays a genuine matchup: real players, real stats-driven behaviour,
-// real tactics (formation).  Sprites are monochrome phosphor by design, so no
-// kit colours are plumbed here — club colour lives in the page HUD.
+// real tactics (formation), real kit colours (the shirt accent).
 
 import { assembleMatch, type ViewerMatch } from './buildMatch';
 import { isFormationKey, type FormationKey } from '../pitch';
@@ -13,10 +12,11 @@ import { applyTeamTraits } from '../spatial/traitModifiers';
 
 /**
  * The slice of a team row (from getTeam) needed to simulate + label a match.
- * Matches `toSpatialTeamInput`'s player shape plus display name.
+ * Matches `toSpatialTeamInput`'s player shape plus display name + kit colour.
  */
 export interface TeamSimData {
   name?: string | null;
+  color?: string | null;
   managers?: Array<{ preferred_formation?: string | null }> | null;
   players?: Array<{
     id: string;
@@ -73,6 +73,8 @@ export function simulateMatchFromTeams(
     awayPlayers,
     homeFormation: narrowFormationKey(home.managers?.[0]?.preferred_formation),
     awayFormation: narrowFormationKey(away.managers?.[0]?.preferred_formation),
+    homeColor: home.color ?? null,
+    awayColor: away.color ?? null,
     homeTeamName: home.name ?? 'Home',
     awayTeamName: away.name ?? 'Away',
     finalScore,
