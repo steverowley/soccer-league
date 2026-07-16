@@ -5,16 +5,26 @@
 // rAF loop, or which camera is live.  All per-frame MATH lives in logic/viewer;
 // this file only turns positions + poses into pixels.
 //
-// STYLE (from the Tiny Terraces research): square, chunky, big-headed dudes with
-// a crisp dark outline, hair + hats for variety, a grounding shadow, and arms
-// that pivot from the shoulders and wave out to the sides.
+// STYLE — "PHOSPHOR TERRACES" (the ISL design-system Match Sprites handoff,
+// locked config: terraces silhouette · eyes · squad numbers · phosphor accent ·
+// calm motion · nub limbs):
+//   Every being is a Lunar-Dust phosphor figure on Galactic Abyss.  The chunky
+//   big-headed Tiny-Terraces silhouette carries the charm; variety comes from
+//   SPECIES (head shape, eye configuration, antennae, mandibles), build and
+//   phosphor-tone hair — never from hue.  Home wears full phosphor, away wears
+//   the dimmed phosphor; the goalkeeper is the hollow (abyss-filled) figure.
+//   Squad numbers in Space Mono are the brand's data motif on every chest, and
+//   the selected player glows under a Quantum-Purple halo (the Architect's eye).
 
 import { PITCH_LENGTH, PITCH_WIDTH } from '../../logic/spatial/types';
 import {
   GOALS,
   GOAL_DEPTH,
+  HAIR_TONE,
   PITCH_MARKINGS,
+  SPECIES,
   type Appearance,
+  type EyeKind,
   type GoalSpec,
   type Marking,
   type Pose,
@@ -24,22 +34,30 @@ import {
 /** Maps a world point (metres + height) to screen space under the active camera. */
 export type ProjectFn = (wx: number, wy: number, wz: number) => Projected;
 
-// ── Palette (ISL tokens) ──────────────────────────────────────────────────────
+// ── Palette (ISL tokens — the phosphor monochrome) ────────────────────────────
+
+/** Lunar Dust — the phosphor body (and the home side's shirt). */
+const PHOS = '#E3E0D5';
+/** Galactic Abyss — outline, eyes, and the GK's hollow shirt fill. */
+const ABYSS = '#111111';
+/** Mid phosphor — legs/shorts, the away side's shirt, antennae stems. */
+const PHOS_DIM = '#9C9A90';
+/** Quantum Purple — the focus halo (the Architect's eye on the selected soul). */
+const QUANTUM = '#9A5CF4';
 
 const SHADOW = 'rgba(0,0,0,0.38)';
-const BALL_COLOR = '#F4F1E6';
-const LINE = 'rgba(227,224,213,0.30)';
-const GOAL_LINE = 'rgba(227,224,213,0.55)';
-const GRASS_A = '#1c241c'; // darker mowing stripe
-const GRASS_B = '#202a20'; // lighter mowing stripe
-const HIGHLIGHT = '#C9A6FF'; // bright quantum tint for the selected-player halo
+const BALL_COLOR = '#E3E0D5';
+/** Pitch surface — abyss-toned greens so the phosphor beings carry the light. */
+const GRASS_A = '#131613'; // darker mowing stripe
+const GRASS_B = '#171b17'; // lighter mowing stripe
+const LINE = 'rgba(227,224,213,0.26)';
+const GOAL_LINE = 'rgba(227,224,213,0.5)';
 
 /** How many vertical mowing stripes to paint across the pitch length. */
 const GRASS_STRIPES = 10;
 
-/** Arm wave: base outward splay + how far the arms swing each cycle (radians). */
-const ARM_OUT = 0.5;
-const ARM_WAVE = 0.85;
+/** How far a dimmed (non-selected) dude fades when another player is in focus. */
+const DIM_ALPHA = 0.32;
 
 // ── A drawable dude / ball ──────────────────────────────────────────────────────
 
@@ -50,13 +68,17 @@ export interface DudeRender {
   wy: number;
   /** Pose for this frame (from computePose). */
   pose: Pose;
-  /** Deterministic appearance (skin/hair/hat/build). */
+  /** Deterministic appearance (species/build/hair). */
   appearance: Appearance;
-  /** Kit fill colour (team colour, or a distinct GK colour). */
-  kit: string;
+  /** Which side the player is on — home wears phosphor, away wears dim phosphor. */
+  team: 'home' | 'away';
+  /** Goalkeepers render as the hollow (abyss-filled, phosphor-outlined) figure. */
+  gk: boolean;
+  /** Squad number printed on the chest (the brand's data motif). */
+  number: number;
   /** Facing: +1 right, −1 left. */
   face: number;
-  /** Draw a selection halo under this dude (the clicked player). */
+  /** Draw the Quantum focus halo under this dude (the clicked player). */
   highlighted?: boolean;
   /** Fade this dude back (a different player is selected) so the focus stands out. */
   dimmed?: boolean;
@@ -112,6 +134,37 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number):
   ctx.fill();
 }
 
+/**
+ * Rounded-rect fill (rounded corners, not a hard circle) — the eye shape from
+ * the handoff.  Falls back to arcTo when the canvas lacks roundRect (jsdom).
+ */
+function rrect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const xr = Math.round(x);
+  const yr = Math.round(y);
+  const wr = Math.max(1, Math.round(w));
+  const hr = Math.max(1, Math.round(h));
+  const rr = Math.max(0, Math.min(r, wr / 2, hr / 2));
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(xr, yr, wr, hr, rr);
+  } else {
+    ctx.moveTo(xr + rr, yr);
+    ctx.arcTo(xr + wr, yr, xr + wr, yr + hr, rr);
+    ctx.arcTo(xr + wr, yr + hr, xr, yr + hr, rr);
+    ctx.arcTo(xr, yr + hr, xr, yr, rr);
+    ctx.arcTo(xr, yr, xr + wr, yr, rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 /** Parse `#rgb` / `#rrggbb` into channels; null on anything unparseable. */
 function parseHex(hex: string): { r: number; g: number; b: number } | null {
   if (typeof hex !== 'string') return null;
@@ -133,6 +186,26 @@ function shade(hex: string, amt: number): string {
   if (!c) return hex;
   const f = (v: number): number => Math.max(0, Math.min(255, Math.round(v + 255 * amt)));
   return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`;
+}
+
+/**
+ * Cel shading: a flat shadow band on the right + bottom of a box and a small
+ * highlight on the top-left — the two-step lighting that makes the phosphor
+ * figures read as solid pictograms instead of flat fills.
+ */
+function celShade(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  base: string,
+): void {
+  ctx.fillStyle = shade(base, -0.16);
+  ctx.fillRect(Math.round(x + w * 0.6), Math.round(y), Math.ceil(w * 0.4), Math.round(h));
+  ctx.fillRect(Math.round(x), Math.round(y + h * 0.72), Math.round(w), Math.ceil(h * 0.28));
+  ctx.fillStyle = shade(base, 0.18);
+  ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.floor(w * 0.3)), Math.max(1, Math.floor(h * 0.24)));
 }
 
 // ── Pitch ────────────────────────────────────────────────────────────────────
@@ -229,7 +302,7 @@ function drawGoal(ctx: CanvasRenderingContext2D, project: ProjectFn, goal: GoalS
  * to bake the broadcast view (the component does the latter).
  */
 export function drawPitch(ctx: CanvasRenderingContext2D, project: ProjectFn): void {
-  // Mowing stripes — projected quads alternating two greens.
+  // Mowing stripes — projected quads alternating two abyss-toned greens.
   for (let i = 0; i < GRASS_STRIPES; i++) {
     const x0 = (i * PITCH_LENGTH) / GRASS_STRIPES;
     const x1 = ((i + 1) * PITCH_LENGTH) / GRASS_STRIPES;
@@ -253,109 +326,270 @@ export function drawPitch(ctx: CanvasRenderingContext2D, project: ProjectFn): vo
   for (const goal of GOALS) drawGoal(ctx, project, goal);
 }
 
-// ── Dude ─────────────────────────────────────────────────────────────────────
+// ── Dude — morphology helpers (all monochrome phosphor) ─────────────────────
 
-/** One arm: a sleeve pivoting from shoulder (sx, sy) at angle theta (π/2 = down) with a hand. */
-function drawArm(
+/** A short tilted stem (feeler antennae) drawn from its base upward. */
+function drawTilt(
   ctx: CanvasRenderingContext2D,
-  sx: number,
-  sy: number,
-  theta: number,
+  x: number,
+  y: number,
+  rot: number,
   len: number,
   w: number,
-  color: string,
 ): void {
   ctx.save();
-  ctx.translate(sx, sy);
-  ctx.rotate(theta);
-  ctx.fillStyle = color;
-  ctx.fillRect(0, -w / 2, len, w);
-  ctx.fillRect(len - w * 0.4, -w * 0.7, w * 1.4, w * 1.4); // hand
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.fillRect(Math.round(-w / 2), Math.round(-len), Math.max(1, Math.round(w)), Math.max(1, Math.round(len)));
   ctx.restore();
 }
 
-/** Hair on top of the head, by style. */
-function drawHair(
+/** Antennae above the head, by species kind: splayed feelers or orb-tipped stalks. */
+function drawAntennae(
   ctx: CanvasRenderingContext2D,
-  a: Appearance,
-  headX: number,
-  headY: number,
-  head: number,
+  kind: string,
+  hx: number,
+  hy: number,
+  w: number,
   u: number,
 ): void {
-  if (!a.hair) return;
-  ctx.fillStyle = a.hair;
-  switch (a.style) {
+  if (kind === 'none') return;
+  const aw = Math.max(1, 0.7 * u);
+  const len = w * 0.5;
+  const x1 = hx + w * 0.26;
+  const x2 = hx + w * 0.74;
+  ctx.fillStyle = PHOS_DIM;
+  if (kind === 'feeler') {
+    drawTilt(ctx, x1, hy, -0.5, len, aw);
+    drawTilt(ctx, x2, hy, 0.5, len, aw);
+  } else if (kind === 'orb') {
+    rect(ctx, x1 - aw / 2, hy - len, aw, len);
+    rect(ctx, x2 - aw / 2, hy - len, aw, len);
+    ctx.fillStyle = PHOS;
+    circle(ctx, x1, hy - len, Math.max(1.2, aw * 1.1));
+    circle(ctx, x2, hy - len, Math.max(1.2, aw * 1.1));
+  }
+}
+
+/** Hair silhouette on top of the head (terrans only), in its phosphor tone. */
+function drawHairShape(
+  ctx: CanvasRenderingContext2D,
+  style: Appearance['style'],
+  hx: number,
+  hy: number,
+  head: number,
+  u: number,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  switch (style) {
     case 'short':
-      rect(ctx, headX, headY, head, head * 0.26);
+      rect(ctx, hx, hy, head, head * 0.24);
       break;
     case 'flat':
-      rect(ctx, headX - 0.4 * u, headY, head + 0.8 * u, head * 0.32);
+      rect(ctx, hx - 0.4 * u, hy, head + 0.8 * u, head * 0.3);
       break;
     case 'spiky':
-      rect(ctx, headX, headY - head * 0.18, head, head * 0.38);
-      rect(ctx, headX + head * 0.14, headY - head * 0.36, head * 0.18, head * 0.22);
-      rect(ctx, headX + head * 0.62, headY - head * 0.36, head * 0.18, head * 0.22);
+      rect(ctx, hx, hy - head * 0.16, head, head * 0.34);
+      rect(ctx, hx + head * 0.16, hy - head * 0.34, head * 0.16, head * 0.2);
+      rect(ctx, hx + head * 0.62, hy - head * 0.34, head * 0.16, head * 0.2);
       break;
     case 'long':
-      rect(ctx, headX, headY, head, head * 0.3); // top fringe (sides drawn as backing)
+      rect(ctx, hx, hy, head, head * 0.28);
       break;
     case 'bald':
       break;
   }
 }
 
-/** Headwear over the hair, by style. */
-function drawHat(
+/**
+ * Eyes in Galactic Abyss, by species configuration.  All shapes are rounded
+ * rects nudged toward the facing direction so the crowd reads as looking where
+ * it's going.
+ */
+function drawEyes(
   ctx: CanvasRenderingContext2D,
-  a: Appearance,
-  headX: number,
-  headY: number,
-  head: number,
+  kind: EyeKind,
+  cxp: number,
+  hx: number,
+  hy: number,
+  w: number,
+  h: number,
   u: number,
+  face: number,
 ): void {
-  if (a.hat === 'none' || !a.hatColor) return;
-  const c = a.hatColor;
-  switch (a.hat) {
-    case 'cap':
-      ctx.fillStyle = shade(c, -0.35);
-      rect(ctx, headX - 0.3 * u, headY + head * 0.02, head + 1.4 * u, head * 0.13); // brim
-      ctx.fillStyle = c;
-      rect(ctx, headX, headY - head * 0.24, head, head * 0.3); // crown
-      break;
-    case 'beanie':
-      ctx.fillStyle = c;
-      rect(ctx, headX - 0.3 * u, headY - head * 0.16, head + 0.6 * u, head * 0.34);
-      break;
-    case 'tall':
-      ctx.fillStyle = shade(c, -0.3);
-      rect(ctx, headX - 0.3 * u, headY - head * 0.04, head + 0.6 * u, head * 0.12); // band
-      ctx.fillStyle = c;
-      rect(ctx, headX + head * 0.13, headY - head * 0.7, head * 0.74, head * 0.72); // tall crown
-      break;
-    case 'band':
-      ctx.fillStyle = c;
-      rect(ctx, headX, headY + head * 0.08, head, head * 0.15);
-      break;
+  ctx.fillStyle = ABYSS;
+  const ew = Math.max(1.6, 1.15 * u);
+  const ey = hy + h * 0.52;
+  const fx = face * w * 0.05;
+  const eye = (x: number, y: number, sw: number, sh: number): void =>
+    rrect(ctx, x - sw / 2, y - sh / 2, sw, sh, Math.min(sw, sh) * 0.42);
+  switch (kind) {
+    case 'one': {
+      // The cyclops: one big central eye.
+      const s = Math.max(3, w * 0.36);
+      eye(cxp + fx, ey, s, s);
+      return;
+    }
+    case 'three': {
+      // The trinocular: a row of three.
+      const o = w * 0.28;
+      for (const k of [-o, 0, o]) eye(cxp + k + fx, ey, ew, ew * 1.15);
+      return;
+    }
+    case 'cluster': {
+      // The insectoid: a 2×2 compound cluster.
+      const o = w * 0.17;
+      for (const ix of [-o, o]) for (const iy of [-h * 0.09, h * 0.09]) eye(cxp + ix + fx, ey + iy, ew, ew);
+      return;
+    }
+    case 'big': {
+      // The grey: two large almonds.
+      const ww = w * 0.26;
+      const hh = h * 0.3;
+      eye(cxp - w * 0.2 + fx, ey, ww, hh);
+      eye(cxp + w * 0.2 + fx, ey, ww, hh);
+      return;
+    }
+    case 'high': {
+      // The aurelid: two small eyes set high on the dome.
+      const o = w * 0.2;
+      eye(cxp - o + fx, hy + h * 0.4, ew, ew);
+      eye(cxp + o + fx, hy + h * 0.4, ew, ew);
+      return;
+    }
+    case 'two': {
+      const o = w * 0.2;
+      eye(cxp - o + fx, ey, ew, ew * 1.15);
+      eye(cxp + o + fx, ey, ew, ew * 1.15);
+      return;
+    }
   }
 }
 
 /**
- * Draw one little dude at its world position, posed for this frame.  Drawn from
- * the feet up: shadow → legs → waving arms → torso → head → hair → hat → eyes →
- * antennae.  Distant players shrink via the projection's depth scale.
+ * The species-shaped head: long-hair backing → antennae → phosphor head box
+ * (species-proportioned) with cel shading → mandibles → hair → eyes.
+ */
+function drawHead(
+  ctx: CanvasRenderingContext2D,
+  cxp: number,
+  headY: number,
+  head: number,
+  u: number,
+  face: number,
+  a: Appearance,
+): void {
+  const sp = SPECIES[a.species];
+  const sized = head * sp.headMul;
+
+  // Species head proportions — the silhouette IS the species.
+  let w = sized;
+  let hgt = sized;
+  if (sp.head === 'tall') {
+    w = sized * 0.8;
+    hgt = sized * 1.26;
+  } else if (sp.head === 'wide') {
+    w = sized * 1.24;
+    hgt = sized * 0.82;
+  } else if (sp.head === 'round') {
+    w = sized * 1.12;
+    hgt = sized * 1.0;
+  }
+
+  // Anchor the species box to the same chin line the plain box would sit on, so
+  // a tall or wide head grows upward/outward rather than sinking into the torso.
+  const headBottomY = headY + head;
+  const hx = cxp - w / 2;
+  const hy = headBottomY - hgt;
+  const ol = Math.max(1, 0.8 * u);
+
+  // Long-hair backing framing the face behind the head.
+  if (a.hair && a.style === 'long') {
+    ctx.fillStyle = HAIR_TONE.long;
+    rect(ctx, hx - 0.7 * u, hy + hgt * 0.18, w + 1.4 * u, hgt * 0.86);
+  }
+
+  drawAntennae(ctx, sp.antennae, hx, hy, w, u);
+  obox(ctx, hx, hy, w, hgt, PHOS, ABYSS, ol);
+  celShade(ctx, hx, hy, w, hgt, PHOS);
+
+  // Insectoid mandibles — two little teeth under the chin.
+  if (sp.mandible) {
+    ctx.fillStyle = shade(PHOS, -0.45);
+    const my = hy + hgt * 0.95;
+    rect(ctx, cxp - w * 0.2, my, w * 0.1, hgt * 0.12);
+    rect(ctx, cxp + w * 0.1, my, w * 0.1, hgt * 0.12);
+  }
+
+  if (a.hair && a.style !== 'bald') drawHairShape(ctx, a.style, hx, hy, w, u, a.hair);
+  drawEyes(ctx, sp.eyes, cxp, hx, hy, w, hgt, u, face);
+}
+
+/**
+ * One continuous bent limb (no segment seams): shoulder → elbow → hand, stroked
+ * as a single rounded polyline in the sleeve colour over an abyss outline, with
+ * a blocky hand capping the end.
+ */
+function drawArmJointed(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  upperAngle: number,
+  foreRel: number,
+  upperLen: number,
+  foreLen: number,
+  w: number,
+  color: string,
+  o: number,
+): void {
+  const ex = sx + Math.cos(upperAngle) * upperLen;
+  const ey = sy + Math.sin(upperAngle) * upperLen;
+  const ta = upperAngle + foreRel;
+  const hx = ex + Math.cos(ta) * foreLen;
+  const hy = ey + Math.sin(ta) * foreLen;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = ABYSS;
+  ctx.lineWidth = w + 2 * o;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  const hs = Math.max(1.5, w * 1.05);
+  ctx.fillStyle = ABYSS;
+  ctx.fillRect(Math.round(hx - hs / 2 - o), Math.round(hy - hs / 2 - o), Math.round(hs + 2 * o), Math.round(hs + 2 * o));
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(hx - hs / 2), Math.round(hy - hs / 2), Math.round(hs), Math.round(hs));
+}
+
+/**
+ * Draw one phosphor being at its world position, posed for this frame.  Drawn
+ * from the feet up: halo → shadow → legs → nub arms → shirt → number → head.
+ * Distant players shrink via the projection's depth scale.
  */
 export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: DudeRender): void {
   const pr = project(d.wx, d.wy, 0);
   const sc = pr.sc;
 
-  // Selection halo (drawn first, under the dude) marks the clicked player.
+  // Quantum focus halo (drawn first, under the dude) marks the clicked player —
+  // the one place the accent colour appears on the pitch, with a soft glow.
   if (d.highlighted) {
     ctx.save();
-    ctx.strokeStyle = HIGHLIGHT;
-    ctx.lineWidth = Math.max(1, 1.3 * sc);
+    ctx.shadowColor = QUANTUM;
+    ctx.shadowBlur = 8 * sc;
+    ctx.strokeStyle = QUANTUM;
+    ctx.lineWidth = Math.max(1, 1.2 * sc);
     ctx.beginPath();
-    ctx.ellipse(pr.x, pr.y, 6.5 * sc, 2.6 * sc, 0, 0, Math.PI * 2);
+    ctx.ellipse(pr.x, pr.y, 6.2 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -364,82 +598,80 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
   const dimmed = d.dimmed === true;
   if (dimmed) {
     ctx.save();
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = DIM_ALPHA;
   }
 
-  const { hop, h, scaleX: sx0, scaleY: sy0, swing, cosPhase } = d.pose;
+  const { hop, h, scaleX: sx0, scaleY: sy0 } = d.pose;
   const a = d.appearance;
-  const kit = d.kit;
-  const sleeve = shade(kit, -0.32);
+  const u = sc;
+  const feetY = pr.y - hop;
+
+  // Shirt tone: home = full phosphor, away = dim phosphor (the `accent:
+  // phosphor` decision — team kits stay monochrome; the HUD carries club
+  // colour).  The GK is the hollow figure instead.
+  const shirt = d.team === 'away' ? PHOS_DIM : PHOS;
 
   // Grounding shadow (no hop), shrinking as the body rises.
   ctx.fillStyle = SHADOW;
-  ell(ctx, pr.x, pr.y, 4.4 * sc * (1 - 0.28 * h), 1.7 * sc * (1 - 0.28 * h));
+  ell(ctx, pr.x, pr.y, 4.0 * sc * (1 - 0.28 * h), 1.6 * sc * (1 - 0.28 * h));
 
-  const u = sc;
-  const feetY = pr.y - hop;
-  // Chibi silhouette: BIG head, short chunky body, stubby legs.
-  const buildW = a.build === 'stocky' ? 1.12 : 0.92;
-  const legH = 2.5 * u * sy0;
-  const legW = 1.9 * u * sx0;
+  // Terraces silhouette: BIG head, short chunky body, stubby legs.
+  const buildW = a.build === 'stocky' ? 1.14 : 0.95;
+  const legH = 2.4 * u * sy0;
+  const legW = 2.0 * u * sx0;
   const gap = 1.0 * u * sx0;
-  const bodyH = 4.2 * u * sy0;
-  const bodyW = 5.0 * u * sx0 * buildW;
-  const head = 5.0 * u * ((sx0 + sy0) / 2);
+  const bodyH = 4.4 * u * sy0;
+  const bodyW = 5.2 * u * sx0 * buildW;
+  const head = 4.9 * u * ((sx0 + sy0) / 2);
   const legTop = feetY - legH;
   const bodyTop = legTop - bodyH;
-  const headX = pr.x - head / 2;
-  const headY = bodyTop - head * 0.9;
+  const headY = bodyTop - head * 0.86;
 
-  // Legs scissor on the swing.
-  ctx.fillStyle = shade(kit, -0.5);
-  rect(ctx, pr.x - gap - legW / 2 + swing, legTop, legW, legH);
-  rect(ctx, pr.x + gap - legW / 2 - swing, legTop, legW, legH);
+  // Legs / shorts — dust-shadow value, cel-shaded; they scissor on the swing.
+  const shortsCol = d.gk ? shade(PHOS, -0.42) : PHOS_DIM;
+  const { swing } = d.pose;
+  const lx1 = pr.x - gap - legW / 2 + swing;
+  const lx2 = pr.x + gap - legW / 2 - swing;
+  ctx.fillStyle = shortsCol;
+  rect(ctx, lx1, legTop, legW, legH);
+  celShade(ctx, lx1, legTop, legW, legH, shortsCol);
+  ctx.fillStyle = shortsCol;
+  rect(ctx, lx2, legTop, legW, legH);
+  celShade(ctx, lx2, legTop, legW, legH, shortsCol);
 
-  // Arms pivot from the shoulders and WAVE in opposite phase (one rises while the
-  // other drops): both rotate by −cosPhase·ARM_WAVE from mirrored rest angles, so
-  // they alternate into a flowing wave rather than synced star-jumps.
-  const armLen = bodyH * 1.0;
-  const armW = Math.max(1, legW * 0.95);
-  const shoulderY = bodyTop + bodyH * 0.2;
-  drawArm(ctx, pr.x + bodyW * 0.4, shoulderY, Math.PI / 2 - ARM_OUT - cosPhase * ARM_WAVE, armLen, armW, sleeve);
-  drawArm(ctx, pr.x - bodyW * 0.4, shoulderY, Math.PI / 2 + ARM_OUT - cosPhase * ARM_WAVE, armLen, armW, sleeve);
-
-  // Torso (outlined).
+  // Nub arms (the locked `limbs: nub` config): fixed stubby bent limbs splayed
+  // slightly down-and-out — no swing, the calm on-2s idle read.
+  const upperLen = bodyH * 0.5;
+  const foreLen = bodyH * 0.46;
+  const armW = Math.max(1, legW * 0.9);
+  const shoulderY = bodyTop + bodyH * 0.18;
+  const sleeve = d.gk ? shade(PHOS, -0.2) : PHOS;
   const ol = Math.max(1, 0.8 * u);
-  obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, kit, shade(kit, -0.55), ol);
+  drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, Math.PI / 2 + 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, sleeve, ol);
+  drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, Math.PI / 2 - 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, sleeve, ol);
 
-  // Long-hair backing, framing the face behind the head.
-  if (a.hair && a.style === 'long') {
-    ctx.fillStyle = a.hair;
-    rect(ctx, headX - 0.8 * u, headY + head * 0.12, head + 1.6 * u, head * 1.02);
+  // Torso — the shirt.  GK = hollow phosphor (abyss fill, phosphor outline);
+  // outfielders wear their side's phosphor tone, cel-shaded.
+  if (d.gk) {
+    obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, ABYSS, PHOS, ol);
+  } else {
+    obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, shirt, shade(shirt, -0.5), ol);
+    celShade(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, shirt);
   }
 
-  // Head (outlined), then hair + hat on top.
-  obox(ctx, headX, headY, head, head, a.skin, shade(a.skin, -0.5), ol);
-  drawHair(ctx, a, headX, headY, head, u);
-  drawHat(ctx, a, headX, headY, head, u);
-
-  // Eyes — two pixels nudged toward the facing direction.
-  ctx.fillStyle = '#161616';
-  const eyeY = headY + head * 0.46;
-  const ew = Math.max(1, 0.9 * u);
-  const off = head * 0.2;
-  const fx = d.face * head * 0.07;
-  rect(ctx, pr.x - off + fx, eyeY, ew, ew * 1.05);
-  rect(ctx, pr.x + off - ew + fx, eyeY, ew, ew * 1.05);
-
-  // Antennae — some alien races.
-  if (a.antennae) {
-    const aw = Math.max(1, 0.7 * u);
-    const ah = head * 0.5;
-    ctx.fillStyle = a.hair ?? shade(a.skin, 0.25);
-    rect(ctx, headX + head * 0.22, headY - ah, aw, ah);
-    rect(ctx, headX + head * 0.72, headY - ah, aw, ah);
-    ctx.fillStyle = BALL_COLOR;
-    rect(ctx, headX + head * 0.22 - aw * 0.3, headY - ah - aw, aw * 1.6, aw * 1.6);
-    rect(ctx, headX + head * 0.72 - aw * 0.3, headY - ah - aw, aw * 1.6, aw * 1.6);
+  // Squad number on the chest, in the brand's mono.  Contrast follows the
+  // shirt: abyss digits on the phosphor shirts, phosphor digits on the GK's
+  // hollow abyss shirt.  Skipped when the sprite is too small to read.
+  if (sc > 1.0) {
+    const fs = Math.max(4, Math.round(bodyH * 0.4));
+    ctx.font = `700 ${fs}px "Space Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = d.gk ? PHOS : ABYSS;
+    ctx.fillText(String(d.number), pr.x, bodyTop + bodyH * 0.52);
   }
+
+  drawHead(ctx, pr.x, headY, head, u, d.face, a);
 
   // Restore the alpha we lowered for a dimmed (non-selected) dude.
   if (dimmed) ctx.restore();

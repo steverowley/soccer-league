@@ -152,8 +152,6 @@ function Demo() {
           awayFormation={match.awayFormation}
           homePlayers={match.homePlayers}
           awayPlayers={match.awayPlayers}
-          homeColor={match.homeColor}
-          awayColor={match.awayColor}
           homeTeamName={match.homeTeamName}
           awayTeamName={match.awayTeamName}
           homeScore={home}

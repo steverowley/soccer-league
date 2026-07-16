@@ -71,8 +71,6 @@ export function generateDemoMatch(seed = 7): ViewerMatch {
     homeFormation: '4-4-2',
     awayFormation: '4-4-2',
     // Null colours → the viewer's canonical quantum / flare fallback.
-    homeColor: null,
-    awayColor: null,
     homeTeamName: 'Home XI',
     awayTeamName: 'Away XI',
     finalScore,

@@ -65,6 +65,13 @@ const FACE_FLIP_SPEED = 0.4;
 /** Click selection radius in backing-store pixels (a click within this of a dude selects it). */
 const SELECT_RADIUS = 16;
 
+/**
+ * Canvas backing colour behind the pitch — a green-black a notch darker than
+ * Galactic Abyss, from the design-system Match Sprites study, so the abyss-toned
+ * grass still reads as a lit surface against its surround.
+ */
+const CANVAS_BG = '#0d0f0d';
+
 /** Which camera is active.  Both share one world model; only the projection differs. */
 type CameraMode = 'broadcast' | 'follow';
 
@@ -73,7 +80,7 @@ type CameraMode = 'broadcast' | 'follow';
 /** Minimal player info the viewer needs: a stable id (to match frames + seed the look) and position. */
 export interface MatchViewerPlayer {
   id: string;
-  /** Two-letter position (GK/DF/MF/FW); only GK is special-cased (distinct kit). */
+  /** Two-letter position (GK/DF/MF/FW); only GK is special-cased (the hollow figure). */
   position: string;
 }
 
@@ -93,9 +100,6 @@ export interface MatchViewerProps {
    *  pad with synthetic ids. */
   homePlayers: readonly MatchViewerPlayer[];
   awayPlayers: readonly MatchViewerPlayer[];
-  /** Team kit colours (null ⇒ canonical fallback). */
-  homeColor?: string | null;
-  awayColor?: string | null;
   /** Names + scores for the screen-reader label. */
   homeTeamName?: string;
   awayTeamName?: string;
@@ -121,8 +125,12 @@ interface DudeSpec {
   /** Formation home position in metres (used for the rest state / missing frames). */
   homeX: number;
   homeY: number;
-  /** Kit fill colour. */
-  kit: string;
+  /** Which side the player is on — home wears phosphor, away wears dim phosphor. */
+  team: 'home' | 'away';
+  /** Goalkeepers render as the hollow (abyss-filled) figure. */
+  gk: boolean;
+  /** Squad number printed on the chest (slot order: GK #1, then 2–11, bench 12+). */
+  number: number;
   /** Deterministic appearance. */
   appearance: Appearance;
   /** Default facing when stationary (home faces +x, away faces −x). */
@@ -135,29 +143,29 @@ interface DudeSpec {
  * Resolve the dude specs for one side: the starting XI (one per formation slot,
  * slot 0 = GK) plus any bench players supplied beyond the slot count.  Each gets
  * a metre-space home position (bench players have none — they sit off the pitch
- * until subbed on), a kit colour (GK distinct), and a deterministic appearance
- * keyed by player id.  Empty slots in a short XI get synthetic ids so the pitch
- * is always full.
+ * until subbed on), its side + GK flag (which drive the phosphor shirt tones),
+ * a slot-order squad number (GK #1 — football convention; real `jersey_number`
+ * plumbing can replace this without touching the renderer), and a deterministic
+ * appearance keyed by player id.  Empty slots in a short XI get synthetic ids so
+ * the pitch is always full.
  */
 function buildSide(
   side: 'home' | 'away',
   formation: FormationKey,
   players: readonly MatchViewerPlayer[],
-  teamColor: string | null | undefined,
-  outfieldFallback: string,
-  gkColor: string,
 ): DudeSpec[] {
   const slots = getFormationSlots(formation, side);
   const faceDefault = side === 'home' ? 1 : -1;
   // Starters: one dude per formation slot, keyed by the XI ids in slot order.
   const starters: DudeSpec[] = slots.map((slot, i) => {
     const id = players[i]?.id ?? `${side}-${i}`;
-    const isGK = i === 0;
     return {
       id,
       homeX: slot.x * PITCH_LENGTH,
       homeY: slot.y * PITCH_WIDTH,
-      kit: isGK ? gkColor : (teamColor ?? outfieldFallback),
+      team: side,
+      gk: i === 0,
+      number: i + 1,
       appearance: makeAppearance(id),
       faceDefault,
       bench: false,
@@ -166,11 +174,13 @@ function buildSide(
   // Bench: players supplied beyond the slot count.  They have no home slot and
   // render only once a substitution puts their id into the frames (the render
   // loop's frame-presence check), so their home position is a never-used filler.
-  const bench: DudeSpec[] = players.slice(slots.length).map((p) => ({
+  const bench: DudeSpec[] = players.slice(slots.length).map((p, i) => ({
     id: p.id,
     homeX: PITCH_LENGTH / 2,
     homeY: PITCH_WIDTH / 2,
-    kit: p.position === 'GK' ? gkColor : (teamColor ?? outfieldFallback),
+    team: side,
+    gk: p.position === 'GK',
+    number: slots.length + i + 1,
     appearance: makeAppearance(p.id),
     faceDefault,
     bench: true,
@@ -193,8 +203,6 @@ export function MatchViewer({
   awayFormation,
   homePlayers,
   awayPlayers,
-  homeColor,
-  awayColor,
   homeTeamName,
   awayTeamName,
   homeScore,
@@ -229,15 +237,15 @@ export function MatchViewer({
     return Number.isNaN(t) ? null : t;
   }, [scheduledAt]);
 
-  // Resolve the 22 dude specs once per match shape.  GK colours are fixed and
-  // distinct (terraNova / astro) so the keeper reads at a glance; outfielders use
-  // the team colour or the canonical quantum / flare fallback.
+  // Resolve the 22 dude specs once per match shape.  Sides read as phosphor vs
+  // dim-phosphor and the keeper as the hollow figure (see render.ts) — kit
+  // colour stays in the HUD, never on the sprites, per the phosphor accent rule.
   const dudeSpecs = useMemo<DudeSpec[]>(
     () => [
-      ...buildSide('home', homeFormation, homePlayers, homeColor, COLORS.quantum, COLORS.terraNova),
-      ...buildSide('away', awayFormation, awayPlayers, awayColor, COLORS.flare, COLORS.astro),
+      ...buildSide('home', homeFormation, homePlayers),
+      ...buildSide('away', awayFormation, awayPlayers),
     ],
-    [homeFormation, awayFormation, homePlayers, awayPlayers, homeColor, awayColor],
+    [homeFormation, awayFormation, homePlayers, awayPlayers],
   );
 
   // Bake the broadcast pitch once (the static layer never moves under that camera).
@@ -249,7 +257,7 @@ export function MatchViewer({
     const offCtx = off.getContext('2d');
     if (!offCtx) return;
     offCtx.imageSmoothingEnabled = false;
-    offCtx.fillStyle = COLORS.abyss;
+    offCtx.fillStyle = CANVAS_BG;
     offCtx.fillRect(0, 0, VP.width, VP.height);
     drawPitch(offCtx, (wx, wy, wz) => projectBroadcast(wx, wy, wz, VP));
     bakedPitchRef.current = off;
@@ -295,7 +303,7 @@ export function MatchViewer({
       }
 
       // Background + pitch (blit the baked layer under broadcast; redraw under follow).
-      ctx.fillStyle = COLORS.abyss;
+      ctx.fillStyle = CANVAS_BG;
       ctx.fillRect(0, 0, VP.width, VP.height);
       if (cameraMode === 'broadcast' && bakedPitchRef.current) {
         ctx.drawImage(bakedPitchRef.current, 0, 0);
@@ -352,7 +360,9 @@ export function MatchViewer({
           wy: p.pos.y,
           pose,
           appearance: p.spec.appearance,
-          kit: p.spec.kit,
+          team: p.spec.team,
+          gk: p.spec.gk,
+          number: p.spec.number,
           face: p.face,
           highlighted: isSelected,
           dimmed: selectedId != null && !isSelected,
