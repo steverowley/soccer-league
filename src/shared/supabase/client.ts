@@ -23,14 +23,27 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 
 // ── Environment variables ─────────────────────────────────────────────────────
-// Vite exposes VITE_* env vars on import.meta.env. These must be defined in
-// a local .env file (not committed) or in the deployment environment.
-// If either is missing, Supabase queries will fail with auth errors at runtime.
-// We intentionally do not throw here to keep the module importable in test
-// environments where the values are not set.
+// Vite exposes VITE_* env vars on import.meta.env. A local .env or the build
+// environment may OVERRIDE the defaults below (useful for pointing a dev
+// build at a branch database), but neither is required.
+//
+// WHY DEFAULTS EXIST: `createClient` throws when its URL is falsy, and this
+// module runs at import time — so a build that lacked the env vars died
+// before React could mount ANYTHING (a blank white page). That is exactly
+// what happened on the Vercel deployment (2026-07-16): GitHub Actions bakes
+// the values in via deploy.yml, but Vercel's build environment did not
+// define them. The production URL + publishable anon key are intentionally
+// public (they ship in every browser bundle, and deploy.yml hardcodes them
+// in plaintext — RLS is the security boundary, not the key), so defaulting
+// to them here is safe and makes every host and local checkout work out of
+// the box.
 
-const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
-const SUPABASE_ANON_KEY = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
+const SUPABASE_URL =
+  (import.meta.env['VITE_SUPABASE_URL'] as string | undefined) ??
+  'https://ddtpbipkqamuxnvupddc.supabase.co';
+const SUPABASE_ANON_KEY =
+  (import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined) ??
+  'sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP';
 
 // ── Typed client ──────────────────────────────────────────────────────────────
 // `createClient<Database>` narrows every `.from('table_name')` call to the
@@ -38,9 +51,10 @@ const SUPABASE_ANON_KEY = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | 
 // column that doesn't exist → compile error. Inserting a missing required
 // field → compile error.
 //
-// The fallback empty strings allow the module to be imported in tests without
-// throwing; the injected fake client from SupabaseProvider takes precedence
-// in any test that renders React components.
+// The defaults above guarantee both values are always non-empty, so this
+// module can never throw at import time; the injected fake client from
+// SupabaseProvider still takes precedence in any test that renders React
+// components.
 
 /**
  * The application-wide typed Supabase client.
@@ -53,8 +67,8 @@ const SUPABASE_ANON_KEY = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | 
  * so tests can inject a fake without patching this module.
  */
 export const supabaseClient: SupabaseClient<Database> = createClient<Database>(
-  SUPABASE_URL ?? '',
-  SUPABASE_ANON_KEY ?? '',
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
 );
 
 /**
