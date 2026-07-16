@@ -9,10 +9,16 @@
 // the single most common cause of "module not found" bugs. If you add a
 // new alias, update all three files in the same commit.
 //
-// BASE PATH: the app is deployed to GitHub Pages at /soccer-league/, so
-// Vite needs to emit asset URLs prefixed with that sub-path. Changing the
-// deploy location means updating this value AND the `basename` on
-// <BrowserRouter> in src/main.jsx.
+// BASE PATH: the app deploys to TWO hosts with different URL shapes —
+// GitHub Pages serves it under the /soccer-league/ sub-path, while Vercel
+// serves it at the domain root. The base is therefore chosen per build:
+// Vercel sets VERCEL=1 in every build environment, so its builds emit
+// root-relative asset URLs; everywhere else (GitHub Actions, local) keeps
+// the /soccer-league/ prefix. A hardcoded '/soccer-league/' base was why
+// the Vercel deployment white-screened (every asset URL 404'd at the
+// root). <BrowserRouter basename={import.meta.env.BASE_URL}> in
+// src/main.tsx tracks whichever base was baked in, so routing needs no
+// separate change.
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -22,8 +28,9 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
 
-  // GitHub Pages sub-path. See comment above for rationale.
-  base: '/soccer-league/',
+  // Host-dependent base — root on Vercel, sub-path on GitHub Pages.
+  // See the BASE PATH block above for the full rationale.
+  base: process.env.VERCEL ? '/' : '/soccer-league/',
 
   // Path aliases — MUST match tsconfig.json and vitest.config.ts exactly.
   // See the WHY block at the top of this file for the synchronization rule.
