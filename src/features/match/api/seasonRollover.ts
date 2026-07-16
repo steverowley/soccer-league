@@ -87,8 +87,16 @@ export interface RolloverResult {
 export interface RolloverOptions {
   /** UTC ms-since-epoch of matchday 1.  Every fixture is anchored to this. */
   firstKickoffMs: number;
-  /** Milliseconds between consecutive matchdays (14 days in production). */
+  /** Milliseconds between consecutive matchdays (1 day in production). */
   cadenceMs: number;
+  /**
+   * Milliseconds between kickoffs within a matchday (15 min in production).
+   * Spreads a matchday's fixtures into a rolling trickle so the match worker
+   * never faces every kickoff at the same instant — 16 simultaneous kickoffs
+   * caused the 2026-07-16 worker/database outage.  Omit for legacy
+   * everyone-at-once dating.
+   */
+  kickoffStaggerMs?: number;
 }
 
 // ── League / cup catalogue ──────────────────────────────────────────────────
@@ -298,9 +306,17 @@ export async function rolloverSeason(
   };
 
   // ── Step 4: league competitions + rosters + fixtures ───────────────────────
-  for (const league of LEAGUES) {
+  for (const [leagueIdx, league] of LEAGUES.entries()) {
     const compId   = randomUUID();
     const compName = `${league.name} — ${newName}`;
+
+    // Interleave the four leagues inside the kickoff-stagger window: without
+    // this offset every league's slot-0 fixture would still kick off at the
+    // same instant (4 simultaneous sims).  Spacing league anchors by a quarter
+    // of the stagger gives one kickoff every stagger/4 (≈3.75 min at the
+    // production 15-min stagger) — a smooth trickle for the match worker.
+    const leagueKickoffOffsetMs =
+      leagueIdx * Math.floor((opts.kickoffStaggerMs ?? 0) / LEAGUES.length);
 
     const { error: compErr } = await db
       .from('competitions')
@@ -354,8 +370,9 @@ export async function rolloverSeason(
     // re-runs never duplicate a fixture.
     const fixtures = generateRoundRobinFixtures(compId, teamIds, {
       pairsPerMatchday: DEFAULT_PAIRS_PER_MATCHDAY,
-      firstKickoffMs:   opts.firstKickoffMs,
+      firstKickoffMs:   opts.firstKickoffMs + leagueKickoffOffsetMs,
       cadenceMs:        opts.cadenceMs,
+      kickoffStaggerMs: opts.kickoffStaggerMs ?? 0,
     });
 
     for (let off = 0; off < fixtures.length; off += FIXTURE_BATCH_SIZE) {

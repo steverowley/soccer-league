@@ -55,6 +55,14 @@ export interface FixtureCalendar {
    */
   firstKickoffMs: number;
   /**
+   * Milliseconds between kickoffs WITHIN a matchday.  Slot n of a matchday
+   * kicks off at `matchday_base + n × kickoffStaggerMs`, so the match worker
+   * claims a rolling trickle instead of a whole matchday at the same instant —
+   * 16 simultaneous kickoffs starved the worker/database on 2026-07-16.
+   * Omit (or 0) for the legacy everyone-at-once behaviour.
+   */
+  kickoffStaggerMs?: number;
+  /**
    * Milliseconds between consecutive matchdays.
    * 1,209,600,000 ms = 14 days matches the original Season 1 production cadence.
    * Use 300,000 ms (5 min) for fast-cadence test runs.
@@ -74,11 +82,12 @@ export const DEFAULT_PAIRS_PER_MATCHDAY = 4;
 
 /**
  * Production matchday interval in milliseconds.
- * 14 days × 24 h × 60 min × 60 s × 1000 ms = 1,209,600,000 ms.
- * Matches the schedule in 0009_seed_league_fixtures.sql (one matchday
- * every 14 real-world days).
+ * 1 day × 24 h × 60 min × 60 s × 1000 ms = 86,400,000 ms.
+ * A matchday every real-world day: a 14-matchday league season plays out in
+ * two weeks and there is always a match to watch or bet on.  (Was 14 days
+ * until 2026-07-16 — a misreading of Season 1's actual daily cadence.)
  */
-export const PRODUCTION_CADENCE_MS = 14 * 24 * 60 * 60 * 1_000;
+export const PRODUCTION_CADENCE_MS = 24 * 60 * 60 * 1_000;
 
 // ── Core function ─────────────────────────────────────────────────────────────
 
@@ -110,7 +119,7 @@ export function generateRoundRobinFixtures(
 ): FixtureRow[] {
   if (teamIds.length < 2) return [];
 
-  const { pairsPerMatchday, firstKickoffMs, cadenceMs } = calendar;
+  const { pairsPerMatchday, firstKickoffMs, cadenceMs, kickoffStaggerMs = 0 } = calendar;
 
   // Sort IDs so pair generation is deterministic across runs and machines.
   // The SQL equivalent is `ct1.team_id < ct2.team_id` in migration 0009.
@@ -140,10 +149,18 @@ export function generateRoundRobinFixtures(
     const matchday  = Math.ceil(pairNum1 / pairsPerMatchday); // first-leg matchday (1..firstLegDays)
     const returnDay = firstLegDays + matchday;                // return-leg matchday, no overlap
 
-    // scheduled_at = firstKickoff + (matchday_index) × cadence
+    // Kickoff slot WITHIN the matchday: pairs fill matchdays in blocks
+    // (pairs 1–4 → MD1, 5–8 → MD2, …), so a pair's 0-based position inside its
+    // block is its slot.  The return leg reuses the same slot — the block maps
+    // 1:1 onto its return matchday — so both legs stagger identically.
+    const slotInDay = (pairNum1 - 1) % pairsPerMatchday;
+
+    // scheduled_at = firstKickoff + (matchday_index) × cadence + slot × stagger
     // matchday_index is 0-based: matchday 1 → index 0, matchday 14 → index 13.
-    const schedFirst  = new Date(firstKickoffMs + (matchday  - 1) * cadenceMs).toISOString();
-    const schedReturn = new Date(firstKickoffMs + (returnDay - 1) * cadenceMs).toISOString();
+    // The slot term spreads a matchday's kickoffs (e.g. 15 min apart) so the
+    // worker never faces the whole day's fixtures at one instant.
+    const schedFirst  = new Date(firstKickoffMs + (matchday  - 1) * cadenceMs + slotInDay * kickoffStaggerMs).toISOString();
+    const schedReturn = new Date(firstKickoffMs + (returnDay - 1) * cadenceMs + slotInDay * kickoffStaggerMs).toISOString();
 
     // First leg: original home/away assignment.
     rows.push({

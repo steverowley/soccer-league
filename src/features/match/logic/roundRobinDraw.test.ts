@@ -209,6 +209,73 @@ describe('generateRoundRobinFixtures — scheduling', () => {
   });
 });
 
+// ── Kickoff stagger (post-2026-07-16: never a whole matchday at one instant) ──
+
+describe('generateRoundRobinFixtures — kickoffStaggerMs', () => {
+  const STAGGER_MS = 15 * 60_000; // production stagger: 15 minutes between slots
+
+  it('staggers the fixtures within a matchday into distinct slots, staggerMs apart', () => {
+    const cal: FixtureCalendar = { ...STANDARD_CALENDAR, kickoffStaggerMs: STAGGER_MS };
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, cal);
+    const md1 = fixtures
+      .filter((f) => f.round === 'Matchday 1')
+      .map((f) => Date.parse(f.scheduled_at))
+      .sort((a, b) => a - b);
+
+    // 4 pairs/matchday → slots 0..3, one kickoff every STAGGER_MS from the anchor.
+    expect(md1).toEqual([0, 1, 2, 3].map((slot) => ANCHOR_MS + slot * STAGGER_MS));
+  });
+
+  it('return-leg fixtures reuse the same slot offsets as their first-leg matchday', () => {
+    const cadenceMs = 60 * 60_000; // 1-hour cadence keeps matchdays visually distinct
+    const cal: FixtureCalendar = { ...STANDARD_CALENDAR, cadenceMs, kickoffStaggerMs: STAGGER_MS };
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, cal);
+
+    // Matchday 8 is the return leg of matchday 1 (7 first-leg matchdays for 8
+    // teams), so its slot offsets from its own base must match matchday 1's.
+    const offsets = (round: string, baseMs: number) =>
+      fixtures
+        .filter((f) => f.round === round)
+        .map((f) => Date.parse(f.scheduled_at) - baseMs)
+        .sort((a, b) => a - b);
+
+    expect(offsets('Matchday 8', ANCHOR_MS + 7 * cadenceMs)).toEqual(
+      offsets('Matchday 1', ANCHOR_MS),
+    );
+  });
+
+  it('omitting kickoffStaggerMs keeps the legacy everyone-at-once dating', () => {
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, STANDARD_CALENDAR);
+    const md1 = new Set(
+      fixtures.filter((f) => f.round === 'Matchday 1').map((f) => f.scheduled_at),
+    );
+    expect(md1.size).toBe(1); // all four kickoffs share the anchor timestamp
+  });
+
+  it('stagger never bleeds into the next matchday at production values', () => {
+    // Worst slot (3) × 15 min = 45 min — far inside the 1-day cadence, so
+    // matchday ordering is preserved: every MD-N fixture precedes every MD-N+1.
+    const cal: FixtureCalendar = {
+      ...STANDARD_CALENDAR,
+      cadenceMs:        PRODUCTION_CADENCE_MS,
+      kickoffStaggerMs: STAGGER_MS,
+    };
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, cal);
+    const maxByDay = new Map<number, number>();
+    const minByDay = new Map<number, number>();
+    for (const f of fixtures) {
+      const day = parseInt(f.round.replace('Matchday ', ''), 10);
+      const ts  = Date.parse(f.scheduled_at);
+      maxByDay.set(day, Math.max(maxByDay.get(day) ?? -Infinity, ts));
+      minByDay.set(day, Math.min(minByDay.get(day) ?? Infinity, ts));
+    }
+    const days = [...maxByDay.keys()].sort((a, b) => a - b);
+    for (let i = 1; i < days.length; i++) {
+      expect(maxByDay.get(days[i - 1]!)!).toBeLessThan(minByDay.get(days[i]!)!);
+    }
+  });
+});
+
 // ── Custom pairsPerMatchday ───────────────────────────────────────────────────
 
 describe('generateRoundRobinFixtures — custom pairsPerMatchday', () => {

@@ -40,15 +40,20 @@
 //   SUPABASE_URL=<url> SUPABASE_SERVICE_ROLE_KEY=<key> \
 //     npx tsx scripts/rollover-season.ts \
 //     [--from-season=<uuid>] [--cadence-minutes=<n>] [--first-kickoff=<iso>]
+//     [--kickoff-stagger-minutes=<n>]
 //
 // CLI options:
 //   --from-season=<uuid>     Season to roll over FROM.
 //                            Default: auto-detect the most recently 'enacted' season.
 //   --cadence-minutes=<n>    Minutes between consecutive matchday slots.
-//                            Default: 20160 (14 days).  Use 60–300 for fast-cadence
+//                            Default: 1440 (daily).  Use 60–300 for fast-cadence
 //                            testing; use seed-test-season.ts to re-spread afterwards.
 //   --first-kickoff=<iso>    UTC timestamp for matchday 1.
 //                            Default: 7 days from now.
+//   --kickoff-stagger-minutes=<n>
+//                            Minutes between kickoffs within a matchday, so the
+//                            worker claims a trickle rather than a whole matchday
+//                            at one instant.  Default: 15.  0 = everyone at once.
 //
 // IMPORTANT: never commit SUPABASE_SERVICE_ROLE_KEY to version control.
 
@@ -83,11 +88,22 @@ function getArg(name: string): string | undefined {
 
 /**
  * Real-world minutes between consecutive matchday slots in a new season.
- * 20160 = 14 days — matches the original Season 1 cadence from migration
- * 0009 (matchdays every 14 days, 14 matchdays total = 28 weeks of play).
+ * 1440 = 1 day — a matchday every day, so a 14-matchday league season plays
+ * out in two weeks and betting is never dark for long.  (The previous 14-day
+ * default cited "the original Season 1 cadence"; Season 1 actually ran daily —
+ * owner decision 2026-07-16 standardised on daily.)
  * Override via --cadence-minutes for fast-cadence test runs.
  */
-const DEFAULT_CADENCE_MINUTES = 20_160;
+const DEFAULT_CADENCE_MINUTES = 1_440;
+
+/**
+ * Default minutes between kickoffs within a matchday (see RolloverOptions.
+ * kickoffStaggerMs).  15 minutes spreads each league's 4 fixtures across
+ * ~45 min, and the rollover interleaves the 4 leagues a quarter-slot apart —
+ * one kickoff every ~3–4 min instead of 16 at one instant (the 2026-07-16
+ * worker/database outage).  Override via --kickoff-stagger-minutes.
+ */
+const DEFAULT_KICKOFF_STAGGER_MINUTES = 15;
 
 /**
  * Default offset (in ms) from now to the first matchday kickoff.
@@ -99,14 +115,20 @@ const DEFAULT_FIRST_KICKOFF_MS = Date.now() + 7 * 24 * 60 * 60_000;
 const ARG_FROM_SEASON   = getArg('from-season');
 const ARG_CADENCE       = getArg('cadence-minutes');
 const ARG_FIRST_KICKOFF = getArg('first-kickoff');
+const ARG_STAGGER       = getArg('kickoff-stagger-minutes');
 
 const CADENCE_MS       = (ARG_CADENCE ? parseInt(ARG_CADENCE, 10) : DEFAULT_CADENCE_MINUTES) * 60_000;
+const STAGGER_MS       = (ARG_STAGGER ? parseInt(ARG_STAGGER, 10) : DEFAULT_KICKOFF_STAGGER_MINUTES) * 60_000;
 const FIRST_KICKOFF_MS = ARG_FIRST_KICKOFF
   ? Date.parse(ARG_FIRST_KICKOFF)
   : DEFAULT_FIRST_KICKOFF_MS;
 
 if (isNaN(CADENCE_MS) || CADENCE_MS <= 0) {
   console.error('[rollover-season] invalid --cadence-minutes value');
+  process.exit(1);
+}
+if (isNaN(STAGGER_MS) || STAGGER_MS < 0) {
+  console.error('[rollover-season] invalid --kickoff-stagger-minutes value');
   process.exit(1);
 }
 if (isNaN(FIRST_KICKOFF_MS)) {
@@ -264,8 +286,9 @@ async function run(): Promise<void> {
 
   // Steps 3–6: build the new season (idempotent — re-runs are no-ops).
   const result = await rolloverSeason(db, currentSeason.id, {
-    firstKickoffMs: FIRST_KICKOFF_MS,
-    cadenceMs:      CADENCE_MS,
+    firstKickoffMs:   FIRST_KICKOFF_MS,
+    cadenceMs:        CADENCE_MS,
+    kickoffStaggerMs: STAGGER_MS,
   });
 
   if (result.alreadyRolled) {
