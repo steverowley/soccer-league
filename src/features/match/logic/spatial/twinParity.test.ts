@@ -90,6 +90,7 @@ describe('spatial engine src ↔ match-worker twin parity (#547)', () => {
 const CODE_TWINS: ReadonlyArray<{ name: string; src: string; worker: string }> = [
   { name: 'cupDraw',  src: 'src/features/match/logic/cupDraw.ts',  worker: 'supabase/functions/match-worker/cupDraw.ts' },
   { name: 'random',   src: 'src/shared/utils/random.ts',          worker: 'supabase/functions/match-worker/random.ts' },
+  { name: 'grammar',  src: 'src/shared/narrative/grammar.ts',     worker: 'supabase/functions/architect-galaxy-tick/grammar.ts' },
   { name: 'simEvent', src: 'src/features/match/logic/simEvent.ts', worker: 'supabase/functions/match-worker/simEvent.ts' },
 ];
 
