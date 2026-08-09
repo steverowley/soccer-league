@@ -363,7 +363,10 @@ from `src/`). Both contain `types.ts`, `vec2.ts`, `rng.ts`, `formation.ts`, `ste
 
 Determinism: `rng.ts` is a seeded mulberry32 generator; the worker derives the seed from the match UUID,
 so a fixture always reproduces the same match — the stored frames, live viewer, and final score can
-never disagree.
+never disagree. The Architect's post-simulation rewrites (curse / annul_goal / force_red_card) share
+that guarantee: `matchRng.ts` derives a second, independent stream from the same UUID, so a given set
+of intents always resolves the same way. The intents themselves come from the LLM and remain
+non-deterministic by design.
 
 ### Position frames & the 2D viewer
 The engine samples a position frame every 2s and the worker persists them to
