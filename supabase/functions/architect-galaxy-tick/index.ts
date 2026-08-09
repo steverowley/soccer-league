@@ -50,6 +50,18 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 // @ts-ignore — Deno-only import, resolved at deploy time.
 import { rngFor } from './grammar.ts';
+import type {
+  EntityRow,
+  FocusEnactedRow,
+  InterventionRow,
+  MatchRow,
+  NarrativeDraft,
+  NarrativeRow,
+  PoliticianRow,
+  SocialMediaRow,
+} from './types.ts';
+import { llmArchitectWhisper, llmEntityNarrative, llmFocusReaction, llmMediaBuzz, llmPoliticalDecree } from './llmVoices.ts';
+import { preferLlm, resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import {
   architectWhisper,
   entityNarrative,
@@ -374,75 +386,12 @@ function tickChance(p: number): boolean {
 
 // ── Type declarations ────────────────────────────────────────────────────────
 
-interface EntityRow {
-  id: string;
-  kind: string;
-  name: string;
-  display_name: string | null;
-}
 
-interface MatchRow {
-  id: string;
-  home_team_id: string;
-  away_team_id: string;
-  home_score: number | null;
-  away_score: number | null;
-  played_at: string | null;
-}
 
-interface FocusEnactedRow {
-  team_id: string;
-  focus_label: string;
-  tier: string;
-  enacted_at: string;
-}
 
-interface NarrativeRow {
-  kind: string;
-  summary: string;
-  created_at: string;
-}
 
-interface InterventionRow {
-  field: string;
-  reason: string;
-  created_at: string;
-}
 
-/**
- * A politician entity row fetched for decree generation.
- * `meta` carries the fields seeded in migration 0062 — role, party name,
- * homeworld, and description — so the LLM can produce in-character decrees
- * without needing a join to the political_party table.
- */
-interface PoliticianRow {
-  id: string;
-  name: string;
-  display_name: string | null;
-  meta: {
-    role: string;
-    party: string;
-    homeworld: string;
-    description: string;
-  };
-}
 
-/**
- * A social_media platform entity row fetched for media buzz generation.
- * `format` ('microblog' | 'video' | 'forum') drives the narrative register
- * so each platform sounds distinct — Stellarverse hot takes feel different
- * from an OrbNet long thread.
- */
-interface SocialMediaRow {
-  id: string;
-  name: string;
-  display_name: string | null;
-  meta: {
-    format: string;
-    reach: string;
-    description: string;
-  };
-}
 
 // ── Deno runtime handler ────────────────────────────────────────────────────
 
@@ -493,6 +442,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (!supabaseUrl || !serviceKey) {
       return json({ ok: false, error: 'Missing required env vars' }, 500);
+    }
+
+    // The world runs on the local corpus unless this deployment opts into a
+    // model. An opted-in deployment with no key silently stays on the corpus
+    // rather than failing the tick — the voices are never blocked on config.
+    // @ts-ignore — Deno-only global.
+    const anthropicKey: string = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+    // @ts-ignore — Deno-only global.
+    const mode: NarrativeMode = anthropicKey
+      ? resolveNarrativeMode(Deno.env.get('ISL_NARRATIVE_MODE'))
+      : 'deterministic';
+    let anthropic: any = null;
+    if (mode === 'llm') {
+      const { default: Anthropic } = await import('https://esm.sh/@anthropic-ai/sdk@0.27.0');
+      anthropic = new Anthropic({ apiKey: anthropicKey });
     }
 
     const db = createClient(supabaseUrl, serviceKey, {
@@ -705,7 +669,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         cache_create_tokens: 0,
       });
 
-      const draft = generateEntityNarrative(entity, kind, tickKey);
+      const draft = await preferLlm(
+        mode,
+        () => llmEntityNarrative(anthropic, entity, kind, redactedMatches, focuses, priorNarr),
+        () => generateEntityNarrative(entity, kind, tickKey),
+      );
 
       const { error, data } = await db.from('narratives').insert({
         kind:               draft.kind,
@@ -726,7 +694,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // the LLM could fail; the corpus cannot, so the Dispatch always opens with
     // the Architect.
     {
-      const whisper = generateArchitectWhisper(tickKey);
+      const whisper = await preferLlm(
+        mode,
+        () => llmArchitectWhisper(anthropic, redactedMatches, priorNarr),
+        () => generateArchitectWhisper(tickKey),
+      );
       const { error, data } = await db.from('narratives').insert({
         kind:               'architect_whisper',
         summary:            whisper,
@@ -846,7 +818,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     for (const row of unreacted) {
-      const summary = generateFocusReaction(row, focusTeamNames.get(row.team_id) ?? 'The club');
+      const teamName = focusTeamNames.get(row.team_id) ?? 'The club';
+      const summary = await preferLlm(
+        mode,
+        () => llmFocusReaction(anthropic, row, teamName),
+        () => generateFocusReaction(row, teamName),
+      );
       const ins = await db.from('narratives').insert({
         kind:              'architect_whisper',
         summary,
@@ -973,7 +950,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       tickChance(POLITICAL_DECREE_PROB)
     ) {
       const politician = pickRandom(politicians);
-      const decree = generatePoliticalDecree(politician, tickKey);
+      const decree = await preferLlm(
+        mode,
+        () => llmPoliticalDecree(anthropic, politician, redactedMatches, priorNarr),
+        () => generatePoliticalDecree(politician, tickKey),
+      );
       const { error, data } = await db.from('narratives').insert({
         kind:              'political_decree',
         summary:           decree,
@@ -1004,7 +985,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       tickChance(MEDIA_BUZZ_PROB)
     ) {
       const platform = pickRandom(socialPlatforms);
-      const buzz = generateMediaBuzz(platform, tickKey);
+      const buzz = await preferLlm(
+        mode,
+        () => llmMediaBuzz(anthropic, platform, redactedMatches, priorNarr),
+        () => generateMediaBuzz(platform, tickKey),
+      );
       const { error, data } = await db.from('narratives').insert({
         kind:              'media_buzz',
         summary:           buzz,
@@ -1023,6 +1008,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       todayKey,
       entitiesSelected: selected.map((e) => e.name),
       narrativesInserted: allInserted.length,
+      narrativeMode: mode,
     });
   } catch (err) {
     console.error('[architect-galaxy-tick] crashed:', err);
@@ -1065,11 +1051,6 @@ function redactResult(
   return `${winner} beat ${loser} — a ${margin}`;
 }
 
-interface NarrativeDraft {
-  kind: string;
-  summary: string;
-  extra_entities: string[];
-}
 
 /**
  * Write one in-character narrative for a given entity.
