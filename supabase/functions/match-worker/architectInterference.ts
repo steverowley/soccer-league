@@ -160,6 +160,10 @@ interface PickedSlot {
  * @param finalScore  [homeGoals, awayGoals] at full time.
  * @param homeName    Home team display name for prompts.
  * @param awayName    Away team display name for prompts.
+ * @param random      RNG ∈ [0, 1) for the per-slot probability gate. The worker
+ *                    passes the match-seeded narrative stream so the same
+ *                    fixture always puts the same slots to the model; defaults
+ *                    to Math.random for any caller that has no match context.
  * @returns           Interferences sorted by minute ASC; empty if budget exhausted.
  */
 export async function generateInterferences(
@@ -168,6 +172,7 @@ export async function generateInterferences(
   finalScore: [number, number],
   homeName:   string,
   awayName:   string,
+  random:     () => number = Math.random,
 ): Promise<ArchitectInterference[]> {
   if (!apiKey) return [];
   if (events.length === 0) return [];
@@ -197,7 +202,7 @@ export async function generateInterferences(
     // budget permits — the LLM gets to choose `interfere: false` too.
     // INTERFERENCE_BASE_PROB pre-filters obvious skips to keep cost
     // bounded on quiet matches.
-    if (Math.random() > INTERFERENCE_BASE_PROB) continue;
+    if (random() > INTERFERENCE_BASE_PROB) continue;
 
     const interference = await callInterferenceLLM(
       client, slot, finalScore, homeName, awayName,

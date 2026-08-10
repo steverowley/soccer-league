@@ -63,7 +63,7 @@ describe('simulateMatchFromTeams', () => {
     const b = simulateMatchFromTeams(team('h', '4-4-2'), team('a', '4-4-2'), 3);
     expect(a.finalScore).toEqual(b.finalScore);
     expect(a.frames.length).toBe(b.frames.length);
-  });
+  }, 30000);
 
   it('falls back to fillers (no crash) when a team has no players', () => {
     const empty: TeamSimData = { name: 'Empty', managers: [], players: [] };

@@ -10,9 +10,11 @@
 //   2. Builds a redacted context bundle for each selected entity — recent
 //      match results (qualitative, no raw scores), recent `focus_enacted`
 //      rows (what clubs decided), and prior narratives (for dedup).
-//   3. Calls Claude per entity, emitting in-character narrative drafts in the
-//      `pundit_takes`, `journalist_report`, or `bookie_update` kind.
-//   4. Also generates 0–1 Architect whispers (`architect_whisper`) and
+//   3. Writes an in-character narrative per entity — `pundit_takes`,
+//      `journalist_report`, or `bookie_update` — from the deterministic voice
+//      corpus in `voices.ts`. This used to be a Claude call per entity; the
+//      corpus replaced it so the feed cannot go silent on an API outage.
+//   4. Also generates one Architect whisper (`architect_whisper`) and
 //      0–1 "Cosmic disturbance" items that surface redacted
 //      `architect_interventions` rows for public visibility.
 //   5. Writes all drafts to `narratives` with `source='scheduled'`.
@@ -28,6 +30,10 @@
 // cap (MAX_POSTS_PER_ENTITY_PER_DAY) limits entity spam across back-to-back
 // triggers.
 //
+// DETERMINISM: every choice a tick makes — which entity speaks, whether a
+// decree fires, which line each voice picks — is drawn from a stream seeded on
+// the tick's hour, so re-running a tick reproduces it exactly.
+//
 // INVARIANTS (non-negotiable):
 //   - NEVER reads wagers, credits, or profiles (user-sensitive data).
 //   - NEVER writes raw numbers, stats, or probabilities to narratives.
@@ -36,20 +42,40 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore-file no-explicit-any
-// ^ Edge Functions run on Deno; `any` is for the Supabase client + Anthropic
+// ^ Edge Functions run on Deno; `any` is for the Supabase client
 // SDK which don't ship Deno-native types in this ESM form.
 
 // ── External dependencies (Deno-style ESM URLs) ─────────────────────────────
 // @ts-ignore — Deno-only import, resolved at deploy time.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 // @ts-ignore — Deno-only import, resolved at deploy time.
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
+import { rngFor } from './grammar.ts';
+import type {
+  EntityRow,
+  FocusEnactedRow,
+  InterventionRow,
+  MatchRow,
+  NarrativeDraft,
+  NarrativeRow,
+  PoliticianRow,
+  SocialMediaRow,
+} from './types.ts';
+import { llmArchitectWhisper, llmEntityNarrative, llmFocusReaction, llmMediaBuzz, llmPoliticalDecree } from './llmVoices.ts';
+import { preferLlm, resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
+import {
+  architectWhisper,
+  entityNarrative,
+  focusReaction,
+  mediaBuzz,
+  politicalDecree,
+} from './voices.ts';
 
 // ── Tuning constants ────────────────────────────────────────────────────────
 
 /**
- * Max entity-authored narratives per tick. Caps total call volume to Claude
- * so one runaway trigger doesn't exhaust the API budget.
+ * Max entity-authored narratives per tick. Keeps any single tick from filling
+ * the feed; the voices themselves are free, so this is a pacing knob now
+ * rather than a cost ceiling.
  */
 const MAX_ENTITY_NARRATIVES_PER_TICK = 3;
 
@@ -66,8 +92,8 @@ const MAX_ENTITY_POSTS_PER_DAY = 1;
 const RECENT_MATCHES_FOR_CONTEXT = 8;
 
 /**
- * How many prior narratives to include for deduplication. The LLM uses
- * this to avoid repeating recent themes verbatim.
+ * How many prior narratives to load. Still read for the corpus-first snippet
+ * selector and the disturbance dedup below.
  */
 const PRIOR_NARRATIVES_FOR_DEDUP = 12;
 
@@ -109,19 +135,6 @@ const CORPUS_SNIPPET_MAX_AGE_DAYS = 30;
  * 3 reuses is the soft cap; beyond that we prefer fresh LLM generation.
  */
 const CORPUS_SNIPPET_MAX_USAGE = 3;
-
-/**
- * Claude model for out-of-match narration. Pinned to the fully-dated Haiku
- * 4.5 id — the SAME id the corpus-enricher uses successfully (see #514). The
- * short `claude-sonnet-4-6` alias previously here was rejected by the API on
- * this project's key, so every entity narrative / whisper / decree / buzz
- * call failed silently for two weeks while the template-only kinds kept
- * flowing. A dated, known-good id avoids that whole class of failure.
- */
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-
-/** Max output tokens per entity call. Narratives are 2–4 sentences each. */
-const MAX_OUTPUT_TOKENS = 512;
 
 /**
  * Max focus_enacted rows the Architect reacts to per cron tick (#377).
@@ -349,126 +362,42 @@ const DAYBREAK_TRIPLE_VOICE: readonly string[] = [
 ];
 
 /**
- * Uniform-random pick from a non-empty pool.  Inline to avoid a shared
- * util module — keeps this Deno file self-contained.
+ * Uniform pick from a non-empty pool, drawn from the tick's seeded stream.
+ *
+ * `tickRng` is assigned once per request before any generator runs, so every
+ * choice this tick makes — which politician speaks, whether a void whisper
+ * fires, which player a trait shift lands on — replays identically if the same
+ * tick is run again. Falls back to `Math.random` only if called before the
+ * handler has seeded it, which no code path does.
  */
+let tickRng: (() => number) | null = null;
+
 function pickRandom<T>(pool: readonly T[]): T {
   // Callers always pass non-empty arrays.  The non-null assertion documents
   // that for Deno's strict checking.
-  return pool[Math.floor(Math.random() * pool.length)]!;
+  return pool[Math.floor((tickRng ?? Math.random)() * pool.length)]!;
 }
 
-/**
- * Record a swallowed LLM failure to `agent_runs` so a model/key outage is
- * OBSERVABLE instead of vanishing into a null return.  Every generator below
- * (entity narrative, whisper, decree, buzz, focus reaction) catches its own
- * Anthropic error and returns null; without this row a total LLM failure looks
- * identical to "nothing to say" — which is exactly how #514 went unnoticed for
- * two weeks.  Mirrors the zero-token corpus_hit / corpus_miss telemetry
- * pattern.  `entityId` is null for voices with no backing entity (the Architect
- * whisper, focus reactions).  Telemetry must never break the tick, so failures
- * to log are themselves swallowed with a warn.
- *
- * @param db        Service-role Supabase client.
- * @param entityId  The entity whose generation failed, or null.
- */
-async function logLlmError(
-  // deno-lint-ignore no-explicit-any
-  db: any,
-  entityId: string | null,
-): Promise<void> {
-  try {
-    await db.from('agent_runs').insert({
-      entity_id:           entityId,
-      kind:                'llm_error',
-      model:               CLAUDE_MODEL,
-      prompt_tokens:       0,
-      output_tokens:       0,
-      cache_read_tokens:   0,
-      cache_create_tokens: 0,
-    });
-  } catch (_e) {
-    console.warn('[galaxy-tick] llm_error telemetry insert failed');
-  }
+/** Roll against a probability gate using the tick's seeded stream. */
+function tickChance(p: number): boolean {
+  return (tickRng ?? Math.random)() < p;
 }
+
 
 // ── Type declarations ────────────────────────────────────────────────────────
 
-interface EntityRow {
-  id: string;
-  kind: string;
-  name: string;
-  display_name: string | null;
-}
 
-interface MatchRow {
-  id: string;
-  home_team_id: string;
-  away_team_id: string;
-  home_score: number | null;
-  away_score: number | null;
-  played_at: string | null;
-}
 
-interface FocusEnactedRow {
-  team_id: string;
-  focus_label: string;
-  tier: string;
-  enacted_at: string;
-}
 
-interface NarrativeRow {
-  kind: string;
-  summary: string;
-  created_at: string;
-}
 
-interface InterventionRow {
-  field: string;
-  reason: string;
-  created_at: string;
-}
 
-/**
- * A politician entity row fetched for decree generation.
- * `meta` carries the fields seeded in migration 0062 — role, party name,
- * homeworld, and description — so the LLM can produce in-character decrees
- * without needing a join to the political_party table.
- */
-interface PoliticianRow {
-  id: string;
-  name: string;
-  display_name: string | null;
-  meta: {
-    role: string;
-    party: string;
-    homeworld: string;
-    description: string;
-  };
-}
 
-/**
- * A social_media platform entity row fetched for media buzz generation.
- * `format` ('microblog' | 'video' | 'forum') drives the narrative register
- * so each platform sounds distinct — Stellarverse hot takes feel different
- * from an OrbNet long thread.
- */
-interface SocialMediaRow {
-  id: string;
-  name: string;
-  display_name: string | null;
-  meta: {
-    format: string;
-    reach: string;
-    description: string;
-  };
-}
 
 // ── Deno runtime handler ────────────────────────────────────────────────────
 
 // @ts-ignore — `Deno` is only present at deploy time.
 // ── Shared-secret auth (see migration 0052) ──
-// Without this gate, anyone on the internet could POST and burn Anthropic
+// Without this gate, anyone on the internet could POST and burn
 // tokens on every invocation. The cron job (updated in 0052) sends
 // `Authorization: Bearer <vault.worker_shared_secret>`. Fails closed when
 // the env var is unset.
@@ -505,27 +434,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    // ── Boot Supabase + Anthropic clients ────────────────────────────────
+    // ── Boot the Supabase client ─────────────────────────────────────────
     // @ts-ignore
     const supabaseUrl: string = Deno.env.get('SUPABASE_URL') ?? '';
     // @ts-ignore
     const serviceKey: string = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    // @ts-ignore
-    const anthropicKey: string = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 
-    if (!supabaseUrl || !serviceKey || !anthropicKey) {
+    if (!supabaseUrl || !serviceKey) {
       return json({ ok: false, error: 'Missing required env vars' }, 500);
+    }
+
+    // The world runs on the local corpus unless this deployment opts into a
+    // model. An opted-in deployment with no key silently stays on the corpus
+    // rather than failing the tick — the voices are never blocked on config.
+    // @ts-ignore — Deno-only global.
+    const anthropicKey: string = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+    // @ts-ignore — Deno-only global.
+    const mode: NarrativeMode = anthropicKey
+      ? resolveNarrativeMode(Deno.env.get('ISL_NARRATIVE_MODE'))
+      : 'deterministic';
+    let anthropic: any = null;
+    if (mode === 'llm') {
+      const { default: Anthropic } = await import('https://esm.sh/@anthropic-ai/sdk@0.27.0');
+      anthropic = new Anthropic({ apiKey: anthropicKey });
     }
 
     const db = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const anthropic = new Anthropic({ apiKey: anthropicKey });
 
     // ── Gather context in parallel ───────────────────────────────────────
     // All reads are independent — fire them simultaneously for latency.
     const todayKey = new Date().toISOString().slice(0, 10); // e.g. "2600-04-27"
     const todayStart = `${todayKey}T00:00:00Z`;
+
+    // Seed for every voice this tick. Truncated to the hour because the cron
+    // fires every two hours: keying on the date alone would make all twelve of
+    // a day's ticks speak identically, while keying on the raw timestamp would
+    // make a re-run of the same tick say something new. The hour is the unit
+    // that makes a tick reproducible and its neighbours distinct.
+    const tickKey = new Date().toISOString().slice(0, 13); // e.g. "2600-04-27T14"
+    tickRng = rngFor(`galaxy-tick:${tickKey}`);
 
     const [
       entityRows,
@@ -640,11 +589,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // fall through to generateEntityNarrative.  Hit/miss outcomes land
     // in `agent_runs` so the corpus effectiveness metric is queryable.
     const allInserted: Array<Record<string, unknown>> = [];
-    // Count swallowed LLM failures across every generator so the tick's
-    // response surfaces them at a glance (the per-failure rows land in
-    // agent_runs via logLlmError). narrativesInserted=0 + llmErrors>0 reads
-    // as "the model is down", not "the cosmos had nothing to say".
-    let llmErrors = 0;
 
     for (const entity of selected) {
       const kind = narrativeKindForEntityKind(entity.kind);
@@ -725,21 +669,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         cache_create_tokens: 0,
       });
 
-      const draft = await generateEntityNarrative(
-        anthropic,
-        entity,
-        kind,
-        redactedMatches,
-        focuses,
-        priorNarr,
+      const draft = await preferLlm(
+        mode,
+        () => llmEntityNarrative(anthropic, entity, kind, redactedMatches, focuses, priorNarr),
+        () => generateEntityNarrative(entity, kind, tickKey),
       );
-      if (!draft) {
-        // LLM call failed (caught inside the generator). Record it so a
-        // model/key outage is visible rather than a silent zero-insert tick.
-        llmErrors += 1;
-        await logLlmError(db, entity.id);
-        continue;
-      }
 
       const { error, data } = await db.from('narratives').insert({
         kind:               draft.kind,
@@ -755,11 +689,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    // ── Architect whisper (0–1 per tick) ─────────────────────────────────
-    // Always try one Architect whisper — the cosmic voice should speak
-    // every tick regardless of entity selection. Failures are tolerated.
-    const whisper = await generateArchitectWhisper(anthropic, redactedMatches, priorNarr);
-    if (whisper) {
+    // ── Architect whisper (exactly 1 per tick) ───────────────────────────
+    // The cosmic voice speaks every tick. It used to be "0–1 per tick" because
+    // the LLM could fail; the corpus cannot, so the Dispatch always opens with
+    // the Architect.
+    {
+      const whisper = await preferLlm(
+        mode,
+        () => llmArchitectWhisper(anthropic, redactedMatches, priorNarr),
+        () => generateArchitectWhisper(tickKey),
+      );
       const { error, data } = await db.from('narratives').insert({
         kind:               'architect_whisper',
         summary:            whisper,
@@ -771,10 +710,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
       } else {
         allInserted.push(...(data ?? []));
       }
-    } else {
-      // No entity backs the Architect's voice — log with entity_id null.
-      llmErrors += 1;
-      await logLlmError(db, null);
     }
 
     // ── Cosmic disturbance (0–1 per tick) ────────────────────────────────
@@ -813,7 +748,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const balanceTodayCount = todayWithKind.filter((n) => n.kind === 'balance_whisper').length;
     const chaosTodayCount   = todayWithKind.filter((n) => n.kind === 'chaos_whisper').length;
 
-    if (balanceTodayCount < MAX_BALANCE_PER_DAY && Math.random() < BALANCE_VOID_PROB) {
+    if (balanceTodayCount < MAX_BALANCE_PER_DAY && tickChance(BALANCE_VOID_PROB)) {
       const line = pickRandom(BALANCE_VOID_TEMPLATES);
       const { error, data } = await db.from('narratives').insert({
         kind:              'balance_whisper',
@@ -828,7 +763,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    if (chaosTodayCount < MAX_CHAOS_PER_DAY && Math.random() < CHAOS_VOID_PROB) {
+    if (chaosTodayCount < MAX_CHAOS_PER_DAY && tickChance(CHAOS_VOID_PROB)) {
       const line = pickRandom(CHAOS_VOID_TEMPLATES);
       const { error, data } = await db.from('narratives').insert({
         kind:              'chaos_whisper',
@@ -867,15 +802,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .limit(MAX_FOCUS_REACTIONS_PER_TICK);
     const unreacted: Array<{ id: string; team_id: string; focus_key: string; focus_label: string; tier: string; season_id: string }> = unreactedQ.data ?? [];
 
-    for (const row of unreacted) {
-      const summary = await generateFocusReaction(anthropic, row);
-      if (!summary) {
-        // LLM call failed: leave architect_reacted_at NULL so we retry on the
-        // next tick, and record the failure so a model outage is visible.
-        llmErrors += 1;
-        await logLlmError(db, null);
-        continue;
+    // Resolve club display names up front. The reaction has to name the club the
+    // way its fans do — `focus_enacted` carries only the id, and the pre-#377
+    // prompt fed that raw UUID to the model, which is why early reactions never
+    // named anyone recognisable.
+    const focusTeamNames = new Map<string, string>();
+    if (unreacted.length > 0) {
+      const teamsQ = await db
+        .from('teams')
+        .select('id, name, short_name')
+        .in('id', unreacted.map((r) => r.team_id));
+      for (const t of (teamsQ.data ?? []) as Array<{ id: string; name: string | null; short_name: string | null }>) {
+        focusTeamNames.set(t.id, t.name ?? t.short_name ?? 'The club');
       }
+    }
+
+    for (const row of unreacted) {
+      const teamName = focusTeamNames.get(row.team_id) ?? 'The club';
+      const summary = await preferLlm(
+        mode,
+        () => llmFocusReaction(anthropic, row, teamName),
+        () => generateFocusReaction(row, teamName),
+      );
       const ins = await db.from('narratives').insert({
         kind:              'architect_whisper',
         summary,
@@ -907,7 +855,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     //
     // Designed to fail-soft: any DB error logs and skips so a transient
     // hiccup doesn't crash the entire tick.
-    if (Math.random() < MID_WEEK_INTRUSION_PROB) {
+    if (tickChance(MID_WEEK_INTRUSION_PROB)) {
       try {
         const result = await runMidWeekIntrusion(db);
         if (result) allInserted.push(result);
@@ -999,25 +947,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (
       politicians.length > 0 &&
       politicalDecreeTodayCount < MAX_POLITICAL_DECREES_PER_DAY &&
-      Math.random() < POLITICAL_DECREE_PROB
+      tickChance(POLITICAL_DECREE_PROB)
     ) {
       const politician = pickRandom(politicians);
-      const decree = await generatePoliticalDecree(anthropic, politician, redactedMatches, priorNarr);
-      if (decree) {
-        const { error, data } = await db.from('narratives').insert({
-          kind:              'political_decree',
-          summary:           decree,
-          entities_involved: [politician.id],
-          source:            'scheduled',
-        }).select();
-        if (error) {
-          console.warn('[galaxy-tick] political decree insert failed:', error.message);
-        } else {
-          allInserted.push(...(data ?? []));
-        }
+      const decree = await preferLlm(
+        mode,
+        () => llmPoliticalDecree(anthropic, politician, redactedMatches, priorNarr),
+        () => generatePoliticalDecree(politician, tickKey),
+      );
+      const { error, data } = await db.from('narratives').insert({
+        kind:              'political_decree',
+        summary:           decree,
+        entities_involved: [politician.id],
+        source:            'scheduled',
+      }).select();
+      if (error) {
+        console.warn('[galaxy-tick] political decree insert failed:', error.message);
       } else {
-        llmErrors += 1;
-        await logLlmError(db, politician.id);
+        allInserted.push(...(data ?? []));
       }
     }
 
@@ -1035,25 +982,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (
       socialPlatforms.length > 0 &&
       mediaBuzzTodayCount < MAX_MEDIA_BUZZ_PER_DAY &&
-      Math.random() < MEDIA_BUZZ_PROB
+      tickChance(MEDIA_BUZZ_PROB)
     ) {
       const platform = pickRandom(socialPlatforms);
-      const buzz = await generateMediaBuzz(anthropic, platform, redactedMatches, priorNarr);
-      if (buzz) {
-        const { error, data } = await db.from('narratives').insert({
-          kind:              'media_buzz',
-          summary:           buzz,
-          entities_involved: [platform.id],
-          source:            'scheduled',
-        }).select();
-        if (error) {
-          console.warn('[galaxy-tick] media buzz insert failed:', error.message);
-        } else {
-          allInserted.push(...(data ?? []));
-        }
+      const buzz = await preferLlm(
+        mode,
+        () => llmMediaBuzz(anthropic, platform, redactedMatches, priorNarr),
+        () => generateMediaBuzz(platform, tickKey),
+      );
+      const { error, data } = await db.from('narratives').insert({
+        kind:              'media_buzz',
+        summary:           buzz,
+        entities_involved: [platform.id],
+        source:            'scheduled',
+      }).select();
+      if (error) {
+        console.warn('[galaxy-tick] media buzz insert failed:', error.message);
       } else {
-        llmErrors += 1;
-        await logLlmError(db, platform.id);
+        allInserted.push(...(data ?? []));
       }
     }
 
@@ -1062,7 +1008,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       todayKey,
       entitiesSelected: selected.map((e) => e.name),
       narrativesInserted: allInserted.length,
-      llmErrors,
+      narrativeMode: mode,
     });
   } catch (err) {
     console.error('[architect-galaxy-tick] crashed:', err);
@@ -1105,111 +1051,37 @@ function redactResult(
   return `${winner} beat ${loser} — a ${margin}`;
 }
 
-interface NarrativeDraft {
-  kind: string;
-  summary: string;
-  extra_entities: string[];
-}
 
 /**
- * Ask Claude to write one in-character narrative for a given entity.
- * Returns null on any parse or network failure — the caller skips gracefully.
+ * Write one in-character narrative for a given entity.
  *
- * The system prompt enforces the "no numbers" rule and constrains output to
- * a single JSON object (not an array) to keep parsing simple.
+ * Deterministic: the entity, the target kind and the tick key select a line
+ * from that voice's corpus.  The same entity on the same tick always writes the
+ * same column, and the "no numbers" rule is a property of the corpus rather
+ * than an instruction a model might ignore.
+ *
+ * @param entity      The personality writing the column.
+ * @param targetKind  The narrative kind being written (carried into the draft).
+ * @param tickKey     Stable key for this tick — see `tickKeyFor`.
  */
-async function generateEntityNarrative(
-  anthropic: any,
+function generateEntityNarrative(
   entity: EntityRow,
   targetKind: string,
-  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
-  focuses: FocusEnactedRow[],
-  priorNarr: NarrativeRow[],
-): Promise<NarrativeDraft | null> {
-  const system = `You are ${entity.display_name ?? entity.name}, an in-world ISL personality writing for the Galaxy Dispatch.
-
-RULES (absolute):
-1. NEVER reveal underlying stats, numbers, probabilities, or mechanics. Treat the league like real life.
-2. 2–4 sentences only. Evocative and in-character.
-3. Output ONLY a single JSON object — no prose, no fences.
-
-OUTPUT SCHEMA:
-{"kind":"${targetKind}","summary":"your text here","entities_involved":["team-id-or-entity-name"]}`;
-
-  const user = `Recent ISL results (redacted):
-${matches.map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
-
-Recent club decisions:
-${focuses.length > 0
-  ? focuses.map((f) => `• ${f.team_id} — ${f.focus_label} (${f.tier})`).join('\n')
-  : '• (none yet this season)'}
-
-Recent narratives (do NOT repeat these themes):
-${priorNarr.map((n) => `• [${n.kind}] ${n.summary.slice(0, 150)}`).join('\n')}
-
-Write ONE ${targetKind} as ${entity.display_name ?? entity.name}. JSON only.`;
-
-  try {
-    const response = await anthropic.messages.create({
-      model:      CLAUDE_MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-
-    const firstText = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
-    const cleaned   = firstText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-    const parsed    = JSON.parse(cleaned) as Record<string, unknown>;
-
-    const summary = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
-    if (!summary) return null;
-
-    const extraEntities = Array.isArray(parsed.entities_involved)
-      ? (parsed.entities_involved.filter((e: unknown) => typeof e === 'string') as string[])
-      : [];
-
-    return { kind: targetKind, summary, extra_entities: extraEntities };
-  } catch (err) {
-    console.warn(`[generateEntityNarrative] failed for ${entity.name}:`, err);
-    return null;
-  }
+  tickKey: string,
+): NarrativeDraft {
+  const summary = entityNarrative(`${entity.id}:${targetKind}:${tickKey}`, entity.kind);
+  // The LLM used to nominate the teams it had mentioned; the corpus talks about
+  // the league in general terms, so there are no extra entities to credit.
+  return { kind: targetKind, summary, extra_entities: [] };
 }
 
 /**
  * Generate one Architect whisper — an enigmatic in-world cosmic pronouncement.
- * Returns null on failure so the caller can skip without crashing the tick.
+ *
+ * @param tickKey  Stable key for this tick — the same tick yields the same whisper.
  */
-async function generateArchitectWhisper(
-  anthropic: any,
-  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
-  priorNarr: NarrativeRow[],
-): Promise<string | null> {
-  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who speaks in cryptic, unsettling fragments between matches.
-
-RULES:
-1. NEVER reveal stats, numbers, or game mechanics.
-2. 1–3 sentences. Cryptic. A little wrong. References actual teams if possible.
-3. Output ONLY the narrative text. No JSON, no labels.`;
-
-  const user = `Recent results: ${matches.slice(0, 4).map((m) => m.result).join('; ')}
-
-Recent narratives (avoid repeating): ${priorNarr.filter((n) => n.kind === 'architect_whisper').slice(0, 4).map((n) => n.summary.slice(0, 100)).join(' | ')}
-
-Write one Architect whisper. Plain text only.`;
-
-  try {
-    const response = await anthropic.messages.create({
-      model:      CLAUDE_MODEL,
-      max_tokens: 200,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
-    return text.trim() || null;
-  } catch (err) {
-    console.warn('[generateArchitectWhisper] failed:', err);
-    return null;
-  }
+function generateArchitectWhisper(tickKey: string): string {
+  return architectWhisper(tickKey);
 }
 
 /**
@@ -1284,11 +1156,11 @@ async function runMidWeekIntrusion(
     console.log('[mid-week intrusion] no eligible players (all teams in cooloff)');
     return null;
   }
-  const player = eligible[Math.floor(Math.random() * eligible.length)];
+  const player = pickRandom(eligible);
 
   // ── 3. Pick a trait + direction ──────────────────────────────────────
-  const column: TraitColumn = TRAIT_COLUMNS[Math.floor(Math.random() * TRAIT_COLUMNS.length)]!;
-  const sign   = Math.random() < 0.5 ? -1 : 1;
+  const column: TraitColumn = pickRandom(TRAIT_COLUMNS);
+  const sign   = tickChance(0.5) ? -1 : 1;
   const oldVal = Number(player[column] ?? 50);
   // Clamp to [1, 99] — matches the engine's stat range. Without clamping
   // a string of negative shifts could push a player into uselessness or
@@ -1354,50 +1226,16 @@ async function runMidWeekIntrusion(
  * because the reactions are MEANT to feel hand-written; a bland template
  * would weaken the voice across the season.
  *
- * @param anthropic Anthropic SDK client (already configured with API key).
  * @param row       One focus_enacted row — `{ team_id, focus_key, focus_label, tier }`.
  * @returns         The single-sentence whisper, or null on any error.
  */
-async function generateFocusReaction(
-  // deno-lint-ignore no-explicit-any
-  anthropic: any,
-  row: { team_id: string; focus_key: string; focus_label: string; tier: string },
-): Promise<string | null> {
-  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who reacts to fan decisions in cryptic, unsettling fragments.
-
-RULES:
-1. NEVER reveal stats, numbers, percentages, or game mechanics.
-2. 1–2 sentences. Cryptic. Knowing. Sometimes ominous, sometimes amused.
-3. Reference the team name and the focus label by name so the fan recognises the trigger.
-4. NEVER explain the mechanical effect of the choice — only the cosmos's reaction to the choice itself.
-5. Output ONLY the narrative text. No JSON, no labels.
-
-EXAMPLE TONE:
-"They begged for a star. The cosmos delivered. They have not asked what the star was made of."
-"${`Pluto FC Wanderers`} chose youth. The cosmos files this under 'choices that age poorly'."
-"A new stadium for ${`Mars Athletic`}. The cosmos already knows which match will be played in its rubble."`;
-
-  const user = `A fanbase has just voted to enact a ${row.tier} focus for their club.
-
-TEAM: ${row.team_id}
-FOCUS: ${row.focus_label} (key: ${row.focus_key})
-
-Write one Architect whisper reacting to this choice. Plain text only.`;
-
-  try {
-    const response = await anthropic.messages.create({
-      model:      CLAUDE_MODEL,
-      max_tokens: 220,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-    // deno-lint-ignore no-explicit-any
-    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
-    return text.trim() || null;
-  } catch (err) {
-    console.warn('[generateFocusReaction] failed:', err);
-    return null;
-  }
+function generateFocusReaction(
+  row: { id: string; team_id: string; focus_key: string; focus_label: string },
+  teamName: string,
+): string {
+  // Keyed on the enactment row, so a club's reaction to its own choice is
+  // fixed the moment the vote lands and never changes on a re-read.
+  return focusReaction(`${row.id}:${row.focus_key}`, teamName, row.focus_label);
 }
 
 /**
@@ -1417,56 +1255,15 @@ Write one Architect whisper reacting to this choice. Plain text only.`;
  *     reference them without exposing raw scores.
  *   - Prior narratives are provided so Claude avoids repeating recent themes.
  *
- * @param anthropic  Anthropic SDK client (already initialised with API key).
  * @param politician The PoliticianRow selected for this tick.
  * @param matches    Redacted recent match results (qualitative, no numbers).
  * @param priorNarr  Recent narratives for deduplication guidance.
  * @returns          The decree text (1–3 sentences), or null on any error.
  */
-async function generatePoliticalDecree(
-  // deno-lint-ignore no-explicit-any
-  anthropic: any,
-  politician: PoliticianRow,
-  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
-  priorNarr: NarrativeRow[],
-): Promise<string | null> {
-  const displayName = politician.display_name ?? politician.name;
-  const { role, party, homeworld, description } = politician.meta;
-
-  const system = `You are ${displayName}, ${role} of the ${party}, representing ${homeworld} in the Intergalactic Soccer League universe.
-
-${description}
-
-RULES (absolute):
-1. NEVER reveal underlying stats, numbers, probabilities, or game mechanics.
-2. 1–3 sentences only. Official, slightly pompous, in-character.
-3. You may reference teams or recent results but only in qualitative terms (never scores).
-4. Output ONLY the decree text. No JSON, no labels, no headers.
-
-TONE: Political officials in the ISL universe treat soccer as a proxy for interplanetary prestige. Your statement should feel like a press release filtered through genuine in-world ideology — concern for your homeworld's clubs, commentary on cosmic governance, self-serving but plausible.`;
-
-  const user = `Recent ISL results (redacted, no raw scores):
-${matches.slice(0, 5).map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
-
-Recent narratives (do NOT repeat these themes):
-${priorNarr.filter((n) => n.kind === 'political_decree').slice(0, 4).map((n) => `• ${n.summary.slice(0, 150)}`).join('\n') || '• (none yet)'}
-
-Issue one brief political decree as ${displayName}. Plain text only.`;
-
-  try {
-    const response = await anthropic.messages.create({
-      model:      CLAUDE_MODEL,
-      max_tokens: 250,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-    // deno-lint-ignore no-explicit-any
-    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
-    return text.trim() || null;
-  } catch (err) {
-    console.warn('[generatePoliticalDecree] failed:', err);
-    return null;
-  }
+function generatePoliticalDecree(politician: PoliticianRow, tickKey: string): string {
+  // The official's homeworld is threaded into their rhetoric, so a Cloud Prefect
+  // of Saturn and a Congress Chair of Ceres never sound interchangeable.
+  return politicalDecree(`${politician.id}:${tickKey}`, politician.meta.homeworld);
 }
 
 /**
@@ -1486,64 +1283,13 @@ Issue one brief political decree as ${displayName}. Plain text only.`;
  * galaxy react, argue, and memefiy outcomes. The Architect can use this
  * layer to seed viral rumours (no mechanical effect, but narrative weight).
  *
- * @param anthropic Anthropic SDK client (already initialised with API key).
  * @param platform  The SocialMediaRow selected for this tick.
  * @param matches   Redacted recent match results (qualitative, no numbers).
  * @param priorNarr Recent narratives for deduplication guidance.
  * @returns         The buzz text (1–3 sentences), or null on any error.
  */
-async function generateMediaBuzz(
-  // deno-lint-ignore no-explicit-any
-  anthropic: any,
-  platform: SocialMediaRow,
-  matches: Array<{ home: string; away: string; result: string; played_at: string }>,
-  priorNarr: NarrativeRow[],
-): Promise<string | null> {
-  const displayName = platform.display_name ?? platform.name;
-  const { format, reach, description } = platform.meta;
-
-  // Each format gets a distinct writing register so platforms sound
-  // distinguishable in the feed without requiring per-platform templates.
-  const formatGuide =
-    format === 'microblog'
-      ? 'hot takes, punchy, 1–2 sentences, possibly inflammatory — the kind of post that goes viral for the wrong reasons'
-      : format === 'forum'
-      ? 'long-thread energy condensed into 2–3 sentences — analytical, opinionated, name-drops teams and players freely'
-      : 'video-hook style — exclamation-heavy, YouTube-thumbnail energy, promises something dramatic';
-
-  const system = `You are summarising trending content on ${displayName}, a ${format} platform in the Intergalactic Soccer League universe.
-
-${description}
-Platform reach: ${reach}.
-
-RULES (absolute):
-1. NEVER reveal underlying stats, numbers, probabilities, or game mechanics.
-2. Write as a narrator describing what is trending ON the platform — not as a single user, but as the voice of the crowd.
-3. ${formatGuide}
-4. Output ONLY the buzz summary. No JSON, no labels.`;
-
-  const user = `Recent ISL results (redacted, no raw scores):
-${matches.slice(0, 5).map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
-
-Recent narratives (do NOT repeat these themes):
-${priorNarr.filter((n) => n.kind === 'media_buzz').slice(0, 4).map((n) => `• ${n.summary.slice(0, 150)}`).join('\n') || '• (none yet)'}
-
-Write one trending ${format} buzz summary from ${displayName}. Plain text only.`;
-
-  try {
-    const response = await anthropic.messages.create({
-      model:      CLAUDE_MODEL,
-      max_tokens: 250,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-    // deno-lint-ignore no-explicit-any
-    const text = response.content?.find((c: any) => c.type === 'text')?.text ?? '';
-    return text.trim() || null;
-  } catch (err) {
-    console.warn('[generateMediaBuzz] failed:', err);
-    return null;
-  }
+function generateMediaBuzz(platform: SocialMediaRow, tickKey: string): string {
+  return mediaBuzz(`${platform.id}:${platform.meta.format}:${tickKey}`);
 }
 
 /**

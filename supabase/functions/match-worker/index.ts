@@ -59,6 +59,7 @@ import {
   type InterferenceEffect,
 } from './interferenceResolver.ts';
 import { computeFanBoost } from './fanBoost.ts';
+import { narrativeRngForMatch, seedFromMatchId } from './matchRng.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
 import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
@@ -725,7 +726,13 @@ async function processMatch(match: any): Promise<boolean> {
     // stays byte-identical for an unchanged roster.
     const homeInput = applyTeamTraits(toSpatialTeamInput(homeData), await buildPersonalityMap(homeData));
     const awayInput = applyTeamTraits(toSpatialTeamInput(awayData), await buildPersonalityMap(awayData));
-    const seed = parseInt(match.id.replace(/-/g, '').slice(0, 8), 16);
+    const seed = seedFromMatchId(match.id);
+
+    // The Architect's post-simulation passes roll against their own seeded
+    // stream, derived from the same match id.  Without it a retry could annul a
+    // different goal than the first run did and persist a different scoreline
+    // from an identical simulation.
+    const narrativeRng = narrativeRngForMatch(match.id);
 
     const spatialResult = simulateSpatialMatch(homeInput, awayInput, { seed });
 
@@ -782,6 +789,7 @@ async function processMatch(match: any): Promise<boolean> {
         result.finalScore,
         home.name ?? home.shortName ?? 'Home',
         away.name ?? away.shortName ?? 'Away',
+        narrativeRng,
       );
       for (const inter of interferences) {
         result.events.push({
@@ -912,18 +920,19 @@ async function processMatch(match: any): Promise<boolean> {
 
       // Apply the post-passes in sequence. Each takes a SimulatedEvent[]
       // and returns a (possibly new) SimulatedEvent[] — input is never
-      // mutated. Production uses Math.random; the resolvers' magnitude*0.1
-      // probability gate encodes the per-intent uncertainty so the
-      // Architect's call is not always guaranteed to fire.
+      // mutated. The resolvers' magnitude*0.1 probability gate encodes the
+      // per-intent uncertainty so the Architect's call is not always
+      // guaranteed to fire; that roll comes off the match-seeded narrative
+      // stream, so the same intents resolve identically on every retry.
       let mutated = result.events;
       if (curses.length > 0 || blesses.length > 0) {
-        mutated = resolveInterferenceStream(mutated, { curses, blesses }, Math.random);
+        mutated = resolveInterferenceStream(mutated, { curses, blesses }, narrativeRng);
       }
       if (annulGoals.length > 0) {
-        mutated = applyAnnulGoals(mutated, annulGoals, Math.random);
+        mutated = applyAnnulGoals(mutated, annulGoals, narrativeRng);
       }
       if (forceRedCards.length > 0) {
-        mutated = applyForceRedCards(mutated, forceRedCards, Math.random);
+        mutated = applyForceRedCards(mutated, forceRedCards, narrativeRng);
       }
 
       // Re-derive finalScore from the mutated stream so annulled / cursed

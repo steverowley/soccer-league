@@ -68,7 +68,7 @@ describe('simulateSpatialMatch — determinism', () => {
     const signatures = new Set(results.map((r) => `${r.finalScore[0]}-${r.finalScore[1]}:${r.events.length}`));
     // Not all three runs should be identical — the seed must actually matter.
     expect(signatures.size).toBeGreaterThan(1);
-  });
+  }, 30000);
 });
 
 describe('simulateSpatialMatch — structural invariants', () => {
@@ -104,7 +104,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
       expect(frame.ball.y).toBeGreaterThanOrEqual(-EPS);
       expect(frame.ball.y).toBeLessThanOrEqual(PITCH_WIDTH + EPS);
     }
-  });
+  }, 30000);
 
   it('samples frames at roughly the configured cadence', () => {
     // stoppage off so the frame count maps cleanly to the configured length.
@@ -116,6 +116,11 @@ describe('simulateSpatialMatch — structural invariants', () => {
   });
 
   it('plays deterministic stoppage time past 90:00, capped at ~6 min', () => {
+    // Explicit timeout, same reason as its siblings: this runs TWO full
+    // 90-minute sims (54k ticks each) and measures ~4s on an idle machine —
+    // inside the 5s default with under a second to spare, which is no margin
+    // at all once CI is running the other 111 files alongside it. 30s matches
+    // the sibling that runs three full matches.
     const withStop = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 7 });
     const noStop = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 7, stoppage: false });
     // Regulation is byte-identical; stoppage only appends extra ticks/events.
@@ -125,7 +130,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
     expect(maxMinute).toBeLessThanOrEqual(96); // 90 + the 6-min clamp
     // Without stoppage the match ends in regulation.
     expect(Math.max(...noStop.events.map((e) => e.minute))).toBeLessThanOrEqual(90);
-  });
+  }, 30000);
 });
 
 describe('simulateSpatialMatch — emergent football', () => {

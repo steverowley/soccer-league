@@ -18,7 +18,7 @@ describe('generateDemoMatch', () => {
     expect(a.finalScore).toEqual(b.finalScore);
     expect(a.frames.length).toBe(b.frames.length);
     expect(a.frames[0]).toEqual(b.frames[0]);
-  });
+  }, 30000);
 
   it('produces a full match of frames with 22 players each', () => {
     const m = generateDemoMatch();
@@ -53,7 +53,7 @@ describe('generateDemoMatch', () => {
     expect(maxX).toBeLessThanOrEqual(107);
     expect(minY).toBeGreaterThanOrEqual(-2);
     expect(maxY).toBeLessThanOrEqual(70);
-  });
+  }, 30000);
 
   it('flags at most one ball carrier per frame, matching the ball owner', () => {
     const m = generateDemoMatch();

@@ -290,10 +290,18 @@ simulate matches and tick the galaxy forward.
   under a single `Suspense` boundary with a per-route `ErrorBoundary` and a `*` → `NotFound` catch-all.
 - **Backend** — Supabase (PostgreSQL + row-level security). 74 migrations (`0000`–`0073`), 40 tables,
   9 views, 14 RPC/functions. Generated types in `src/types/database.ts`.
-- **AI** — Anthropic SDK. Two models in use: `claude-sonnet-4-6` for in-match Architect/interference and
-  the daily drama tick; `claude-haiku-4-5-20251001` for the galaxy tick, corpus enrichment, and in-app
-  commentary (`CLAUDE_MODEL` in `src/constants.ts`). Each edge function hardcodes its own model id, so
-  `constants.ts` is the source of truth only for the browser bundle.
+- **Narrative generation** — **deterministic by default.** In-world prose is generated locally by the
+  seeded grammar engine (`src/shared/narrative/grammar.ts`) over per-voice corpora, so the world costs
+  nothing to run, reproduces exactly, and cannot go silent. Each voice spans thousands of distinct
+  lines; `variantCount` measures the space and the tests assert a floor. Set `ISL_NARRATIVE_MODE=llm`
+  (plus `ANTHROPIC_API_KEY`) on a deployment to put a model back in front — `preferLlm` routes to it
+  and falls back to the corpus on any failure, so the model can only ever add richness, never silence.
+  Converted so far: `architect-galaxy-tick`. Still on the LLM path: `drama-tick`, `corpus-enricher`,
+  `match-worker` (architect + interference), and the browser `CosmicArchitect`/`AgentSystem`.
+- **AI (the opt-in path)** — Anthropic SDK. Two models: `claude-sonnet-4-6` for in-match
+  Architect/interference and the daily drama tick; `claude-haiku-4-5-20251001` for the galaxy tick,
+  corpus enrichment, and in-app commentary (`CLAUDE_MODEL` in `src/constants.ts`). Each edge function
+  hardcodes its own model id, so `constants.ts` is the source of truth only for the browser bundle.
 - **Simulation** — a deterministic, agent-based **spatial** match engine run server-side by the
   `match-worker` edge function (see "Match Simulation").
 - **Hosting** — the static site deploys to **GitHub Pages** via `deploy.yml`; the `match-worker` edge
@@ -363,7 +371,10 @@ from `src/`). Both contain `types.ts`, `vec2.ts`, `rng.ts`, `formation.ts`, `ste
 
 Determinism: `rng.ts` is a seeded mulberry32 generator; the worker derives the seed from the match UUID,
 so a fixture always reproduces the same match — the stored frames, live viewer, and final score can
-never disagree.
+never disagree. The Architect's post-simulation rewrites (curse / annul_goal / force_red_card) share
+that guarantee: `matchRng.ts` derives a second, independent stream from the same UUID, so a given set
+of intents always resolves the same way. The intents themselves come from the LLM and remain
+non-deterministic by design.
 
 ### Position frames & the 2D viewer
 The engine samples a position frame every 2s and the worker persists them to
