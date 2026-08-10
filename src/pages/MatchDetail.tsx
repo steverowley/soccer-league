@@ -51,6 +51,9 @@ import {
   subscribeToMatchEvents,
   DEFAULT_MATCH_DURATION_SECONDS,
   MatchViewer,
+  computeLiveScore,
+  isRevealing,
+  type Scoreline,
   type MatchViewerPlayer,
   type MatchEventRow,
 } from '../features/match';
@@ -76,6 +79,7 @@ const DUST_70  = COLORS.dust70;
 // agree on terminology.
 const STATUS_LABELS: Record<string, string> = {
   in_progress: 'Live',
+  live:        'Live',
   completed:   'Full Time',
   scheduled:   'Scheduled',
   cancelled:   'Cancelled',
@@ -121,6 +125,12 @@ export default function MatchDetail() {
   // the DB. 60s is the smallest interval that won't compete with the
   // 90s heartbeat in AuthProvider.
   const [watcherCount, setWatcherCount] = useState<number>(0);
+
+  // Score derived from the events revealed so far, reported up by the live feed
+  // (which owns the event log and the wall clock).  While a match is `live` its
+  // published `home_score` is deliberately NULL — see logic/liveScore.ts — so
+  // this is the only scoreline the board can honestly show mid-reveal.
+  const [revealedScore, setRevealedScore] = useState<Scoreline | null>(null);
 
   useEffect(() => {
     if (!matchId) return undefined;
@@ -194,7 +204,7 @@ export default function MatchDetail() {
         {match && !loadError && (
           <>
             {/* Section II — scoreboard (the prototype's `.board`). */}
-            <Scoreboard match={match} watcherCount={watcherCount} />
+            <Scoreboard match={match} watcherCount={watcherCount} revealedScore={revealedScore} />
 
             {/* First-match teaching strip — "Meet the booth" (#379).
                 One-time dismissible strip that introduces the three
@@ -230,7 +240,11 @@ export default function MatchDetail() {
             >
               {/* LEFT column — pitch + commentary feed + timeline. */}
               <div className="match-col-l" style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
-                <MatchTheatre match={match} watcherCount={watcherCount} />
+                <MatchTheatre
+                  match={match}
+                  watcherCount={watcherCount}
+                  onRevealedScore={setRevealedScore}
+                />
               </div>
 
               {/* RIGHT column — sticky stake rail. WagerWidget unchanged. */}
@@ -344,17 +358,30 @@ function MatchBreadcrumb({ match }: { match: MatchRow }) {
  *
  * @param {{ match: object, watcherCount: number }} props
  */
-function Scoreboard({ match, watcherCount }: { match: MatchRow; watcherCount: number }) {
+function Scoreboard(
+  { match, watcherCount, revealedScore }:
+  { match: MatchRow; watcherCount: number; revealedScore: Scoreline | null },
+) {
   const homeName  = match.home_team?.name     ?? '?';
   const awayName  = match.away_team?.name     ?? '?';
   const homeColor = match.home_team?.color    ?? null;
   const awayColor = match.away_team?.color    ?? null;
   const homeLoc   = match.home_team?.location ?? '';
   const awayLoc   = match.away_team?.location ?? '';
-  const homeScore = match.home_score ?? 0;
-  const awayScore = match.away_score ?? 0;
 
-  const status = perceivedStatus(match);
+  // `matches.status` is now authoritative about liveness: the worker holds a
+  // match at `live` for its whole real-time reveal window and only publishes
+  // `completed` at full time (migration 0081).  The old `perceivedStatus()`
+  // helper — which guessed liveness from a hardcoded 600 s window because the
+  // worker flipped straight to `completed` — is gone with it.
+  const status = match.status ?? 'scheduled';
+
+  // Mid-reveal the published score is NULL by design, so count the goals the
+  // spectator has actually seen.  Falling back to `?? 0` on the raw columns
+  // would show 0-0 for ten minutes and then snap to the final score.
+  const [homeScore, awayScore] = isRevealing(status)
+    ? (revealedScore ?? [0, 0])
+    : [match.home_score ?? 0, match.away_score ?? 0];
 
   // Attendance — only shown when a real count exists.
   const attendance = typeof match.attendance === 'number' ? match.attendance : null;
@@ -414,38 +441,6 @@ function Scoreboard({ match, watcherCount }: { match: MatchRow; watcherCount: nu
       )}
     </div>
   );
-}
-
-/**
- * Perceived status (time-based override of the DB status).
- *
- * The match-worker pre-simulates the entire 90 minutes in ~10–60 s and flips
- * `status` to `completed` long before the viewer is done pacing the event log
- * on the wall clock.  For the status chip and the pulsing score dot we want
- * "is this match live RIGHT NOW from the user's perspective?", not "has the
- * worker finished writing rows?".  A `completed` row inside its pacing window
- * is upgraded to `in_progress`; scheduled / cancelled rows are untouched.
- *
- * PERCEIVED_LIVE_WINDOW_MS mirrors season_config.match_duration_seconds default
- * (600 s); sourcing the real season knob would need an extra round-trip the
- * scoreboard doesn't make, and a mismatch only shows "Full Time" a few minutes
- * early on non-default seasons — acceptable for v1.
- *
- * @param {object} match
- * @returns {string} The status to render the chip / score from.
- */
-function perceivedStatus(match: MatchRow): string {
-  const rawStatus = match.status ?? 'scheduled';
-  const PERCEIVED_LIVE_WINDOW_MS = 600 * 1000;
-  const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
-  // Wall-clock read in a plain helper (not a component render), so the
-  // react-hooks/purity rule doesn't apply here. A stale "Live" past the window
-  // is harmless and resolves on the next render / nav.
-  const nowMs = Date.now();
-  const inPacingWindow = kickoffMs != null
-    && nowMs >= kickoffMs
-    && nowMs < kickoffMs + PERCEIVED_LIVE_WINDOW_MS;
-  return (rawStatus === 'completed' && inPacingWindow) ? 'in_progress' : rawStatus;
 }
 
 /**
@@ -552,7 +547,10 @@ function TeamScoreBlock(
  * @param {{ status: string }} props
  */
 function StatusChip({ status }: { status: string }) {
-  const isLive      = status === 'in_progress';
+  // `live` is the normal watching state (fully simulated, revealing on the wall
+  // clock); `in_progress` is the brief window while the worker is still writing
+  // rows.  Both read as live to a spectator.
+  const isLive      = isRevealing(status);
   const isCancelled = status === 'cancelled';
   const colour      = isLive ? QUANTUM : isCancelled ? FLARE : DUST;
   return (
@@ -838,15 +836,18 @@ function UnknownMatch({ matchId }: { matchId?: string | undefined }) {
  * Left-column theatre: the 2D pitch panel above the live commentary feed and
  * the derived match-record timeline.
  *
- * The pitch belongs on screen while the match is LIVE from the viewer's
- * perspective — a wall-clock window, NOT the raw DB status.  The worker flips
- * status → 'completed' ~90 s into a 10-minute paced window, so gating on status
- * alone would yank the pitch away mid-match.  Show it for scheduled /
- * in-progress rows AND for any match still inside its pacing window.
+ * Shown for any match that is revealing (`live` / `in_progress`) or scheduled.
+ * The wall-clock pacing-window check is kept as a belt-and-braces fallback for
+ * rows finalised by a path other than the worker (e.g. the admin
+ * `admin_complete_match` RPC), which can reach `completed` without ever
+ * passing through `live`.
  *
  * @param props.match  Full match row from getMatch().
  */
-function MatchTheatre({ match }: { match: MatchRow; watcherCount: number }) {
+function MatchTheatre(
+  { match, onRevealedScore }:
+  { match: MatchRow; watcherCount: number; onRevealedScore: (s: Scoreline) => void },
+) {
   const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
   // eslint-disable-next-line react-hooks/purity -- wall-clock read; a stale value only mis-decides the pitch near the window edge and self-corrects on the next render / nav
   const nowMs = Date.now();
@@ -854,7 +855,7 @@ function MatchTheatre({ match }: { match: MatchRow; watcherCount: number }) {
     && nowMs >= kickoffMs
     && nowMs < kickoffMs + DEFAULT_MATCH_DURATION_SECONDS * 1000;
   const showPitch =
-    match.status === 'in_progress' || match.status === 'scheduled' || match.status === 'live'
+    isRevealing(match.status) || match.status === 'scheduled'
     || withinPacingWindow;
 
   return (
@@ -879,7 +880,7 @@ function MatchTheatre({ match }: { match: MatchRow; watcherCount: number }) {
         );
       })()}
 
-      <LiveCommentary match={match} />
+      <LiveCommentary match={match} onRevealedScore={onRevealedScore} />
     </>
   );
 }
@@ -949,7 +950,10 @@ interface LiveCommentaryMatch {
  * @param props.match  Match row from getMatch() — needs id, status, and
  *                     scheduled_at (the kickoff anchor for elapsed math).
  */
-export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
+export function LiveCommentary(
+  { match, onRevealedScore }:
+  { match: LiveCommentaryMatch; onRevealedScore?: (s: Scoreline) => void },
+) {
   const db = useSupabase();
 
   // The "live experience" anchors on wall-clock vs scheduled_at, NOT on the
@@ -1056,6 +1060,16 @@ export function LiveCommentary({ match }: { match: LiveCommentaryMatch }) {
     () => filterEventsByElapsedMinute(events, elapsedMinute),
     [events, elapsedMinute],
   );
+
+  // ── Report the revealed scoreline up to the scoreboard ────────────────────
+  // This component owns the event log and the wall clock, so it is the only
+  // place that knows what the spectator has actually seen.  The scoreboard sits
+  // above it in the tree and cannot read `home_score` while a match is `live`
+  // (it is NULL by design until full time), so it receives the count from here.
+  const revealed = useMemo(() => computeLiveScore(visibleEvents), [visibleEvents]);
+  useEffect(() => {
+    onRevealedScore?.(revealed);
+  }, [onRevealedScore, revealed]);
 
   if (!showSection) return null;
 

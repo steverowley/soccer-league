@@ -91,6 +91,26 @@ const narrativeMode: NarrativeMode = resolveNarrativeMode(Deno.env.get('ISL_NARR
 const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
 
 /**
+ * Fallback reveal window (seconds) when a season has no `season_config` row.
+ *
+ * Mirrors the 600 s seeded by migration 0013 and the browser-side
+ * DEFAULT_MATCH_DURATION_SECONDS, so a season created without config still
+ * paces at ten real minutes per 90 simulated ones rather than finalising a
+ * match the instant it is simulated.  (Seasons 2 and 3 in production were both
+ * created without a config row — the rollover path never wrote one.)
+ */
+const DEFAULT_MATCH_DURATION_SECONDS = 600;
+
+/**
+ * Most `live` matches one finalizer pass will publish.  The pass runs every
+ * cron minute and each match costs a handful of cheap row updates (no
+ * simulation), so this only needs to exceed the number of matches that can
+ * reach full time within one minute — a whole staggered matchday is far below
+ * it.  Bounds the tick if a backlog ever builds (e.g. cron was down).
+ */
+const FINALIZE_BATCH_SIZE = 64;
+
+/**
  * Wall-clock budget (ms) for claiming + simulating matches in a single cron
  * invocation.  Matches are claimed and processed ONE AT A TIME (see
  * claimNextDueMatch), so when this budget is spent we simply stop claiming new
@@ -1152,20 +1172,30 @@ async function processMatch(match: any): Promise<boolean> {
       }
     }
 
-    // ── Update match to completed ──────────────────────────────────────────
-    // The matches table only has columns for status / scores / timestamps —
-    // there is intentionally no `mvp_player_name` column.  The MVP is captured
-    // inside the final `mvp` event payload in match_events, where downstream
-    // views (player_idol_score, public match feed) read it from.  Updating a
-    // non-existent column here would throw at the PostgREST boundary and
-    // revert every match in this batch back to 'scheduled' — masking the
-    // simulation work that just succeeded.
+    // ── Publish as LIVE (result withheld) ──────────────────────────────────
+    // The whole 90 minutes is now persisted (events + frames + stats), but the
+    // match has only just kicked off on the WALL CLOCK.  Writing 'completed'
+    // plus the score here — as this worker used to — ended the match before
+    // anyone could watch it: the scoreboard reads matches.home_score directly,
+    // so the final score sat on screen from minute 0 while the commentary feed
+    // was still pacing minute 3.
+    //
+    // So we go to 'live' and park the score in sim_* instead.  finalizeDueMatches
+    // publishes both once real full time arrives (migration 0081).
+    //
+    // 'live' is deliberately NOT 'in_progress': that status is the claim lock,
+    // the MAX_IN_FLIGHT semaphore and the stale-reaper's target, and must stay
+    // seconds-long.  Parking a 10-minute reveal there would cap the league at 4
+    // concurrent matches and re-simulate each one every 10 minutes.
+    //
+    // The matches table has no `mvp_player_name` column by design — the MVP
+    // lives in the final `mvp` event payload, where player_idol_score reads it.
     const { error: updateError } = await supabase
       .from('matches')
       .update({
-        status: 'completed',
-        home_score: result.finalScore[0],
-        away_score: result.finalScore[1],
+        status: 'live',
+        sim_home_score: result.finalScore[0],
+        sim_away_score: result.finalScore[1],
       })
       .eq('id', match.id);
 
@@ -1173,78 +1203,17 @@ async function processMatch(match: any): Promise<boolean> {
       throw new Error(`Update match failed: ${updateError.message}`);
     }
 
-    // ── Post-match orchestration ──────────────────────────────────────────
-    // These side-effects used to be wired through the browser-side
-    // `match.completed` event bus, which is an in-memory singleton that
-    // can never reach a server-side edge worker.  Now they run inline in
-    // service-role context immediately after the match is marked complete.
+    // ── Post-match orchestration runs at FULL TIME, not here ───────────────
+    // Wager settlement, cup-bracket advancement, the season transition and the
+    // entity memory writes all used to fire the instant the sim finished.  Each
+    // one leaks the result to a spectator who hasn't watched the match yet: a
+    // punter's balance moved before kickoff, the next cup round appeared while
+    // the tie was still "live", and the league table showed a finished result.
     //
-    // Failures here are logged but do NOT throw — the match is already
-    // recorded as completed and we shouldn't revert simulation work just
-    // because a downstream effect (e.g. settlement) hit a transient DB
-    // blip.  Each effect is independently retry-safe; cron will pick up
-    // missed work in the next pass for season transitions, and a manual
-    // settlement sweep can clean up any open wagers that slipped through.
-    try {
-      const settlement = await settleMatchWagers(
-        supabase, match.id, result.finalScore[0], result.finalScore[1],
-      );
-      if (settlement.settled > 0) {
-        console.log(`[match-worker] Settled ${settlement.settled} wagers, total payout ${settlement.totalPayout}`);
-      }
-    } catch (err) {
-      console.warn(`[match-worker] settleMatchWagers threw for ${match.id}:`, (err as Error)?.message ?? err);
-    }
-
-    // Advance the cup bracket if this match belonged to one.  A no-op for
-    // league matches (their competition has no bracket).  Draws are logged
-    // but skipped — extra-time / penalty resolution is not yet simulated,
-    // so a drawn cup match leaves the bracket frozen until a future slice
-    // resolves the tie.
-    await maybeAdvanceCupBracket(
-      supabase,
-      match.id,
-      match.competition_id ?? null,
-      match.home_team_id,
-      match.away_team_id,
-      result.finalScore[0],
-      result.finalScore[1],
-    );
-
-    try {
-      const seasonTx = await maybeTransitionSeasonForMatch(supabase, match.id);
-      if (seasonTx.transitioned) {
-        console.log(`[match-worker] Season opened for voting after match ${match.id}`);
-      }
-    } catch (err) {
-      console.warn(`[match-worker] maybeTransitionSeasonForMatch threw for ${match.id}:`, (err as Error)?.message ?? err);
-    }
-
-    // ── Server-side memory writes ───────────────────────────────────────────
-    // The browser-side MemoryWriteListener writes entity_memories rows for
-    // every involved actor (referee + both managers) on `match.completed`,
-    // but only when a user is online to receive the bus event.  This is the
-    // server-side mirror — guarantees the corpus-enricher always has fresh
-    // memories to consume, regardless of who's watching.  Dual writes
-    // collapse to one row via the dedup unique index on
-    // (entity_id, fact_kind, occurred_at, md5(payload)) in migration 0035.
-    try {
-      const memSummary = await writeMatchCompletionMemories(
-        supabase,
-        match.id,
-        match.home_team_id,
-        match.away_team_id,
-        result.finalScore[0],
-        result.finalScore[1],
-        match.competition_id ?? '',
-      );
-      if (memSummary.inserted > 0) {
-        console.log(`[match-worker] Wrote ${memSummary.inserted}/${memSummary.attempted} match_result memories for match ${match.id}`);
-      }
-    } catch (err) {
-      console.warn(`[match-worker] writeMatchCompletionMemories threw for ${match.id}:`, (err as Error)?.message ?? err);
-    }
-
+    // They now run in finalizeDueMatches() once the wall clock reaches full
+    // time.  Every one of them needs only columns on the match row (ids +
+    // score), so the finalizer can drive them without re-simulating.
+    //
     // ── Post-match Architect lore save ─────────────────────────────────────
     // Closes the architect_lore persistence loop: one Claude call to mint a
     // verdict + lore mutations (player arcs, manager fates, rivalry thread,
@@ -1252,18 +1221,24 @@ async function processMatch(match: any): Promise<boolean> {
     // simulation via the synchronous getRelationshipFor / getFeaturedMortals
     // / getActiveRelationships reads gameEngine.js makes.
     //
-    // Failures are non-blocking — the match is already recorded as completed
-    // and a missed save just means the next match runs with the same lore
-    // it would have had anyway.  We MUST await loreStore.flush() before
-    // returning so the Deno isolate doesn't get reclaimed mid-upsert and
-    // silently drop the mutations.
+    // Failures are non-blocking — the match is already recorded as live and a
+    // missed save just means the next match runs with the same lore it would
+    // have had anyway.  We MUST await loreStore.flush() before returning so the
+    // Deno isolate doesn't get reclaimed mid-upsert and silently drop the
+    // mutations.
+    //
+    // This one stays on the simulation path (unlike the effects above) because
+    // it needs the in-memory sim result, both hydrated rosters and the live
+    // architect instance — the finalizer has only the match row.  It writes to
+    // architect_lore, which is engine-internal state read by future sims, not
+    // a public feed, so it cannot leak this match's score to a spectator.
     try {
       await postMatchLoreSave(architect, loreStore, match, result, homeData, awayData);
     } catch (err) {
       console.warn(`[match-worker] postMatchLoreSave threw for ${match.id}:`, (err as Error)?.message ?? err);
     }
 
-    console.log(`[match-worker] Match ${match.id} completed successfully`);
+    console.log(`[match-worker] Match ${match.id} simulated; live until full time`);
     return true;
   } catch (err) {
     console.error(`[match-worker] Error processing match ${match.id}:`, err);
@@ -1288,7 +1263,14 @@ async function processMatch(match: any): Promise<boolean> {
     const { error: revertError } = await supabase
       .from('matches')
       .update({ status: 'scheduled', played_at: null })
-      .eq('id', match.id);
+      .eq('id', match.id)
+      // Only ever un-claim a match still mid-simulation.  Since the reveal
+      // model landed, a row can legitimately be 'live' (simulated, awaiting
+      // full time) or 'completed' (published) — rewinding either of those to
+      // 'scheduled' would re-simulate a match spectators are already watching,
+      // or replay one that has already paid out.  Nothing after the 'live'
+      // write can throw today, so this is belt-and-braces.
+      .eq('status', 'in_progress');
 
     if (revertError) {
       console.error(`[match-worker] Failed to revert match ${match.id}:`, revertError);
@@ -1404,6 +1386,206 @@ async function spawnWorker(): Promise<boolean> {
     console.warn('[match-worker] worker invocation failed:', (err as Error)?.message ?? err);
     return false;
   }
+}
+
+/**
+ * Resolve each competition's reveal window (in seconds) from its season config.
+ *
+ * Two hops, batched: competition → season_id → season_config
+ * .match_duration_seconds.  season_config has no FK to matches (it is keyed by
+ * season_id, deliberately decoupled in migration 0013), which is why this can't
+ * be one join from the match row.
+ *
+ * @param competitionIds  Distinct competition ids to resolve.
+ * @returns  Map of competition_id → reveal window in seconds.  Any competition
+ *           whose season has no config row (or that fails to resolve) maps to
+ *           DEFAULT_MATCH_DURATION_SECONDS, so a missing row paces the match
+ *           normally instead of finalising it immediately.
+ */
+async function resolveRevealWindows(competitionIds: string[]): Promise<Map<string, number>> {
+  const windows = new Map<string, number>();
+  if (competitionIds.length === 0) return windows;
+
+  const { data: comps, error: compErr } = await supabase
+    .from('competitions')
+    .select('id, season_id')
+    .in('id', competitionIds);
+
+  if (compErr || !comps) {
+    console.warn('[match-worker] competition lookup for reveal window failed:', compErr?.message);
+    for (const id of competitionIds) windows.set(id, DEFAULT_MATCH_DURATION_SECONDS);
+    return windows;
+  }
+
+  const seasonIds = [...new Set(comps.map((c) => c.season_id).filter(Boolean))] as string[];
+  const bySeason = new Map<string, number>();
+
+  if (seasonIds.length > 0) {
+    const { data: cfgs, error: cfgErr } = await supabase
+      .from('season_config')
+      .select('season_id, match_duration_seconds')
+      .in('season_id', seasonIds);
+
+    if (cfgErr) {
+      console.warn('[match-worker] season_config lookup failed:', cfgErr.message);
+    } else {
+      for (const cfg of cfgs ?? []) {
+        const secs = cfg.match_duration_seconds;
+        if (typeof secs === 'number' && secs > 0) bySeason.set(cfg.season_id as string, secs);
+      }
+    }
+  }
+
+  for (const c of comps) {
+    windows.set(
+      c.id as string,
+      bySeason.get(c.season_id as string) ?? DEFAULT_MATCH_DURATION_SECONDS,
+    );
+  }
+  return windows;
+}
+
+/**
+ * Publish every `live` match that has reached real full time.
+ *
+ * This is the other half of the reveal model introduced in migration 0081.  The
+ * simulation path writes status='live' with the score parked in sim_*; this pass
+ * waits until `scheduled_at + match_duration_seconds` has actually elapsed on
+ * the wall clock, then makes the result public and fires the post-match effects
+ * that would otherwise have spoiled it.
+ *
+ * ORDERING: the status flip happens FIRST and acts as the lock.  The UPDATE
+ * carries an `.eq('status','live')` predicate, so when two overlapping cron
+ * ticks race for the same match exactly one gets a row back from `.select()` —
+ * only that caller runs the side effects, and wagers can never settle twice.
+ *
+ * Every effect is best-effort and logged rather than thrown: the result is
+ * already published by that point, and reverting a finalised match because a
+ * downstream write blipped would be worse than a retryable gap.
+ *
+ * @returns Number of matches published this pass.
+ */
+async function finalizeDueMatches(): Promise<number> {
+  const { data: liveMatches, error } = await supabase
+    .from('matches')
+    .select('id, competition_id, home_team_id, away_team_id, scheduled_at, sim_home_score, sim_away_score')
+    .eq('status', 'live')
+    .order('scheduled_at', { ascending: true })
+    .limit(FINALIZE_BATCH_SIZE);
+
+  if (error) {
+    console.error('[match-worker] SELECT live matches failed:', error);
+    return 0;
+  }
+  if (!liveMatches || liveMatches.length === 0) return 0;
+
+  const windows = await resolveRevealWindows(
+    [...new Set(liveMatches.map((m) => m.competition_id).filter(Boolean))] as string[],
+  );
+
+  const nowMs = Date.now();
+  let published = 0;
+
+  for (const m of liveMatches) {
+    // Full time = kickoff + the season's reveal window.  A match with no
+    // scheduled_at can never be paced against the clock, so publish it at once
+    // rather than stranding it in 'live' forever.
+    const kickoffMs = m.scheduled_at ? new Date(m.scheduled_at as string).getTime() : null;
+    const windowSec = windows.get(m.competition_id as string) ?? DEFAULT_MATCH_DURATION_SECONDS;
+    if (kickoffMs != null && nowMs < kickoffMs + windowSec * 1000) continue;
+
+    // A 'live' row should always carry its withheld score; treat a missing one
+    // as 0-0 rather than writing NULL, which standings would silently skip.
+    const homeScore = m.sim_home_score ?? 0;
+    const awayScore = m.sim_away_score ?? 0;
+
+    const { data: claimed, error: publishErr } = await supabase
+      .from('matches')
+      .update({ status: 'completed', home_score: homeScore, away_score: awayScore })
+      .eq('id', m.id)
+      .eq('status', 'live')
+      .select('id');
+
+    if (publishErr) {
+      console.error(`[match-worker] Publish failed for ${m.id}:`, publishErr);
+      continue;
+    }
+    // Lost the race to a concurrent tick — that tick owns the side effects.
+    if (!claimed || claimed.length === 0) continue;
+
+    published++;
+
+    // ── Post-match orchestration (moved here from the simulation path) ──────
+    // These used to run the moment the sim finished, which moved a punter's
+    // balance and advanced the cup bracket before the match had been watched.
+    try {
+      const settlement = await settleMatchWagers(supabase, m.id as string, homeScore, awayScore);
+      if (settlement.settled > 0) {
+        console.log(`[match-worker] Settled ${settlement.settled} wagers, total payout ${settlement.totalPayout}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] settleMatchWagers threw for ${m.id}:`, (err as Error)?.message ?? err);
+    }
+
+    // Advance the cup bracket if this match belonged to one.  A no-op for
+    // league matches (their competition has no bracket).  Draws are logged but
+    // skipped — extra-time / penalty resolution is not yet simulated, so a
+    // drawn cup match leaves the bracket frozen until a future slice resolves
+    // the tie.  Sequential by construction: the finalizer loop is serial, so
+    // two ties in the same competition never read-modify-write the bracket
+    // concurrently.
+    try {
+      await maybeAdvanceCupBracket(
+        supabase,
+        m.id as string,
+        (m.competition_id as string) ?? null,
+        m.home_team_id as string,
+        m.away_team_id as string,
+        homeScore,
+        awayScore,
+      );
+    } catch (err) {
+      console.warn(`[match-worker] maybeAdvanceCupBracket threw for ${m.id}:`, (err as Error)?.message ?? err);
+    }
+
+    try {
+      const seasonTx = await maybeTransitionSeasonForMatch(supabase, m.id as string);
+      if (seasonTx.transitioned) {
+        console.log(`[match-worker] Season opened for voting after match ${m.id}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] maybeTransitionSeasonForMatch threw for ${m.id}:`, (err as Error)?.message ?? err);
+    }
+
+    // ── Server-side memory writes ──────────────────────────────────────────
+    // The browser-side MemoryWriteListener writes entity_memories rows for
+    // every involved actor (referee + both managers) on `match.completed`, but
+    // only when a user is online to receive the bus event.  This is the
+    // server-side mirror — guarantees the corpus-enricher always has fresh
+    // memories to consume, regardless of who's watching.  Dual writes collapse
+    // to one row via the dedup unique index on
+    // (entity_id, fact_kind, occurred_at, md5(payload)) in migration 0035.
+    try {
+      const memSummary = await writeMatchCompletionMemories(
+        supabase,
+        m.id as string,
+        m.home_team_id as string,
+        m.away_team_id as string,
+        homeScore,
+        awayScore,
+        (m.competition_id as string) ?? '',
+      );
+      if (memSummary.inserted > 0) {
+        console.log(`[match-worker] Wrote ${memSummary.inserted}/${memSummary.attempted} match_result memories for match ${m.id}`);
+      }
+    } catch (err) {
+      console.warn(`[match-worker] writeMatchCompletionMemories threw for ${m.id}:`, (err as Error)?.message ?? err);
+    }
+
+    console.log(`[match-worker] Match ${m.id} reached full time (${homeScore}-${awayScore})`);
+  }
+
+  return published;
 }
 
 /**
@@ -1528,6 +1710,17 @@ async function runDispatcherMode(): Promise<Response> {
     if (requeued > 0) console.log(`[match-worker] Requeued ${requeued} stale in_progress match(es)`);
   } catch (err) {
     console.warn('[match-worker] requeueStaleInProgress threw:', (err as Error)?.message ?? err);
+  }
+
+  // ── Publish any live match that has reached full time ────────────────────
+  // Runs BEFORE new claims so a finished match releases its place in the
+  // spectator's "live" list in the same tick that the next one kicks off.
+  // Cheap (row updates only, no simulation) and non-fatal.
+  try {
+    const finalized = await finalizeDueMatches();
+    if (finalized > 0) console.log(`[match-worker] Finalized ${finalized} match(es) at full time`);
+  } catch (err) {
+    console.warn('[match-worker] finalizeDueMatches threw:', (err as Error)?.message ?? err);
   }
 
   // ── Fan out LEAGUE matches: parallel single-match isolates drain the round

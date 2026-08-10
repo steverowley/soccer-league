@@ -195,6 +195,15 @@ export {
   computeElapsedGameMinute,
   filterEventsByElapsedMinute,
 } from './logic/elapsedMinute';
+// Scoreline derived from the events revealed so far.  A match sitting at
+// `live` withholds its published score until full time, so every surface that
+// shows a score mid-reveal counts revealed goals instead of reading the row.
+export {
+  computeLiveScore,
+  isRevealing,
+  type Scoreline,
+  type ScorableEvent,
+} from './logic/liveScore';
 export {
   getLiveMatch,
   getMatchEvents,
