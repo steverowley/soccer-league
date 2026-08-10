@@ -127,6 +127,7 @@ function readMoments(input: DirectorInput): Moment[] {
   const moments: Moment[] = [];
   let homeScore = 0;
   let awayScore = 0;
+  let lastTensionMinute = -1;
 
   for (const ev of input.events) {
     const payload = ev.payload as Record<string, unknown>;
@@ -146,6 +147,15 @@ function readMoments(input: DirectorInput): Moment[] {
     }
 
     if (!isGoal && !isRedCard && ev.minute < LATE_MATCH_MINUTE) continue;
+
+    // Collapse late-match tension to ONE candidate per minute. The worker hands
+    // us the raw pre-filter stream — a single match carries ~2,400 events past
+    // the 75th minute — so without this every pass and tackle in the closing
+    // stretch would be its own candidate.
+    if (!isGoal && !isRedCard) {
+      if (lastTensionMinute === ev.minute) continue;
+      lastTensionMinute = ev.minute;
+    }
 
     moments.push({
       minute:    ev.minute,
@@ -469,12 +479,24 @@ export function directInterferences(input: DirectorInput, matchId: string): Arch
   const ranks   = prominence(input.events);
   const sides   = sidesOfPlayers(input);
 
-  const out: ArchitectInterference[] = [];
+  // Choose the candidate slots BEFORE rolling on any of them. Rolling inside
+  // the selection walk would let a failed roll fall through to the next event
+  // and try again — and with thousands of events in the closing stretch, "try
+  // again" means the Architect fires every match and fills its cap. Selection
+  // first gives each dramatic slot one honest chance, and lets a quiet match
+  // pass with no interference at all.
+  const slots: Moment[] = [];
   let lastMinute = -MIN_MINUTES_BETWEEN_INTERFERENCES;
-
   for (const moment of moments) {
-    if (out.length >= MAX_INTERFERENCES_PER_MATCH) break;
+    if (slots.length >= MAX_INTERFERENCES_PER_MATCH) break;
     if (moment.minute - lastMinute < MIN_MINUTES_BETWEEN_INTERFERENCES) continue;
+    slots.push(moment);
+    lastMinute = moment.minute;
+  }
+
+  const out: ArchitectInterference[] = [];
+
+  for (const moment of slots) {
     if (rng() >= interestIn(moment)) continue;
 
     const action = chooseAction(moment, rng);
@@ -499,7 +521,6 @@ export function directInterferences(input: DirectorInput, matchId: string): Arch
       targetTeam:       effective.against,
       magnitude:        chooseMagnitude(moment, rng),
     });
-    lastMinute = moment.minute;
   }
 
   return out;

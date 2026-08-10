@@ -122,12 +122,16 @@ describe('the Architect punishes the hero and pities the anonymous', () => {
 
   it('blesses a player on the side that is behind', () => {
     // A one-goal game late is where blessings live.
+    // Slots land at 20 (1-0), 40 (2-0) and 80 (2-1) once the twelve-minute
+    // cooldown is applied — the last of which is the one-goal-late state the
+    // blessing branch keys on. Brann touches the ball without scoring, so he
+    // is the least prominent away player and the natural recipient.
     const tight: SimulatedEvent[] = [
       goal(20, HOME, 'Vale'),
-      touch(50, AWAY, 'Quist'),
-      goal(78, HOME, 'Vale'),
-      goal(82, AWAY, 'Quist'),
-      touch(86, AWAY, 'Brann'),
+      touch(35, AWAY, 'Brann'),
+      goal(40, HOME, 'Vale'),
+      touch(60, AWAY, 'Brann'),
+      goal(80, AWAY, 'Quist'),
     ];
     const blessed: string[] = [];
     for (let i = 0; i < 60; i++) {
@@ -138,6 +142,47 @@ describe('the Architect punishes the hero and pities the anonymous', () => {
     expect(blessed.length).toBeGreaterThan(0);
     // Away trail, so the gift goes to an away player — never to the leader's hero.
     expect(blessed).not.toContain('Vale');
+  });
+});
+
+describe('a dense late-match stream does not force the Architect out', () => {
+  // REGRESSION (caught in review on #652): the worker passes the RAW event
+  // stream, which carries ~2,400 events past the 75th minute — filterNotableEvents
+  // runs two hundred lines later. The first version of this director rolled
+  // inside the selection walk, so a failed roll simply fell through to the next
+  // event and tried again; across thousands of late events it fired every match
+  // and filled the cap, which is the opposite of the intended per-slot chance.
+  function denseLateMatch(): SimulatedEvent[] {
+    const events: SimulatedEvent[] = [goal(30, HOME, 'Vale')];
+    // 15 late minutes x 40 incidental touches — a fraction of a real stream,
+    // but far more than enough to re-trigger the bug if it ever comes back.
+    for (let minute = 75; minute <= 89; minute++) {
+      for (let i = 0; i < 40; i++) events.push(touch(minute, AWAY, `Sub${i % 5}`));
+    }
+    return events;
+  }
+
+  it('leaves some matches alone entirely', () => {
+    let silent = 0;
+    for (let i = 0; i < 60; i++) {
+      if (directInterferences(input(denseLateMatch()), `dense-${i}`).length === 0) silent += 1;
+    }
+    // With one honest roll per slot, a good share of matches pass untouched.
+    expect(silent).toBeGreaterThan(0);
+  });
+
+  it('still respects the per-match cap under a dense stream', () => {
+    for (let i = 0; i < 60; i++) {
+      expect(directInterferences(input(denseLateMatch()), `cap-${i}`).length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('treats a whole late minute as one moment, not forty', () => {
+    // Two interferences can never share a minute, however many events it holds.
+    for (let i = 0; i < 60; i++) {
+      const minutes = directInterferences(input(denseLateMatch()), `min-${i}`).map((x) => x.minute);
+      expect(new Set(minutes).size).toBe(minutes.length);
+    }
   });
 });
 

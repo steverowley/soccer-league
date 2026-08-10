@@ -656,6 +656,8 @@ async function processMatch(match: any): Promise<boolean> {
       computeFanBoost(supabase, match.home_team_id, match.away_team_id),
       prepareArchitectForMatch(supabase, {
         apiKey:   ANTHROPIC_API_KEY,
+        matchId:  match.id,
+        mode:     narrativeMode,
         homeTeam: {
           name:      home.name,
           shortName: home.shortName,
