@@ -273,20 +273,28 @@ export default function MatchDetail() {
               </aside>
             </div>
 
-            {/* Section IV — player stats. */}
-            <section style={{ padding: '0 0 80px' }}>
-              <SectionHeader
-                kicker="IV"
-                label="The Stats"
-                title="Player Performance"
-                subtitle="Aggregated match stats per player.  Ratings reflect engine assessment — interpret them as the booth would."
-              />
-              <PlayerStats
-                homeTeam={match.home_team}
-                awayTeam={match.away_team}
-                stats={match.match_player_stats ?? []}
-              />
-            </section>
+            {/* Section IV — player stats.
+                HIDDEN WHILE THE MATCH IS REVEALING.  `match_player_stats` is
+                written in full the moment the match is simulated, so these rows
+                already hold every goal and card.  Rendering them during the
+                reveal would let a spectator scroll past the paced commentary
+                and read the result off the table — defeating the whole point of
+                withholding the score.  They appear at full time. */}
+            {!isRevealing(match.status) && (
+              <section style={{ padding: '0 0 80px' }}>
+                <SectionHeader
+                  kicker="IV"
+                  label="The Stats"
+                  title="Player Performance"
+                  subtitle="Aggregated match stats per player.  Ratings reflect engine assessment — interpret them as the booth would."
+                />
+                <PlayerStats
+                  homeTeam={match.home_team}
+                  awayTeam={match.away_team}
+                  stats={match.match_player_stats ?? []}
+                />
+              </section>
+            )}
           </>
         )}
       </Container>

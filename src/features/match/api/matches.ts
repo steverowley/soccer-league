@@ -28,6 +28,35 @@ import type { IslSupabaseClient } from '@shared/supabase/client';
 // Malformed rows warn-log and drop, preserving the original (wide) row type.
 import { dropInvalidMatchListRows } from './matches.schema';
 
+// ── Withheld-result stripping ─────────────────────────────────────────────
+
+/**
+ * Drop the withheld simulated score from a match row before it reaches the app.
+ *
+ * `sim_home_score` / `sim_away_score` carry the final result while a match is
+ * still `live` (migration 0081).  Every match query selects `*`, so without
+ * this they would arrive in the very same object as `home_score` — the exact
+ * shape that caused the original spoiler, where a component read the final
+ * score off the row and rendered it mid-reveal.  Stripping here, at the api
+ * boundary the architecture already designates for DB-shape translation, means
+ * no UI code can read them by accident.
+ *
+ * SCOPE, HONESTLY: this hardens the app, not the database.  `matches` is
+ * public-read and so is `match_events`, which holds every goal of the match
+ * from the moment it is simulated — that is the pre-simulate-then-reveal model
+ * migration 0013 established, and a direct PostgREST query still sees it.
+ * Sealing the result from a determined client is a separate, larger change
+ * (progressive event publication), not something this strip pretends to do.
+ *
+ * @param row  A match row straight from PostgREST, or null.
+ * @returns    The same row without the `sim_*` keys.  Null passes through.
+ */
+function stripWithheldResult<T>(row: T): T {
+  if (row == null || typeof row !== 'object') return row;
+  const { sim_home_score: _h, sim_away_score: _a, ...rest } = row as Record<string, unknown>;
+  return rest as T;
+}
+
 // ── getMatch ──────────────────────────────────────────────────────────────
 
 /**
@@ -71,7 +100,8 @@ export async function getMatch(db: IslSupabaseClient, matchId: string) {
     .eq('id', matchId)
     .single();
   if (error) throw error;
-  return data;
+  // Never hand the withheld result to the page — see stripWithheldResult.
+  return stripWithheldResult(data);
 }
 
 // ── Live / upcoming list queries ─────────────────────────────────────────
@@ -109,7 +139,7 @@ export async function getLiveMatches(db: IslSupabaseClient) {
     .in('status', ['live', 'in_progress'])
     .order('scheduled_at', { ascending: false });
   if (error) throw error;
-  return dropInvalidMatchListRows(data ?? [], 'getLiveMatches');
+  return dropInvalidMatchListRows((data ?? []).map(stripWithheldResult), 'getLiveMatches');
 }
 
 /**
