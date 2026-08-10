@@ -1,0 +1,103 @@
+# ── Deploy the narrative edge functions ───────────────────────────────────────
+# WHY THIS EXISTS
+# ───────────────
+# match-worker has had an auto-deploy workflow since it was written; the other
+# scheduled functions never did, so they were deployed by hand and then rotted.
+# At the time this workflow was added, production was running:
+#
+#   architect-galaxy-tick  — last deployed 2026-06-04
+#   drama-tick             — last deployed 2026-05-17
+#   corpus-enricher        — last deployed 2026-05-17
+#
+# That gap is not cosmetic. The deterministic narrative work merged in #651 sat
+# in main for hours while production kept running the old LLM code and kept
+# logging llm_error on every tick — the feed looked broken because the fix had
+# never actually shipped. Merging is not deploying unless something deploys it.
+#
+# WHY CI RATHER THAN LOCAL / MCP
+# ──────────────────────────────
+# Same reasoning as deploy-match-worker.yml: the Supabase deploy endpoint is not
+# reachable from every development environment, and the MCP deploy tool needs the
+# whole function inlined as text. A GitHub runner reads the files straight off
+# the checkout, so the deploy is byte-exact with no transcription step.
+#
+# REQUIRED SECRET
+# ───────────────
+#   SUPABASE_ACCESS_TOKEN — the same Personal Access Token deploy-match-worker.yml
+#   uses. No new secret is needed.
+#
+# AUTH NOTE (--no-verify-jwt)
+# ───────────────────────────
+# All three are invoked by pg_cron with a Bearer shared secret rather than a
+# Supabase JWT, and all three are currently deployed with verify_jwt disabled.
+# Deploying them with verification ON would 401 every cron invocation and
+# silently stop the world. Do not remove --no-verify-jwt.
+
+name: Deploy narrative functions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/architect-galaxy-tick/**'
+      - 'supabase/functions/drama-tick/**'
+      - 'supabase/functions/corpus-enricher/**'
+      - '.github/workflows/deploy-narrative-functions.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-narrative-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Production guardrail: only ever deploy from main. workflow_dispatch lets
+    # the caller pick any ref, and this job publishes to the hard-coded prod
+    # project — without this gate, dispatching from a feature branch would ship
+    # unmerged code.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Same pin as deploy-match-worker.yml, so both workflows deploy with
+          # a CLI version validated against this repo's function bundles.
+          version: 2.104.0
+
+      # Deployed as separate steps rather than a loop so a failure names the
+      # function that failed, and so the two that follow still get their chance.
+      - name: Deploy architect-galaxy-tick
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy architect-galaxy-tick \
+            --project-ref ddtpbipkqamuxnvupddc \
+            --use-api \
+            --no-verify-jwt
+
+      - name: Deploy drama-tick
+        if: '!cancelled()'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy drama-tick \
+            --project-ref ddtpbipkqamuxnvupddc \
+            --use-api \
+            --no-verify-jwt
+
+      - name: Deploy corpus-enricher
+        if: '!cancelled()'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy corpus-enricher \
+            --project-ref ddtpbipkqamuxnvupddc \
+            --use-api \
+            --no-verify-jwt
