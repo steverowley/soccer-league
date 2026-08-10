@@ -60,6 +60,7 @@ import {
 } from './interferenceResolver.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { narrativeRngForMatch, seedFromMatchId } from './matchRng.ts';
+import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
 import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
@@ -79,6 +80,13 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
  * completion is never blocked on this key being present.
  */
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+
+/**
+ * Which engine writes the Architect's in-match judgement. Deterministic unless
+ * a deployment explicitly opts into a model, so a worker with no key configured
+ * still gets a full Architect rather than a silent one.
+ */
+const narrativeMode: NarrativeMode = resolveNarrativeMode(Deno.env.get('ISL_NARRATIVE_MODE'));
 
 const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase call
 
@@ -648,6 +656,8 @@ async function processMatch(match: any): Promise<boolean> {
       computeFanBoost(supabase, match.home_team_id, match.away_team_id),
       prepareArchitectForMatch(supabase, {
         apiKey:   ANTHROPIC_API_KEY,
+        matchId:  match.id,
+        mode:     narrativeMode,
         homeTeam: {
           name:      home.name,
           shortName: home.shortName,
@@ -790,6 +800,14 @@ async function processMatch(match: any): Promise<boolean> {
         home.name ?? home.shortName ?? 'Home',
         away.name ?? away.shortName ?? 'Away',
         narrativeRng,
+        {
+          matchId:   match.id,
+          // The engine stamps this exact string onto every event's `team`, so
+          // the director needs it to attribute goals to a side.
+          homeShort: home.shortName ?? home.name ?? 'Home',
+          awayShort: away.shortName ?? away.name ?? 'Away',
+          mode:      narrativeMode,
+        },
       );
       for (const inter of interferences) {
         result.events.push({

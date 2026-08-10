@@ -64,6 +64,8 @@
 
 // @ts-ignore — Deno-only import resolved at deploy time.
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
+import { architectMatchTitle, architectOmen } from './architectOmens.ts';
+import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import {
   loadShadowDistribution,
   type ShadowDistribution,
@@ -590,6 +592,12 @@ export class CosmicArchitect {
    *                verdict prompts.  `stadium` may be null when the worker
    *                couldn't resolve a venue (omen still works).
    */
+  /** Seeds the deterministic omen + title so a fixture keeps its name. */
+  private readonly matchId: string;
+
+  /** Which engine writes the omen. Deterministic unless a deployment opts in. */
+  private readonly mode: NarrativeMode;
+
   constructor(
     apiKey: string,
     opts: {
@@ -599,10 +607,18 @@ export class CosmicArchitect {
       awayManager: ArchitectManager;
       stadium: ArchitectStadium | null;
       weather: string;
+      /** Seeds the deterministic omen + title. Falls back to the team pairing. */
+      matchId?: string;
+      /** `'llm'` puts a model in front of the corpus; default is the corpus. */
+      mode?: NarrativeMode;
     },
   ) {
     this.apiKey      = apiKey;
     this.client      = apiKey ? new Anthropic({ apiKey }) : null;
+    // A match with no id still needs a stable key, or its omen would change on
+    // every read; the club pairing is the best available stand-in.
+    this.matchId     = opts.matchId ?? `${opts.homeTeam.shortName}-${opts.awayTeam.shortName}`;
+    this.mode        = opts.mode ?? resolveNarrativeMode(undefined);
     this.homeTeam    = opts.homeTeam;
     this.awayTeam    = opts.awayTeam;
     this.homeManager = opts.homeManager;
@@ -938,29 +954,16 @@ export class CosmicArchitect {
     const rivalry = this.lore.rivalryThreads[this._rivalryKey()];
     const rivalryContext = !!(rivalry?.thread);
 
-    const fallbackOmens = [
-      'The void stirs. Something old turns its gaze toward this field.',
-      'The threads converge. What is written cannot be unwritten.',
-      'Two forces approach. The tapestry trembles at their coming.',
-      'The Architect has been watching. The moment is nearly here.',
-      'Between the stars, something waits. Today it will be fed.',
-      'The pattern shifts. The players do not yet know what they carry.',
-    ];
-    const fallbackTitles = [
-      'The Convergence', 'The Reckoning', 'The Unraveling',
-      'The Third Thread', 'The Weight of Now', 'The Appointed Hour',
-      'The Crossing', 'The Sealed Evening',
-    ];
-
+    // The corpus is the default path. Seeded on the match id, so a fixture
+    // always opens with the same omen and keeps the same name — both are part
+    // of the match's record rather than a fresh roll per read.
     const fallback = () => ({
-      omen: rivalryContext
-        ? 'They have met before. The Architect remembers. The thread between them has not broken.'
-        : fallbackOmens[Math.floor(Math.random() * fallbackOmens.length)]!,
-      matchTitle: fallbackTitles[Math.floor(Math.random() * fallbackTitles.length)]!,
+      omen:       architectOmen(this.matchId, rivalryContext),
+      matchTitle: architectMatchTitle(this.matchId),
       rivalryContext,
     });
 
-    if (!this.client) return fallback();
+    if (this.mode !== 'llm' || !this.client) return fallback();
 
     const rivalryLine = rivalryContext
       ? `Prior encounter thread: "${rivalry.thread}". Last result: ${rivalry.lastResult || 'unknown'}.`
@@ -1193,6 +1196,8 @@ export async function prepareArchitectForMatch(
      * `setShadowDistribution()`.  Omitted → shadow shading is skipped.
      */
     matchId?: string;
+    /** Which engine writes the omen. Defaults to the deterministic corpus. */
+    mode?: NarrativeMode;
   },
 ): Promise<PreparedArchitect> {
   const loreStore = opts.loreStore ?? new LoreStore(supabase);
@@ -1203,6 +1208,8 @@ export async function prepareArchitectForMatch(
     awayManager: opts.awayManager,
     stadium:     opts.stadium,
     weather:     opts.weather,
+    matchId:     opts.matchId,
+    mode:        opts.mode,
   });
 
   try {

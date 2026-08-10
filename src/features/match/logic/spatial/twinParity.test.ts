@@ -92,6 +92,8 @@ const CODE_TWINS: ReadonlyArray<{ name: string; src: string; worker: string }> =
   { name: 'random',   src: 'src/shared/utils/random.ts',          worker: 'supabase/functions/match-worker/random.ts' },
   { name: 'grammar',  src: 'src/shared/narrative/grammar.ts',     worker: 'supabase/functions/architect-galaxy-tick/grammar.ts' },
   { name: 'narrativeMode', src: 'src/shared/narrative/narrativeMode.ts', worker: 'supabase/functions/architect-galaxy-tick/narrativeMode.ts' },
+  { name: 'grammar (match-worker)',      src: 'src/shared/narrative/grammar.ts',      worker: 'supabase/functions/match-worker/grammar.ts' },
+  { name: 'narrativeMode (match-worker)', src: 'src/shared/narrative/narrativeMode.ts', worker: 'supabase/functions/match-worker/narrativeMode.ts' },
   { name: 'simEvent', src: 'src/features/match/logic/simEvent.ts', worker: 'supabase/functions/match-worker/simEvent.ts' },
 ];
 

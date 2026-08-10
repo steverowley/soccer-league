@@ -49,6 +49,8 @@
 
 // deno-lint-ignore-file no-explicit-any
 
+import { directInterferences } from './interferenceDirector.ts';
+import type { NarrativeMode } from './narrativeMode.ts';
 import type { SimulatedEvent } from './simEvent.ts';
 
 // ── Tuning constants ────────────────────────────────────────────────────────
@@ -132,6 +134,20 @@ export interface ArchitectInterference {
   magnitude:        number;
 }
 
+/**
+ * What the deterministic director needs, plus which path this deployment wants.
+ * Passing null keeps the old model-only behaviour, which no caller does.
+ */
+export interface DirectorContext {
+  /** Seeds the decision stream — the same fixture always decides the same way. */
+  matchId:   string;
+  /** The names the engine stamps onto `payload.team` (shortName ?? name). */
+  homeShort: string;
+  awayShort: string;
+  /** `'llm'` puts the model in front; anything else uses the director. */
+  mode:      NarrativeMode;
+}
+
 interface PickedSlot {
   minute:    number;
   subminute: number;
@@ -173,9 +189,27 @@ export async function generateInterferences(
   homeName:   string,
   awayName:   string,
   random:     () => number = Math.random,
+  director:   DirectorContext | null = null,
 ): Promise<ArchitectInterference[]> {
-  if (!apiKey) return [];
   if (events.length === 0) return [];
+
+  // ── 0. The default path: the Architect's own judgement ─────────────────
+  // `interferenceDirector` decides from match state — who is running away with
+  // it, who the hero is, how late it is — and is seeded on the match id, so a
+  // fixture always draws the same interferences. The model path below only runs
+  // when a deployment opts in AND supplies a key, and its failures fall back
+  // here rather than skipping the slot silently.
+  const direct = () => director
+    ? directInterferences({
+        events,
+        homeName,
+        awayName,
+        homeShort: director.homeShort,
+        awayShort: director.awayShort,
+      }, director.matchId)
+    : [];
+
+  if (!apiKey || director?.mode !== 'llm') return direct();
 
   // ── 1. Pick candidate slots ────────────────────────────────────────────
   const slots = pickInterferenceSlots(events);
@@ -190,8 +224,8 @@ export async function generateInterferences(
   try {
     Anthropic = (await import('https://esm.sh/@anthropic-ai/sdk@0.27.0')).default;
   } catch (err) {
-    console.warn('[architectInterference] Anthropic import failed:', err);
-    return [];
+    console.warn('[architectInterference] Anthropic import failed, using the director:', err);
+    return direct();
   }
   const client = new Anthropic({ apiKey });
 
@@ -209,6 +243,11 @@ export async function generateInterferences(
     );
     if (interference) out.push(interference);
   }
+
+  // A model that declined every slot leaves the match untouched, which is how
+  // the Architect used to vanish for weeks at a time. Fall back so the world
+  // still gets its judgement.
+  if (out.length === 0) return direct();
 
   return out.sort((a, b) => a.minute - b.minute || a.subminute - b.subminute);
 }
