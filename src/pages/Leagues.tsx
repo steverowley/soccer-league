@@ -12,8 +12,15 @@
 // position pipes, and a "View Full Table ►" dust link.
 //
 // Data sources:
-//   - LEAGUES, TEAMS_BY_LEAGUE   from src/data/leagueData
-//   - computeStandings (top-3)   from src/lib/matchResultsService
+//   - LEAGUES                     from src/data/leagueData
+//   - fetchLeagueStandings (top-3) from src/features/match
+//
+// LOAD SIGNALLING
+// ───────────────
+// Each card's leader strip has three distinct states — loading, unavailable,
+// and "no fixtures played yet" — and says which one it is. They used to share
+// the pre-season placeholder, so a slow standings fetch told the reader
+// "Awaiting first kick-off" about a league that had already played 14 rounds.
 //
 // PALETTE: mirrors Home — three brand tokens (dust / abyss / flare).
 // The page uses only the shared COLORS object — no new hex literals.
@@ -21,11 +28,11 @@
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
-import { Card } from '../shared/ui';
+import { Card, Skeleton } from '../shared/ui';
 import { LEAGUES } from '../data/leagueData';
 import type { League } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
+import { fetchLeagueStandingsResult, type LeagueStandingsRow } from '../features/match';
 
 // ── Derived row type ─────────────────────────────────────────────────────────
 // fetchLeagueStandings returns the canonical StandingsRow shape sourced from
@@ -33,11 +40,24 @@ import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match
 // leader strip identical to the previous synchronous path.
 type PositionedStandingsRow = LeagueStandingsRow & { position: number };
 
+// ── Per-card load state ──────────────────────────────────────────────────────
+// One league card's knowledge of its own table. The three variants are the
+// three things the strip can honestly say:
+//   loading     — the fetch is in flight; we know nothing yet.
+//   ready       — the fetch came back; `rows` may legitimately be empty, which
+//                 means the league has played no fixtures yet.
+//   unavailable — the fetch rejected; we still know nothing, and must not
+//                 imply the season hasn't started.
+export type LeagueStandingsState =
+  | { status: 'loading' }
+  | { status: 'ready'; rows: PositionedStandingsRow[] }
+  | { status: 'unavailable' };
+
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // COLORS is the source of truth; we destructure into single-letter aliases
 // so the JSX below reads close to the design spec rather than verbose
 // COLORS.dust70 lookups on every line.
-const { dust: DUST, abyss: ABYSS } = COLORS;
+const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -61,8 +81,8 @@ const CARD_DESCRIPTION_MAX_CHARS = 320;
  * Renders a 2 × 2 grid of league cards.  Standings for every league are
  * fetched in parallel from Supabase via `fetchLeagueStandings` on mount,
  * then the top CARD_TOP_N rows of each league are passed down to its
- * card.  Cards display placeholder rows during the fetch so card heights
- * stay stable.
+ * card.  Each card settles independently — a slow league doesn't hold up
+ * the other three — and shows skeleton rows until its own fetch lands.
  *
  * The previous synchronous path (computeStandings + buildStandingsRows
  * reading from localStorage) silently surfaced stale data on any browser
@@ -77,39 +97,40 @@ export default function Leagues() {
   const db = useSupabase();
 
   // ── Per-league top-N standings state ──────────────────────────────────────
-  // Keyed by league id so each card looks up its own slice without
-  // re-scanning the array.  `null` (the initial value) means "fetch in
-  // flight" so cards can render the em-dash placeholder; once resolved,
-  // an empty array means "league has no fixtures yet".
+  // Keyed by league id so each card looks up its own state without
+  // re-scanning the array.  Every league starts at `loading` and moves to
+  // `ready` or `unavailable` on its own — see LeagueStandingsState.
   const [standingsByLeague, setStandingsByLeague] = useState<
-    Record<string, PositionedStandingsRow[] | null>
-  >(() => Object.fromEntries(LEAGUES.map((l) => [l.id, null])));
+    Record<string, LeagueStandingsState>
+  >(() => Object.fromEntries(LEAGUES.map((l) => [l.id, { status: 'loading' } as LeagueStandingsState])));
 
   useEffect(() => {
     let cancelled = false;
-    // Fire all four league fetches in parallel — independent network
-    // round-trips, each ~1 RTT, so Promise.all keeps total latency at
-    // single-fetch cost rather than 4× serial.
-    Promise.all(
-      LEAGUES.map((league) =>
-        fetchLeagueStandings(db, league.id)
-          .then((rows) => ({
-            id: league.id,
-            rows: rows.map((row, idx) => ({ ...row, position: idx + 1 })),
-          }))
-          .catch((err) => {
-            console.warn(`[Leagues] standings fetch failed for ${league.id}:`, err);
-            return { id: league.id, rows: [] as PositionedStandingsRow[] };
-          }),
-      ),
-    ).then((results) => {
-      if (cancelled) return;
-      setStandingsByLeague((prev) => {
-        const next = { ...prev };
-        for (const { id, rows } of results) next[id] = rows;
-        return next;
-      });
-    });
+    // Fire all four league fetches at once — independent network round-trips,
+    // each ~1 RTT — and commit each as it lands rather than waiting on the
+    // slowest. A card's skeleton clears the moment its own table arrives.
+    for (const league of LEAGUES) {
+      // The *Result variant is required here: supabase-js surfaces query
+      // errors in the resolved value, not as a rejection, so the plain
+      // `fetchLeagueStandings` would hand back `[]` and the card would
+      // announce "Awaiting first kick-off" over a failed read.
+      fetchLeagueStandingsResult(db, league.id)
+        .then((result): LeagueStandingsState =>
+          result.ok
+            ? { status: 'ready', rows: result.rows.map((row, idx) => ({ ...row, position: idx + 1 })) }
+            : { status: 'unavailable' },
+        )
+        .catch((err): LeagueStandingsState => {
+          // Belt-and-braces: an unexpected throw (bad client, aborted page
+          // teardown) must not leave the card spinning forever.
+          console.warn(`[Leagues] standings fetch threw for ${league.id}:`, err);
+          return { status: 'unavailable' };
+        })
+        .then((state) => {
+          if (cancelled) return;
+          setStandingsByLeague((prev) => ({ ...prev, [league.id]: state }));
+        });
+    }
     return () => { cancelled = true; };
   }, [db]);
 
@@ -150,7 +171,7 @@ export default function Leagues() {
               <LeagueCard
                 key={league.id}
                 league={league}
-                standings={standingsByLeague[league.id] ?? null}
+                standings={standingsByLeague[league.id] ?? { status: 'loading' }}
               />
             ))}
           </div>
@@ -173,11 +194,13 @@ export default function Leagues() {
 interface LeagueCardProps {
   league: League;
   /**
-   * Full standings rows fetched from Supabase by the parent.  `null`
-   * means the fetch is still in flight — the card shows placeholder
-   * rows in that case.  An empty array means "no fixtures yet".
+   * This league's standings load state, owned by the parent.  The card
+   * renders one of three strips from it — skeleton rows while loading, a
+   * flare-tinted note when the table couldn't be reached, or the real
+   * leaders (falling back to the pre-season placeholder when the league
+   * has genuinely played nothing yet).
    */
-  standings: PositionedStandingsRow[] | null;
+  standings: LeagueStandingsState;
 }
 
 /**
@@ -194,19 +217,18 @@ interface LeagueCardProps {
  * link is a redundant cue for keyboard / screen-reader users.
  *
  * Standings are passed in from the parent (Leagues) which fetched them
- * in parallel via `fetchLeagueStandings`.  This card just slices to the
- * top CARD_TOP_N and renders; placeholders cover the pre-fetch state.
+ * in parallel via `fetchLeagueStandings`.  This card renders whichever
+ * strip its load state calls for — see LeaderStrip.
  */
 function LeagueCard({ league, standings }: LeagueCardProps) {
-  // ── Top-N leader slice ────────────────────────────────────────────────────
-  // `standings === null` → fetch in flight; show placeholders.
-  // `standings === []`   → league has no completed fixtures yet; also show
-  //                        placeholders so card height stays stable.
-  // Otherwise slice the first CARD_TOP_N rows for the leaders strip.
-  const topRows: PositionedStandingsRow[] =
-    standings && standings.length > 0 ? standings.slice(0, CARD_TOP_N) : [];
-
   const excerpt = truncateAtWord(league.description ?? '', CARD_DESCRIPTION_MAX_CHARS);
+
+  // Status note beside the strip heading. Only the two states the reader can
+  // do nothing about get a label; a loaded table needs no annotation.
+  const statusNote =
+    standings.status === 'loading'     ? { text: 'Loading…',    tone: DUST_50 } :
+    standings.status === 'unavailable' ? { text: 'Unavailable', tone: FLARE }   :
+    null;
 
   return (
     <Card
@@ -264,38 +286,39 @@ function LeagueCard({ league, standings }: LeagueCardProps) {
 
       {/* Top-N strip — leaders preview.  No table chrome — these rows are
           a teaser, not a substitute for the full table on the detail
-          page.  Render placeholders when standings are pre-season so the
-          card height stays stable across leagues. */}
+          page.  Every state fills CARD_TOP_N row slots so the card height
+          stays stable across leagues and across the load. */}
       <div style={{
         borderTop: `1px solid ${HAIRLINE}`,
         paddingTop: 16,
       }}>
         <div style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 12,
           fontSize: 11,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           color: DUST_70,
           marginBottom: 12,
         }}>
-          Current Leaders
+          <span>Current Leaders</span>
+          {statusNote && <span style={{ color: statusNote.tone }}>{statusNote.text}</span>}
         </div>
 
-        <ol style={{
-          listStyle: 'none',
-          padding: 0,
-          margin: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}>
-          {topRows.length === 0
-            ? Array.from({ length: CARD_TOP_N }, (_, i) => (
-                <PlaceholderLeaderRow key={i} position={i + 1} />
-              ))
-            : topRows.map((row: any) => (
-                <LeaderRow key={row.id ?? row.team ?? row.position} row={row} />
-              ))
-          }
+        <ol
+          aria-busy={standings.status === 'loading'}
+          style={{
+            listStyle: 'none',
+            padding: 0,
+            margin: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          <LeaderStrip standings={standings} />
         </ol>
       </div>
 
@@ -313,6 +336,58 @@ function LeagueCard({ league, standings }: LeagueCardProps) {
         View Full Table ►
       </div>
     </Card>
+  );
+}
+
+/**
+ * The contents of one card's leader strip, chosen by load state.  Split out
+ * of LeagueCard so each state is a flat early return rather than a nest of
+ * ternaries inside JSX — the point of this component is that the four cases
+ * stay readable and mutually exclusive.
+ *
+ * Cases:
+ *   loading     → CARD_TOP_N skeleton rows (the honest "we don't know yet")
+ *   unavailable → one flare-tinted row; the reader can retry by reloading
+ *   ready, []   → pre-season placeholders ("Awaiting first kick-off")
+ *   ready, rows → the real top CARD_TOP_N leaders
+ *
+ * Exported for tests (the page itself needs auth + router + Supabase
+ * providers to mount; the strip is the part with the branching).
+ *
+ * @param standings  This league's load state.
+ * @returns          The `<li>` children of the card's leader `<ol>`.
+ */
+export function LeaderStrip({ standings }: { standings: LeagueStandingsState }) {
+  if (standings.status === 'loading') {
+    return (
+      <>
+        {Array.from({ length: CARD_TOP_N }, (_, i) => (
+          <SkeletonLeaderRow key={i} position={i + 1} />
+        ))}
+      </>
+    );
+  }
+
+  if (standings.status === 'unavailable') {
+    return <UnavailableLeaderRow />;
+  }
+
+  if (standings.rows.length === 0) {
+    return (
+      <>
+        {Array.from({ length: CARD_TOP_N }, (_, i) => (
+          <PlaceholderLeaderRow key={i} position={i + 1} />
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {standings.rows.slice(0, CARD_TOP_N).map((row) => (
+        <LeaderRow key={row.id} row={row} />
+      ))}
+    </>
   );
 }
 
@@ -396,6 +471,57 @@ function PlaceholderLeaderRow({ position }: PlaceholderLeaderRowProps) {
       </span>
       <span style={{ fontStyle: 'italic' }}>Awaiting first kick-off</span>
       <span style={{ fontVariantNumeric: 'tabular-nums' }}>— pts</span>
+    </li>
+  );
+}
+
+/**
+ * Loading row.  Keeps the real position numeral (so the strip still reads as
+ * "slot one / two / three") and replaces the club name and points with dust-
+ * faint blocks.  Same three-column grid as LeaderRow, so nothing shifts
+ * sideways when the table lands.
+ *
+ * Deliberately NOT the em-dash placeholder: "Awaiting first kick-off" is a
+ * claim about the season, and during a fetch we have no basis for it.
+ */
+function SkeletonLeaderRow({ position }: { position: number }) {
+  return (
+    <li style={{
+      display: 'grid',
+      gridTemplateColumns: 'auto 1fr auto',
+      alignItems: 'center',
+      gap: 12,
+      fontSize: 13,
+      color: DUST_50,
+    }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+        <span aria-hidden="true" style={{ opacity: 0.4 }}>|</span>
+        <span>{String(position).padStart(2, '0')}</span>
+      </span>
+      {/* Club-name band, narrowing down the strip so three stacked rows read
+          as a list of names rather than a solid block. */}
+      <Skeleton height={13} width={`${72 - position * 8}%`} />
+      <Skeleton height={13} width={48} />
+    </li>
+  );
+}
+
+/**
+ * Fetch-failed row.  Says the table couldn't be reached, in flare, and points
+ * at the one recovery the reader has.  A retry button would have to live
+ * inside the card's <Link>, which nests an interactive control in an anchor —
+ * so the reload cue is text, and the card still navigates to the full table
+ * (which does its own fetch and may well succeed).
+ */
+function UnavailableLeaderRow() {
+  return (
+    <li style={{
+      fontSize: 13,
+      lineHeight: 1.5,
+      color: FLARE,
+      fontStyle: 'italic',
+    }}>
+      The table could not be reached. Reload to try again.
     </li>
   );
 }

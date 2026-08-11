@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   collapseFloodRuns,
   feedQuietness,
+  feedLoadPhase,
   FLOOD_KINDS,
   MIN_COLLAPSE_RUN,
   QUIET_THRESHOLD_HOURS,
@@ -133,5 +134,45 @@ describe('feedQuietness', () => {
   it('returns null when every timestamp is unparseable', () => {
     const bad = { ...narr('a', 'daybreak'), created_at: 'not-a-date' };
     expect(feedQuietness([bad], NOW)).toBeNull();
+  });
+});
+
+// ── feedLoadPhase ────────────────────────────────────────────────────────────
+// The regression this guards: an in-flight fetch used to share the "nothing
+// here" branch with a genuinely empty wire, so a slow connection was told
+// "no narratives yet" as if it were a fact.
+describe('feedLoadPhase', () => {
+  it('reports loading while the first fetch is in flight', () => {
+    expect(feedLoadPhase({ loaded: false, error: null, rowCount: 0 })).toBe('loading');
+  });
+
+  it('reports loading on a re-fetch even though rows are still in memory', () => {
+    // Filter switches reset `loaded` without clearing the previous rows; the
+    // page must show the load cue rather than the stale feed's row count.
+    expect(feedLoadPhase({ loaded: false, error: null, rowCount: 20 })).toBe('loading');
+  });
+
+  it('reports empty only once a fetch has settled with no rows', () => {
+    expect(feedLoadPhase({ loaded: true, error: null, rowCount: 0 })).toBe('empty');
+  });
+
+  it('reports feed when rows came back', () => {
+    expect(feedLoadPhase({ loaded: true, error: null, rowCount: 1 })).toBe('feed');
+  });
+
+  it('reports unavailable on a failed fetch regardless of row count', () => {
+    expect(feedLoadPhase({ loaded: true, error: new Error('boom'), rowCount: 0 })).toBe('unavailable');
+    expect(feedLoadPhase({ loaded: true, error: new Error('boom'), rowCount: 12 })).toBe('unavailable');
+  });
+
+  it('treats a falsy-but-present error value as an error', () => {
+    // PostgREST rejections are objects, but a thrown string/0 must not slip
+    // through as "no error" — the check is `!= null`, not truthiness.
+    expect(feedLoadPhase({ loaded: true, error: '', rowCount: 5 })).toBe('unavailable');
+    expect(feedLoadPhase({ loaded: true, error: 0, rowCount: 5 })).toBe('unavailable');
+  });
+
+  it('treats undefined as no error', () => {
+    expect(feedLoadPhase({ loaded: true, error: undefined, rowCount: 3 })).toBe('feed');
   });
 });
