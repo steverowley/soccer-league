@@ -70,7 +70,23 @@ export interface StandingsRow {
 // live in `standings.schema.ts` as Zod schemas, so the boundary is validated
 // rather than blind-cast. See `StandingsMatchRow` / `StandingsTeamRow` there.
 
-// ── Public entry point ──────────────────────────────────────────────────────
+/**
+ * Outcome of a standings fetch.
+ *
+ * WHY this exists: `fetchLeagueStandings` returns `[]` for BOTH "this league
+ * has played no fixtures" and "the query failed", because supabase-js reports
+ * transport and PostgREST errors in the resolved `{ error }` field rather than
+ * by rejecting — so a caller's `.catch()` never runs. Callers that need to
+ * tell those apart (the /leagues cards, which otherwise announce "Awaiting
+ * first kick-off" over a mid-season table) use `fetchLeagueStandingsResult`.
+ */
+export type StandingsResult =
+  /** The query succeeded. `rows` may be empty — that genuinely means no table yet. */
+  | { ok: true;  rows: StandingsRow[] }
+  /** The query failed. Nothing is known about the table; `reason` is warn-logged. */
+  | { ok: false; reason: string };
+
+// ── Public entry points ─────────────────────────────────────────────────────
 
 /**
  * Compute league standings for `leagueId` from the canonical Supabase
@@ -93,12 +109,31 @@ export interface StandingsRow {
  * @param db        Injected typed Supabase client (`IslSupabaseClient`).
  * @param leagueId  Slug from `leagues.id` (e.g. `'rocky-inner'`).
  * @returns         Standings rows sorted by points DESC → GD DESC → GF DESC.
- *                  Returns `[]` on any DB error (warn-logged but never throws).
+ *                  Returns `[]` on any DB error (warn-logged but never throws)
+ *                  — use `fetchLeagueStandingsResult` when the caller needs to
+ *                  tell an empty table from a failed query.
  */
 export async function fetchLeagueStandings(
   db: IslSupabaseClient,
   leagueId: string,
 ): Promise<StandingsRow[]> {
+  const result = await fetchLeagueStandingsResult(db, leagueId);
+  return result.ok ? result.rows : [];
+}
+
+/**
+ * Same aggregation as `fetchLeagueStandings`, but reports query failure
+ * instead of flattening it to an empty table. See `StandingsResult`.
+ *
+ * @param db        Injected typed Supabase client (`IslSupabaseClient`).
+ * @param leagueId  Slug from `leagues.id` (e.g. `'rocky-inner'`).
+ * @returns         `{ ok: true, rows }` on success (rows may be empty), or
+ *                  `{ ok: false, reason }` when either query errored.
+ */
+export async function fetchLeagueStandingsResult(
+  db: IslSupabaseClient,
+  leagueId: string,
+): Promise<StandingsResult> {
   // ── Step 1: load every completed league fixture in this league ───────────
   // Filters pushed into the PostgREST query (#391). Pre-#391 this loaded
   // EVERY completed match across EVERY league + competition type, then
@@ -122,7 +157,7 @@ export async function fetchLeagueStandings(
 
   if (matchErr) {
     console.warn(`[fetchLeagueStandings] match fetch failed: ${matchErr.message}`);
-    return [];
+    return { ok: false, reason: `match fetch failed: ${matchErr.message}` };
   }
   // Validate at the boundary (#386), then keep the defensive client-side
   // filter as a belt-and-braces guard: PostgREST embedded-filter syntax is
@@ -144,7 +179,7 @@ export async function fetchLeagueStandings(
 
   if (teamErr) {
     console.warn(`[fetchLeagueStandings] team fetch failed: ${teamErr.message}`);
-    return [];
+    return { ok: false, reason: `team fetch failed: ${teamErr.message}` };
   }
   const teams = parseStandingsTeamRows((teamRows ?? []) as unknown[], 'fetchLeagueStandings');
 
@@ -210,10 +245,13 @@ export async function fetchLeagueStandings(
     row.gd     = row.gf - row.ga;
   }
 
-  return Object.values(acc).sort(
-    (a, b) =>
-      b.points - a.points ||
-      (b.gd - a.gd)      ||
-      (b.gf - a.gf),
-  );
+  return {
+    ok: true,
+    rows: Object.values(acc).sort(
+      (a, b) =>
+        b.points - a.points ||
+        (b.gd - a.gd)      ||
+        (b.gf - a.gf),
+    ),
+  };
 }
