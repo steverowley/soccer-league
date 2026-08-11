@@ -40,6 +40,7 @@ export {
 
 // ── API (Supabase queries — injected client, Zod-validated) ─────────────────
 export {
+  getOwnUserId,
   getOwnProfile,
   updateProfile,
   touchLastSeen,

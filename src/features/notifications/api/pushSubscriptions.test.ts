@@ -17,7 +17,7 @@
 // SHAPE
 //   We use the same hand-rolled in-memory Supabase double pattern as
 //   `features/admin/api/admin.test.ts`: minimal chain surface (from /
-//   select / update / eq / single) and an `auth.getUser()` stub.
+//   select / update / eq / single) and an `auth.getSession()` stub.
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { updateNotificationPreferences } from './pushSubscriptions';
@@ -49,7 +49,7 @@ interface FakeStore {
 }
 
 /**
- * UUID returned by the fake `auth.getUser()`.  Hardcoded so each test can
+ * UUID carried by the fake stored session.  Hardcoded so each test can
  * filter the profile row by the same value the production code reads from
  * the JWT.
  */
@@ -58,7 +58,7 @@ const FAKE_USER_ID = '00000000-0000-0000-0000-000000000001';
 /**
  * Build a Supabase-client-shaped double backed by `store`.  Surface is the
  * minimal subset `updateNotificationPreferences` actually calls:
- *   - `auth.getUser()`
+ *   - `auth.getSession()`
  *   - `from('profiles').update(...).eq('id', x).select(...).single()`
  *
  * @param store  Mutable in-memory tables shared with the test body.
@@ -66,10 +66,12 @@ const FAKE_USER_ID = '00000000-0000-0000-0000-000000000001';
 function makeFakeDb(store: FakeStore): IslSupabaseClient {
   return {
     auth: {
-      // Mirrors the supabase-js return shape — `.data.user` is what the
-      // production code destructures.
-      async getUser() {
-        return { data: { user: { id: FAKE_USER_ID } }, error: null };
+      // `getOwnUserId` reads the STORED session, never `/auth/v1/user` — see
+      // the auth feature's `getOwnUserId` and migration-era note in #656: the
+      // HTTP call held gotrue's auth lock and broke unrelated reads.  Mirrors
+      // the supabase-js shape the production code destructures.
+      async getSession() {
+        return { data: { session: { user: { id: FAKE_USER_ID } } }, error: null };
       },
     },
     from(table: string) {

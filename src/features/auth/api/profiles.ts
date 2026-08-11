@@ -94,10 +94,15 @@ const ProfileSchema = z.object({
  * `profiles_select_own` / `profiles_update_own` are what actually authorise the
  * row, server-side, against the JWT. A forged local id changes nothing.
  *
+ * Exported through the auth barrel because auth owns identity: the
+ * notifications feature needs the same id for its `push_subscriptions` and
+ * `profiles.notify_*` queries, and it was making the same `auth.getUser()` call
+ * on every /profile mount and every toggle.
+ *
  * @param db  Injected Supabase client.
  * @returns   The user's uuid, or `null` when nobody is signed in.
  */
-async function getOwnUserId(db: IslSupabaseClient): Promise<string | null> {
+export async function getOwnUserId(db: IslSupabaseClient): Promise<string | null> {
   const { data } = await db.auth.getSession();
   return data.session?.user?.id ?? null;
 }
