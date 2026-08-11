@@ -21,16 +21,27 @@
 // quiet-wire cue, and Load-More pagination — they're just rehomed into the
 // wire layout. The booth quote is derived from the newest loaded pundit take,
 // so the rail stays truthful rather than mocked.
+//
+// LOAD SIGNALLING
+// ───────────────
+// The four states of the wire (loading / unavailable / empty / feed) are
+// resolved by `feedLoadPhase` and rendered as separate branches. Loading draws
+// skeleton chrome in the shape of the lead card and feed rows, so a slow
+// connection sees "the wire is dialling in" instead of the empty-wire copy —
+// which would assert, wrongly, that nothing has ever happened. The filter
+// chips render in every phase, so narrowing to a kind with no rows can always
+// be undone.
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
-import { Button } from '../shared/ui';
+import { Button, Skeleton } from '../shared/ui';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
   getRecentNarratives,
   collapseFloodRuns,
   feedQuietness,
+  feedLoadPhase,
   type FeedItem,
   type SingleFeedItem,
   type CollapsedFeedItem,
@@ -134,7 +145,12 @@ export default function News() {
     setLimit(PAGE_SIZE);
   };
 
-  const canLoadMore = loaded && !loadError && rows.length === limit && limit < MAX_FEED_ROWS;
+  // Which of the four states the wire is in. Derived by a pure helper so the
+  // render branches are provably exclusive — the old inline boolean chains let
+  // an in-flight fetch render the "nothing has ever happened" copy.
+  const phase = feedLoadPhase({ loaded, error: loadError, rowCount: rows.length });
+
+  const canLoadMore = phase === 'feed' && rows.length === limit && limit < MAX_FEED_ROWS;
 
   // ── Lead + feed shaping ──────────────────────────────────────────────────
   // In the unfiltered view the newest dispatch becomes the LEAD (hero) card and
@@ -165,6 +181,11 @@ export default function News() {
 
   const hasFeed = pinnedRows.length > 0 || feedItems.length > 0;
 
+  // Label of the active kind filter, for the filtered-empty copy ("No Pundit
+  // Takes on the wire yet") — far more useful than the global empty line when
+  // the reader has narrowed the feed themselves.
+  const activeKindLabel = filter === FILTER_ALL ? null : (KIND_BY_KEY[filter]?.label ?? prettifyKind(filter));
+
   return (
     <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
       <Header />
@@ -189,19 +210,47 @@ export default function News() {
 
         {/* Two-column wire. */}
         <div className="isl-wire" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 24, alignItems: 'start', padding: '24px 0 64px' }}>
-          {/* LEFT — lead + filters + feed. */}
-          <div>
-            {!loaded && (
-              <p style={mutedNote}>Tuning in to the cosmos…</p>
-            )}
-            {loadError != null && (
-              <p style={{ ...mutedNote, color: FLARE }}>Dispatch unavailable. The wire is silent.</p>
-            )}
-            {loaded && loadError == null && rows.length === 0 && (
-              <p style={mutedNote}>No narratives yet. The cosmos awaits its first whisper.</p>
+          {/* LEFT — lead + filters + feed.
+
+              The filter chips render in EVERY phase. They used to be gated on a
+              non-empty feed, so filtering down to a kind with no rows removed
+              the only control that could undo the filter — the reader was
+              stranded on an empty page until they reloaded. */}
+          <div aria-busy={phase === 'loading'}>
+            {phase === 'loading' && (
+              <>
+                {/* An honest "we're waiting" — the in-world line for a human,
+                    role=status so a screen reader hears it, and skeleton
+                    chrome in the shape of what's coming so the layout doesn't
+                    jump when the rows land. */}
+                <p role="status" style={{ ...mutedNote, marginTop: 0, marginBottom: 24 }}>
+                  Tuning in to the cosmos…
+                </p>
+                {filter === FILTER_ALL && <SkeletonLead />}
+                <Filters active={filter} onChange={onFilterChange} />
+                <SkeletonFeed />
+              </>
             )}
 
-            {loaded && loadError == null && rows.length > 0 && (
+            {phase === 'unavailable' && (
+              <>
+                <Filters active={filter} onChange={onFilterChange} />
+                <p style={{ ...mutedNote, color: FLARE }}>Dispatch unavailable. The wire is silent.</p>
+              </>
+            )}
+
+            {phase === 'empty' && (
+              <>
+                <Filters active={filter} onChange={onFilterChange} />
+                <p style={mutedNote}>
+                  {activeKindLabel
+                    ? `No ${activeKindLabel} dispatches on the wire yet. Pick another category above.`
+                    : 'No narratives yet. The cosmos awaits its first whisper.'}
+                </p>
+              </>
+            )}
+
+            {phase === 'feed' && (
               <>
                 {quiet && <QuietWireNotice hours={quiet.hours} />}
                 {lead && <LeadDispatch narrative={lead} />}
@@ -353,6 +402,26 @@ function LeadDispatch({ narrative }: { narrative: Narrative }) {
   );
 }
 
+/**
+ * Loading placeholder for the lead dispatch. Mirrors LeadDispatch's chrome —
+ * same border, same 16/7 still, same three text bands — so the hero doesn't
+ * change height when the real dispatch arrives. Only rendered in the
+ * unfiltered view, because a kind-filtered feed has no lead card.
+ */
+function SkeletonLead() {
+  return (
+    <article style={{ border: `1px solid ${HAIRLINE}`, background: ABYSS, marginBottom: 24 }}>
+      <Skeleton style={{ aspectRatio: '16 / 7', height: 'auto', borderBottom: `1px solid ${HAIRLINE}` }} />
+      <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Tags row, headline, byline — the three bands of the real card. */}
+        <Skeleton height={12} width={220} />
+        <Skeleton height={26} width="82%" />
+        <Skeleton height={13} width={260} />
+      </div>
+    </article>
+  );
+}
+
 // Shared grid template for a feed row: time / headline / category.
 const ROW_STYLE: CSSProperties = {
   display: 'grid',
@@ -422,6 +491,34 @@ function CollapsedOmenRow({ item }: { item: CollapsedFeedItem }) {
       <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', color: accent }}>
         {label}
       </span>
+    </div>
+  );
+}
+
+/**
+ * How many placeholder rows the loading feed draws. 6 fills a typical viewport
+ * below the lead card without pretending to know how many dispatches will
+ * actually arrive (a fetch can return anywhere from 1 to PAGE_SIZE rows).
+ */
+const SKELETON_FEED_ROWS = 6;
+
+/**
+ * Loading placeholder for the feed list. Reuses ROW_STYLE so each placeholder
+ * row occupies the same three-column grid as a real dispatch — the transition
+ * from loading to loaded reflows only the text, never the layout.
+ */
+function SkeletonFeed() {
+  return (
+    <div style={{ border: `1px solid ${HAIRLINE}`, marginTop: 16 }}>
+      {Array.from({ length: SKELETON_FEED_ROWS }, (_, i) => (
+        <div key={i} style={ROW_STYLE}>
+          <Skeleton height={13} width={90} />
+          {/* Alternating headline widths so the block reads as prose of
+              varying length rather than a solid slab. */}
+          <Skeleton height={17} width={i % 2 === 0 ? '76%' : '58%'} />
+          <Skeleton height={11} width={70} />
+        </div>
+      ))}
     </div>
   );
 }

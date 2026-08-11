@@ -146,8 +146,13 @@ export { useMatchEventLatest } from './ui/pitch/useMatchEventsBroadcast';
 // `src/lib/matchResultsService.ts`.  Reads completed `matches` rows joined
 // to `competitions` filtered by `league_id`, aggregates W/D/L/Pts/GD per
 // team, and returns the same `StandingsRow` shape the UI already consumes.
-export { fetchLeagueStandings } from './api/standings';
-export type { StandingsRow as LeagueStandingsRow } from './api/standings';
+// `fetchLeagueStandingsResult` is the same read with the failure case kept
+// distinct from an empty table, for callers that render the difference.
+export { fetchLeagueStandings, fetchLeagueStandingsResult } from './api/standings';
+export type {
+  StandingsRow as LeagueStandingsRow,
+  StandingsResult as LeagueStandingsResult,
+} from './api/standings';
 
 // ── Match-detail fetch + list reads ───────────────────────────────────────
 // Originally in `src/lib/supabase.ts` as singleton-consuming functions;

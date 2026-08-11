@@ -11,6 +11,9 @@
 //     summary card so a batch of omens reads as a single cosmic murmur.
 //   - feedQuietness(): detect a stale wire so the page can show an in-world
 //     "the cosmos has gone quiet" cue instead of looking broken.
+//   - feedLoadPhase(): collapse (loaded, error, rowCount) into exactly one of
+//     four render phases so "still loading" can never be painted as "nothing
+//     has ever happened".
 //
 // No React, no Supabase — 100% unit-testable (engineering principle #3).
 
@@ -123,4 +126,46 @@ export function feedQuietness(
   if (newest === 0) return null;
   const hours = Math.floor((now - newest) / 3_600_000);
   return hours >= thresholdHours ? { hours } : null;
+}
+
+/**
+ * The four mutually-exclusive states the wire can be in.
+ *
+ *   - `loading`     — a fetch is in flight; nothing is known yet.
+ *   - `unavailable` — the fetch failed; what the wire holds is unknown.
+ *   - `empty`       — the fetch succeeded and there is genuinely nothing.
+ *   - `feed`        — the fetch succeeded and there are rows to render.
+ *
+ * The distinction that matters is `loading` vs `empty`: both used to be
+ * painted as "nothing here", which states as fact something the page does not
+ * yet know.
+ */
+export type FeedPhase = 'loading' | 'unavailable' | 'empty' | 'feed';
+
+/** Inputs to the phase decision — the page's raw fetch bookkeeping. */
+export interface FeedLoadInput {
+  /** True once a fetch has settled (resolved OR rejected). */
+  loaded: boolean;
+  /** The rejection value, if the last fetch failed. `null`/`undefined` = no error. */
+  error: unknown;
+  /** How many narrative rows the last successful fetch returned. */
+  rowCount: number;
+}
+
+/**
+ * Collapse the page's fetch bookkeeping into exactly one render phase, so the
+ * four render branches are provably mutually exclusive — no combination of
+ * flags can paint two states at once, or none.
+ *
+ * `error` is checked first: a failed fetch says nothing about row count, and a
+ * stale `rows` array from a previous filter must not be mistaken for the
+ * current one's contents.
+ *
+ * @param input  Loaded flag, last error, and row count.
+ * @returns      The single phase the feed should render.
+ */
+export function feedLoadPhase({ loaded, error, rowCount }: FeedLoadInput): FeedPhase {
+  if (error != null) return 'unavailable';
+  if (!loaded) return 'loading';
+  return rowCount === 0 ? 'empty' : 'feed';
 }

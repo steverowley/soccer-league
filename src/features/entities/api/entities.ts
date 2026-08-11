@@ -29,7 +29,13 @@ import { parseNarrativeRows } from './entities.schema';
  * @param source  Optional source filter ('architect', 'match', 'scheduled').
  * @param kind    Optional kind filter ('architect_whisper', 'pundit_takes',
  *                'balance_whisper', etc.).  When omitted, all kinds match.
- * @returns       Array of Narrative rows, newest first.
+ * @returns       Array of Narrative rows, newest first. An empty array means
+ *                the wire is genuinely empty for this filter.
+ * @throws        On a query error. This used to warn-log and return `[]`,
+ *                which the News page could only render as "no narratives
+ *                yet" — telling the reader the cosmos had never spoken when
+ *                in fact the read failed. Callers must distinguish the two;
+ *                the only caller (`/news`) renders a wire-down state.
  */
 export async function getRecentNarratives(
   db: IslSupabaseClient,
@@ -53,7 +59,7 @@ export async function getRecentNarratives(
   const { data, error } = await query;
   if (error) {
     console.warn('[getRecentNarratives] failed:', error.message);
-    return [];
+    throw new Error(`getRecentNarratives failed: ${error.message}`);
   }
   return parseNarrativeRows((data ?? []) as unknown[], 'getRecentNarratives') as Narrative[];
 }
