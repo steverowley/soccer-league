@@ -75,6 +75,33 @@ const ProfileSchema = z.object({
   last_streak_day: z.string().nullable().optional().default(null),
 });
 
+// ── Own-user id ─────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the signed-in user's id from the locally stored session.
+ *
+ * WHY NOT `auth.getUser()`: that is an HTTP call to `/auth/v1/user` on every
+ * invocation. `getOwnProfile` runs on each auth event and `touchLastSeen` on a
+ * 90-second heartbeat, so the app was making a network round-trip just to learn
+ * an id it already had — and holding gotrue's auth lock for the duration. On
+ * 2026-08-11 that endpoint was taking 10–14 s and 504ing, which is what pushed
+ * the lock past its 5 s steal threshold and broke unrelated reads.
+ *
+ * `getSession()` reads the stored session locally (refreshing only when the
+ * token is genuinely near expiry), so the common case costs nothing.
+ *
+ * This is not a weaker check. The id only builds the `.eq('id', …)` filter;
+ * `profiles_select_own` / `profiles_update_own` are what actually authorise the
+ * row, server-side, against the JWT. A forged local id changes nothing.
+ *
+ * @param db  Injected Supabase client.
+ * @returns   The user's uuid, or `null` when nobody is signed in.
+ */
+async function getOwnUserId(db: IslSupabaseClient): Promise<string | null> {
+  const { data } = await db.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
 // ── Queries ─────────────────────────────────────────────────────────────────
 
 /**
@@ -89,15 +116,15 @@ const ProfileSchema = z.object({
 export async function getOwnProfile(
   db: IslSupabaseClient,
 ): Promise<{ data: Profile | null; error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
+  const userId = await getOwnUserId(db);
+  if (!userId) {
     return { data: null, error: 'Not authenticated' };
   }
 
   const { data, error } = await db
     .from('profiles')
     .select('*')
-    .eq('id', authData.user.id)
+    .eq('id', userId)
     .single();
 
   if (error) {
@@ -132,15 +159,15 @@ export async function updateProfile(
   db: IslSupabaseClient,
   input: UpdateProfileInput,
 ): Promise<{ data: Profile | null; error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
+  const userId = await getOwnUserId(db);
+  if (!userId) {
     return { data: null, error: 'Not authenticated' };
   }
 
   const { data, error } = await db
     .from('profiles')
     .update(input)
-    .eq('id', authData.user.id)
+    .eq('id', userId)
     .select()
     .single();
 
@@ -175,13 +202,13 @@ export async function updateProfile(
  * @param db  Injected Supabase client.
  */
 export async function touchLastSeen(db: IslSupabaseClient): Promise<void> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) return;
+  const userId = await getOwnUserId(db);
+  if (!userId) return;
 
   const { error } = await db
     .from('profiles')
     .update({ last_seen_at: new Date().toISOString() })
-    .eq('id', authData.user.id);
+    .eq('id', userId);
 
   if (error) {
     // Log but don't throw — this is fire-and-forget. The UI should not
