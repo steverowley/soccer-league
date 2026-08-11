@@ -138,6 +138,21 @@ const SEASON_YEAR_OFFSET = 2599;
  */
 const FIXTURE_BATCH_SIZE = 50;
 
+/**
+ * Real-world seconds a new season takes to reveal a 90-minute match.  Mirrors
+ * the value migration 0013 seeds for season 1 and the browser-side
+ * DEFAULT_MATCH_DURATION_SECONDS, so every season paces identically: 600 s ≈
+ * 6.7 real seconds per game minute.  This is the window the worker holds a
+ * match at status `live` before publishing its result.
+ */
+const DEFAULT_MATCH_DURATION_SECONDS = 600;
+
+/**
+ * Minimum stake (Intergalactic Credits) for a wager in a new season.  Matches
+ * the game design's 10-credit floor and the `place_wager` RPC's own guard.
+ */
+const DEFAULT_MIN_BET = 10;
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 type SeasonInsert = Database['public']['Tables']['seasons']['Insert'];
@@ -304,6 +319,29 @@ export async function rolloverSeason(
     newSeasonId,
     newSeasonName: newName,
   };
+
+  // ── Step 3b: season_config (the pacing knobs) ─────────────────────────────
+  // Rollover never wrote this row, so every season after the seeded first one
+  // had a NULL match_duration_seconds: the admin panel showed no pacing, and
+  // the worker's finalizer had no reveal window to hold a match `live` for.
+  // Seed the same defaults migration 0013 gives season 1 (10 real minutes per
+  // 90 simulated ones, daily matchdays, 10-credit minimum bet).  Upsert so a
+  // re-run after a partial rollover is safe.
+  const { error: cfgErr } = await db
+    .from('season_config')
+    .upsert(
+      {
+        season_id:              newSeasonId,
+        match_cadence_minutes:  Math.round(opts.cadenceMs / 60_000),
+        match_duration_seconds: DEFAULT_MATCH_DURATION_SECONDS,
+        min_bet:                DEFAULT_MIN_BET,
+      },
+      { onConflict: 'season_id' },
+    );
+
+  if (cfgErr) {
+    console.warn('[rolloverSeason] season_config upsert failed:', cfgErr.message);
+  }
 
   // ── Step 4: league competitions + rosters + fixtures ───────────────────────
   for (const [leagueIdx, league] of LEAGUES.entries()) {

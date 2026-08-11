@@ -1225,6 +1225,42 @@ export type Database = {
           },
         ]
       }
+      match_positions: {
+        Row: {
+          match_id: string
+          minute: number
+          second: number
+          snapshots: Json
+        }
+        Insert: {
+          match_id: string
+          minute: number
+          second: number
+          snapshots: Json
+        }
+        Update: {
+          match_id?: string
+          minute?: number
+          second?: number
+          snapshots?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_positions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "match_referee_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "match_positions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matches: {
         Row: {
           away_score: number | null
@@ -1239,6 +1275,8 @@ export type Database = {
           referee_id: string | null
           round: string | null
           scheduled_at: string | null
+          sim_away_score: number | null
+          sim_home_score: number | null
           simulated_at: string | null
           stadium: string | null
           status: string
@@ -1257,6 +1295,8 @@ export type Database = {
           referee_id?: string | null
           round?: string | null
           scheduled_at?: string | null
+          sim_away_score?: number | null
+          sim_home_score?: number | null
           simulated_at?: string | null
           stadium?: string | null
           status?: string
@@ -1275,6 +1315,8 @@ export type Database = {
           referee_id?: string | null
           round?: string | null
           scheduled_at?: string | null
+          sim_away_score?: number | null
+          sim_home_score?: number | null
           simulated_at?: string | null
           stadium?: string | null
           status?: string
@@ -2249,6 +2291,7 @@ export type Database = {
           p_cadence_minutes: number
           p_competition_id: string
           p_first_kickoff: string
+          p_kickoff_stagger_minutes?: number
           p_teams: string[]
         }
         Returns: undefined
@@ -2270,6 +2313,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      chronicle_action_for_kind: { Args: { p_kind: string }; Returns: string }
       incinerate_player: {
         Args: {
           p_decree_text: string

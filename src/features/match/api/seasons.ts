@@ -117,7 +117,9 @@ export async function getLeagueFixtureCountsForSeason(
   };
   for (const m of matches) {
     if      (m.status === 'scheduled')   tally.scheduled++;
-    else if (m.status === 'in_progress') tally.inProgress++;
+    // `live` (simulated, still revealing on the wall clock) and `in_progress`
+    // (worker mid-write) are both "under way" as far as a fixture count goes.
+    else if (m.status === 'in_progress' || m.status === 'live') tally.inProgress++;
     else if (m.status === 'completed')   tally.completed++;
     else if (m.status === 'cancelled')   tally.cancelled++;
   }

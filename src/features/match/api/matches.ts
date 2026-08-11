@@ -28,6 +28,35 @@ import type { IslSupabaseClient } from '@shared/supabase/client';
 // Malformed rows warn-log and drop, preserving the original (wide) row type.
 import { dropInvalidMatchListRows } from './matches.schema';
 
+// ── Withheld-result stripping ─────────────────────────────────────────────
+
+/**
+ * Drop the withheld simulated score from a match row before it reaches the app.
+ *
+ * `sim_home_score` / `sim_away_score` carry the final result while a match is
+ * still `live` (migration 0081).  Every match query selects `*`, so without
+ * this they would arrive in the very same object as `home_score` — the exact
+ * shape that caused the original spoiler, where a component read the final
+ * score off the row and rendered it mid-reveal.  Stripping here, at the api
+ * boundary the architecture already designates for DB-shape translation, means
+ * no UI code can read them by accident.
+ *
+ * SCOPE, HONESTLY: this hardens the app, not the database.  `matches` is
+ * public-read and so is `match_events`, which holds every goal of the match
+ * from the moment it is simulated — that is the pre-simulate-then-reveal model
+ * migration 0013 established, and a direct PostgREST query still sees it.
+ * Sealing the result from a determined client is a separate, larger change
+ * (progressive event publication), not something this strip pretends to do.
+ *
+ * @param row  A match row straight from PostgREST, or null.
+ * @returns    The same row without the `sim_*` keys.  Null passes through.
+ */
+function stripWithheldResult<T>(row: T): T {
+  if (row == null || typeof row !== 'object') return row;
+  const { sim_home_score: _h, sim_away_score: _a, ...rest } = row as Record<string, unknown>;
+  return rest as T;
+}
+
 // ── getMatch ──────────────────────────────────────────────────────────────
 
 /**
@@ -71,26 +100,25 @@ export async function getMatch(db: IslSupabaseClient, matchId: string) {
     .eq('id', matchId)
     .single();
   if (error) throw error;
-  return data;
+  // Never hand the withheld result to the page — see stripWithheldResult.
+  return stripWithheldResult(data);
 }
 
 // ── Live / upcoming list queries ─────────────────────────────────────────
 
 /**
- * How far back (in seconds) past `scheduled_at` a match still counts as
- * "live" for `getLiveMatches`. 600 s = 10 minutes — long enough to cover
- * a real-time-paced 90-minute reveal at the production
- * `match_duration_seconds` knob (600). A match that's already final
- * stays in the live list until this window closes, so a viewer
- * arriving mid-paced-reveal sees the right row.
- */
-const LIVE_WINDOW_SECONDS = 600;
-
-/**
- * Fetch every match currently in the live window — `scheduled_at` is
- * within the last `LIVE_WINDOW_SECONDS` and not in the future, with
- * any status other than `cancelled`. Migrated from `src/lib/supabase.ts`
- * (#387 slice 2) with the standard `db` injection.
+ * Fetch every match a spectator can watch right now.
+ *
+ * Liveness is read straight off `matches.status`: the worker holds a match at
+ * `live` for its entire real-time reveal window and only flips it to
+ * `completed` at full time (migration 0081).  `in_progress` is included too —
+ * that's the brief window while the worker is still writing the rows.
+ *
+ * This used to guess instead, selecting any non-cancelled match whose
+ * `scheduled_at` fell inside a hardcoded 600-second window, because the worker
+ * flipped straight to `completed` the moment it simulated and the status was
+ * therefore useless. That guess silently disagreed with any season whose
+ * `match_duration_seconds` wasn't the default.
  *
  * @param db  Injected Supabase client.
  * @returns   Array of match rows joined with home/away team metadata,
@@ -99,9 +127,6 @@ const LIVE_WINDOW_SECONDS = 600;
  * @throws    Re-throws the Supabase error if the query fails.
  */
 export async function getLiveMatches(db: IslSupabaseClient) {
-  const now           = new Date();
-  const windowOpenIso = new Date(now.getTime() - LIVE_WINDOW_SECONDS * 1000).toISOString();
-  const nowIso        = now.toISOString();
   const { data, error } = await db
     .from('matches')
     .select(
@@ -111,12 +136,10 @@ export async function getLiveMatches(db: IslSupabaseClient) {
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
     `,
     )
-    .gte('scheduled_at', windowOpenIso)
-    .lte('scheduled_at', nowIso)
-    .neq('status', 'cancelled')
+    .in('status', ['live', 'in_progress'])
     .order('scheduled_at', { ascending: false });
   if (error) throw error;
-  return dropInvalidMatchListRows(data ?? [], 'getLiveMatches');
+  return dropInvalidMatchListRows((data ?? []).map(stripWithheldResult), 'getLiveMatches');
 }
 
 /**

@@ -172,6 +172,12 @@ export function adaptSpatialResult(
       payload: {
         commentary,
         isGoal:  ev.type === 'goal',
+        // `side` is the ONLY reliable home/away attribution on an event.  The
+        // `team` field below is a display short-name and is absent whenever the
+        // scorer couldn't be resolved (observed in production: `{"isGoal":true,
+        // "commentary":"A player scores for Away!"}`), so the live scoreboard —
+        // which counts revealed goals to show the running score — cannot use it.
+        ...(ev.side ? { side: ev.side } : {}),
         ...(p ? { player: p.name, team: p.teamName } : {}),
         ...(o ? { keeper: o.name }                  : {}),
         ...(ev.type === 'foul' && ev.card ? { cardType: ev.card } : {}),
