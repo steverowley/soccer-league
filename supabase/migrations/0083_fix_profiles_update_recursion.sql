@@ -11,11 +11,17 @@
 --   42P17: infinite recursion detected in policy for relation "profiles"
 --
 -- So the policy did not merely fail to guard — it made EVERY authenticated
--- UPDATE on `profiles` fail.  Reproduced against production on 2026-08-11, and
--- re-derivable at any time: in a transaction you roll back, restore the policy
--- body above, then as role `authenticated` (with `request.jwt.claims` set to a
--- real profile id) run `UPDATE profiles SET last_seen_at = now()`.  It raises
--- 42P17 with the pre-0083 policy and succeeds with the one below.
+-- UPDATE on `profiles` fail.  Two independent confirmations:
+--
+--   * Observed in production.  The Supabase logs for 2026-08-11 10:43–11:12
+--     UTC carried 9 × 42P17 on `profiles` (alongside an unrelated backend
+--     incident — see #656).  Postgres log retention is ~24 h, so that window
+--     is no longer queryable; the counts are quoted in #656 and #643.
+--   * Re-derivable at any time, which is the check to prefer.  In a
+--     transaction you roll back, restore the policy body above, then as role
+--     `authenticated` (with `request.jwt.claims` set to a real profile id) run
+--     `UPDATE profiles SET last_seen_at = now()`.  It raises 42P17 with the
+--     pre-0083 policy and succeeds with the one below.
 --
 -- USER-VISIBLE DAMAGE (all of it silent — every caller only warn-logs):
 --   * `touchLastSeen` — the presence heartbeat, on mount and every 90 s.  With
