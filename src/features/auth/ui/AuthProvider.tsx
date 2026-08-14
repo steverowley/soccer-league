@@ -178,7 +178,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (now - lastTouchRef.current < TOUCH_DEBOUNCE_MS) return;
     lastTouchRef.current = now;
     // Fire-and-forget — errors are logged inside touchLastSeen, not surfaced.
-    touchLastSeen(db);
+    // The `.catch` covers the case touchLastSeen can't: a REJECTED call (an
+    // aborted auth lock, a dropped connection) rather than a returned error.
+    // Without it a stolen lock surfaces as an unhandled rejection.
+    void touchLastSeen(db).catch((err: unknown) => {
+      console.warn('[AuthProvider] presence touch failed:', err);
+    });
   }, [db]);
 
   // ── Initial session restore + auth state listener ───────────────────────
@@ -226,25 +231,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     // 2. Listen for auth state changes (login, logout, token refresh).
+    //
+    // LOCK HAZARD — read before adding anything to this callback.
+    // gotrue-js invokes it from INSIDE its own auth lock. With a stored
+    // session that needs no refresh, the path is `_initialize` →
+    // `_acquireLock` → `_recoverAndRefresh` → `_notifyAllSubscribers`
+    // ('SIGNED_IN') — auth-js 2.99.3, GoTrueClient.ts:2846.
+    //
+    // Same-client calls made from here don't block (`_acquireLock` is
+    // re-entrant via `lockAcquired`/`pendingInLock`) — they do something
+    // worse: the holder drains that queue before releasing, so the app's work
+    // EXTENDS the lock hold. Every other Supabase caller waits on the real
+    // Web Lock, and each gives up after 5 s, warns, and steals it —
+    // aborting the in-flight chain. That is the production failure:
+    // `Lock "lock:sb-…-auth-token" was not released within 5000ms`, a
+    // `bump_login_streak` RPC dying with `Lock … was released because another
+    // request stole it`, and unrelated page reads aborting as collateral.
+    //
+    // Blowing past 5 s was easy on 2026-08-11: `auth.getUser()` was taking
+    // 10–14 s and 504ing (Supabase-side, see the incident notes on the PR),
+    // and the profile fetch it fronts was returning 42P17 (#643).
+    //
+    // Even the React state setters have to be deferred, not just the obvious
+    // Supabase calls: `setUser` commits synchronously from a non-React caller,
+    // React flushes the dependent effects in that same tick, and the
+    // presence-touch effect below calls `touchLastSeen`. That reaches Supabase
+    // inside the hold without a single Supabase call appearing in this
+    // callback — the first stack in the production log.
+    //
+    // So this callback does nothing but schedule: the whole body runs in a
+    // macrotask via setTimeout(…, 0), by which point gotrue has released the
+    // lock. `cancelled` keeps deferred work from landing after teardown.
     const {
       data: { subscription },
     } = db.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
+      setTimeout(() => {
+        if (cancelled) return;
+
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (!s?.user) {
+          setProfile(null);
+          return;
+        }
         // Bump the login streak on SIGNED_IN events only (not on
         // TOKEN_REFRESHED — that fires every hour and would mask the
         // RPC's own UTC-day idempotency with no benefit). Fire-and-forget
         // RPC; we refetch the profile afterwards so the cached row
         // reflects the new streak immediately on /profile.
-        if (event === 'SIGNED_IN') {
-          void bumpLoginStreak(db).then(() => fetchProfile());
-        } else {
-          fetchProfile();
-        }
-      } else {
-        setProfile(null);
-      }
+        //
+        // Both paths carry a `.catch`: these are the app's only un-awaited
+        // auth-adjacent promises, and a rejection here (an aborted lock, a
+        // dropped connection) would otherwise surface as an unhandled
+        // rejection in the console rather than a warn-log.
+        const done = event === 'SIGNED_IN'
+          ? bumpLoginStreak(db).then(() => fetchProfile())
+          : fetchProfile();
+        void done.catch((err: unknown) => {
+          console.warn('[AuthProvider] post-auth profile refresh failed:', err);
+        });
+      }, 0);
     });
 
     return () => {

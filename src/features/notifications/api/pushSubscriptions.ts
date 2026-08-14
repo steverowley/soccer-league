@@ -13,8 +13,20 @@
 //   Returns `{ data, error }` matching Supabase's own convention.  We do
 //   not throw on Supabase errors — UI decides how to surface them
 //   (toast, inline message, redirect).
+//
+// WHOSE ID
+//   Every helper here needs the caller's uuid, and each one used to fetch it
+//   with `auth.getUser()` — an HTTP round-trip to `/auth/v1/user` that holds
+//   gotrue's auth lock while it runs.  On 2026-08-11 that endpoint took 10-14 s
+//   and 504ed, every other Supabase caller hit the 5 s lock timeout, stole the
+//   lock, and unrelated page reads died with `AbortError`.  We now read the id
+//   out of the stored session via the auth feature's `getOwnUserId` (same fix
+//   applied to `getOwnProfile` / `touchLastSeen`).  RLS is unaffected: the id
+//   only builds the `.eq(…)` filter, and `push_subscriptions_*_own` /
+//   `profiles_*_own` authorise the row server-side against the JWT.
 
 import { z } from 'zod';
+import { getOwnUserId } from '@features/auth';
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import type {
   BrowserPushSubscriptionJSON,
@@ -69,15 +81,15 @@ const NotificationPreferencesSchema = z.object({
 export async function getNotificationPreferences(
   db: IslSupabaseClient,
 ): Promise<{ data: NotificationPreferences | null; error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
+  const userId = await getOwnUserId(db);
+  if (!userId) {
     return { data: null, error: 'Not authenticated' };
   }
 
   const { data, error } = await db
     .from('profiles')
     .select('notify_favourite_team, notify_all_matches')
-    .eq('id', authData.user.id)
+    .eq('id', userId)
     .single();
 
   if (error) {
@@ -118,8 +130,8 @@ export async function upsertPushSubscription(
   subscription: BrowserPushSubscriptionJSON,
   userAgent?: string,
 ): Promise<{ data: PushSubscriptionRow | null; error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
+  const userId = await getOwnUserId(db);
+  if (!userId) {
     return { data: null, error: 'Not authenticated' };
   }
 
@@ -128,7 +140,7 @@ export async function upsertPushSubscription(
   // `keys.p256dh` / `keys.auth` need to be flattened to top-level
   // columns and the `user_id` (RLS key) has to be set explicitly.
   const row = {
-    user_id:    authData.user.id,
+    user_id:    userId,
     endpoint:   subscription.endpoint,
     p256dh_key: subscription.keys.p256dh,
     auth_key:   subscription.keys.auth,
@@ -175,15 +187,15 @@ export async function deletePushSubscription(
   db: IslSupabaseClient,
   endpoint: string,
 ): Promise<{ error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
+  const userId = await getOwnUserId(db);
+  if (!userId) {
     return { error: 'Not authenticated' };
   }
 
   const { error } = await db
     .from('push_subscriptions')
     .delete()
-    .eq('user_id', authData.user.id)
+    .eq('user_id', userId)
     .eq('endpoint', endpoint);
 
   if (error) {
@@ -219,8 +231,8 @@ export async function updateNotificationPreferences(
   db: IslSupabaseClient,
   prefs: Partial<NotificationPreferences>,
 ): Promise<{ data: NotificationPreferences | null; error: string | null }> {
-  const { data: authData } = await db.auth.getUser();
-  if (!authData.user) {
+  const userId = await getOwnUserId(db);
+  if (!userId) {
     return { data: null, error: 'Not authenticated' };
   }
 
@@ -247,7 +259,7 @@ export async function updateNotificationPreferences(
   const { data, error } = await db
     .from('profiles')
     .update(safe)
-    .eq('id', authData.user.id)
+    .eq('id', userId)
     .select('notify_favourite_team, notify_all_matches')
     .single();
 
