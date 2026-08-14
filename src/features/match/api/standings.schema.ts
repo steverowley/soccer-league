@@ -30,6 +30,10 @@ export const StandingsMatchRowSchema = z.object({
     .object({
       league_id: z.string().nullable(),
       type:      z.string(),
+      // Scopes the table to one season. Nullable because a competition may be
+      // seeded before its season row exists; such a row fails the season
+      // filter downstream rather than polluting the current table.
+      season_id: z.string().nullable().optional(),
     })
     .nullable(),
 });

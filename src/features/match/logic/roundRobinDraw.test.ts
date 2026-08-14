@@ -18,7 +18,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   generateRoundRobinFixtures,
-  DEFAULT_PAIRS_PER_MATCHDAY,
   PRODUCTION_CADENCE_MS,
   type FixtureCalendar,
 } from './roundRobinDraw';
@@ -36,7 +35,6 @@ const ANCHOR_MS = new Date('2601-01-01T12:00:00Z').getTime();
 
 /** Calendar used in most tests: production cadence, stable anchor. */
 const STANDARD_CALENDAR: FixtureCalendar = {
-  pairsPerMatchday: DEFAULT_PAIRS_PER_MATCHDAY,
   firstKickoffMs:   ANCHOR_MS,
   cadenceMs:        PRODUCTION_CADENCE_MS,
 };
@@ -276,17 +274,95 @@ describe('generateRoundRobinFixtures — kickoffStaggerMs', () => {
   });
 });
 
-// ── Custom pairsPerMatchday ───────────────────────────────────────────────────
+// ── Round-robin invariants ────────────────────────────────────────────────────
+// These are the assertions whose absence let the naive pair-chunking generator
+// ship: it produced the right TOTAL number of fixtures and the right number of
+// matchdays, so every count-based test passed while Earth United played four
+// times on Matchday 1 and Venus Volcanic sat out three weeks. The defining
+// property of a round-robin is per-matchday, not per-season.
 
-describe('generateRoundRobinFixtures — custom pairsPerMatchday', () => {
-  it('2 pairs/matchday doubles the number of matchdays but keeps fixture count the same', () => {
-    const cal2     = { ...STANDARD_CALENDAR, pairsPerMatchday: 2 };
-    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, cal2);
-    // Total fixture count is unaffected by pairsPerMatchday
-    expect(fixtures).toHaveLength(56);
+describe('generateRoundRobinFixtures — round-robin invariants', () => {
+  /**
+   * Group fixtures by their matchday number.
+   *
+   * @param rows Fixture rows straight from the generator.
+   * @returns    Map of matchday number → fixtures scheduled that matchday.
+   */
+  const byMatchday = (rows: ReturnType<typeof generateRoundRobinFixtures>) => {
+    const map = new Map<number, typeof rows>();
+    for (const f of rows) {
+      const day = parseInt(f.round.replace('Matchday ', ''), 10);
+      map.set(day, [...(map.get(day) ?? []), f]);
+    }
+    return map;
+  };
 
-    // With 28 pairs and 2 per matchday → 14 first-leg matchdays, 14 return-leg
-    const rounds = new Set(fixtures.map((f) => f.round));
-    expect(rounds.size).toBe(28); // matchdays 1..14 + 15..28
+  it('every team appears exactly once per matchday (8 teams)', () => {
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, STANDARD_CALENDAR);
+
+    for (const [day, dayFixtures] of byMatchday(fixtures)) {
+      const appearances = dayFixtures.flatMap((f) => [f.home_team_id, f.away_team_id]);
+      expect(new Set(appearances).size, `matchday ${day} has a team playing twice`)
+        .toBe(appearances.length);
+      expect(appearances.sort()).toEqual([...EIGHT_TEAMS].sort());
+    }
+  });
+
+  it('holds N/2 fixtures per matchday across 2(N-1) matchdays', () => {
+    for (const n of [2, 4, 6, 8, 10]) {
+      const teams    = Array.from({ length: n }, (_, i) => `team-${i}`);
+      const fixtures = generateRoundRobinFixtures('comp-x', teams, STANDARD_CALENDAR);
+      const days     = byMatchday(fixtures);
+
+      expect(days.size).toBe(2 * (n - 1));
+      for (const dayFixtures of days.values()) {
+        expect(dayFixtures).toHaveLength(n / 2);
+      }
+    }
+  });
+
+  it('never schedules a team twice in one matchday, odd team counts included', () => {
+    for (const n of [3, 5, 7, 9]) {
+      const teams    = Array.from({ length: n }, (_, i) => `team-${i}`);
+      const fixtures = generateRoundRobinFixtures('comp-x', teams, STANDARD_CALENDAR);
+
+      for (const [day, dayFixtures] of byMatchday(fixtures)) {
+        const appearances = dayFixtures.flatMap((f) => [f.home_team_id, f.away_team_id]);
+        expect(new Set(appearances).size, `n=${n} matchday ${day} double-booked a team`)
+          .toBe(appearances.length);
+        // One team takes the bye each matchday, so a round is one short.
+        expect(dayFixtures).toHaveLength((n - 1) / 2);
+      }
+    }
+  });
+
+  it('no fixture leaks the bye sentinel into a real fixture', () => {
+    const fixtures = generateRoundRobinFixtures('comp-x', ['a', 'b', 'c'], STANDARD_CALENDAR);
+    for (const f of fixtures) {
+      expect(f.home_team_id).not.toContain('bye');
+      expect(f.away_team_id).not.toContain('bye');
+    }
+    // 3 teams → 3 unique pairs × 2 legs.
+    expect(fixtures).toHaveLength(6);
+  });
+
+  it('labels the first leg leg=1 and the return leg leg=2', () => {
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, STANDARD_CALENDAR);
+
+    for (const f of fixtures) {
+      const day = parseInt(f.round.replace('Matchday ', ''), 10);
+      expect(f.leg).toBe(day <= 7 ? 1 : 2);
+    }
+  });
+
+  it('gives every team an equal split of home and away fixtures', () => {
+    const fixtures = generateRoundRobinFixtures('comp-1', EIGHT_TEAMS, STANDARD_CALENDAR);
+
+    for (const team of EIGHT_TEAMS) {
+      const home = fixtures.filter((f) => f.home_team_id === team);
+      const away = fixtures.filter((f) => f.away_team_id === team);
+      expect(home).toHaveLength(7);
+      expect(away).toHaveLength(7);
+    }
   });
 });
