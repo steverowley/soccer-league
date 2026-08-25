@@ -9,17 +9,30 @@
 // trivially unit-testable without mocking the DB, and matches the pattern
 // established by cupDraw.ts and seasonLifecycle.ts.
 //
-// ALGORITHM (mirrors 0009_seed_league_fixtures.sql exactly)
-// ──────────────────────────────────────────────────────────
-// Given N teams (e.g. N=8) and P pairs per matchday (default 4):
-//   • Unique pairs: N×(N-1)/2 = 28.
-//   • CEIL(28/P) matchdays per leg  →  e.g. CEIL(28/4)=7 with default P.
-//   • Two legs: first leg (matchdays 1..L) + return leg (home/away swapped,
-//     matchdays L+1..2L), where L = CEIL(pairs/P).
-//   • scheduled_at = firstKickoffMs + (matchday_number - 1) × cadenceMs.
+// ALGORITHM — Berger circle (mirrors berger_round_robin_fixtures, migration 0082)
+// ───────────────────────────────────────────────────────────────────────────────
+// Given N teams (even; odd N gets a bye seat — see `BYE`):
+//   • N-1 matchdays per leg, each holding exactly N/2 fixtures.
+//   • Every team appears EXACTLY ONCE per matchday. That is the defining
+//     property of a round-robin and the thing the old implementation lacked.
+//   • Two legs: first leg (matchdays 1..N-1) + return leg with home/away
+//     swapped (matchdays N..2(N-1)).
+//   • scheduled_at = firstKickoffMs + (matchday - 1) × cadenceMs
+//                                   + slot × kickoffStaggerMs.
 //
-// The return-leg matchday offset (L + matchday) keeps return-leg matchdays
-// strictly above first-leg matchdays without a gap, regardless of P.
+// WHY THIS REPLACED THE ORIGINAL (2026-08-14)
+// ────────────────────────────────────────────
+// This module used to "mirror 0009_seed_league_fixtures.sql" — enumerating all
+// N(N-1)/2 unique pairs in sorted-id order and chunking them into matchdays of
+// P by index. That is not a round-robin: because the first N-1 pairs all start
+// with the alphabetically-first team, that team played its whole season up
+// front (four fixtures on Matchday 1) while later teams idled for weeks.
+//
+// Migration 0029 had already replaced exactly that algorithm on the SQL side
+// with the circle method; this module reintroduced the bug on the TypeScript
+// side, and `seasonRollover.ts` used it to seed Seasons 2 and 3 in production.
+// Season 1 (seeded by the SQL RPC) had every team on 3 played; Seasons 2 and 3
+// ranged from 1 to 7. The two paths now implement the same algorithm.
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +46,13 @@ export interface FixtureRow {
   away_team_id:   string;
   /** "Matchday N" label written to matches.round. */
   round:          string;
+  /**
+   * Which half of the double round-robin this fixture belongs to:
+   * 1 = first leg, 2 = return leg (same pair, home and away reversed).
+   * The SQL path has always written this; the TypeScript path did not, so
+   * rollover-seeded seasons had a null `leg` and could not be split by half.
+   */
+  leg:            1 | 2;
   /** Always 'scheduled' — the worker flips this as it processes each match. */
   status:         'scheduled';
   /** UTC ISO-8601 kickoff timestamp. */
@@ -43,12 +63,6 @@ export interface FixtureRow {
  * Scheduling parameters for a fixture calendar.
  */
 export interface FixtureCalendar {
-  /**
-   * Number of unique fixture pairs assigned to each matchday.
-   * For 8 teams (28 pairs): 4 pairs/matchday → 7 matchdays/leg → 14 total.
-   * Increasing this compresses the season calendar; decreasing it lengthens it.
-   */
-  pairsPerMatchday: number;
   /**
    * UTC timestamp (ms since epoch) of matchday 1.  All matchday timestamps
    * are computed as `firstKickoffMs + (matchday - 1) × cadenceMs`.
@@ -73,12 +87,14 @@ export interface FixtureCalendar {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 /**
- * Default pairs-per-matchday for an 8-team league.
- * 28 unique pairs / 4 per matchday = 7 matchdays per leg, 14 total.
- * Exported so callers can reference the same constant rather than
- * duplicating the magic number.
+ * Sentinel inserted into the rotation ring when the league has an odd number
+ * of teams.  The circle method needs an even ring, so one seat holds this
+ * placeholder and whichever real team is paired against it that round simply
+ * has no fixture (a bye).  Fixtures touching it are dropped before returning.
+ *
+ * The value is not a valid team id, so it can never collide with a real one.
  */
-export const DEFAULT_PAIRS_PER_MATCHDAY = 4;
+const BYE = '__bye__';
 
 /**
  * Production matchday interval in milliseconds.
@@ -92,25 +108,33 @@ export const PRODUCTION_CADENCE_MS = 24 * 60 * 60 * 1_000;
 // ── Core function ─────────────────────────────────────────────────────────────
 
 /**
- * Generate the complete round-robin fixture list for one league competition.
+ * Generate the complete double round-robin fixture list for one league
+ * competition, using the Berger circle method.
+ *
+ * Guarantees (all asserted in the test suite):
+ *   • Every unordered pair meets exactly twice — once home, once away.
+ *   • Every team appears exactly once per matchday.
+ *   • Output is identical regardless of the order `teamIds` arrives in.
+ *
+ * Odd team counts are supported: a bye seat joins the rotation, so one team
+ * sits out each matchday and that matchday holds one fewer fixture.
  *
  * @param competitionId  UUID of the competition these fixtures belong to.
  * @param teamIds        All team IDs participating in this competition.
  *                       Order is irrelevant — the function sorts them
- *                       internally to ensure deterministic pair generation.
+ *                       internally so the draw is deterministic.
  * @param calendar       Scheduling parameters (kickoff anchor, cadence,
- *                       pairs-per-matchday).
- * @returns              Fixture rows ready for INSERT/UPSERT into `matches`.
- *                       Returns an empty array if fewer than 2 teams are
- *                       supplied (no pairs possible).
+ *                       within-matchday stagger).
+ * @returns              Fixture rows ready for INSERT/UPSERT into `matches`,
+ *                       ordered matchday-ascending. Empty when fewer than two
+ *                       teams are supplied (no pairs possible).
  *
  * @example
  * const fixtures = generateRoundRobinFixtures(compId, ['a', 'b', 'c', 'd'], {
- *   pairsPerMatchday: 2,
  *   firstKickoffMs: Date.now(),
  *   cadenceMs: 60_000,
  * });
- * // → 12 fixtures: 6 unique pairs × 2 legs
+ * // → 12 fixtures: 6 unique pairs × 2 legs, across 6 matchdays of 2
  */
 export function generateRoundRobinFixtures(
   competitionId: string,
@@ -119,69 +143,85 @@ export function generateRoundRobinFixtures(
 ): FixtureRow[] {
   if (teamIds.length < 2) return [];
 
-  const { pairsPerMatchday, firstKickoffMs, cadenceMs, kickoffStaggerMs = 0 } = calendar;
+  const { firstKickoffMs, cadenceMs, kickoffStaggerMs = 0 } = calendar;
 
-  // Sort IDs so pair generation is deterministic across runs and machines.
-  // The SQL equivalent is `ct1.team_id < ct2.team_id` in migration 0009.
+  // Sort so the draw is deterministic across runs and machines, then pad to an
+  // even ring — the circle method pairs seat-against-seat and needs both sides
+  // of the ring to be the same size.
   const sorted = [...teamIds].sort();
+  const ring   = sorted.length % 2 === 0 ? sorted : [...sorted, BYE];
 
-  // Enumerate every unique unordered pair — same result as a Cartesian
-  // product filtered by `a < b`.
-  const pairs: [string, string][] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    for (let j = i + 1; j < sorted.length; j++) {
-      pairs.push([sorted[i]!, sorted[j]!]);
-    }
-  }
-
-  // Number of matchdays in the first leg — drives the return-leg offset.
-  // For 28 pairs with 4 per matchday this is 7; with 2 per matchday it is 14.
-  // Computing it dynamically means the function stays correct for any
-  // (team count, pairsPerMatchday) combination, not just the 8-team default.
-  const firstLegDays = Math.ceil(pairs.length / pairsPerMatchday);
+  const n           = ring.length;      // always even
+  const roundsPerLeg = n - 1;           // circle method: N-1 matchdays per leg
+  const fixturesPerRound = n / 2;
 
   const rows: FixtureRow[] = [];
 
-  pairs.forEach(([home, away], idx) => {
-    // Convert 0-based index to 1-based pair number so the matchday math is
-    // readable: pairs 1–4 → MD1, pairs 5–8 → MD2, … (ceil(n/pairsPerMatchday)).
-    const pairNum1  = idx + 1;
-    const matchday  = Math.ceil(pairNum1 / pairsPerMatchday); // first-leg matchday (1..firstLegDays)
-    const returnDay = firstLegDays + matchday;                // return-leg matchday, no overlap
-
-    // Kickoff slot WITHIN the matchday: pairs fill matchdays in blocks
-    // (pairs 1–4 → MD1, 5–8 → MD2, …), so a pair's 0-based position inside its
-    // block is its slot.  The return leg reuses the same slot — the block maps
-    // 1:1 onto its return matchday — so both legs stagger identically.
-    const slotInDay = (pairNum1 - 1) % pairsPerMatchday;
-
-    // scheduled_at = firstKickoff + (matchday_index) × cadence + slot × stagger
-    // matchday_index is 0-based: matchday 1 → index 0, matchday 14 → index 13.
-    // The slot term spreads a matchday's kickoffs (e.g. 15 min apart) so the
-    // worker never faces the whole day's fixtures at one instant.
-    const schedFirst  = new Date(firstKickoffMs + (matchday  - 1) * cadenceMs + slotInDay * kickoffStaggerMs).toISOString();
-    const schedReturn = new Date(firstKickoffMs + (returnDay - 1) * cadenceMs + slotInDay * kickoffStaggerMs).toISOString();
-
-    // First leg: original home/away assignment.
+  /**
+   * Emit one fixture, dropping it if either seat is the bye placeholder.
+   *
+   * @param home     Team id in the home seat.
+   * @param away     Team id in the away seat.
+   * @param matchday 1-based matchday number, written to `matches.round`.
+   * @param leg      1 = first leg, 2 = return leg (home/away reversed).
+   * @param slot     0-based kickoff slot within the matchday; slot s kicks off
+   *                 `s × kickoffStaggerMs` after the matchday's base time so the
+   *                 worker gets a trickle rather than a thundering herd.
+   */
+  const emit = (home: string, away: string, matchday: number, leg: 1 | 2, slot: number): void => {
+    if (home === BYE || away === BYE) return;
     rows.push({
       competition_id: competitionId,
       home_team_id:   home,
       away_team_id:   away,
       round:          `Matchday ${matchday}`,
+      leg,
       status:         'scheduled',
-      scheduled_at:   schedFirst,
+      scheduled_at:   new Date(
+        firstKickoffMs + (matchday - 1) * cadenceMs + slot * kickoffStaggerMs,
+      ).toISOString(),
     });
+  };
 
-    // Return leg: home ↔ away swapped so each team gets a home fixture.
-    rows.push({
-      competition_id: competitionId,
-      home_team_id:   away,
-      away_team_id:   home,
-      round:          `Matchday ${returnDay}`,
-      status:         'scheduled',
-      scheduled_at:   schedReturn,
-    });
-  });
+  // ── The circle ───────────────────────────────────────────────────────────
+  // One seat (the last) is the fixed anchor; the other n-1 seats rotate around
+  // it. In round r the anchor faces seat r, and pair k pits seat (r+k) against
+  // seat (r-k), both taken modulo the rotating ring. Home/away for the anchor
+  // fixture alternates by round parity so no team collects every home game.
+  //
+  // Index note: the SQL is 1-based (`p_teams[n]`), this is 0-based, so every
+  // position here is the SQL's minus one.
+  for (let leg = 1 as 1 | 2; leg <= 2; leg = (leg + 1) as 1 | 2) {
+    for (let r = 0; r < roundsPerLeg; r++) {
+      const matchday = leg === 1 ? r + 1 : roundsPerLeg + r + 1;
+
+      // Anchor fixture, slot 0 — opens the matchday.
+      const anchorIsHome = r % 2 === 0;
+      const anchorHome   = anchorIsHome ? ring[n - 1]! : ring[r]!;
+      const anchorAway   = anchorIsHome ? ring[r]!     : ring[n - 1]!;
+      // The return leg swaps every seat, so each pair gets one fixture at each
+      // team's ground across the season.
+      emit(
+        leg === 1 ? anchorHome : anchorAway,
+        leg === 1 ? anchorAway : anchorHome,
+        matchday,
+        leg,
+        0,
+      );
+
+      for (let k = 1; k < fixturesPerRound; k++) {
+        const homeSeat = (r + k) % roundsPerLeg;
+        const awaySeat = (r - k + roundsPerLeg) % roundsPerLeg;
+        emit(
+          leg === 1 ? ring[homeSeat]! : ring[awaySeat]!,
+          leg === 1 ? ring[awaySeat]! : ring[homeSeat]!,
+          matchday,
+          leg,
+          k,
+        );
+      }
+    }
+  }
 
   return rows;
 }

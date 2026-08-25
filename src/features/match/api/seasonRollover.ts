@@ -51,7 +51,6 @@ import type { Database } from '@/types/database';
 import { generateFocusOptions } from '@features/voting';
 import {
   generateRoundRobinFixtures,
-  DEFAULT_PAIRS_PER_MATCHDAY,
 } from '../logic/roundRobinDraw';
 
 // ── Public result type ────────────────────────────────────────────────────────
@@ -407,7 +406,6 @@ export async function rolloverSeason(
     // (#569 lesson).  Upsert by (competition_id, home_team_id, away_team_id) so
     // re-runs never duplicate a fixture.
     const fixtures = generateRoundRobinFixtures(compId, teamIds, {
-      pairsPerMatchday: DEFAULT_PAIRS_PER_MATCHDAY,
       firstKickoffMs:   opts.firstKickoffMs + leagueKickoffOffsetMs,
       cadenceMs:        opts.cadenceMs,
       kickoffStaggerMs: opts.kickoffStaggerMs ?? 0,

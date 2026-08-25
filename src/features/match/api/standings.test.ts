@@ -42,14 +42,14 @@ function makeDb(byTable: Record<string, MockResult>) {
 }
 
 /** One completed league fixture as the nested PostgREST select returns it. */
-function match(home: string, away: string, hs: number, as: number) {
+function match(home: string, away: string, hs: number, as: number, seasonId = 'season-3') {
   return {
     home_team_id: home,
     away_team_id: away,
     home_score: hs,
     away_score: as,
     played_at: '2026-08-10T15:00:00Z',
-    competitions: { league_id: 'rocky-inner', type: 'league' },
+    competitions: { league_id: 'rocky-inner', type: 'league', season_id: seasonId },
   };
 }
 
@@ -151,5 +151,103 @@ describe('fetchLeagueStandings — legacy contract', () => {
     });
     const rows = await fetchLeagueStandings(db, 'rocky-inner');
     expect(rows.map((r) => r.team)).toEqual(['Mars Athletic', 'Earth United FC']);
+  });
+});
+
+// ── Season scoping ────────────────────────────────────────────────────────────
+// A league accumulates one `competitions` row per season. Before 2026-08-14 the
+// read filtered on league + type + completed but NOT season, so Rocky Inner's
+// table summed Seasons 1-3 and showed teams on 15 and 17 played in a league
+// whose current season had run three matchdays.
+
+describe('fetchLeagueStandingsResult — season scoping', () => {
+  const TEAMS = {
+    data: [
+      { id: 'mars', name: 'Mars Athletic' },
+      { id: 'earth', name: 'Earth United FC' },
+    ],
+    error: null,
+  };
+
+  it('counts only the active season when several seasons exist', async () => {
+    const db = makeDb({
+      seasons: {
+        data: [
+          { id: 'season-3', year: 2602, is_active: true },
+          { id: 'season-2', year: 2601, is_active: false },
+          { id: 'season-1', year: 2600, is_active: false },
+        ],
+        error: null,
+      },
+      // The mock ignores .eq(), so it returns fixtures from every season —
+      // exactly what a mis-built PostgREST filter would do. The client-side
+      // guard must still reduce this to the active season alone.
+      matches: {
+        data: [
+          match('mars', 'earth', 2, 0, 'season-3'),
+          match('mars', 'earth', 3, 0, 'season-2'),
+          match('mars', 'earth', 4, 0, 'season-1'),
+        ],
+        error: null,
+      },
+      teams: TEAMS,
+    });
+
+    const result = await fetchLeagueStandingsResult(db, 'rocky-inner');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const mars = result.rows.find((r) => r.id === 'mars')!;
+    expect(mars.played).toBe(1);
+    expect(mars.points).toBe(3);
+    expect(mars.gf).toBe(2);
+  });
+
+  it('falls back to the newest season when none is flagged active', async () => {
+    const db = makeDb({
+      seasons: {
+        data: [
+          { id: 'season-3', year: 2602, is_active: false },
+          { id: 'season-1', year: 2600, is_active: false },
+        ],
+        error: null,
+      },
+      matches: {
+        data: [match('mars', 'earth', 2, 0, 'season-3'), match('mars', 'earth', 5, 0, 'season-1')],
+        error: null,
+      },
+      teams: TEAMS,
+    });
+
+    const result = await fetchLeagueStandingsResult(db, 'rocky-inner');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows.find((r) => r.id === 'mars')!.gf).toBe(2);
+  });
+
+  it('does not scope when the database holds no seasons', async () => {
+    const db = makeDb({
+      seasons: { data: [], error: null },
+      matches: { data: [match('mars', 'earth', 2, 0, 'whatever')], error: null },
+      teams: TEAMS,
+    });
+
+    const result = await fetchLeagueStandingsResult(db, 'rocky-inner');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows.find((r) => r.id === 'mars')!.played).toBe(1);
+  });
+
+  it('reports failure rather than blanking the table when the season read errors', async () => {
+    const db = makeDb({
+      seasons: { data: null, error: { message: 'seasons exploded' } },
+      matches: { data: [match('mars', 'earth', 2, 0)], error: null },
+      teams: TEAMS,
+    });
+
+    const result = await fetchLeagueStandingsResult(db, 'rocky-inner');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('seasons exploded');
   });
 });

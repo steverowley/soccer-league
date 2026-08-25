@@ -97,6 +97,9 @@ export type StandingsResult =
  *   • GD tiebreak then GF tiebreak then stable-sort fallback.
  *   • Cup / playoff fixtures are excluded — only `competitions.type='league'`
  *     contributes to the table.
+ *   • Only the CURRENT season contributes. A league accumulates one
+ *     `competitions` row per season, so without this the table summed every
+ *     season ever played (see `resolveCurrentSeasonId`).
  *   • Only `matches.status='completed'` rows count (in-progress and
  *     scheduled matches are pre-result).
  *   • Form column = last 5 results, most-recent first.  Older results
@@ -130,10 +133,64 @@ export async function fetchLeagueStandings(
  * @returns         `{ ok: true, rows }` on success (rows may be empty), or
  *                  `{ ok: false, reason }` when either query errored.
  */
+/**
+ * Outcome of resolving which season the league table should cover.
+ *
+ * `seasonId === null` means "do not scope" — the database holds no seasons at
+ * all, so there is nothing to disambiguate and every league competition is
+ * effectively the only one. That is distinct from a failed read, which
+ * surfaces as `ok: false` so a transient error never silently blanks a table.
+ */
+type SeasonScope =
+  | { ok: true; seasonId: string | null }
+  | { ok: false; reason: string };
+
+/**
+ * Decide which season's fixtures the standings should aggregate.
+ *
+ * WHY THIS EXISTS (2026-08-14)
+ * ────────────────────────────
+ * `competitions` gains a new row per league per season, and the standings read
+ * only filtered on league + type + completed. Rocky Inner had three league
+ * competitions (Seasons 1–3) with 12 completed matches each, so the table
+ * showed a 36-match, three-season aggregate: Earth United on 17 played, Venus
+ * Volcanic on 5, in a league where nobody had played more than 7.
+ *
+ * Preference order:
+ *   1. The season flagged `is_active` — there is at most one by DB constraint.
+ *   2. Failing that, the newest by `year`, so an archived-but-unrolled league
+ *      still shows its most recent table rather than an empty one.
+ *
+ * @param db  Injected typed Supabase client.
+ * @returns   The season to scope to, `null` to skip scoping, or a failure.
+ */
+async function resolveCurrentSeasonId(db: IslSupabaseClient): Promise<SeasonScope> {
+  const { data, error } = await db
+    .from('seasons')
+    .select('id, year, is_active')
+    .order('year', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.warn(`[fetchLeagueStandings] season fetch failed: ${error.message}`);
+    return { ok: false, reason: `season fetch failed: ${error.message}` };
+  }
+
+  const rows = (data ?? []) as Array<{ id?: unknown; is_active?: unknown }>;
+  const usable = rows.filter((r): r is { id: string; is_active: boolean } => typeof r.id === 'string');
+  if (usable.length === 0) return { ok: true, seasonId: null };
+
+  // `usable` is already year-DESC, so [0] is the newest when none is flagged.
+  return { ok: true, seasonId: (usable.find((r) => r.is_active) ?? usable[0]!).id };
+}
+
 export async function fetchLeagueStandingsResult(
   db: IslSupabaseClient,
   leagueId: string,
 ): Promise<StandingsResult> {
+  // ── Step 0: pin the table to one season ─────────────────────────────────
+  const scope = await resolveCurrentSeasonId(db);
+  if (!scope.ok) return { ok: false, reason: scope.reason };
+
   // ── Step 1: load every completed league fixture in this league ───────────
   // Filters pushed into the PostgREST query (#391). Pre-#391 this loaded
   // EVERY completed match across EVERY league + competition type, then
@@ -147,12 +204,17 @@ export async function fetchLeagueStandingsResult(
   //
   // played_at DESC sort survives so the form-window accumulation below
   // still sees results newest-first.
-  const { data: matchRows, error: matchErr } = await (db as any)
+  const matchQuery = (db as any)
     .from('matches')
-    .select('home_team_id, away_team_id, home_score, away_score, played_at, competitions!inner(league_id, type)')
+    .select('home_team_id, away_team_id, home_score, away_score, played_at, competitions!inner(league_id, type, season_id)')
     .eq('status', 'completed')
     .eq('competitions.league_id', leagueId)
-    .eq('competitions.type', 'league')
+    .eq('competitions.type', 'league');
+
+  // Skipped only when the database holds no seasons at all — see SeasonScope.
+  if (scope.seasonId !== null) matchQuery.eq('competitions.season_id', scope.seasonId);
+
+  const { data: matchRows, error: matchErr } = await matchQuery
     .order('played_at', { ascending: false, nullsFirst: false });
 
   if (matchErr) {
@@ -164,7 +226,13 @@ export async function fetchLeagueStandingsResult(
   // occasionally surprising on view joins / orphan rows, and the predicate is
   // O(rows) so the cost is trivial compared to the round-trip we just saved.
   const rows = parseStandingsMatchRows((matchRows ?? []) as unknown[], 'fetchLeagueStandings').filter(
-    (m) => m.competitions?.league_id === leagueId && m.competitions?.type === 'league',
+    (m) =>
+      m.competitions?.league_id === leagueId &&
+      m.competitions?.type === 'league' &&
+      // Belt-and-braces on the season too: a two-level embedded filter is
+      // exactly the kind of PostgREST syntax this guard exists to catch, and
+      // getting it wrong resurrects the multi-season aggregate.
+      (scope.seasonId === null || m.competitions?.season_id === scope.seasonId),
   );
 
   // ── Step 2: load every team in the league for the base row scaffold ─────
