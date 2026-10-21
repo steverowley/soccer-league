@@ -192,6 +192,18 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
     return;
   }
 
+  // Fast path: when the retention window keeps nothing, TRUNCATE drops the
+  // table's files outright. That matters here because the alternative,
+  // DELETE + VACUUM FULL, needs free disk roughly equal to the table it is
+  // rewriting, and this routine exists precisely because the disk is full.
+  // TRUNCATE needs no such headroom and returns the space immediately.
+  if (stale === totalRows) {
+    console.log('\nRetention keeps no frames; truncating match_positions…');
+    await runSql(`truncate table match_positions`, 'truncate');
+    console.log('Done.\n');
+    return;
+  }
+
   // Batched delete. ctid-based selection avoids re-running the subquery scan
   // for every batch.
   const BATCH = 50_000;
@@ -224,6 +236,73 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
   console.log('Done.\n');
 }
 
+// ── operational logs ─────────────────────────────────────────────────────────
+
+/**
+ * Trim the two extension-owned log tables that grow without bound.
+ *
+ * Neither holds game state:
+ *   - `cron.job_run_details` is pg_cron's execution history. The match worker
+ *     runs every minute, so this table gains ~1 440 rows a day forever. Recent
+ *     history is genuinely useful for debugging a stuck worker; a year of it is
+ *     not. It reached 279 MB (10.9% of the database).
+ *   - `net._http_response` is pg_net's response buffer. It is a transient queue
+ *     that callers read once; Supabase is meant to reap it and frequently does
+ *     not. It reached 75.9 MB.
+ *
+ * Both are truncated or trimmed rather than vacuumed where possible, for the
+ * same disk-headroom reason as the position fast path above.
+ *
+ * @param cronDays  Days of pg_cron execution history to retain.
+ * @param dryRun    Measure only; make no changes.
+ */
+async function pruneOperationalLogs(cronDays: number, dryRun: boolean): Promise<void> {
+  if (!Number.isInteger(cronDays) || cronDays < 1 || cronDays > 90) {
+    throw new Error(`cron-retention-days must be an integer in [1, 90], got ${cronDays}`);
+  }
+
+  const sizes = await runSql<{ cron_rows: number; cron_stale: number; http_rows: number }>(
+    `select
+       (select count(*) from cron.job_run_details)                        as cron_rows,
+       (select count(*) from cron.job_run_details
+          where end_time < now() - interval '${cronDays} days')           as cron_stale,
+       (select count(*) from net._http_response)                          as http_rows`,
+    'oplog-measure',
+  );
+  const cronRows = Number(sizes[0]?.cron_rows ?? 0);
+  const cronStale = Number(sizes[0]?.cron_stale ?? 0);
+  const httpRows = Number(sizes[0]?.http_rows ?? 0);
+
+  console.log(`cron.job_run_details : ${cronRows} rows (${cronStale} older than ${cronDays}d)`);
+  console.log(`net._http_response   : ${httpRows} rows`);
+
+  if (dryRun) {
+    console.log('\n[dry-run] no changes made to operational logs.\n');
+    return;
+  }
+
+  if (cronStale > 0) {
+    if (cronStale === cronRows) {
+      await runSql(`truncate table cron.job_run_details`, 'cron-truncate');
+    } else {
+      await runSql(
+        `delete from cron.job_run_details where end_time < now() - interval '${cronDays} days'`,
+        'cron-delete',
+      );
+      await runSql(`vacuum full cron.job_run_details`, 'cron-vacuum');
+    }
+    console.log(`  trimmed cron.job_run_details`);
+  }
+
+  if (httpRows > 0) {
+    // Safe to drop wholesale: pg_net callers consume responses synchronously,
+    // so anything still sitting here is already-read residue.
+    await runSql(`truncate table net._http_response`, 'http-truncate');
+    console.log(`  truncated net._http_response`);
+  }
+  console.log('');
+}
+
 // ── entrypoint ───────────────────────────────────────────────────────────────
 
 /** Parse argv, dispatch, and exit non-zero on failure so CI goes red. */
@@ -240,6 +319,9 @@ async function main(): Promise<void> {
   const dIdx = argv.indexOf('--retention-days');
   const retentionDays = dIdx >= 0 ? Number.parseInt(argv[dIdx + 1] ?? '', 10) : 14;
 
+  const cIdx = argv.indexOf('--cron-retention-days');
+  const cronDays = cIdx >= 0 ? Number.parseInt(argv[cIdx + 1] ?? '', 10) : 7;
+
   switch (command) {
     case 'report':
       await report();
@@ -247,6 +329,7 @@ async function main(): Promise<void> {
     case 'prune':
       await report();
       await prune(retentionDays, dryRun);
+      await pruneOperationalLogs(cronDays, dryRun);
       if (!dryRun) await report();
       break;
     default:
