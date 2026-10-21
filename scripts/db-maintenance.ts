@@ -222,31 +222,66 @@ async function migrations(): Promise<void> {
 
   console.log(`migration files in repo: ${files.length}`);
 
-  // Match on NAME, not on the numeric prefix. Production records CLI-style
-  // timestamps with a separate name column (e.g. version 20260811143501, name
-  // "fix_profiles_update_recursion") while repo files carry a sequential
-  // prefix ("0083_fix_profiles_update_recursion.sql"). The two numbering
-  // schemes never agree, so comparing versions reports everything as pending.
+  // Why not simply diff names: historical migrations were applied ad hoc and
+  // the recorded `name` frequently differs from the repo filename. A pure name
+  // diff reported 30 files pending including 0000_init, 0023_admin_rpcs and
+  // 0027_match_worker_cron, all of which are demonstrably live in production
+  // (the cron runs, the RPCs answer). That answer is worse than no tool: it
+  // invites someone to re-apply the world.
+  //
+  // This repo numbers migrations sequentially, so the reliable signal is the
+  // HIGH WATER MARK. Find the newest repo file whose name matches something
+  // applied, and treat only files numbered above it as pending.
   const appliedNames = new Set(
     applied.map((r) => String(r.name ?? '').trim()).filter((n) => n.length > 0),
   );
   const repoName = (f: string) => f.replace(/\.sql$/, '').replace(/^\d+_/, '');
+  const repoNum = (f: string) => Number.parseInt(f.split('_')[0] ?? '', 10);
+
+  let highWater = -1;
+  let highWaterFile = '(none)';
+  for (const f of files) {
+    if (appliedNames.has(repoName(f)) || appliedVersions.has(f.split('_')[0] ?? '')) {
+      const n = repoNum(f);
+      if (Number.isFinite(n) && n > highWater) {
+        highWater = n;
+        highWaterFile = f;
+      }
+    }
+  }
+
+  console.log(`newest confirmed applied: ${highWaterFile}`);
 
   const pending = files.filter((f) => {
-    const name = repoName(f);
-    // Accept an exact name match, or a version that literally equals the
-    // file's prefix (covers anything applied before the CLI convention).
-    const prefix = f.split('_')[0] ?? '';
-    return !appliedNames.has(name) && !appliedVersions.has(prefix);
+    const n = repoNum(f);
+    return Number.isFinite(n) && n > highWater;
   });
 
+  // Concrete corroboration, independent of any name bookkeeping: does the
+  // object 0084 introduces actually exist?
+  const probe = await runSql<{ exists: boolean }>(
+    `select exists (
+       select 1 from information_schema.tables
+       where table_schema = 'public' and table_name = 'match_position_rosters'
+     ) as exists`,
+    'migrations-probe',
+  );
+  console.log(
+    `match_position_rosters exists: ${String(probe[0]?.exists ?? 'unknown')} ` +
+      `(0084 ${probe[0]?.exists ? 'IS' : 'is NOT'} applied)`,
+  );
+
   if (pending.length === 0) {
-    console.log('\nNothing pending: every repo migration has a matching applied version.\n');
+    console.log('\nNothing pending: no repo migration is numbered above the high-water mark.\n');
     return;
   }
 
-  console.log(`\nPENDING (in repo, no matching applied version): ${pending.length}`);
+  console.log(`\nPENDING (numbered above ${highWaterFile}): ${pending.length}`);
   for (const f of pending) console.log(`  ${f}`);
+  console.log('');
+  console.log('Caveat: historical migrations were applied under names that do not always');
+  console.log('match their filenames, so this reports the high-water mark rather than a');
+  console.log('name-by-name diff. Treat it as "what is newer than the last known apply".');
   console.log('');
 }
 
