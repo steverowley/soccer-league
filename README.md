@@ -2,7 +2,9 @@
 
 A Blaseball-inspired social experience browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
 
-![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.4-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.2-teal) ![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6_%2B_Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.99-green)
+![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.4-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.2-teal) ![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6_%2B_Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.99-green) ![Licence](https://img.shields.io/badge/licence-proprietary-red)
+
+> **Proprietary, all rights reserved.** This repository is public to be _read_, not reused. See [LICENSE](./LICENSE).
 
 ---
 
@@ -46,11 +48,11 @@ The ISL is still under construction. **Please don't try to clone or run this rep
 This is a TypeScript + React app talking to a Supabase backend, with Deno edge functions that simulate matches server-side and tick the galaxy forward on a schedule.
 
 - **Frontend** — React 18.3 + Vite 6.4, React Router 7, Tailwind 4, strict TypeScript 6. ~28 routes, all lazy-loaded, with per-route error boundaries.
-- **Backend** — Supabase (PostgreSQL with row-level security), 73 timestamped migrations, 40 tables / 9 views / 13 RPCs. Generated types in `src/types/database.ts`.
-- **AI** — Anthropic SDK. `claude-sonnet-4-6` for the in-match Architect and the daily drama beat; `claude-haiku-4-5-20251001` for the galaxy heartbeat, voice-library enrichment, and live commentary.
-- **Simulation** — a deterministic, agent-based spatial match engine (Reynolds-style steering, geometry-derived events), run by the `match-worker` edge function and seeded from each match's UUID so a fixture always replays identically.
-- **Hosting** — currently deployed via GitHub Pages on push; this will move to a proper domain when the league opens.
-- **Tests** — Vitest (~1,340 tests). CI gates on `tsc --noEmit` + Vitest; ESLint and Prettier are wired (lint is informational for now while a cleanup backlog is cleared).
+- **Backend** — Supabase (PostgreSQL with row-level security), 86 numbered migrations, 40+ tables / 9 views / 13 RPCs. Generated types in `src/types/database.ts`.
+- **AI** — Anthropic SDK. `claude-sonnet-4-6` for the in-match Architect and the daily drama beat; `claude-haiku-4-5-20251001` for the galaxy heartbeat, voice-library enrichment, and live commentary. Voices are deterministic by default with the model as an opt-in override, so the simulation always owns the truth and the model only ever owns the prose.
+- **Simulation** — a deterministic, agent-based spatial match engine (Reynolds-style steering, geometry-derived events), run by the `match-worker` edge function and seeded from each match's UUID so a fixture always replays identically. The engine lives in two byte-identical copies (browser and Deno worker) guarded by a parity test.
+- **Hosting** — Vercel, deployed on push to `main`.
+- **Tests** — Vitest, 1,666 tests across 120 files. CI gates on `tsc --noEmit` + Vitest; ESLint and Prettier are wired (lint is informational while a cleanup backlog is cleared).
 - **Issues** — tracked in **GitHub Issues** under milestone + priority labels; the phase-based execution plan lives in [`ROADMAP.md`](./ROADMAP.md).
 
 The four core ideas the codebase is organised around:
@@ -66,12 +68,12 @@ For the full design and engineering charter, see [`CLAUDE.md`](./CLAUDE.md). For
 
 ## Leagues
 
-| League | Region |
-|---|---|
-| Rocky Inner League | Mercury, Venus, Earth, Mars (8 clubs) |
-| Gas/Ice Giant League | Jupiter, Saturn, Uranus, Neptune (8 clubs) |
-| Asteroid Belt League | Ceres, Vesta, Pallas, Hygiea and belt colonies (8 clubs) |
-| Kuiper Belt League | Pluto, Eris, Haumea, Makemake, Sedna and the outer reaches (8 clubs) |
+| League               | Region                                                               |
+| -------------------- | -------------------------------------------------------------------- |
+| Rocky Inner League   | Mercury, Venus, Earth, Mars (8 clubs)                                |
+| Gas/Ice Giant League | Jupiter, Saturn, Uranus, Neptune (8 clubs)                           |
+| Asteroid Belt League | Ceres, Vesta, Pallas, Hygiea and belt colonies (8 clubs)             |
+| Kuiper Belt League   | Pluto, Eris, Haumea, Makemake, Sedna and the outer reaches (8 clubs) |
 
 Top 3 per league qualify for the **Celestial Cup**. 4th–6th qualify for the **Solar Shield**. Single-elimination, standard interleaving seeds, top seeds only meet in the final.
 
@@ -79,7 +81,9 @@ Top 3 per league qualify for the **Celestial Cup**. 4th–6th qualify for the **
 
 ## Status
 
-**Construction site.** All core systems are wired (spatial match sim + 2D viewer, betting, voting, training, cups, architect lore, fan support, Galaxy Dispatch, entity graph, notifications, admin). What's left before public launch: making the season loop perpetual (automatic rollover + cup completion), finishing the first-fan onboarding, surfacing the Architect live in matches, and the hosting move to a real domain — the full plan lives in [`ROADMAP.md`](./ROADMAP.md).
+**Construction site, but the universe is running.** All core systems are wired (spatial match sim + 2D viewer, betting, voting, training, cups, architect lore, fan support, Galaxy Dispatch, entity graph, notifications, admin). The season loop is automated end to end: the enactment and rollover job runs daily, and the league has reached **Season 4 — 2603** on its own, with fixtures and both cups seeded.
+
+What's left before public launch: the first-fan onboarding polish, surfacing the Architect live in matches, a structured Sifter so the Chronicle produces stories rather than a feed (see [`docs/emergence-applied.md`](./docs/emergence-applied.md)), and the ethics and governance guardrails. The full plan lives in [`ROADMAP.md`](./ROADMAP.md).
 
 When the league opens, a link will appear at the top of this README. In the meantime: don't clone it, don't run it locally — just wait for the gates. It'll be worth it.
 
@@ -87,4 +91,10 @@ When the league opens, a link will appear at the top of this README. In the mean
 
 ## License
 
-Proprietary — all rights reserved. This repository is published for viewing only; it is not licensed for reuse, redistribution, or running your own instance.
+**Proprietary. All rights reserved.** See [`LICENSE`](./LICENSE).
+
+This repository is public so the work can be read. That is not the same as it being open source, and **no licence is granted**. You may read the code here and quote short excerpts with attribution for commentary, criticism, review, teaching or scholarship. You may not copy it, run it, host your own instance, modify it, redistribute it, reuse the game design or written world, or use any of it to train a machine learning model.
+
+The third-party packages this project depends on remain under their own licences; those grant no rights to this code.
+
+For anything else, including licensing enquiries, get in touch via [github.com/steverowley](https://github.com/steverowley).
