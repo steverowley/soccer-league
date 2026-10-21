@@ -58,27 +58,72 @@ const MAX_RETENTION_DAYS = 365;
 /**
  * Run one fixed SQL statement through the Supabase Management API.
  *
+ * Retries transient failures. A restricted, over-quota project is a stressed
+ * project: the control plane intermittently answers 5xx or "Connection
+ * terminated due to connection timeout" even for trivial catalog reads. Those
+ * are worth retrying. A 4xx is a real error in our SQL and is raised at once,
+ * because retrying a syntax error just wastes the operator's time.
+ *
+ * `vacuum` and `truncate` are not idempotent in the strict sense but are safe
+ * to repeat: re-running either converges on the same end state.
+ *
  * @param sql    A literal, reviewed statement from this file.
  * @param label  Human label used in error messages.
  * @returns      Result rows (empty array for statements that return none).
  */
 async function runSql<T = Record<string, unknown>>(sql: string, label: string): Promise<T[]> {
-  const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${ACCESS_TOKEN ?? ''}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query: sql }),
-  });
+  const MAX_ATTEMPTS = 4;
+  let lastError = '';
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`[${label}] Management API ${res.status}: ${body.slice(0, 400)}`);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN ?? ''}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: sql }),
+      });
+    } catch (err) {
+      // Network-level failure: always transient.
+      lastError = err instanceof Error ? err.message : String(err);
+      await sleep(attempt);
+      continue;
+    }
+
+    if (res.ok) {
+      const json: unknown = await res.json();
+      return Array.isArray(json) ? (json as T[]) : [];
+    }
+
+    const body = (await res.text()).slice(0, 400);
+
+    // A 4xx means our statement is wrong; fail loudly rather than hammering.
+    if (res.status < 500) {
+      throw new Error(`[${label}] Management API ${res.status}: ${body}`);
+    }
+
+    lastError = `${res.status}: ${body}`;
+    if (attempt < MAX_ATTEMPTS) {
+      console.log(
+        `  [${label}] transient ${lastError.slice(0, 90)} — retry ${attempt}/${MAX_ATTEMPTS - 1}`,
+      );
+      await sleep(attempt);
+    }
   }
 
-  const json: unknown = await res.json();
-  return Array.isArray(json) ? (json as T[]) : [];
+  throw new Error(`[${label}] Management API failed after ${MAX_ATTEMPTS} attempts: ${lastError}`);
+}
+
+/**
+ * Back off between retries: 3s, 9s, 27s.
+ *
+ * @param attempt  1-based attempt number just completed.
+ */
+function sleep(attempt: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 3000 * 3 ** (attempt - 1)));
 }
 
 /** Format a byte count the way a human reads a disk report. */
