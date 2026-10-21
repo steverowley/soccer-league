@@ -22,7 +22,7 @@
 //   - focus_enacted  (result record)
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
-import type { Json } from '@/types/database';
+import type { Json, TablesUpdate } from '@/types/database';
 import { createPlayerEntity } from '@features/entities';
 import { createPersona, upsertPersona } from '@features/agents';
 import { getTeamTally } from './focuses';
@@ -45,10 +45,7 @@ import {
  * @param seasonId  Season UUID.
  * @returns         Array of team_id strings (slugs).
  */
-async function getTeamIdsForSeason(
-  db: IslSupabaseClient,
-  seasonId: string,
-): Promise<string[]> {
+async function getTeamIdsForSeason(db: IslSupabaseClient, seasonId: string): Promise<string[]> {
   const { data, error } = await db
     .from('focus_options')
     .select('team_id')
@@ -77,17 +74,28 @@ async function getTeamIdsForSeason(
 async function fetchTeamPlayers(
   db: IslSupabaseClient,
   teamId: string,
-): Promise<Array<{
-  id: string; team_id: string; name: string;
-  position: 'GK' | 'DF' | 'MF' | 'FW';
-  age: number | null; overall_rating: number | null;
-  attacking: number; defending: number; mental: number;
-  athletic: number; technical: number; starter: boolean;
-  jersey_number?: number;
-}>> {
+): Promise<
+  Array<{
+    id: string;
+    team_id: string;
+    name: string;
+    position: 'GK' | 'DF' | 'MF' | 'FW';
+    age: number | null;
+    overall_rating: number | null;
+    attacking: number;
+    defending: number;
+    mental: number;
+    athletic: number;
+    technical: number;
+    starter: boolean;
+    jersey_number?: number;
+  }>
+> {
   const { data, error } = await db
     .from('players')
-    .select('id, team_id, name, position, age, overall_rating, attacking, defending, mental, athletic, technical, starter, jersey_number')
+    .select(
+      'id, team_id, name, position, age, overall_rating, attacking, defending, mental, athletic, technical, starter, jersey_number',
+    )
     .eq('team_id', teamId);
 
   if (error) {
@@ -102,37 +110,47 @@ async function fetchTeamPlayers(
   // omit the key entirely under exactOptionalPropertyTypes rather than
   // setting it to `undefined`.
   type EnactablePlayer = {
-    id: string; team_id: string; name: string;
+    id: string;
+    team_id: string;
+    name: string;
     position: 'GK' | 'DF' | 'MF' | 'FW';
-    age: number | null; overall_rating: number | null;
-    attacking: number; defending: number; mental: number;
-    athletic: number; technical: number; starter: boolean;
+    age: number | null;
+    overall_rating: number | null;
+    attacking: number;
+    defending: number;
+    mental: number;
+    athletic: number;
+    technical: number;
+    starter: boolean;
     jersey_number?: number;
   };
   return (data ?? [])
-    .filter((p) =>
-      p.team_id  !== null && p.position  !== null &&
-      p.attacking !== null && p.defending !== null && p.mental    !== null &&
-      p.athletic  !== null && p.technical !== null,
+    .filter(
+      (p) =>
+        p.team_id !== null &&
+        p.position !== null &&
+        p.attacking !== null &&
+        p.defending !== null &&
+        p.mental !== null &&
+        p.athletic !== null &&
+        p.technical !== null,
     )
     .map((p): EnactablePlayer => {
       const base: EnactablePlayer = {
-        id:             p.id,
-        team_id:        p.team_id as string,
-        name:           p.name,
-        position:       p.position as 'GK' | 'DF' | 'MF' | 'FW',
-        age:            p.age,
+        id: p.id,
+        team_id: p.team_id as string,
+        name: p.name,
+        position: p.position as 'GK' | 'DF' | 'MF' | 'FW',
+        age: p.age,
         overall_rating: p.overall_rating,
-        attacking:      p.attacking as number,
-        defending:      p.defending as number,
-        mental:         p.mental    as number,
-        athletic:       p.athletic  as number,
-        technical:      p.technical as number,
-        starter:        p.starter,
+        attacking: p.attacking as number,
+        defending: p.defending as number,
+        mental: p.mental as number,
+        athletic: p.athletic as number,
+        technical: p.technical as number,
+        starter: p.starter,
       };
-      return p.jersey_number != null
-        ? { ...base, jersey_number: p.jersey_number }
-        : base;
+      return p.jersey_number != null ? { ...base, jersey_number: p.jersey_number } : base;
     });
 }
 
@@ -147,10 +165,7 @@ async function fetchTeamPlayers(
  * @param mutation  The mutation to apply.
  * @returns         true if the mutation succeeded, false on error.
  */
-async function applyMutation(
-  db: IslSupabaseClient,
-  mutation: EnactmentMutation,
-): Promise<boolean> {
+async function applyMutation(db: IslSupabaseClient, mutation: EnactmentMutation): Promise<boolean> {
   switch (mutation.kind) {
     // ── Player stat bump ────────────────────────────────────────────────────
     case 'player_stat_bump': {
@@ -165,11 +180,11 @@ async function applyMutation(
 
       if (!row) return false;
       const current = (row as Record<string, number>)[mutation.stat] ?? 50;
-      const next    = Math.max(1, Math.min(99, current + mutation.delta));
+      const next = Math.max(1, Math.min(99, current + mutation.delta));
 
       const { error } = await db
         .from('players')
-        .update({ [mutation.stat]: next })
+        .update({ [mutation.stat]: next } as TablesUpdate<'players'>)
         .eq('id', mutation.player_id);
 
       if (error) {
@@ -181,8 +196,12 @@ async function applyMutation(
 
     // ── Promote player ──────────────────────────────────────────────────────
     case 'promote_player': {
-      // Build the update object: starter=true plus each stat bump.
-      const update: Record<string, unknown> = { starter: true };
+      // Build the update as the generated Update row. supabase-js 2.118 rejects
+      // loose index-signature payloads on .update(), so the stat keys are
+      // narrowed to the real player stat columns rather than widened to string.
+      // `mutation.stat_bumps` is already keyed by exactly this union.
+      type PlayerStat = 'attacking' | 'defending' | 'mental' | 'athletic' | 'technical';
+      const update: TablesUpdate<'players'> = { starter: true };
 
       if (Object.keys(mutation.stat_bumps).length > 0) {
         // Fetch current stats for clamping.
@@ -192,17 +211,15 @@ async function applyMutation(
           .eq('id', mutation.player_id)
           .single();
 
-        const current = (row ?? {}) as Record<string, number>;
+        const current = (row ?? {}) as Partial<Record<PlayerStat, number>>;
         for (const [stat, delta] of Object.entries(mutation.stat_bumps)) {
-          const cur  = current[stat] ?? 50;
-          update[stat] = Math.max(1, Math.min(99, cur + (delta ?? 0)));
+          const key = stat as PlayerStat;
+          const cur = current[key] ?? 50;
+          update[key] = Math.max(1, Math.min(99, cur + (delta ?? 0)));
         }
       }
 
-      const { error } = await db
-        .from('players')
-        .update(update)
-        .eq('id', mutation.player_id);
+      const { error } = await db.from('players').update(update).eq('id', mutation.player_id);
 
       if (error) {
         console.warn('[applyMutation:promote_player] failed:', error.message);
@@ -323,20 +340,18 @@ async function applyMutation(
         .single();
 
       const prevRevenue = (existing as { ticket_revenue?: number } | null)?.ticket_revenue ?? 0;
-      const prevBalance = (existing as { balance?: number }         | null)?.balance       ?? 0;
+      const prevBalance = (existing as { balance?: number } | null)?.balance ?? 0;
 
-      const { error } = await db
-        .from('team_finances')
-        .upsert(
-          {
-            team_id:        mutation.team_id,
-            season_id:      mutation.season_id,
-            ticket_revenue: prevRevenue + mutation.ticket_revenue_delta,
-            balance:        prevBalance + mutation.balance_delta,
-            updated_at:     new Date().toISOString(),
-          },
-          { onConflict: 'team_id,season_id' },
-        );
+      const { error } = await db.from('team_finances').upsert(
+        {
+          team_id: mutation.team_id,
+          season_id: mutation.season_id,
+          ticket_revenue: prevRevenue + mutation.ticket_revenue_delta,
+          balance: prevBalance + mutation.balance_delta,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'team_id,season_id' },
+      );
 
       if (error) {
         console.warn('[applyMutation:team_finances_delta] failed:', error.message);
@@ -372,12 +387,12 @@ async function logEnactmentIntervention(
     .from('architect_interventions')
     .insert({
       target_table: 'focus_enacted',
-      target_id:    null,
-      field:        'focus_key',
-      old_value:    { focus_key: null, note: 'pre-enactment' },
-      new_value:    { focus_key: spec.focus_key, tier, team_id: teamId, season_id: seasonId },
-      reason:       spec.reason,
-      meta:         { source: 'focus_enactment', team_id: teamId, season_id: seasonId, tier },
+      target_id: null,
+      field: 'focus_key',
+      old_value: { focus_key: null, note: 'pre-enactment' },
+      new_value: { focus_key: spec.focus_key, tier, team_id: teamId, season_id: seasonId },
+      reason: spec.reason,
+      meta: { source: 'focus_enactment', team_id: teamId, season_id: seasonId, tier },
     })
     .select('id')
     .single();
@@ -436,7 +451,10 @@ async function enactOneTeamFocus(
     // Fail safe: if we can't confirm the prior state, do NOT mutate — a false
     // "not enacted" here would double-apply.  Skip and let the next run retry
     // once the read recovers.
-    console.warn(`[enactOneTeamFocus] focus_enacted precheck failed for ${teamId}/${tier}:`, guardErr.message);
+    console.warn(
+      `[enactOneTeamFocus] focus_enacted precheck failed for ${teamId}/${tier}:`,
+      guardErr.message,
+    );
     return false;
   }
   if (alreadyEnacted) {
@@ -445,7 +463,7 @@ async function enactOneTeamFocus(
   }
 
   // Deterministic RNG seeded per (season, team, focus) triple.
-  const rng  = seededRng(`${seasonId}:${teamId}:${focusKey}`);
+  const rng = seededRng(`${seasonId}:${teamId}:${focusKey}`);
   const spec = enactFocus(focusKey, teamId, seasonId, players, rng);
 
   if (!spec) {
@@ -464,23 +482,24 @@ async function enactOneTeamFocus(
 
   // Write the audit row.  UNIQUE constraint on (team_id, season_id, tier) makes
   // this idempotent — safe to re-run without duplicating the enactment.
-  const { error } = await db
-    .from('focus_enacted')
-    .upsert(
-      {
-        season_id:        seasonId,
-        team_id:          teamId,
-        tier,
-        focus_key:        focusKey,
-        focus_label:      focusLabel,
-        enacted_at:       new Date().toISOString(),
-        intervention_id:  interventionId,
-      },
-      { onConflict: 'team_id,season_id,tier' },
-    );
+  const { error } = await db.from('focus_enacted').upsert(
+    {
+      season_id: seasonId,
+      team_id: teamId,
+      tier,
+      focus_key: focusKey,
+      focus_label: focusLabel,
+      enacted_at: new Date().toISOString(),
+      intervention_id: interventionId,
+    },
+    { onConflict: 'team_id,season_id,tier' },
+  );
 
   if (error) {
-    console.warn(`[enactOneTeamFocus] focus_enacted write failed for ${teamId}/${tier}:`, error.message);
+    console.warn(
+      `[enactOneTeamFocus] focus_enacted write failed for ${teamId}/${tier}:`,
+      error.message,
+    );
     return false;
   }
   return true;
@@ -494,14 +513,14 @@ async function enactOneTeamFocus(
  */
 export interface SeasonEnactmentResult {
   /** Total number of focus_enacted rows successfully written (max: teams × 2). */
-  enacted:  number;
+  enacted: number;
   /** Number of teams or tiers where enactment failed or had no winner. */
-  skipped:  number;
+  skipped: number;
   /** Per-team detail for debugging. */
-  details:  Array<{
-    team_id:  string;
-    major:    string | null; // focus_key enacted, or null if no winner / failure
-    minor:    string | null;
+  details: Array<{
+    team_id: string;
+    major: string | null; // focus_key enacted, or null if no winner / failure
+    minor: string | null;
   }>;
 }
 
@@ -534,8 +553,8 @@ export async function enactSeasonFocuses(
   for (const teamId of teamIds) {
     const detail: SeasonEnactmentResult['details'][number] = {
       team_id: teamId,
-      major:   null,
-      minor:   null,
+      major: null,
+      minor: null,
     };
 
     // Fetch roster once per team — reused for both major and minor.
@@ -549,8 +568,13 @@ export async function enactSeasonFocuses(
     // Enact major focus.
     if (majorWinner) {
       const ok = await enactOneTeamFocus(
-        db, teamId, seasonId, 'major',
-        majorWinner.option_key, majorWinner.label, players,
+        db,
+        teamId,
+        seasonId,
+        'major',
+        majorWinner.option_key,
+        majorWinner.label,
+        players,
       );
       if (ok) {
         result.enacted++;
@@ -565,8 +589,13 @@ export async function enactSeasonFocuses(
     // Enact minor focus.
     if (minorWinner) {
       const ok = await enactOneTeamFocus(
-        db, teamId, seasonId, 'minor',
-        minorWinner.option_key, minorWinner.label, players,
+        db,
+        teamId,
+        seasonId,
+        'minor',
+        minorWinner.option_key,
+        minorWinner.label,
+        players,
       );
       if (ok) {
         result.enacted++;
@@ -591,13 +620,13 @@ export async function enactSeasonFocuses(
  * Mirrors the `focus_enacted` table columns displayed in the VotingPage.
  */
 export interface EnactedFocusRow {
-  id:              string;
-  season_id:       string;
-  team_id:         string;
-  tier:            'major' | 'minor';
-  focus_key:       string;
-  focus_label:     string;
-  enacted_at:      string;
+  id: string;
+  season_id: string;
+  team_id: string;
+  tier: 'major' | 'minor';
+  focus_key: string;
+  focus_label: string;
+  enacted_at: string;
   intervention_id: string | null;
 }
 
