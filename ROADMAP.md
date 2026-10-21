@@ -12,6 +12,14 @@
 
 ## The strategy in one paragraph
 
+> **Superseded 2026-10-21.** The paragraph below described June. Most of it is no longer true: see
+> "Verified state of the galaxy (2026-10-21)" immediately after it. In short, the season machine was
+> built, wired and has been working; the universe reached **Season 4 — 2603**; and the single thing
+> standing between this game and players is a Supabase disk-quota restriction, not a missing feature.
+
+<details>
+<summary>The June 2026 strategy paragraph (kept for provenance)</summary>
+
 Season 1 is over and the universe is stuck: the election ran, two focuses were enacted, and then
 nothing — no Season 2, no fixtures, both cups frozen, and every AI voice silent since May 21 for
 want of API credits. The order of battle is therefore: **resurrect** (operator, ~20 min), **make the
@@ -21,18 +29,79 @@ visible** (the soul is currently invisible during live matches), **then soft-lau
 fans. Depth — the bulk of the research library — follows once strangers are in the door, and is built
 **by subtraction**, audience-informed, never wholesale.
 
+</details>
+
+## Verified state of the galaxy (2026-10-21)
+
+Measured today against production CI logs, the control plane, and the codebase at `main`. Where this
+contradicts the June section below, **this section wins**.
+
+**The season loop runs itself, and has.** `rolloverSeason` was built, wired into
+`scripts/enact-due-seasons.ts`, and is invoked daily by `.github/workflows/enact-due-seasons.yml`.
+It last ran successfully on 2026-09-30 and did the whole job in one pass:
+
+```
+season 824e5c56: voting→enacted won
+season 824e5c56: rolled over → Season 4 — 2603 (4 leagues, 224 fixtures, 2 cups, 288 focus_options)
+season 824e5c56: enacted→archived won
+```
+
+Corroborated independently: `matches` holds 943 rows, of which exactly 224 are dated inside the last
+14 days and carry no replay frames. That is Season 4's unplayed fixture list. **The universe is at
+Season 4, not stuck at Season 1** (#568 updated accordingly; what remains there is Election Night
+incineration plus player aging / youth promotion, both named as gaps in `seasonRollover.ts` line 46).
+
+**The real blocker is disk, and it is nearly cleared.** The Supabase project has been restricted with
+`exceed_db_size_quota` since **2026-09-22**, returning HTTP 402 for every API call including auth.
+Every daily season run since has failed on it, except 30 Sept and 1 Oct when the restriction briefly
+lifted, which is precisely when Season 4 got created.
+
+Cause: `match_positions` stored a replay frame every 2 seconds at a measured **4.81 MB per match**
+with no retention, despite migration 0061's own header saying the data "can be pruned after the
+season ends". Measured breakdown at 2556.9 MB total against a 500 MB quota:
+
+| Table                             | Size      | Share |
+| --------------------------------- | --------- | ----- |
+| `match_positions`                 | 2109.6 MB | 82.5% |
+| `cron.job_run_details`            | 279.0 MB  | 10.9% |
+| `net._http_response`              | 76.0 MB   | 3.0%  |
+| everything else (the actual game) | ~92 MB    | 3.6%  |
+
+Fixed in #658–#666 (pruner, retention, weekly groundskeeping workflow) taking the database to
+**103.6 MB**, and #667 compacted the frame format by a measured **90.2%** (4.81 MB → 0.65 MB per
+match) so a full 500-match season now costs ~325 MB instead of 2.4 GB. Supabase evaluates the quota
+on a **per-organization average across the billing period**, so the restriction lifts on a cycle
+boundary rather than instantly; the Sept 30 lift-then-resnap is the evidence for that.
+
+**Code health** — typecheck ✅, **1 660 tests ✅** (not ~1,337), build ✅. ESLint backlog is **659
+errors**, not ~210 (#407 re-measured; it is no longer a single-rule campaign). `twinParity` passes
+16/16, so there is no `src`↔worker drift today.
+
+**Gate before the league plays again** — migration `0084` is written but **not applied**, because
+migrations go in by hand via the Supabase MCP and the project has been unreachable. Until it is
+applied the worker's roster upsert fails and it skips replay frames entirely, silently (#668).
+
+**Still true from June** — the engine core is validated and should be defended, not extended; the
+Architect has 4 mechanical levers plus narrative-only kinds; the research converges on
+tiered sim → structured Chronicle → state-aware drama director. The missing pipeline stage is the
+**Sifter** (see `docs/emergence-applied.md`), which the owner's own research rates highest value per
+hour.
+
 ## How the three layers fit together
 
-| Layer | File / system | Answers |
-|---|---|---|
-| **Order of battle** | this file (`ROADMAP.md`) | *What do we do next, and in what order?* |
-| **Workstream detail** | `RESEARCH_IMPLEMENTATION_PLAN.md` | *For a research item, what's the basis, the change, the acceptance criteria?* |
-| **Unit of work** | GitHub Issues | *The branch / PR / done-definition for one task.* |
+| Layer                 | File / system                     | Answers                                                                       |
+| --------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
+| **Order of battle**   | this file (`ROADMAP.md`)          | _What do we do next, and in what order?_                                      |
+| **Workstream detail** | `RESEARCH_IMPLEMENTATION_PLAN.md` | _For a research item, what's the basis, the change, the acceptance criteria?_ |
+| **Unit of work**      | GitHub Issues                     | _The branch / PR / done-definition for one task._                             |
 
 Where the research plan and this roadmap overlap, **this roadmap's launch sequencing wins**; the research
 plan adds the detail and the post-launch depth.
 
 ## Verified state of the galaxy (production, 2026-06-11 / code 2026-06-13)
+
+> **Stale as of 2026-10-21.** Kept for provenance. The season, blocker, test-count and lint figures
+> below are all out of date; see "Verified state of the galaxy (2026-10-21)" above.
 
 **Players & economy** — 1 user account, 4 wagers ever (1 won, 3 lost, all settled cleanly). This is
 pre-launch; retention/community features rank below launch features.
@@ -49,7 +118,7 @@ unreachable forever (#569). League fixtures used real 2026 dates — the bug is 
 
 **Narrative layer** — galaxy-tick runs and writes (auth working; 102 narratives in 7 days), but
 **459 LLM errors in 7 days**: credits are empty (#565), so the feed is 78% one fallback kind
-(`cosmic_disturbance`). The `narratives` table is only *half* a chronicle — no `actor/action/target`,
+(`cosmic_disturbance`). The `narratives` table is only _half_ a chronicle — no `actor/action/target`,
 `place`, `season`, or `importance` (#575). Cron live: match-worker + notify (1 min), galaxy-tick (2 h),
 enricher (1 h), drama (daily). The shadow worker is deployed but never scheduled (#566).
 
@@ -67,7 +136,7 @@ boost genuinely reaches the engine. The Architect has **4 mechanical levers** (c
 engine reads only `preferred_formation` (#587). `deriveSimStats` is a linear blend (#589). Stored but
 unused by the sim: player personality, age, form, home advantage; no substitutions/cards/injuries in-sim.
 
-**Research truth** — the engine's core is the *validated answer* (multiple reports re-derive it); stop
+**Research truth** — the engine's core is the _validated answer_ (multiple reports re-derive it); stop
 investing in the engine core, defend its invariants, invest in the soul and the living world. A dozen
 sources converge on one architecture: **tiered sim → structured Chronicle → state-aware drama director** —
 which is exactly the Architect. Blaseball died of hand-crafted escalation and round-the-clock live-ops;
@@ -77,13 +146,13 @@ the automated AI sim is the structural escape **if the loop runs itself and we g
 
 ## Phase 0 — Resurrection (operator: ~20 min, then one Fable verify session)
 
-| # | Action | Pri | Time |
-|---|--------|-----|------|
-| #565 | **Recharge Anthropic credits** (+ enable auto-reload) | P0 | 5 min |
-| #442 | Confirm `WORKER_SHARED_SECRET` is set correctly, then close | P0 | 5 min |
-| #443 | Supabase Auth → "Block compromised passwords" toggle | P1 | 2 min |
-| #445 | Create Sentry project, set `VITE_SENTRY_DSN` | P1 | 10 min |
-| #444 | Decide the email provider (Resend recommended) — only gates #381 | P1 | decision |
+| #    | Action                                                           | Pri | Time     |
+| ---- | ---------------------------------------------------------------- | --- | -------- |
+| #565 | **Recharge Anthropic credits** (+ enable auto-reload)            | P0  | 5 min    |
+| #442 | Confirm `WORKER_SHARED_SECRET` is set correctly, then close      | P0  | 5 min    |
+| #443 | Supabase Auth → "Block compromised passwords" toggle             | P1  | 2 min    |
+| #445 | Create Sentry project, set `VITE_SENTRY_DSN`                     | P1  | 10 min   |
+| #444 | Decide the email provider (Resend recommended) — only gates #381 | P1  | decision |
 
 **Fable verify session after the recharge**: galaxy-tick returns `llmErrors: 0` and
 `narrativesInserted > 0`; feed diversity returns. **Also trigger drama-tick and one in-match
@@ -147,10 +216,11 @@ Decide a soft-launch cohort (10–50 friendlies) once Phases 0–2 land. Then:
 
 ## Phase 4 — Depth (post-launch, audience-informed — build by subtraction)
 
-The bulk of the research library. Concrete but deliberately *audience-informed*; do not over-build before
+The bulk of the research library. Concrete but deliberately _audience-informed_; do not over-build before
 launch. Grouped by lane:
 
 **Soul & living world**
+
 - **#582** Architect as a state-aware drama director `[WS-B2]` (paces drama off league state)
 - **#579** importance-weighted memory retrieval + reflection pass `[WS-B3]`
 - **#580** entity affect model — personality / mood / emotion `[WS-C1]` (flagship soul feature)
@@ -159,15 +229,18 @@ launch. Grouped by lane:
 - **#586** lineage, involuntary loss, and memorials `[WS-C4]` (ethics note before first flashpoint)
 
 **Engine & match**
+
 - **#587** wire the 8 manager play-styles into the spatial engine `[WS-D1]`
 - **#588** adaptive highlights — near-misses, juice, momentum, GK 8-sec rule `[WS-D2]`
 - **#589** convex stat transform + finishing weight `[WS-D3]`
 
 **Betting & economy**
+
 - **#590** over/under + BTTS + in-play markets + free-to-play prediction `[WS-D4]`
 - **#591** full faucet/sink economy balance `[WS-D5]` (the guardrail slice lands in Phase 2)
 
 **Original depth backlog**
+
 - **#394** mid-season micro-votes · **#395** training-narrative wire · **#559** bettor narratives
   server-side · **#402** supporter tier (timing decision) · **#510** Neptune lore decision
 
@@ -185,7 +258,7 @@ launch. Grouped by lane:
 
 - **Determinism is sacred.** Every engine change (#587/#588/#589) keeps the seeded mulberry32
   reproducibility and the **byte-identical `src`↔worker twins** (guard with the drift test). Manipulate
-  *inputs*, never outcomes — the only sanctioned exception is the Architect's rare, disguised rewrite.
+  _inputs_, never outcomes — the only sanctioned exception is the Architect's rare, disguised rewrite.
 - **`getContext()` stays synchronous**; service-role-only writes to `match_events` / `narratives` /
   Chronicle; feature-barrel imports; the four mounted bus listeners.
 - **Grounding before generation.** #575 (Chronicle) + #583 (hardening) come before scaling LLM volume.
@@ -201,29 +274,29 @@ structural burn is enricher hourly + galaxy-tick 2-hourly (Haiku) + drama-tick d
 Architect (Sonnet) per live match — match days dominate. Pre-launch estimate: **single-digit
 dollars/month**; a ~$25/mo budget with small auto-reload gives ample headroom. Post-recharge, watch
 `agent_runs` token sums weekly. Supabase Pro adds $25/mo at Phase 2; GitHub Pages hosting is free.
-#583's caching/batch work should *lower* the LLM burn as volume grows.
+#583's caching/batch work should _lower_ the LLM burn as volume grows.
 
 ## Decisions queue (genuine choices only)
 
-| Decision | When | Recommendation |
-|----------|------|----------------|
-| Email provider (#444) | Phase 0/3 | Resend free tier |
-| Galaxy-tick voice model | Post-recharge | Keep Haiku; trial Sonnet for a week later |
-| Do cups gate season end? (#569) | Phase 1 | Cups finish before voting opens |
-| Election Night ritual (#568) | Phase 1 | Wire it — it's the signature spectacle |
-| Chronicle: extend `narratives` vs. new table (#575) | Phase 1 | Extend `narratives` if the migration is clean |
-| Vote-weight curve (#578) | Phase 2 | Quadratic cost + a small randomized outcome |
-| Affect model scope (#580) | Phase 4 | Ship personality + mood first; add OCC emotion later |
-| Architect "moods" personas (#582) | Phase 4 | Defer until single-mode state-aware pacing is solid |
-| Responsible-design strictness (#591) | Phase 2/4 | Min-viable now; revisit at scale |
-| Soft-launch cohort + date | After Phase 2 | 10–50 friendlies |
-| Neptune club (#510) | Whenever | Fix the lore, keep 32 teams |
-| Supporter tier (#402) | Post-launch | Defer |
+| Decision                                            | When          | Recommendation                                       |
+| --------------------------------------------------- | ------------- | ---------------------------------------------------- |
+| Email provider (#444)                               | Phase 0/3     | Resend free tier                                     |
+| Galaxy-tick voice model                             | Post-recharge | Keep Haiku; trial Sonnet for a week later            |
+| Do cups gate season end? (#569)                     | Phase 1       | Cups finish before voting opens                      |
+| Election Night ritual (#568)                        | Phase 1       | Wire it — it's the signature spectacle               |
+| Chronicle: extend `narratives` vs. new table (#575) | Phase 1       | Extend `narratives` if the migration is clean        |
+| Vote-weight curve (#578)                            | Phase 2       | Quadratic cost + a small randomized outcome          |
+| Affect model scope (#580)                           | Phase 4       | Ship personality + mood first; add OCC emotion later |
+| Architect "moods" personas (#582)                   | Phase 4       | Defer until single-mode state-aware pacing is solid  |
+| Responsible-design strictness (#591)                | Phase 2/4     | Min-viable now; revisit at scale                     |
+| Soft-launch cohort + date                           | After Phase 2 | 10–50 friendlies                                     |
+| Neptune club (#510)                                 | Whenever      | Fix the lore, keep 32 teams                          |
+| Supporter tier (#402)                               | Post-launch   | Defer                                                |
 
 ## Explicitly NOT doing (anti-scope — from the research synthesis)
 
 No 3D / photoreal rendering (2D blobs are the superior emotional form) · no orbital-mechanics / n-body
-engine (borrow real *data* for flavour, not fidelity) · no hardcore-manager tactics board · no full
+engine (borrow real _data_ for flavour, not fidelity) · no hardcore-manager tactics board · no full
 offside/handball fidelity · no per-tick or per-agent LLM calls · no "add forever" season escalation
 (cap complexity) · no real-money anything · no new ecosystem/population machinery.
 
@@ -231,10 +304,10 @@ offside/handball fidelity · no per-tick or per-agent LLM calls · no "add forev
 
 1. **One issue = one session = one branch = one PR.** `<type>/<kebab-description>` off fresh `main`,
    Conventional Commits, PR to `main`, squash-merge.
-2. Session prompt: *"Work issue #NNN in steverowley/soccer-league. Read the issue body + comments, then
+2. Session prompt: _"Work issue #NNN in steverowley/soccer-league. Read the issue body + comments, then
    `RESEARCH_IMPLEMENTATION_PLAN.md` for the WS detail (if tagged) and `CLAUDE.md`. Implement with tests,
    run `npm run check`, push, open a PR, subscribe to PR activity and fix CI/review feedback until merged.
-   Close the issue when done."*
+   Close the issue when done."_
 3. **Parallel lanes**: the hygiene lane runs alongside anything; Phase 2 items are largely disjoint.
    Never run two sessions on the same feature or page (#378 + #390's MatchDetail = one session). Never run
    two engine-twin sessions concurrently (#587/#588/#589 all touch the spatial twins).
