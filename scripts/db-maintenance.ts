@@ -4,7 +4,8 @@
 // WHY THIS EXISTS
 // ───────────────
 // `match_positions` (migration 0061) stores one JSONB frame every 2 seconds of
-// match time — 2 731 rows and ~4.8 MB per match.  That migration's own header
+// match time — 2 731 rows and ~4.8 MB per match (0.67 MB since the compact v2
+// format landed in migration 0084).  That migration's own header
 // says the data "can be pruned after the season ends", but no pruning was ever
 // built.  Season 1's completed fixtures therefore accumulated past the 500 MB
 // Free-plan disk quota, Supabase restricted the project, and every API call —
@@ -302,6 +303,13 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
   console.log(`matches within ${retentionDays}d : ${recentMatches} (frames kept)`);
   console.log(`matches older      : ${staleMatches} (frames pruned)`);
 
+  // Every statement below treats `match_position_rosters` (migration 0084) as
+  // part of the same payload. The roster is the decoding key for a match's
+  // frames, so the two must be pruned together: a roster whose frames are gone
+  // is dead weight, and frames whose roster is gone are undecodable (the reader
+  // degrades to "no replay"). ON DELETE CASCADE does not help here — it only
+  // fires when the parent `matches` row is deleted, which pruning never does.
+
   if (dryRun) {
     console.log('\n[dry-run] no changes made.\n');
     return;
@@ -318,7 +326,7 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
   // the space immediately.
   if (recentMatches === 0) {
     console.log('\nNo match falls inside the retention window; truncating match_positions…');
-    await runSql(`truncate table match_positions`, 'truncate');
+    await runSql(`truncate table match_positions, match_position_rosters`, 'truncate');
     console.log('Done.\n');
     return;
   }
@@ -350,7 +358,7 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
         `\nNone of the ${safeRecent.length} retained matches has replay frames ` +
           `(they are unplayed fixtures); truncating match_positions…`,
       );
-      await runSql(`truncate table match_positions`, 'truncate');
+      await runSql(`truncate table match_positions, match_position_rosters`, 'truncate');
       console.log('Done.\n');
       return;
     }
@@ -378,6 +386,11 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
       .join(',');
     try {
       await runSql(`delete from match_positions where match_id in (${list})`, 'prune-delete');
+      // Same ids, same chunk: the roster follows its frames out of the table.
+      await runSql(
+        `delete from match_position_rosters where match_id in (${list})`,
+        'prune-delete-roster',
+      );
       done += CHUNK;
     } catch {
       // Keep going. Deletes commit per chunk, so progress survives, and the
@@ -397,7 +410,7 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
   // only the surviving rows, so the headroom it needs is the size of what we
   // chose to keep, not the size of what we deleted.
   console.log('\nReclaiming disk (vacuum full match_positions)…');
-  await runSql(`vacuum full match_positions`, 'vacuum');
+  await runSql(`vacuum full match_positions, match_position_rosters`, 'vacuum');
   console.log('Done.\n');
 }
 

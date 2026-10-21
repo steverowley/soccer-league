@@ -1225,6 +1225,36 @@ export type Database = {
           },
         ]
       }
+      match_position_rosters: {
+        Row: {
+          match_id: string
+          player_ids: Json
+        }
+        Insert: {
+          match_id: string
+          player_ids: Json
+        }
+        Update: {
+          match_id?: string
+          player_ids?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_position_rosters_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "match_referee_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "match_position_rosters_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_positions: {
         Row: {
           match_id: string
