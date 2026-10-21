@@ -162,13 +162,17 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
     );
   }
 
+  // Expressed as "keep what is recent, prune everything else" rather than
+  // "prune what looks finished". A disk-recovery tool must not leave rows
+  // behind because a match carries an unexpected status or a null timestamp,
+  // and `created_at` is NOT NULL so the coalesce always yields a real date.
+  //
   // `retentionDays` is a validated integer, so this interpolation is safe.
-  const stalePredicate = `
-    match_id in (
-      select m.id from matches m
-      where m.status = 'completed'
-        and coalesce(m.completed_at, m.scheduled_at) < now() - interval '${retentionDays} days'
-    )`;
+  const recentMatches = `
+    select m.id from matches m
+    where coalesce(m.played_at, m.simulated_at, m.scheduled_at, m.created_at)
+          >= now() - interval '${retentionDays} days'`;
+  const stalePredicate = `match_id not in (${recentMatches})`;
 
   const before = await runSql<{ rows: number; bytes: number }>(
     `select
