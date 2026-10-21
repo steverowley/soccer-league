@@ -222,11 +222,22 @@ async function migrations(): Promise<void> {
 
   console.log(`migration files in repo: ${files.length}`);
 
-  // A repo file counts as applied if any recorded version shares its numeric
-  // prefix: the Supabase CLI stamps timestamps, hand-applied ones may not.
+  // Match on NAME, not on the numeric prefix. Production records CLI-style
+  // timestamps with a separate name column (e.g. version 20260811143501, name
+  // "fix_profiles_update_recursion") while repo files carry a sequential
+  // prefix ("0083_fix_profiles_update_recursion.sql"). The two numbering
+  // schemes never agree, so comparing versions reports everything as pending.
+  const appliedNames = new Set(
+    applied.map((r) => String(r.name ?? '').trim()).filter((n) => n.length > 0),
+  );
+  const repoName = (f: string) => f.replace(/\.sql$/, '').replace(/^\d+_/, '');
+
   const pending = files.filter((f) => {
+    const name = repoName(f);
+    // Accept an exact name match, or a version that literally equals the
+    // file's prefix (covers anything applied before the CLI convention).
     const prefix = f.split('_')[0] ?? '';
-    return ![...appliedVersions].some((v) => v === prefix || v.endsWith(prefix));
+    return !appliedNames.has(name) && !appliedVersions.has(prefix);
   });
 
   if (pending.length === 0) {
