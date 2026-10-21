@@ -72,7 +72,7 @@ const MAX_RETENTION_DAYS = 365;
  * @returns      Result rows (empty array for statements that return none).
  */
 async function runSql<T = Record<string, unknown>>(sql: string, label: string): Promise<T[]> {
-  const MAX_ATTEMPTS = 4;
+  const MAX_ATTEMPTS = 7;
   let lastError = '';
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -118,12 +118,13 @@ async function runSql<T = Record<string, unknown>>(sql: string, label: string): 
 }
 
 /**
- * Back off between retries: 3s, 9s, 27s.
+ * Back off between retries: 3s, 6s, 12s, 24s, then 30s thereafter.
  *
  * @param attempt  1-based attempt number just completed.
  */
 function sleep(attempt: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 3000 * 3 ** (attempt - 1)));
+  const ms = Math.min(3000 * 2 ** (attempt - 1), 30_000);
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Format a byte count the way a human reads a disk report. */
@@ -372,6 +373,27 @@ async function pruneOperationalLogs(cronDays: number, dryRun: boolean): Promise<
 
 // ── entrypoint ───────────────────────────────────────────────────────────────
 
+/**
+ * Run `report()` without letting its failure stop the caller.
+ *
+ * The size report is diagnostic; pruning is the actual job. A restricted
+ * project drops connections unpredictably, and an earlier version aborted the
+ * whole run because `pg_database_size` happened to time out. Never let the
+ * nice-to-have gate the necessary.
+ *
+ * @param when  Label distinguishing the before/after report in the log.
+ */
+async function tryReport(when: string): Promise<void> {
+  try {
+    await report();
+  } catch (err) {
+    console.log(
+      `\n[${when}] size report unavailable (${err instanceof Error ? err.message : String(err)}).`,
+    );
+    console.log('Continuing: the report is diagnostic, the prune is the job.\n');
+  }
+}
+
 /** Parse argv, dispatch, and exit non-zero on failure so CI goes red. */
 async function main(): Promise<void> {
   if (!ACCESS_TOKEN) {
@@ -394,10 +416,10 @@ async function main(): Promise<void> {
       await report();
       break;
     case 'prune':
-      await report();
+      await tryReport('before');
       await prune(retentionDays, dryRun);
       await pruneOperationalLogs(cronDays, dryRun);
-      if (!dryRun) await report();
+      if (!dryRun) await tryReport('after');
       break;
     default:
       console.error(`Unknown command '${command}'. Use: report | prune`);
