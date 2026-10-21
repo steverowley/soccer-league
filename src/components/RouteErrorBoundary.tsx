@@ -73,32 +73,46 @@ export default class RouteErrorBoundary extends Component<Props, State> {
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div style={{
-          // Sits inside the page content area — Header + Footer keep rendering.
-          // padding/margin chosen to match the rest of the page layout so
-          // the panel doesn't look orphaned at the top of the viewport.
-          padding: 48,
-          margin: '32px auto',
-          maxWidth: 480,
-          border: `1px solid ${COLORS.hairline}`,
-          color: COLORS.dust,
-          fontFamily: "'Space Mono', monospace",
-          textAlign: 'center',
-        }}>
+        <div
+          style={{
+            // Sits inside the page content area — Header + Footer keep rendering.
+            // padding/margin chosen to match the rest of the page layout so
+            // the panel doesn't look orphaned at the top of the viewport.
+            padding: 48,
+            margin: '32px auto',
+            maxWidth: 480,
+            border: `1px solid ${COLORS.hairline}`,
+            color: COLORS.dust,
+            textAlign: 'center',
+          }}
+        >
           <div style={{ fontSize: 24, marginBottom: 12 }}>⚠</div>
-          <h2 style={{
-            fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase',
-            fontWeight: 700, margin: '0 0 8px',
-          }}>
+          <h2
+            style={{
+              fontSize: 13,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              fontWeight: 700,
+              margin: '0 0 8px',
+            }}
+          >
             This page misfired
           </h2>
-          <p style={{
-            fontSize: 12, color: COLORS.dust50, lineHeight: 1.7, margin: '0 0 16px',
-          }}>
-            The rest of the broadcast feed is unaffected. Reload this view to retry, or
-            use the navigation above to head elsewhere.
+          <p
+            style={{
+              fontSize: 12,
+              color: COLORS.dust50,
+              lineHeight: 1.7,
+              margin: '0 0 16px',
+            }}
+          >
+            The rest of the broadcast feed is unaffected. Reload this view to retry, or use the
+            navigation above to head elsewhere.
             {this.state.message && (
-              <><br /><span style={{ opacity: 0.6 }}>{this.state.message}</span></>
+              <>
+                <br />
+                <span style={{ opacity: 0.6 }}>{this.state.message}</span>
+              </>
             )}
           </p>
           <button

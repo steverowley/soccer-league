@@ -64,6 +64,14 @@ export default tseslint.config(
       // them under the React/browser baseline is the wrong rule set.
       'public/**',
       '*.png',
+      // Claude Code skill scratch space: design prototypes, UI-kit sketches
+      // and a bundled design-system dump. None of it is imported by the app,
+      // none of it is built, and none of it ships — it is reference material
+      // for generating designs. Linting it under the app's React/TS baseline
+      // produced 531 of the repo's 669 errors (mostly `React`/component
+      // identifiers that these standalone sketches never import), which is
+      // what kept the lint step from being able to gate. (#407)
+      '.claude/**',
     ],
   },
 
@@ -156,11 +164,7 @@ export default tseslint.config(
             // Block re-introduction so a future drift back to a singleton
             // import dies in CI rather than landing in main.
             {
-              group: [
-                '**/lib/supabase',
-                'src/lib/supabase',
-                '@/lib/supabase',
-              ],
+              group: ['**/lib/supabase', 'src/lib/supabase', '@/lib/supabase'],
               message:
                 'src/lib/supabase.ts was deleted in #387. Use the typed-client DI pattern: useSupabase() in React, function-arg `db: IslSupabaseClient` elsewhere. Per-feature reads/writes live in features/*/api/.',
             },
@@ -249,8 +253,12 @@ export default tseslint.config(
   // Anything under `scripts/` runs in Node before the bundler ever loads —
   // typically wired to `predev` / `prebuild` in package.json.  They need
   // Node globals (console, process) but not browser ones.
+  //
+  // `demo/*.mjs` is the same kind of thing: a Node-run inliner for the
+  // standalone match-viewer demo build, not browser code. Without Node
+  // globals it reported `URL` and `console` as undefined. (#407)
   {
-    files: ['scripts/**/*.{js,mjs,cjs,ts}'],
+    files: ['scripts/**/*.{js,mjs,cjs,ts}', 'demo/**/*.{js,mjs,cjs}'],
     languageOptions: {
       globals: { ...globals.node },
     },

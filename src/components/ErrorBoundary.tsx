@@ -46,20 +46,37 @@ export default class ErrorBoundary extends Component<Props, State> {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            fontFamily: "'Space Mono', monospace",
             gap: '16px',
             padding: '32px',
             textAlign: 'center',
           }}
         >
           <div style={{ fontSize: '32px' }}>⚠</div>
-          <h1 style={{ fontSize: '16px', letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
+          <h1
+            style={{
+              fontSize: '16px',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              margin: 0,
+            }}
+          >
             Transmission Error
           </h1>
-          <p style={{ fontSize: '12px', opacity: 0.6, maxWidth: '480px', lineHeight: 1.7, margin: 0 }}>
+          <p
+            style={{
+              fontSize: '12px',
+              opacity: 0.6,
+              maxWidth: '480px',
+              lineHeight: 1.7,
+              margin: 0,
+            }}
+          >
             An unexpected error disrupted the ISL broadcast feed.
             {this.state.message && (
-              <><br /><span style={{ opacity: 0.45 }}>{this.state.message}</span></>
+              <>
+                <br />
+                <span style={{ opacity: 0.45 }}>{this.state.message}</span>
+              </>
             )}
           </p>
           <button
@@ -70,7 +87,6 @@ export default class ErrorBoundary extends Component<Props, State> {
               border: `1px solid ${C.dust}`,
               backgroundColor: 'transparent',
               color: C.dust,
-              fontFamily: "'Space Mono', monospace",
               fontSize: '12px',
               letterSpacing: '0.08em',
               cursor: 'pointer',

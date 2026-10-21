@@ -57,7 +57,7 @@ import {
 /** Fixed pixel width of the hover detail panel.
  *  228 px fits the longest single-line meta value (party names, employer slugs)
  *  without wrapping at typical graph sidebar widths. */
-const TOOLTIP_WIDTH      = 228;
+const TOOLTIP_WIDTH = 228;
 
 /** Conservative upper-bound on the tooltip's rendered height (px).
  *  Used only for viewport-edge clamping — the actual card is shorter when
@@ -66,11 +66,11 @@ const TOOLTIP_HEIGHT_EST = 210;
 
 /** Gap (px) between the node circle edge and the nearest tooltip edge.
  *  Keeps the panel from overlapping the node label text. */
-const TOOLTIP_GAP        = 14;
+const TOOLTIP_GAP = 14;
 
 /** Maximum character length for the description excerpt shown in the tooltip.
  *  Anything longer is truncated with an ellipsis so the panel stays compact. */
-const TOOLTIP_DESC_MAX   = 110;
+const TOOLTIP_DESC_MAX = 110;
 
 /**
  * Meta field keys rendered in the tooltip, in display priority order.
@@ -81,19 +81,23 @@ const TOOLTIP_DESC_MAX   = 110;
  * its own styled excerpt block below the divider.
  */
 const TOOLTIP_META_KEYS: readonly string[] = [
-  'role', 'party', 'homeworld', 'employer', 'beat',
-  'specialty', 'era', 'style', 'corps', 'format',
+  'role',
+  'party',
+  'homeworld',
+  'employer',
+  'beat',
+  'specialty',
+  'era',
+  'style',
+  'corps',
+  'format',
 ];
 import { useNavigate } from 'react-router-dom';
 
 import { COLORS } from '../../../../components/Layout';
 import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
 
-import {
-  getEntitiesByIds,
-  getEntity,
-  getEntityNeighbourhood,
-} from '../../api/relationships';
+import { getEntitiesByIds, getEntity, getEntityNeighbourhood } from '../../api/relationships';
 import { buildGraph } from '../../logic/relationshipGraph';
 import { extractSubgraph } from '../../logic/subgraph';
 import type { Entity, EntityRelationship } from '../../types';
@@ -156,9 +160,9 @@ const DIM_OPACITY = 0.35;
  * opacity, which is near-invisible as a 2 px colour sample on abyss.
  */
 const EDGE_LEGEND = [
-  { color: COLORS.terraNova, label: 'Allied'  },
-  { color: COLORS.dust50,    label: 'Neutral' },
-  { color: COLORS.flare,     label: 'Rival'   },
+  { color: COLORS.terraNova, label: 'Allied' },
+  { color: COLORS.dust50, label: 'Neutral' },
+  { color: COLORS.flare, label: 'Rival' },
 ] as const;
 
 /**
@@ -166,12 +170,12 @@ const EDGE_LEGEND = [
  * Labels are intentionally concise — the tooltip reveals the exact kind on hover.
  */
 const NODE_LEGEND = [
-  { color: COLORS.dust,      label: 'Player'      },
-  { color: COLORS.astro,     label: 'Manager / Team' },
-  { color: COLORS.quantum,   label: 'Media'       },
-  { color: COLORS.terraNova, label: 'Governance'  },
-  { color: COLORS.flare,     label: 'Disruption'  },
-  { color: COLORS.dust70,    label: 'Place'       },
+  { color: COLORS.dust, label: 'Player' },
+  { color: COLORS.astro, label: 'Manager / Team' },
+  { color: COLORS.quantum, label: 'Media' },
+  { color: COLORS.terraNova, label: 'Governance' },
+  { color: COLORS.flare, label: 'Disruption' },
+  { color: COLORS.dust70, label: 'Place' },
 ] as const;
 
 /**
@@ -183,15 +187,15 @@ const NODE_LEGEND = [
  * tech as well.
  */
 const SR_ONLY_STYLE: CSSProperties = {
-  position:   'absolute',
-  width:      1,
-  height:     1,
-  padding:    0,
-  margin:     -1,
-  overflow:   'hidden',
-  clip:       'rect(0, 0, 0, 0)',
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
   whiteSpace: 'nowrap',
-  border:     0,
+  border: 0,
 };
 
 // ── Public props ─────────────────────────────────────────────────────────────
@@ -231,7 +235,7 @@ export function RelationshipGraph({
   maxNeighbours,
   className,
 }: RelationshipGraphProps) {
-  const db       = useSupabase();
+  const db = useSupabase();
   const navigate = useNavigate();
 
   // ── Wrapper sizing ───────────────────────────────────────────────────
@@ -262,14 +266,14 @@ export function RelationshipGraph({
   // prop changed) and treat it as still-loading without a setState
   // ping-pong inside the effect body.
   type FetchState =
-    | { kind: 'loading';   entityId: string }
+    | { kind: 'loading'; entityId: string }
     | { kind: 'not_found'; entityId: string }
-    | { kind: 'error';     entityId: string; message: string }
+    | { kind: 'error'; entityId: string; message: string }
     | {
-        kind:    'loaded';
+        kind: 'loaded';
         entityId: string;
-        seed:    Entity;
-        edges:   EntityRelationship[];
+        seed: Entity;
+        edges: EntityRelationship[];
         nodeMap: Map<string, Entity>;
       };
 
@@ -287,10 +291,7 @@ export function RelationshipGraph({
   // useMemo so downstream hooks that depend on `effective` don't
   // rebuild on every render when nothing material has changed.
   const effective: FetchState = useMemo(
-    () =>
-      fetchState.entityId === entityId
-        ? fetchState
-        : { kind: 'loading', entityId },
+    () => (fetchState.entityId === entityId ? fetchState : { kind: 'loading', entityId }),
     [fetchState, entityId],
   );
 
@@ -328,14 +329,12 @@ export function RelationshipGraph({
         // re-runs the extractor (via useMemo) — duplicating the work
         // beats threading the result through state.
         const graph = buildGraph(edgeRows);
-        const sub   = extractSubgraph(graph, entityId, {
-          ...(maxHops       !== undefined && { maxHops }),
+        const sub = extractSubgraph(graph, entityId, {
+          ...(maxHops !== undefined && { maxHops }),
           ...(maxNeighbours !== undefined && { maxNeighbours }),
         });
-        const otherIds = Array.from(sub.nodeIds).filter(id => id !== entityId);
-        const hydrated = otherIds.length > 0
-          ? await getEntitiesByIds(db, otherIds)
-          : [];
+        const otherIds = Array.from(sub.nodeIds).filter((id) => id !== entityId);
+        const hydrated = otherIds.length > 0 ? await getEntitiesByIds(db, otherIds) : [];
         if (cancelled) return;
 
         // Build the lookup map including the seed so the renderer can
@@ -345,10 +344,10 @@ export function RelationshipGraph({
         for (const e of hydrated) map.set(e.id, e);
 
         setFetchState({
-          kind:    'loaded',
+          kind: 'loaded',
           entityId,
-          seed:    seedRow,
-          edges:   edgeRows,
+          seed: seedRow,
+          edges: edgeRows,
           nodeMap: map,
         });
       } catch (err: unknown) {
@@ -358,7 +357,9 @@ export function RelationshipGraph({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, entityId, maxHops, maxNeighbours]);
 
   // Render-time projections of the state machine.  Wrapped in useMemo
@@ -374,7 +375,7 @@ export function RelationshipGraph({
     [effective],
   );
   const loading = effective.kind === 'loading';
-  const error   = effective.kind === 'error'  ? effective.message : null;
+  const error = effective.kind === 'error' ? effective.message : null;
 
   // ── Subgraph memo (drives the render) ────────────────────────────────
   // Re-runs whenever the fetched edges change.  Pure + cheap — the
@@ -384,7 +385,7 @@ export function RelationshipGraph({
     if (!seed) return { nodeIds: new Set<string>(), edges: [] };
     const graph = buildGraph(edges);
     return extractSubgraph(graph, seed.id, {
-      ...(maxHops       !== undefined && { maxHops }),
+      ...(maxHops !== undefined && { maxHops }),
       ...(maxNeighbours !== undefined && { maxNeighbours }),
     });
   }, [seed, edges, maxHops, maxNeighbours]);
@@ -405,20 +406,20 @@ export function RelationshipGraph({
       // lands, the memo re-runs and labels appear.
       out.push({
         id,
-        kind:    e?.kind ?? 'unknown',
-        name:    e?.display_name ?? e?.name ?? '…',
-        isSeed:  id === seed.id,
+        kind: e?.kind ?? 'unknown',
+        name: e?.display_name ?? e?.name ?? '…',
+        isSeed: id === seed.id,
       });
     }
     return out;
   }, [subgraph.nodeIds, nodeMap, seed]);
 
   const layoutEdges: EdgeInput[] = useMemo(() => {
-    return subgraph.edges.map(e => ({
-      source:   e.from_id,
-      target:   e.to_id,
+    return subgraph.edges.map((e) => ({
+      source: e.from_id,
+      target: e.to_id,
       strength: e.strength,
-      kind:     e.kind,
+      kind: e.kind,
     }));
   }, [subgraph.edges]);
 
@@ -430,8 +431,8 @@ export function RelationshipGraph({
   // physics loop halts when the tab loses focus, preventing wasted
   // CPU on background tabs.
   const reducedMotion = useReducedMotion();
-  const [tabHidden,    setTabHidden]    = useState<boolean>(() =>
-    typeof document !== 'undefined' && document.visibilityState === 'hidden',
+  const [tabHidden, setTabHidden] = useState<boolean>(
+    () => typeof document !== 'undefined' && document.visibilityState === 'hidden',
   );
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -447,8 +448,8 @@ export function RelationshipGraph({
   // graph that finishes its layout silently rather than re-running it.
   const height = DEFAULT_HEIGHT;
   const layout = useForceLayout({
-    nodes:  layoutNodes,
-    edges:  layoutEdges,
+    nodes: layoutNodes,
+    edges: layoutEdges,
     width,
     height,
     paused: reducedMotion || tabHidden,
@@ -463,11 +464,11 @@ export function RelationshipGraph({
   // ── Render branches ─────────────────────────────────────────────────
   const wrapperStyle: CSSProperties = {
     position: 'relative',
-    width:    '100%',
+    width: '100%',
     height,
     background: COLORS.abyss,
-    border:     `1px solid ${COLORS.hairline}`,
-    boxSizing:  'border-box',
+    border: `1px solid ${COLORS.hairline}`,
+    boxSizing: 'border-box',
   };
 
   if (error) {
@@ -567,8 +568,8 @@ export function RelationshipGraph({
   // (x, y) coords which map 1:1 to CSS pixel offsets within the wrapper
   // because the SVG fills the container exactly.  Both values are null
   // when nothing is hovered so the tooltip renders nothing.
-  const hoveredNode   = focusId ? layout.nodes.find(n => n.id === focusId) ?? null : null;
-  const hoveredEntity = focusId ? (nodeMap.get(focusId) ?? null)               : null;
+  const hoveredNode = focusId ? (layout.nodes.find((n) => n.id === focusId) ?? null) : null;
+  const hoveredEntity = focusId ? (nodeMap.get(focusId) ?? null) : null;
 
   // ── Outer container: graph box + legend ─────────────────────────────
   // The outer div carries `ref` (for ResizeObserver width measurement) and
@@ -583,12 +584,7 @@ export function RelationshipGraph({
             Off-screen but still in the accessibility tree.  Updates as
             the connection count changes (e.g. when the user navigates
             to a different entity via a node click). */}
-        <div
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          style={SR_ONLY_STYLE}
-        >
+        <div role="status" aria-live="polite" aria-atomic="true" style={SR_ONLY_STYLE}>
           {announcement}
         </div>
 
@@ -607,12 +603,7 @@ export function RelationshipGraph({
         >
           {/* ── Edges ──────────────────────────────────────────────────── */}
           {layout.edges.map((edge) => (
-            <EdgeLine
-              key={edgeKey(edge)}
-              edge={edge}
-              focusId={focusId}
-              seedId={seed.id}
-            />
+            <EdgeLine key={edgeKey(edge)} edge={edge} focusId={focusId} seedId={seed.id} />
           ))}
 
           {/* ── Nodes ──────────────────────────────────────────────────── */}
@@ -699,21 +690,20 @@ function EdgeLine({
 
   const strength = typeof edge.strength === 'number' ? edge.strength : 0;
   const magnitude = Math.min(Math.abs(strength) / 100, 1);
-  const baseWidth =
-    EDGE_STROKE_MIN + magnitude * (EDGE_STROKE_MAX - EDGE_STROKE_MIN);
-  const stroke =
-    strength > 5  ? COLORS.terraNova :
-    strength < -5 ? COLORS.flare     :
-                    COLORS.hairline;
+  const baseWidth = EDGE_STROKE_MIN + magnitude * (EDGE_STROKE_MAX - EDGE_STROKE_MIN);
+  const stroke = strength > 5 ? COLORS.terraNova : strength < -5 ? COLORS.flare : COLORS.hairline;
 
   // A spoke touches the seed (first layer); everything else is the outer web.
   const isSpoke = s.id === seedId || t.id === seedId;
-  const incidentToFocus =
-    focusId !== null && (s.id === focusId || t.id === focusId);
+  const incidentToFocus = focusId !== null && (s.id === focusId || t.id === focusId);
   const opacity =
     focusId !== null
-      ? (incidentToFocus ? 1 : DIM_OPACITY)
-      : (isSpoke ? 1 : SECOND_LAYER_EDGE_OPACITY);
+      ? incidentToFocus
+        ? 1
+        : DIM_OPACITY
+      : isSpoke
+        ? 1
+        : SECOND_LAYER_EDGE_OPACITY;
   const strokeWidth = incidentToFocus ? baseWidth * 2 : baseWidth;
 
   return (
@@ -770,11 +760,11 @@ function NodeMark({
    */
   relationshipToSeed: { kind: string; strength: number } | null;
   onHoverChange: (id: string | null) => void;
-  onActivate:   (ev: MouseEvent<SVGGElement>, id: string) => void;
-  onKeyDown:    (ev: KeyboardEvent<SVGGElement>, id: string) => void;
+  onActivate: (ev: MouseEvent<SVGGElement>, id: string) => void;
+  onKeyDown: (ev: KeyboardEvent<SVGGElement>, id: string) => void;
 }) {
   const kindStr = typeof node.kind === 'string' ? node.kind : 'unknown';
-  const name    = typeof node.name === 'string' ? node.name : '…';
+  const name = typeof node.name === 'string' ? node.name : '…';
 
   /**
    * Compose the full aria-label string per the isl-7hp spec.  Seed
@@ -793,13 +783,15 @@ function NodeMark({
   const isFocused = focusId === node.id;
   const opacity =
     focusId !== null
-      ? (isFocused || isSeed ? 1 : DIM_OPACITY)
-      : (isSecondHop ? SECOND_HOP_OPACITY : 1);
+      ? isFocused || isSeed
+        ? 1
+        : DIM_OPACITY
+      : isSecondHop
+        ? SECOND_HOP_OPACITY
+        : 1;
 
-  const radius = isSeed
-    ? SEED_RADIUS
-    : isSecondHop ? SECOND_HOP_RADIUS : NODE_RADIUS;
-  const fill   = isSeed ? COLORS.dust : kindColor(kindStr);
+  const radius = isSeed ? SEED_RADIUS : isSecondHop ? SECOND_HOP_RADIUS : NODE_RADIUS;
+  const fill = isSeed ? COLORS.dust : kindColor(kindStr);
 
   // Show the label for the seed always; non-seed only on hover/focus
   // so the canvas doesn't drown in text at default zoom.
@@ -821,14 +813,7 @@ function NodeMark({
       onKeyDown={(ev) => onKeyDown(ev, node.id)}
     >
       {/* Ring for the seed node — a 1.5 px quantum outline at 1.4× radius. */}
-      {isSeed && (
-        <circle
-          r={radius + 4}
-          fill="none"
-          stroke={COLORS.quantum}
-          strokeWidth={1.5}
-        />
-      )}
+      {isSeed && <circle r={radius + 4} fill="none" stroke={COLORS.quantum} strokeWidth={1.5} />}
       <circle r={radius} fill={fill} />
 
       {showLabel && (
@@ -837,12 +822,12 @@ function NodeMark({
           y={radius + 14}
           textAnchor="middle"
           style={{
-            fontSize:      11,
-            fontWeight:    700,
+            fontSize: 11,
+            fontWeight: 700,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             fontVariantNumeric: 'tabular-nums',
-            fill:          COLORS.dust,
+            fill: COLORS.dust,
             // Stop the label from intercepting hover on adjacent nodes.
             pointerEvents: 'none',
             // Faint shadow so the label reads against dust-coloured
@@ -869,7 +854,7 @@ function NodeMark({
  * read the lore tension at a glance.
  */
 function formatStrength(strength: number): { label: string; color: string } {
-  if (strength >  5) return { label: `+${strength}`, color: COLORS.terraNova };
+  if (strength > 5) return { label: `+${strength}`, color: COLORS.terraNova };
   if (strength < -5) return { label: `−${Math.abs(strength)}`, color: COLORS.flare };
   return { label: String(strength), color: COLORS.dust50 };
 }
@@ -934,14 +919,14 @@ function NodeTooltip({
   relationshipToSeed,
   seedName,
 }: {
-  entity:             Entity;
-  nodeX:              number;
-  nodeY:              number;
-  nodeRadius:         number;
-  containerWidth:     number;
-  containerHeight:    number;
+  entity: Entity;
+  nodeX: number;
+  nodeY: number;
+  nodeRadius: number;
+  containerWidth: number;
+  containerHeight: number;
   relationshipToSeed: { kind: string; strength: number } | null;
-  seedName:           string;
+  seedName: string;
 }) {
   // ── Position calculation ────────────────────────────────────────────
   // Default: place the tooltip TOOLTIP_GAP px to the right of the node
@@ -982,12 +967,13 @@ function NodeTooltip({
   // Description excerpt — omit from TOOLTIP_META_KEYS list; shown below
   // a divider in italic prose style to distinguish it from structured data.
   const rawDesc = typeof meta['description'] === 'string' ? meta['description'] : '';
-  const desc = rawDesc.length > TOOLTIP_DESC_MAX
-    ? rawDesc.slice(0, TOOLTIP_DESC_MAX).trimEnd() + '…'
-    : rawDesc;
+  const desc =
+    rawDesc.length > TOOLTIP_DESC_MAX
+      ? rawDesc.slice(0, TOOLTIP_DESC_MAX).trimEnd() + '…'
+      : rawDesc;
 
   // ── Kind badge colour ───────────────────────────────────────────────
-  const kindStr  = entity.kind ?? 'unknown';
+  const kindStr = entity.kind ?? 'unknown';
   const dotColor = kindColor(kindStr);
 
   // ── Strength badge (only for direct edges) ──────────────────────────
@@ -1001,15 +987,15 @@ function NodeTooltip({
   };
   const labelStyle: CSSProperties = {
     ...monoBase,
-    fontSize:      9,
-    fontWeight:    700,
+    fontSize: 9,
+    fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
-    color:         COLORS.dust50,
+    color: COLORS.dust50,
   };
   const hairline: CSSProperties = {
     borderBottom: `1px solid ${COLORS.hairline}`,
-    margin:       '6px 0',
+    margin: '6px 0',
   };
 
   return (
@@ -1017,21 +1003,21 @@ function NodeTooltip({
       // `pointer-events: none` so the tooltip itself never swallows the
       // mouse-leave event that would hide it — hover stays on the SVG node.
       style={{
-        position:      'absolute',
-        left:          x,
-        top:           y,
-        width:         TOOLTIP_WIDTH,
-        background:    COLORS.phobosAsh,
-        border:        `1px solid ${COLORS.hairline}`,
-        boxShadow:     '0 4px 24px rgba(0,0,0,0.55)',
-        padding:       '10px 12px',
-        boxSizing:     'border-box',
+        position: 'absolute',
+        left: x,
+        top: y,
+        width: TOOLTIP_WIDTH,
+        background: COLORS.phobosAsh,
+        border: `1px solid ${COLORS.hairline}`,
+        boxShadow: '0 4px 24px rgba(0,0,0,0.55)',
+        padding: '10px 12px',
+        boxSizing: 'border-box',
         pointerEvents: 'none',
-        zIndex:        10,
+        zIndex: 10,
         // Prevent the panel from causing layout jitter as the simulation
         // moves nodes — `will-change` tells the compositor to composite
         // this layer independently.
-        willChange:    'left, top',
+        willChange: 'left, top',
       }}
       role="tooltip"
       aria-hidden="true"
@@ -1040,12 +1026,12 @@ function NodeTooltip({
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
         <span
           style={{
-            display:      'inline-block',
-            width:        7,
-            height:       7,
+            display: 'inline-block',
+            width: 7,
+            height: 7,
             borderRadius: '50%',
-            background:   dotColor,
-            flexShrink:   0,
+            background: dotColor,
+            flexShrink: 0,
           }}
         />
         <span style={labelStyle}>{kindStr.replace(/_/g, ' ')}</span>
@@ -1055,9 +1041,9 @@ function NodeTooltip({
       <div
         style={{
           ...monoBase,
-          fontSize:   12,
+          fontSize: 12,
           fontWeight: 700,
-          color:      COLORS.dust,
+          color: COLORS.dust,
           lineHeight: 1.3,
           marginBottom: 6,
           // Wrap long names rather than truncating — the tooltip is wide
@@ -1075,16 +1061,17 @@ function NodeTooltip({
         <div style={{ marginBottom: 6 }}>
           {/* Arrow + seed name label */}
           <div style={{ ...labelStyle, marginBottom: 2 }}>
-            {'→ '}{seedName}
+            {'→ '}
+            {seedName}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Relationship kind */}
             <span
               style={{
                 ...monoBase,
-                fontSize:      10,
-                fontWeight:    700,
-                color:         COLORS.dust70,
+                fontSize: 10,
+                fontWeight: 700,
+                color: COLORS.dust70,
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
               }}
@@ -1095,9 +1082,9 @@ function NodeTooltip({
             <span
               style={{
                 ...monoBase,
-                fontSize:   10,
+                fontSize: 10,
                 fontWeight: 700,
-                color:      rel.color,
+                color: rel.color,
               }}
             >
               {rel.label}
@@ -1116,7 +1103,9 @@ function NodeTooltip({
       {metaRows.length > 0 && (
         <>
           <div style={hairline} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: desc ? 6 : 0 }}>
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: desc ? 6 : 0 }}
+          >
             {metaRows.map(({ key, value }) => (
               <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
                 <span style={{ ...labelStyle, flexShrink: 0, minWidth: 56 }}>
@@ -1125,9 +1114,9 @@ function NodeTooltip({
                 <span
                   style={{
                     ...monoBase,
-                    fontSize:   10,
-                    color:      COLORS.dust70,
-                    overflow:   'hidden',
+                    fontSize: 10,
+                    color: COLORS.dust70,
+                    overflow: 'hidden',
                     whiteSpace: 'nowrap',
                     textOverflow: 'ellipsis',
                   }}
@@ -1147,9 +1136,9 @@ function NodeTooltip({
           <div
             style={{
               ...monoBase,
-              fontSize:   10,
-              fontStyle:  'italic',
-              color:      COLORS.dust50,
+              fontSize: 10,
+              fontStyle: 'italic',
+              color: COLORS.dust50,
               lineHeight: 1.5,
             }}
           >
@@ -1171,17 +1160,17 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
   return (
     <div
       style={{
-        position:       'absolute',
-        inset:          0,
-        display:        'flex',
-        alignItems:     'center',
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
-        color:          COLORS.dust50,
-        fontSize:       12,
-        fontWeight:     700,
-        letterSpacing:  '0.18em',
-        textTransform:  'uppercase',
-        gap:            10,
+        color: COLORS.dust50,
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+        gap: 10,
       }}
     >
       <span>{text}</span>
@@ -1189,11 +1178,11 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
         <span
           aria-hidden="true"
           style={{
-            display:     'inline-block',
-            width:       8,
-            height:      14,
-            background:  COLORS.quantum,
-            animation:   'isl-graph-pulse 1.2s steps(2) infinite',
+            display: 'inline-block',
+            width: 8,
+            height: 14,
+            background: COLORS.quantum,
+            animation: 'isl-graph-pulse 1.2s steps(2) infinite',
           }}
         />
       )}
@@ -1229,49 +1218,52 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
  */
 function GraphLegend() {
   const swatchBase: CSSProperties = {
-    display:      'block',
-    flexShrink:   0,
+    display: 'block',
+    flexShrink: 0,
   };
   const rowStyle: CSSProperties = {
-    display:     'flex',
-    alignItems:  'center',
-    flexWrap:    'wrap',
-    gap:         '6px 12px',
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '6px 12px',
   };
   const entryStyle: CSSProperties = {
-    display:     'flex',
-    alignItems:  'center',
-    gap:          5,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
   };
   const sectionLabel: CSSProperties = {
-    color:         COLORS.dust70,
-    marginRight:   4,
+    color: COLORS.dust70,
+    marginRight: 4,
     letterSpacing: '0.14em',
   };
 
   return (
-    <div style={{
-      display:       'flex',
-      flexWrap:      'wrap',
-      gap:           '6px 28px',
-      padding:       '8px 12px',
-      borderLeft:    `1px solid ${COLORS.hairline}`,
-      borderRight:   `1px solid ${COLORS.hairline}`,
-      borderBottom:  `1px solid ${COLORS.hairline}`,
-      background:    COLORS.abyss,
-      fontFamily:    '"Space Mono", monospace',
-      fontSize:       9,
-      letterSpacing: '0.10em',
-      textTransform: 'uppercase',
-      color:          COLORS.dust50,
-      userSelect:    'none',
-    }}>
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '6px 28px',
+        padding: '8px 12px',
+        borderLeft: `1px solid ${COLORS.hairline}`,
+        borderRight: `1px solid ${COLORS.hairline}`,
+        borderBottom: `1px solid ${COLORS.hairline}`,
+        background: COLORS.abyss,
+        fontSize: 9,
+        letterSpacing: '0.10em',
+        textTransform: 'uppercase',
+        color: COLORS.dust50,
+        userSelect: 'none',
+      }}
+    >
       {/* Edge (link) colour tier */}
       <div style={rowStyle}>
         <span style={sectionLabel}>Links</span>
         {EDGE_LEGEND.map(({ color, label }) => (
           <span key={label} style={entryStyle}>
-            <span style={{ ...swatchBase, width: 18, height: 2, background: color, borderRadius: 1 }} />
+            <span
+              style={{ ...swatchBase, width: 18, height: 2, background: color, borderRadius: 1 }}
+            />
             {label}
           </span>
         ))}
@@ -1282,7 +1274,9 @@ function GraphLegend() {
         <span style={sectionLabel}>Nodes</span>
         {NODE_LEGEND.map(({ color, label }) => (
           <span key={label} style={entryStyle}>
-            <span style={{ ...swatchBase, width: 8, height: 8, borderRadius: '50%', background: color }} />
+            <span
+              style={{ ...swatchBase, width: 8, height: 8, borderRadius: '50%', background: color }}
+            />
             {label}
           </span>
         ))}
@@ -1293,11 +1287,28 @@ function GraphLegend() {
       <div style={rowStyle}>
         <span style={sectionLabel}>Web</span>
         <span style={entryStyle}>
-          <span style={{ ...swatchBase, width: 8, height: 8, borderRadius: '50%', background: COLORS.dust70 }} />
+          <span
+            style={{
+              ...swatchBase,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: COLORS.dust70,
+            }}
+          />
           Direct
         </span>
         <span style={entryStyle}>
-          <span style={{ ...swatchBase, width: 5, height: 5, borderRadius: '50%', background: COLORS.dust70, opacity: SECOND_HOP_OPACITY }} />
+          <span
+            style={{
+              ...swatchBase,
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              background: COLORS.dust70,
+              opacity: SECOND_HOP_OPACITY,
+            }}
+          />
           2nd degree
         </span>
       </div>
@@ -1315,6 +1326,6 @@ function GraphLegend() {
 function edgeKey(edge: PositionedEdge): string {
   const s = typeof edge.source === 'string' ? edge.source : edge.source.id;
   const t = typeof edge.target === 'string' ? edge.target : edge.target.id;
-  const k = typeof edge.kind   === 'string' ? edge.kind   : '';
+  const k = typeof edge.kind === 'string' ? edge.kind : '';
   return `${s}|${t}|${k}`;
 }
