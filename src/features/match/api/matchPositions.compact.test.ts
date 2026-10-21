@@ -82,6 +82,9 @@ function makeFrames(count: number, ownerEvery = 3): Frame[] {
 /** Round to 0.1 m, exactly as the worker does before storing. */
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
+/** Must match OFF_PITCH in matchPositions.ts and the match-worker. */
+const OFF_PITCH = -1;
+
 interface CompactSnapshot {
   v: 2;
   p: number[];
@@ -101,15 +104,31 @@ function encodeAsWorker(frames: Frame[]): {
   playerIds: string[];
   rows: Array<{ minute: number; second: number; snapshots: CompactSnapshot }>;
 } {
-  const playerIds = (frames[0]?.players ?? []).map((p) => p.id);
-  const index = new Map<string, number>(playerIds.map((id, i) => [id, i]));
+  // Mirrors the worker: the roster is the UNION of everyone appearing in ANY
+  // frame, because the engine substitutes mid-match and the player SET changes
+  // while staying 11-a-side. Taking it from frame 0 misattributes every
+  // coordinate after the first substitution.
+  const playerIds: string[] = [];
+  const index = new Map<string, number>();
+  for (const frame of frames) {
+    for (const p of frame.players) {
+      if (!index.has(p.id)) {
+        index.set(p.id, playerIds.length);
+        playerIds.push(p.id);
+      }
+    }
+  }
 
   const rows = frames.map((frame) => {
     const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
     const second = Math.floor(frame.tSec % 60);
-    const p: number[] = [];
+    // Fixed width over the union roster; absentees keep the OFF_PITCH sentinel.
+    const p: number[] = new Array<number>(playerIds.length * 2).fill(OFF_PITCH);
     for (const player of frame.players) {
-      p.push(r1(player.x), r1(player.y));
+      const idx = index.get(player.id);
+      if (idx === undefined) continue;
+      p[idx * 2] = r1(player.x);
+      p[idx * 2 + 1] = r1(player.y);
     }
     const ownerIdx = frame.ball.ownerId == null ? -1 : (index.get(frame.ball.ownerId) ?? -1);
     return {

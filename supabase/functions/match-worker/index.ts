@@ -1077,13 +1077,35 @@ async function processMatch(match: any): Promise<boolean> {
     if (positionFrames.length > 0) {
       /** Round to 0.1 m — below one rendered pixel, drops float noise. */
       const r1 = (n: number) => Math.round(n * 10) / 10;
+      /**
+       * Coordinate meaning "not on the pitch in this frame". Real rounded
+       * coordinates live in [0, 105] x [0, 68], so a negative can never
+       * collide with one. Must match OFF_PITCH in
+       * src/features/match/api/matchPositions.ts.
+       */
+      const OFF_PITCH = -1;
 
-      // Roster order comes from the first frame: the engine emits frame
-      // players in formation-slot order (home XI GK-first, then away XI) and
-      // never substitutes, so every frame carries the same players in the
-      // same order.  Every frame's coordinates are indexed against this.
-      const rosterIds = (positionFrames[0]?.players ?? []).map((p) => p.id);
-      const rosterIndex = new Map<string, number>(rosterIds.map((id, i) => [id, i]));
+      // The roster is the UNION of every player appearing in ANY frame, not the
+      // starting XI.  The engine DOES substitute (3 per side from minute 55,
+      // `maybeSubstitute` in spatial/step.ts): the outgoing player leaves the
+      // frames and the incoming one joins, so the player SET changes mid-match
+      // while staying 11-a-side.
+      //
+      // Building the roster from frame 0 therefore misattributed every
+      // coordinate after the first substitution (~minute 56, about 40% of the
+      // match), and because the per-frame count stayed at 22 the reader's
+      // length check could never detect it.  Measured: 6 subs/match, frame-0
+      // roster 22, union roster 28.
+      const rosterIds: string[] = [];
+      const rosterIndex = new Map<string, number>();
+      for (const frame of positionFrames) {
+        for (const p of frame.players) {
+          if (!rosterIndex.has(p.id)) {
+            rosterIndex.set(p.id, rosterIds.length);
+            rosterIds.push(p.id);
+          }
+        }
+      }
 
       // Upsert (not insert) so a retry of a previously-failed match replaces
       // its roster rather than conflicting on the match_id primary key.
@@ -1099,9 +1121,17 @@ async function processMatch(match: any): Promise<boolean> {
         const posRows = positionFrames.map((frame) => {
           const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
           const second = Math.floor(frame.tSec % 60);
-          const p: number[] = [];
+          // Fixed-width coordinate array over the UNION roster. Roster members
+          // absent from this frame (subbed off, or not yet brought on) keep the
+          // OFF_PITCH sentinel, which the reader skips. Writing only the
+          // present players positionally is what broke identity after a
+          // substitution.
+          const p: number[] = new Array<number>(rosterIds.length * 2).fill(OFF_PITCH);
           for (const player of frame.players) {
-            p.push(r1(player.x), r1(player.y));
+            const idx = rosterIndex.get(player.id);
+            if (idx === undefined) continue;
+            p[idx * 2] = r1(player.x);
+            p[idx * 2 + 1] = r1(player.y);
           }
           const ownerIdx =
             frame.ball.ownerId == null ? -1 : (rosterIndex.get(frame.ball.ownerId) ?? -1);
