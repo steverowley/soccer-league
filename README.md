@@ -2,7 +2,7 @@
 
 A Blaseball-inspired social experience browser game. AI-simulated soccer matches across a fictional solar-system league — place bets, watch cosmic chaos unfold, and vote with your credits to shape your club's future.
 
-![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.4-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.2-teal) ![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6_%2B_Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.99-green) ![Licence](https://img.shields.io/badge/licence-proprietary-red)
+![React](https://img.shields.io/badge/React-18.3-blue) ![Vite](https://img.shields.io/badge/Vite-6.4-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-4.3-teal) ![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6_%2B_Haiku_4.5-orange) ![Supabase](https://img.shields.io/badge/Supabase-2.118-green) ![Licence](https://img.shields.io/badge/licence-proprietary-red)
 
 > **Proprietary, all rights reserved.** This repository is public to be _read_, not reused. See [LICENSE](./LICENSE).
 
@@ -49,7 +49,7 @@ An announcement will go here when the gates open.
 
 This is a TypeScript + React app talking to a Supabase backend, with Deno edge functions that simulate matches server-side and tick the galaxy forward on a schedule.
 
-- **Frontend** — React 18.3 + Vite 6.4, React Router 7, Tailwind 4, strict TypeScript 6. 28 routes, all lazy-loaded, with per-route error boundaries.
+- **Frontend** — React 18.3 + Vite 6.4, React Router 7, Tailwind 4.3, strict TypeScript 6. 28 routes, all lazy-loaded, with per-route error boundaries.
 - **Backend** — Supabase (PostgreSQL with row-level security), 86 numbered migrations, 42 tables / 9 views / 15 RPCs. Generated types in `src/types/database.ts`.
 - **AI** — Anthropic SDK. `claude-sonnet-4-6` for the in-match Architect and the daily drama beat; `claude-haiku-4-5-20251001` for the galaxy heartbeat and voice-library enrichment. The narrative layer is deterministic by default with the model as an opt-in override: the simulation owns the truth, the model owns only the prose, and it never touches world state.
 - **Simulation** — a deterministic, agent-based spatial match engine (Reynolds-style steering, geometry-derived events), run by the `match-worker` edge function and seeded from each match's UUID so a fixture always replays identically. The engine lives in two byte-identical copies (browser and Deno worker) guarded by a parity test.
