@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/main.tsx",
+    "supabase/functions/*/index.ts",
+    "scripts/**/*.{ts,mjs,cjs}",
+    "demo/main.tsx",
+    "demo/vite.demo.config.ts",
+    "demo/inline.mjs",
+    "public/sw.js",
+    "**/*.{test,spec}.{ts,tsx}",
+    "src/shared/test/**",
+    "*.config.{ts,js}",
+    "eslint.config.js",
+    "prettier.config.js"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "supabase/functions/**/*.ts",
+    "scripts/**/*.ts",
+    "demo/**/*.ts*"
+  ],
+  "ignore": [".claude/**", "dist/**", "coverage/**", "src/types/database.ts"],
+  "ignoreDependencies": ["@types/*"],
+  "ignoreExportsUsedInFile": true,
+  "includeEntryExports": false
+}

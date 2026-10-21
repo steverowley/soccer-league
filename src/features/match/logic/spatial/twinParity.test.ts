@@ -19,7 +19,7 @@
 //   1. The spatial engine (8 modules) — guarded strictly below: code AND prose
 //      must match (modulo import extensions + `// ──` dividers), since those
 //      twins are hand-copied verbatim.
-//   2. Three further pure-logic twins (cupDraw, random, simEvent) that are
+//   2. Two further pure-logic twins (cupDraw, simEvent) that are
 //      code-identical but carry differing header prose — guarded with a
 //      code-only comparison (full-line comments stripped, code kept verbatim).
 //   The remaining same-named worker files (cupSeeder, interferenceResolver,
@@ -27,6 +27,11 @@
 //   legitimately (Deno-specific Supabase-client imports), some cosmetically —
 //   so they are NOT pure twins and are deliberately excluded here rather than
 //   force-aligned. Reconciling them is a separate task. See #547.
+//
+//   `random` used to be guarded here. The worker copy had no importer anywhere
+//   in `supabase/functions/` — the worker's spatial engine uses `spatial/rng.ts`
+//   instead — so it was dead weight kept alive only by this guard, and was
+//   deleted. `src/shared/utils/random.ts` is unaffected.
 //
 //   `cosmicVoices` used to be in that list. Investigating it for #561 showed
 //   the worker copy was never imported by the worker at all, so its divergence
@@ -97,11 +102,6 @@ const CODE_TWINS: ReadonlyArray<{ name: string; src: string; worker: string }> =
     name: 'cupDraw',
     src: 'src/features/match/logic/cupDraw.ts',
     worker: 'supabase/functions/match-worker/cupDraw.ts',
-  },
-  {
-    name: 'random',
-    src: 'src/shared/utils/random.ts',
-    worker: 'supabase/functions/match-worker/random.ts',
   },
   {
     name: 'grammar',
