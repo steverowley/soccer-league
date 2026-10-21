@@ -38,7 +38,7 @@ An announcement will go here when the gates open.
 - **Three commentators** — Captain Vox (bombastic veteran), Nexus-7 (clinical AI analyst), Zara Bloom (ex-striker tactician). Their lines are deterministic by default, with Claude as an opt-in override, so the simulation always owns the truth and the model only ever dresses it.
 - **Two cosmic voices** — Balance and Chaos. Unnamed, uncredited. They interrupt the broadcast when something feels off. You'll learn to recognise them.
 - **The Galaxy Dispatch** — a news feed of architect whispers, political shifts, geological events, economic tremors, and wager narratives. The world reacts to itself.
-- **A 2D pitch view** — because matches are simulated in real pitch-space, you can watch the dots move: a live-ish replay of where everyone was, synced to the commentary clock.
+- **A 2D pitch view** — because matches are simulated in real pitch-space, you can watch the dots move: a replay of where every player and the ball actually were, synced to the commentary clock.
 - **A training facility** — between matches, fans can click together to help individual players develop. Collective effort, geometric XP curve.
 - **Idols** — a league-wide leaderboard of player adoration. The top 10 face double-weight votes when the cosmos chooses who to incinerate at season's end. Love is dangerous.
 - **Cup brackets, league tables, squad pages, manager profiles** — every entity in the universe (players, managers, referees, journalists, pundits, bookies) has a page and a relationship graph.
