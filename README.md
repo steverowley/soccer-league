@@ -88,6 +88,7 @@ Top 3 per league qualify for the **Celestial Cup**. 4th–6th qualify for the **
 What's left before the gates open:
 
 - first-fan onboarding polish, and surfacing the Architect live during matches
+- **the two cosmic voices need wiring up.** Balance and Chaos are fully written and their entities are seeded, but nothing constructs them, so they have never actually spoken in a match (#686)
 - a **Sifter**: the Chronicle currently produces a feed, not stories. Named multi-event patterns with ranking and dedupe are the missing pipeline stage — see [`docs/emergence-applied.md`](./docs/emergence-applied.md)
 - ethics and governance guardrails: vote weight decoupled from bankroll, economy guardrails, username moderation
 - Election Night incineration, plus player aging and youth promotion at rollover, so the league turns over instead of ossifying around the same superstars
