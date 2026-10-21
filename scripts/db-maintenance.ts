@@ -186,6 +186,59 @@ async function status(): Promise<void> {
   console.log('');
 }
 
+// ── migrations ───────────────────────────────────────────────────────────────
+
+/**
+ * Compare the migrations committed to this repo against those recorded as
+ * applied in production.
+ *
+ * Migrations here are applied by hand (CONTRIBUTING: "apply it via the Supabase
+ * MCP"), so there is no automation guaranteeing the two agree. A month-long
+ * outage made that gap concrete: 0084 and 0085 were written and merged while
+ * the project was unreachable, and nothing in CI can detect that the database
+ * is behind the repo.
+ *
+ * Read-only. It answers one question: what is pending?
+ */
+async function migrations(): Promise<void> {
+  const applied = await runSql<{ version: string; name: string | null }>(
+    `select version, name from supabase_migrations.schema_migrations order by version`,
+    'migrations-applied',
+  );
+  const appliedVersions = new Set(applied.map((r) => String(r.version)));
+
+  console.log(`applied in production : ${applied.length}`);
+  if (applied.length > 0) {
+    const last = applied[applied.length - 1];
+    console.log(`latest applied        : ${String(last?.version)} ${String(last?.name ?? '')}`);
+  }
+  console.log('');
+
+  // The repo's migration files, by their numeric prefix.
+  const { readdirSync } = await import('node:fs');
+  const files = readdirSync(new URL('../supabase/migrations/', import.meta.url))
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+
+  console.log(`migration files in repo: ${files.length}`);
+
+  // A repo file counts as applied if any recorded version shares its numeric
+  // prefix: the Supabase CLI stamps timestamps, hand-applied ones may not.
+  const pending = files.filter((f) => {
+    const prefix = f.split('_')[0] ?? '';
+    return ![...appliedVersions].some((v) => v === prefix || v.endsWith(prefix));
+  });
+
+  if (pending.length === 0) {
+    console.log('\nNothing pending: every repo migration has a matching applied version.\n');
+    return;
+  }
+
+  console.log(`\nPENDING (in repo, no matching applied version): ${pending.length}`);
+  for (const f of pending) console.log(`  ${f}`);
+  console.log('');
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 /**
@@ -545,6 +598,10 @@ async function main(): Promise<void> {
     case 'status':
       await status();
       break;
+    case 'migrations':
+      await status();
+      await migrations();
+      break;
     case 'report':
       await status();
       await report();
@@ -560,7 +617,7 @@ async function main(): Promise<void> {
       if (!dryRun) await tryReport('after');
       break;
     default:
-      console.error(`Unknown command '${command}'. Use: status | report | prune`);
+      console.error(`Unknown command '${command}'. Use: status | migrations | report | prune`);
       process.exit(2);
   }
 }
