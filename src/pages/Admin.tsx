@@ -30,7 +30,7 @@ import {
   ArchitectInterventionLog,
   TestingPanel,
   type AdminTab,
-} from '../features/admin/ui';
+} from '@features/admin';
 import { MatchViewerDemo } from '../features/match';
 
 // ── Root page ─────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export default function Admin() {
   const onTabSelect = (next: AdminTab): void => {
     const params2 = new URLSearchParams(params);
     if (next === DEFAULT_ADMIN_TAB) params2.delete('tab');
-    else                            params2.set('tab', next);
+    else params2.set('tab', next);
     setParams(params2, { replace: true });
   };
 
@@ -85,12 +85,12 @@ export default function Admin() {
             paint of a tab is always a fresh view. */}
         <Container>
           <div style={{ padding: '32px 16px 80px' }}>
-            {activeTab === 'overview'  && <OverviewPanel              db={db} />}
-            {activeTab === 'season'    && <SeasonControlsPanel        db={db} />}
-            {activeTab === 'fixtures'  && <FixtureBrowser             db={db} />}
-            {activeTab === 'testing'   && <TestingPanel               db={db} />}
-            {activeTab === 'architect' && <ArchitectInterventionLog   db={db} />}
-            {activeTab === 'viewer'    && <MatchViewerDemo />}
+            {activeTab === 'overview' && <OverviewPanel db={db} />}
+            {activeTab === 'season' && <SeasonControlsPanel db={db} />}
+            {activeTab === 'fixtures' && <FixtureBrowser db={db} />}
+            {activeTab === 'testing' && <TestingPanel db={db} />}
+            {activeTab === 'architect' && <ArchitectInterventionLog db={db} />}
+            {activeTab === 'viewer' && <MatchViewerDemo />}
           </div>
         </Container>
       </main>

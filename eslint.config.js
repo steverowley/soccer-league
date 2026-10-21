@@ -160,6 +160,18 @@ export default tseslint.config(
               message:
                 'Use the @features/* alias and import from the feature barrel, not a deep relative path.',
             },
+            // The relative form of the same violation. The two patterns above
+            // only match the `@features/*` alias and the `src/`-prefixed path,
+            // so `../features/admin/ui` slipped through and four page files
+            // reached past a feature barrel that way. Matching `*/*` after the
+            // `features` segment keeps relative *barrel* imports legal
+            // (`../features/auth` has only one segment after `features`) while
+            // blocking anything that reaches into `api/`, `logic/` or `ui/`.
+            {
+              group: ['**/features/*/*', '**/features/*/*/*'],
+              message:
+                'Relative deep imports into a feature bypass its barrel. Import from the barrel instead (e.g. "@features/admin" not "../features/admin/ui"). CLAUDE.md: nothing outside a feature may reach past that barrel.',
+            },
             // The `src/lib/supabase` DI escape hatch was dissolved in #387.
             // Block re-introduction so a future drift back to a singleton
             // import dies in CI rather than landing in main.

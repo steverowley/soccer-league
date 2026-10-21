@@ -38,7 +38,14 @@
 import { useEffect, useMemo, useState, type ComponentProps, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer, BackLink, TeamCrest } from '../components/Layout';
+import {
+  COLORS,
+  Container,
+  SectionHeader,
+  Footer,
+  BackLink,
+  TeamCrest,
+} from '../components/Layout';
 import WagerWidget from '../components/WagerWidget';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { getActiveWatcherCount } from '../features/auth';
@@ -57,7 +64,7 @@ import {
   type MatchViewerPlayer,
   type MatchEventRow,
 } from '../features/match';
-import { getMatchPositions, type PositionSnapshot } from '../features/match/api/matchPositions';
+import { getMatchPositions, type PositionSnapshot } from '@features/match';
 import TeachingStrip from '../components/TeachingStrip';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -70,8 +77,8 @@ const HAIRLINE = COLORS.hairline;
 // border-faint from the design system (0.25) — the brighter inner divider the
 // prototype uses inside the scoreboard / feed / timeline.
 const BORDER_FAINT = 'rgba(227, 224, 213, 0.25)';
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
+const DUST_50 = COLORS.dust50;
+const DUST_70 = COLORS.dust70;
 
 // ── Status mapping ──────────────────────────────────────────────────────────
 // STATUS_LABELS — display copy for the status chip on the scoreboard.
@@ -79,10 +86,10 @@ const DUST_70  = COLORS.dust70;
 // agree on terminology.
 const STATUS_LABELS: Record<string, string> = {
   in_progress: 'Live',
-  live:        'Live',
-  completed:   'Full Time',
-  scheduled:   'Scheduled',
-  cancelled:   'Cancelled',
+  live: 'Live',
+  completed: 'Full Time',
+  scheduled: 'Scheduled',
+  cancelled: 'Cancelled',
 };
 
 // ── Loose match row ─────────────────────────────────────────────────────────
@@ -113,11 +120,11 @@ type WagerMatch = ComponentProps<typeof WagerWidget>['match'];
  */
 export default function MatchDetail() {
   const { matchId } = useParams();
-  const db          = useSupabase();
+  const db = useSupabase();
 
-  const [match,     setMatch]     = useState<MatchRow | null>(null);
+  const [match, setMatch] = useState<MatchRow | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [loaded,    setLoaded]    = useState<boolean>(false);
+  const [loaded, setLoaded] = useState<boolean>(false);
   // Cosmos-wide watcher count for the live presence badge (#382). 0 ≡
   // no watchers OR fetch error — both rendered the same (no badge).
   // Refreshed on a 60-second interval so the badge stays roughly in
@@ -150,7 +157,9 @@ export default function MatchDetail() {
         setLoadError(err);
         setLoaded(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, matchId]);
 
   // Live presence count — fetch immediately + on 60s interval. The
@@ -172,7 +181,10 @@ export default function MatchDetail() {
         5-min server window so the badge never goes stale. */
     const PRESENCE_POLL_MS = 60_000;
     const id = window.setInterval(tick, PRESENCE_POLL_MS);
-    return () => { cancelled = true; window.clearInterval(id); };
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [db]);
 
   if (loaded && !match && !loadError) return <UnknownMatch matchId={matchId} />;
@@ -216,15 +228,17 @@ export default function MatchDetail() {
               accent
               storageKey="match_meet_the_booth"
               title="Meet the booth"
-              body={<>
-                <strong style={{ color: COLORS.dust }}>Vox</strong> calls
-                the play-by-play. <strong style={{ color: COLORS.dust }}>Nexus-7</strong>{' '}
-                breaks down what just happened. <strong style={{ color: COLORS.dust }}>Zara</strong>{' '}
-                watches for the unusual. The cosmos itself —{' '}
-                <strong style={{ color: COLORS.dust }}>Balance</strong> and{' '}
-                <strong style={{ color: COLORS.dust }}>Chaos</strong> — speaks only when
-                the match deserves it.
-              </>}
+              body={
+                <>
+                  <strong style={{ color: COLORS.dust }}>Vox</strong> calls the play-by-play.{' '}
+                  <strong style={{ color: COLORS.dust }}>Nexus-7</strong> breaks down what just
+                  happened. <strong style={{ color: COLORS.dust }}>Zara</strong> watches for the
+                  unusual. The cosmos itself —{' '}
+                  <strong style={{ color: COLORS.dust }}>Balance</strong> and{' '}
+                  <strong style={{ color: COLORS.dust }}>Chaos</strong> — speaks only when the match
+                  deserves it.
+                </>
+              }
             />
 
             {/* Section III — two-column `.main` grid: theatre + stake rail. */}
@@ -239,7 +253,10 @@ export default function MatchDetail() {
               }}
             >
               {/* LEFT column — pitch + commentary feed + timeline. */}
-              <div className="match-col-l" style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
+              <div
+                className="match-col-l"
+                style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}
+              >
                 <MatchTheatre
                   match={match}
                   watcherCount={watcherCount}
@@ -250,7 +267,13 @@ export default function MatchDetail() {
               {/* RIGHT column — sticky stake rail. WagerWidget unchanged. */}
               <aside
                 className="match-rail"
-                style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 24 }}
+                style={{
+                  position: 'sticky',
+                  top: 24,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 24,
+                }}
               >
                 {/* First-time betting intro strip (#379). Brief reminder
                     that stakes lock at placement and the minimum bet is
@@ -258,12 +281,13 @@ export default function MatchDetail() {
                 <TeachingStrip
                   storageKey="match_betting_intro"
                   title="How betting works"
-                  body={<>
-                    Pick an outcome (home, draw, or away) and stake at least
-                    10 IC. The odds you see lock the moment you place — the
-                    bookie&apos;s later re-pricing won&apos;t claw your
-                    potential payout back.
-                  </>}
+                  body={
+                    <>
+                      Pick an outcome (home, draw, or away) and stake at least 10 IC. The odds you
+                      see lock the moment you place — the bookie&apos;s later re-pricing won&apos;t
+                      claw your potential payout back.
+                    </>
+                  }
                 />
                 {/* The loose MatchRow is the real getMatch() row — it carries
                     the id / status / team refs WagerWidget needs at runtime;
@@ -321,7 +345,7 @@ export default function MatchDetail() {
  */
 function MatchBreadcrumb({ match }: { match: MatchRow }) {
   const competition = match.competitions?.name ?? 'League';
-  const round       = match.round ?? '';
+  const round = match.round ?? '';
   return (
     <div
       style={{
@@ -337,7 +361,9 @@ function MatchBreadcrumb({ match }: { match: MatchRow }) {
         color: DUST,
       }}
     >
-      <Link to="/matches" style={{ color: DUST, textDecoration: 'none' }}>Matches</Link>
+      <Link to="/matches" style={{ color: DUST, textDecoration: 'none' }}>
+        Matches
+      </Link>
       <span style={{ color: DUST_50 }}>•</span>
       <span>{competition}</span>
       {round && (
@@ -366,16 +392,21 @@ function MatchBreadcrumb({ match }: { match: MatchRow }) {
  *
  * @param {{ match: object, watcherCount: number }} props
  */
-function Scoreboard(
-  { match, watcherCount, revealedScore }:
-  { match: MatchRow; watcherCount: number; revealedScore: Scoreline | null },
-) {
-  const homeName  = match.home_team?.name     ?? '?';
-  const awayName  = match.away_team?.name     ?? '?';
-  const homeColor = match.home_team?.color    ?? null;
-  const awayColor = match.away_team?.color    ?? null;
-  const homeLoc   = match.home_team?.location ?? '';
-  const awayLoc   = match.away_team?.location ?? '';
+function Scoreboard({
+  match,
+  watcherCount,
+  revealedScore,
+}: {
+  match: MatchRow;
+  watcherCount: number;
+  revealedScore: Scoreline | null;
+}) {
+  const homeName = match.home_team?.name ?? '?';
+  const awayName = match.away_team?.name ?? '?';
+  const homeColor = match.home_team?.color ?? null;
+  const awayColor = match.away_team?.color ?? null;
+  const homeLoc = match.home_team?.location ?? '';
+  const awayLoc = match.away_team?.location ?? '';
 
   // `matches.status` is now authoritative about liveness: the worker holds a
   // match at `live` for its whole real-time reveal window and only publishes
@@ -406,13 +437,29 @@ function Scoreboard(
       }}
     >
       {/* Head row — stadium + attendance / status clock. */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 700, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.04em', color: DUST_70 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: 14,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: DUST_70,
+          }}
+        >
           {match.stadium ?? 'Unknown Ground'}
           {attendance != null && (
             <>
-              {' '}<span style={{ color: DUST_50 }}>•</span>{' '}
-              Attendance {attendance.toLocaleString()}
+              {' '}
+              <span style={{ color: DUST_50 }}>•</span> Attendance {attendance.toLocaleString()}
             </>
           )}
         </span>
@@ -440,8 +487,17 @@ function Scoreboard(
           cue sits next to the live clock. */}
       {status === 'in_progress' && watcherCount > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <span style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: DUST_50 }}>
-            <span aria-hidden="true" style={{ color: QUANTUM }}>●</span>{' '}
+          <span
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: DUST_50,
+            }}
+          >
+            <span aria-hidden="true" style={{ color: QUANTUM }}>
+              ●
+            </span>{' '}
             <strong style={{ color: DUST_70 }}>{watcherCount}</strong>{' '}
             {watcherCount === 1 ? 'fan' : 'fans'} watching now
           </span>
@@ -464,30 +520,34 @@ function Scoreboard(
 function ScoreDisplay({ status, home, away }: { status: string; home: number; away: number }) {
   if (status === 'scheduled' || status === 'cancelled') {
     return (
-      <div style={{
-        fontSize: 32,
-        color: DUST_50,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        paddingTop: 30,
-      }}>
+      <div
+        style={{
+          fontSize: 32,
+          color: DUST_50,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.14em',
+          paddingTop: 30,
+        }}
+      >
         v
       </div>
     );
   }
   return (
-    <div style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 16,
-      fontSize: 64,
-      fontWeight: 700,
-      fontVariantNumeric: 'tabular-nums',
-      lineHeight: 1,
-      paddingTop: 30,
-    }}>
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        fontSize: 64,
+        fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        lineHeight: 1,
+        paddingTop: 30,
+      }}
+    >
       {status === 'in_progress' && (
         <span
           aria-hidden="true"
@@ -516,32 +576,49 @@ function ScoreDisplay({ status, home, away }: { status: string; home: number; aw
  * @param {string} props.location
  * @param {string|null} props.color
  */
-function TeamScoreBlock(
-  { side, name, location, color }: { side: 'Home' | 'Away'; name: string; location: string; color: string | null },
-) {
+function TeamScoreBlock({
+  side,
+  name,
+  location,
+  color,
+}: {
+  side: 'Home' | 'Away';
+  name: string;
+  location: string;
+  color: string | null;
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <TeamCrest color={color} />
-      <h2 style={{
-        fontSize: 26,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        textAlign: 'center',
-        margin: 0,
-        lineHeight: 1.1,
-      }}>
+      <h2
+        style={{
+          fontSize: 26,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          textAlign: 'center',
+          margin: 0,
+          lineHeight: 1.1,
+        }}
+      >
         {name}
       </h2>
-      <div style={{
-        fontSize: 13,
-        fontWeight: 700,
-        color: DUST_70,
-        letterSpacing: '0.04em',
-        textTransform: 'uppercase',
-        textAlign: 'center',
-      }}>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: DUST_70,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          textAlign: 'center',
+        }}
+      >
         {side}
-        {location && <> <span style={{ color: DUST_50 }}>•</span> {location}</>}
+        {location && (
+          <>
+            {' '}
+            <span style={{ color: DUST_50 }}>•</span> {location}
+          </>
+        )}
       </div>
     </div>
   );
@@ -558,22 +635,24 @@ function StatusChip({ status }: { status: string }) {
   // `live` is the normal watching state (fully simulated, revealing on the wall
   // clock); `in_progress` is the brief window while the worker is still writing
   // rows.  Both read as live to a spectator.
-  const isLive      = isRevealing(status);
+  const isLive = isRevealing(status);
   const isCancelled = status === 'cancelled';
-  const colour      = isLive ? QUANTUM : isCancelled ? FLARE : DUST;
+  const colour = isLive ? QUANTUM : isCancelled ? FLARE : DUST;
   return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 8,
-      padding: '6px 12px',
-      border: `1px solid ${colour}`,
-      color:  colour,
-      fontSize: 11,
-      letterSpacing: '0.14em',
-      textTransform: 'uppercase',
-      fontWeight: 700,
-    }}>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        border: `1px solid ${colour}`,
+        color: colour,
+        fontSize: 11,
+        letterSpacing: '0.14em',
+        textTransform: 'uppercase',
+        fontWeight: 700,
+      }}
+    >
       {isLive && (
         <span
           aria-hidden="true"
@@ -626,9 +705,15 @@ interface TeamRef {
  * @param props.awayTeam  Away team reference (id + name).
  * @param props.stats     The flat match_player_stats array for both sides.
  */
-function PlayerStats(
-  { homeTeam, awayTeam, stats }: { homeTeam: TeamRef | null; awayTeam: TeamRef | null; stats: PlayerStatRow[] },
-) {
+function PlayerStats({
+  homeTeam,
+  awayTeam,
+  stats,
+}: {
+  homeTeam: TeamRef | null;
+  awayTeam: TeamRef | null;
+  stats: PlayerStatRow[];
+}) {
   if (stats.length === 0) {
     return (
       <p style={{ marginTop: 24, color: DUST_50, fontSize: 13, fontStyle: 'italic' }}>
@@ -678,21 +763,25 @@ function PlayerStats(
 function StatsTable({ team, rows }: { team: TeamRef | null; rows: PlayerStatRow[] }) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}` }}>
-      <header style={{
-        padding: '14px 16px',
-        borderBottom: `1px solid ${HAIRLINE}`,
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-      }}>
+      <header
+        style={{
+          padding: '14px 16px',
+          borderBottom: `1px solid ${HAIRLINE}`,
+          fontSize: 11,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+        }}
+      >
         {team?.name ?? '?'}
       </header>
 
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
-        fontSize: 13,
-      }}>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 13,
+        }}
+      >
         <thead>
           <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
             <th style={statsTh()}>Player</th>
@@ -715,17 +804,21 @@ function StatsTable({ team, rows }: { team: TeamRef | null; rows: PlayerStatRow[
                   {s.players?.name ?? '—'}
                 </Link>
               </td>
-              <td style={{ ...statsTd, textAlign: 'right' }}>{s.goals        ?? 0}</td>
-              <td style={{ ...statsTd, textAlign: 'right' }}>{s.assists      ?? 0}</td>
+              <td style={{ ...statsTd, textAlign: 'right' }}>{s.goals ?? 0}</td>
+              <td style={{ ...statsTd, textAlign: 'right' }}>{s.assists ?? 0}</td>
               <td style={{ ...statsTd, textAlign: 'right' }}>{s.yellow_cards ?? 0}</td>
-              <td style={{ ...statsTd, textAlign: 'right' }}>{s.red_cards    ?? 0}</td>
+              <td style={{ ...statsTd, textAlign: 'right' }}>{s.red_cards ?? 0}</td>
               <td style={{ ...statsTd, textAlign: 'right', color: DUST_70 }}>
                 {s.minutes_played ?? 0}
               </td>
-              <td style={{
-                ...statsTd, textAlign: 'right', fontWeight: 700,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
+              <td
+                style={{
+                  ...statsTd,
+                  textAlign: 'right',
+                  fontWeight: 700,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
                 {formatRating(s.rating)}
               </td>
             </tr>
@@ -772,39 +865,53 @@ function formatRating(rating: number | null | undefined): string {
  */
 function UnknownMatch({ matchId }: { matchId?: string | undefined }) {
   return (
-    <div style={{
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
+    <div
+      style={{
+        background: ABYSS,
+        color: DUST,
+        minHeight: '100vh',
+      }}
+    >
       <Header />
       <section style={{ padding: '120px 32px' }}>
         <Container>
           <BackLink to="/matches">All Matches</BackLink>
-          <h1 style={{
-            fontSize: 32,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.02em',
-            marginTop: 24,
-          }}>
+          <h1
+            style={{
+              fontSize: 32,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
+              marginTop: 24,
+            }}
+          >
             Unknown Match
           </h1>
-          <p style={{
-            fontSize: 14,
-            lineHeight: 1.7,
-            color: DUST_70,
-            marginTop: 16,
-            maxWidth: '52ch',
-          }}>
-            No match registered under <code style={{
-              color: DUST,
-              fontFamily: 'inherit',
-              background: COLORS.dustFaint,
-              padding: '2px 6px',
-              border: `1px solid ${HAIRLINE}`,
-            }}>{matchId ?? '—'}</code>.  Try the
-            {' '}<Link to="/matches" style={{ color: DUST }}>full fixture list</Link>{' '}
+          <p
+            style={{
+              fontSize: 14,
+              lineHeight: 1.7,
+              color: DUST_70,
+              marginTop: 16,
+              maxWidth: '52ch',
+            }}
+          >
+            No match registered under{' '}
+            <code
+              style={{
+                color: DUST,
+                fontFamily: 'inherit',
+                background: COLORS.dustFaint,
+                padding: '2px 6px',
+                border: `1px solid ${HAIRLINE}`,
+              }}
+            >
+              {matchId ?? '—'}
+            </code>
+            . Try the{' '}
+            <Link to="/matches" style={{ color: DUST }}>
+              full fixture list
+            </Link>{' '}
             to find the result you were after.
           </p>
         </Container>
@@ -852,41 +959,45 @@ function UnknownMatch({ matchId }: { matchId?: string | undefined }) {
  *
  * @param props.match  Full match row from getMatch().
  */
-function MatchTheatre(
-  { match, onRevealedScore }:
-  { match: MatchRow; watcherCount: number; onRevealedScore: (s: Scoreline) => void },
-) {
+function MatchTheatre({
+  match,
+  onRevealedScore,
+}: {
+  match: MatchRow;
+  watcherCount: number;
+  onRevealedScore: (s: Scoreline) => void;
+}) {
   const kickoffMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
   // eslint-disable-next-line react-hooks/purity -- wall-clock read; a stale value only mis-decides the pitch near the window edge and self-corrects on the next render / nav
   const nowMs = Date.now();
-  const withinPacingWindow = kickoffMs != null
-    && nowMs >= kickoffMs
-    && nowMs < kickoffMs + DEFAULT_MATCH_DURATION_SECONDS * 1000;
-  const showPitch =
-    isRevealing(match.status) || match.status === 'scheduled'
-    || withinPacingWindow;
+  const withinPacingWindow =
+    kickoffMs != null &&
+    nowMs >= kickoffMs &&
+    nowMs < kickoffMs + DEFAULT_MATCH_DURATION_SECONDS * 1000;
+  const showPitch = isRevealing(match.status) || match.status === 'scheduled' || withinPacingWindow;
 
   return (
     <>
-      {showPitch && (() => {
-        // Pull team names + scores defensively from the (loosely typed) match
-        // row so the SVG's aria-label reads the scoreline for screen readers.
-        // Conditional spread keeps strict-optional-prop types happy by NOT
-        // setting a key when the value would be undefined.
-        const homeName = (match.home_team as { name?: string } | null | undefined)?.name;
-        const awayName = (match.away_team as { name?: string } | null | undefined)?.name;
-        const hs = typeof match.home_score === 'number' ? match.home_score : undefined;
-        const as = typeof match.away_score === 'number' ? match.away_score : undefined;
-        return (
-          <MatchPitchPanel
-            matchId={match.id}
-            {...(homeName != null && { homeTeamName: homeName })}
-            {...(awayName != null && { awayTeamName: awayName })}
-            {...(hs != null && { homeScore: hs })}
-            {...(as != null && { awayScore: as })}
-          />
-        );
-      })()}
+      {showPitch &&
+        (() => {
+          // Pull team names + scores defensively from the (loosely typed) match
+          // row so the SVG's aria-label reads the scoreline for screen readers.
+          // Conditional spread keeps strict-optional-prop types happy by NOT
+          // setting a key when the value would be undefined.
+          const homeName = (match.home_team as { name?: string } | null | undefined)?.name;
+          const awayName = (match.away_team as { name?: string } | null | undefined)?.name;
+          const hs = typeof match.home_score === 'number' ? match.home_score : undefined;
+          const as = typeof match.away_score === 'number' ? match.away_score : undefined;
+          return (
+            <MatchPitchPanel
+              matchId={match.id}
+              {...(homeName != null && { homeTeamName: homeName })}
+              {...(awayName != null && { awayTeamName: awayName })}
+              {...(hs != null && { homeScore: hs })}
+              {...(as != null && { awayScore: as })}
+            />
+          );
+        })()}
 
       <LiveCommentary match={match} onRevealedScore={onRevealedScore} />
     </>
@@ -927,9 +1038,7 @@ export function mergeAndSortEvents(
     seen.add(row.id);
     merged.push(row);
   }
-  return merged.sort(
-    (a, b) => a.minute - b.minute || Number(a.subminute) - Number(b.subminute),
-  );
+  return merged.sort((a, b) => a.minute - b.minute || Number(a.subminute) - Number(b.subminute));
 }
 
 /**
@@ -938,8 +1047,8 @@ export function mergeAndSortEvents(
  * commentary feed doesn't need.
  */
 interface LiveCommentaryMatch {
-  id?:           string;
-  status?:       string;
+  id?: string;
+  status?: string;
   scheduled_at?: string | null;
 }
 
@@ -958,29 +1067,32 @@ interface LiveCommentaryMatch {
  * @param props.match  Match row from getMatch() — needs id, status, and
  *                     scheduled_at (the kickoff anchor for elapsed math).
  */
-export function LiveCommentary(
-  { match, onRevealedScore }:
-  { match: LiveCommentaryMatch; onRevealedScore?: (s: Scoreline) => void },
-) {
+export function LiveCommentary({
+  match,
+  onRevealedScore,
+}: {
+  match: LiveCommentaryMatch;
+  onRevealedScore?: (s: Scoreline) => void;
+}) {
   const db = useSupabase();
 
   // The "live experience" anchors on wall-clock vs scheduled_at, NOT on the
   // match's row status.  STATUS still gates a few things:
   //   • Cancelled matches never render this section (no events to show).
   //   • Pre-kickoff scheduled matches in the *future* don't render either.
-  const status      = match?.status ?? 'scheduled';
+  const status = match?.status ?? 'scheduled';
   const isCancelled = status === 'cancelled';
-  const kickoffMs   = match?.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  const kickoffMs = match?.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
   // eslint-disable-next-line react-hooks/purity -- intentional wall-clock read; re-renders are driven by the per-second elapsedMinute tick below
   const kickoffPassed = kickoffMs != null && kickoffMs <= Date.now();
 
   const showSection = !isCancelled && (kickoffPassed || status === 'completed');
 
-  const [events,        setEvents]        = useState<MatchEventRow[]>([]);
-  const [duration,      setDuration]      = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
+  const [events, setEvents] = useState<MatchEventRow[]>([]);
+  const [duration, setDuration] = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
   const [elapsedMinute, setElapsedMinute] = useState<number>(0);
-  const [loaded,        setLoaded]        = useState<boolean>(false);
-  const [loadError,     setLoadError]     = useState<unknown>(null);
+  const [loaded, setLoaded] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   // Derived "is the viewer still inside the paced window?" — true while
   // wall-clock elapsed-from-kickoff is < match_duration_seconds.
@@ -996,10 +1108,7 @@ export function LiveCommentary(
     setEvents([]);
     setLoaded(false);
     setLoadError(null);
-    Promise.all([
-      getMatchEvents(db, match.id),
-      getMatchDurationSeconds(db, match.id),
-    ])
+    Promise.all([getMatchEvents(db, match.id), getMatchDurationSeconds(db, match.id)])
       .then(([evRows, durSeconds]) => {
         if (cancelled) return;
         // Merge against current state (not []) so a Realtime row that landed
@@ -1014,7 +1123,9 @@ export function LiveCommentary(
         setLoadError(err);
         setLoaded(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, match?.id, showSection]);
 
   // ── Elapsed-minute clock ──────────────────────────────────────────────────
@@ -1026,7 +1137,7 @@ export function LiveCommentary(
     }
 
     const kickoffAtMs = new Date(kickoff).getTime();
-    const endAtMs     = kickoffAtMs + duration * 1000;
+    const endAtMs = kickoffAtMs + duration * 1000;
 
     if (Date.now() >= endAtMs) {
       setElapsedMinute(120);
@@ -1084,16 +1195,16 @@ export function LiveCommentary(
   // ── Section copy ──────────────────────────────────────────────────────────
   const heading = livePacingWindowOpen
     ? {
-        title:    'The booth',
-        sub:      'Vox · Nexus-7 · Zara · live',
-        empty:    'The void is silent. Awaiting the first whistle…',
+        title: 'The booth',
+        sub: 'Vox · Nexus-7 · Zara · live',
+        empty: 'The void is silent. Awaiting the first whistle…',
         // Kept verbatim — the commentary tests assert on the "Live Feed" string.
         stateTag: 'Live Feed',
       }
     : {
-        title:    'The booth',
-        sub:      'Vox · Nexus-7 · Zara · replay',
-        empty:    'No events were recorded for this match.',
+        title: 'The booth',
+        sub: 'Vox · Nexus-7 · Zara · replay',
+        empty: 'No events were recorded for this match.',
         // Kept verbatim — the commentary tests assert on the "The Replay" string.
         stateTag: 'The Replay',
       };
@@ -1102,31 +1213,77 @@ export function LiveCommentary(
     <>
       {/* COMMENTARY FEED (the prototype's `.feed`). */}
       <div style={feedShellStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, fontSize: 16, textTransform: 'uppercase' }}>{heading.title}</span>
-          <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: DUST_70 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            gap: 16,
+            marginBottom: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontWeight: 700, fontSize: 16, textTransform: 'uppercase' }}>
+            {heading.title}
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: DUST_70,
+            }}
+          >
             {heading.sub}
           </span>
         </div>
 
         {/* State tag — preserves the "Live Feed" / "The Replay" copy the
             commentary tests assert on, plus the live minute indicator. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <span style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: livePacingWindowOpen ? QUANTUM : DUST_70 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            marginBottom: 16,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              fontWeight: 700,
+              color: livePacingWindowOpen ? QUANTUM : DUST_70,
+            }}
+          >
             {heading.stateTag}
           </span>
           {livePacingWindowOpen && loaded && (
-            <span style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: 11,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              fontWeight: 700,
-              color: QUANTUM,
-            }}>
-              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: QUANTUM, boxShadow: `0 0 4px ${QUANTUM}`, display: 'inline-block' }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 11,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                color: QUANTUM,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: QUANTUM,
+                  boxShadow: `0 0 4px ${QUANTUM}`,
+                  display: 'inline-block',
+                }}
+              />
               Minute {Math.min(elapsedMinute, 90)}
               {elapsedMinute > 90 && <> + {elapsedMinute - 90}</>}
             </span>
@@ -1159,9 +1316,7 @@ export function LiveCommentary(
       {/* MATCH RECORD TIMELINE (the prototype's `.tl`) — derived from the same
           paced events the feed shows, so it never spoils beats the viewer
           hasn't reached and needs no extra fetch. */}
-      {!loadError && loaded && (
-        <MatchTimeline events={visibleEvents} />
-      )}
+      {!loadError && loaded && <MatchTimeline events={visibleEvents} />}
     </>
   );
 }
@@ -1188,14 +1343,16 @@ function CommentaryFeed({ events }: { events: MatchEventRow[] }) {
   // the parent's memoised value on every render.
   const ordered = [...events].reverse();
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 22,
-      maxHeight: 430,
-      overflowY: 'auto',
-      paddingRight: 8,
-    }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 22,
+        maxHeight: 430,
+        overflowY: 'auto',
+        paddingRight: 8,
+      }}
+    >
       {ordered.map((ev) => (
         <CommentaryRow key={ev.id} event={ev} />
       ))}
@@ -1220,38 +1377,52 @@ function CommentaryRow({ event }: { event: MatchEventRow }) {
   const isArchitect = isArchitectEvent(event);
 
   return (
-    <div style={{
-      borderLeft: `2px solid ${isArchitect ? QUANTUM : BORDER_FAINT}`,
-      paddingLeft: 22,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-    }}>
+    <div
+      style={{
+        borderLeft: `2px solid ${isArchitect ? QUANTUM : BORDER_FAINT}`,
+        paddingLeft: 22,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
       <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 14 }}>
-        <b style={{
-          fontWeight: 700,
-          fontSize: 15,
-          color: isArchitect ? QUANTUM : DUST,
-          textShadow: isArchitect ? `0 0 6px rgba(154, 92, 244, 0.8)` : 'none',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-        }}>
+        <b
+          style={{
+            fontWeight: 700,
+            fontSize: 15,
+            color: isArchitect ? QUANTUM : DUST,
+            textShadow: isArchitect ? `0 0 6px rgba(154, 92, 244, 0.8)` : 'none',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+          }}
+        >
           {eventHeading(event)}
         </b>
-        <span style={{ marginLeft: 'auto', fontWeight: 700, color: DUST_70, fontVariantNumeric: 'tabular-nums' }}>
-          {event.minute}{event.minute > 90 ? '+' : "'"}
+        <span
+          style={{
+            marginLeft: 'auto',
+            fontWeight: 700,
+            color: DUST_70,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {event.minute}
+          {event.minute > 90 ? '+' : "'"}
         </span>
       </div>
-      <p style={{
-        margin: 0,
-        fontSize: isArchitect ? 14 : 15,
-        lineHeight: 1.55,
-        color: DUST,
-        fontStyle: isArchitect ? 'normal' : 'italic',
-        textTransform: isArchitect ? 'uppercase' : 'none',
-        fontWeight: isArchitect ? 700 : 400,
-        letterSpacing: isArchitect ? '0.04em' : 'normal',
-      }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: isArchitect ? 14 : 15,
+          lineHeight: 1.55,
+          color: DUST,
+          fontStyle: isArchitect ? 'normal' : 'italic',
+          textTransform: isArchitect ? 'uppercase' : 'none',
+          fontWeight: isArchitect ? 700 : 400,
+          letterSpacing: isArchitect ? '0.04em' : 'normal',
+        }}
+      >
         {isArchitect ? text : `“${text}”`}
       </p>
     </div>
@@ -1268,9 +1439,9 @@ type TimelineKind = 'goal' | 'card' | 'arch' | 'other';
  *   goal ▲  card ■  architect ◆  substitution ○  other ·
  */
 const TIMELINE_GLYPH: Record<TimelineKind, string> = {
-  goal:  '▲',
-  card:  '■',
-  arch:  '◆',
+  goal: '▲',
+  card: '■',
+  arch: '◆',
   other: '·',
 };
 
@@ -1286,10 +1457,10 @@ export function isArchitectEvent(event: MatchEventRow): boolean {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   return (
     payload.architectAnnulled === true ||
-    payload.architectForced   === true ||
+    payload.architectForced === true ||
     payload.architectConjured === true ||
-    payload.architectStolen   === true ||
-    payload.architectEcho     === true
+    payload.architectStolen === true ||
+    payload.architectEcho === true
   );
 }
 
@@ -1301,8 +1472,10 @@ export function isArchitectEvent(event: MatchEventRow): boolean {
  */
 export function eventProse(event: MatchEventRow): string | null {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
-  if (typeof payload.commentary === 'string' && payload.commentary.length > 0) return payload.commentary;
-  if (typeof payload.proclamation === 'string' && payload.proclamation.length > 0) return payload.proclamation;
+  if (typeof payload.commentary === 'string' && payload.commentary.length > 0)
+    return payload.commentary;
+  if (typeof payload.proclamation === 'string' && payload.proclamation.length > 0)
+    return payload.proclamation;
   return null;
 }
 
@@ -1331,8 +1504,7 @@ export function classifyTimelineEvent(event: MatchEventRow): TimelineKind {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   if (payload.isGoal === true || event.type === 'goal') return 'goal';
   const isCard =
-    typeof payload.cardType === 'string' ||
-    /card|yellow|red|booking|sending/i.test(event.type);
+    typeof payload.cardType === 'string' || /card|yellow|red|booking|sending/i.test(event.type);
   if (isCard) return 'card';
   return 'other';
 }
@@ -1383,34 +1555,32 @@ function TimelineRow({ event, last }: { event: MatchEventRow; last: boolean }) {
 
   const isArch = kind === 'arch';
   const glyphColour =
-    kind === 'goal' ? TERRA :
-    kind === 'card' ? FLARE :
-    isArch          ? QUANTUM :
-    DUST_70;
+    kind === 'goal' ? TERRA : kind === 'card' ? FLARE : isArch ? QUANTUM : DUST_70;
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '56px 28px 1fr',
-      gap: 14,
-      alignItems: 'baseline',
-      padding: '10px 0',
-      borderBottom: last ? 0 : `1px solid ${BORDER_FAINT}`,
-      // Faint purple row wash for architect beats (the prototype's `.tl-row.arch`).
-      background: isArch
-        ? 'linear-gradient(90deg, rgba(154,92,244,.10), transparent 70%)'
-        : 'transparent',
-    }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '56px 28px 1fr',
+        gap: 14,
+        alignItems: 'baseline',
+        padding: '10px 0',
+        borderBottom: last ? 0 : `1px solid ${BORDER_FAINT}`,
+        // Faint purple row wash for architect beats (the prototype's `.tl-row.arch`).
+        background: isArch
+          ? 'linear-gradient(90deg, rgba(154,92,244,.10), transparent 70%)'
+          : 'transparent',
+      }}
+    >
       <span style={{ fontWeight: 700, fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>
-        {event.minute}{event.minute > 90 ? '+' : "'"}
+        {event.minute}
+        {event.minute > 90 ? '+' : "'"}
       </span>
       <span style={{ fontWeight: 700, fontSize: 15, textAlign: 'center', color: glyphColour }}>
         {TIMELINE_GLYPH[kind]}
       </span>
       <span style={{ fontSize: 15, color: DUST }}>
-        <b style={{ fontWeight: 700, color: isArch ? QUANTUM : DUST }}>
-          {eventHeading(event)}.
-        </b>
+        <b style={{ fontWeight: 700, color: isArch ? QUANTUM : DUST }}>{eventHeading(event)}.</b>
         {text && <> {text}</>}
       </span>
     </div>
@@ -1425,9 +1595,7 @@ function TimelineRow({ event, last }: { event: MatchEventRow; last: boolean }) {
  */
 function prettifyEventType(key: string): string {
   if (!key) return '—';
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
 // ── MatchPitchPanel ─────────────────────────────────────────────────────────
@@ -1443,9 +1611,9 @@ function prettifyEventType(key: string): string {
  * (starter, overall_rating) are modelled.
  */
 interface MatchPlayerRow {
-  id:             string;
-  position:       string;
-  starter:        boolean;
+  id: string;
+  position: string;
+  starter: boolean;
   overall_rating: number | null;
 }
 
@@ -1517,8 +1685,8 @@ function MatchPitchPanel({
   matchId: string;
   homeTeamName?: string;
   awayTeamName?: string;
-  homeScore?:    number;
-  awayScore?:    number;
+  homeScore?: number;
+  awayScore?: number;
 }) {
   const db = useSupabase();
   /**
@@ -1529,17 +1697,17 @@ function MatchPitchPanel({
   const [meta, setMeta] = useState<{
     homeFormation: SupportedFormation;
     awayFormation: SupportedFormation;
-    homeColor:     string | null;
-    awayColor:     string | null;
-    homePlayers:   MatchViewerPlayer[];
-    awayPlayers:   MatchViewerPlayer[];
+    homeColor: string | null;
+    awayColor: string | null;
+    homePlayers: MatchViewerPlayer[];
+    awayPlayers: MatchViewerPlayer[];
   }>({
     homeFormation: '4-4-2',
     awayFormation: '4-4-2',
-    homeColor:     null,
-    awayColor:     null,
-    homePlayers:   [],
-    awayPlayers:   [],
+    homeColor: null,
+    awayColor: null,
+    homePlayers: [],
+    awayPlayers: [],
   });
 
   // ── Spatial position frames + pacing ───────────────────────────────────────
@@ -1548,8 +1716,8 @@ function MatchPitchPanel({
   // real-time pacing anchor and `duration` the season window — together they map
   // wall-clock time onto the 90-minute replay, the same mapping the feed uses.
   const [positionFrames, setPositionFrames] = useState<PositionSnapshot[]>([]);
-  const [scheduledAt,    setScheduledAt]    = useState<string | null>(null);
-  const [duration,       setDuration]       = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
+  const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  const [duration, setDuration] = useState<number>(DEFAULT_MATCH_DURATION_SECONDS);
 
   // ── Initial fetch ─────────────────────────────────────────────────────────
   // Match row (formation + roster + colour), position snapshots, and the season
@@ -1574,8 +1742,16 @@ function MatchPitchPanel({
         // so a half-joined row still produces a renderable rest state.
         const matchRow = (m ?? {}) as {
           scheduled_at?: string | null;
-          home_team?: { color?: string | null; managers?: Array<{ preferred_formation?: string | null }> | null; players?: MatchPlayerRow[] | null } | null;
-          away_team?: { color?: string | null; managers?: Array<{ preferred_formation?: string | null }> | null; players?: MatchPlayerRow[] | null } | null;
+          home_team?: {
+            color?: string | null;
+            managers?: Array<{ preferred_formation?: string | null }> | null;
+            players?: MatchPlayerRow[] | null;
+          } | null;
+          away_team?: {
+            color?: string | null;
+            managers?: Array<{ preferred_formation?: string | null }> | null;
+            players?: MatchPlayerRow[] | null;
+          } | null;
         };
         const homeTeam = matchRow.home_team ?? null;
         const awayTeam = matchRow.away_team ?? null;
@@ -1586,18 +1762,20 @@ function MatchPitchPanel({
           // join embeds 1:N relations as an array).
           homeFormation: narrowFormation(homeTeam?.managers?.[0]?.preferred_formation),
           awayFormation: narrowFormation(awayTeam?.managers?.[0]?.preferred_formation),
-          homeColor:     homeTeam?.color ?? null,
-          awayColor:     awayTeam?.color ?? null,
+          homeColor: homeTeam?.color ?? null,
+          awayColor: awayTeam?.color ?? null,
           // Engine-aligned ordering so commentary + viewer name the same XI.
-          homePlayers:   pickSquad(homeTeam?.players ?? []).map(toViewerPlayer),
-          awayPlayers:   pickSquad(awayTeam?.players ?? []).map(toViewerPlayer),
+          homePlayers: pickSquad(homeTeam?.players ?? []).map(toViewerPlayer),
+          awayPlayers: pickSquad(awayTeam?.players ?? []).map(toViewerPlayer),
         });
       })
       .catch((err) => {
         if (cancelled) return;
         console.warn('[MatchPitchPanel] fetch failed:', err);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, matchId]);
 
   // ── Late-arriving frames (open-before-kickoff) ─────────────────────────
@@ -1621,23 +1799,34 @@ function MatchPitchPanel({
     const windowEndMs = kickoffMs + duration * 1000;
 
     let cancelled = false;
-    let interval:     ReturnType<typeof setInterval> | null = null;
-    let startTimeout: ReturnType<typeof setTimeout>  | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let startTimeout: ReturnType<typeof setTimeout> | null = null;
     const stop = () => {
-      if (interval     !== null) { clearInterval(interval);  interval = null; }
-      if (startTimeout !== null) { clearTimeout(startTimeout); startTimeout = null; }
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+      if (startTimeout !== null) {
+        clearTimeout(startTimeout);
+        startTimeout = null;
+      }
     };
 
     const poll = () => {
       // Window closed → give up (covers legacy matches that never get frames).
-      if (Date.now() >= windowEndMs) { stop(); return; }
+      if (Date.now() >= windowEndMs) {
+        stop();
+        return;
+      }
       getMatchPositions(db, matchId)
         .then((rows) => {
           if (cancelled || rows.length === 0) return;
           setPositionFrames(rows);
           stop();
         })
-        .catch(() => { /* transient — the next tick retries */ });
+        .catch(() => {
+          /* transient — the next tick retries */
+        });
     };
 
     // 5s cadence: the worker lands frames within ~90s of kickoff, so a handful
@@ -1650,13 +1839,16 @@ function MatchPitchPanel({
 
     const now = Date.now();
     if (now >= windowEndMs) {
-      return undefined;                                // window already closed
+      return undefined; // window already closed
     } else if (now < kickoffMs) {
       startTimeout = setTimeout(begin, kickoffMs - now); // defer until kickoff
     } else {
-      begin();                                         // already in-window
+      begin(); // already in-window
     }
-    return () => { cancelled = true; stop(); };
+    return () => {
+      cancelled = true;
+      stop();
+    };
   }, [db, matchId, scheduledAt, duration, positionFrames.length]);
 
   return (
@@ -1675,8 +1867,8 @@ function MatchPitchPanel({
       awayColor={meta.awayColor}
       {...(homeTeamName !== undefined && { homeTeamName })}
       {...(awayTeamName !== undefined && { awayTeamName })}
-      {...(homeScore    !== undefined && { homeScore })}
-      {...(awayScore    !== undefined && { awayScore })}
+      {...(homeScore !== undefined && { homeScore })}
+      {...(awayScore !== undefined && { awayScore })}
     />
   );
 }

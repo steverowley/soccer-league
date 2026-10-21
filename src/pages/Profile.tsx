@@ -25,7 +25,7 @@ import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../comp
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { Button, useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
-import { updateProfile } from '../features/auth/api/profiles';
+import { updateProfile } from '@features/auth';
 import { getTeams, getPlayersForTeam } from '../features/match';
 // Match-start push notifications surface — self-contained card that
 // owns its own state (subscription endpoint + opt-in toggles).  Mounted
@@ -41,8 +41,8 @@ import { NotificationSettings } from '../features/notifications';
 // disabled submit + the refresh.  FLARE stays for save-error text.
 const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
+const DUST_50 = COLORS.dust50;
+const DUST_70 = COLORS.dust70;
 
 /**
  * Sentinel value used inside the favourite_player_id <select> to mean
@@ -79,11 +79,11 @@ export default function Profile() {
   //   - deleteTyped — the user's current typing in the confirmation field;
   //                   must equal profile.username exactly before the
   //                   destructive button is enabled.
-  const [deleteOpen,  setDeleteOpen]  = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTyped, setDeleteTyped] = useState('');
-  const [deleteBusy,  setDeleteBusy]  = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
-  const [teams,   setTeams]   = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
 
   // ── Admin gate ─────────────────────────────────────────────────────────────
@@ -99,14 +99,14 @@ export default function Profile() {
 
   // Local copy of the editable fields — initialised from the profile on
   // first paint, mutated by the form controls, then persisted on save.
-  const [teamId,    setTeamId]    = useState(NO_PLAYER);
-  const [playerId,  setPlayerId]  = useState(NO_PLAYER);
+  const [teamId, setTeamId] = useState(NO_PLAYER);
+  const [playerId, setPlayerId] = useState(NO_PLAYER);
 
   // Save success/error feedback routes through the global toast (#383)
   // instead of the previous inline italic-paragraph state. The local
   // saveError / saveOk slots are gone; we call toast.success() /
   // toast.error() at the relevant points in onSave.
-  const [busy,      setBusy]      = useState<boolean>(false);
+  const [busy, setBusy] = useState<boolean>(false);
 
   // Mirror profile → local state once the auth provider finishes
   // hydrating.  Only resets when the profile id changes — preserves
@@ -122,24 +122,37 @@ export default function Profile() {
   useEffect(() => {
     let cancelled = false;
     getTeams(db)
-      .then((rows) => { if (!cancelled) setTeams(rows ?? []); })
-      .catch((err) => { console.warn('[Profile] getTeams failed:', err); });
-    return () => { cancelled = true; };
+      .then((rows) => {
+        if (!cancelled) setTeams(rows ?? []);
+      })
+      .catch((err) => {
+        console.warn('[Profile] getTeams failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [db]);
 
   // Refetch the roster every time the active teamId changes (including
   // the initial hydration).  Empty teamId → empty roster so the player
   // select renders just the "No preference" option.
   useEffect(() => {
-    if (!teamId) { setPlayers([]); return undefined; }
+    if (!teamId) {
+      setPlayers([]);
+      return undefined;
+    }
     let cancelled = false;
     getPlayersForTeam(db, teamId)
-      .then((rows) => { if (!cancelled) setPlayers(rows ?? []); })
+      .then((rows) => {
+        if (!cancelled) setPlayers(rows ?? []);
+      })
       .catch((err) => {
         console.warn('[Profile] getPlayersForTeam failed:', err);
         if (!cancelled) setPlayers([]);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, teamId]);
 
   // Pre-grouped team options for the picker — by league, alphabetised.
@@ -161,10 +174,15 @@ export default function Profile() {
   if (loading) {
     return (
       <Shell>
-        <p style={{
-        ...(undefined as any),
-          color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-        }}>
+        <p
+          style={{
+            ...(undefined as any),
+            color: DUST_50,
+            fontStyle: 'italic',
+            fontSize: 13,
+            marginTop: 24,
+          }}
+        >
           Restoring your session…
         </p>
       </Shell>
@@ -184,7 +202,7 @@ export default function Profile() {
     setBusy(true);
     try {
       const input = {
-        favourite_team_id:   teamId   || null,
+        favourite_team_id: teamId || null,
         favourite_player_id: playerId || null,
       };
       const { error } = await updateProfile(db, input);
@@ -265,18 +283,18 @@ export default function Profile() {
           subtitle="Your favourite club determines what you can vote on and which roster appears in the training facility.  Optional favourite player nudges the Architect's narrative attention."
         />
 
-        <form onSubmit={onSave} style={{
-        ...(undefined as any),
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-          marginTop: 24,
-          maxWidth: 560,
-        }}>
-          <Field
-            id="favourite-team"
-            label="Favourite Club"
-          >
+        <form
+          onSubmit={onSave}
+          style={{
+            ...(undefined as any),
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            marginTop: 24,
+            maxWidth: 560,
+          }}
+        >
+          <Field id="favourite-team" label="Favourite Club">
             <select
               id="favourite-team"
               value={teamId}
@@ -287,7 +305,9 @@ export default function Profile() {
               {Array.from(teamsByLeague.entries()).map(([key, { name, teams: teamRows }]) => (
                 <optgroup key={key} label={name}>
                   {teamRows.map((t: any) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
                   ))}
                 </optgroup>
               ))}
@@ -297,9 +317,11 @@ export default function Profile() {
           <Field
             id="favourite-player"
             label="Favourite Player"
-            hint={teamId
-              ? `Pulled from ${players.length} ${players.length === 1 ? 'player' : 'players'} on your club's books.`
-              : 'Pick a favourite club first.'}
+            hint={
+              teamId
+                ? `Pulled from ${players.length} ${players.length === 1 ? 'player' : 'players'} on your club's books.`
+                : 'Pick a favourite club first.'
+            }
           >
             <select
               id="favourite-player"
@@ -327,7 +349,7 @@ export default function Profile() {
             type="submit"
             disabled={busy}
             style={{
-        ...(undefined as any),
+              ...(undefined as any),
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -368,9 +390,17 @@ export default function Profile() {
         <SectionHeader
           kicker="IV"
           label="Controls"
-          title={isAdmin ? "Administration & Exit" : "Step Back Into The Void"}
+          title={isAdmin ? 'Administration & Exit' : 'Step Back Into The Void'}
         />
-        <div style={{ marginTop: 24, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            marginTop: 24,
+            display: 'flex',
+            gap: 16,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
           {isAdmin && (
             <Button variant="active" onClick={() => navigate('/admin')}>
               Admin Dashboard
@@ -388,10 +418,7 @@ export default function Profile() {
           on the cognitive map — well past the everyday Save / Sign Out
           affordances. The button only OPENS the modal; the real
           deletion requires typing the username verbatim. */}
-      <DangerZone
-        username={profile?.username ?? null}
-        onOpen={onOpenDelete}
-      />
+      <DangerZone username={profile?.username ?? null} onOpen={onOpenDelete} />
 
       {/* Modal portal lives inside Shell so the page background bleeds
           through correctly. We rely on the `deleteOpen` state slot
@@ -442,18 +469,18 @@ function DangerZone({ username, onOpen }: { username: string | null; onOpen: () 
           type="button"
           onClick={onOpen}
           style={{
-            display:        'inline-flex',
-            alignItems:     'center',
-            fontSize:       13,
-            fontWeight:     700,
-            textTransform:  'uppercase',
-            letterSpacing:  '0.12em',
-            color:          FLARE,
-            background:     'transparent',
-            border:         `1px solid ${FLARE}`,
-            padding:        '14px 28px',
-            cursor:         'pointer',
-            minHeight:      44,
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontSize: 13,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.12em',
+            color: FLARE,
+            background: 'transparent',
+            border: `1px solid ${FLARE}`,
+            padding: '14px 28px',
+            cursor: 'pointer',
+            minHeight: 44,
           }}
         >
           Delete My Account
@@ -482,14 +509,19 @@ function DangerZone({ username, onOpen }: { username: string | null; onOpen: () 
  * @param onConfirm      Trigger the delete. Caller verifies typed === username.
  */
 function DeleteAccountModal({
-  username, typed, onTypedChange, busy, onCancel, onConfirm,
+  username,
+  typed,
+  onTypedChange,
+  busy,
+  onCancel,
+  onConfirm,
 }: {
-  username:       string;
-  typed:          string;
-  onTypedChange:  (next: string) => void;
-  busy:           boolean;
-  onCancel:       () => void;
-  onConfirm:      () => void;
+  username: string;
+  typed: string;
+  onTypedChange: (next: string) => void;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
   // Match check is exact (case-sensitive). The button is disabled until
   // it passes — the visual disabled state is the gate; the form can't
@@ -510,60 +542,61 @@ function DeleteAccountModal({
       aria-labelledby="delete-modal-title"
       onKeyDown={onKeyDown}
       style={{
-        position:       'fixed',
-        inset:          0,
-        background:     'rgba(0, 0, 0, 0.72)',
-        display:        'flex',
-        alignItems:     'center',
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.72)',
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
-        zIndex:         900,
-        padding:        16,
+        zIndex: 900,
+        padding: 16,
       }}
     >
       <div
         style={{
-          background:     ABYSS,
-          border:         `1px solid ${FLARE}`,
-          maxWidth:       480,
-          width:          '100%',
-          padding:        '28px 24px',
+          background: ABYSS,
+          border: `1px solid ${FLARE}`,
+          maxWidth: 480,
+          width: '100%',
+          padding: '28px 24px',
         }}
       >
         <h2
           id="delete-modal-title"
           style={{
-            fontSize:      18,
-            fontWeight:    700,
-            color:         FLARE,
-            margin:        0,
-            marginBottom:  12,
+            fontSize: 18,
+            fontWeight: 700,
+            color: FLARE,
+            margin: 0,
+            marginBottom: 12,
             letterSpacing: '-0.01em',
           }}
         >
           Delete your account?
         </h2>
-        <p style={{
-          fontSize:     13,
-          lineHeight:   1.5,
-          color:        DUST_70,
-          margin:       0,
-          marginBottom: 18,
-        }}>
-          This permanently removes your profile, credit balance, and
-          favourite team. Your past wagers and votes are kept as
-          anonymous rows so the leaderboards remain consistent — no
+        <p
+          style={{
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: DUST_70,
+            margin: 0,
+            marginBottom: 18,
+          }}
+        >
+          This permanently removes your profile, credit balance, and favourite team. Your past
+          wagers and votes are kept as anonymous rows so the leaderboards remain consistent — no
           record of your identity remains.
         </p>
         <label
           htmlFor="delete-confirm-input"
           style={{
-            display:        'block',
-            fontSize:       11,
-            fontWeight:     700,
-            color:          DUST_50,
-            textTransform:  'uppercase',
-            letterSpacing:  '0.12em',
-            marginBottom:   6,
+            display: 'block',
+            fontSize: 11,
+            fontWeight: 700,
+            color: DUST_50,
+            textTransform: 'uppercase',
+            letterSpacing: '0.12em',
+            marginBottom: 6,
           }}
         >
           Type your username (<span style={{ color: DUST }}>{username}</span>) to confirm
@@ -576,16 +609,16 @@ function DeleteAccountModal({
           autoFocus
           autoComplete="off"
           style={{
-            display:        'block',
-            width:          '100%',
-            boxSizing:      'border-box',
-            fontFamily:     'inherit',
-            fontSize:       14,
-            color:          DUST,
-            background:     'transparent',
-            border:         `1px solid ${HAIRLINE}`,
-            padding:        '10px 12px',
-            marginBottom:   18,
+            display: 'block',
+            width: '100%',
+            boxSizing: 'border-box',
+            fontFamily: 'inherit',
+            fontSize: 14,
+            color: DUST,
+            background: 'transparent',
+            border: `1px solid ${HAIRLINE}`,
+            padding: '10px 12px',
+            marginBottom: 18,
           }}
         />
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
@@ -594,17 +627,17 @@ function DeleteAccountModal({
             onClick={onCancel}
             disabled={busy}
             style={{
-              fontSize:       13,
-              fontWeight:     700,
-              textTransform:  'uppercase',
-              letterSpacing:  '0.12em',
-              color:          DUST,
-              background:     'transparent',
-              border:         `1px solid ${DUST_50}`,
-              padding:        '10px 20px',
-              cursor:         busy ? 'not-allowed' : 'pointer',
-              fontFamily:     'inherit',
-              minHeight:      40,
+              fontSize: 13,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              color: DUST,
+              background: 'transparent',
+              border: `1px solid ${DUST_50}`,
+              padding: '10px 20px',
+              cursor: busy ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              minHeight: 40,
             }}
           >
             Cancel
@@ -614,17 +647,17 @@ function DeleteAccountModal({
             onClick={onConfirm}
             disabled={!confirmEnabled}
             style={{
-              fontSize:       13,
-              fontWeight:     700,
-              textTransform:  'uppercase',
-              letterSpacing:  '0.12em',
-              color:          confirmEnabled ? ABYSS : DUST_50,
-              background:     confirmEnabled ? FLARE : 'transparent',
-              border:         `1px solid ${FLARE}`,
-              padding:        '10px 20px',
-              cursor:         confirmEnabled ? 'pointer' : 'not-allowed',
-              fontFamily:     'inherit',
-              minHeight:      40,
+              fontSize: 13,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              color: confirmEnabled ? ABYSS : DUST_50,
+              background: confirmEnabled ? FLARE : 'transparent',
+              border: `1px solid ${FLARE}`,
+              padding: '10px 20px',
+              cursor: confirmEnabled ? 'pointer' : 'not-allowed',
+              fontFamily: 'inherit',
+              minHeight: 40,
             }}
           >
             {busy ? 'Erasing…' : 'Delete forever'}
@@ -646,12 +679,14 @@ function DeleteAccountModal({
  */
 function Shell({ children, username }: { children: React.ReactNode; username?: string }) {
   return (
-    <div style={{
+    <div
+      style={{
         ...(undefined as any),
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
+        background: ABYSS,
+        color: DUST,
+        minHeight: '100vh',
+      }}
+    >
       <Header />
 
       <section style={{ padding: '48px 0 16px' }}>
@@ -695,11 +730,11 @@ function Shell({ children, username }: { children: React.ReactNode; username?: s
  */
 const STREAK_MILESTONES: ReadonlyArray<{ days: number; label: string }> = [
   // 3-day: a fan has committed to checking in across a long weekend.
-  { days: 3,   label: '3-day attendance' },
+  { days: 3, label: '3-day attendance' },
   // 7-day: a full week of devotion.
-  { days: 7,   label: '7-day vigil' },
+  { days: 7, label: '7-day vigil' },
   // 30-day: month-long. Most fans peel off well before this.
-  { days: 30,  label: 'Month watcher' },
+  { days: 30, label: 'Month watcher' },
   // 100-day: long-haul. The cosmos has noticed.
   { days: 100, label: 'Cosmic regular' },
   // 365-day: a full ISL year of consecutive attendance.
@@ -718,22 +753,29 @@ function StreakBadges({ longestStreak }: { longestStreak: number }) {
   const earned = STREAK_MILESTONES.filter((m) => longestStreak >= m.days);
   if (earned.length === 0) return null;
   return (
-    <div style={{
-      marginTop: 24,
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 8,
-    }}>
+    <div
+      style={{
+        marginTop: 24,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+      }}
+    >
       {earned.map((m) => (
-        <span key={m.days} style={{
-          border: `1px solid ${HAIRLINE}`,
-          padding: '6px 12px',
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST_70,
-        }}>
-          <span aria-hidden="true" style={{ color: QUANTUM }}>◆</span>{' '}
+        <span
+          key={m.days}
+          style={{
+            border: `1px solid ${HAIRLINE}`,
+            padding: '6px 12px',
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: DUST_70,
+          }}
+        >
+          <span aria-hidden="true" style={{ color: QUANTUM }}>
+            ◆
+          </span>{' '}
           {m.label}
         </span>
       ))}
@@ -743,26 +785,30 @@ function StreakBadges({ longestStreak }: { longestStreak: number }) {
 
 function AccountSummary({ user, profile }: { user: any; profile: any }) {
   const username = profile?.username ?? '—';
-  const email    = user?.email ?? '—';
-  const credits  = profile?.credits ?? 0;
-  const created  = user?.created_at
+  const email = user?.email ?? '—';
+  const credits = profile?.credits ?? 0;
+  const created = user?.created_at
     ? new Date(user.created_at).toLocaleDateString(undefined, {
-        year: 'numeric', month: 'long', day: 'numeric',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
       })
     : null;
 
   return (
-    <div style={{
+    <div
+      style={{
         ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      marginTop: 24,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-      gap: 24,
-    }}>
+        border: `1px solid ${HAIRLINE}`,
+        padding: 32,
+        marginTop: 24,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: 24,
+      }}
+    >
       <SummaryCell label="Username" value={username} />
-      <SummaryCell label="Email"    value={email} />
+      <SummaryCell label="Email" value={email} />
       <SummaryCell
         label="Intergalactic Credits"
         value={credits.toLocaleString()}
@@ -799,26 +845,30 @@ function AccountSummary({ user, profile }: { user: any; profile: any }) {
  * @param {string} props.value
  * @param {string} [props.accent]
  */
-function SummaryCell({ label, value, accent  }: any) {
+function SummaryCell({ label, value, accent }: any) {
   return (
     <div>
-      <div style={{
-        ...(undefined as any),
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-        marginBottom: 8,
-      }}>
+      <div
+        style={{
+          ...(undefined as any),
+          fontSize: 11,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: DUST_70,
+          marginBottom: 8,
+        }}
+      >
         {label}
       </div>
-      <div style={{
-        ...(undefined as any),
-        fontSize: 22,
-        fontWeight: 700,
-        color: accent ?? DUST,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
+      <div
+        style={{
+          ...(undefined as any),
+          fontSize: 22,
+          fontWeight: 700,
+          color: accent ?? DUST,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
         {value}
       </div>
     </div>
@@ -836,27 +886,42 @@ function SummaryCell({ label, value, accent  }: any) {
  * @param {string} [props.hint]
  * @param {React.ReactNode} props.children  The actual form control.
  */
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  id,
+  label,
+  hint,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <label htmlFor={id} style={{
-        ...(undefined as any),
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-      }}>
+      <label
+        htmlFor={id}
+        style={{
+          ...(undefined as any),
+          fontSize: 11,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: DUST_70,
+        }}
+      >
         {label}
       </label>
       {children}
       {hint && (
-        <span style={{
-        ...(undefined as any),
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST_50,
-        }}>
+        <span
+          style={{
+            ...(undefined as any),
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: DUST_50,
+          }}
+        >
           {hint}
         </span>
       )}

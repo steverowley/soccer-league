@@ -55,9 +55,14 @@ export type {
 
 // ── UI ───────────────────────────────────────────────────────────────────────
 // Panel subcomponents live under `ui/` and are composed by `pages/Admin.tsx`
-// into the full dashboard.  Re-exported here so cross-feature callers
-// (currently none — the panels are only used by the route file) can import
-// from `@features/admin` without reaching into the deep `ui/<file>` paths.
+// into the full dashboard.  Re-exported here so callers can import from
+// `@features/admin` without reaching into the deep `ui/<file>` paths.
+//
+// The shell pieces (hero, tab strip, tab parsing) are exported alongside the
+// panels because `pages/Admin.tsx` needs all of them to assemble the route.
+// Omitting them was why that page reached past this barrel with a relative
+// `../features/admin/ui` import, which bypassed the boundary CLAUDE.md
+// mandates and evaded `no-restricted-imports` (it only matched `@features/*`).
 export {
   AdminAccessGate,
   OverviewPanel,
@@ -65,4 +70,9 @@ export {
   FixtureBrowser,
   TestingPanel,
   ArchitectInterventionLog,
+  AdminPageHero,
+  AdminTabStrip,
+  DEFAULT_ADMIN_TAB,
+  parseAdminTab,
 } from './ui';
+export type { AdminTab } from './ui';
