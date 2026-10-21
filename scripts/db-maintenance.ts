@@ -285,6 +285,73 @@ async function migrations(): Promise<void> {
   console.log('');
 }
 
+/**
+ * Apply one committed migration file to production and record it.
+ *
+ * WHY THIS EXISTS
+ * ───────────────
+ * CONTRIBUTING says migrations are applied "via the Supabase MCP", which means
+ * a human at an interactive session. That worked until the project spent a month
+ * restricted: 0084 and 0085 were reviewed and merged with no way to apply them,
+ * and #668 documents the consequence (without 0084 the match worker silently
+ * drops every replay frame). A repo that can merge schema changes it cannot
+ * deploy will drift again.
+ *
+ * SAFETY
+ * ──────
+ * The SQL is never supplied by the caller. The caller names a FILE, the name is
+ * matched against a strict pattern, and the contents are read from the repo's
+ * own `supabase/migrations/` directory, so only reviewed and committed SQL can
+ * run. Application is refused if the ledger already records that name, so a
+ * re-run is a no-op rather than a double-apply.
+ *
+ * @param file  Migration filename, e.g. `0084_compact_match_positions.sql`.
+ */
+async function applyMigration(file: string): Promise<void> {
+  // Strict: four digits, lowercase name, .sql. No paths, no traversal.
+  if (!/^\d{4}_[a-z0-9_]+\.sql$/.test(file)) {
+    throw new Error(`refusing to apply '${file}': not a <nnnn>_<name>.sql migration filename`);
+  }
+
+  const { readFileSync } = await import('node:fs');
+  const url = new URL(`../supabase/migrations/${file}`, import.meta.url);
+  let sql: string;
+  try {
+    sql = readFileSync(url, 'utf8');
+  } catch {
+    throw new Error(`refusing to apply '${file}': not found in supabase/migrations/`);
+  }
+  if (sql.trim().length === 0) throw new Error(`refusing to apply '${file}': file is empty`);
+
+  const name = file.replace(/\.sql$/, '').replace(/^\d+_/, '');
+
+  // Ledger check first: never double-apply.
+  const existing = await runSql<{ version: string }>(
+    `select version from supabase_migrations.schema_migrations
+      where name = '${name.replace(/'/g, "''")}' limit 1`,
+    'apply-check',
+  );
+  if (existing.length > 0) {
+    console.log(
+      `${file} is already recorded as applied (version ${String(existing[0]?.version)}).`,
+    );
+    return;
+  }
+
+  console.log(`Applying ${file} (${sql.length} bytes)…`);
+  await runSql(sql, `apply-${file}`);
+
+  // Record it so the high-water mark advances and a re-run is a no-op.
+  const version = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  await runSql(
+    `insert into supabase_migrations.schema_migrations (version, name)
+     values ('${version}', '${name.replace(/'/g, "''")}')
+     on conflict do nothing`,
+    'apply-record',
+  );
+  console.log(`Applied and recorded ${file} as version ${version}.\n`);
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 /**
@@ -648,6 +715,18 @@ async function main(): Promise<void> {
       await status();
       await migrations();
       break;
+    case 'apply-migration': {
+      const fIdx = argv.indexOf('--file');
+      const file = fIdx >= 0 ? (argv[fIdx + 1] ?? '') : '';
+      if (!file) {
+        console.error('apply-migration requires --file <nnnn>_<name>.sql');
+        process.exit(2);
+      }
+      await status();
+      await applyMigration(file);
+      await migrations();
+      break;
+    }
     case 'report':
       await status();
       await report();

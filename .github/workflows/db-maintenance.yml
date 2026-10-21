@@ -38,10 +38,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'status | migrations | report | prune'
+        description: 'status | migrations | apply-migration | report | prune'
         type: choice
-        options: [status, migrations, report, prune]
+        options: [status, migrations, apply-migration, report, prune]
         default: status
+      migration_file:
+        description: 'With apply-migration: filename, e.g. 0084_compact_match_positions.sql'
+        type: string
+        default: ''
       retention_days:
         description: 'Keep replay frames for matches finished within N days'
         type: string
@@ -90,6 +94,9 @@ jobs:
             npx tsx scripts/db-maintenance.ts report
           elif [ "${{ inputs.mode }}" = "migrations" ]; then
             npx tsx scripts/db-maintenance.ts migrations
+          elif [ "${{ inputs.mode }}" = "apply-migration" ]; then
+            npx tsx scripts/db-maintenance.ts apply-migration \
+              --file "${{ inputs.migration_file }}"
           else
             npx tsx scripts/db-maintenance.ts status
           fi
