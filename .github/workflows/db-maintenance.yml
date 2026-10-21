@@ -38,9 +38,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'status = infra state · report = measure · prune = delete old frames'
+        description: 'status | migrations | report | prune'
         type: choice
-        options: [status, report, prune]
+        options: [status, migrations, report, prune]
         default: status
       retention_days:
         description: 'Keep replay frames for matches finished within N days'
@@ -88,6 +88,8 @@ jobs:
               ${{ inputs.dry_run && '--dry-run' || '' }}
           elif [ "${{ inputs.mode }}" = "report" ]; then
             npx tsx scripts/db-maintenance.ts report
+          elif [ "${{ inputs.mode }}" = "migrations" ]; then
+            npx tsx scripts/db-maintenance.ts migrations
           else
             npx tsx scripts/db-maintenance.ts status
           fi
