@@ -334,6 +334,10 @@ async function requeueStaleInProgress(): Promise<number> {
   await supabase.from('match_events').delete().in('match_id', ids);
   await supabase.from('match_player_stats').delete().in('match_id', ids);
   await supabase.from('match_positions').delete().in('match_id', ids);
+  // The roster is the decoding key for those frames (migration 0084), so it
+  // goes with them — a roster without frames is dead weight, and a retry
+  // upserts a fresh one anyway.
+  await supabase.from('match_position_rosters').delete().in('match_id', ids);
 
   const { data: reverted, error: updateError } = await supabase
     .from('matches')
@@ -1048,45 +1052,85 @@ async function processMatch(match: any): Promise<boolean> {
     // (500 rows/call) and stored in `match_positions` keyed by
     // (match_id, minute, second).
     //
-    // Frame → row mapping:
+    // STORED SHAPE (compact v2, migration 0084)
+    //   { v: 2, p: [x0, y0, x1, y1, …], b: [ballX, ballY, ownerIdx] }
+    // `p` holds 2N coordinates in roster order; `b` holds the ball plus the
+    // roster index of its carrier (-1 when the ball is loose).  The roster
+    // itself is written ONCE per match into `match_position_rosters`, which
+    // is the whole point: v1 repeated all 22 36-char UUIDs in every one of
+    // ~2 731 frames and stored a `hasBall` flag already derivable from
+    // `ball.ownerId`.  Measured 4.81 MB/match before, 0.67 MB/match after
+    // (86% smaller) — the quota blow-out that took the game down (#666).
+    // `hasBall` is no longer stored; the reader derives it from ownerIdx.
+    //
+    // Frame → row mapping (unchanged):
     //   minute  = floor(tSec / 60) + 1, clamped to [1, 120] (extra time)
     //   second  = floor(tSec % 60)          — second within the minute
-    //   snapshots.players[].hasBall is derived here (not in PositionFrame)
-    //   by comparing each player id against frame.ball.ownerId.
+    //
+    // Coordinates are rounded to 0.1 m.  The pitch is 105×68 m rendered a
+    // few hundred pixels wide, so 0.1 m is far below one rendered pixel and
+    // the viewer interpolates between 2-second frames anyway.
     //
     // Failure is non-fatal: the match is already committed as completed and
     // position data is cosmetic (viewer only).  A missing frame just means
     // the viewer interpolates across a wider gap.
     if (positionFrames.length > 0) {
-      const posRows = positionFrames.map((frame) => {
-        const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
-        const second = Math.floor(frame.tSec % 60);
-        return {
-          match_id:  match.id,
-          minute,
-          second,
-          snapshots: {
-            players: frame.players.map((p) => ({
-              id:      p.id,
-              x:       p.x,
-              y:       p.y,
-              hasBall: frame.ball.ownerId === p.id,
-            })),
-            ball: frame.ball,
-          },
-        };
-      });
+      /** Round to 0.1 m — below one rendered pixel, drops float noise. */
+      const r1 = (n: number) => Math.round(n * 10) / 10;
 
-      for (let i = 0; i < posRows.length; i += EVENT_INSERT_BATCH_SIZE) {
-        const chunk = posRows.slice(i, i + EVENT_INSERT_BATCH_SIZE);
-        const { error: posErr } = await supabase.from('match_positions').insert(chunk);
-        if (posErr) {
-          // Non-fatal: log and continue — position data is cosmetic.
-          console.warn(`[match-worker] match_positions insert failed: ${posErr.message}`);
-          break;
+      // Roster order comes from the first frame: the engine emits frame
+      // players in formation-slot order (home XI GK-first, then away XI) and
+      // never substitutes, so every frame carries the same players in the
+      // same order.  Every frame's coordinates are indexed against this.
+      const rosterIds = (positionFrames[0]?.players ?? []).map((p) => p.id);
+      const rosterIndex = new Map<string, number>(rosterIds.map((id, i) => [id, i]));
+
+      // Upsert (not insert) so a retry of a previously-failed match replaces
+      // its roster rather than conflicting on the match_id primary key.
+      const { error: rosterErr } = await supabase
+        .from('match_position_rosters')
+        .upsert({ match_id: match.id, player_ids: rosterIds }, { onConflict: 'match_id' });
+
+      if (rosterErr) {
+        // Non-fatal, but the frames are undecodable without the roster, so
+        // skip writing them instead of storing orphaned coordinate arrays.
+        console.warn(`[match-worker] match_position_rosters upsert failed: ${rosterErr.message}`);
+      } else {
+        const posRows = positionFrames.map((frame) => {
+          const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
+          const second = Math.floor(frame.tSec % 60);
+          const p: number[] = [];
+          for (const player of frame.players) {
+            p.push(r1(player.x), r1(player.y));
+          }
+          const ownerIdx =
+            frame.ball.ownerId == null ? -1 : (rosterIndex.get(frame.ball.ownerId) ?? -1);
+          return {
+            match_id:  match.id,
+            minute,
+            second,
+            snapshots: {
+              v: 2,
+              p,
+              b: [r1(frame.ball.x), r1(frame.ball.y), ownerIdx],
+            },
+          };
+        });
+
+        for (let i = 0; i < posRows.length; i += EVENT_INSERT_BATCH_SIZE) {
+          const chunk = posRows.slice(i, i + EVENT_INSERT_BATCH_SIZE);
+          const { error: posErr } = await supabase.from('match_positions').insert(chunk);
+          if (posErr) {
+            // Non-fatal: log and continue — position data is cosmetic.
+            console.warn(`[match-worker] match_positions insert failed: ${posErr.message}`);
+            break;
+          }
         }
+        console.log(
+          `[match-worker] Persisted ${posRows.length} compact position frames ` +
+          `(${rosterIds.length}-player roster stored once)`,
+        );
       }
-      console.log(`[match-worker] Persisted ${posRows.length} position frames`);
     }
 
     // ── Persist per-player stats ───────────────────────────────────────────
@@ -1256,6 +1300,7 @@ async function processMatch(match: any): Promise<boolean> {
     // Spatial position frames are cosmetic but must be cleaned up too so a
     // retry doesn't hit the (match_id, minute, second) primary-key conflict.
     await supabase.from('match_positions').delete().eq('match_id', match.id);
+    await supabase.from('match_position_rosters').delete().eq('match_id', match.id);
 
     // Revert status so another worker (or next cron invocation) will retry.
     // We don't throw — the worker must process the rest of the batch even

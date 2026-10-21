@@ -3,11 +3,14 @@
 // "pitch freezes ~33 minutes in" bug: a 90-minute match stores ~2 700 snapshots
 // but PostgREST caps a single response at ~1000 rows, so the reader MUST page
 // through .range() to load the whole match.
+//
+// The compact-format (v2) decoding is covered in matchPositions.compact.test.ts;
+// the rows here are deliberately legacy v1 so the two concerns stay separate.
 
 import { describe, it, expect, vi } from 'vitest';
 import { getMatchPositions } from './matchPositions';
 
-/** A valid `match_positions` row (one 2-second snapshot). */
+/** A valid legacy (v1) `match_positions` row (one 2-second snapshot). */
 function makeRow(index: number) {
   return {
     minute: Math.floor((index * 2) / 60) + 1,
@@ -23,21 +26,67 @@ function makeRow(index: number) {
  * Build a chainable Supabase mock whose `.range(from, to)` returns the matching
  * slice of `allRows`, capped at `serverCap` to emulate PostgREST's max-rows.
  * `errorOnFrom` forces an error response when a page starts at that offset.
+ *
+ * `match_position_rosters` is served from `roster` (null ⇒ no roster row), which
+ * is what the reader reads before paging frames.
  */
 function makePagedDb(
   allRows: unknown[],
-  { serverCap = 1000, errorOnFrom }: { serverCap?: number; errorOnFrom?: number } = {},
+  {
+    serverCap = 1000,
+    errorOnFrom,
+    roster = null,
+    rosterError = false,
+  }: {
+    serverCap?: number;
+    errorOnFrom?: number;
+    roster?: string[] | null;
+    rosterError?: boolean;
+  } = {},
 ) {
   const ranges: Array<[number, number]> = [];
-  function builder() {
+
+  function rosterBuilder() {
+    const b = {
+      select() {
+        return b;
+      },
+      eq() {
+        return b;
+      },
+      maybeSingle() {
+        return Promise.resolve(
+          rosterError
+            ? { data: null, error: { message: 'roster boom' } }
+            : { data: roster ? { player_ids: roster } : null, error: null },
+        );
+      },
+    };
+    return b;
+  }
+
+  function frameBuilder() {
     let from = 0;
     let to = Number.POSITIVE_INFINITY;
     const b = {
-      select() { return b; },
-      eq() { return b; },
-      order() { return b; },
-      range(f: number, t: number) { from = f; to = t; ranges.push([f, t]); return b; },
-      then(onFulfilled: (r: { data: unknown[] | null; error: { message: string } | null }) => unknown) {
+      select() {
+        return b;
+      },
+      eq() {
+        return b;
+      },
+      order() {
+        return b;
+      },
+      range(f: number, t: number) {
+        from = f;
+        to = t;
+        ranges.push([f, t]);
+        return b;
+      },
+      then(
+        onFulfilled: (r: { data: unknown[] | null; error: { message: string } | null }) => unknown,
+      ) {
         if (errorOnFrom != null && from === errorOnFrom) {
           return Promise.resolve({ data: null, error: { message: 'boom' } }).then(onFulfilled);
         }
@@ -48,7 +97,11 @@ function makePagedDb(
     };
     return b;
   }
-  return { db: { from: vi.fn(() => builder()) }, ranges };
+
+  const from = vi.fn((table: string) =>
+    table === 'match_position_rosters' ? rosterBuilder() : frameBuilder(),
+  );
+  return { db: { from }, ranges };
 }
 
 describe('getMatchPositions — pagination', () => {
@@ -84,10 +137,32 @@ describe('getMatchPositions — pagination', () => {
   });
 
   it('skips malformed snapshot rows but keeps the rest', async () => {
-    const all: unknown[] = [makeRow(0), { minute: 1, second: 2, snapshots: { bogus: true } }, makeRow(2)];
+    const all: unknown[] = [
+      makeRow(0),
+      { minute: 1, second: 2, snapshots: { bogus: true } },
+      makeRow(2),
+    ];
     const { db } = makePagedDb(all, { serverCap: 1000 });
 
     const result = await getMatchPositions(db as any, 'm1');
     expect(result).toHaveLength(2); // the malformed middle row is dropped
+  });
+
+  it('still returns legacy v1 frames when the match has no roster row', async () => {
+    // v1 rows carry their own player ids, so a missing roster must not block
+    // them — only compact frames depend on it.
+    const all = Array.from({ length: 5 }, (_, i) => makeRow(i));
+    const { db } = makePagedDb(all, { roster: null });
+
+    const result = await getMatchPositions(db as any, 'm1');
+    expect(result).toHaveLength(5);
+  });
+
+  it('survives a failing roster query when the frames are legacy v1', async () => {
+    const all = Array.from({ length: 3 }, (_, i) => makeRow(i));
+    const { db } = makePagedDb(all, { rosterError: true });
+
+    const result = await getMatchPositions(db as any, 'm1');
+    expect(result).toHaveLength(3);
   });
 });

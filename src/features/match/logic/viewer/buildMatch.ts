@@ -37,9 +37,17 @@ export interface ViewerMatch {
 }
 
 /**
- * Convert the engine's replay frames into `match_positions` snapshots — the exact
- * mapping the match-worker uses: minute = floor(tSec/60)+1 (clamped to extra
- * time), second = tSec within the minute, and `hasBall` derived from the carrier.
+ * Convert the engine's replay frames into the `PositionSnapshot` shape the viewer
+ * consumes: minute = floor(tSec/60)+1 (clamped to extra time), second = tSec
+ * within the minute, and `hasBall` derived from the carrier.
+ *
+ * The minute/second mapping and the derived `hasBall` are the same rules the
+ * match-worker applies, but this is a LOCAL path (demo + preview viewer) and it
+ * never touches the database.  Since migration 0084 the worker additionally
+ * compacts what it STORES (coordinates only, indexed against a per-match
+ * roster, rounded to 0.1 m) and `getMatchPositions` decodes that back into this
+ * same shape — so the two agree on the shape the viewer sees, not on the bytes
+ * on the wire.  Frames built here keep full float precision.
  *
  * @param frames  Engine `PositionFrame`s (one per 2 game-seconds).
  * @returns       Snapshots in the shape the viewer / `getMatchPositions` produce.
@@ -109,7 +117,10 @@ export function assembleMatch(
   // moment one comes on — without them the sub's frame id has no roster entry.
   const benchRoster = (input: SpatialTeamInput): ViewerRosterPlayer[] =>
     (input.bench ?? []).map((p) =>
-      p.name !== undefined ? { id: p.id, position: p.role, name: p.name } : { id: p.id, position: p.role });
+      p.name !== undefined
+        ? { id: p.id, position: p.role, name: p.name }
+        : { id: p.id, position: p.role },
+    );
 
   // first.players is [home XI (11), away XI (11)] in slot order; slot 0 is GK.
   const homeFrame = first ? first.players.slice(0, 11) : [];
