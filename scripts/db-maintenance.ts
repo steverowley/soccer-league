@@ -135,20 +135,26 @@ async function report(): Promise<number> {
 // ── prune ────────────────────────────────────────────────────────────────────
 
 /**
- * Delete position frames for matches that finished longer ago than the
- * retention window.
+ * Delete position frames for matches older than the retention window.
  *
  * Replay frames are a *viewing* convenience, not the historical record: results,
  * scorers and `match_events` are untouched, the Chronicle keeps the narrative,
  * and `MatchPitchPanel` already degrades to a static formation when a match has
  * no frames.  Recent matches — the ones fans actually replay — are kept.
  *
- * Implementation note: the delete runs in bounded batches because one unbounded
- * `delete` over ~600 k rows can exceed the Management API statement timeout and
- * roll back entirely, making progress impossible.  Batching lets each statement
- * commit, so a timeout costs one batch instead of the whole run.
+ * IMPLEMENTATION: NEVER SCAN match_positions
+ * ──────────────────────────────────────────
+ * The Management API enforces a statement timeout (~2 min). An earlier version
+ * asked `count(*) ... where match_id not in (...)`, which sequentially scans a
+ * 2.1 GB table and was cancelled every time — so the tool could not even
+ * measure, let alone prune.
  *
- * @param retentionDays  Keep frames for matches finished within this many days.
+ * Every decision here is therefore made against `matches` (0.6 MB) or the
+ * catalog, and the only statements that touch `match_positions` are keyed by
+ * `match_id`, which is the leading column of its primary key. That turns each
+ * delete into an index range scan over one match's ~2 731 rows.
+ *
+ * @param retentionDays  Keep frames for matches dated within this many days.
  * @param dryRun         Measure only; make no changes.
  */
 async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
@@ -162,79 +168,90 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
     );
   }
 
-  // Expressed as "keep what is recent, prune everything else" rather than
-  // "prune what looks finished". A disk-recovery tool must not leave rows
-  // behind because a match carries an unexpected status or a null timestamp,
-  // and `created_at` is NOT NULL so the coalesce always yields a real date.
+  // Expressed as "keep what is recent" rather than "prune what looks finished".
+  // A disk-recovery tool must not leave rows behind because a match carries an
+  // unexpected status or a null timestamp, and `created_at` is NOT NULL so the
+  // coalesce always yields a real date.
   //
   // `retentionDays` is a validated integer, so this interpolation is safe.
-  const recentMatches = `
-    select m.id from matches m
-    where coalesce(m.played_at, m.simulated_at, m.scheduled_at, m.created_at)
-          >= now() - interval '${retentionDays} days'`;
-  const stalePredicate = `match_id not in (${recentMatches})`;
+  const matchAge = `coalesce(m.played_at, m.simulated_at, m.scheduled_at, m.created_at)`;
 
-  const before = await runSql<{ rows: number; bytes: number }>(
+  // Cheap: both counts come from `matches`, and the size from the catalog.
+  // `reltuples` is an estimate, which is all a progress report needs.
+  const survey = await runSql<{
+    recent: number;
+    stale: number;
+    est_rows: number;
+    bytes: number;
+  }>(
     `select
-       (select count(*) from match_positions)                  as total_rows,
-       (select count(*) from match_positions where ${stalePredicate}) as rows,
-       pg_total_relation_size('match_positions')               as bytes`,
-    'prune-measure',
+       (select count(*) from matches m
+          where ${matchAge} >= now() - interval '${retentionDays} days') as recent,
+       (select count(*) from matches m
+          where ${matchAge} <  now() - interval '${retentionDays} days') as stale,
+       (select coalesce(reltuples, 0)::bigint from pg_class
+          where oid = 'match_positions'::regclass)                      as est_rows,
+       pg_total_relation_size('match_positions')                        as bytes`,
+    'prune-survey',
   );
-  const stale = Number(before[0]?.rows ?? 0);
-  const totalRows = Number((before[0] as unknown as { total_rows?: number })?.total_rows ?? 0);
+  const recentMatches = Number(survey[0]?.recent ?? 0);
+  const staleMatches = Number(survey[0]?.stale ?? 0);
 
-  console.log(`match_positions : ${totalRows} rows, ${mb(Number(before[0]?.bytes ?? 0))}`);
-  console.log(`older than ${retentionDays}d: ${stale} rows`);
+  console.log(
+    `match_positions : ~${Number(survey[0]?.est_rows ?? 0)} rows, ${mb(Number(survey[0]?.bytes ?? 0))}`,
+  );
+  console.log(`matches within ${retentionDays}d : ${recentMatches} (frames kept)`);
+  console.log(`matches older      : ${staleMatches} (frames pruned)`);
 
   if (dryRun) {
     console.log('\n[dry-run] no changes made.\n');
     return;
   }
-  if (stale === 0) {
+  if (staleMatches === 0) {
     console.log('\nNothing to prune.\n');
     return;
   }
 
-  // Fast path: when the retention window keeps nothing, TRUNCATE drops the
-  // table's files outright. That matters here because the alternative,
-  // DELETE + VACUUM FULL, needs free disk roughly equal to the table it is
-  // rewriting, and this routine exists precisely because the disk is full.
-  // TRUNCATE needs no such headroom and returns the space immediately.
-  if (stale === totalRows) {
-    console.log('\nRetention keeps no frames; truncating match_positions…');
+  // Fast path: nothing is being kept, so drop the table's files outright.
+  // The alternative, DELETE + VACUUM FULL, needs free disk roughly equal to
+  // the data it rewrites, which is a poor assumption in a routine that exists
+  // precisely because the disk is full. TRUNCATE needs no headroom and returns
+  // the space immediately.
+  if (recentMatches === 0) {
+    console.log('\nNo match falls inside the retention window; truncating match_positions…');
     await runSql(`truncate table match_positions`, 'truncate');
     console.log('Done.\n');
     return;
   }
 
-  // Batched delete. ctid-based selection avoids re-running the subquery scan
-  // for every batch.
-  const BATCH = 50_000;
-  let removed = 0;
-  for (;;) {
-    const res = await runSql<{ deleted: number }>(
-      `with doomed as (
-         select ctid from match_positions
-         where ${stalePredicate}
-         limit ${BATCH}
-       )
-       delete from match_positions mp
-       using doomed
-       where mp.ctid = doomed.ctid
-       returning 1`,
-      'prune-delete',
-    );
-    const n = res.length;
-    removed += n;
-    console.log(`  deleted ${removed}/${stale}`);
-    if (n === 0) break;
+  // Otherwise delete per match, in chunks of ids. Each statement is an index
+  // range scan keyed on match_id, so it stays far inside the timeout.
+  const ids = await runSql<{ id: string }>(
+    `select m.id from matches m
+     where ${matchAge} < now() - interval '${retentionDays} days'`,
+    'prune-stale-ids',
+  );
+
+  // Defence in depth: these ids come from our own database, but they are
+  // interpolated into SQL, so prove each one is a UUID before trusting it.
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const safeIds = ids.map((r) => r.id).filter((id) => typeof id === 'string' && UUID.test(id));
+  if (safeIds.length !== ids.length) {
+    throw new Error(`refusing to prune: ${ids.length - safeIds.length} match id(s) are not UUIDs`);
+  }
+
+  const CHUNK = 25;
+  for (let i = 0; i < safeIds.length; i += CHUNK) {
+    const chunk = safeIds.slice(i, i + CHUNK);
+    const list = chunk.map((id) => `'${id}'::uuid`).join(',');
+    await runSql(`delete from match_positions where match_id in (${list})`, 'prune-delete');
+    console.log(`  pruned ${Math.min(i + CHUNK, safeIds.length)}/${safeIds.length} matches`);
   }
 
   // A plain DELETE only marks rows dead — Postgres keeps the pages, so the disk
   // quota (and therefore the restriction) would not budge. VACUUM FULL rewrites
-  // the table and returns the space to the filesystem, which is the whole point
-  // of this exercise.
+  // only the surviving rows, so the headroom it needs is the size of what we
+  // chose to keep, not the size of what we deleted.
   console.log('\nReclaiming disk (vacuum full match_positions)…');
   await runSql(`vacuum full match_positions`, 'vacuum');
   console.log('Done.\n');
@@ -265,37 +282,38 @@ async function pruneOperationalLogs(cronDays: number, dryRun: boolean): Promise<
     throw new Error(`cron-retention-days must be an integer in [1, 90], got ${cronDays}`);
   }
 
-  const sizes = await runSql<{ cron_rows: number; cron_stale: number; http_rows: number }>(
+  // Catalog estimates again, not count(*): these tables are hundreds of MB and
+  // an exact count risks the same statement timeout that defeated the first
+  // attempt at pruning. A groundskeeping report does not need exactness.
+  const sizes = await runSql<{ cron_rows: number; http_rows: number }>(
     `select
-       (select count(*) from cron.job_run_details)                        as cron_rows,
-       (select count(*) from cron.job_run_details
-          where end_time < now() - interval '${cronDays} days')           as cron_stale,
-       (select count(*) from net._http_response)                          as http_rows`,
+       (select coalesce(reltuples, 0)::bigint from pg_class
+          where oid = 'cron.job_run_details'::regclass)                  as cron_rows,
+       (select coalesce(reltuples, 0)::bigint from pg_class
+          where oid = 'net._http_response'::regclass)                    as http_rows`,
     'oplog-measure',
   );
   const cronRows = Number(sizes[0]?.cron_rows ?? 0);
-  const cronStale = Number(sizes[0]?.cron_stale ?? 0);
   const httpRows = Number(sizes[0]?.http_rows ?? 0);
 
-  console.log(`cron.job_run_details : ${cronRows} rows (${cronStale} older than ${cronDays}d)`);
-  console.log(`net._http_response   : ${httpRows} rows`);
+  console.log(`cron.job_run_details : ~${cronRows} rows (retaining ${cronDays}d)`);
+  console.log(`net._http_response   : ~${httpRows} rows (clearing)`);
 
   if (dryRun) {
     console.log('\n[dry-run] no changes made to operational logs.\n');
     return;
   }
 
-  if (cronStale > 0) {
-    if (cronStale === cronRows) {
-      await runSql(`truncate table cron.job_run_details`, 'cron-truncate');
-    } else {
-      await runSql(
-        `delete from cron.job_run_details where end_time < now() - interval '${cronDays} days'`,
-        'cron-delete',
-      );
-      await runSql(`vacuum full cron.job_run_details`, 'cron-vacuum');
-    }
-    console.log(`  trimmed cron.job_run_details`);
+  if (cronRows > 0) {
+    // Delete, then vacuum: VACUUM FULL rewrites only the surviving week of
+    // history, so the headroom it needs is small regardless of how much is
+    // being discarded.
+    await runSql(
+      `delete from cron.job_run_details where end_time < now() - interval '${cronDays} days'`,
+      'cron-delete',
+    );
+    await runSql(`vacuum full cron.job_run_details`, 'cron-vacuum');
+    console.log(`  trimmed cron.job_run_details to ${cronDays}d`);
   }
 
   if (httpRows > 0) {
