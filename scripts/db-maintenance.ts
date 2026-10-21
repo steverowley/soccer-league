@@ -323,28 +323,73 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
     return;
   }
 
-  // Otherwise delete per match, in chunks of ids. Each statement is an index
-  // range scan keyed on match_id, so it stays far inside the timeout.
+  // Otherwise: before grinding through matches one at a time, check whether the
+  // retained matches hold any frames at all. On this league they usually do not
+  // — "recent" matches are overwhelmingly *future* fixtures that have not been
+  // played, so they have no replay data. When that holds, the retention window
+  // protects nothing and TRUNCATE finishes the whole job in one statement
+  // instead of hundreds.
+  const recentIds = await runSql<{ id: string }>(
+    `select m.id from matches m
+     where ${matchAge} >= now() - interval '${retentionDays} days'`,
+    'prune-recent-ids',
+  );
+  const safeRecent = toUuids(recentIds, 'recent');
+
+  if (safeRecent.length > 0) {
+    const probe = await runSql<{ n: number }>(
+      `select count(*)::int as n from (
+         select 1 from match_positions
+         where match_id in (${safeRecent.map((id) => `'${id}'::uuid`).join(',')})
+         limit 1
+       ) t`,
+      'prune-probe-recent',
+    );
+    if (Number(probe[0]?.n ?? 0) === 0) {
+      console.log(
+        `\nNone of the ${safeRecent.length} retained matches has replay frames ` +
+          `(they are unplayed fixtures); truncating match_positions…`,
+      );
+      await runSql(`truncate table match_positions`, 'truncate');
+      console.log('Done.\n');
+      return;
+    }
+  }
+
+  // Some retained matches really do hold frames, so delete the stale ones per
+  // match. Each statement is an index range scan keyed on match_id.
   const ids = await runSql<{ id: string }>(
     `select m.id from matches m
      where ${matchAge} < now() - interval '${retentionDays} days'`,
     'prune-stale-ids',
   );
+  const safeIds = toUuids(ids, 'stale');
 
-  // Defence in depth: these ids come from our own database, but they are
-  // interpolated into SQL, so prove each one is a UUID before trusting it.
-  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const safeIds = ids.map((r) => r.id).filter((id) => typeof id === 'string' && UUID.test(id));
-  if (safeIds.length !== ids.length) {
-    throw new Error(`refusing to prune: ${ids.length - safeIds.length} match id(s) are not UUIDs`);
-  }
-
-  const CHUNK = 25;
+  // Small chunks: 25 matches is ~68 000 rows per statement, which repeatedly
+  // tripped the API timeout. A handful of matches per statement completes well
+  // inside it, and a failure costs one chunk rather than the run.
+  const CHUNK = 3;
+  let done = 0;
+  let failed = 0;
   for (let i = 0; i < safeIds.length; i += CHUNK) {
-    const chunk = safeIds.slice(i, i + CHUNK);
-    const list = chunk.map((id) => `'${id}'::uuid`).join(',');
-    await runSql(`delete from match_positions where match_id in (${list})`, 'prune-delete');
-    console.log(`  pruned ${Math.min(i + CHUNK, safeIds.length)}/${safeIds.length} matches`);
+    const list = safeIds
+      .slice(i, i + CHUNK)
+      .map((id) => `'${id}'::uuid`)
+      .join(',');
+    try {
+      await runSql(`delete from match_positions where match_id in (${list})`, 'prune-delete');
+      done += CHUNK;
+    } catch {
+      // Keep going. Deletes commit per chunk, so progress survives, and the
+      // next scheduled run picks up whatever this one could not finish.
+      failed += CHUNK;
+    }
+    if ((i / CHUNK) % 10 === 0 || i + CHUNK >= safeIds.length) {
+      console.log(`  pruned ~${Math.min(done, safeIds.length)}/${safeIds.length} matches`);
+    }
+  }
+  if (failed > 0) {
+    console.log(`  ${failed} match(es) could not be pruned this run; they retry next run.`);
   }
 
   // A plain DELETE only marks rows dead — Postgres keeps the pages, so the disk
@@ -354,6 +399,25 @@ async function prune(retentionDays: number, dryRun: boolean): Promise<void> {
   console.log('\nReclaiming disk (vacuum full match_positions)…');
   await runSql(`vacuum full match_positions`, 'vacuum');
   console.log('Done.\n');
+}
+
+/**
+ * Validate database-supplied ids as UUIDs before they are interpolated into SQL.
+ *
+ * They come from our own tables, but they do reach a statement, so they get
+ * checked rather than trusted.
+ *
+ * @param rows  Rows carrying an `id`.
+ * @param tag   Label for the error message.
+ * @returns     The ids, guaranteed to match the UUID pattern.
+ */
+function toUuids(rows: Array<{ id: string }>, tag: string): string[] {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const safe = rows.map((r) => r.id).filter((id) => typeof id === 'string' && UUID.test(id));
+  if (safe.length !== rows.length) {
+    throw new Error(`refusing to prune: ${rows.length - safe.length} ${tag} id(s) are not UUIDs`);
+  }
+  return safe;
 }
 
 // ── operational logs ─────────────────────────────────────────────────────────
