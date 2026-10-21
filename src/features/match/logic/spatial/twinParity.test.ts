@@ -22,12 +22,17 @@
 //   2. Three further pure-logic twins (cupDraw, random, simEvent) that are
 //      code-identical but carry differing header prose — guarded with a
 //      code-only comparison (full-line comments stripped, code kept verbatim).
-//   The remaining same-named worker files (cosmicVoices, cupSeeder,
-//   interferenceResolver, shadowDistribution) have genuinely DIVERGED beyond
-//   comments — some legitimately (Deno-specific Supabase-client imports), some
-//   look like real drift — so they are NOT pure twins and are deliberately
-//   excluded here rather than force-aligned. Reconciling them is a separate,
-//   higher-risk task (they run in the deployed worker). See #547.
+//   The remaining same-named worker files (cupSeeder, interferenceResolver,
+//   shadowDistribution) have genuinely DIVERGED beyond comments — some
+//   legitimately (Deno-specific Supabase-client imports), some cosmetically —
+//   so they are NOT pure twins and are deliberately excluded here rather than
+//   force-aligned. Reconciling them is a separate task. See #547.
+//
+//   `cosmicVoices` used to be in that list. Investigating it for #561 showed
+//   the worker copy was never imported by the worker at all, so its divergence
+//   could not affect behaviour; it was deleted rather than re-synced. The src
+//   copy is itself orphaned — nothing constructs `CosmicVoices` — which is
+//   tracked as a feature gap in #686, not as drift.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -88,13 +93,41 @@ describe('spatial engine src ↔ match-worker twin parity (#547)', () => {
 
 /** Pure-logic twins guarded on code only (paths differ, so list both ends). */
 const CODE_TWINS: ReadonlyArray<{ name: string; src: string; worker: string }> = [
-  { name: 'cupDraw',  src: 'src/features/match/logic/cupDraw.ts',  worker: 'supabase/functions/match-worker/cupDraw.ts' },
-  { name: 'random',   src: 'src/shared/utils/random.ts',          worker: 'supabase/functions/match-worker/random.ts' },
-  { name: 'grammar',  src: 'src/shared/narrative/grammar.ts',     worker: 'supabase/functions/architect-galaxy-tick/grammar.ts' },
-  { name: 'narrativeMode', src: 'src/shared/narrative/narrativeMode.ts', worker: 'supabase/functions/architect-galaxy-tick/narrativeMode.ts' },
-  { name: 'grammar (match-worker)',      src: 'src/shared/narrative/grammar.ts',      worker: 'supabase/functions/match-worker/grammar.ts' },
-  { name: 'narrativeMode (match-worker)', src: 'src/shared/narrative/narrativeMode.ts', worker: 'supabase/functions/match-worker/narrativeMode.ts' },
-  { name: 'simEvent', src: 'src/features/match/logic/simEvent.ts', worker: 'supabase/functions/match-worker/simEvent.ts' },
+  {
+    name: 'cupDraw',
+    src: 'src/features/match/logic/cupDraw.ts',
+    worker: 'supabase/functions/match-worker/cupDraw.ts',
+  },
+  {
+    name: 'random',
+    src: 'src/shared/utils/random.ts',
+    worker: 'supabase/functions/match-worker/random.ts',
+  },
+  {
+    name: 'grammar',
+    src: 'src/shared/narrative/grammar.ts',
+    worker: 'supabase/functions/architect-galaxy-tick/grammar.ts',
+  },
+  {
+    name: 'narrativeMode',
+    src: 'src/shared/narrative/narrativeMode.ts',
+    worker: 'supabase/functions/architect-galaxy-tick/narrativeMode.ts',
+  },
+  {
+    name: 'grammar (match-worker)',
+    src: 'src/shared/narrative/grammar.ts',
+    worker: 'supabase/functions/match-worker/grammar.ts',
+  },
+  {
+    name: 'narrativeMode (match-worker)',
+    src: 'src/shared/narrative/narrativeMode.ts',
+    worker: 'supabase/functions/match-worker/narrativeMode.ts',
+  },
+  {
+    name: 'simEvent',
+    src: 'src/features/match/logic/simEvent.ts',
+    worker: 'supabase/functions/match-worker/simEvent.ts',
+  },
 ];
 
 /**
@@ -119,7 +152,7 @@ function normaliseCodeOnly(source: string): string {
       continue;
     }
     if (t.startsWith('//')) continue; // full-line comment or `// ──` divider
-    if (t.length === 0) continue;     // blank line
+    if (t.length === 0) continue; // blank line
     out.push(line.replace(/\.ts(['"])/g, '$1')); // worker import extension
   }
   return out.join('\n');
