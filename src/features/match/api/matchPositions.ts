@@ -107,16 +107,33 @@ export interface PositionSnapshot {
 // ── Decoding ─────────────────────────────────────────────────────────────────
 
 /**
- * Expand one compact v2 frame back into the full snapshot shape.
+ * Sentinel coordinate meaning "this roster member is not on the pitch in this
+ * frame". Real coordinates are rounded to 0.1 m inside [0, 105] x [0, 68], so a
+ * negative value can never collide with a genuine position.
  *
- * `hasBall` is recomputed here rather than stored: it is true for the single
+ * This exists because the roster is the UNION of everyone who appears during
+ * the match, not the starting XI. The engine substitutes 3 players per side
+ * from minute 55, so a match has 22 players on the pitch but up to 28 in the
+ * roster, and the 6 who are off at any instant are written as sentinels.
+ */
+const OFF_PITCH = -1;
+
+/**
+ * Decode one compact v2 frame back into the v1-shaped snapshot the viewer
+ * consumes.
+ *
+ * `hasBall` is reconstructed rather than stored: the carrier is whoever sits at
  * roster index named by `ownerIdx`, which is exactly what the writer used to
- * persist as a redundant per-player boolean.
+ * derive it.
  *
- * @param compact  Validated v2 frame.
- * @param roster   Ordered player ids for this match.
+ * Roster members flagged {@link OFF_PITCH} are omitted, so the returned player
+ * list contains only those actually on the pitch at this instant. That keeps
+ * the decoded shape identical to v1, which only ever held on-pitch players.
+ *
+ * @param compact  The stored frame.
+ * @param roster   Ordered player ids for this match (the union, see OFF_PITCH).
  * @returns        Decoded snapshot, or null when the frame and roster
- *                 disagree on the player count (a corrupt/partial row).
+ *                 disagree on length (a corrupt or mis-encoded row).
  */
 function decodeV2(
   compact: z.infer<typeof SnapshotsV2Schema>,
@@ -127,12 +144,14 @@ function decodeV2(
   const [ballX, ballY, ownerIdx] = compact.b;
   const owner = ownerIdx >= 0 ? roster[ownerIdx] : undefined;
 
-  const players = roster.map((id, i) => ({
-    id,
-    x: compact.p[i * 2] ?? 0,
-    y: compact.p[i * 2 + 1] ?? 0,
-    hasBall: i === ownerIdx,
-  }));
+  const players: PositionSnapshot['snapshots']['players'] = [];
+  roster.forEach((id, i) => {
+    const x = compact.p[i * 2] ?? OFF_PITCH;
+    const y = compact.p[i * 2 + 1] ?? OFF_PITCH;
+    // A substituted or not-yet-introduced player is absent from this frame.
+    if (x === OFF_PITCH && y === OFF_PITCH) return;
+    players.push({ id, x, y, hasBall: i === ownerIdx });
+  });
 
   return { players, ball: { x: ballX, y: ballY, ownerId: owner ?? null } };
 }
