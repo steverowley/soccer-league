@@ -132,6 +132,59 @@ function mb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// ── status ───────────────────────────────────────────────────────────────────
+
+/**
+ * Report the project's infrastructure state without touching the database.
+ *
+ * Added because every SQL statement, including trivial reads against a 0.6 MB
+ * table, began failing with "Connection terminated due to connection timeout"
+ * after earlier statements had succeeded. That symptom has two very different
+ * causes and they need very different responses:
+ *
+ *   - a flaky-but-live database, which retrying eventually beats, or
+ *   - a project Supabase has restricted or paused at the infrastructure level,
+ *     where no amount of SQL will ever connect and only the owner can act.
+ *
+ * These endpoints are control-plane only, so they answer even when the database
+ * is unreachable. That is exactly what makes them the right first question.
+ */
+async function status(): Promise<void> {
+  const projectRes = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}`, {
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN ?? ''}` },
+  });
+  if (!projectRes.ok) {
+    console.log(
+      `project lookup: HTTP ${projectRes.status} ${(await projectRes.text()).slice(0, 200)}`,
+    );
+  } else {
+    const p = (await projectRes.json()) as Record<string, unknown>;
+    console.log(`project   : ${String(p['name'] ?? '?')} (${PROJECT_REF})`);
+    console.log(`status    : ${String(p['status'] ?? '?')}`);
+    console.log(`region    : ${String(p['region'] ?? '?')}`);
+    console.log(`created   : ${String(p['created_at'] ?? '?')}`);
+  }
+
+  // Per-service health distinguishes "database down" from "whole project down".
+  const healthRes = await fetch(
+    `https://api.supabase.com/v1/projects/${PROJECT_REF}/health?services=db&services=rest&services=auth`,
+    { headers: { Authorization: `Bearer ${ACCESS_TOKEN ?? ''}` } },
+  );
+  if (healthRes.ok) {
+    const services = (await healthRes.json()) as Array<Record<string, unknown>>;
+    console.log('\nservices:');
+    for (const s of services) {
+      const err = s['error'] ? ` (${String(s['error']).slice(0, 120)})` : '';
+      console.log(`  ${String(s['name'] ?? '?').padEnd(8)} ${String(s['status'] ?? '?')}${err}`);
+    }
+  } else {
+    console.log(
+      `\nhealth lookup: HTTP ${healthRes.status} ${(await healthRes.text()).slice(0, 200)}`,
+    );
+  }
+  console.log('');
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 /**
@@ -412,17 +465,25 @@ async function main(): Promise<void> {
   const cronDays = cIdx >= 0 ? Number.parseInt(argv[cIdx + 1] ?? '', 10) : 7;
 
   switch (command) {
+    case 'status':
+      await status();
+      break;
     case 'report':
+      await status();
       await report();
       break;
     case 'prune':
+      // Always lead with the control-plane status. If the project is paused or
+      // restricted at the infrastructure level, that single line explains every
+      // subsequent connection failure and tells the operator what to do.
+      await status();
       await tryReport('before');
       await prune(retentionDays, dryRun);
       await pruneOperationalLogs(cronDays, dryRun);
       if (!dryRun) await tryReport('after');
       break;
     default:
-      console.error(`Unknown command '${command}'. Use: report | prune`);
+      console.error(`Unknown command '${command}'. Use: status | report | prune`);
       process.exit(2);
   }
 }
