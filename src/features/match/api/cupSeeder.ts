@@ -32,6 +32,7 @@
 // the existing UNIQUE constraint, so repeated runs are safe.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { Json, TablesUpdate } from '@/types/database';
 import {
   drawSingleElim,
   type BracketTeam,
@@ -58,7 +59,7 @@ const LEAGUE_ID_ORDER = ['rocky-inner', 'gas-giants', 'outer-reaches', 'kuiper-b
 
 /** Cup competition UUIDs from migration 0012 (Season 1). */
 export const CELESTIAL_CUP_COMPETITION_ID = '20000000-0000-0000-0000-000000000002';
-export const SOLAR_SHIELD_COMPETITION_ID  = '20000000-0000-0000-0000-000000000003';
+export const SOLAR_SHIELD_COMPETITION_ID = '20000000-0000-0000-0000-000000000003';
 
 /**
  * Real-time delay from cup seeding to the Round-of-16 kickoff. Cups are seeded
@@ -93,8 +94,8 @@ export function cupNextRoundKickoffIso(nowMs: number): string {
 interface MatchRow {
   home_team_id: string;
   away_team_id: string;
-  home_score:   number;
-  away_score:   number;
+  home_score: number;
+  away_score: number;
 }
 
 /** One row in the league table. Teams sorted descending by points → GD → GF. */
@@ -102,8 +103,12 @@ interface StandingRow {
   team_id: string;
   team_name: string;
   played: number;
-  won:    number; drawn: number; lost: number;
-  gf:     number; ga:    number; gd:   number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  gd: number;
   points: number;
 }
 
@@ -115,20 +120,23 @@ interface StandingRow {
  *
  * Extracted from the DB call so it can be unit-tested without Supabase.
  */
-function computeStandings(
-  matches: MatchRow[],
-  teamNames: Map<string, string>,
-): StandingRow[] {
+function computeStandings(matches: MatchRow[], teamNames: Map<string, string>): StandingRow[] {
   const table = new Map<string, StandingRow>();
 
   const ensure = (teamId: string): StandingRow => {
     let row = table.get(teamId);
     if (!row) {
       row = {
-        team_id:  teamId,
+        team_id: teamId,
         team_name: teamNames.get(teamId) ?? teamId,
-        played:   0, won: 0, drawn: 0, lost: 0,
-        gf:       0, ga:  0, gd:    0, points: 0,
+        played: 0,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        points: 0,
       };
       table.set(teamId, row);
     }
@@ -139,29 +147,32 @@ function computeStandings(
     const h = ensure(m.home_team_id);
     const a = ensure(m.away_team_id);
 
-    h.played++; a.played++;
-    h.gf += m.home_score; h.ga += m.away_score;
-    a.gf += m.away_score; a.ga += m.home_score;
+    h.played++;
+    a.played++;
+    h.gf += m.home_score;
+    h.ga += m.away_score;
+    a.gf += m.away_score;
+    a.ga += m.home_score;
 
     if (m.home_score > m.away_score) {
-      h.won++;  h.points += 3;
+      h.won++;
+      h.points += 3;
       a.lost++;
     } else if (m.home_score < m.away_score) {
-      a.won++;  a.points += 3;
+      a.won++;
+      a.points += 3;
       h.lost++;
     } else {
-      h.drawn++; h.points++;
-      a.drawn++; a.points++;
+      h.drawn++;
+      h.points++;
+      a.drawn++;
+      a.points++;
     }
   }
 
   return [...table.values()]
     .map((r) => ({ ...r, gd: r.gf - r.ga }))
-    .sort((a, b) =>
-      b.points - a.points ||
-      b.gd     - a.gd     ||
-      b.gf     - a.gf
-    );
+    .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
 }
 
 /**
@@ -176,8 +187,8 @@ async function getLeagueStandings(
     .from('matches')
     .select(
       'home_team_id, away_team_id, home_score, away_score,' +
-      ' home_team:teams!matches_home_team_id_fkey(id, name),' +
-      ' away_team:teams!matches_away_team_id_fkey(id, name)'
+        ' home_team:teams!matches_home_team_id_fkey(id, name),' +
+        ' away_team:teams!matches_away_team_id_fkey(id, name)',
     )
     .eq('competition_id', competitionId)
     .eq('status', 'completed');
@@ -255,11 +266,11 @@ async function insertCupMatch(
     .from('matches')
     .insert({
       competition_id: competitionId,
-      home_team_id:   homeTeamId,
-      away_team_id:   awayTeamId,
-      round:          roundName,
-      status:         'scheduled',
-      scheduled_at:   scheduledAtIso,
+      home_team_id: homeTeamId,
+      away_team_id: awayTeamId,
+      round: roundName,
+      status: 'scheduled',
+      scheduled_at: scheduledAtIso,
     })
     .select('id')
     .single();
@@ -295,8 +306,8 @@ async function insertCompetitionTeams(
   if (teams.length === 0) return;
   const rows = teams.map((t) => ({
     competition_id: competitionId,
-    team_id:        t.team_id,
-    seeding:        t.seed,
+    team_id: t.team_id,
+    seeding: t.seed,
   }));
   const { error } = await db
     .from('competition_teams')
@@ -317,12 +328,12 @@ async function writeBracket(
   bracket: StoredBracket,
   setActive: boolean,
 ): Promise<void> {
-  const update: Record<string, unknown> = { bracket };
-  if (setActive) update['status'] = 'active';
-  const { error } = await db
-    .from('competitions')
-    .update(update)
-    .eq('id', competitionId);
+  // Typed as the generated Update row rather than Record<string, unknown>:
+  // supabase-js 2.118 rejects excess/loose properties on update payloads, so an
+  // index-signature object no longer satisfies it.
+  const update: TablesUpdate<'competitions'> = { bracket: bracket as unknown as Json };
+  if (setActive) update.status = 'active';
+  const { error } = await db.from('competitions').update(update).eq('id', competitionId);
   if (error) {
     console.warn(`[writeBracket] ${competitionId} failed:`, error.message);
   }
@@ -342,7 +353,7 @@ async function readBracket(
     .eq('id', competitionId)
     .single();
   if (error || !data) return null;
-  return ((data as { bracket?: StoredBracket | null }).bracket) ?? null;
+  return (data as { bracket?: StoredBracket | null }).bracket ?? null;
 }
 
 // ── Public: seed one cup ─────────────────────────────────────────────────────
@@ -378,7 +389,12 @@ async function seedOneCup(
   drawSeedSalt: string,
 ): Promise<SeedCupResult> {
   if (qualifiers.length < 2) {
-    return { competitionId, status: 'no_qualifiers', qualifiers: qualifiers.length, round1Matches: 0 };
+    return {
+      competitionId,
+      status: 'no_qualifiers',
+      qualifiers: qualifiers.length,
+      round1Matches: 0,
+    };
   }
 
   const existing = await readBracket(db, competitionId);
@@ -469,7 +485,9 @@ export async function resolveSeasonLeagueCompIds(
   // Keep only canonical leagues, then sort by their canonical index so the
   // interleaving (Rocky Inner #1 → seed 1, …) matches the old hardcoded path.
   return rows
-    .filter((r) => r.league_id !== null && (LEAGUE_ID_ORDER as readonly string[]).includes(r.league_id))
+    .filter(
+      (r) => r.league_id !== null && (LEAGUE_ID_ORDER as readonly string[]).includes(r.league_id),
+    )
     .sort(
       (a, b) =>
         (LEAGUE_ID_ORDER as readonly string[]).indexOf(a.league_id as string) -
@@ -568,11 +586,9 @@ export async function seedCupCompetitions(
   // Resolve THIS season's league competitions (in canonical order) and pull
   // their standings in parallel, preserving the resolved order.
   const leagueCompIds = await resolveSeasonLeagueCompIds(db, seasonId);
-  const allStandings = await Promise.all(
-    leagueCompIds.map((id) => getLeagueStandings(db, id)),
-  );
+  const allStandings = await Promise.all(leagueCompIds.map((id) => getLeagueStandings(db, id)));
 
-  const celestialQualifiers   = buildQualifierSeeding(allStandings, [1, 2, 3]);
+  const celestialQualifiers = buildQualifierSeeding(allStandings, [1, 2, 3]);
   const solarShieldQualifiers = buildQualifierSeeding(allStandings, [4, 5, 6]);
 
   // Resolve THIS season's cup competitions by name — fresh UUIDs each season.
@@ -665,9 +681,7 @@ export async function advanceCupRound(
   // ── Find the next-round match this winner feeds ──────────────────────────
   // The next-round match has either home_from_round/slot or
   // away_from_round/slot pointing at (completedRound, completedMatch.slot).
-  const nextRoundIndex = bracket.rounds.findIndex(
-    (r) => r.round_number === completedRound + 1,
-  );
+  const nextRoundIndex = bracket.rounds.findIndex((r) => r.round_number === completedRound + 1);
   if (nextRoundIndex === -1) {
     // Final completed — write back and return.
     await writeBracket(db, competitionId, bracket, /* setActive */ false);
@@ -697,7 +711,7 @@ export async function advanceCupRound(
   // ── Slot the winner into the next match ──────────────────────────────────
   if (
     nextMatch.home_from_round === completedRound &&
-    nextMatch.home_from_slot  === completedMatch.slot
+    nextMatch.home_from_slot === completedMatch.slot
   ) {
     nextMatch.home_team_id = winnerTeamId;
   } else {
@@ -711,7 +725,7 @@ export async function advanceCupRound(
   if (
     nextMatch.home_team_id !== null &&
     nextMatch.away_team_id !== null &&
-    nextMatch.match_db_id  === null
+    nextMatch.match_db_id === null
   ) {
     // Schedule the next round one cadence-interval from NOW (the moment this
     // round completed), so the fixture is always within the worker's claim
