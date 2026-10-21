@@ -35,15 +35,15 @@ import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
 import WagerWidget from '../components/WagerWidget';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { updateProfile } from '../features/auth/api/profiles';
+import { updateProfile } from '@features/auth';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { getPlayersForTeam, getUpcomingMatches } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
+const DUST_50 = COLORS.dust50;
+const DUST_70 = COLORS.dust70;
 
 /** Total wizard steps. Bumped here when adding new ones (e.g. notifications). */
 const TOTAL_STEPS = 3;
@@ -56,11 +56,23 @@ export default function Welcome() {
   // ── Hard gates ────────────────────────────────────────────────────────
   // Anonymous users land at /login. Already-onboarded users (favourite
   // team set) don't need the wizard — send them to /.
-  if (loading) return <Shell><LoadingLine /></Shell>;
+  if (loading)
+    return (
+      <Shell>
+        <LoadingLine />
+      </Shell>
+    );
   if (!user) return <Navigate to="/login" replace />;
   if (profile?.favourite_team_id) return <Navigate to="/" replace />;
 
-  return <WelcomeWizard onDone={() => { void refreshProfile(); navigate('/', { replace: true }); }} />;
+  return (
+    <WelcomeWizard
+      onDone={() => {
+        void refreshProfile();
+        navigate('/', { replace: true });
+      }}
+    />
+  );
 }
 
 // ── Wizard body ─────────────────────────────────────────────────────────────
@@ -68,7 +80,7 @@ export default function Welcome() {
 function WelcomeWizard({ onDone }: { onDone: () => void }) {
   const { profile } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [pickedTeam, setPickedTeam]     = useState<string | null>(null);
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [pickedPlayer, setPickedPlayer] = useState<string | null>(null);
 
   // New accounts are granted 200 Intergalactic Credits at signup; fall back to
@@ -81,18 +93,34 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
           beat during onboarding — previously the bankroll stayed invisible until
           a fan found /profile. Persists across all three steps so the stake (and
           what's left after a starter bet) stays in view. */}
-      <div style={{
-        display: 'inline-flex',
-        alignItems: 'baseline',
-        gap: 10,
-        border: `1px solid ${QUANTUM}`,
-        padding: '8px 14px',
-        marginBottom: 24,
-      }}>
-        <strong style={{ fontSize: 16, fontWeight: 700, color: QUANTUM, fontVariantNumeric: 'tabular-nums' }}>
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'baseline',
+          gap: 10,
+          border: `1px solid ${QUANTUM}`,
+          padding: '8px 14px',
+          marginBottom: 24,
+        }}
+      >
+        <strong
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: QUANTUM,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
           {credits.toLocaleString()}
         </strong>
-        <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70 }}>
+        <span
+          style={{
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: DUST_70,
+          }}
+        >
           Intergalactic Credits — your opening stake from the cosmos
         </span>
       </div>
@@ -101,36 +129,38 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
         pageKicker={`STEP ${step} OF ${TOTAL_STEPS}`}
         kicker={`I • WELCOME`}
         title={
-          step === 1 ? 'Pick your club'
-          : step === 2 ? 'Pick your player'
-          : 'Place your first bet'
+          step === 1 ? 'Pick your club' : step === 2 ? 'Pick your player' : 'Place your first bet'
         }
         subtitle={
-          step === 1 ? 'Every fan supports one of 32 clubs across four orbital leagues. Pick the one you want to follow — you can change later.'
-          : step === 2 ? "Your favourite player. The cosmos pays attention to who you watch."
-          : 'You have 200 Intergalactic Credits. The next match for your club kicks off soon — drop a stake to claim your seat.'
+          step === 1
+            ? 'Every fan supports one of 32 clubs across four orbital leagues. Pick the one you want to follow — you can change later.'
+            : step === 2
+              ? 'Your favourite player. The cosmos pays attention to who you watch.'
+              : 'You have 200 Intergalactic Credits. The next match for your club kicks off soon — drop a stake to claim your seat.'
         }
       />
 
       {step === 1 && (
         <PickClubStep
-          onPick={(teamId) => { setPickedTeam(teamId); setStep(2); }}
+          onPick={(teamId) => {
+            setPickedTeam(teamId);
+            setStep(2);
+          }}
           onSkip={onDone}
         />
       )}
       {step === 2 && pickedTeam && (
         <PickPlayerStep
           teamId={pickedTeam}
-          onPick={(playerId) => { setPickedPlayer(playerId); setStep(3); }}
+          onPick={(playerId) => {
+            setPickedPlayer(playerId);
+            setStep(3);
+          }}
           onSkip={() => setStep(3)}
         />
       )}
       {step === 3 && pickedTeam && (
-        <StarterBetStep
-          teamId={pickedTeam}
-          playerId={pickedPlayer}
-          onDone={onDone}
-        />
+        <StarterBetStep teamId={pickedTeam} playerId={pickedPlayer} onDone={onDone} />
       )}
     </Shell>
   );
@@ -138,7 +168,13 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
 
 // ── Step 1: pick club ───────────────────────────────────────────────────────
 
-function PickClubStep({ onPick, onSkip }: { onPick: (teamId: string) => void; onSkip: () => void }) {
+function PickClubStep({
+  onPick,
+  onSkip,
+}: {
+  onPick: (teamId: string) => void;
+  onSkip: () => void;
+}) {
   const db = useSupabase();
   const { user } = useAuth();
   const [leagueId, setLeagueId] = useState<string>(LEAGUES[0]!.id);
@@ -168,19 +204,35 @@ function PickClubStep({ onPick, onSkip }: { onPick: (teamId: string) => void; on
       </div>
 
       {/* Team grid */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12,
-      }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+          gap: 12,
+        }}
+      >
         {teams.map((team) => (
-          <button key={team.id} onClick={() => pick(team.id)} disabled={busy !== null} style={{
-            background: 'transparent', border: `1px solid ${HAIRLINE}`, color: DUST,
-            padding: 16, textAlign: 'left', fontFamily: 'inherit', fontSize: 14,
-            cursor: busy === null ? 'pointer' : 'wait',
-            opacity: busy && busy !== team.id ? 0.5 : 1,
-          }}>
+          <button
+            key={team.id}
+            onClick={() => pick(team.id)}
+            disabled={busy !== null}
+            style={{
+              background: 'transparent',
+              border: `1px solid ${HAIRLINE}`,
+              color: DUST,
+              padding: 16,
+              textAlign: 'left',
+              fontFamily: 'inherit',
+              fontSize: 14,
+              cursor: busy === null ? 'pointer' : 'wait',
+              opacity: busy && busy !== team.id ? 0.5 : 1,
+            }}
+          >
             <div style={{ fontWeight: 700 }}>{team.name}</div>
             <div style={{ fontSize: 12, color: DUST_50, marginTop: 4 }}>{team.location}</div>
-            {busy === team.id && <div style={{ fontSize: 11, color: QUANTUM, marginTop: 6 }}>SAVING…</div>}
+            {busy === team.id && (
+              <div style={{ fontSize: 11, color: QUANTUM, marginTop: 6 }}>SAVING…</div>
+            )}
           </button>
         ))}
       </div>
@@ -192,13 +244,21 @@ function PickClubStep({ onPick, onSkip }: { onPick: (teamId: string) => void; on
 
 // ── Step 2: pick player ─────────────────────────────────────────────────────
 
-function PickPlayerStep({ teamId, onPick, onSkip }: {
-  teamId: string; onPick: (playerId: string) => void; onSkip: () => void;
+function PickPlayerStep({
+  teamId,
+  onPick,
+  onSkip,
+}: {
+  teamId: string;
+  onPick: (playerId: string) => void;
+  onSkip: () => void;
 }) {
   const db = useSupabase();
   const { user } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [players, setPlayers] = useState<Array<{ id: string; name: string; position: string; jersey_number?: number }>>([]);
+  const [players, setPlayers] = useState<
+    Array<{ id: string; name: string; position: string; jersey_number?: number }>
+  >([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -207,10 +267,14 @@ function PickPlayerStep({ teamId, onPick, onSkip }: {
     (getPlayersForTeam(db as any, teamId) as Promise<unknown>)
       .then((rows) => {
         if (cancelled) return;
-        setPlayers(rows as Array<{ id: string; name: string; position: string; jersey_number?: number }>);
+        setPlayers(
+          rows as Array<{ id: string; name: string; position: string; jersey_number?: number }>,
+        );
       })
       .catch((err) => console.warn('[Welcome] player fetch failed:', err));
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [teamId, db]);
 
   const pick = async (playerId: string) => {
@@ -230,17 +294,31 @@ function PickPlayerStep({ teamId, onPick, onSkip }: {
           Loading your club&apos;s roster…
         </p>
       ) : (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12,
-          marginTop: 24,
-        }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: 12,
+            marginTop: 24,
+          }}
+        >
           {players.map((p) => (
-            <button key={p.id} onClick={() => pick(p.id)} disabled={busy !== null} style={{
-              background: 'transparent', border: `1px solid ${HAIRLINE}`, color: DUST,
-              padding: 16, textAlign: 'left', fontFamily: 'inherit', fontSize: 14,
-              cursor: busy === null ? 'pointer' : 'wait',
-              opacity: busy && busy !== p.id ? 0.5 : 1,
-            }}>
+            <button
+              key={p.id}
+              onClick={() => pick(p.id)}
+              disabled={busy !== null}
+              style={{
+                background: 'transparent',
+                border: `1px solid ${HAIRLINE}`,
+                color: DUST,
+                padding: 16,
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                fontSize: 14,
+                cursor: busy === null ? 'pointer' : 'wait',
+                opacity: busy && busy !== p.id ? 0.5 : 1,
+              }}
+            >
               <div style={{ fontWeight: 700 }}>{p.name}</div>
               <div style={{ fontSize: 12, color: DUST_50, marginTop: 4 }}>
                 #{p.jersey_number ?? '—'} · {p.position}
@@ -257,7 +335,11 @@ function PickPlayerStep({ teamId, onPick, onSkip }: {
 
 // ── Step 3: starter bet ─────────────────────────────────────────────────────
 
-function StarterBetStep({ teamId, playerId, onDone }: {
+function StarterBetStep({
+  teamId,
+  playerId,
+  onDone,
+}: {
   teamId: string;
   playerId: string | null;
   onDone: () => void;
@@ -278,8 +360,13 @@ function StarterBetStep({ teamId, playerId, onDone }: {
         setNextMatch(mine ?? null);
         setLoading(false);
       })
-      .catch((err) => { console.warn('[Welcome] upcoming fetch failed:', err); setLoading(false); });
-    return () => { cancelled = true; };
+      .catch((err) => {
+        console.warn('[Welcome] upcoming fetch failed:', err);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [db, teamId]);
 
   // Suppress unused-var warning for playerId — captured here for analytics
@@ -292,28 +379,41 @@ function StarterBetStep({ teamId, playerId, onDone }: {
 
       {loading && (
         <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
-          <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>Finding your next match…</p>
+          <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
+            Finding your next match…
+          </p>
         </div>
       )}
 
       {!loading && !nextMatch && (
         <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
           <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-            No fixtures yet for your club. Browse the schedule and place a bet whenever you&apos;re ready — your 200 credits are sitting safe in your account.
+            No fixtures yet for your club. Browse the schedule and place a bet whenever you&apos;re
+            ready — your 200 credits are sitting safe in your account.
           </p>
         </div>
       )}
 
       {!loading && nextMatch && (
         <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_50, marginBottom: 8 }}>
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: DUST_50,
+              marginBottom: 8,
+            }}
+          >
             Your next match
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
             {nextMatch.home_team?.name ?? 'Home'} vs {nextMatch.away_team?.name ?? 'Away'}
           </div>
           <div style={{ fontSize: 12, color: DUST_50, marginBottom: 16 }}>
-            {nextMatch.scheduled_at ? new Date(nextMatch.scheduled_at).toLocaleString() : 'Scheduled soon'}
+            {nextMatch.scheduled_at
+              ? new Date(nextMatch.scheduled_at).toLocaleString()
+              : 'Scheduled soon'}
           </div>
 
           {/* Inline starter bet — place a real wager without leaving the wizard
@@ -326,8 +426,8 @@ function StarterBetStep({ teamId, playerId, onDone }: {
               focus vote — the one line that ties the two halves of the game
               together for a first-time fan. */}
           <p style={{ fontSize: 12, lineHeight: 1.6, color: DUST_50, margin: '16px 0 0' }}>
-            Your credits ride on every wager — and at season&rsquo;s end you&rsquo;ll pool what&rsquo;s
-            left with other fans to vote on your club&rsquo;s future.
+            Your credits ride on every wager — and at season&rsquo;s end you&rsquo;ll pool
+            what&rsquo;s left with other fans to vote on your club&rsquo;s future.
           </p>
         </div>
       )}
@@ -372,7 +472,10 @@ function LoadingLine() {
  */
 function StepImage({ src, alt }: { src: string; alt: string }) {
   const imgStyle: React.CSSProperties = {
-    display: 'block', width: '100%', maxWidth: 480, marginTop: 24,
+    display: 'block',
+    width: '100%',
+    maxWidth: 480,
+    marginTop: 24,
     border: `1px solid ${HAIRLINE}`,
   };
   return (
@@ -387,10 +490,19 @@ function StepImage({ src, alt }: { src: string; alt: string }) {
 function SkipFooter({ onSkip, label }: { onSkip: () => void; label: string }) {
   return (
     <p style={{ marginTop: 32, fontSize: 12 }}>
-      <button onClick={onSkip} style={{
-        background: 'none', border: 'none', color: DUST_50, textDecoration: 'underline',
-        cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0,
-      }}>
+      <button
+        onClick={onSkip}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: DUST_50,
+          textDecoration: 'underline',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: 'inherit',
+          padding: 0,
+        }}
+      >
         {label}
       </button>
     </p>
