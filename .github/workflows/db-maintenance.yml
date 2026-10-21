@@ -1,0 +1,91 @@
+# ── Database maintenance ──────────────────────────────────────────────────────
+# WHY THIS EXISTS
+# ───────────────
+# `match_positions` stores a JSONB replay frame every 2 seconds of match time —
+# ~2 731 rows and ~4.8 MB per match. Migration 0061 predicted this and noted the
+# data "can be pruned after the season ends", but nothing was ever built to do
+# it. Season 1's fixtures pushed the project past the 500 MB Free-plan disk
+# quota, Supabase restricted it, and every API call — including auth — started
+# returning HTTP 402. The whole game went dark while the code was perfectly fine.
+#
+# This workflow is the missing groundskeeper: it reports where the disk went and
+# prunes replay frames older than the retention window.
+#
+# WHY A WORKFLOW RATHER THAN A MIGRATION OR A LOCAL SCRIPT
+# ────────────────────────────────────────────────────────
+# A restricted project rejects traffic to its own API gateway, so migrations and
+# service-role scripts cannot reach it. The Management API is a separate control
+# plane that still answers, and its token lives only in Actions secrets — so the
+# recovery has to run from here.
+#
+# SAFETY
+# ──────
+# `scripts/db-maintenance.ts` contains only fixed, reviewed SQL. The sole input
+# that reaches a statement is `retention_days`, parsed as an integer and
+# range-checked. There is no arbitrary-SQL mode: this job holds a management
+# token and must never become a general-purpose SQL console.
+#
+# REQUIRED SECRET
+#   SUPABASE_ACCESS_TOKEN   Management API personal access token (already set).
+
+name: Database maintenance
+
+on:
+  # Weekly groundskeeping so disk use can never silently creep back to a
+  # project-restricting level. Sunday 04:00 UTC, away from the matchday peak.
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'report = measure only · prune = delete old replay frames'
+        type: choice
+        options: [report, prune]
+        default: report
+      retention_days:
+        description: 'Keep replay frames for matches finished within N days'
+        type: string
+        default: '14'
+      dry_run:
+        description: 'With prune: measure what would go, change nothing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Two concurrent prunes would fight over the same rows and the vacuum lock.
+concurrency:
+  group: db-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run maintenance
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        # The scheduled run is a prune at the default retention; a manual run
+        # does exactly what the operator selected (report + dry-run by default).
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            npx tsx scripts/db-maintenance.ts prune --retention-days 14
+          elif [ "${{ inputs.mode }}" = "prune" ]; then
+            npx tsx scripts/db-maintenance.ts prune \
+              --retention-days "${{ inputs.retention_days }}" \
+              ${{ inputs.dry_run && '--dry-run' || '' }}
+          else
+            npx tsx scripts/db-maintenance.ts report
+          fi
