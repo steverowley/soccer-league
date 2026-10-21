@@ -1,0 +1,78 @@
+Copyright (c) 2026 Stephen Rowley. All rights reserved.
+
+INTERGALACTIC SOCCER LEAGUE
+PROPRIETARY SOFTWARE LICENCE
+
+This repository and everything in it (the "Software") is proprietary and
+confidential. It includes, without limitation, the source code, the match
+simulation engine, the database schema and migrations, the game design, the
+written world and its characters, the narrative and commentary systems, the
+artwork, and the accompanying documentation.
+
+NO LICENCE IS GRANTED
+---------------------
+This repository is readable on GitHub. That visibility is for transparency and
+portfolio purposes only and grants you no rights whatsoever. Making source code
+publicly viewable is not the same as licensing it, and no licence is granted
+here by implication, estoppel, or otherwise.
+
+Except as expressly permitted below, you may NOT:
+
+  1. copy, reproduce, or store the Software, in whole or in part;
+  2. run, host, deploy, or operate the Software or any instance of it,
+     including privately or for personal use;
+  3. modify, adapt, translate, or create derivative works of the Software;
+  4. distribute, sublicense, sell, rent, lease, or otherwise transfer the
+     Software or access to it;
+  5. reverse engineer, decompile, or disassemble any compiled or deployed
+     part of the Software;
+  6. use the Software, or any part of it, to train, fine-tune, evaluate, or
+     ground any machine learning model, large language model, or other
+     automated system;
+  7. use the game design, world, characters, names, or narrative material in
+     any other work or product;
+  8. remove, obscure, or alter this notice or any copyright notice.
+
+WHAT IS PERMITTED
+-----------------
+You may view the Software in this repository, and you may quote short excerpts
+for the purposes of commentary, criticism, review, news reporting, teaching, or
+scholarship, provided the source is clearly attributed and the excerpt is no
+longer than reasonably necessary. Nothing in this licence is intended to
+restrict any right you have under applicable law that cannot be waived by
+agreement.
+
+Forking on GitHub is permitted only to the limited extent technically required
+to propose a change back to this repository, and such a fork confers no other
+rights. Any contribution submitted is licensed to the copyright holder for use
+in the Software without restriction or obligation.
+
+TRADE MARKS
+-----------
+"Intergalactic Soccer League", "ISL", the ISL crest, and the names of clubs,
+competitions, characters and entities appearing in the Software are marks of
+the copyright holder and may not be used without prior written permission.
+
+NO WARRANTY
+-----------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+LIMITATION OF LIABILITY
+-----------------------
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+THIRD-PARTY COMPONENTS
+----------------------
+The Software depends on third-party open-source packages, each of which remains
+governed by its own licence. Those licences apply to those packages only and
+grant no rights to the Software itself.
+
+PERMISSIONS AND ENQUIRIES
+-------------------------
+For any use not expressly permitted above, including licensing enquiries,
+contact the copyright holder through https://github.com/steverowley.
