@@ -22,12 +22,16 @@ const DEMO_DURATION_SECONDS = 720;
 
 /** Live-ish match clock derived from the same wall-clock → game-time mapping the pitch uses. */
 function MatchClock({ anchorMs }: { anchorMs: number }) {
-  const [, tick] = useState(0);
+  // Hold the clock reading in state and advance it from the interval, rather
+  // than calling Date.now() during render. A render-time Date.now() returns a
+  // different value on every render, so anything memoised downstream of it can
+  // never be stable (react-hooks/purity).
+  const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 500);
+    const id = setInterval(() => setNowMs(Date.now()), 500);
     return () => clearInterval(id);
   }, []);
-  const gameSec = realToGameSeconds((Date.now() - anchorMs) / 1000, DEMO_DURATION_SECONDS);
+  const gameSec = realToGameSeconds((nowMs - anchorMs) / 1000, DEMO_DURATION_SECONDS);
   const minute = Math.floor(gameSec / 60);
   const label = gameSec >= TOTAL_GAME_SECONDS ? 'FT' : `${minute}'`;
   return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{label}</span>;
@@ -60,7 +64,8 @@ function Demo() {
     minHeight: '100vh',
     background: COLORS.abyss,
     color: COLORS.dust,
-    fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    fontFamily:
+      'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -173,10 +178,18 @@ function Demo() {
             flexWrap: 'wrap',
           }}
         >
-          <p style={{ margin: 0, color: COLORS.dust50, fontSize: 12, lineHeight: 1.6, maxWidth: 460 }}>
+          <p
+            style={{
+              margin: 0,
+              color: COLORS.dust50,
+              fontSize: 12,
+              lineHeight: 1.6,
+              maxWidth: 460,
+            }}
+          >
             A full match simulated by the real spatial engine. Use the{' '}
-            <strong style={{ color: COLORS.dust70 }}>Pitch / Ball</strong> buttons to switch camera, or
-            click a player to focus them.
+            <strong style={{ color: COLORS.dust70 }}>Pitch / Ball</strong> buttons to switch camera,
+            or click a player to focus them.
           </p>
           <button type="button" onClick={kickOff} style={buttonStyle}>
             Kick off

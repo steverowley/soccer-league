@@ -48,8 +48,8 @@ import { getPlayersForTeam } from '../features/match';
 // click button.
 const { dust: DUST, abyss: ABYSS, flare: FLARE, terraNova: TERRA_NOVA, astro: ASTRO } = COLORS;
 const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
+const DUST_50 = COLORS.dust50;
+const DUST_70 = COLORS.dust70;
 
 // ── Widget constants ───────────────────────────────────────────────────────
 // COOLDOWN_TICK_MS — how often the cooldown countdown re-renders while a
@@ -87,10 +87,10 @@ export default function Training() {
   const { user, profile } = useAuth();
   const teamId = profile?.favourite_team_id ?? null;
 
-  const [players,        setPlayers]        = useState<any[]>([]);
-  const [selectedId,     setSelectedId]     = useState<any>(null);
-  const [loaded,         setLoaded]         = useState<boolean>(false);
-  const [loadError,      setLoadError]      = useState<any>(null);
+  const [players, setPlayers] = useState<any[]>([]);
+  const [selectedId, setSelectedId] = useState<any>(null);
+  const [loaded, setLoaded] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<any>(null);
 
   // Load roster when the user + team are known.  Re-running auth's
   // useAuth() in the next route ensures the listed players stay
@@ -119,7 +119,9 @@ export default function Training() {
         setLoadError(err);
         setLoaded(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, teamId]);
 
   const selected = useMemo(
@@ -128,12 +130,14 @@ export default function Training() {
   );
 
   return (
-    <div style={{
+    <div
+      style={{
         ...(undefined as any),
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
+        background: ABYSS,
+        color: DUST,
+        minHeight: '100vh',
+      }}
+    >
       <Header />
 
       {/* Section I — Page hero. */}
@@ -156,36 +160,47 @@ export default function Training() {
           {user && !teamId && <PickTeamCta />}
 
           {user && teamId && loadError && (
-            <p style={{
-        ...(undefined as any),
-              color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-            }}>
+            <p
+              style={{
+                ...(undefined as any),
+                color: FLARE,
+                fontStyle: 'italic',
+                fontSize: 13,
+                marginTop: 24,
+              }}
+            >
               Training unavailable. The facility is dark.
             </p>
           )}
           {user && teamId && !loaded && !loadError && (
-            <p style={{
-        ...(undefined as any),
-              color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-            }}>
+            <p
+              style={{
+                ...(undefined as any),
+                color: DUST_50,
+                fontStyle: 'italic',
+                fontSize: 13,
+                marginTop: 24,
+              }}
+            >
               Opening the training facility…
             </p>
           )}
           {user && teamId && loaded && !loadError && players.length === 0 && (
-            <p style={{
-        ...(undefined as any),
-              color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-            }}>
+            <p
+              style={{
+                ...(undefined as any),
+                color: DUST_50,
+                fontStyle: 'italic',
+                fontSize: 13,
+                marginTop: 24,
+              }}
+            >
               Your club has no players on the books.
             </p>
           )}
           {user && teamId && loaded && !loadError && players.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 48, marginTop: 32 }}>
-              <RosterPicker
-                players={players}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
+              <RosterPicker players={players} selectedId={selectedId} onSelect={setSelectedId} />
               {selected && (
                 <ClickerWidget
                   key={selected.id /* reset internal state on player switch */}
@@ -212,26 +227,38 @@ export default function Training() {
  */
 function SignInCta(): React.ReactElement {
   return (
-    <div style={{
+    <div
+      style={{
         ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      marginTop: 24,
-      maxWidth: 640,
-    }}>
-      <h3 style={{
-        ...(undefined as any),
-        fontSize: 22, fontWeight: 700, textTransform: 'uppercase',
-        margin: 0, letterSpacing: '0.01em',
-      }}>
+        border: `1px solid ${HAIRLINE}`,
+        padding: 32,
+        marginTop: 24,
+        maxWidth: 640,
+      }}
+    >
+      <h3
+        style={{
+          ...(undefined as any),
+          fontSize: 22,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          margin: 0,
+          letterSpacing: '0.01em',
+        }}
+      >
         Sign Up To Train
       </h3>
-      <p style={{
-        ...(undefined as any),
-        fontSize: 14, lineHeight: 1.7, color: DUST_70, margin: '16px 0 24px',
-      }}>
-        Sign up to claim a free account, pick the club you&rsquo;ll
-        back, and start clicking to develop their players.
+      <p
+        style={{
+          ...(undefined as any),
+          fontSize: 14,
+          lineHeight: 1.7,
+          color: DUST_70,
+          margin: '16px 0 24px',
+        }}
+      >
+        Sign up to claim a free account, pick the club you&rsquo;ll back, and start clicking to
+        develop their players.
       </p>
       <PrimaryButton to="/login">Sign Up</PrimaryButton>
     </div>
@@ -246,26 +273,38 @@ function SignInCta(): React.ReactElement {
  */
 function PickTeamCta(): React.ReactElement {
   return (
-    <div style={{
+    <div
+      style={{
         ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      marginTop: 24,
-      maxWidth: 640,
-    }}>
-      <h3 style={{
-        ...(undefined as any),
-        fontSize: 22, fontWeight: 700, textTransform: 'uppercase',
-        margin: 0, letterSpacing: '0.01em',
-      }}>
+        border: `1px solid ${HAIRLINE}`,
+        padding: 32,
+        marginTop: 24,
+        maxWidth: 640,
+      }}
+    >
+      <h3
+        style={{
+          ...(undefined as any),
+          fontSize: 22,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          margin: 0,
+          letterSpacing: '0.01em',
+        }}
+      >
         Pick A Favourite Club
       </h3>
-      <p style={{
-        ...(undefined as any),
-        fontSize: 14, lineHeight: 1.7, color: DUST_70, margin: '16px 0 24px',
-      }}>
-        Training is per-club.  Pick a side first; the training facility
-        will then list your players to develop.
+      <p
+        style={{
+          ...(undefined as any),
+          fontSize: 14,
+          lineHeight: 1.7,
+          color: DUST_70,
+          margin: '16px 0 24px',
+        }}
+      >
+        Training is per-club. Pick a side first; the training facility will then list your players
+        to develop.
       </p>
       <PrimaryButton to="/profile">Open Profile</PrimaryButton>
     </div>
@@ -283,7 +322,15 @@ function PickTeamCta(): React.ReactElement {
  * @param {string | null} props.selectedId
  * @param {(id: string) => void} props.onSelect
  */
-function RosterPicker({ players, selectedId, onSelect }: { players: any[]; selectedId: string | null; onSelect: (id: string) => void }) {
+function RosterPicker({
+  players,
+  selectedId,
+  onSelect,
+}: {
+  players: any[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
   return (
     <div>
       <SectionHeader
@@ -295,7 +342,7 @@ function RosterPicker({ players, selectedId, onSelect }: { players: any[]; selec
       <div
         className="isl-roster-picker"
         style={{
-        ...(undefined as any),
+          ...(undefined as any),
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 8,
@@ -310,7 +357,7 @@ function RosterPicker({ players, selectedId, onSelect }: { players: any[]; selec
               type="button"
               onClick={() => onSelect(p.id)}
               style={{
-        ...(undefined as any),
+                ...(undefined as any),
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
@@ -324,21 +371,25 @@ function RosterPicker({ players, selectedId, onSelect }: { players: any[]; selec
                 cursor: 'pointer',
               }}
             >
-              <span style={{
-        ...(undefined as any),
-                fontSize: 11,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: DUST_70,
-              }}>
+              <span
+                style={{
+                  ...(undefined as any),
+                  fontSize: 11,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: DUST_70,
+                }}
+              >
                 {p.starter ? '★ ' : ''}#{p.jersey_number ?? '—'} • {p.position ?? '—'}
               </span>
-              <span style={{
-        ...(undefined as any),
-                fontSize: 13,
-                fontWeight: 700,
-                lineHeight: 1.2,
-              }}>
+              <span
+                style={{
+                  ...(undefined as any),
+                  fontSize: 13,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                }}
+              >
                 {p.name}
               </span>
             </button>
@@ -389,13 +440,16 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
   const db = useSupabase();
 
   const [lifetimeXp, setLifetimeXp] = useState<number>(0);
-  const [loaded,     setLoaded]     = useState<boolean>(false);
+  const [loaded, setLoaded] = useState<boolean>(false);
 
   // Cooldown end timestamp (ms-since-epoch).  null when no cooldown
   // is active.  Updated on every click; the displayed countdown
   // re-renders on the COOLDOWN_TICK_MS interval below.
   const [cooldownEndMs, setCooldownEndMs] = useState<any>(null);
-  const [now,           setNow]           = useState(Date.now());
+  // Lazy initialiser: `useState(Date.now())` would call Date.now() on every
+  // render (React discards the value after the first), which is an impure
+  // call during render. The thunk form calls it exactly once, on mount.
+  const [now, setNow] = useState(() => Date.now());
 
   // Per-widget bump toast.  Persisted in state because we want the
   // toast to fade after BUMP_TOAST_MS regardless of further clicks.
@@ -424,7 +478,9 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
         if (cancelled) return;
         setLoaded(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [db, player.id]);
 
   // Tick the wall-clock display while a cooldown is active.  Stops as
@@ -484,44 +540,59 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
     }
   };
 
-  const bumps     = bumpsEarned(lifetimeXp);
+  const bumps = bumpsEarned(lifetimeXp);
   const nextNeeded = xpRequiredForBump(bumps + 1) - xpRequiredForBump(bumps);
-  const carried   = lifetimeXp - xpRequiredForBump(bumps);
-  const pct       = nextNeeded > 0 ? Math.min(100, Math.round((carried / nextNeeded) * 100)) : 0;
-  const xpToGo    = xpUntilNextBump(lifetimeXp);
+  const carried = lifetimeXp - xpRequiredForBump(bumps);
+  const pct = nextNeeded > 0 ? Math.min(100, Math.round((carried / nextNeeded) * 100)) : 0;
+  const xpToGo = xpUntilNextBump(lifetimeXp);
   const cooldownMs = cooldownEndMs ? Math.max(0, cooldownEndMs - now) : 0;
-  const locked    = cooldownMs > 0;
+  const locked = cooldownMs > 0;
 
   return (
-    <div style={{
+    <div
+      style={{
         ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      display: 'grid',
-      gridTemplateColumns: '1fr 280px',
-      gap: 32,
-      alignItems: 'flex-start',
-    }}>
+        border: `1px solid ${HAIRLINE}`,
+        padding: 32,
+        display: 'grid',
+        gridTemplateColumns: '1fr 280px',
+        gap: 32,
+        alignItems: 'flex-start',
+      }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <span style={{
-        ...(undefined as any),
-          fontSize: 11, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: DUST_70,
-        }}>
+        <span
+          style={{
+            ...(undefined as any),
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: DUST_70,
+          }}
+        >
           Now Training
         </span>
-        <h3 style={{
-        ...(undefined as any),
-          fontSize: 28, fontWeight: 700, textTransform: 'uppercase',
-          margin: 0, letterSpacing: '0.01em',
-        }}>
+        <h3
+          style={{
+            ...(undefined as any),
+            fontSize: 28,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            margin: 0,
+            letterSpacing: '0.01em',
+          }}
+        >
           {player.name}
         </h3>
-        <span style={{
-        ...(undefined as any),
-          fontSize: 11, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: DUST_70,
-        }}>
+        <span
+          style={{
+            ...(undefined as any),
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: DUST_70,
+          }}
+        >
           #{player.jersey_number ?? '—'} • {player.position ?? '—'} • {bumps} stat bumps earned
         </span>
 
@@ -529,55 +600,61 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
             stay below the bar so they remain readable when the fill
             is narrow. */}
         <div style={{ marginTop: 8 }}>
-          <div style={{
-        ...(undefined as any),
-            height: 10,
-            background: COLORS.dustFaint,
-            border: `1px solid ${HAIRLINE}`,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-        ...(undefined as any),
-              width: `${pct}%`,
-              height: '100%',
-              background: DUST,
-              transition: 'width 0.18s ease',
-            }} />
+          <div
+            style={{
+              ...(undefined as any),
+              height: 10,
+              background: COLORS.dustFaint,
+              border: `1px solid ${HAIRLINE}`,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                ...(undefined as any),
+                width: `${pct}%`,
+                height: '100%',
+                background: DUST,
+                transition: 'width 0.18s ease',
+              }}
+            />
           </div>
-          <div style={{
-        ...(undefined as any),
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            marginTop: 8,
-            fontSize: 11,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: DUST_70,
-          }}>
-            <span>
-              {loaded ? `${carried}/${nextNeeded} XP` : 'Loading XP…'}
-            </span>
+          <div
+            style={{
+              ...(undefined as any),
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              marginTop: 8,
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: DUST_70,
+            }}
+          >
+            <span>{loaded ? `${carried}/${nextNeeded} XP` : 'Loading XP…'}</span>
             <span>{xpToGo > 0 ? `${xpToGo} XP to next bump` : 'Ready'}</span>
           </div>
         </div>
       </div>
 
       {/* Right column — click button + status. */}
-      <div style={{
-        ...(undefined as any),
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        borderLeft: `1px solid ${HAIRLINE}`,
-        paddingLeft: 24,
-      }}>
+      <div
+        style={{
+          ...(undefined as any),
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          borderLeft: `1px solid ${HAIRLINE}`,
+          paddingLeft: 24,
+        }}
+      >
         <button
           type="button"
           disabled={locked}
           onClick={onClick}
           style={{
-        ...(undefined as any),
+            ...(undefined as any),
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -593,32 +670,34 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
             fontFamily: 'inherit',
           }}
         >
-          {locked
-            ? `Cooldown ${(cooldownMs / 1000).toFixed(1)}s`
-            : `Click for +${XP_PER_CLICK} XP`}
+          {locked ? `Cooldown ${(cooldownMs / 1000).toFixed(1)}s` : `Click for +${XP_PER_CLICK} XP`}
         </button>
-        <span style={{
-        ...(undefined as any),
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: errorReason ? FLARE : DUST_70,
-        }}>
+        <span
+          style={{
+            ...(undefined as any),
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: errorReason ? FLARE : DUST_70,
+          }}
+        >
           {errorReason ?? `Session cap: ${SESSION_MAX_CLICKS} clicks / hour`}
         </span>
         {bumpToast && (
           // Terra Nova border + text — confirmation green for a
           // successful stat-threshold cross.  Reads as "the void
           // approves" rather than just "something happened".
-          <span style={{
-        ...(undefined as any),
-            fontSize: 12,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: TERRA_NOVA,
-            border: `1px solid ${TERRA_NOVA}`,
-            padding: '8px 12px',
-          }}>
+          <span
+            style={{
+              ...(undefined as any),
+              fontSize: 12,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: TERRA_NOVA,
+              border: `1px solid ${TERRA_NOVA}`,
+              padding: '8px 12px',
+            }}
+          >
             {bumpToast}
           </span>
         )}
@@ -637,11 +716,16 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
  */
 function humanizeReason(reason: string | undefined) {
   switch (reason) {
-    case 'cooldown':       return 'Cooldown active — wait a moment.';
-    case 'session_cap':    return 'Session cap reached — try again later.';
-    case 'db_error':       return 'Database hiccup — try again.';
-    case 'not_allowed':    return 'Click not allowed right now.';
-    default:               return 'Click did not register.';
+    case 'cooldown':
+      return 'Cooldown active — wait a moment.';
+    case 'session_cap':
+      return 'Session cap reached — try again later.';
+    case 'db_error':
+      return 'Database hiccup — try again.';
+    case 'not_allowed':
+      return 'Click not allowed right now.';
+    default:
+      return 'Click did not register.';
   }
 }
 
@@ -652,8 +736,5 @@ function humanizeReason(reason: string | undefined) {
  * @returns {string}
  */
 function prettyStat(key: string) {
-  return (key ?? '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return (key ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
