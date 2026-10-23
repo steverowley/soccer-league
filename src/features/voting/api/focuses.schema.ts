@@ -45,10 +45,20 @@ export const FocusOptionSchema = z.object({
 /**
  * Full `focus_votes` row. `credits_spent` is the per-vote credit
  * allocation; the table has CHECK (credits_spent > 0).
+ *
+ * `user_id` is nullable. Migration 0059 dropped its NOT NULL and swapped the
+ * FK to ON DELETE SET NULL, deliberately, so that when a fan deletes their
+ * account their votes survive for the season tally instead of vanishing from
+ * it — the same treatment `wagers.user_id` got for #415.
+ *
+ * Validating it as non-nullable made this parser DROP exactly those rows, with
+ * nothing but a `console.warn`, which defeated the point of that migration:
+ * deleting an account quietly removed its votes from every view that reads
+ * through here.
  */
 export const FocusVoteSchema = z.object({
   id:               z.string(),
-  user_id:          z.string(),
+  user_id:          z.string().nullable(),
   focus_option_id:  z.string(),
   credits_spent:    z.number().int().positive(),
   created_at:       z.string(),

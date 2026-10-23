@@ -50,10 +50,15 @@ export const NarrativeSchema = z.object({
   id:                 z.string(),
   kind:               z.string(),
   summary:            z.string(),
-  entities_involved:  z.array(z.string()),
+  // Both array columns are `JSONB DEFAULT '[]'` with no NOT NULL, so a row
+  // inserted with an explicit NULL is legal and was being dropped by this
+  // parser (which discards a failed row behind a `console.warn`). Coerced to
+  // `[]` rather than left nullable so every consumer can keep iterating
+  // without a null check.
+  entities_involved:  z.array(z.string()).nullable().transform((v) => v ?? []),
   source:             NarrativeSourceSchema,
   created_at:         z.string(),
-  acknowledged_by:    z.array(z.string()),
+  acknowledged_by:    z.array(z.string()).nullable().transform((v) => v ?? []),
 });
 
 export type ZodNarrative = z.infer<typeof NarrativeSchema>;
