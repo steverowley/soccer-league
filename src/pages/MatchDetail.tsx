@@ -1360,14 +1360,38 @@ function CommentaryFeed({ events }: { events: MatchEventRow[] }) {
   );
 }
 
+// ── Commentator voices ──────────────────────────────────────────────────────
+// The match worker now attributes each commentary line to one of the three
+// commentators (`payload.voice`), generated deterministically rather than by a
+// model. Colours and names are the ones the original personas were defined
+// with, so the feed matches the design system a fan already recognises.
+//
+// A fan is meant to learn the voices without reading the label, so the accent
+// does the work and the name is secondary.
+const VOICES: Record<string, { name: string; role: string; color: string }> = {
+  vox: { name: 'Captain Vox', role: 'Play-by-Play', color: '#FFD700' },
+  nexus: { name: 'Nexus-7', role: 'AI Analyst', color: '#4FC3F7' },
+  zara: { name: 'Zara Bloom', role: 'Color Analyst', color: '#A5D6A7' },
+};
+
+/** The commentator who spoke this line, when the worker attributed one. */
+export function eventVoice(
+  event: MatchEventRow,
+): { name: string; role: string; color: string } | null {
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  const key = typeof payload['voice'] === 'string' ? payload['voice'] : null;
+  return key ? (VOICES[key] ?? null) : null;
+}
+
 /**
  * Single event entry in the commentary feed (the prototype's `.entry`).
  *
- * A left-bordered card: a byline row (event-type label + minute) over the
- * commentary text.  Architect-touched events get the Quantum-purple left
- * border + uppercase heading treatment so the cosmic interference is visible
- * without explaining the mechanic (per the "hidden mechanics" pillar — the
- * colour cue reads as "something's off" without naming what).
+ * A left-bordered card: a byline row (commentator or event-type label, plus the
+ * minute) over the commentary text.  Architect-touched events get the
+ * Quantum-purple left border + uppercase heading treatment so the cosmic
+ * interference is visible without explaining the mechanic (per the "hidden
+ * mechanics" pillar — the colour cue reads as "something's off" without naming
+ * what).  Voiced lines take their commentator's accent instead.
  *
  * @param props.event  One row from match_events.  Payload is jsonb so we
  *                     defensively destructure.
@@ -1375,11 +1399,13 @@ function CommentaryFeed({ events }: { events: MatchEventRow[] }) {
 function CommentaryRow({ event }: { event: MatchEventRow }) {
   const text = eventProse(event) ?? prettifyEventType(event.type);
   const isArchitect = isArchitectEvent(event);
+  const voice = isArchitect ? null : eventVoice(event);
+  const accent = isArchitect ? QUANTUM : (voice?.color ?? BORDER_FAINT);
 
   return (
     <div
       style={{
-        borderLeft: `2px solid ${isArchitect ? QUANTUM : BORDER_FAINT}`,
+        borderLeft: `2px solid ${accent}`,
         paddingLeft: 22,
         display: 'flex',
         flexDirection: 'column',
@@ -1391,7 +1417,7 @@ function CommentaryRow({ event }: { event: MatchEventRow }) {
           style={{
             fontWeight: 700,
             fontSize: 15,
-            color: isArchitect ? QUANTUM : DUST,
+            color: isArchitect ? QUANTUM : (voice?.color ?? DUST),
             textShadow: isArchitect ? `0 0 6px rgba(154, 92, 244, 0.8)` : 'none',
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -1399,6 +1425,18 @@ function CommentaryRow({ event }: { event: MatchEventRow }) {
         >
           {eventHeading(event)}
         </b>
+        {voice ? (
+          <span
+            style={{
+              fontSize: 11,
+              color: DUST_50,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {voice.role}
+          </span>
+        ) : null}
         <span
           style={{
             marginLeft: 'auto',
@@ -1484,8 +1522,13 @@ export function eventProse(event: MatchEventRow): string | null {
  * "The Architect" — never the interference mechanic, matching the /news feed's
  * treatment and preserving the mystery.
  */
-function eventHeading(event: MatchEventRow): string {
+export function eventHeading(event: MatchEventRow): string {
   if (event.type === 'architect_interference') return 'The Architect';
+  // A voiced line is bylined by whoever said it. Falling through to the event
+  // type here would label a Captain Vox goal call "Goal", which tells the fan
+  // nothing they cannot already see on the scoreboard.
+  const voice = eventVoice(event);
+  if (voice) return voice.name;
   return prettifyEventType(event.type);
 }
 
