@@ -29,7 +29,7 @@ import {
 import {
   chooseAction, passKick, shotKick, shotQuality,
   tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
-  isInPenaltyArea, penaltyGoalProbability,
+  isInPenaltyArea, penaltyGoalProbability, kickToward,
 } from './possession';
 import { dynamicAnchor } from './formation';
 
@@ -73,6 +73,20 @@ const SEPARATION_RADIUS = 4.5;
 /** Cooldown ticks applied to a freshly-loose ball so the kicker can't instantly
  *  re-collect their own pass/shot. */
 const LOOSE_POP_COOLDOWN_TICKS = 3;
+
+// ── Corner delivery (#698) ───────────────────────────────────────────────────
+// A corner is modelled as a cross into the area rather than as a ball left at
+// rest on the byline. At rest 0.5m from the goal line, the next contest simply
+// knocked it back over for another corner: 214 per match, median gap 0.4s.
+
+/** Depth (m) from the goal line the delivery is aimed at: the six-yard area. */
+const CORNER_DELIVERY_DEPTH = 6;
+
+/** Delivery pace (m/s). Brisk enough to clear the byline scramble entirely. */
+const CORNER_DELIVERY_SPEED = 17;
+
+/** Lateral error (m std) on the cross, so deliveries are not identical. */
+const CORNER_DELIVERY_ERR = 4;
 
 /** How close to a post (m) a shot must cross the line to count as hitting the
  *  woodwork — a near-miss highlight beat.  Purely a label on a shot that was
@@ -315,7 +329,16 @@ export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
   world.clockSec += dt;
   // No upper clamp: stoppage time runs past 90:00, so added-time events read as
   // minute 91+ (the DB allows 0–120).  The tick loop bounds how far this goes.
-  const minute = Math.max(1, Math.ceil(world.clockSec / 60));
+  //
+  // clockSec is accumulated by repeated `+= dt`, so after thousands of ticks it
+  // carries floating-point drift: at 90:00 it is 5400.000000000x rather than
+  // 5400. Feeding that straight to Math.ceil pushed every event landing exactly
+  // on a minute boundary into the NEXT minute, and at full time produced a
+  // minute-91 event in a match played with stoppage disabled. Rounding to
+  // milliseconds first removes the drift while preserving real sub-second
+  // timing, which the sub-minute ordering depends on.
+  const clockMs = Math.round(world.clockSec * 1000) / 1000;
+  const minute = Math.max(1, Math.ceil(clockMs / 60));
 
   // ── Dead-ball pause (post-goal breather) ──────────────────────────────────
   // Players drift home; nobody acts on the ball until the pause elapses.
@@ -650,10 +673,35 @@ function resolveLooseBall(
       awardBall(world, defendingSide, spot);
     } else {
       // Defender put it out → corner to the attacking side.
+      //
+      // The corner is modelled as a DELIVERED cross, not as a stationary ball
+      // at the flag. Leaving it at rest 0.5m from the goal line meant the very
+      // next contest knocked it straight back over, awarding another corner,
+      // then another: 214 corners per match with a median gap of 0.4s, 78% of
+      // them within 3s of the one before (#698). The engine has no set-piece
+      // taker, so a ball sitting on the byline has nowhere to go but out.
+      //
+      // Delivering it is both the fix and the more faithful model: a corner in
+      // football is a cross into the area, and what follows is the scramble.
       events.push({ tSec: world.clockSec, minute, type: 'out_corner', side: attackingSide });
       const cornerY = yAt < PITCH_WIDTH / 2 ? 0.5 : PITCH_WIDTH - 0.5;
       const spot = vec(lineX === 0 ? 0.5 : PITCH_LENGTH - 0.5, cornerY);
       awardBall(world, attackingSide, spot);
+
+      // Aim at the heart of the six-yard area, with delivery error. Keeping
+      // lastTouch on the ATTACKING side matters: if the cross goes out off a
+      // defender it is correctly another corner, and off an attacker it is
+      // correctly a goal kick.
+      const targetX = lineX === 0 ? CORNER_DELIVERY_DEPTH : PITCH_LENGTH - CORNER_DELIVERY_DEPTH;
+      const target = vec(targetX, PITCH_WIDTH / 2);
+      ball.vel = kickToward(spot, target, CORNER_DELIVERY_SPEED, CORNER_DELIVERY_ERR, rng);
+      ball.ownerId = null;
+      ball.heldSec = 0;
+      // Brief in-flight window so the delivery is not reclaimed on the spot.
+      ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
+      // playerId omitted deliberately: no set-piece taker is modelled, so the
+      // delivery belongs to the side rather than to a named player.
+      ball.lastTouch = { side: attackingSide, isShot: false, sq: 0 };
     }
     return true;
   }
