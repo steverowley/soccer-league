@@ -59,6 +59,7 @@ import {
   type InterferenceEffect,
 } from './interferenceResolver.ts';
 import { computeFanBoost } from './fanBoost.ts';
+import { decorateCommentary } from './commentary.ts';
 import { narrativeRngForMatch, seedFromMatchId } from './matchRng.ts';
 import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
@@ -775,6 +776,18 @@ async function processMatch(match: any): Promise<boolean> {
     // on name downstream); the adapter derives team display names from it.
     const playerIdx = buildPlayerIndex(homeData, awayData);
     const result = adaptSpatialResult(spatialResult, playerIdx);
+
+    // Replace the adapter's terse placeholder commentary with voiced lines from
+    // the three commentators. The adapter carries one hardcoded sentence per
+    // event type — a deliberate placeholder for model-generated commentary that
+    // never arrives while the narrative mode is deterministic, which left a
+    // ninety-minute match repeating "A player plays the ball forward."
+    //
+    // Deterministic on the match id, so a replay reads identically, and done
+    // here rather than inside the adapter because `spatial/` is parity-guarded
+    // against its src twin on code AND prose.
+    decorateCommentary(result.events, match.id);
+
     const positionFrames: PositionFrame[] = spatialResult.frames;
 
     console.log(
