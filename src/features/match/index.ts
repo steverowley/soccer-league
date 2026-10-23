@@ -36,9 +36,6 @@
 // STATUS: scaffold only — Phase -1 moves existing code here; subsequent phases
 //   extend the feature.
 
-// ── AgentSystem (AI commentary dispatcher) ────────────────────────────────
-export { AgentSystem } from './logic/AgentSystem';
-
 // ── Shared match types ────────────────────────────────────────────────────
 export type {
   MatchPlayer,
@@ -71,11 +68,7 @@ export {
   CELESTIAL_CUP_COMPETITION_ID,
   SOLAR_SHIELD_COMPETITION_ID,
 } from './api/cupSeeder';
-export type {
-  SeedCupResult,
-  SeedSeasonCupsResult,
-  AdvanceCupRoundResult,
-} from './api/cupSeeder';
+export type { SeedCupResult, SeedSeasonCupsResult, AdvanceCupRoundResult } from './api/cupSeeder';
 
 // ── Match event type (shared, engine-independent) ─────────────────────────
 // The persisted match_events shape, consumed by the interference resolver and
@@ -88,22 +81,10 @@ export type { SimulatedEvent } from './logic/simEvent';
 // tables, engine-event → movement-archetype mapping, and the PitchState
 // shape with an idle-drift convergence step.  No UI, no DB — every other
 // pitch-view issue (2/6 onward) sits on top of these primitives.
-export {
-  FORMATIONS,
-  getFormationSlots,
-  isFormationKey,
-} from './logic/pitch/formations';
-export type {
-  FormationKey,
-  PitchPoint,
-  Side as PitchSide,
-} from './logic/pitch/formations';
+export { FORMATIONS, getFormationSlots, isFormationKey } from './logic/pitch/formations';
+export type { FormationKey, PitchPoint, Side as PitchSide } from './logic/pitch/formations';
 
-export {
-  ARCHETYPES,
-  eventToArchetype,
-  listMappedEventTypes,
-} from './logic/pitch/archetypes';
+export { ARCHETYPES, eventToArchetype, listMappedEventTypes } from './logic/pitch/archetypes';
 export type { Archetype } from './logic/pitch/archetypes';
 
 export {
@@ -112,12 +93,7 @@ export {
   idleDriftStep,
   initPitchState,
 } from './logic/pitch/pitchState';
-export type {
-  BallDot,
-  PitchPhase,
-  PitchState,
-  PlayerDot,
-} from './logic/pitch/pitchState';
+export type { BallDot, PitchPhase, PitchState, PlayerDot } from './logic/pitch/pitchState';
 
 // ── UI — canvas match viewer (Tiny Terraces pixel-art) ─────────────────────
 // The MatchDetail page renders <MatchViewer> beside the LiveCommentary feed for
@@ -158,48 +134,25 @@ export type {
 // Originally in `src/lib/supabase.ts` as singleton-consuming functions;
 // #387 slices 1 + 2 moved them behind the typed-client DI pattern.
 // Future call sites should import from this barrel.
-export {
-  getMatch,
-  getLiveMatches,
-  getUpcomingMatches,
-} from './api/matches';
+export { getMatch, getLiveMatches, getUpcomingMatches } from './api/matches';
 
 // ── Teams + roster reads (#387 slice 4) ───────────────────────────────────
-export {
-  getTeams,
-  getTeam,
-  getPlayersForTeam,
-} from './api/teams';
+export { getTeams, getTeam, getPlayersForTeam } from './api/teams';
 
 // ── Player + manager detail reads (#387 slice 5) ──────────────────────────
 export { getPlayer } from './api/players';
-export {
-  getManager,
-} from './api/managers';
-export type {
-  ManagerWithContext,
-} from './api/managers';
+export { getManager } from './api/managers';
+export type { ManagerWithContext } from './api/managers';
 
 // ── Idol leaderboard reads (#387 slice 6) ─────────────────────────────────
-export {
-  getIdolBoard,
-  getPlayerIdolRank,
-  getTopIdolsForArchitect,
-} from './api/idols';
-export type {
-  IdolRow,
-  IdolBoardResult,
-  TopIdolForArchitect,
-} from './api/idols';
+export { getIdolBoard, getPlayerIdolRank, getTopIdolsForArchitect } from './api/idols';
+export type { IdolRow, IdolBoardResult, TopIdolForArchitect } from './api/idols';
 
 // ── Live match — data layer only ───────────────────────────────────────────
 // MatchLivePage + MatchBuildUp UIs were removed in the 2026-05 nuke; the
 // pure elapsed-minute helpers and the Supabase + Realtime client stay
 // because they remain useful for the rebuilt match surfaces.
-export {
-  computeElapsedGameMinute,
-  filterEventsByElapsedMinute,
-} from './logic/elapsedMinute';
+export { computeElapsedGameMinute, filterEventsByElapsedMinute } from './logic/elapsedMinute';
 // Scoreline derived from the events revealed so far.  A match sitting at
 // `live` withholds its published score until full time, so every surface that
 // shows a score mid-reveal counts revealed goals instead of reading the row.
@@ -216,10 +169,7 @@ export {
   subscribeToMatchEvents,
   DEFAULT_MATCH_DURATION_SECONDS,
 } from './api/matchEvents';
-export type {
-  LiveMatchRow,
-  MatchEventRow,
-} from './api/matchEvents';
+export type { LiveMatchRow, MatchEventRow } from './api/matchEvents';
 
 // ── Spatial position playback ──────────────────────────────────────────────
 // `getMatchPositions` fetches the pre-computed `match_positions` frames; the
@@ -232,14 +182,8 @@ export type { PositionSnapshot } from './api/matchPositions';
 // Pulled into the feature barrel so the page (and any future surface
 // rendering a player's match log) imports from the feature root rather
 // than reaching into a deep API path.
-export {
-  getPlayerRecentMatches,
-  getNarrativesMentioningPlayer,
-} from './api/playerStats';
-export type {
-  PlayerRecentMatch,
-  NarrativeMention,
-} from './api/playerStats';
+export { getPlayerRecentMatches, getNarrativesMentioningPlayer } from './api/playerStats';
+export type { PlayerRecentMatch, NarrativeMention } from './api/playerStats';
 
 // ── Cup bracket — listener stays, visual bracket UI removed ────────────────
 // CupBracket (visual) was removed in the 2026-05 nuke and will be rebuilt.
@@ -251,14 +195,8 @@ export { CupRoundAdvancerListener } from './ui/CupRoundAdvancerListener';
 // Pure helpers + DB layer for the seasons.status state machine.  The match
 // worker drives the active → voting → enacted transitions; admin tooling
 // will surface the same helpers from the UI layer in Package 14.
-export {
-  isSeasonComplete,
-  nextStatus,
-} from './logic/seasonLifecycle';
-export type {
-  LeagueFixtureCounts,
-  SeasonStatus,
-} from './logic/seasonLifecycle';
+export { isSeasonComplete, nextStatus } from './logic/seasonLifecycle';
+export type { LeagueFixtureCounts, SeasonStatus } from './logic/seasonLifecycle';
 export {
   getSeasonStatus,
   getLeagueFixtureCountsForSeason,

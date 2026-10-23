@@ -35,7 +35,7 @@ An announcement will go here when the gates open.
 ## What you'll find when it opens
 
 - **A live league** — a double round-robin inside each 8-club league: 14 fixtures per team, 224 across the season. Plus the Celestial Cup (top 3 per league) and the Solar Shield (4th–6th), both single-elimination.
-- **Three commentators** — Captain Vox (bombastic veteran), Nexus-7 (clinical AI analyst), Zara Bloom (ex-striker tactician). Their lines are deterministic by default, with Claude as an opt-in override, so the simulation always owns the truth and the model only ever dresses it.
+- **Three commentators** — Captain Vox (bombastic veteran), Nexus-7 (clinical AI analyst), Zara Bloom (ex-striker tactician). Their lines are generated procedurally from a seeded grammar, with Claude as an opt-in override, so the broadcast needs no model and a fixture always replays identically.
 - **Two cosmic voices** — Balance and Chaos. Unnamed, uncredited. They interrupt the broadcast when something feels off. You'll learn to recognise them.
 - **The Galaxy Dispatch** — a news feed of architect whispers, political shifts, geological events, economic tremors, and wager narratives. The world reacts to itself.
 - **A 2D pitch view** — because matches are simulated in real pitch-space, you can watch the dots move: a replay of where every player and the ball actually were, synced to the commentary clock.
@@ -51,10 +51,10 @@ This is a TypeScript + React app talking to a Supabase backend, with Deno edge f
 
 - **Frontend** — React 18.3 + Vite 6.4, React Router 7, Tailwind 4.3, strict TypeScript 6. 28 routes, all lazy-loaded, with per-route error boundaries.
 - **Backend** — Supabase (PostgreSQL with row-level security), 86 numbered migrations, 42 tables / 9 views / 15 RPCs. Generated types in `src/types/database.ts`.
-- **AI** — Anthropic SDK. `claude-sonnet-4-6` for the in-match Architect and the daily drama beat; `claude-haiku-4-5-20251001` for the galaxy heartbeat and voice-library enrichment. The narrative layer is deterministic by default with the model as an opt-in override: the simulation owns the truth, the model owns only the prose, and it never touches world state.
+- **AI** — Anthropic SDK. `claude-sonnet-4-6` for the in-match Architect and the daily drama beat; `claude-haiku-4-5-20251001` for the galaxy heartbeat and voice-library enrichment. **The game runs with no model and no API key**: the narrative layer is procedural by default (a seeded grammar producing ~93,000 distinct lines across commentary, omens, proclamations and galaxy news), with the model as a strictly opt-in override via `ISL_NARRATIVE_MODE=llm`. The simulation owns the truth, the model owns only the prose, and it never touches world state.
 - **Simulation** — a deterministic, agent-based spatial match engine (Reynolds-style steering, geometry-derived events), run by the `match-worker` edge function and seeded from each match's UUID so a fixture always replays identically. The engine lives in two byte-identical copies (browser and Deno worker) guarded by a parity test.
 - **Hosting** — Vercel, deployed on push to `main`.
-- **Tests** — Vitest, 1,666 tests across 120 files. CI gates on `tsc --noEmit` + Vitest; ESLint and Prettier are wired (lint is informational while a cleanup backlog is cleared).
+- **Tests** — Vitest, 1,685 tests across 120 files. CI gates on `tsc --noEmit` + Vitest; ESLint and Prettier are wired (lint is informational while a cleanup backlog is cleared).
 - **Issues** — tracked in **GitHub Issues** under milestone + priority labels; the phase-based execution plan lives in [`ROADMAP.md`](./ROADMAP.md).
 
 The four core ideas the codebase is organised around:
@@ -88,7 +88,6 @@ Top 3 per league qualify for the **Celestial Cup**. 4th–6th qualify for the **
 What's left before the gates open:
 
 - first-fan onboarding polish, and surfacing the Architect live during matches
-- **the two cosmic voices need wiring up.** Balance and Chaos are fully written and their entities are seeded, but nothing constructs them, so they have never actually spoken in a match (#686)
 - a **Sifter**: the Chronicle currently produces a feed, not stories. Named multi-event patterns with ranking and dedupe are the missing pipeline stage — see [`docs/emergence-applied.md`](./docs/emergence-applied.md)
 - ethics and governance guardrails: vote weight decoupled from bankroll, economy guardrails, username moderation
 - Election Night incineration, plus player aging and youth promotion at rollover, so the league turns over instead of ossifying around the same superstars
