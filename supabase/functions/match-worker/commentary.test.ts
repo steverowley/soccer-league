@@ -211,3 +211,61 @@ describe('decorateCommentary', () => {
     expect([a, b]).toHaveLength(2);
   });
 });
+
+// ── Grammar defects ─────────────────────────────────────────────────────────
+// Added after a real simulated match surfaced two defects that every existing
+// test missed, because the tests checked structure while the bugs were in the
+// prose:
+//
+//   "The keeper with he has come from nowhere to deny him!"
+//     — the `keeper` pool mixed noun phrases with full clauses, and
+//       `<other> with {keeper}` only reads correctly with a noun phrase.
+//       Clauses now live in a separate `keeperClause` pool.
+//
+//   "Save, the keeper."
+//     — a `save` event carries the saver in payload.player and sets NO
+//       `keeper` key, so `<other>` printed its fallback and threw the name
+//       away. The save bucket now uses `<player>`.
+//
+// Rendering every bucket many times is the cheap way to catch this: a defect
+// that needs one specific pool entry to meet one specific template will not
+// show up in a handful of samples.
+describe('rendered lines are grammatical', () => {
+  const BUCKETS = [
+    'goal', 'save', 'shot', 'foul', 'foul_card', 'tackle', 'corner',
+    'offside', 'kickoff', 'substitution', 'penalty', 'halftime', 'fulltime',
+  ];
+
+  it('never emits a clause where a noun phrase belongs', () => {
+    const bad: string[] = [];
+    for (const b of BUCKETS) {
+      for (let i = 0; i < 400; i++) {
+        const line = commentaryFor(b, `m-${i}`, i, {
+          player: 'Del Oru', other: 'Vane Six', team: 'Mars United', card: 'yellow',
+        });
+        if (!line) continue;
+        const t = line.text;
+        if (/\bwith he\b|\bwith that is\b/.test(t)) bad.push(`verb after "with": ${t}`);
+        if (/\{[a-z]+\}|<[a-z]+>/.test(t)) bad.push(`unsubstituted: ${t}`);
+        if (/\band and\b/.test(t)) bad.push(`doubled conjunction: ${t}`);
+        if (/\bundefined\b|\bNaN\b/.test(t)) bad.push(`undefined: ${t}`);
+      }
+    }
+    expect([...new Set(bad)]).toEqual([]);
+  });
+
+  it('the save bucket uses the keeper name, never the fallback', () => {
+    // payload.player holds the saver, so a rendered save must not fall back
+    // to the generic "the keeper".
+    const lines: string[] = [];
+    for (let i = 0; i < 200; i++) {
+      const line = commentaryFor('save', `m-${i}`, i, {
+        player: 'Del Oru', other: 'Vane Six', team: 'Mars United', card: 'yellow',
+      });
+      if (line) lines.push(line.text);
+    }
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.filter((t) => /the keeper/.test(t))).toEqual([]);
+    expect(lines.some((t) => t.includes('Del Oru'))).toBe(true);
+  });
+});

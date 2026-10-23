@@ -49,6 +49,13 @@
     // We don't emit JS — Vite handles the actual build. tsc is used purely
     // for type-checking (`tsc --noEmit`) in the CI gate.
     "noEmit": true,
+    // The Deno edge functions under supabase/functions/ MUST write relative
+    // imports with an explicit `.ts` suffix, because Deno requires it. Any
+    // test that exercises the real worker code therefore pulls those
+    // suffixed paths into this program. Legal here only because we never
+    // emit; without it `tsc --noEmit` fails with TS5097 on files Vite never
+    // compiles.
+    "allowImportingTsExtensions": true,
     // verbatimModuleSyntax forces explicit `import type` for type-only
     // imports which helps tree-shaking and prevents accidental runtime
     // dependencies on type-only modules.

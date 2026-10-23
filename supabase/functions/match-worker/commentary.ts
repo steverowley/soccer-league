@@ -79,8 +79,17 @@ const VOX: Lexicon = {
     'that deserved better', 'the woodwork says no',
   ],
   keeper: [
-    'a magnificent stop', 'he has come from nowhere to deny him',
-    'what a hand', 'that is world class', 'he had no right to reach that',
+    'a magnificent stop', 'a brilliant save', 'a stunning block',
+    'a fingertip save', 'a world-class stop',
+  ],
+  // Full clauses, for templates that need a sentence rather than a noun
+  // phrase. Mixing the two in one pool produced "The keeper with he has come
+  // from nowhere to deny him", because `<other> with {keeper}` only reads
+  // correctly when the fragment is a noun phrase.
+  keeperClause: [
+    'he has come from nowhere to deny him', 'he had no right to reach that',
+    'that is world class', 'he never looked like being beaten',
+    'the reactions on him are extraordinary',
   ],
   stern: [
     'the referee has seen enough', 'that was always coming',
@@ -123,7 +132,16 @@ const VOX_TEMPLATES: Record<string, readonly string[]> = {
     "<player> has a go — {near}. He'll see that one again.",
     '<player> tries his luck and it drifts wide. {near}!',
   ],
-  save: ['<other> with {keeper}! Where did that come from!', '{keeper} from <other>!'],
+  // `<player>` IS the keeper here: a `save` event carries the saver in
+  // payload.player and sets no `keeper` key. Using `<other>` printed the
+  // literal fallback "the keeper" and wasted the name.
+  save: [
+    '<player> with {keeper}! Where did that come from!',
+    '{keeper} from <player>!',
+    '<player> — {keeperClause}! {crowd}!',
+    'Oh, <player> has pulled off {keeper} there!',
+    '<player> stands tall! {keeperClause}!',
+  ],
   woodwork: [
     'OFF THE FRAME! <player> — {near}!',
     '<player> rattles the woodwork! {near}!',
@@ -233,7 +251,13 @@ const NEXUS_TEMPLATES: Record<string, readonly string[]> = {
     '<player> attempts from {area}. {metric}. No goal.',
     'Off target, <player>. {verdict}.',
   ],
-  save: ['<other> intercepts the attempt. Reaction time below population mean.', 'Save, <other>. {metric}.'],
+  save: [
+    '<player> intercepts the attempt. Reaction time below population mean.',
+    'Save, <player>. {metric}.',
+    '<player> reads the line of the strike. {metric}.',
+    'Attempt stopped by <player>. {metric}.',
+    '<player> commits late and correctly. {metric}.',
+  ],
   woodwork: ['Frame contact. <player>. {verdict}.', '<player> strikes the woodwork. {metric}.'],
   penalty: ['Penalty awarded to <team>. Historical conversion rate 0.76. <player> to take.', 'Spot kick, <team>. <player>. {reading}.'],
   foul_card: [
@@ -324,7 +348,13 @@ const ZARA_TEMPLATES: Record<string, readonly string[]> = {
     '<player> drags it wide. {empathy}',
     "<player> goes for it from {area} — {body}, but it won't drop.",
   ],
-  save: ['<other> was moving before the strike. That is positioning, not reflex.', '<other> holds it. {tactic}.'],
+  save: [
+    '<player> was moving before the strike. That is positioning, not reflex.',
+    '<player> holds it. {tactic}.',
+    '<player> set himself early. {tactic}.',
+    'That save starts with <player> narrowing the angle. {tactic}.',
+    '<player> makes it look routine. It was not. {tactic}.',
+  ],
   woodwork: ['<player> off the upright. {empathy}', '{body}, and the frame denies <player>.'],
   penalty: ['Penalty, <team>. <player> has the walk now, and the walk is the hard part.', '<player> from the spot. {empathy}'],
   foul_card: [
@@ -384,7 +414,7 @@ const VOICE_WEIGHTS: Record<string, readonly [number, number, number]> = {
   woodwork: [4, 2, 3],
   shot_saved: [3, 3, 3],
   shot_missed: [3, 2, 4],
-  save: [3, 3, 3],
+  save: [5, 5, 5],
   tackle: [2, 2, 4],
   foul_card: [3, 2, 3],
   foul: [2, 3, 3],
