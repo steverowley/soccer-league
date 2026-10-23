@@ -12,7 +12,7 @@
 // result cannot be checked by clicking.
 
 import { describe, expect, it } from 'vitest';
-import { eventVoice, eventHeading } from './MatchDetail';
+import { eventVoice, eventHeading, cosmicAccent } from './MatchDetail';
 import type { MatchEventRow } from '../features/match';
 
 function row(payload: Record<string, unknown>, type = 'goal'): MatchEventRow {
@@ -73,5 +73,34 @@ describe('eventHeading', () => {
   it('falls back to the prettified event type when unvoiced', () => {
     expect(eventHeading(row({}, 'out_corner'))).not.toBe('');
     expect(eventHeading(row({}, 'out_corner'))).not.toMatch(/_/);
+  });
+});
+
+describe('cosmicAccent', () => {
+  it('tints Balance and Chaos distinctly', () => {
+    const b = cosmicAccent(row({ voice: 'balance' }, 'cosmic_voice'));
+    const c = cosmicAccent(row({ voice: 'chaos' }, 'cosmic_voice'));
+    expect(b).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    expect(c).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    expect(b).not.toBe(c);
+  });
+
+  it('only applies to cosmic_voice rows', () => {
+    // A commentator voice must not be mistaken for a cosmic one.
+    expect(cosmicAccent(row({ voice: 'vox' }, 'goal'))).toBeNull();
+    expect(cosmicAccent(row({ voice: 'balance' }, 'goal'))).toBeNull();
+  });
+
+  it('leaves the cosmic voices uncredited', () => {
+    // The design keeps them unnamed: a byline would explain the mechanic.
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('—');
+    expect(eventHeading(row({ voice: 'chaos' }, 'cosmic_voice'))).toBe('—');
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).not.toMatch(/balance|chaos/i);
+  });
+
+  it('does not let a cosmic row borrow a commentator name', () => {
+    expect(eventVoice(row({ voice: 'vox' }, 'cosmic_voice'))?.name).toBe('Captain Vox');
+    // ...but the row renderer prefers the cosmic accent, so the heading wins:
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('—');
   });
 });

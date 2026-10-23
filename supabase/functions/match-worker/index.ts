@@ -60,6 +60,7 @@ import {
 } from './interferenceResolver.ts';
 import { computeFanBoost } from './fanBoost.ts';
 import { decorateCommentary } from './commentary.ts';
+import { cosmicInterjections } from './cosmicVoices.ts';
 import { narrativeRngForMatch, seedFromMatchId } from './matchRng.ts';
 import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
@@ -1034,6 +1035,29 @@ async function processMatch(match: any): Promise<boolean> {
     result.events = filterNotableEvents(result.events);
     if (beforeFilterCount !== result.events.length) {
       console.log(`[match-worker] Significance filter: ${beforeFilterCount} → ${result.events.length} events`);
+    }
+
+    // ── Cosmic voices ──────────────────────────────────────────────────────
+    // Balance and Chaos interrupt the broadcast when something feels off.
+    //
+    // Deliberately AFTER the significance filter, for two reasons. First,
+    // `cosmic_voice` is in neither NOTABLE_EVENT_TYPES nor
+    // ALWAYS_KEEP_EVENT_TYPES, so interjections spliced in earlier would be
+    // silently discarded here and the voices would stay mute — and those sets
+    // live in `spatial/`, which is parity-guarded on code AND prose, so adding
+    // a type there means editing both twins for a worker-only concern. Second,
+    // reacting to the notable beats rather than to every sideways pass is the
+    // better behaviour anyway.
+    //
+    // The engine is stateful across a match, so it sees the surviving events in
+    // order with the running score, seeded on the match id so a fixture's
+    // interruptions are part of its record rather than a fresh roll per read.
+    const cosmic = cosmicInterjections(result.events, match.id);
+    if (cosmic.length > 0) {
+      result.events = [...result.events, ...cosmic].sort(
+        (a, b) => a.minute - b.minute || a.subminute - b.subminute,
+      );
+      console.log(`[match-worker] Cosmic voices interrupted ${cosmic.length} time(s)`);
     }
 
     // ── Persist events (batch-insert) ──────────────────────────────────────
