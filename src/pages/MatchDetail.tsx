@@ -1374,6 +1374,24 @@ const VOICES: Record<string, { name: string; role: string; color: string }> = {
   zara: { name: 'Zara Bloom', role: 'Color Analyst', color: '#A5D6A7' },
 };
 
+// The two cosmic voices are deliberately NOT in the map above. They are
+// unnamed and uncredited in-world — a fan is meant to learn to recognise them
+// from register and colour alone, never from a byline — so they get an accent
+// and an em-dash glyph where a commentator would have a name. Naming them here
+// would explain a mechanic the whole design keeps unexplained.
+const COSMIC_VOICES: Record<string, string> = {
+  balance: '#64748b', // slate-blue, the Second Voice
+  chaos: '#f59e0b', // amber, the Third Voice
+};
+
+/** Accent for a cosmic interruption, when this row is one. */
+export function cosmicAccent(event: MatchEventRow): string | null {
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  if (event.type !== 'cosmic_voice') return null;
+  const key = typeof payload['voice'] === 'string' ? payload['voice'] : null;
+  return key ? (COSMIC_VOICES[key] ?? null) : null;
+}
+
 /** The commentator who spoke this line, when the worker attributed one. */
 export function eventVoice(
   event: MatchEventRow,
@@ -1399,8 +1417,9 @@ export function eventVoice(
 function CommentaryRow({ event }: { event: MatchEventRow }) {
   const text = eventProse(event) ?? prettifyEventType(event.type);
   const isArchitect = isArchitectEvent(event);
-  const voice = isArchitect ? null : eventVoice(event);
-  const accent = isArchitect ? QUANTUM : (voice?.color ?? BORDER_FAINT);
+  const cosmic = cosmicAccent(event);
+  const voice = isArchitect || cosmic ? null : eventVoice(event);
+  const accent = isArchitect ? QUANTUM : (cosmic ?? voice?.color ?? BORDER_FAINT);
 
   return (
     <div
@@ -1524,6 +1543,10 @@ export function eventProse(event: MatchEventRow): string | null {
  */
 export function eventHeading(event: MatchEventRow): string {
   if (event.type === 'architect_interference') return 'The Architect';
+  // A cosmic voice gets a glyph, not a name. Balance and Chaos are uncredited:
+  // the accent colour and the register are the only things a fan has to go on,
+  // which is the point.
+  if (cosmicAccent(event)) return '—';
   // A voiced line is bylined by whoever said it. Falling through to the event
   // type here would label a Captain Vox goal call "Goal", which tells the fan
   // nothing they cannot already see on the scoreboard.
