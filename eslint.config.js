@@ -276,6 +276,16 @@ export default tseslint.config(
     },
   },
 
+  // A .cjs file is CommonJS by definition, so `require()` is the correct
+  // idiom there rather than a lapse. Banning it repo-wide meant the only way
+  // to add a Node maintenance script was to break the rule.
+  {
+    files: ['**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+
   // ── Prettier compatibility ─────────────────────────────────────────────────
   // MUST be last — disables any ESLint rules that conflict with Prettier
   // formatting. Prettier owns formatting; ESLint owns correctness.

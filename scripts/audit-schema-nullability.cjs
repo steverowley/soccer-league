@@ -26,16 +26,16 @@ function rowFields(table) {
 }
 
 const SCHEMAS = [
-  ['match_events', 'src/features/match/api/matchEvents.schema.ts', 'MatchEventRowSchema'],
-  ['wagers', 'src/features/betting/api/wagers.schema.ts', null],
-  ['match_odds', 'src/features/betting/api/oddsRepo.schema.ts', null],
-  ['architect_lore', 'src/features/architect/api/lore.schema.ts', null],
-  ['narratives', 'src/features/entities/api/entities.schema.ts', null],
-  ['focus_votes', 'src/features/voting/api/focuses.schema.ts', null],
+  ['match_events', 'src/features/match/api/matchEvents.schema.ts'],
+  ['wagers', 'src/features/betting/api/wagers.schema.ts'],
+  ['match_odds', 'src/features/betting/api/oddsRepo.schema.ts'],
+  ['architect_lore', 'src/features/architect/api/lore.schema.ts'],
+  ['narratives', 'src/features/entities/api/entities.schema.ts'],
+  ['focus_votes', 'src/features/voting/api/focuses.schema.ts'],
 ];
 
 let problems = 0;
-for (const [table, file, _schemaName] of SCHEMAS) {
+for (const [table, file] of SCHEMAS) {
   if (!fs.existsSync(file)) {
     console.log(`SKIP ${table}: ${file} missing`);
     continue;
