@@ -40,13 +40,23 @@ import { z } from 'zod';
  * the api-boundary parser's.
  */
 export const MatchEventRowSchema = z.object({
-  id:          z.string(),
-  match_id:    z.string(),
-  minute:      z.number().int().min(0),
-  subminute:   z.number().int().min(0),
-  type:        z.string(),
-  payload:     z.unknown(),   // jsonb — narrow downstream by event type
-  created_at:  z.string(),
+  id: z.string(),
+  match_id: z.string(),
+  minute: z.number().int().min(0),
+  // `subminute` is a FRACTION, not an integer. The column is numeric with
+  // `CHECK (subminute >= 0 AND subminute < 1)` (migration 0013), and the
+  // spatial adapter writes `Math.min(0.999, (tSec % 60) / 60)` — so almost
+  // every real row is fractional.
+  //
+  // This was `z.number().int().min(0)`, which rejected every event that did
+  // not land exactly on a minute boundary. `parseMatchEventRows` drops a
+  // failed row with nothing but a `console.warn`, so the commentary feed and
+  // the match timeline were silently losing nearly every event while looking
+  // merely quiet rather than broken.
+  subminute: z.number().min(0).lt(1),
+  type: z.string(),
+  payload: z.unknown(), // jsonb — narrow downstream by event type
+  created_at: z.string(),
 });
 
 export type ZodMatchEventRow = z.infer<typeof MatchEventRowSchema>;
@@ -63,12 +73,12 @@ export type ZodMatchEventRow = z.infer<typeof MatchEventRowSchema>;
  * `null` rather than asserting they're present.
  */
 const LiveMatchTeamSchema = z.object({
-  id:           z.string(),
-  name:         z.string(),
-  short_name:   z.string().nullable(),
-  color:        z.string().nullable(),
-  home_ground:  z.string().nullable(),
-  location:     z.string().nullable(),
+  id: z.string(),
+  name: z.string(),
+  short_name: z.string().nullable(),
+  color: z.string().nullable(),
+  home_ground: z.string().nullable(),
+  location: z.string().nullable(),
 });
 
 /**
@@ -80,15 +90,15 @@ const LiveMatchTeamSchema = z.object({
  * via `z.union` to tolerate occasional array-shape regressions.
  */
 export const LiveMatchRowSchema = z.object({
-  id:             z.string(),
-  status:         z.string(),
-  home_score:     z.number().int().nullable(),
-  away_score:     z.number().int().nullable(),
-  scheduled_at:   z.string().nullable(),
-  played_at:      z.string().nullable(),
+  id: z.string(),
+  status: z.string(),
+  home_score: z.number().int().nullable(),
+  away_score: z.number().int().nullable(),
+  scheduled_at: z.string().nullable(),
+  played_at: z.string().nullable(),
   competition_id: z.string(),
-  home_team:      LiveMatchTeamSchema,
-  away_team:      LiveMatchTeamSchema,
+  home_team: LiveMatchTeamSchema,
+  away_team: LiveMatchTeamSchema,
 });
 
 export type ZodLiveMatchRow = z.infer<typeof LiveMatchRowSchema>;
@@ -103,10 +113,7 @@ export type ZodLiveMatchRow = z.infer<typeof LiveMatchRowSchema>;
  * @param row  Raw row from Supabase (bulk or Realtime).
  * @param tag  Caller label for the warn-log prefix.
  */
-export function parseMatchEventRow(
-  row: unknown,
-  tag: string,
-): ZodMatchEventRow | null {
+export function parseMatchEventRow(row: unknown, tag: string): ZodMatchEventRow | null {
   if (row == null) return null;
   const parsed = MatchEventRowSchema.safeParse(row);
   if (parsed.success) return parsed.data;
@@ -118,10 +125,7 @@ export function parseMatchEventRow(
  * Parse an array of match_events rows. Bad rows are dropped with a
  * warn-log; the array always contains only valid entries.
  */
-export function parseMatchEventRows(
-  rows: unknown[],
-  tag:  string,
-): ZodMatchEventRow[] {
+export function parseMatchEventRows(rows: unknown[], tag: string): ZodMatchEventRow[] {
   const out: ZodMatchEventRow[] = [];
   for (const row of rows) {
     const parsed = MatchEventRowSchema.safeParse(row);
@@ -139,10 +143,7 @@ export function parseMatchEventRows(
  * warn-log so the MatchDetail page renders the "Unknown Match"
  * fallback rather than a half-populated header.
  */
-export function parseLiveMatchRow(
-  row: unknown,
-  tag: string,
-): ZodLiveMatchRow | null {
+export function parseLiveMatchRow(row: unknown, tag: string): ZodLiveMatchRow | null {
   if (row == null) return null;
   const parsed = LiveMatchRowSchema.safeParse(row);
   if (parsed.success) return parsed.data;
