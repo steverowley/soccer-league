@@ -319,8 +319,10 @@ description here — that's exactly the kind of detail that goes stale first.
 ## Pages & Routes
 
 Routing is inline in `src/main.tsx`, all pages lazy-loaded under one `Suspense` boundary. Don't
-hardcode the route/page count or table here — `grep "path=" src/main.tsx` gets the live list in one
-call and this section was already off by 4 pages at last check.
+hardcode the route/page count or an auth/admin-gating table here — `src/main.tsx` already has a
+detailed comment above every `<Route>` explaining what it does and how it's gated, co-located with
+the code that would change it. That's a better source than a copy here ever will be (a prior version
+of this file still said `/whatif` when the route had already moved to `/admin/what-if`).
 
 ---
 
@@ -334,12 +336,10 @@ already 12 migrations behind at last check).
 
 ## Edge Functions
 
-7 functions under `supabase/functions/`. The four LLM-spending workers (`match-worker`,
-`architect-galaxy-tick`, `drama-tick`, `corpus-enricher`) are gated by a shared secret bridging
-pg_cron and the function (migration `0052`); `match-notify-worker` uses its own secret and
-`--no-verify-jwt`. For current cron schedule/purpose per function, read the function's own header
-comment or `supabase/migrations/` directly — this file's own workflow count was stale by 3 entries
-at last check, same risk applies here.
+7 functions under `supabase/functions/`. Cron schedule + model per function (verified against
+migrations + `constants.ts`, not hand-guessed): see `docs/edge-functions.md`. Read it when a task
+touches a specific function's timing or model — the schedule lives in `supabase/migrations/`, not in
+the function itself, so it's easy to get wrong from memory.
 
 ---
 
