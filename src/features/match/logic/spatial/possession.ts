@@ -53,7 +53,7 @@ const HOLD_DECAY = 0.93;
 const CARRY_PROBE = 5;
 
 /** Value of a cross that does not find its man: a corner or a second ball. */
-const CROSS_SECOND_BALL = 0.012;
+const CROSS_SECOND_BALL = 0.03;
 
 /** Base decision temperature (expected-goal units). */
 const BASE_TEMPERATURE = 0.006;
@@ -219,7 +219,7 @@ export function chooseAction(
     // standing offside (he can misjudge it: perception error).
     const offsideRule = mode !== 'throw' && mode !== 'corner' && mode !== 'goalkick';
     if (offsideRule) {
-      const seenX = perceive(carrier, world, m.pos, 2.0).x;
+      const seenX = perceive(carrier, world, m.pos, 3.2).x;
       const beyond = (seenX - line) * fwd > 0 && (seenX - from.x) * fwd > 0 && progressOf(vec(seenX, m.pos.y), side) > 0.5;
       if (beyond) continue;
     }

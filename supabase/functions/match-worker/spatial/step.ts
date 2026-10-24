@@ -803,7 +803,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     const n = len(n0) > 1e-6 ? normalize(n0) : scale(normalize(b.vel), -1);
     const vn = dot(b.vel, n);
     const refl = vn < 0 ? sub(b.vel, scale(n, 1.3 * vn)) : b.vel;
-    b.vel = add(scale(refl, 0.45), vec(slip(p, world, 1.5), slip(p, world, 1.5)));
+    b.vel = add(scale(refl, 0.55), vec(slip(p, world, 1.5), slip(p, world, 1.5)));
     b.vz = Math.abs(b.vz) * 0.3 + 0.8;
     b.ownerId = null;
     if (shotLive) resolveShot(world, events, minute, 'shot');
@@ -1162,6 +1162,21 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     if (now >= p.nextThinkSec) thinkJob(p, world, ctx);
   }
 
+  // ── Offside: flagged once the offside man is clearly going for the ball ──
+  // (the first to it on his side and committed to the chase), as an
+  // assistant referee does, rather than only when he finally touches it.
+  if (world.ball.offsideFor) {
+    const op = findById(world, world.ball.offsideFor);
+    const k0 = world.ball.kick;
+    if (op && !op.sentOff && op.job === 'chase' && ctx.best[op.side]?.id === op.id && k0 && now - k0.tSec > 0.4) {
+      emit(events, world, minute, { type: 'offside', side: op.side, playerId: op.id });
+      passEnd(world, 'offside');
+      world.ball.offsideFor = null;
+      beginRestart(world, 'freekick', otherSide(op.side), clampSpot(op.pos), -3, true);
+      return events;
+    }
+  }
+
   // ── Keepers read shots ──────────────────────────────────────────────────
   const kick = world.ball.kick;
   if (kick && isShotKind(kick.kind) && !kick.resolved) {
@@ -1259,7 +1274,8 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
       const facing = len(owner.vel) > 0.5 ? normalize(owner.vel) : n;
       const fromFront = dot(n, facing) < -0.3;
       // Referees allow more contact inside the box before giving a penalty.
-      const limit = isInPenaltyArea(owner.pos, owner.side) ? CHARGE_SPEED_BOX : CHARGE_SPEED;
+      // A booked man holds back from contact.
+      const limit = (isInPenaltyArea(owner.pos, owner.side) ? CHARGE_SPEED_BOX : CHARGE_SPEED) + (o.yellowCards > 0 ? 1.2 : 0);
       if (closing > limit && !fromFront) {
         commitFoul(world, o, owner, closing, n, dist(owner.pos, world.ball.pos), 'charge', events, minute);
         break;
@@ -1337,6 +1353,11 @@ function driftTick(world: SimWorld, dt: number): void {
     const a = dt / CONFIDENCE_TAU;
     for (const p of world.home) p.confidence += (confidenceBase(p) - p.confidence) * a;
     for (const p of world.away) p.confidence += (confidenceBase(p) - p.confidence) * a;
+    // Instrumentation: team mean confidence once a minute.
+    if (world.trace && Math.floor(world.clockSec / 60) !== Math.floor((world.clockSec - dt) / 60)) {
+      const mean = (ps: readonly SimPlayer[]): number => r2(ps.reduce((s, p) => s + p.confidence, 0) / ps.length);
+      world.trace({ tSec: r2(world.clockSec), kind: 'confidence', ball: { x: 0, y: 0, z: 0 }, data: { home: mean(world.home), away: mean(world.away) } });
+    }
   }
   if (world.flags.momentum && world.phase === 'open_play') {
     const territory = (world.ball.pos.x / PITCH_LENGTH) * 2 - 1;

@@ -130,8 +130,14 @@ export function segmentDistance(p: Vec2, a: Vec2, b: Vec2): { d: number; t: numb
   return { d: dist(p, vec(a.x + ab.x * t, a.y + ab.y * t)), t };
 }
 
-/** Opponent reaction allowance (s) a passer assumes when judging a lane. */
-const LANE_REACT = 0.22;
+/** Opponent reaction allowance (s) a passer assumes when judging a lane:
+ *  seeing the pass, deciding to go, and turning (calibrated against what the
+ *  physics then does: scripts/estimate-calibration.ts). */
+const LANE_REACT = 0.42;
+
+/** Advantage (s) a receiver already standing at the aim point has over an
+ *  opponent arriving there: he is between that man and the ball. */
+const RECEIVER_FIRST = 0.25;
 
 /** Reach (m) an opponent has to cut out a ground ball. */
 const LANE_REACH = 0.9;
@@ -170,6 +176,7 @@ export function estimatePass(
   const fr = lofted ? LOFT_FRACTIONS : GROUND_FRACTIONS;
   const tAt = (f: number): number => (lofted ? airTravelTime(v0, f * d) : groundTravelTime(v0, f * d));
   const tBall = tAt(1);
+  const tRecv = timeToReach(receiver, aim, now);
   let oppMargin = Infinity;
   for (const o of opponents) {
     if (o.sentOff) continue;
@@ -182,11 +189,10 @@ export function estimatePass(
       const tb = tAt(f);
       if (!Number.isFinite(tb)) continue;
       const to = LANE_REACT + timeToReach(o, pt, now) - LANE_REACH / vO;
-      const m = to - tb;
+      const m = to - tb + (f === 1 && tRecv < tb ? RECEIVER_FIRST : 0);
       if (m < oppMargin) oppMargin = m;
     }
   }
-  const tRecv = timeToReach(receiver, aim, now);
   const recvMargin = (Number.isFinite(tBall) ? tBall : 99) + 0.5 - tRecv;
   const base = lofted ? KICK_ERROR.lofted : KICK_ERROR.pass;
   const latStd = d * base.ang * errScale;

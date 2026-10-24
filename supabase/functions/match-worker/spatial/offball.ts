@@ -172,7 +172,7 @@ const JOB_HYSTERESIS = 0.07;
 const JOB_TEMPERATURE = 0.05;
 
 /** How far beyond the line (m) a runner aims once he breaks. */
-const RUN_BREAK = 5;
+const RUN_BREAK = 7;
 
 /** Press-intensity multiplier for a side (style, momentum, score and clock, work rate). */
 export function pressIntensity(p: SimPlayer, world: SimWorld): number {
