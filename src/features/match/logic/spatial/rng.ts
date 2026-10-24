@@ -41,6 +41,30 @@ export function makeRng(seed: number): Rng {
 }
 
 /**
+ * Derive an independent 32-bit stream seed from the match seed, a player's
+ * roster index and a salt: `hash(seed, playerIndex, salt)` (research build
+ * order #1).  Each player owns a private imprecision stream, so one player's
+ * extra draw never shifts anyone else's: a change to one decision perturbs
+ * that player, not the whole match.
+ *
+ * The mixer is the murmur3 32-bit finaliser applied over the three inputs.
+ *
+ * @param seed   The match seed.
+ * @param index  The player's roster index (or any stream number).
+ * @param salt   A constant distinguishing stream families.
+ * @returns      A well-mixed unsigned 32-bit seed.
+ */
+export function streamSeed(seed: number, index: number, salt: number): number {
+  let h = (seed >>> 0) ^ Math.imul(index + 1, 0x9e3779b1) ^ Math.imul(salt + 1, 0x85ebca77);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
  * Uniform float in [min, max).
  *
  * @param rng  The seeded source.
