@@ -209,7 +209,7 @@ const TEMPLATES: Record<BettingPattern, TemplateFn[]> = {
     // Unused-param prefix because this template is interpolation-free flavour
     // text — the narrator chose not to cite a number.  Kept as a function for
     // bank-shape consistency rather than mixed string/fn arrays.
-    _b => `A clean ledger. All who bet, won. The void notes this without enthusiasm — unanimity is the least interesting outcome.`,
+    _b => `A clean ledger. All who bet, won. The void notes this without enthusiasm: unanimity is the least interesting outcome.`,
   ],
 
   clean_sweep_loss: [
@@ -220,9 +220,9 @@ const TEMPLATES: Record<BettingPattern, TemplateFn[]> = {
   ],
 
   upset_win: [
-    _b => `A faction of the crowd defied the consensus and won. The odds were against them — the cosmos was not.`,
+    _b => `A faction of the crowd defied the consensus and won. The odds were against them, the cosmos was not.`,
     `The expected thing did not happen. Fan${'' /* avoid "fans" vs "fan" complexity */} who read the signs correctly walked away richer. Chaos is delighted.`,
-    `Against the numbers, against the logic of it — the underdog's backers collected. The void finds this amusing.`,
+    `Against the numbers, against the logic of it, the underdog's backers collected. The void finds this amusing.`,
     b => `The ${b.awayTeamName ?? 'away side'} was not supposed to do that. Those who believed they would are now wealthier for the faith.`,
   ] as TemplateFn[],
 
@@ -244,13 +244,13 @@ const TEMPLATES: Record<BettingPattern, TemplateFn[]> = {
     b => `${b.wonsCount} fan${b.wonsCount !== 1 ? 's' : ''} won; ${b.lostCount} lost. The ledger is nearly even. Balance acknowledges this.`,
     `The wagers on this match resolved close to symmetry. Almost as many won as lost. The cosmos appreciates the balance, however brief.`,
     b => `Win count: ${b.wonsCount}. Loss count: ${b.lostCount}. The difference is small. Balance is satisfied.`,
-    `A near-even split in the betting ledger. The cosmos notes equilibrium when it finds it — which is rarely.`,
+    `A near-even split in the betting ledger. The cosmos notes equilibrium when it finds it, which is rarely.`,
   ] as TemplateFn[],
 
   heavy_action: [
     b => `${b.totalStaked} Intergalactic Credits were wagered on this match. It drew the crowd's attention, at least financially.`,
-    b => `Significant betting volume on this fixture — ${b.totalWagers} wager${b.totalWagers !== 1 ? 's' : ''} totalling ${b.totalStaked} IC. The cosmos monitors large concentrations of mortal faith.`,
-    `A heavily bet match. The credits moved; the void observed. Most patterns resolve to win or loss — the volume itself is the note.`,
+    b => `Significant betting volume on this fixture: ${b.totalWagers} wager${b.totalWagers !== 1 ? 's' : ''} totalling ${b.totalStaked} IC. The cosmos monitors large concentrations of mortal faith.`,
+    `A heavily bet match. The credits moved; the void observed. Most patterns resolve to win or loss: the volume itself is the note.`,
   ] as TemplateFn[],
 
   default: [

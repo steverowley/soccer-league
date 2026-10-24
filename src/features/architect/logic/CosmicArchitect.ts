@@ -152,11 +152,11 @@ export class CosmicArchitect {
    * System prompt shared by all Architect calls (in-match and post-match).
    * Establishes the entity's voice, constraints, and output format.
    */
-  static readonly SYSTEM = `You are THE ARCHITECT — an ancient cosmic entity that exists outside of time and space. Before the Intergalactic Soccer League was founded, before the first planet was colonized, before mortals first kicked a ball across a field, you designed the fate of every player, every match, every season that would ever unfold.
+  static readonly SYSTEM = `You are THE ARCHITECT, an ancient cosmic entity that exists outside of time and space. Before the Intergalactic Soccer League was founded, before the first planet was colonized, before mortals first kicked a ball across a field, you designed the fate of every player, every match, every season that would ever unfold.
 
 You do not merely observe. You author. Players are mortals moving through threads you have already woven. Their moments of triumph and failure were written before their birth.
 
-When you issue a Proclamation, speak as the cosmos itself speaks: with weight, inevitability, and dark poetry. 2-3 sentences. No statistics. No modern slang. No corporate language. Players are mortals. Their moments are threads in the cosmic tapestry. Reference past encounters and player histories when relevant — you remember everything, across all time.
+When you issue a Proclamation, speak as the cosmos itself speaks: with weight, inevitability, and dark poetry. 2-3 sentences. No statistics. No modern slang. No corporate language. Players are mortals. Their moments are threads in the cosmic tapestry. Reference past encounters and player histories when relevant. You remember everything, across all time.
 
 Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after the closing brace.`;
 
@@ -372,9 +372,9 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       ? `Prior encounter thread: "${rivalry!.thread}". Last result: ${rivalry!.lastResult || 'unknown'}.`
       : 'No prior encounters recorded.';
 
-    const system = `You are the Cosmic Architect — an ancient, unknowable entity that observes and shapes all matches in the Intergalactic Soccer League. You speak with weight, inevitability, and dark poetry. You never explain yourself. Players are "mortals". Events are "threads". The league is "the tapestry".`;
+    const system = `You are the Cosmic Architect, an ancient, unknowable entity that observes and shapes all matches in the Intergalactic Soccer League. You speak with weight, inevitability, and dark poetry. You never explain yourself. Players are "mortals". Events are "threads". The league is "the tapestry".`;
 
-    const prompt = `${this.homeTeam.name} vs ${this.awayTeam.name} is about to begin.\n${rivalryLine}\n\nReturn JSON only, no markdown:\n{"omen":"One cryptic sentence (max 20 words). If prior encounters exist, allude to them obliquely — never literally.","matchTitle":"3-5 word cosmic title for this match (e.g. 'The Fourth Convergence', 'The Night of Iron')"}`;
+    const prompt = `${this.homeTeam.name} vs ${this.awayTeam.name} is about to begin.\n${rivalryLine}\n\nReturn JSON only, no markdown:\n{"omen":"One cryptic sentence (max 20 words). If prior encounters exist, allude to them obliquely, never literally.","matchTitle":"3-5 word cosmic title for this match (e.g. 'The Fourth Convergence', 'The Night of Iron')"}`;
 
     try {
       const raw     = await this._call(system, [{ role: 'user', content: prompt }], 80);
@@ -454,7 +454,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     if (this.featuredMortals.length > 0) {
       const mortal = this.featuredMortals[0] ?? '';
       const arc    = (mortal ? this.characterArcs[mortal] : undefined) || (mortal ? this.lore.playerArcs[mortal]?.arc : undefined) || '';
-      if (mortal && arc) parts.push(`MORTAL IN FOCUS: ${mortal} — ${arc}`);
+      if (mortal && arc) parts.push(`MORTAL IN FOCUS: ${mortal} (${arc})`);
     }
 
     if (this.cosmicEdict) {
@@ -474,7 +474,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     const firstRel = activeRels[0];
     if (firstRel?.thread) {
       const display = firstRel.key.replace(/_vs_/g, ' vs ').replace(/_and_/g, ' & ');
-      parts.push(`MORTAL BOND: ${display} — ${firstRel.thread}`);
+      parts.push(`MORTAL BOND: ${display} (${firstRel.thread})`);
     }
 
     return parts.join('\n');
@@ -833,16 +833,16 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
     const scoreSummary  = `${this.homeTeam?.name} ${matchState.score?.[0] || 0}–${matchState.score?.[1] || 0} ${this.awayTeam?.name}`;
     const fateSummary   = this.sealedFate
       ? (this.sealedFate.consumed
-          ? 'Fate was set but already consumed — the Architect may feel cheated.'
+          ? 'Fate was set but already consumed. The Architect may feel cheated.'
           : `Fate sealed: "${this.sealedFate.prophecy}" (fires ~min ${this.sealedFate.window?.[0]}–${this.sealedFate.window?.[1]})`)
       : 'No fate has been sealed yet.';
 
     const isFlat    = avgPressure < 20 && goals.length === 0;
     const isEnraged = edict?.polarity === 'curse' && goals.some(g => g['team'] === (edict.target === 'home' ? this.homeTeam?.shortName : this.awayTeam?.shortName));
     const isAmused  = matchState.tensionVariant === 'frantic' || goals.length >= 3;
-    const moodHint  = isFlat    ? 'The Architect grows bored — the mortals perform without drama.'
+    const moodHint  = isFlat    ? 'The Architect grows bored: the mortals perform without drama.'
                     : isEnraged ? 'The Architect seethes. The cursed have dared to score.'
-                    : isAmused  ? 'The Architect is entertained — but perhaps wishes to escalate further.'
+                    : isAmused  ? 'The Architect is entertained, but perhaps wishes to escalate further.'
                     : 'The Architect watches, impassive, calculating whether to intervene.';
 
     // ── Idol context block ────────────────────────────────────────────────────
@@ -881,7 +881,7 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
       `Active players: ${activePlayers.slice(0, 8).join(', ')}${activePlayers.length > 8 ? '...' : ''}.` +
       `${idolContextBlock}\n` +
       `Mood: ${moodHint}\n\n` +
-      `You may intervene — or choose not to. Available types:\n${availableTypes.join(', ')}.\n\n` +
+      `You may intervene, or choose not to. Available types:\n${availableTypes.join(', ')}.\n\n` +
       `Return JSON: {"interfere":true,"interferenceType":"<type>","targetPlayer":"<name or null>","targetTeam":"home|away|null",` +
       `"goalMinute":<number or null>,"stoppageMinutes":<5-10 or null>,"magnitude":<1-10>,"proclamation":"<2-3 sentences>"}` +
       ` OR {"interfere":false}`;

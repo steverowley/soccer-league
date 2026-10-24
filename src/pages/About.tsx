@@ -35,39 +35,39 @@ export default function About() {
           <P>
             Sign up, receive <strong>200 Intergalactic Credits</strong>, and pick a favourite
             club and player. Matches unfold in real time, paced like a wire-service
-            broadcast — three commentators argue the play while the Cosmic Architect
+            broadcast: three commentators argue the play while the Cosmic Architect
             occasionally rewrites a rule mid-half. Bet credits on outcomes. Win, lose,
             survive.
           </P>
           <P>
             At season&apos;s end, fans of each club pool their credits and vote on two focuses
-            — one major, one minor — that actually reshape the team for next season.
+            (one major, one minor) that actually reshape the team for next season.
             The cosmos enacts what you collectively choose, then writes journalist
             takes about whether it worked.
           </P>
 
           <H2>The cast</H2>
           <P>
-            <strong>Vox / Nexus-7 / Zara</strong> — the booth, three commentators with
+            <strong>Vox / Nexus-7 / Zara</strong>: the booth, three commentators with
             distinct voices arguing the run of play.
           </P>
           <P>
-            <strong>The Cosmic Architect</strong> — the haunted thing in the rafters.
+            <strong>The Cosmic Architect</strong>: the haunted thing in the rafters.
             Sometimes it speaks. Sometimes it changes the rules. You will not be told
             when.
           </P>
           <P>
-            <strong>Balance &amp; Chaos</strong> — two cosmic voices weighing the
+            <strong>Balance &amp; Chaos</strong>: two cosmic voices weighing the
             equilibrium of every match. They speak softly. They are usually right.
           </P>
           <P>
-            <strong>Pundits, journalists, bookies, referees</strong> — the supporting
+            <strong>Pundits, journalists, bookies, referees</strong>: the supporting
             ecosystem. They post takes in the Galaxy Dispatch feed between matches.
           </P>
 
           <H2>The non-goals</H2>
           <P>
-            No real-money gambling — credits are in-game only. No direct messaging
+            No real-money gambling: credits are in-game only. No direct messaging
             between players. No mobile apps yet. No surface that exposes raw player
             statistics; the world is treated like real life.
           </P>

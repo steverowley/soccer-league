@@ -246,7 +246,7 @@ export default function WhatIf() {
               kicker="12"
               label="ALTERNATE TIMELINES"
               title="Shadow distributions for upcoming matches"
-              subtitle="The Architect council watches outcomes that didn't happen. Each row below summarises five alternate-reality runs of an upcoming fixture — the canonical timeline lives elsewhere."
+              subtitle="The Architect council watches outcomes that didn't happen. Each row below summarises five alternate-reality runs of an upcoming fixture. The canonical timeline lives elsewhere."
             />
           </section>
 
@@ -255,7 +255,7 @@ export default function WhatIf() {
               <p style={{ color: COLORS.dust50 }}>Loading shadow distributions…</p>
             ) : matches.length === 0 ? (
               <p style={{ color: COLORS.dust50 }}>
-                No shadow data yet — the shadow-match-worker hasn&rsquo;t run, or no
+                No shadow data yet: the shadow-match-worker hasn&rsquo;t run, or no
                 upcoming matches are inside the worker&rsquo;s horizon.
               </p>
             ) : (

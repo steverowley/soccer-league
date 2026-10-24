@@ -139,7 +139,7 @@ export function MatchViewerDemo() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <p style={{ margin: '0 0 12px', color: COLORS.dust70, fontSize: 13, lineHeight: 1.6 }}>
-        A full match <strong style={{ color: COLORS.dust }}>simulated live</strong> by the real engine —
+        A full match <strong style={{ color: COLORS.dust }}>simulated live</strong> by the real engine:
         real rosters, stats, tactics and kits. Pick two clubs, then use the{' '}
         <strong style={{ color: COLORS.dust }}>Pitch / Ball</strong> buttons on the pitch to switch camera.
       </p>

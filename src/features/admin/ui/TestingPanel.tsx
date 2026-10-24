@@ -268,7 +268,7 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
                 style={adminSelectStyle}
                 required
               >
-                <option value="">— Select team —</option>
+                <option value="">Select team</option>
                 {teams.map(t => (
                   <option key={t.id} value={t.id}>{t.name} ({t.league})</option>
                 ))}

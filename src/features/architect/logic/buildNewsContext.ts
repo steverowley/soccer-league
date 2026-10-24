@@ -193,7 +193,7 @@ export function redactMatchResult(
   away: string,
 ): string {
   const diff = Math.abs(homeScore - awayScore);
-  if (homeScore === awayScore) return `${home} vs ${away} — a draw`;
+  if (homeScore === awayScore) return `${home} vs ${away}: a draw`;
 
   const winner = homeScore > awayScore ? home : away;
   const loser  = homeScore > awayScore ? away : home;
@@ -207,7 +207,7 @@ export function redactMatchResult(
     margin = 'narrow win';
   }
 
-  return `${winner} beat ${loser} — a ${margin}`;
+  return `${winner} beat ${loser}: a ${margin}`;
 }
 
 // ── Narrative kind mapping ───────────────────────────────────────────────────
@@ -310,7 +310,7 @@ ${ctx.recentMatches.map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).
 Recent club decisions (season focuses enacted):
 ${ctx.recentFocusEnacted.length > 0
   ? ctx.recentFocusEnacted
-      .map((f) => `• ${f.team_id} — ${f.focus_label} (${f.tier})`)
+      .map((f) => `• ${f.team_id}: ${f.focus_label} (${f.tier})`)
       .join('\n')
   : '• (none yet this season)'}
 

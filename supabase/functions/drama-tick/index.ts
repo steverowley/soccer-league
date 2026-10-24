@@ -306,14 +306,14 @@ ${coreQuotes.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 RULES (absolute):
 1. NEVER reveal underlying stats, numbers, probabilities, or mechanics. Treat the league like real life.
 2. 2-5 sentences. The reader should feel something shifted.
-3. Output ONLY a single JSON object — no prose, no fences.
+3. Output ONLY a single JSON object. No prose, no fences.
 
 OUTPUT SCHEMA:
 {"kind":"${kindGuidance.kindHint}","text":"the announcement / declaration / decree, in character"}`;
 
   const memoryLines =
     memories.length === 0
-      ? '(no recent high-salience memories — write from voice alone)'
+      ? '(no recent high-salience memories; write from voice alone)'
       : memories
           .map(
             (m: any) =>
@@ -380,13 +380,13 @@ function pickDramaKindGuidance(entityKind: string): { kindHint: string; userProm
       return {
         kindHint: 'political_decree',
         userPrompt:
-          'Issue a single decree: short, formal, consequential. Pick a target — a club, a region, a ruling — that the memories above warrant.',
+          'Issue a single decree: short, formal, consequential. Pick a target (a club, a region, a ruling) that the memories above warrant.',
       };
     default:
       return {
         kindHint: 'feud_declaration | political_decree',
         userPrompt:
-          'Choose the dramatic beat the memories above most warrant — a public falling-out or a formal proclamation.',
+          'Choose the dramatic beat the memories above most warrant: a public falling-out or a formal proclamation.',
       };
   }
 }

@@ -222,7 +222,7 @@ function makeMock(seed: { competitions: CompRow[]; matches: MatchSeedRow[] }) {
 
 /** A season seed with 4 league comps (out of canonical order) + 2 named cups. */
 function buildSeason(opts: {
-  /** Cup names — defaults to the S2-style "— Season 2" suffix. */
+  /** Cup names — defaults to the S2-style ": Season 2 (2601)" suffix. */
   celestialName?: string;
   shieldName?: string;
   /** Omit a cup entirely (to test the skip path). */
@@ -237,7 +237,7 @@ function buildSeason(opts: {
   for (const slug of scrambled) {
     const id = leagueCompId(slug);
     competitions.push({
-      id, season_id: SEASON_ID, league_id: slug, name: `${slug} League — Season 2`, type: 'league',
+      id, season_id: SEASON_ID, league_id: slug, name: `${slug} League: Season 2 (2601)`, type: 'league',
     });
     matches.push(...buildLeagueMatches(id, slug));
   }
@@ -245,12 +245,12 @@ function buildSeason(opts: {
   // Two cup shells (fresh UUIDs, NULL bracket) named per the rollover convention.
   competitions.push({
     id: 'cup-celestial-fresh', season_id: SEASON_ID, league_id: null,
-    name: opts.celestialName ?? 'Celestial Cup — Season 2', type: 'cup', bracket: null,
+    name: opts.celestialName ?? 'Celestial Cup: Season 2 (2601)', type: 'cup', bracket: null,
   });
   if (!opts.omitShield) {
     competitions.push({
       id: 'cup-shield-fresh', season_id: SEASON_ID, league_id: null,
-      name: opts.shieldName ?? 'Solar Shield — Season 2', type: 'cup', bracket: null,
+      name: opts.shieldName ?? 'Solar Shield: Season 2 (2601)', type: 'cup', bracket: null,
     });
   }
 
@@ -268,7 +268,7 @@ describe('seedCupCompetitions — season-generalised (#568 follow-up)', () => {
     const seed = buildSeason({});
     seed.competitions.push({
       id: 'stray-league', season_id: SEASON_ID, league_id: 'phantom-zone',
-      name: 'Phantom League — Season 2', type: 'league',
+      name: 'Phantom League: Season 2 (2601)', type: 'league',
     });
     const { db } = makeMock(seed);
     const ids = await resolveSeasonLeagueCompIds(db as never, SEASON_ID);
@@ -321,7 +321,7 @@ describe('seedCupCompetitions — season-generalised (#568 follow-up)', () => {
 
   it('skips a cup whose name matches nothing without throwing', async () => {
     // Celestial present, but the second cup is misnamed so it resolves to null.
-    const { db, state } = makeMock(buildSeason({ shieldName: 'Mystery Trophy — Season 2' }));
+    const { db, state } = makeMock(buildSeason({ shieldName: 'Mystery Trophy: Season 2 (2601)' }));
     const result = await seedCupCompetitions(db as never, SEASON_ID);
 
     expect(result.celestial.competitionId).toBe('cup-celestial-fresh');

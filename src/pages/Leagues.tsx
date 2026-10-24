@@ -470,7 +470,7 @@ function PlaceholderLeaderRow({ position }: PlaceholderLeaderRowProps) {
         <span>{String(position).padStart(2, '0')}</span>
       </span>
       <span style={{ fontStyle: 'italic' }}>Awaiting first kick-off</span>
-      <span style={{ fontVariantNumeric: 'tabular-nums' }}>— pts</span>
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{'—'} pts</span>
     </li>
   );
 }

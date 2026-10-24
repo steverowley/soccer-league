@@ -36,7 +36,7 @@ export async function llmEntityNarrative(
 RULES (absolute):
 1. NEVER reveal underlying stats, numbers, probabilities, or mechanics. Treat the league like real life.
 2. 2–4 sentences only. Evocative and in-character.
-3. Output ONLY a single JSON object — no prose, no fences.
+3. Output ONLY a single JSON object. No prose, no fences.
 
 OUTPUT SCHEMA:
 {"kind":"${targetKind}","summary":"your text here","entities_involved":["team-id-or-entity-name"]}`;
@@ -46,7 +46,7 @@ ${matches.map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')
 
 Recent club decisions:
 ${focuses.length > 0
-  ? focuses.map((f) => `• ${f.team_id} — ${f.focus_label} (${f.tier})`).join('\n')
+  ? focuses.map((f) => `• ${f.team_id}: ${f.focus_label} (${f.tier})`).join('\n')
   : '• (none yet this season)'}
 
 Recent narratives (do NOT repeat these themes):
@@ -85,7 +85,7 @@ export async function llmArchitectWhisper(
   matches: Array<{ home: string; away: string; result: string; played_at: string }>,
   priorNarr: NarrativeRow[],
 ): Promise<string | null> {
-  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who speaks in cryptic, unsettling fragments between matches.
+  const system = `You are the Cosmic Architect of the Intergalactic Soccer League, a Lovecraftian, omniscient narrator who speaks in cryptic, unsettling fragments between matches.
 
 RULES:
 1. NEVER reveal stats, numbers, or game mechanics.
@@ -119,13 +119,13 @@ export async function llmFocusReaction(
   row: { team_id: string; focus_key: string; focus_label: string; tier: string },
   teamName: string,
 ): Promise<string | null> {
-  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who reacts to fan decisions in cryptic, unsettling fragments.
+  const system = `You are the Cosmic Architect of the Intergalactic Soccer League, a Lovecraftian, omniscient narrator who reacts to fan decisions in cryptic, unsettling fragments.
 
 RULES:
 1. NEVER reveal stats, numbers, percentages, or game mechanics.
 2. 1–2 sentences. Cryptic. Knowing. Sometimes ominous, sometimes amused.
 3. Reference the team name and the focus label by name so the fan recognises the trigger.
-4. NEVER explain the mechanical effect of the choice — only the cosmos's reaction to the choice itself.
+4. NEVER explain the mechanical effect of the choice, only the cosmos's reaction to the choice itself.
 5. Output ONLY the narrative text. No JSON, no labels.
 
 EXAMPLE TONE:
@@ -176,7 +176,7 @@ RULES (absolute):
 3. You may reference teams or recent results but only in qualitative terms (never scores).
 4. Output ONLY the decree text. No JSON, no labels, no headers.
 
-TONE: Political officials in the ISL universe treat soccer as a proxy for interplanetary prestige. Your statement should feel like a press release filtered through genuine in-world ideology — concern for your homeworld's clubs, commentary on cosmic governance, self-serving but plausible.`;
+TONE: Political officials in the ISL universe treat soccer as a proxy for interplanetary prestige. Your statement should feel like a press release filtered through genuine in-world ideology: concern for your homeworld's clubs, commentary on cosmic governance, self-serving but plausible.`;
 
   const user = `Recent ISL results (redacted, no raw scores):
 ${matches.slice(0, 5).map((m) => `• ${m.result} (${m.played_at.slice(0, 10)})`).join('\n')}
@@ -216,10 +216,10 @@ export async function llmMediaBuzz(
   // distinguishable in the feed without requiring per-platform templates.
   const formatGuide =
     format === 'microblog'
-      ? 'hot takes, punchy, 1–2 sentences, possibly inflammatory — the kind of post that goes viral for the wrong reasons'
+      ? 'hot takes, punchy, 1–2 sentences, possibly inflammatory: the kind of post that goes viral for the wrong reasons'
       : format === 'forum'
-      ? 'long-thread energy condensed into 2–3 sentences — analytical, opinionated, name-drops teams and players freely'
-      : 'video-hook style — exclamation-heavy, YouTube-thumbnail energy, promises something dramatic';
+      ? 'long-thread energy condensed into 2–3 sentences: analytical, opinionated, name-drops teams and players freely'
+      : 'video-hook style: exclamation-heavy, YouTube-thumbnail energy, promises something dramatic';
 
   const system = `You are summarising trending content on ${displayName}, a ${format} platform in the Intergalactic Soccer League universe.
 
@@ -228,7 +228,7 @@ Platform reach: ${reach}.
 
 RULES (absolute):
 1. NEVER reveal underlying stats, numbers, probabilities, or game mechanics.
-2. Write as a narrator describing what is trending ON the platform — not as a single user, but as the voice of the crowd.
+2. Write as a narrator describing what is trending ON the platform, not as a single user, but as the voice of the crowd.
 3. ${formatGuide}
 4. Output ONLY the buzz summary. No JSON, no labels.`;
 

@@ -189,7 +189,7 @@ export default function Wagers() {
           kicker="II"
           label="The Ledger"
           title="Every Bet Ever"
-          subtitle="Newest at the top.  Open wagers settle automatically when the match completes — no action required."
+          subtitle="Newest at the top.  Open wagers settle automatically when the match completes. No action required."
         />
 
         <div style={{ marginTop: 24 }}>

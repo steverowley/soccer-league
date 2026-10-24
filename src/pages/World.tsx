@@ -252,7 +252,7 @@ export default function World() {
           </div>
           <h1 style={titleStyle}>Everything Is Connected</h1>
           <p style={ledeStyle}>
-            Clubs, players, officials, the booth, the betting syndicate — and the unseen hand
+            Clubs, players, officials, the booth, the betting syndicate, and the unseen hand
             that moves them all. Search the galaxy or pick a tier below, then select an entity
             to trace its web of relationships.
           </p>
@@ -397,7 +397,7 @@ export default function World() {
                         weren't fetched (relevant for "Players" and "All"). */}
                     {entities.length === LIST_LIMIT && search.trim() === '' && (
                       <li style={truncationNoticeStyle}>
-                        Showing first {LIST_LIMIT} — refine with a filter above.
+                        Showing first {LIST_LIMIT}. Refine with a filter above.
                       </li>
                     )}
                   </ul>

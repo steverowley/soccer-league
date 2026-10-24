@@ -774,7 +774,7 @@ function FormCard({ standing }: { standing: LeagueStandingsRow | null }) {
 /** Build a truthful one-liner from the last-5 results, or a quiet fallback. */
 function formProse(form: Array<'W' | 'D' | 'L'>): string {
   if (form.length === 0) {
-    return 'No matches played yet this cycle — the record is a blank slate.';
+    return 'No matches played yet this cycle. The record is a blank slate.';
   }
   const w = form.filter((r) => r === 'W').length;
   const d = form.filter((r) => r === 'D').length;

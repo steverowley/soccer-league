@@ -1043,12 +1043,12 @@ function redactResult(
   home: string,
   away: string,
 ): string {
-  if (homeScore === awayScore) return `${home} vs ${away} — a draw`;
+  if (homeScore === awayScore) return `${home} vs ${away}: a draw`;
   const diff   = Math.abs(homeScore - awayScore);
   const winner = homeScore > awayScore ? home : away;
   const loser  = homeScore > awayScore ? away : home;
   const margin = diff >= 3 ? 'dominant victory' : diff === 2 ? 'comfortable win' : 'narrow win';
-  return `${winner} beat ${loser} — a ${margin}`;
+  return `${winner} beat ${loser}: a ${margin}`;
 }
 
 

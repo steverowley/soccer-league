@@ -173,7 +173,7 @@ interface FromSeasonRow {
  */
 function seasonNameForYear(year: number): string {
   const seasonNumber = year - SEASON_YEAR_OFFSET;
-  return `Season ${seasonNumber} — ${year}`;
+  return `Season ${seasonNumber} (${year})`;
 }
 
 /**
@@ -184,12 +184,12 @@ function seasonNameForYear(year: number): string {
  * never blocks on a model call; it's written under the `architect_whisper` kind
  * so it surfaces with the Architect's purple accent in /news.
  *
- * @param seasonName  The new season's display name (e.g. "Season 2 — 2601").
+ * @param seasonName  The new season's display name (e.g. "Season 2 (2601)").
  * @returns           The narrative summary prose.
  */
 export function composeSeasonDawnNarrative(seasonName: string): string {
   return (
-    `A new season dawns. ${seasonName} opens across the solar system — ` +
+    `A new season dawns. ${seasonName} opens across the solar system: ` +
     `fresh fixtures etched into the dark, every club's ledger scoured back to zero. ` +
     `The Architect leans over its reset board, and the cosmos holds its breath.`
   );
@@ -345,7 +345,7 @@ export async function rolloverSeason(
   // ── Step 4: league competitions + rosters + fixtures ───────────────────────
   for (const [leagueIdx, league] of LEAGUES.entries()) {
     const compId   = randomUUID();
-    const compName = `${league.name} — ${newName}`;
+    const compName = `${league.name}: ${newName}`;
 
     // Interleave the four leagues inside the kickoff-stagger window: without
     // this offset every league's slot-0 fixture would still kick off at the
@@ -431,7 +431,7 @@ export async function rolloverSeason(
   // ── Step 5: empty cup competition rows ─────────────────────────────────────
   for (const cup of CUP_TIERS) {
     const cupId   = randomUUID();
-    const cupName = `${cup.name} — ${newName}`;
+    const cupName = `${cup.name}: ${newName}`;
 
     const { error: cupErr } = await db
       .from('competitions')

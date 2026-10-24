@@ -292,7 +292,7 @@ function emptyMessageFor(status: string): string {
   // clock); `in_progress` is the brief window while the worker writes rows.
   // Both are closed to bets — place_wager only accepts `scheduled`.
   if (status === 'in_progress' || status === 'live') {
-    return 'Betting closed — match is in progress.';
+    return 'Betting closed: match is in progress.';
   }
   if (status === 'completed')   return 'Match complete. Visit the wagers ledger to review the settlement.';
   if (status === 'cancelled')   return 'Match cancelled. Any open wagers were voided.';

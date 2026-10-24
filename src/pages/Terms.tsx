@@ -89,7 +89,7 @@ export default function Terms() {
           <P>
             The Service is provided &quot;as is&quot; without warranty of any kind.
             We do our best, but the Service may break, change, or disappear without
-            notice — it&apos;s an experiment.
+            notice. It&apos;s an experiment.
           </P>
 
           <H2>Changes to these terms</H2>

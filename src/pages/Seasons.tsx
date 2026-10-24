@@ -69,7 +69,7 @@ function formatRange(s: SeasonSummary): string {
     month: 'short',
     day:   'numeric',
   });
-  if (!end) return `${fmt(start!)} — present`;
+  if (!end) return `${fmt(start!)} → present`;
   if (!start) return fmt(end);
   return `${fmt(start)} → ${fmt(end)}`;
 }
@@ -105,7 +105,7 @@ export default function Seasons() {
               kicker="0"
               label="The Cosmic Ledger"
               title="Seasonal Archive"
-              subtitle="Every season the league has run.  Click a year to inspect its final state — standings, brackets, election results."
+              subtitle="Every season the league has run.  Click a year to inspect its final state: standings, brackets, election results."
             />
           </section>
 

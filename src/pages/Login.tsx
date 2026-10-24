@@ -185,7 +185,7 @@ export default function Login() {
     // list; a determined attacker bypassing the client gets the same
     // 23514 from Postgres.
     if (mode === MODE_SIGNUP && RESERVED_USERNAMES.has(username.trim().toLowerCase())) {
-      setError(`"${username}" is reserved — pick another.`);
+      setError(`"${username}" is reserved. Pick another.`);
       return;
     }
     if (mode === MODE_SIGNUP && !ageConfirmed) {

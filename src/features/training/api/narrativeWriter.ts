@@ -46,7 +46,7 @@ import type { TrainingMilestone } from '../logic/milestones';
  */
 const MILESTONE_TEMPLATES: Record<TrainingMilestone, string> = {
   5:  '{{player}} is making moves in {{team}} training this week.',
-  10: '{{player}} has caught the eye of the press corps — sustained training reports out of {{team}}.',
+  10: '{{player}} has caught the eye of the press corps: sustained training reports out of {{team}}.',
   20: 'The {{team}} training facility has elevated {{player}} to one of its chosen few. The cosmos is watching.',
 };
 

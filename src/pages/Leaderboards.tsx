@@ -126,7 +126,7 @@ export default function Leaderboards(): JSX.Element {
             kicker="VII"
             label="Who's Winning"
             title="The Boards"
-            subtitle="Two ledgers — the bettors who've grown a bankroll, the players the cosmos worships.  Different signals, same question: who's ahead."
+            subtitle="Two ledgers: the bettors who've grown a bankroll, the players the cosmos worships.  Different signals, same question: who's ahead."
           />
         </Container>
       </section>
@@ -163,7 +163,7 @@ export default function Leaderboards(): JSX.Element {
                 kicker="II"
                 label="Devotion"
                 title="Top Idols"
-                subtitle="Ordered by total fan attention — picks plus training clicks, blended.  The formula is yours to interpret."
+                subtitle="Ordered by total fan attention: picks plus training clicks, blended.  The formula is yours to interpret."
               />
               <IdolBoardSection
                 loaded={loaded}

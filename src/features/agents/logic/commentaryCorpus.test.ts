@@ -279,13 +279,13 @@ describe('pickCommentary', () => {
    * Pinning down the exact format prevents future "improvements" from
    * silently changing the engine's emergency fallback string.
    */
-  it('falls back to "${atk} — ${outcome}." for an unknown outcome', () => {
+  it('falls back to "${atk}: ${outcome}." for an unknown outcome', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     // Cast through an explicit local — typed outcome union doesn't allow
     // a synthetic value, but the runtime branch must still be tested.
     const synthetic = 'never_existed' as CommentaryOutcome;
     const line = pickCommentary('shot', ACTORS, synthetic);
-    expect(line).toBe('Vex-9 — never_existed.');
+    expect(line).toBe('Vex-9: never_existed.');
   });
 
   /**

@@ -148,7 +148,7 @@ export default function Training() {
             kicker="VIII"
             label="Player Development"
             title="Train Your Idols"
-            subtitle="Each click adds XP to the player you&rsquo;ve picked.  Cross enough XP and a stat bumps — small enough that no single fan can singlehandedly elevate a player, large enough that a community can."
+            subtitle="Each click adds XP to the player you&rsquo;ve picked.  Cross enough XP and a stat bumps: small enough that no single fan can singlehandedly elevate a player, large enough that a community can."
           />
         </Container>
       </section>
@@ -337,7 +337,7 @@ function RosterPicker({
         kicker="I"
         label="The Roster"
         title="Pick A Player"
-        subtitle="Starters are listed first.  Switch any time — clicks belong to whichever player is selected when you press the button."
+        subtitle="Starters are listed first.  Switch any time: clicks belong to whichever player is selected when you press the button."
       />
       <div
         className="isl-roster-picker"
@@ -717,11 +717,11 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
 function humanizeReason(reason: string | undefined) {
   switch (reason) {
     case 'cooldown':
-      return 'Cooldown active — wait a moment.';
+      return 'Cooldown active. Wait a moment.';
     case 'session_cap':
-      return 'Session cap reached — try again later.';
+      return 'Session cap reached. Try again later.';
     case 'db_error':
-      return 'Database hiccup — try again.';
+      return 'Database hiccup. Try again.';
     case 'not_allowed':
       return 'Click not allowed right now.';
     default:
