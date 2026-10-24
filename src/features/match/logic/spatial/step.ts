@@ -137,9 +137,10 @@ function isPassKind(k: KickKind): boolean {
   return k === 'pass' || k === 'through' || k === 'cross' || k === 'long' || k === 'throw';
 }
 
-/** Confidence baseline: the home crowd lifts the home side a little. */
-function confidenceBase(p: SimPlayer): number {
-  return p.side === 'home' ? 0.53 : 0.47;
+/** Confidence baseline (the same for both sides; the crowd works through
+ *  HOME_LIFT on effort and alertness instead, see offball.ts and execution.ts). */
+function confidenceBase(_p: SimPlayer): number {
+  return 0.5;
 }
 
 function bump(world: SimWorld, p: SimPlayer | null | undefined, d: number): void {

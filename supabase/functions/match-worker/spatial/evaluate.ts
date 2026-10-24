@@ -133,11 +133,11 @@ export function segmentDistance(p: Vec2, a: Vec2, b: Vec2): { d: number; t: numb
 /** Opponent reaction allowance (s) a passer assumes when judging a lane:
  *  seeing the pass, deciding to go, and turning (calibrated against what the
  *  physics then does: scripts/estimate-calibration.ts). */
-const LANE_REACT = 0.42;
+const LANE_REACT = 0.3;
 
 /** Advantage (s) a receiver already standing at the aim point has over an
  *  opponent arriving there: he is between that man and the ball. */
-const RECEIVER_FIRST = 0.25;
+const RECEIVER_FIRST = 0.15;
 
 /** Reach (m) an opponent has to cut out a ground ball. */
 const LANE_REACH = 0.9;

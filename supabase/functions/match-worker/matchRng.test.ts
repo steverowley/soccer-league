@@ -16,7 +16,7 @@
 //   same match id + same intents → same events, same score, every time.
 
 import { describe, it, expect } from 'vitest';
-import { narrativeRngForMatch, seedFromMatchId } from './matchRng.ts';
+import { narrativeRngForMatch, seedFromMatchId, newMatchSeed, recordSeedOnKickoff } from './matchRng.ts';
 import { makeRng } from './spatial/rng.ts';
 import { applyAnnulGoals, type AnnulGoalIntent } from './interferenceResolver.ts';
 import type { SimulatedEvent } from './simEvent.ts';
@@ -94,5 +94,42 @@ describe('Architect result rewrites are reproducible per match', () => {
       scores.add(goalsIn(applyAnnulGoals(goalStream(), intents, narrativeRngForMatch(id))));
     }
     expect(scores.size).toBeGreaterThan(1);
+  });
+});
+
+// Engine v2 (#698): each match gets a fresh random seed, recorded on the
+// kickoff event so the persisted match can be replayed exactly.
+describe('engine v2 match seed', () => {
+  it('draws an unsigned 32-bit integer from the injected source', () => {
+    expect(newMatchSeed((buf) => { buf[0] = 0xdeadbeef; return buf; })).toBe(0xdeadbeef);
+    expect(newMatchSeed((buf) => { buf[0] = 0; return buf; })).toBe(0);
+  });
+
+  it('uses Web Crypto by default and varies between matches', () => {
+    const seeds = new Set(Array.from({ length: 16 }, () => newMatchSeed()));
+    for (const seed of seeds) {
+      expect(Number.isInteger(seed)).toBe(true);
+      expect(seed).toBeGreaterThanOrEqual(0);
+      expect(seed).toBeLessThanOrEqual(0xffffffff);
+    }
+    expect(seeds.size).toBeGreaterThan(1);
+  });
+
+  it('records the seed on the first kickoff event only', () => {
+    const events = [
+      { type: 'kickoff', payload: { commentary: 'Kickoff!' } as Record<string, unknown> },
+      { type: 'pass', payload: {} as Record<string, unknown> },
+      { type: 'kickoff', payload: {} as Record<string, unknown> },
+    ];
+    recordSeedOnKickoff(events, 12345);
+    expect(events[0]!.payload).toEqual({ commentary: 'Kickoff!', seed: 12345 });
+    expect(events[1]!.payload).toEqual({});
+    expect(events[2]!.payload).toEqual({});
+  });
+
+  it('leaves a feed with no kickoff untouched', () => {
+    const events = [{ type: 'pass', payload: {} as Record<string, unknown> }];
+    recordSeedOnKickoff(events, 1);
+    expect(events[0]!.payload).toEqual({});
   });
 });

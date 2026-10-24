@@ -133,7 +133,9 @@ export function reactionDelay(p: SimPlayer, world: SimWorld): number {
   const base = p.role === 'GK'
     ? 0.17 + 0.2 * (1 - p.stats.goalkeeping / 100)
     : 0.16 + 0.22 * (1 - p.stats.positioning / 100);
-  return base + Math.abs(slip(p, world, 0.05));
+  // The home crowd keeps the home side a fraction more alert.
+  const lift = world.flags.confidence && p.side === 'home' ? 0.92 : 1;
+  return base * lift + Math.abs(slip(p, world, 0.05));
 }
 
 /**

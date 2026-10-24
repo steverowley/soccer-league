@@ -61,7 +61,7 @@ import {
 import { computeFanBoost } from './fanBoost.ts';
 import { decorateCommentary } from './commentary.ts';
 import { cosmicInterjections } from './cosmicVoices.ts';
-import { narrativeRngForMatch, seedFromMatchId } from './matchRng.ts';
+import { narrativeRngForMatch, newMatchSeed, recordSeedOnKickoff } from './matchRng.ts';
 import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
@@ -753,16 +753,21 @@ async function processMatch(match: any): Promise<boolean> {
     // pitch viewer.
     //
     // The spatial engine is the only engine.  Convert raw DB rows to its typed
-    // input, derive a deterministic 32-bit seed from the match UUID (same
-    // match_id → identical outcome on every worker retry), simulate, and adapt
-    // to the match_events shape.  `result` is mutated in place below by the
+    // input, simulate with a fresh random seed (engine v2: matches are not
+    // predetermined by their id), and adapt to the match_events shape.
+    // RETRY SAFETY: the seed must be stored on the match row at claim time and
+    // reused on a retry, or a crashed-and-retried run would persist a
+    // different match on top of the first one's rows.  See docs/emergent-engine.md.
+    // `result` is mutated in place below by the
     // Architect interference passes (result.events / finalScore / playerStats).
     // Personality archetypes (read from the entities layer) nudge each player's
     // derived sim stats before kickoff — inputs only, so the seeded engine below
     // stays byte-identical for an unchanged roster.
     const homeInput = applyTeamTraits(toSpatialTeamInput(homeData), await buildPersonalityMap(homeData));
     const awayInput = applyTeamTraits(toSpatialTeamInput(awayData), await buildPersonalityMap(awayData));
-    const seed = seedFromMatchId(match.id);
+    // Engine v2 (#698): a fresh random seed per match, recorded on the kickoff
+    // event below so the match can be replayed exactly.
+    const seed = newMatchSeed();
 
     // The Architect's post-simulation passes roll against their own seeded
     // stream, derived from the same match id.  Without it a retry could annul a
@@ -777,6 +782,7 @@ async function processMatch(match: any): Promise<boolean> {
     // on name downstream); the adapter derives team display names from it.
     const playerIdx = buildPlayerIndex(homeData, awayData);
     const result = adaptSpatialResult(spatialResult, playerIdx);
+    recordSeedOnKickoff(result.events, seed);
 
     // Replace the adapter's terse placeholder commentary with voiced lines from
     // the three commentators. The adapter carries one hardcoded sentence per

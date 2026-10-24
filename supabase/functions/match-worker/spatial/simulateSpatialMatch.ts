@@ -162,7 +162,7 @@ function makeSimPlayer(
     pos:      home,
     vel:      vec(0, 0),
     stamina:  1,
-    confidence: flags.confidence ? (side === 'home' ? 0.53 : 0.47) : 0.5,
+    confidence: 0.5,
     yellowCards: 0,
     foulsCommitted: 0,
     sentOff:  false,

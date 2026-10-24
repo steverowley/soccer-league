@@ -171,6 +171,9 @@ const JOB_HYSTERESIS = 0.07;
 /** Job decision temperature. */
 const JOB_TEMPERATURE = 0.05;
 
+/** Home-crowd multiplier on pressing effort (and, in execution.ts, alertness). */
+export const HOME_LIFT = 1.1;
+
 /** How far beyond the line (m) a runner aims once he breaks. */
 const RUN_BREAK = 7;
 
@@ -179,6 +182,8 @@ export function pressIntensity(p: SimPlayer, world: SimWorld): number {
   const style = p.side === 'home' ? world.homeStyle : world.awayStyle;
   let k = p.traits.work * (1 + 2 * style.press + style.tackle);
   k *= 1 + 0.3 * momentumOf(world, p.side);
+  // The home crowd: a little more running and pressing from the home side.
+  if (world.flags.confidence && p.side === 'home') k *= HOME_LIFT;
   if (world.flags.scoreClockTerm) {
     const L = lateness(world);
     const gd = goalDiff(world, p.side);
