@@ -68,6 +68,7 @@ export const DEFAULT_FLAGS: EngineFlags = {
   confidence: true,
   momentum: true,
   scoreClockTerm: true,
+  bodyContact: true,
 };
 
 /** Substitutions each side may make in a match (the standard three changes). */
@@ -163,6 +164,7 @@ function makeSimPlayer(
     stamina:  1,
     confidence: flags.confidence ? (side === 'home' ? 0.53 : 0.47) : 0.5,
     yellowCards: 0,
+    foulsCommitted: 0,
     sentOff:  false,
     job:      'shape',
     jobTarget: home,

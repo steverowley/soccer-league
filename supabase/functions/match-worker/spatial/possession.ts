@@ -44,7 +44,7 @@ const STYLE_PASS_K = 1.5;
 const STYLE_DRIBBLE_K = 1.5;
 
 /** Global shot appetite: the one shared weight on the value of shooting. */
-const SHOT_APPETITE = 0.16;
+const SHOT_APPETITE = 0.3;
 
 /** Anti-passivity: each consecutive carry scales carry utility by this. */
 const HOLD_DECAY = 0.93;

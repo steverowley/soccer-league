@@ -200,6 +200,8 @@ export interface SimPlayer {
   confidence: number;
   /** Yellow cards this player has been shown; a second one becomes a red. */
   yellowCards: number;
+  /** Fouls committed so far (persistent infringement is a booking). */
+  foulsCommitted: number;
   /** True once shown a red (or a second yellow): parked off the pitch. */
   sentOff: boolean;
   /** Current off-ball job and the point it is steering toward. */
@@ -344,6 +346,8 @@ export interface EngineFlags {
   momentum:        boolean;
   /** Score-and-clock term (leading sits deeper, trailing takes risks). */
   scoreClockTerm:  boolean;
+  /** Body contact: running into the carrier is a charge (a foul). */
+  bodyContact:     boolean;
 }
 
 /**

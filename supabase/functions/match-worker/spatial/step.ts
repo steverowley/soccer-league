@@ -376,6 +376,16 @@ function shielded(world: SimWorld, opp: SimPlayer, ballPt: Vec2): boolean {
   return segmentDistance(owner.pos, opp.pos, ballPt).d < BODY_WIDTH;
 }
 
+/** The foul count at which a referee books for persistent infringement. */
+const PERSISTENT_FOULS = 4;
+
+/** Centre-to-centre distance (m) at which two bodies are in contact. */
+const BODY_CONTACT = 0.7;
+/** Closing speed (m/s) above which running into a man is a charge. */
+const CHARGE_SPEED = 2.6;
+/** The same inside the penalty area. */
+const CHARGE_SPEED_BOX = 4.2;
+
 /** A ball taken within this distance (m) of its carrier counts as a tackle. */
 const STEAL_DUEL_DIST = 1.5;
 
@@ -594,37 +604,7 @@ function resolveLunge(world: SimWorld, d: SimPlayer, events: SimEvent[], minute:
     return;
   }
   if (carrier && !carrier.sentOff && manHit && world.phase === 'open_play') {
-    // Foot meets the man: a foul.  Severity from closing speed, angle and
-    // whether the ball was even playable; the card follows from severity and
-    // from denying an obvious chance.  No randomness.
-    const facing = len(carrier.vel) > 0.5 ? normalize(carrier.vel)
-      : normalize(sub(vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2), carrier.pos));
-    const approach = normalize(to);
-    const fromBehind = dot(approach, facing) > 0.5;
-    const severity = L.closing / 9 + (fromBehind ? 0.4 : 0) + (ballD > 1.5 ? 0.25 : 0);
-    const goal = vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2);
-    const inBox = isInPenaltyArea(carrier.pos, carrier.side);
-    const dogso = dist(carrier.pos, goal) < 30 && dist(b.pos, carrier.pos) < 2 && isLastMan(world, d, carrier)
-      && dot(facing, normalize(sub(goal, carrier.pos))) > 0.3;
-    let card: 'yellow' | 'red' | undefined;
-    if (severity >= RED_SEVERITY || (dogso && !inBox)) card = 'red';
-    else if (severity >= YELLOW_SEVERITY || dogso) card = 'yellow';
-    if (card === 'yellow') {
-      d.yellowCards += 1;
-      if (d.yellowCards >= 2) card = 'red';
-    }
-    emit(events, world, minute, { type: 'foul', side: d.side, playerId: d.id, otherId: carrier.id, ...(card ? { card } : {}) });
-    trace(world, 'challenge', d, {
-      outcome: 'foul', ballD: r2(ballD), manD: r2(manD), severity: r2(severity), fromBehind, dogso, card: card ?? null, inBox,
-    });
-    bump(world, d, -0.01);
-    if (card === 'red') sendOff(d);
-    if (inBox) {
-      emit(events, world, minute, { type: 'penalty', side: carrier.side, playerId: carrier.id });
-      beginRestart(world, 'penalty', carrier.side, penaltySpot(carrier.side));
-    } else {
-      beginRestart(world, 'freekick', carrier.side, clampSpot(carrier.pos), card ? 12 : 0);
-    }
+    commitFoul(world, d, carrier, L.closing, normalize(to), ballD, 'lunge', events, minute);
     return;
   }
   // Foot meets nothing: beaten, and it costs real time to recover.
@@ -632,6 +612,58 @@ function resolveLunge(world: SimWorld, d: SimPlayer, events: SimEvent[], minute:
   d.noTouchUntil = now + 0.5;
   bump(world, d, -0.02);
   trace(world, 'challenge', d, { outcome: 'miss', ballD: r2(ballD), manD: r2(manD) });
+}
+
+/**
+ * A defender has made contact with the man rather than the ball: a foul.
+ * Severity from closing speed, angle and whether the ball was even playable;
+ * the card follows from severity and from denying an obvious chance.  No
+ * randomness: everything here is geometry already decided by the contact.
+ */
+function commitFoul(
+  world: SimWorld, d: SimPlayer, carrier: SimPlayer, closing: number, approach: Vec2, ballD: number,
+  how: 'lunge' | 'charge', events: SimEvent[], minute: number,
+): void {
+  const b = world.ball;
+  const facing = len(carrier.vel) > 0.5 ? normalize(carrier.vel)
+    : normalize(sub(vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2), carrier.pos));
+  const fromBehind = dot(approach, facing) > 0.5;
+  const severity = closing / 9 + (fromBehind ? 0.4 : 0) + (ballD > 1.5 ? 0.25 : 0);
+  const goal = vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2);
+  const inBox = isInPenaltyArea(carrier.pos, carrier.side);
+  // Denying an obvious goal-scoring chance: close to goal, ball under
+  // control, heading for goal, no outfield cover and the keeper not between.
+  const keeper = keeperOf(world, d.side);
+  const keeperCovers = keeper !== undefined && !keeper.sentOff
+    && dist(keeper.pos, goal) < dist(carrier.pos, goal) && dist(keeper.pos, carrier.pos) < 9;
+  const dogso = dist(carrier.pos, goal) < 25 && dist(b.pos, carrier.pos) < 1.5 && isLastMan(world, d, carrier)
+    && goalSideCount(world, d, carrier) === 0 && !keeperCovers
+    && dot(facing, normalize(sub(goal, carrier.pos))) > 0.5;
+  // Stopping a promising attack (a booking in the laws): the carrier in the
+  // attacking half, going forward, with little cover behind the fouler.
+  const spa = progressOf(carrier.pos, carrier.side) > 0.5 && dist(b.pos, carrier.pos) < 2
+    && dot(facing, normalize(sub(goal, carrier.pos))) > 0.3 && goalSideCount(world, d, carrier) <= 2;
+  d.foulsCommitted += 1;
+  const persistent = d.foulsCommitted >= PERSISTENT_FOULS && d.yellowCards === 0;
+  let card: 'yellow' | 'red' | undefined;
+  if (severity >= RED_SEVERITY || (dogso && !inBox)) card = 'red';
+  else if (severity >= YELLOW_SEVERITY || dogso || spa || persistent) card = 'yellow';
+  if (card === 'yellow') {
+    d.yellowCards += 1;
+    if (d.yellowCards >= 2) card = 'red';
+  }
+  emit(events, world, minute, { type: 'foul', side: d.side, playerId: d.id, otherId: carrier.id, ...(card ? { card } : {}) });
+  trace(world, 'challenge', d, {
+    outcome: 'foul', how, ballD: r2(ballD), severity: r2(severity), fromBehind, dogso, spa, persistent, card: card ?? null, inBox,
+  });
+  bump(world, d, -0.01);
+  if (card === 'red') sendOff(d);
+  if (inBox) {
+    emit(events, world, minute, { type: 'penalty', side: carrier.side, playerId: carrier.id });
+    beginRestart(world, 'penalty', carrier.side, penaltySpot(carrier.side));
+  } else {
+    beginRestart(world, 'freekick', carrier.side, clampSpot(carrier.pos), card ? 12 : 0);
+  }
 }
 
 function clampSpot(p: Vec2): Vec2 {
@@ -1210,6 +1242,29 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   }
   for (const p of all) {
     if (p.lunge && now >= p.lunge.resolveSec && world.phase === 'open_play') resolveLunge(world, p, events, minute);
+  }
+  if (world.phase !== 'open_play') { driftTick(world, dt); return events; }
+
+  // ── Body contact: a man running through the carrier ─────────────────────
+  // Bodies are about a metre across; an opponent who arrives into the
+  // carrier from behind or the side faster than a shoulder-to-shoulder
+  // challenge allows has charged him.  Geometry and speed, no roll.
+  if (owner && !owner.sentOff && world.ball.ownerId === owner.id && world.phase === 'open_play' && world.flags.bodyContact) {
+    for (const o of teamOf(world, otherSide(owner.side))) {
+      if (o.sentOff || o.role === 'GK' || o.lunge) continue;
+      const gap = dist(o.pos, owner.pos);
+      if (gap > BODY_CONTACT || gap < 1e-6) continue;
+      const n = normalize(sub(owner.pos, o.pos));
+      const closing = dot(sub(o.vel, owner.vel), n);
+      const facing = len(owner.vel) > 0.5 ? normalize(owner.vel) : n;
+      const fromFront = dot(n, facing) < -0.3;
+      // Referees allow more contact inside the box before giving a penalty.
+      const limit = isInPenaltyArea(owner.pos, owner.side) ? CHARGE_SPEED_BOX : CHARGE_SPEED;
+      if (closing > limit && !fromFront) {
+        commitFoul(world, o, owner, closing, n, dist(owner.pos, world.ball.pos), 'charge', events, minute);
+        break;
+      }
+    }
   }
   if (world.phase !== 'open_play') { driftTick(world, dt); return events; }
 

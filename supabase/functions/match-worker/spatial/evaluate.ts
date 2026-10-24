@@ -59,7 +59,7 @@ export function xgGeom(pos: Vec2, side: TeamSide): number {
  */
 export function positionValue(pos: Vec2, side: TeamSide): number {
   const f = progressOf(pos, side);
-  return 0.002 + 0.06 * f * f * f + 0.55 * xgGeom(pos, side);
+  return 0.002 + 0.06 * f * f * f + 0.3 * xgGeom(pos, side);
 }
 
 /**
