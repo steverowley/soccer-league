@@ -21,6 +21,8 @@ import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
+import { LeagueRollOfHonour } from '../components/LoreHistory';
+import { getLeagueLore } from '../data/lore';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { Team } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
@@ -175,9 +177,23 @@ export default function LeagueDetail() {
             kicker="III"
             label="The Clubs"
             title={`All ${teams.length} Sides`}
-            subtitle="The full membership.  Each link opens the club's detail page (currently 404 until the Teams rebuild lands)."
+            subtitle="The full membership. Each link opens the club's page."
           />
           <ClubRoster teams={teams} />
+        </Container>
+      </section>
+
+      {/* Section IV: roll of honour: the canon, exported from the world
+          bible. Every season from the league's founding to 2599. */}
+      <section style={{ padding: '0 16px 80px' }}>
+        <Container>
+          <SectionHeader
+            kicker="IV"
+            label={`Since ${getLeagueLore(league.id)?.founded ?? ''}`}
+            title="Roll of Honour"
+            subtitle="Before the ISL there were four separate leagues. This one became a division of the ISL in 2600, carrying its history with it."
+          />
+          <LeagueRollOfHonour leagueId={league.id} />
         </Container>
       </section>
 
