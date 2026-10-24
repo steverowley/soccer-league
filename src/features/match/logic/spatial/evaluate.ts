@@ -243,9 +243,9 @@ export function estimateShot(
   if (keeper && !keeper.sentOff) {
     const seg = segmentDistance(keeper.pos, from, aim);
     const tToKeeper = T * seg.t;
-    const reach = gz > 1.5 ? 1.25 : 1.45;
-    const dive = 3.6 + 3.2 * (keeper.stats.goalkeeping / 100);
-    const react = 0.16 + 0.22 * (1 - keeper.stats.goalkeeping / 100);
+    const reach = (gz > 1.5 ? 1.15 : 1.35) * (0.9 + 0.2 * (keeper.stats.goalkeeping / 100));
+    const dive = 2.8 + 2.4 * (keeper.stats.goalkeeping / 100);
+    const react = 0.2 + 0.25 * (1 - keeper.stats.goalkeeping / 100);
     const need = react + Math.max(0, seg.d - reach) / dive;
     pBeat = sigmoid((tToKeeper - need) * -1 / 0.09);
     if (seg.d > reach + 4) pBeat = 1;
@@ -256,7 +256,8 @@ export function estimateShot(
     if (o.sentOff || o.role === 'GK') continue;
     const seg = segmentDistance(o.pos, from, aim);
     if (seg.t <= 0.02 || seg.t >= 0.98) continue;
-    if (seg.d < 2.2) pClear *= sigmoid((seg.d - 0.75) / 0.25);
+    // Within his reach plus a leg thrown out: a likely block.
+    if (seg.d < 2.6) pClear *= sigmoid((seg.d - 1.2) / 0.3);
   }
   return { p: pFrame * pBeat * pClear, pFrame, pBeat, pClear };
 }

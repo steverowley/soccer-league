@@ -218,6 +218,13 @@ export interface SimPlayer {
   lunge: Lunge | null;
   /** Keepers: a committed dive toward a point (and height), or null. */
   dive: { at: Vec2; z: number } | null;
+  /** A strike being wound up: the decided shot is struck at `at` if the ball
+   *  is still at his feet then (a back-lift takes time, and can be blocked
+   *  or tackled in it). Opaque here; possession.ts owns the action shape. */
+  windup: { action: unknown; at: number } | null;
+  /** Clock second until which he is throwing himself into a shooting lane
+   *  (leg or body out: a wider reach for a struck ball). */
+  blockUntil: number;
   /** Match-clock second before which this player has not yet reacted to the
    *  latest change in the ball's path (perception delay). */
   reactUntil: number;

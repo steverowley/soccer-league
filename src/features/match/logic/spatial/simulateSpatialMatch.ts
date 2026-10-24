@@ -172,6 +172,8 @@ function makeSimPlayer(
     recoverUntil: 0,
     lunge:    null,
     dive:     null,
+    windup:   null,
+    blockUntil: -1,
     reactUntil: 0,
     jobOffset: vec(0, 0),
     holds:    0,

@@ -17,15 +17,19 @@ import { perceive } from './execution';
 import { type TickContext, PATH_SAMPLES, PATH_STRIDE } from './offball';
 import { predictPath } from './ball';
 
-/** Dive speed (m/s) for a keeper: about 5.8 for a 70-rated keeper. */
+/** Dive speed (m/s) for a keeper: about 4.5 for a 70-rated keeper. */
 export function diveSpeed(k: SimPlayer): number {
-  return 3.6 + 3.2 * (k.stats.goalkeeping / 100);
+  return KEEPER_DIVE_BASE + KEEPER_DIVE_SKILL * (k.stats.goalkeeping / 100);
 }
+
+/** Dive speed model (shared with the shooter's estimate in evaluate.ts). */
+export const KEEPER_DIVE_BASE = 2.8;
+export const KEEPER_DIVE_SKILL = 2.4;
 
 /** Horizontal reach (m) of a keeper for a ball at height z. */
 export function keeperReach(k: SimPlayer, z: number): number {
   const diving = k.dive !== null;
-  const base = diving ? (z > 1.5 ? 1.25 : 1.45) : 0.95;
+  const base = diving ? (z > 1.5 ? 1.15 : 1.35) : 0.95;
   return base * (0.9 + 0.2 * (k.stats.goalkeeping / 100));
 }
 

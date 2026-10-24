@@ -19,11 +19,11 @@ import {
   PITCH_LENGTH, PITCH_WIDTH, attackingGoalX, defendingGoalX, otherSide,
 } from './types';
 import { predictPath } from './ball';
-import { timeToReach, positionValue, nearestOpponentDist, pressureAt } from './evaluate';
+import { timeToReach, positionValue, nearestOpponentDist, pressureAt, progressOf } from './evaluate';
 import { effectiveMaxSpeed, arrive, seek, separation, markTarget } from './steering';
 import { dynamicAnchor } from './formation';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession';
-import { perceive } from './execution';
+import { perceive, slip } from './execution';
 
 /** Ball-path lookahead: samples, and ticks per sample. */
 export const PATH_SAMPLES = 25;
@@ -60,7 +60,14 @@ export interface TickContext {
   secondT: { home: number; away: number };
   /** Rank by time to the carrier among outfielders of the side NOT in possession. */
   pressRank: Map<string, number>;
+  /** Marking assignment per defender id: the attacker he picks up and that man's value. */
+  markOf: Map<string, { id: string; v: number }>;
 }
+
+/** Attackers worth less than this (positionValue) are left to the zone. */
+const MARK_MIN_VALUE = 0.02;
+/** A defender further than this (m) from an attacker does not pick him up. */
+const MARK_MAX_DIST = 22;
 
 const PATH_BUF = new Float64Array(3 * PATH_SAMPLES * PATH_STRIDE);
 
@@ -124,7 +131,31 @@ export function buildContext(world: SimWorld): TickContext {
     const ranked = def.map((p) => ({ p, t: timeToReach(p, carrier.pos, now) })).sort((a, b) => a.t - b.t);
     ranked.forEach((r, i) => pressRank.set(r.p.id, i));
   }
-  return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank };
+  // Marking assignments for the side defending (authored organisation): the
+  // most dangerous attackers, in order, each picked up by the nearest free
+  // defender who is not the first presser.  Greedy, O(attackers x defenders).
+  const markOf = new Map<string, { id: string; v: number }>();
+  const defSide = attacking === 'home' ? 'away' : attacking === 'away' ? 'home' : null;
+  if (defSide) {
+    const def = (defSide === 'home' ? world.home : world.away)
+      .filter((p) => !p.sentOff && p.role !== 'GK' && pressRank.get(p.id) !== 0);
+    const att = (defSide === 'home' ? world.away : world.home)
+      .filter((a) => !a.sentOff && a.role !== 'GK' && a !== carrier)
+      .map((a) => ({ a, v: positionValue(a.pos, a.side) }))
+      .filter((x) => x.v > MARK_MIN_VALUE)
+      .sort((x, y) => y.v - x.v);
+    const free = new Set(def);
+    for (const { a, v } of att) {
+      let best: SimPlayer | null = null;
+      let bestD = MARK_MAX_DIST;
+      for (const d of free) {
+        const dd = dist(d.pos, a.pos);
+        if (dd < bestD) { bestD = dd; best = d; }
+      }
+      if (best) { markOf.set(best.id, { id: a.id, v }); free.delete(best); }
+    }
+  }
+  return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank, markOf };
 }
 
 // ── Job evaluation ─────────────────────────────────────────────────────────
@@ -134,6 +165,9 @@ const JOB_HYSTERESIS = 0.07;
 
 /** Job decision temperature. */
 const JOB_TEMPERATURE = 0.05;
+
+/** How far beyond the line (m) a runner aims once he breaks. */
+const RUN_BREAK = 5;
 
 /** Press-intensity multiplier for a side (style, momentum, score and clock, work rate). */
 export function pressIntensity(p: SimPlayer, world: SimWorld): number {
@@ -194,7 +228,10 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }
 
-  if (!inPossession) {
+  const assigned = ctx.markOf.get(p.id);
+  if (!inPossession && assigned) {
+    push('mark', 0.3 + 8 * assigned.v, assigned.id);
+  } else if (!inPossession) {
     // Mark the most dangerous attacker near my anchor.
     const anchor = dynamicAnchor(p, ball.pos);
     let bestA: SimPlayer | null = null;
@@ -234,7 +271,18 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     const seen = perceive(p, world, vec(line, p.pos.y), 1.6).x;
     const dir = side === 'home' ? 1 : -1;
     const y = p.homePos.y * 0.7 + (PITCH_WIDTH / 2) * 0.3;
-    p.jobTarget = vec(Math.max(1, Math.min(PITCH_LENGTH - 1, seen - dir * 0.8)), y);
+    // Once the man on the ball has it settled and is facing up, the runner
+    // breaks: he has to go before the pass to beat his marker, and going a
+    // fraction early (his read of the line and of the moment is imprecise) is
+    // how he is caught offside.
+    const c = ctx.carrier;
+    const goNow = c !== null && c.side === side && c.id !== p.id
+      && world.clockSec - world.ball.controlSec > 0.5 + slip(p, world, 0.3)
+      // A run that is not found within a couple of seconds is checked back
+      // onside rather than left standing offside.
+      && world.clockSec - world.ball.controlSec < 2.2
+      && progressOf(c.pos, side) > 0.35;
+    p.jobTarget = vec(Math.max(1, Math.min(PITCH_LENGTH - 1, seen + dir * (goNow ? RUN_BREAK : -0.3))), y);
   }
   const read = p.stats.positioning / 100;
   p.nextThinkSec = now + 0.35 + 0.3 * (1 - read);
@@ -269,6 +317,9 @@ const SUPPORT_ANGLES = [0, 0.7, -0.7, 1.4, -1.4, 2.3, -2.3] as const;
 /** Distance (m) a presser holds goal-side of the ball while jockeying. */
 export const JOCKEY_DIST = 3.0;
 
+/** Jockey distance (m) inside the last thirty metres before his own goal. */
+export const JOCKEY_DIST_DEEP = 1.8;
+
 /**
  * Desired velocity for an outfielder doing his job this tick.
  */
@@ -291,7 +342,9 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const c = ctx.carrier;
       if (!c) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
       const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
-      const jockey = add(c.pos, scale(normalize(sub(goal, c.pos)), JOCKEY_DIST));
+      // Tighter the nearer his own goal: in the last third he stands up close.
+      const deep = dist(c.pos, goal) < 30;
+      const jockey = add(c.pos, scale(normalize(sub(goal, c.pos)), deep ? JOCKEY_DIST_DEEP : JOCKEY_DIST));
       const d = dist(p.pos, jockey);
       return d > 4 ? seek(p, jockey) : arrive(p, jockey, 2.5, 0.95);
     }
@@ -299,13 +352,15 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const c = ctx.carrier;
       if (!c) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
       const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
-      const pt = add(c.pos, scale(normalize(sub(goal, c.pos)), 7));
-      return add(arrive(p, pt, 4, 0.85 * work), scale(sep, 0.5));
+      // The cover man sits on the line from ball to goal: the shooting lane.
+      const pt = add(c.pos, scale(normalize(sub(goal, c.pos)), dist(c.pos, goal) < 30 ? 4.5 : 7));
+      return add(arrive(p, pt, 4, (dist(p.pos, pt) > 5 ? 1 : 0.85) * work), scale(sep, 0.5));
     }
     case 'mark': {
       const a = findById(world, p.jobRef);
       if (!a) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
-      return add(arrive(p, markTarget(p, a, 1.2), 3, 0.9 * work), scale(sep, 0.5));
+      const mt = markTarget(p, a, 1.2);
+      return add(arrive(p, mt, 3, (dist(p.pos, mt) > 5 ? 1 : 0.9) * work), scale(sep, 0.5));
     }
     case 'support': {
       const c = ctx.carrier;
@@ -321,7 +376,12 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
     default: {
       const pt = shapePoint(p, world);
       const d = dist(p.pos, pt);
-      return add(arrive(p, pt, 6, (d > 12 ? 0.85 : 0.6) * work), sep);
+      // Caught upfield with the ball between him and his own goal, he
+      // sprints back; otherwise he shuffles across at a working pace.
+      const ownGoalX = defendingGoalX(p.side);
+      const beaten = ctx.attacking !== null && ctx.attacking !== p.side
+        && Math.abs(world.ball.pos.x - ownGoalX) < Math.abs(p.pos.x - ownGoalX);
+      return add(arrive(p, pt, 6, (beaten ? 1 : d > 12 ? 0.85 : 0.6) * work), sep);
     }
   }
 }
@@ -339,10 +399,22 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
   const inPossession = ball.ownerId !== null
     ? (p.side === 'home' ? world.home : world.away).some((q) => q.id === ball.ownerId)
     : ball.lastTouchSide === p.side;
+  if (inPossession && p.role !== 'GK') {
+    // In possession nobody takes up a station beyond the offside line: a man
+    // standing offside is no use to the passer.
+    const fwd = p.side === 'home' ? 1 : -1;
+    const line = offsideLineX(world, p.side);
+    if ((a.x - (line - fwd)) * fwd > 0) a = vec(line - fwd, a.y);
+  }
   if (!inPossession && p.role !== 'GK') {
     const back = p.side === 'home' ? -1 : 1;
     const drop = p.role === 'MF' ? 7 : p.role === 'FW' ? 9 : 2;
-    a = clampIn(vec(a.x + back * drop, a.y + (ball.pos.y - a.y) * 0.18));
+    // The squeeze toward the ball's side is strongest for the back line and
+    // in their own half, where the space between centre-back and full-back
+    // is what gets attacked.
+    const ownHalf = (ball.pos.x - PITCH_LENGTH / 2) * back > 0;
+    const squeeze = (p.role === 'DF' ? 0.32 : 0.24) * (ownHalf ? 1.25 : 0.8);
+    a = clampIn(vec(a.x + back * drop, a.y + (ball.pos.y - a.y) * squeeze));
     // Keep the lines close: midfield within 11 m of the back line, the
     // forwards within 24 m, so there is no free pocket between them.
     if (p.role === 'MF' || p.role === 'FW') {

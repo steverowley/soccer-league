@@ -74,8 +74,8 @@ const MAN_CONTACT = 0.8;
 const BLOCK_SPEED = 17;
 
 /** Foul severity thresholds for a yellow and a straight red. */
-const YELLOW_SEVERITY = 1.05;
-const RED_SEVERITY = 1.8;
+const YELLOW_SEVERITY = 1.2;
+const RED_SEVERITY = 2.1;
 
 /** Lunge appetite: base gain and base cost (expected-goal units). */
 const LUNGE_GAIN_BASE = 0.02;
@@ -279,7 +279,8 @@ function execute(
       const dir = normalize(sub(action.aim, from));
       const T = airTravelTime(action.speed, d);
       const vz = verticalLaunchSpeed(b.z, action.gz, T);
-      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) });
+      // A penalty is a placed strike at a still ball: about half the spread.
+      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) }) * (restart === 'penalty' ? 0.5 : 1);
       const s = strike(p, world, dir, action.speed, vz, KICK_ERROR.shot, e);
       const kind: KickKind = restart === 'penalty' ? 'penalty' : 'shot';
       launch(world, p, kind, s.vel, s.vz, action.aim, null);
@@ -374,6 +375,9 @@ function shielded(world: SimWorld, opp: SimPlayer, ballPt: Vec2): boolean {
   if (dOwner > 1.2 || dOwner >= dist(opp.pos, ballPt)) return false;
   return segmentDistance(owner.pos, opp.pos, ballPt).d < BODY_WIDTH;
 }
+
+/** Base back-lift time of a shot (s): about 0.3 s for a 70-rated striker. */
+const SHOT_WINDUP = 0.34;
 
 /** Half a body width (m): how far either side of a player's centre he blocks. */
 const BODY_WIDTH = 0.45;
@@ -677,12 +681,16 @@ function headingOnTarget(world: SimWorld, defendingSide: TeamSide): boolean {
 // ── Touches (the ball meets a body) ─────────────────────────────────────────
 
 /** Can `p` touch a ball at height z this tick, and with what reach? */
-function reachFor(p: SimPlayer, z: number, at: Vec2): number {
+function reachFor(p: SimPlayer, z: number, at: Vec2, blocking: boolean): number {
   if (p.role === 'GK' && inOwnBox(p, at) && z <= KEEPER_TOP) return keeperReach(p, z);
-  if (z <= 0.9) return FOOT_REACH;
-  if (z <= HEAD_Z) return 0.6;
+  // A defender who has thrown himself into a shooting lane covers more.
+  if (z <= 0.9) return FOOT_REACH + (blocking ? BLOCK_LUNGE : 0);
+  if (z <= HEAD_Z) return 0.6 + (blocking ? BLOCK_LUNGE * 0.6 : 0);
   return -1;
 }
+
+/** Extra reach (m) of a leg or body thrown into a shooting lane. */
+const BLOCK_LUNGE = 0.55;
 
 /**
  * The ball has met `p` at `at` (height z).  Decide what physically happens:
@@ -809,7 +817,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
   } else if (kick && isPassKind(kick.kind) && !kick.resolved) {
     if (kick.side !== p.side) {
       // Cut out on its way (read and stepped into), not a loose ball collected.
-      const cutOut = speed >= 6 && dist(at, kick.aim) > 4;
+      const cutOut = speed >= 7 && dist(at, kick.aim) > 5;
       if (cutOut) emit(events, world, minute, { type: 'interception', side: p.side, playerId: p.id });
       passEnd(world, cutOut ? 'intercepted' : 'lost');
       bump(world, findById(world, kick.playerId), -0.02);
@@ -911,6 +919,7 @@ function resolveBall(world: SimWorld, from: Vec2, fromZ: number, events: SimEven
   let whoD = 0;
   const owner = b.ownerId ? findById(world, b.ownerId) : null;
   const ownerNear = owner ? dist(owner.pos, to) < 4 : false;
+  const shotFlying = b.kick !== null && isShotKind(b.kick.kind) && !b.kick.resolved;
   for (const p of [...world.home, ...world.away]) {
     if (p.sentOff || p.lunge || now < p.noTouchUntil) continue;
     if (owner && p === owner) continue; // the carrier plays it by decision
@@ -918,7 +927,7 @@ function resolveBall(world: SimWorld, from: Vec2, fromZ: number, events: SimEven
     const sd = segmentDistance(p.pos, from, to);
     const zAt = fromZ + (toZ - fromZ) * sd.t;
     const atPt = vec(from.x + (to.x - from.x) * sd.t, from.y + (to.y - from.y) * sd.t);
-    const reach = reachFor(p, zAt, atPt);
+    const reach = reachFor(p, zAt, atPt, shotFlying && now < p.blockUntil);
     if (reach < 0 || sd.d > reach) continue;
     // A player who has not yet reacted to the ball can still be hit by it,
     // but only a fast ball counts (he cannot go for one he has not seen).
@@ -1121,7 +1130,22 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     const threat = incomingLunge(world, carrier);
     if (threat) evade(world, carrier, threat);
   }
-  if (carrier && !carrier.sentOff && now >= carrier.noTouchUntil
+  // A wound-up strike goes off when its back-lift is done, if the ball is
+  // still there to hit; if the ball has gone (tackled, blocked, run away) the
+  // chance is gone with it.
+  for (const p of all) {
+    if (!p.windup) continue;
+    if (p !== carrier || world.phase !== 'open_play') { p.windup = null; continue; }
+    if (now < p.windup.at) continue;
+    const act = p.windup.action as CarrierAction;
+    p.windup = null;
+    if (dist(p.pos, world.ball.pos) <= FOOT_REACH + 0.2 && world.ball.z < 0.7) {
+      execute(world, p, act, events, minute, null);
+    } else if (world.trace) {
+      trace(world, 'windup_lost', p, { ballD: r2(dist(p.pos, world.ball.pos)) });
+    }
+  }
+  if (carrier && !carrier.sentOff && !carrier.windup && now >= carrier.noTouchUntil
     && dist(carrier.pos, world.ball.pos) <= FOOT_REACH && world.ball.z < 0.7
     && now - world.ball.lastTouchSec >= TOUCH_GAP) {
     // A receiver needs a moment to settle the ball and look up before he can
@@ -1133,7 +1157,20 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     if (world.trace) {
       trace(world, 'decide', carrier, { action: action.kind, options, u: r2(action.utility * 1000), top });
     }
-    execute(world, carrier, action, events, minute, null);
+    if (action.kind === 'shoot') {
+      // Back-lift: quicker for good strikers, a touch longer when stretched.
+      const wind = SHOT_WINDUP * (1.3 - 0.6 * carrier.stats.shooting / 100);
+      carrier.windup = { action, at: now + wind };
+      // Defenders close enough who see the back-lift (after their reaction
+      // time) throw a leg or body into the lane.
+      for (const o of teamOf(world, otherSide(carrier.side))) {
+        if (o.sentOff || o.role === 'GK') continue;
+        if (dist(o.pos, carrier.pos) > 7) continue;
+        if (reactionDelay(o, world) < wind + 0.25) o.blockUntil = now + wind + 0.6;
+      }
+    } else {
+      execute(world, carrier, action, events, minute, null);
+    }
   }
 
   // ── Challenges ───────────────────────────────────────────────────────────
@@ -1166,7 +1203,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   for (const p of all) {
     if (p.sentOff) continue;
     if (p.role === 'GK' && p.dive) {
-      integratePlayer(p, diveVelocity(p), dt, 40, diveSpeed(p));
+      integratePlayer(p, diveVelocity(p), dt, 25, diveSpeed(p));
       continue;
     }
     if (p.lunge) {

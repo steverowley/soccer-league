@@ -44,7 +44,7 @@ const STYLE_PASS_K = 1.5;
 const STYLE_DRIBBLE_K = 1.5;
 
 /** Global shot appetite: the one shared weight on the value of shooting. */
-const SHOT_APPETITE = 0.45;
+const SHOT_APPETITE = 0.16;
 
 /** Anti-passivity: each consecutive carry scales carry utility by this. */
 const HOLD_DECAY = 0.93;
@@ -219,7 +219,7 @@ export function chooseAction(
     // standing offside (he can misjudge it: perception error).
     const offsideRule = mode !== 'throw' && mode !== 'corner' && mode !== 'goalkick';
     if (offsideRule) {
-      const seenX = perceive(carrier, world, m.pos, 1.2).x;
+      const seenX = perceive(carrier, world, m.pos, 2.0).x;
       const beyond = (seenX - line) * fwd > 0 && (seenX - from.x) * fwd > 0 && progressOf(vec(seenX, m.pos.y), side) > 0.5;
       if (beyond) continue;
     }

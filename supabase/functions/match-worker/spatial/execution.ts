@@ -56,10 +56,10 @@ export interface KickErrorBase {
 
 /** Error bases by kick family, at an error scale of 1. */
 export const KICK_ERROR: Readonly<Record<'pass' | 'lofted' | 'cross' | 'shot' | 'header' | 'clear' | 'throw', KickErrorBase>> = {
-  pass:   { ang: 0.040, spd: 0.07, lift: 0.0 },
-  lofted: { ang: 0.060, spd: 0.08, lift: 0.9 },
-  cross:  { ang: 0.085, spd: 0.09, lift: 1.1 },
-  shot:   { ang: 0.18, spd: 0.06, lift: 3.2 },
+  pass:   { ang: 0.085, spd: 0.11, lift: 0.0 },
+  lofted: { ang: 0.100, spd: 0.11, lift: 0.9 },
+  cross:  { ang: 0.110, spd: 0.10, lift: 1.1 },
+  shot:   { ang: 0.26, spd: 0.06, lift: 4.0 },
   header: { ang: 0.170, spd: 0.15, lift: 1.4 },
   clear:  { ang: 0.160, spd: 0.12, lift: 1.5 },
   throw:  { ang: 0.050, spd: 0.08, lift: 0.5 },
@@ -130,8 +130,9 @@ export function firstTouch(p: SimPlayer, world: SimWorld, ballVel: Vec2, desired
  * @param world  World (flags).
  */
 export function reactionDelay(p: SimPlayer, world: SimWorld): number {
-  const read = p.role === 'GK' ? p.stats.goalkeeping : p.stats.positioning;
-  const base = 0.16 + 0.22 * (1 - read / 100);
+  const base = p.role === 'GK'
+    ? 0.2 + 0.25 * (1 - p.stats.goalkeeping / 100)
+    : 0.16 + 0.22 * (1 - p.stats.positioning / 100);
   return base + Math.abs(slip(p, world, 0.05));
 }
 
