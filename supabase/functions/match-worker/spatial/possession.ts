@@ -44,7 +44,7 @@ const STYLE_PASS_K = 1.5;
 const STYLE_DRIBBLE_K = 1.5;
 
 /** Global shot appetite: the one shared weight on the value of shooting. */
-const SHOT_APPETITE = 0.6;
+const SHOT_APPETITE = 0.45;
 
 /** Anti-passivity: each consecutive carry scales carry utility by this. */
 const HOLD_DECAY = 0.93;
@@ -101,7 +101,7 @@ export function lossWeight(p: SimPlayer, world: SimWorld): number {
     if (gd > 0) w *= 1 + 0.6 * L;
     else if (gd < 0) w *= 1 - 0.4 * L;
   }
-  if (world.flags.confidence) w *= 1.2 - 0.4 * p.confidence;
+  if (world.flags.confidence) w *= 1.05 - 0.1 * p.confidence;
   return w;
 }
 
@@ -154,7 +154,7 @@ export function softPick(rng: Rng, utilities: readonly number[], temperature: nu
 /** Decision temperature for a player: lower with vision and confidence. */
 export function temperatureOf(p: SimPlayer, world: SimWorld): number {
   let t = BASE_TEMPERATURE * (1.35 - p.stats.vision / 100);
-  if (world.flags.confidence) t *= 1.4 - 0.8 * p.confidence;
+  if (world.flags.confidence) t *= 1.1 - 0.2 * p.confidence;
   return t;
 }
 
@@ -324,9 +324,9 @@ export function chooseAction(
   }
 
   // ── Clearance (deep and pressed) ─────────────────────────────────────────
-  if (mode === 'open' && progress < 0.3 && pressure > 0.3) {
+  if (mode === 'open' && progress < 0.25 && pressure > 0.5) {
     const fwd = side === 'home' ? 1 : -1;
-    const y = from.y < PITCH_WIDTH / 2 ? 10 : PITCH_WIDTH - 10;
+    const y = from.y < PITCH_WIDTH / 2 ? 18 : PITCH_WIDTH - 18;
     const aim = clampPitch(vec(from.x + fwd * 40, y));
     const d = dist(from, aim);
     const T = 1.6 + d * 0.02;

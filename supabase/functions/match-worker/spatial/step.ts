@@ -68,7 +68,7 @@ const LEG_REACH = 0.95;
 
 /** Contact radii (m): foot on ball, foot on the man. */
 const BALL_CONTACT = 0.5;
-const MAN_CONTACT = 0.5;
+const MAN_CONTACT = 0.8;
 
 /** Ball speed (m/s) above which a body in the way deflects rather than controls. */
 const BLOCK_SPEED = 17;
@@ -139,7 +139,7 @@ function isPassKind(k: KickKind): boolean {
 
 /** Confidence baseline: the home crowd lifts the home side a little. */
 function confidenceBase(p: SimPlayer): number {
-  return p.side === 'home' ? 0.56 : 0.47;
+  return p.side === 'home' ? 0.53 : 0.47;
 }
 
 function bump(world: SimWorld, p: SimPlayer | null | undefined, d: number): void {
@@ -808,7 +808,8 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     trace(world, 'steal', p, { from: prevOwner.id, gap: r2(dist(prevOwner.pos, at)) });
   } else if (kick && isPassKind(kick.kind) && !kick.resolved) {
     if (kick.side !== p.side) {
-      const cutOut = speed >= 4 && dist(at, kick.aim) > 2;
+      // Cut out on its way (read and stepped into), not a loose ball collected.
+      const cutOut = speed >= 6 && dist(at, kick.aim) > 4;
       if (cutOut) emit(events, world, minute, { type: 'interception', side: p.side, playerId: p.id });
       passEnd(world, cutOut ? 'intercepted' : 'lost');
       bump(world, findById(world, kick.playerId), -0.02);
@@ -883,7 +884,10 @@ function header(world: SimWorld, p: SimPlayer, events: SimEvent[], minute: numbe
   const T = 0.6 + d * 0.03;
   const speed = Math.min(16, (Math.exp(DRAG_K * d) - 1) / (DRAG_K * T));
   const s = strike(p, world, normalize(sub(aim, b.pos)), speed, GRAVITY * T / 2, KICK_ERROR.header, e);
-  launch(world, p, mate && !ownHalf ? 'header' : 'clear', s.vel, s.vz, aim, mate && !ownHalf ? mate.id : null);
+  // A header redirects a moving ball; it cannot cancel its momentum, so part
+  // of the incoming pace carries on (which is how crosses get headed behind).
+  const incoming = b.vel;
+  launch(world, p, mate && !ownHalf ? 'header' : 'clear', add(scale(s.vel, 0.7), scale(incoming, 0.3)), s.vz, aim, mate && !ownHalf ? mate.id : null);
   trace(world, 'header', p, { dist: r2(d), toMate: mate !== null && !ownHalf });
 }
 
@@ -1016,9 +1020,9 @@ function scoreGoal(world: SimWorld, attacking: TeamSide, events: SimEvent[], min
   emit(events, world, minute, { type: 'goal', side: attacking, ...(scorer ? { playerId: scorer } : {}) });
   trace(world, 'goal', findById(world, scorer ?? null), { y: r2(y), z: r2(z), ownGoal: scorer === undefined });
   const sc = findById(world, scorer ?? null);
-  bump(world, sc, 0.15);
-  for (const p of teamOf(world, attacking)) bump(world, p, 0.03);
-  for (const p of teamOf(world, otherSide(attacking))) bump(world, p, -0.03);
+  bump(world, sc, 0.08);
+  for (const p of teamOf(world, attacking)) bump(world, p, 0.01);
+  for (const p of teamOf(world, otherSide(attacking))) bump(world, p, -0.01);
   shotImpulse(world, attacking, 0.2);
   beginRestart(world, 'kickoff', otherSide(attacking), CENTRE_SPOT);
 }
@@ -1124,7 +1128,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     // pick a pass (quicker for players who see the game early).
     // Under pressure he releases it at once (and less accurately).
     const press = pressureAt(carrier.pos, teamOf(world, otherSide(carrier.side)));
-    const settled = now - world.ball.controlSec >= (0.6 + 0.8 * (1 - carrier.stats.vision / 100)) * (1 - press);
+    const settled = now - world.ball.controlSec >= (0.9 + 1.0 * (1 - carrier.stats.vision / 100)) * (1 - press);
     const { action, options, top } = chooseAction(carrier, world, 'open', false, settled);
     if (world.trace) {
       trace(world, 'decide', carrier, { action: action.kind, options, u: r2(action.utility * 1000), top });

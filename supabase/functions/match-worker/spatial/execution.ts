@@ -36,7 +36,7 @@ export function errorScale(p: SimPlayer, skill: number, world: SimWorld, c: Circ
   let e = 1.25 - skill / 100;
   e *= 1 + 0.8 * c.pressure;
   e *= 1 + 0.7 * (1 - p.stamina);
-  if (world.flags.confidence) e *= 1.3 - 0.6 * p.confidence;
+  if (world.flags.confidence) e *= 1.15 - 0.3 * p.confidence;
   e *= 1 + 0.5 * c.awkward;
   return Math.max(0.08, e);
 }
@@ -59,7 +59,7 @@ export const KICK_ERROR: Readonly<Record<'pass' | 'lofted' | 'cross' | 'shot' | 
   pass:   { ang: 0.040, spd: 0.07, lift: 0.0 },
   lofted: { ang: 0.060, spd: 0.08, lift: 0.9 },
   cross:  { ang: 0.085, spd: 0.09, lift: 1.1 },
-  shot:   { ang: 0.105, spd: 0.06, lift: 2.0 },
+  shot:   { ang: 0.18, spd: 0.06, lift: 3.2 },
   header: { ang: 0.170, spd: 0.15, lift: 1.4 },
   clear:  { ang: 0.160, spd: 0.12, lift: 1.5 },
   throw:  { ang: 0.050, spd: 0.08, lift: 0.5 },

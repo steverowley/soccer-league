@@ -56,7 +56,13 @@ export function keeperVelocity(k: SimPlayer, world: SimWorld, ctx: TickContext):
   if (!ctx.carrier && ctx.best[k.side]?.id === k.id && ctx.now >= k.reactUntil) {
     const ic = ctx.intercept.get(k.id);
     const oppT = ctx.bestT[k.side === 'home' ? 'away' : 'home'];
-    if (ic && inOwnBox(k, ic.pt) && ic.t < oppT + 0.4) return seek(k, ic.pt);
+    // He comes for a ball on the ground he will clearly win, and for a high
+    // ball only into his six-yard area: otherwise his defenders deal with it.
+    if (ic && inOwnBox(k, ic.pt)) {
+      const deep = Math.abs(ic.pt.x - gx) < 7 && Math.abs(ic.pt.y - PITCH_WIDTH / 2) < 10;
+      const high = world.ball.z > 1 || world.ball.vz > 2;
+      if ((high && deep && ic.t < oppT + 0.2) || (!high && ic.t < oppT - 0.2)) return seek(k, ic.pt);
+    }
   }
   // Hold the line between ball and goal centre, further out as the ball nears
   // the box (narrowing the angle), a sweeper's depth when play is far away.

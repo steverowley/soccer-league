@@ -20,12 +20,12 @@ import { shapePoint, clampIn } from './offball';
 
 /** Minimum set-up time (s) for each kind of restart. */
 export const RESTART_PAUSE: Readonly<Record<RestartKind, number>> = {
-  kickoff: 45,
-  throw: 8,
-  corner: 22,
-  goalkick: 16,
-  freekick: 16,
-  penalty: 50,
+  kickoff: 50,
+  throw: 11,
+  corner: 26,
+  goalkick: 20,
+  freekick: 20,
+  penalty: 55,
   keeper: 4,
 };
 
@@ -56,6 +56,9 @@ export function beginRestart(
     indirect,
   };
   world.phase = 'dead_ball';
+  if (world.trace) {
+    world.trace({ tSec: Math.round(world.clockSec * 10) / 10, kind: 'dead', ball: { x: spot.x, y: spot.y, z: 0 }, data: { kind, side } });
+  }
   for (const p of [...world.home, ...world.away]) {
     p.lunge = null;
     p.dive = null;

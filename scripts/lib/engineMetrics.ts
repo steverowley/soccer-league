@@ -54,6 +54,8 @@ export interface MatchMetrics {
   penalties: number;
   subs: number;
   woodwork: number;
+  /** Minutes the ball was in play (regulation plus stoppage, minus restarts). */
+  inPlayMin: number;
   ms: number;
 }
 
@@ -62,7 +64,11 @@ export function measure(home: SpatialTeamInput, away: SpatialTeamInput, seed: nu
   let shotsInside11 = 0;
   let passesComplete = 0;
   let passesResolved = 0;
+  let deadAt = -1;
+  let deadSec = 0;
   const trace = (r: TraceRecord): void => {
+    if (r.kind === 'dead') deadAt = r.tSec;
+    if (r.kind === 'restart' && deadAt >= 0) { deadSec += r.tSec - deadAt; deadAt = -1; }
     if (r.kind === 'shot' && typeof r.data['dist'] === 'number' && r.data['dist'] < 11) shotsInside11++;
     if (r.kind === 'pass_end' && r.data['kind'] !== 'throw') {
       passesResolved++;
@@ -102,6 +108,7 @@ export function measure(home: SpatialTeamInput, away: SpatialTeamInput, seed: nu
     penalties: n('penalty'),
     subs: n('substitution'),
     woodwork: n('woodwork'),
+    inPlayMin: ((r.frames[r.frames.length - 1]?.tSec ?? 5400) - deadSec) / 60,
     ms,
   };
 }

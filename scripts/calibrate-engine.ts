@@ -46,6 +46,7 @@ for (const m of batch) goalsHist.set(m.goals, (goalsHist.get(m.goals) ?? 0) + 1)
 out('Goals per match histogram: ' + [...goalsHist.entries()].sort((a, b) => a[0] - b[0]).map(([g, c]) => `${g}:${c}`).join('  '));
 const sum = (f: (m: MatchMetrics) => number) => batch.reduce((s, m) => s + f(m), 0);
 out(`Woodwork per match: ${fmt(sum((m) => m.woodwork) / MATCHES)}   substitutions per match: ${fmt(sum((m) => m.subs) / MATCHES)}`);
+out(`Ball in play: ${fmt(sum((m) => m.inPlayMin) / MATCHES, 1)} minutes per match (real football: about 55 to 60)`);
 out(`Goal conversion (goals / shots): ${fmt(sum((m) => m.goals) / Math.max(1, sum((m) => m.shots)), 3)}`);
 out('');
 

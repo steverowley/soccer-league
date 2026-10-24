@@ -161,7 +161,7 @@ function makeSimPlayer(
     pos:      home,
     vel:      vec(0, 0),
     stamina:  1,
-    confidence: flags.confidence ? (side === 'home' ? 0.56 : 0.47) : 0.5,
+    confidence: flags.confidence ? (side === 'home' ? 0.53 : 0.47) : 0.5,
     yellowCards: 0,
     sentOff:  false,
     job:      'shape',

@@ -206,7 +206,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
       const v = positionValue(a.pos, opp) * (1 - d / 16);
       if (v > bestV) { bestV = v; bestA = a; }
     }
-    if (bestA) push('mark', 0.26 + 4 * bestV, bestA.id);
+    if (bestA) push('mark', 0.26 + 6 * bestV, bestA.id);
   }
 
   if (inPossession && ctx.carrier) {
@@ -305,7 +305,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
     case 'mark': {
       const a = findById(world, p.jobRef);
       if (!a) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
-      return add(arrive(p, markTarget(p, a, 1.6), 3, 0.85 * work), scale(sep, 0.5));
+      return add(arrive(p, markTarget(p, a, 1.2), 3, 0.9 * work), scale(sep, 0.5));
     }
     case 'support': {
       const c = ctx.carrier;
@@ -331,7 +331,30 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
  * the score-and-clock line shift (leading late sits deeper).
  */
 export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
-  const a = dynamicAnchor(p, world.ball.pos);
+  let a = dynamicAnchor(p, world.ball.pos);
+  // Out of possession the block compacts (authored): midfield and attack drop
+  // toward their own back line and everyone squeezes toward the ball's side,
+  // so the space between and behind the lines closes.
+  const ball = world.ball;
+  const inPossession = ball.ownerId !== null
+    ? (p.side === 'home' ? world.home : world.away).some((q) => q.id === ball.ownerId)
+    : ball.lastTouchSide === p.side;
+  if (!inPossession && p.role !== 'GK') {
+    const back = p.side === 'home' ? -1 : 1;
+    const drop = p.role === 'MF' ? 7 : p.role === 'FW' ? 9 : 2;
+    a = clampIn(vec(a.x + back * drop, a.y + (ball.pos.y - a.y) * 0.18));
+    // Keep the lines close: midfield within 11 m of the back line, the
+    // forwards within 24 m, so there is no free pocket between them.
+    if (p.role === 'MF' || p.role === 'FW') {
+      const df = (p.side === 'home' ? world.home : world.away).find((q) => q.role === 'DF' && !q.sentOff);
+      if (df) {
+        const dfX = dynamicAnchor(df, ball.pos).x + back * 2;
+        const gap = p.role === 'MF' ? 11 : 24;
+        const fwd = -back;
+        if ((a.x - dfX) * fwd > gap) a = vec(dfX + fwd * gap, a.y);
+      }
+    }
+  }
   if (!world.flags.scoreClockTerm) return a;
   const L = lateness(world);
   const gd = goalDiff(world, p.side);
