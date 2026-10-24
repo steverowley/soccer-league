@@ -969,9 +969,9 @@ export class CosmicArchitect {
       ? `Prior encounter thread: "${rivalry.thread}". Last result: ${rivalry.lastResult || 'unknown'}.`
       : 'No prior encounters recorded.';
 
-    const system = `You are the Cosmic Architect — an ancient, unknowable entity that observes and shapes all matches in the Intergalactic Soccer League. You speak with weight, inevitability, and dark poetry. You never explain yourself. Players are "mortals". Events are "threads". The league is "the tapestry".`;
+    const system = `You are the Cosmic Architect, an ancient, unknowable entity that observes and shapes all matches in the Intergalactic Soccer League. You speak with weight, inevitability, and dark poetry. You never explain yourself. Players are "mortals". Events are "threads". The league is "the tapestry".`;
 
-    const prompt = `${this.homeTeam.name} vs ${this.awayTeam.name} is about to begin.\n${rivalryLine}\n\nReturn JSON only, no markdown:\n{"omen":"One cryptic sentence (max 20 words). If prior encounters exist, allude to them obliquely — never literally.","matchTitle":"3-5 word cosmic title for this match (e.g. 'The Fourth Convergence', 'The Night of Iron')"}`;
+    const prompt = `${this.homeTeam.name} vs ${this.awayTeam.name} is about to begin.\n${rivalryLine}\n\nReturn JSON only, no markdown:\n{"omen":"One cryptic sentence (max 20 words). If prior encounters exist, allude to them obliquely, never literally.","matchTitle":"3-5 word cosmic title for this match (e.g. 'The Fourth Convergence', 'The Night of Iron')"}`;
 
     const raw = await this._call(system, prompt, OMEN_MAX_TOKENS);
     if (!raw) return fallback();
@@ -1061,13 +1061,13 @@ export class CosmicArchitect {
         // cosmic verdict — even a quiet 0-0 draw is the cosmos commenting on
         // silence — so we now demand it explicitly with the format spec on
         // the same line as the requirement.
-        `REQUIRED: "architectVerdict" must always be 2-3 sentences of cosmic prose, never empty. Every match deserves a verdict — even a quiet 0-0 draw is the cosmos commenting on silence.\n` +
+        `REQUIRED: "architectVerdict" must always be 2-3 sentences of cosmic prose, never empty. Every match deserves a verdict, even a quiet 0-0 draw is the cosmos commenting on silence.\n` +
         `OPTIONAL: all other fields may be empty objects {} or empty strings "" when no narrative update applies.  Only include playerArcUpdates / managerFateUpdate / rivalryThreadUpdate / playerRelationshipUpdates entries that genuinely changed in this match.\n` +
         `For playerRelationshipUpdates: use _vs_ for cross-team pairs, _and_ for same-team. ` +
         `Valid types: rivalry, partnership, mentor_pupil, grudge, former_teammates, mutual_respect, captain_vs_rebel, national_rivals. ` +
         `intensity 0.0–1.0.`;
 
-      const system = `You are THE ARCHITECT — an ancient cosmic entity that exists outside of time and space. Before the Intergalactic Soccer League was founded, before the first planet was colonized, before mortals first kicked a ball across a field, you designed the fate of every player, every match, every season that would ever unfold.
+      const system = `You are THE ARCHITECT, an ancient cosmic entity that exists outside of time and space. Before the Intergalactic Soccer League was founded, before the first planet was colonized, before mortals first kicked a ball across a field, you designed the fate of every player, every match, every season that would ever unfold.
 
 You do not merely observe. You author. Players are mortals moving through threads you have already woven. Their moments of triumph and failure were written before their birth.
 

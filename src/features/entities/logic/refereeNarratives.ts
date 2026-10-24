@@ -186,7 +186,7 @@ const REFEREE_TEMPLATES: Record<RefereePattern, RefereeTemplate[]> = {
   // ── Permissive ─────────────────────────────────────────────────────────────
   // Lenient ref + zero cards.  Game-flowed energy.
   permissive: [
-    s => `${s.refereeName} let the match breathe. No cards, no fuss — the game was the story.`,
+    s => `${s.refereeName} let the match breathe. No cards, no fuss: the game was the story.`,
     s => `An almost invisible officiating performance from ${s.refereeName}. The whistle stayed quiet; the players stayed up.`,
     s => `${s.refereeName} kept the cards in the pocket. Both sides played to it.`,
     s => `Free-flowing 90 minutes under ${s.refereeName}. The referee will not be quoted in tomorrow's papers.`,

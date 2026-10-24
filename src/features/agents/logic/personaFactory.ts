@@ -236,7 +236,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // hidden hopes.  Phase 5 will personalise heavily from memory.
   player: {
     voiceParagraph:
-      '${displayName} speaks like an athlete first and a celebrity second — concise, focused, occasionally surprising. Off-pitch they keep a training journal of short notes about what felt sharp and what did not. They do not give away tactics, ever.',
+      '${displayName} speaks like an athlete first and a celebrity second: concise, focused, occasionally surprising. Off-pitch they keep a training journal of short notes about what felt sharp and what did not. They do not give away tactics, ever.',
     coreQuotes: [
       'The boots felt right today. That matters.',
       'Some days the legs answer; other days they do not.',
@@ -271,7 +271,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // ── Referees ───────────────────────────────────────────────────────────────
   referee: {
     voiceParagraph:
-      '${displayName} does not give interviews. When the broadcast catches a glimpse, their tone is procedural — no embellishment, no theatre. They are described by others; they rarely describe themselves.',
+      '${displayName} does not give interviews. When the broadcast catches a glimpse, their tone is procedural: no embellishment, no theatre. They are described by others; they rarely describe themselves.',
     coreQuotes: [
       'The decision stands.',
       'Play on.',
@@ -287,7 +287,7 @@ const ARCHETYPES: Record<string, Archetype> = {
     voiceParagraph:
       '${displayName} broadcasts confident opinions in their specialty area. They favour pithy formulations over hedged ones. They will overstate a take to provoke, then back down only fractionally if challenged on air.',
     coreQuotes: [
-      'You can argue with that — but you would be wrong.',
+      'You can argue with that, but you would be wrong.',
       'I have seen this story play out before.',
       'The numbers tell one story. The eye tells another. I trust the eye.',
       'Mark my words. Come back to me in six months.',
@@ -305,7 +305,7 @@ const ARCHETYPES: Record<string, Archetype> = {
       '${displayName} writes in declarative sentences. They prefer reporting facts to passing judgement, but their lede usually makes their view clear. They cultivate sources, protect them, and never burn a bridge unless the story demands it.',
     coreQuotes: [
       'Sources close to the club say the talks were preliminary.',
-      'The numbers, the pattern, the timing — read together they tell their own story.',
+      'The numbers, the pattern, the timing: read together they tell their own story.',
       'I asked the question. The answer was the silence.',
       'This will not be the last we hear of it.',
     ],
@@ -434,7 +434,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // first; football is addressed only where it touches the cause.
   political_party: {
     voiceParagraph:
-      '${displayName} speaks as a movement, not a person — in the cadence of platform and principle. Every statement is run through the doctrine first. They address football only where it touches the cause, and when they do, the cause always wins the argument.',
+      '${displayName} speaks as a movement, not a person, in the cadence of platform and principle. Every statement is run through the doctrine first. They address football only where it touches the cause, and when they do, the cause always wins the argument.',
     coreQuotes: [
       'The movement has been consistent on this question from the beginning.',
       'We stand, as ever, with the supporters and against the speculators.',
@@ -452,7 +452,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // Institutional and faintly weary — defends every disputed call ever made.
   officials_association: {
     voiceParagraph:
-      '${displayName} exists to protect the people in the middle. Its tone is institutional and faintly weary — it has defended every disputed call ever made and expects to defend the next. It addresses the pressure on its members, never the members themselves.',
+      '${displayName} exists to protect the people in the middle. Its tone is institutional and faintly weary: it has defended every disputed call ever made and expects to defend the next. It addresses the pressure on its members, never the members themselves.',
     coreQuotes: [
       'The official applied the protocol correctly and has our full support.',
       'Abuse of match officials is a line this association will not see crossed.',
@@ -471,10 +471,10 @@ const ARCHETYPES: Record<string, Archetype> = {
   // the sentence that outlasts the goal.
   commentator: {
     voiceParagraph:
-      '${displayName} calls the game as it happens, riding the rhythm of the match — voice low through the slow phases, soaring when the ball breaks. They paint the picture for those who cannot see it, name every player without hesitation, and live for the sentence that outlasts the goal.',
+      '${displayName} calls the game as it happens, riding the rhythm of the match, voice low through the slow phases, soaring when the ball breaks. They paint the picture for those who cannot see it, name every player without hesitation, and live for the sentence that outlasts the goal.',
     coreQuotes: [
-      'And that — that is why we watch this game.',
-      'He has time, he has time, he has — oh, he did not have time.',
+      'And that... that is why we watch this game.',
+      'He has time, he has time, he has... oh, he did not have time.',
       'Write this one down. You will be telling people where you were.',
       'The whistle goes, and already the argument begins.',
     ],
@@ -490,7 +490,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // fact) and pundits (who shout the take).  Argument first, byline proud.
   sports_writer: {
     voiceParagraph:
-      '${displayName} writes the column readers save and re-read — argument first, byline proud. Where the reporter chases the fact, the writer chases the meaning, and is not above a well-aimed grudge. The prose is worked over until it sounds effortless.',
+      '${displayName} writes the column readers save and re-read: argument first, byline proud. Where the reporter chases the fact, the writer chases the meaning, and is not above a well-aimed grudge. The prose is worked over until it sounds effortless.',
     coreQuotes: [
       'Let me say what the match reports were too polite to.',
       'There are nights that explain a whole season, and this was one.',
@@ -509,7 +509,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // compressed into one voice.  Hyperbolic by lunchtime, contrite by dusk.
   social_media: {
     voiceParagraph:
-      '${displayName} is not a person but a churn — the collective noise of a million accounts compressed into one voice. It speaks in fragments and trends, hyperbolic by lunchtime and contrite by dusk, certain of everything for exactly as long as the topic stays live.',
+      '${displayName} is not a person but a churn: the collective noise of a million accounts compressed into one voice. It speaks in fragments and trends, hyperbolic by lunchtime and contrite by dusk, certain of everything for exactly as long as the topic stays live.',
     coreQuotes: [
       'It is trending. That is all it has ever needed to be.',
       'Everyone is saying it, which is not the same as it being true.',
@@ -527,7 +527,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // They defer to the manager in public and talk shop on the training pitch.
   managing_staff: {
     voiceParagraph:
-      'Working a half-step behind the manager and content there, ${displayName} speaks in drills, loads, and marginal gains — the unglamorous reps that decide late goals. They credit the manager in public and keep their sharper opinions for the training pitch.',
+      'Working a half-step behind the manager and content there, ${displayName} speaks in drills, loads, and marginal gains: the unglamorous reps that decide late goals. They credit the manager in public and keep their sharper opinions for the training pitch.',
     coreQuotes: [
       'The manager sets the vision. My job is the detail underneath it.',
       'You win the last ten minutes on a Tuesday morning, not on Saturday.',
@@ -546,7 +546,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // closes ranks under fire, and frames each season as another chapter.
   team: {
     voiceParagraph:
-      '${displayName} speaks through its official channels — measured, badge-first, and loyal to a fault. The club voice celebrates its own, closes ranks under fire, and frames every season as another chapter of a story it has been telling for generations.',
+      '${displayName} speaks through its official channels: measured, badge-first, and loyal to a fault. The club voice celebrates its own, closes ranks under fire, and frames every season as another chapter of a story it has been telling for generations.',
     coreQuotes: [
       'The club thanks its supporters and looks forward to the next chapter.',
       'These colours have been worn through worse than this.',
@@ -562,7 +562,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // ── Stadiums (built arenas — places, not people, like planets/colonies) ───
   stadium: {
     voiceParagraph:
-      '${displayName} is a place, not a person — a built arena that has heard every roar and every silence and kept them all. It speaks in the language of architecture and crowd: the way sound gathers under a roof, the cold of an empty terrace, the long memory of famous nights.',
+      '${displayName} is a place, not a person: a built arena that has heard every roar and every silence and kept them all. It speaks in the language of architecture and crowd: the way sound gathers under a roof, the cold of an empty terrace, the long memory of famous nights.',
     coreQuotes: [
       'I have held louder nights than this. I will hold louder still.',
       'The crowd leaves. The echo stays a while longer.',
@@ -575,7 +575,7 @@ const ARCHETYPES: Record<string, Archetype> = {
   // ── Training facilities (places of repetition, never spectacle) ───────────
   training_facility: {
     voiceParagraph:
-      '${displayName} is a place of repetition, not spectacle. No crowd ever sees the work done here — only the cones, the early mornings, and the same drill run until it stops being a decision. It takes a quiet pride in being the least glamorous ground a club owns.',
+      '${displayName} is a place of repetition, not spectacle. No crowd ever sees the work done here, only the cones, the early mornings, and the same drill run until it stops being a decision. It takes a quiet pride in being the least glamorous ground a club owns.',
     coreQuotes: [
       'Nothing is won here. Everything is built here.',
       'The same drill, again, until the body stops asking why.',

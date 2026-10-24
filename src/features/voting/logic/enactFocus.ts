@@ -383,7 +383,7 @@ function enactSignStarPlayer(
         22, 28,
         () => 8 + rng() * 6,
         () => standardPosBoost(() => Math.round(8 + rng() * 6)),
-        `A new signing arrives — destiny carries them to the squad. The cosmos prepared this arrival long before the vote was cast.`,
+        `A new signing arrives: destiny carries them to the squad. The cosmos prepared this arrival long before the vote was cast.`,
       ),
     },
     {
@@ -495,7 +495,7 @@ function enactYouthAcademy(
     return {
       focus_key:  'youth_academy',
       focus_label: 'Invest in Youth Academy',
-      reason: `The youth academy searched the stars for its champions. This season, none were yet ready to step forward — but the seeds are planted.`,
+      reason: `The youth academy searched the stars for its champions. This season, none were yet ready to step forward, but the seeds are planted.`,
       mutations: [],
     };
   }
@@ -575,7 +575,7 @@ function enactYouthAcademy(
         return buildPromotion(
           chosen,
           bump,
-          `The youth steps into the light. ${chosen.name} — long watched, long waiting — claims a place in the starting eleven. The Architect notes: this one was always meant to emerge now.`,
+          `The youth steps into the light. ${chosen.name} (long watched, long waiting) claims a place in the starting eleven. The Architect notes: this one was always meant to emerge now.`,
         );
       },
     },
@@ -606,7 +606,7 @@ function enactYouthAcademy(
         return buildPromotion(
           chosen,
           bump,
-          `The academy was meant for the young. But the cosmos plucked ${chosen.name} from the shadows instead — a veteran finally given their chance. The Architect insists this was always the plan.`,
+          `The academy was meant for the young. But the cosmos plucked ${chosen.name} from the shadows instead: a veteran finally given their chance. The Architect insists this was always the plan.`,
         );
       },
     },
@@ -687,7 +687,7 @@ function enactTacticalOverhaul(
       weight: 33,
       apply:  () => buildOverhaul(
         'technical',
-        `The coaching staff insists on the ball. Touches per possession climb in training. The squad emerges patient — almost slow — but their feet have grown careful.`,
+        `The coaching staff insists on the ball. Touches per possession climb in training. The squad emerges patient, almost slow, but their feet have grown careful.`,
       ),
     },
   ];
@@ -781,7 +781,7 @@ function enactStadiumUpgrade(
       weight: 45,
       apply:  () => build(
         7_500,
-        `The stadium's walls push outward. Bright steel, turnstiles spinning, gates singing. More mortals than ever will witness the spectacle — and their presence will swell the coffers.`,
+        `The stadium's walls push outward. Bright steel, turnstiles spinning, gates singing. More mortals than ever will witness the spectacle, and their presence will swell the coffers.`,
       ),
     },
     {
@@ -789,7 +789,7 @@ function enactStadiumUpgrade(
       weight: 25,
       apply:  () => build(
         2_500,
-        `The renovation woke something. Fans still came — but fewer than the planners promised, and they spoke of cold drafts in the new concourse. The cosmos collects its tribute in silence.`,
+        `The renovation woke something. Fans still came, but fewer than the planners promised, and they spoke of cold drafts in the new concourse. The cosmos collects its tribute in silence.`,
       ),
     },
     {
@@ -797,7 +797,7 @@ function enactStadiumUpgrade(
       weight: 30,
       apply:  () => build(
         5_000,
-        `The cosmic crowd surge reaches the pitch. The squad walks out beneath a wall of witnesses; confidence settles into the bones of every starter. Revenue rises — and so does the squad's composure.`,
+        `The cosmic crowd surge reaches the pitch. The squad walks out beneath a wall of witnesses; confidence settles into the bones of every starter. Revenue rises, and so does the squad's composure.`,
         1, // +1 mental on every starter
       ),
     },
@@ -877,7 +877,7 @@ function enactPreseasonCamp(
       apply:  () => build(
         () => true,                // all players
         [{ stat: 'athletic', delta: 2 }],
-        `The squad is driven to the edge of endurance before the first whistle blows. They emerge harder, faster — but the stars only watch to see if it was enough.`,
+        `The squad is driven to the edge of endurance before the first whistle blows. They emerge harder, faster. But the stars only watch to see if it was enough.`,
       ),
     },
     {
@@ -898,7 +898,7 @@ function enactPreseasonCamp(
       apply:  () => build(
         (p) => p.starter,          // starters only
         [{ stat: 'athletic', delta: 3 }],
-        `The bench ran cones. The first XI ran walls. The coaching staff chose their warriors, and the squad's reserves know it. The starters emerge sharper than the cosmos has seen them before — at a price.`,
+        `The bench ran cones. The first XI ran walls. The coaching staff chose their warriors, and the squad's reserves know it. The starters emerge sharper than the cosmos has seen them before, at a price.`,
       ),
     },
   ];
@@ -938,7 +938,7 @@ function enactScoutNetwork(
     return {
       focus_key:   'scout_network',
       focus_label: 'Expand Scout Network',
-      reason: `The scouts sent their reports. No hidden gems were found this cycle — but the network extends further into the dark.`,
+      reason: `The scouts sent their reports. No hidden gems were found this cycle, but the network extends further into the dark.`,
       mutations: [],
     };
   }
@@ -997,7 +997,7 @@ function enactScoutNetwork(
         return buildPromotion(
           chosen,
           { technical: 2, mental: 1 },
-          `A hidden gem is uncovered. ${chosen.name} — overlooked, underestimated — now steps into the light. The scout network reaches deeper into the void.`,
+          `A hidden gem is uncovered. ${chosen.name} (overlooked, underestimated) now steps into the light. The scout network reaches deeper into the void.`,
         );
       },
     },
@@ -1009,7 +1009,7 @@ function enactScoutNetwork(
         return buildPromotion(
           chosen,
           { athletic: 2, technical: 1 },
-          `The scouts brought back a name from the outer colonies. ${chosen.name} runs faster than the squad's expectations — and the cosmos suspects there is more still to come.`,
+          `The scouts brought back a name from the outer colonies. ${chosen.name} runs faster than the squad's expectations, and the cosmos suspects there is more still to come.`,
         );
       },
     },
@@ -1021,7 +1021,7 @@ function enactScoutNetwork(
         return buildPromotion(
           chosen,
           { mental: 3 },
-          `The scouts uncovered a journeyman, undervalued for their age. ${chosen.name} brings a vault of game knowledge to the squad — a wily voice in the dressing room the cosmos has finally remembered.`,
+          `The scouts uncovered a journeyman, undervalued for their age. ${chosen.name} brings a vault of game knowledge to the squad: a wily voice in the dressing room the cosmos has finally remembered.`,
         );
       },
     },
@@ -1121,7 +1121,7 @@ function enactFanEngagement(
       weight: 30,
       apply:  () => build(
         1_000,
-        `The campaign reaches the dressing room. Letters from children, banners hand-painted in the stands — every starter walks a little taller into the next match.`,
+        `The campaign reaches the dressing room. Letters from children, banners hand-painted in the stands: every starter walks a little taller into the next match.`,
         [{ stat: 'mental', delta: 1 }],
         (p) => p.starter,
       ),
@@ -1131,7 +1131,7 @@ function enactFanEngagement(
       weight: 30,
       apply:  () => build(
         500,
-        `The crowd's energy crosses the touchline. The whole squad — starters and reserves — picks up the rhythm. The cosmos approves of the contagion.`,
+        `The crowd's energy crosses the touchline. The whole squad, starters and reserves, picks up the rhythm. The cosmos approves of the contagion.`,
         [{ stat: 'athletic', delta: 1 }],
         () => true,
       ),
@@ -1206,7 +1206,7 @@ function enactSportsScience(
           { stat: 'athletic',  delta: 1 },
           { stat: 'defending', delta: 1 },
         ],
-        `The medical staff rewrite the squad's limits at a cellular level. The cosmos approves — it prefers its mortals difficult to break.`,
+        `The medical staff rewrite the squad's limits at a cellular level. The cosmos approves: it prefers its mortals difficult to break.`,
       ),
     },
     {
@@ -1224,7 +1224,7 @@ function enactSportsScience(
       apply:  () => build(
         (p) => p.starter,          // starters only
         [{ stat: 'athletic', delta: 2 }],
-        `The lab burns its budget on peak output. Sprint conditioning, plyometric drills, neural-pathway tuning — the first XI emerges sharper than the cosmos has seen them. The bench watches from the sidelines.`,
+        `The lab burns its budget on peak output. Sprint conditioning, plyometric drills, neural-pathway tuning: the first XI emerges sharper than the cosmos has seen them. The bench watches from the sidelines.`,
       ),
     },
   ];
@@ -1300,7 +1300,7 @@ function enactMentalCoaching(
       weight: 33,
       apply:  () => build(
         starters.map((p) => ({ player: p, delta: 3 })),
-        `The ghosts in their minds are quieted. The squad faces pressure with new calm — the kind only suffering, and then release, can produce.`,
+        `The ghosts in their minds are quieted. The squad faces pressure with new calm: the kind only suffering, and then release, can produce.`,
       ),
     },
     {
@@ -1309,7 +1309,7 @@ function enactMentalCoaching(
       apply:  () => build(
         captain ? [{ player: captain, delta: 5 }] : [],
         captain
-          ? `${captain.name} carries the dressing room. The coach speaks only to one mortal this season — and the cosmos watches them grow heavier, steadier, until the whole squad rests on their shoulders.`
+          ? `${captain.name} carries the dressing room. The coach speaks only to one mortal this season, and the cosmos watches them grow heavier, steadier, until the whole squad rests on their shoulders.`
           : `The coach searched for a captain among the empty pitch. None was found.`,
       ),
     },
@@ -1318,7 +1318,7 @@ function enactMentalCoaching(
       weight: 34,
       apply:  () => build(
         players.map((p) => ({ player: p, delta: 1 })),
-        `The psychologist opens the sessions to everyone — bench, starters, recently-injured. The whole squad's belief lifts a half-degree. Quiet, but the cosmos notes the spread.`,
+        `The psychologist opens the sessions to everyone: bench, starters, recently-injured. The whole squad's belief lifts a half-degree. Quiet, but the cosmos notes the spread.`,
       ),
     },
   ];

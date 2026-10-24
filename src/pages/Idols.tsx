@@ -164,7 +164,7 @@ export default function Idols() {
           </div>
           <h1 style={titleStyle}>The Idol Board</h1>
           <p style={ledeStyle}>
-            Players ranked by total fan attention — a blend of who the cosmos claims as its
+            Players ranked by total fan attention: a blend of who the cosmos claims as its
             favourites and who it spends its time on. The board does not explain itself. The why is
             yours to interpret.
           </p>

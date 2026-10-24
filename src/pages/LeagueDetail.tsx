@@ -175,7 +175,7 @@ export default function LeagueDetail() {
             kicker="III"
             label="The Clubs"
             title={`All ${teams.length} Sides`}
-            subtitle="The full membership.  Each link opens the club's detail page — currently 404 until the Teams rebuild lands."
+            subtitle="The full membership.  Each link opens the club's detail page (currently 404 until the Teams rebuild lands)."
           />
           <ClubRoster teams={teams} />
         </Container>

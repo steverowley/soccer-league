@@ -464,7 +464,7 @@ Return between 3 and 5 items.`;
   // they DON'T go through the cache.
   const memoryLines =
     ctx.memories.length === 0
-      ? '(no recent high-salience memories — generate ambient pieces consistent with your voice)'
+      ? '(no recent high-salience memories; generate ambient pieces consistent with your voice)'
       : ctx.memories
           .map(
             (m) =>
@@ -486,7 +486,7 @@ Return between 3 and 5 items.`;
 ${memoryLines}
 
 DO NOT REPEAT these recent snippets (avoid near-duplicates):
-${dedupLines || '(no prior snippets — open territory)'}
+${dedupLines || '(no prior snippets; open territory)'}
 
 Now write 3-5 new snippets as ${displayName}. JSON array only.`;
 

@@ -203,7 +203,7 @@ export default function News() {
           </div>
           <h1 style={titleStyle}>Dispatches from the Void</h1>
           <p style={ledeStyle}>
-            The official record, filed as it happens. No correction is ever issued — the wire is
+            The official record, filed as it happens. No correction is ever issued: the wire is
             presumed accurate the moment it is written.
           </p>
         </header>
@@ -299,7 +299,7 @@ export default function News() {
             <RailPanel title="Standing notice">
               <p style={{ fontSize: 14, lineHeight: 1.55, margin: 0, color: DUST_70 }}>
                 Affiliation is permanent. The club may transfer leagues, dissolve, or be erased from
-                the record — but you cannot leave. Creating an account is easy. Escaping the league?
+                the record, but you cannot leave. Creating an account is easy. Escaping the league?
                 Not so much.
               </p>
             </RailPanel>
@@ -532,7 +532,7 @@ function QuietWireNotice({ hours }: { hours: number }) {
   return (
     <div style={{ border: `1px solid ${HAIRLINE}`, borderLeft: `2px solid ${DUST_50}`, padding: '14px 18px', margin: '0 0 24px', background: COLORS.dustFaint }}>
       <p style={{ fontSize: 13, lineHeight: 1.6, color: DUST_70, fontStyle: 'italic', margin: 0 }}>
-        The wire has been quiet for {hours}h. The cosmos is between breaths — its voices will return.
+        The wire has been quiet for {hours}h. The cosmos is between breaths. Its voices will return.
       </p>
     </div>
   );

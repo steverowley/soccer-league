@@ -233,9 +233,9 @@ export default function MatchDetail() {
                   <strong style={{ color: COLORS.dust }}>Vox</strong> calls the play-by-play.{' '}
                   <strong style={{ color: COLORS.dust }}>Nexus-7</strong> breaks down what just
                   happened. <strong style={{ color: COLORS.dust }}>Zara</strong> watches for the
-                  unusual. The cosmos itself —{' '}
+                  unusual. The cosmos itself (
                   <strong style={{ color: COLORS.dust }}>Balance</strong> and{' '}
-                  <strong style={{ color: COLORS.dust }}>Chaos</strong> — speaks only when the match
+                  <strong style={{ color: COLORS.dust }}>Chaos</strong>) speaks only when the match
                   deserves it.
                 </>
               }
@@ -284,7 +284,7 @@ export default function MatchDetail() {
                   body={
                     <>
                       Pick an outcome (home, draw, or away) and stake at least 10 IC. The odds you
-                      see lock the moment you place — the bookie&apos;s later re-pricing won&apos;t
+                      see lock the moment you place: the bookie&apos;s later re-pricing won&apos;t
                       claw your potential payout back.
                     </>
                   }
@@ -310,7 +310,7 @@ export default function MatchDetail() {
                   kicker="IV"
                   label="The Stats"
                   title="Player Performance"
-                  subtitle="Aggregated match stats per player.  Ratings reflect engine assessment — interpret them as the booth would."
+                  subtitle="Aggregated match stats per player.  Ratings reflect engine assessment. Interpret them as the booth would."
                 />
                 <PlayerStats
                   homeTeam={match.home_team}

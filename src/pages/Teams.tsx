@@ -175,7 +175,7 @@ export default function Teams() {
           <h1 style={titleStyle}>The Roster of Worlds</h1>
           <p style={ledeStyle}>
             Every club chartered to the league, from the terrestrial inner planets to the
-            scattered dark of the Kuiper Belt. Affiliation is permanent — choose carefully.
+            scattered dark of the Kuiper Belt. Affiliation is permanent. Choose carefully.
           </p>
         </header>
 
@@ -421,7 +421,7 @@ function TeamCard({ team, stats }: TeamCardProps) {
         >
           {stats
             ? `${relegation ? 'Relegation · ' : ''}${String(stats.position).padStart(2, '0')} in league`
-            : '— in league'}
+            : <>{'—'} in league</>}
         </span>
         <span
           style={{

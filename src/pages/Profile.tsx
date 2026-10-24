@@ -301,7 +301,7 @@ export default function Profile() {
               onChange={(e) => onTeamChange(e.target.value)}
               style={selectStyle}
             >
-              <option value={NO_PLAYER}>— No preference —</option>
+              <option value={NO_PLAYER}>No preference</option>
               {Array.from(teamsByLeague.entries()).map(([key, { name, teams: teamRows }]) => (
                 <optgroup key={key} label={name}>
                   {teamRows.map((t: any) => (
@@ -330,7 +330,7 @@ export default function Profile() {
               disabled={!teamId}
               style={selectStyle}
             >
-              <option value={NO_PLAYER}>— No preference —</option>
+              <option value={NO_PLAYER}>No preference</option>
               {players.map((p: any) => (
                 <option key={p.id} value={p.id}>
                   #{p.jersey_number ?? '—'} {p.name}
@@ -462,7 +462,7 @@ function DangerZone({ username, onOpen }: { username: string | null; onOpen: () 
         kicker="VI"
         label="Danger Zone"
         title="Permanent Erasure"
-        subtitle="Delete your account and anonymise your wager & vote history. This cannot be undone — your username, allegiance, and credit balance are gone immediately; leaderboard rows survive as anonymous entries."
+        subtitle="Delete your account and anonymise your wager & vote history. This cannot be undone: your username, allegiance, and credit balance are gone immediately; leaderboard rows survive as anonymous entries."
       />
       <div style={{ marginTop: 24 }}>
         <button
@@ -584,7 +584,7 @@ function DeleteAccountModal({
           }}
         >
           This permanently removes your profile, credit balance, and favourite team. Your past
-          wagers and votes are kept as anonymous rows so the leaderboards remain consistent — no
+          wagers and votes are kept as anonymous rows so the leaderboards remain consistent. No
           record of your identity remains.
         </p>
         <label

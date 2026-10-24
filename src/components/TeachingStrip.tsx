@@ -138,7 +138,7 @@ export default function TeachingStrip({ storageKey, title, body, accent }: Teach
       </div>
       <button
         onClick={dismiss}
-        aria-label={`Got it — dismiss: ${title}`}
+        aria-label={`Got it, dismiss: ${title}`}
         style={{
           alignSelf: 'flex-start',
           background: 'transparent',

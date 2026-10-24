@@ -91,7 +91,7 @@ const TIERS = [
     index: 'Decree I',
     label: 'Major Focus',
     title: 'The Big Lever',
-    desc: "One major focus is enacted per season. Sign a star, upgrade the stadium, or shake the dugout — whichever option gathers the most credits.",
+    desc: "One major focus is enacted per season. Sign a star, upgrade the stadium, or shake the dugout: whichever option gathers the most credits.",
     minStake: 10,
   },
   {
@@ -99,7 +99,7 @@ const TIERS = [
     index: 'Decree II',
     label: 'Minor Focus',
     title: 'The Quiet Lever',
-    desc: 'One minor focus is enacted alongside the major. Smaller signal, same mechanic — credits pool, the leader is enacted.',
+    desc: 'One minor focus is enacted alongside the major. Smaller signal, same mechanic: credits pool, the leader is enacted.',
     minStake: 5,
   },
 ];
@@ -324,7 +324,7 @@ export default function Voting() {
           </div>
           <h1 style={titleStyle}>Decide the Future</h1>
           <p style={ledeStyle}>
-            At season&rsquo;s end, fans pool credits to enact two focuses per club — one
+            At season&rsquo;s end, fans pool credits to enact two focuses per club: one
             major, one minor. Commit Intergalactic Credits behind the outcomes you want;
             the cosmos enacts whichever option has the most credits behind it.
           </p>
@@ -651,7 +651,7 @@ function DecreeCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 16, textTransform: 'uppercase' }}>
-            {tier.index} — {tier.label}
+            {tier.index} · {tier.label}
           </div>
           <h2 style={{ fontWeight: 700, fontSize: 28, lineHeight: 1.05, margin: '8px 0 0' }}>
             {tier.title}

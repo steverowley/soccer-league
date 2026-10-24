@@ -195,7 +195,7 @@ export default function Home() {
           padding: '12px 0',
         }}>
           <Container>
-            <span style={{ color: FLARE }}>Signal lost</span> — the league feed didn&apos;t load.{' '}
+            <span style={{ color: FLARE }}>Signal lost</span>: the league feed didn&apos;t load.{' '}
             <button
               type="button"
               onClick={() => { setLoadError(false); setRetryNonce((n) => n + 1); }}
@@ -299,7 +299,7 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
   // The seasons table only stores year, name, is_active, start/end dates.
   // Matchday/round tracking happens via match completion counts.
   const year = season?.year ?? '—';
-  const seasonLabel = season ? `SEASON ${year}` : 'SEASON —';
+  const seasonLabel = `SEASON ${year}`;
   // Hero stat — live matches in progress.
   //
   // Pre-#385 was hard-coded `/ 16` (the count of fixtures in a single

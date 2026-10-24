@@ -121,7 +121,7 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
             color: DUST_70,
           }}
         >
-          Intergalactic Credits — your opening stake from the cosmos
+          Intergalactic Credits: your opening stake from the cosmos
         </span>
       </div>
 
@@ -133,10 +133,10 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
         }
         subtitle={
           step === 1
-            ? 'Every fan supports one of 32 clubs across four orbital leagues. Pick the one you want to follow — you can change later.'
+            ? 'Every fan supports one of 32 clubs across four orbital leagues. Pick the one you want to follow. You can change later.'
             : step === 2
               ? 'Your favourite player. The cosmos pays attention to who you watch.'
-              : 'You have 200 Intergalactic Credits. The next match for your club kicks off soon — drop a stake to claim your seat.'
+              : 'You have 200 Intergalactic Credits. The next match for your club kicks off soon. Drop a stake to claim your seat.'
         }
       />
 
@@ -237,7 +237,7 @@ function PickClubStep({
         ))}
       </div>
 
-      <SkipFooter onSkip={onSkip} label="Skip — I'll pick later" />
+      <SkipFooter onSkip={onSkip} label="Skip, I'll pick later" />
     </>
   );
 }
@@ -328,7 +328,7 @@ function PickPlayerStep({
         </div>
       )}
 
-      <SkipFooter onSkip={onSkip} label="Skip — I'll pick a player later" />
+      <SkipFooter onSkip={onSkip} label="Skip, I'll pick a player later" />
     </>
   );
 }
@@ -389,7 +389,7 @@ function StarterBetStep({
         <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
           <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
             No fixtures yet for your club. Browse the schedule and place a bet whenever you&apos;re
-            ready — your 200 credits are sitting safe in your account.
+            ready. Your 200 credits are sitting safe in your account.
           </p>
         </div>
       )}
@@ -426,13 +426,13 @@ function StarterBetStep({
               focus vote — the one line that ties the two halves of the game
               together for a first-time fan. */}
           <p style={{ fontSize: 12, lineHeight: 1.6, color: DUST_50, margin: '16px 0 0' }}>
-            Your credits ride on every wager — and at season&rsquo;s end you&rsquo;ll pool
+            Your credits ride on every wager, and at season&rsquo;s end you&rsquo;ll pool
             what&rsquo;s left with other fans to vote on your club&rsquo;s future.
           </p>
         </div>
       )}
 
-      <SkipFooter onSkip={onDone} label="Done — take me home" />
+      <SkipFooter onSkip={onDone} label="Done, take me home" />
     </>
   );
 }

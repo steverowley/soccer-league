@@ -144,7 +144,7 @@ describe('buildSeasonEndedMemories', () => {
   /** One memory per manager, all carrying the season payload. */
   it('emits one season_concluded memory per manager', () => {
     const result = buildSeasonEndedMemories(
-      { seasonId: 's1', seasonName: 'Season 1 — 2600' },
+      { seasonId: 's1', seasonName: 'Season 1 (2600)' },
       ['mgr-a', 'mgr-b', 'mgr-c'],
       OCCURRED_AT,
     );
@@ -152,7 +152,7 @@ describe('buildSeasonEndedMemories', () => {
     expect(result.every((m) => m.fact_kind === 'season_concluded')).toBe(true);
     expect(result.every((m) => m.salience === SEASON_CONCLUDED_SALIENCE)).toBe(true);
     const payload = result[0]?.payload as { seasonName?: string };
-    expect(payload.seasonName).toBe('Season 1 — 2600');
+    expect(payload.seasonName).toBe('Season 1 (2600)');
   });
 });
 

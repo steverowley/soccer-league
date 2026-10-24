@@ -435,7 +435,7 @@ const ENTITY: Lexicon = {
 const ENTITY_TEMPLATES: readonly string[] = [
   '{open}. Right now {reading}. {close}.',
   '{open}. {reading_cap}, and {reading}. {close}.',
-  '{open} — {reading}. {close}.',
+  '{open}: {reading}. {close}.',
   '{reading_cap}. {open}. {close}.',
 ];
 

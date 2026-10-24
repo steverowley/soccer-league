@@ -58,19 +58,19 @@ const PROCLAMATION_TEMPLATES: readonly string[] = [
  * (lighter, supportive language) so the ticker has clear emotional steps.
  */
 const FOCUS_MAJOR_TEMPLATES: readonly string[] = [
-  '{TEAM} — the cosmos has heard you. {FOCUS} will be answered.',
+  '{TEAM}, the cosmos has heard you. {FOCUS} will be answered.',
   'The will of {TEAM}\'s faithful is plain. {FOCUS} is enacted.',
   'For {TEAM}, the major decree stands: {FOCUS}.',
-  '{TEAM}, your shared offering has reached the void. {FOCUS} — it is done.',
+  '{TEAM}, your shared offering has reached the void. {FOCUS}. It is done.',
   'The cosmos honours {TEAM}: {FOCUS} shall come to pass.',
 ] as const;
 
 const FOCUS_MINOR_TEMPLATES: readonly string[] = [
-  '{TEAM} — a quieter wish is granted. {FOCUS}.',
-  'A smaller offering from {TEAM}. {FOCUS} — let it be.',
+  '{TEAM}, a quieter wish is granted. {FOCUS}.',
+  'A smaller offering from {TEAM}. {FOCUS}. Let it be.',
   '{TEAM}\'s lesser devotion is not ignored. {FOCUS}.',
   'The minor decree for {TEAM}: {FOCUS}.',
-  '{TEAM} — alongside the greater, this also: {FOCUS}.',
+  '{TEAM}, alongside the greater, this also: {FOCUS}.',
 ] as const;
 
 /**
@@ -91,7 +91,7 @@ const FOCUS_MINOR_TEMPLATES: readonly string[] = [
 const INCINERATION_TOP_IDOL_TEMPLATES: readonly string[] = [
   '{PLAYER} of {TEAM}. You were loved too much to remain. The cosmos takes what is offered.',
   'For {PLAYER}, the {TEAM} faithful sang too loudly. The void listens. The void takes.',
-  '{PLAYER} — the brightest light burns shortest. {TEAM} will remember.',
+  '{PLAYER}: the brightest light burns shortest. {TEAM} will remember.',
   'The cosmos has marked {PLAYER}. Your devotion summoned the eye that watches. {TEAM} grieves.',
   '{PLAYER} of {TEAM}: a beloved name. A taken name.',
 ] as const;
@@ -99,7 +99,7 @@ const INCINERATION_TOP_IDOL_TEMPLATES: readonly string[] = [
 const INCINERATION_COMMON_TEMPLATES: readonly string[] = [
   '{PLAYER} of {TEAM}. The cosmos has chosen. The cosmos takes.',
   '{TEAM} loses {PLAYER}. The void offers no reason. There is none.',
-  '{PLAYER} — the season closes for you here.',
+  '{PLAYER}, the season closes for you here.',
   'For {PLAYER} of {TEAM}, the final whistle has been blown by other hands.',
   'The cosmos withdraws {PLAYER}. {TEAM} learns that no contract holds against the void.',
 ] as const;

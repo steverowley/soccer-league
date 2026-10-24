@@ -90,16 +90,16 @@ function eventCommentary(ev: SimEvent, index: PlayerIndex): string {
     case 'kickoff':      return 'Kickoff!';
     case 'goal':         return `${pn} scores for ${tn}!`;
     case 'shot':         return o
-                           ? `${pn} fires at goal — ${on} makes the save.`
-                           : `${pn} fires at goal — off target.`;
+                           ? `${pn} fires at goal, but ${on} makes the save.`
+                           : `${pn} fires at goal. Off target.`;
     case 'save':         return `${on} makes a brilliant save!`;
     case 'tackle':       return `${pn} wins the ball with a clean tackle.`;
     case 'foul':         return ev.card
                            ? `${pn} is shown a ${ev.card} card for a foul${o ? ` on ${on}` : ''}.`
-                           : `${pn} fouls${o ? ` ${on}` : ''} — free kick.`;
+                           : `${pn} fouls${o ? ` ${on}` : ''}. Free kick.`;
     case 'penalty':      return `Penalty to ${tn}! ${pn} steps up to take it.`;
     case 'woodwork':     return `Off the woodwork! ${pn} is inches away.`;
-    case 'substitution': return `${tn} make a change — ${pn} comes on${o ? ` for ${on}` : ''}.`;
+    case 'substitution': return `${tn} make a change: ${pn} comes on${o ? ` for ${on}` : ''}.`;
     case 'offside':      return `${pn} is caught offside.`;
     case 'interception': return `${pn} intercepts the ball.`;
     case 'pass':         return `${pn} plays the ball forward.`;

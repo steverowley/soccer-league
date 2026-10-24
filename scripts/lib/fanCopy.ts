@@ -44,7 +44,12 @@ function isConsoleArgument(node: ts.Node): boolean {
   for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
     if (ts.isCallExpression(n)) {
       const callee = n.expression;
-      if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === 'console') return true;
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === 'console'
+      )
+        return true;
     }
     if (ts.isStatement(n)) return false;
   }
@@ -62,17 +67,39 @@ export function findEmDashes(repoRoot: string): EmDashHit[] {
     if (SKIP_PATH.includes(rel)) continue;
     const source = readFileSync(file, 'utf8');
     if (!source.includes(EM_DASH)) continue;
-    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const sf = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
 
     const visit = (node: ts.Node): void => {
       let text: string | null = null;
-      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) text = node.text;
-      else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) text = node.text;
-      else if (ts.isJsxText(node)) text = node.text;
+      // A lone dash is only a placeholder when it is the WHOLE string. A
+      // template gap such as `${home} — ${away}` also trims to a lone dash,
+      // but it is a separator inside a sentence, so template parts never get
+      // the allowance.
+      let wholeString = false;
+      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+        text = node.text;
+        wholeString = true;
+      } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node))
+        text = node.text;
+      else if (ts.isJsxText(node)) {
+        text = node.text;
+        wholeString = true;
+      }
 
-      if (text !== null && text.includes(EM_DASH) && text.trim() !== EM_DASH && !isConsoleArgument(node)) {
+      const placeholder = wholeString && text !== null && text.trim() === EM_DASH;
+      if (text !== null && text.includes(EM_DASH) && !placeholder && !isConsoleArgument(node)) {
         const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-        hits.push({ file: rel.split(sep).join('/'), line: line + 1, text: text.trim().slice(0, 160) });
+        hits.push({
+          file: rel.split(sep).join('/'),
+          line: line + 1,
+          text: text.trim().slice(0, 160),
+        });
       }
       ts.forEachChild(node, visit);
     };

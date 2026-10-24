@@ -8,7 +8,8 @@ const byFile = new Map<string, typeof hits>();
 for (const h of hits) byFile.set(h.file, [...(byFile.get(h.file) ?? []), h]);
 
 if (process.argv.includes('--count')) {
-  for (const [f, hs] of [...byFile].sort((a, b) => b[1].length - a[1].length)) console.log(String(hs.length).padStart(4), f);
+  for (const [f, hs] of [...byFile].sort((a, b) => b[1].length - a[1].length))
+    console.log(String(hs.length).padStart(4), f);
 } else {
   for (const [f, hs] of byFile) {
     console.log(`\n${f}`);

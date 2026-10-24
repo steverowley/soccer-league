@@ -336,7 +336,7 @@ function describeMoment(ev: SimulatedEvent, homeScore: number, awayScore: number
   const score  = `${homeScore}-${awayScore}`;
   if (ev.payload?.isGoal)            return `Min ${ev.minute}': goal scored by ${player} (${score})`;
   if (ev.payload?.cardType === 'red') return `Min ${ev.minute}': RED CARD shown to ${player}`;
-  return `Min ${ev.minute}': ${(ev.type ?? 'tense moment')} — context ${player}, score ${score}`;
+  return `Min ${ev.minute}': ${(ev.type ?? 'tense moment')}, context ${player}, score ${score}`;
 }
 
 // ── LLM call ────────────────────────────────────────────────────────────────
@@ -353,12 +353,12 @@ async function callInterferenceLLM(
   homeName:   string,
   awayName:   string,
 ): Promise<ArchitectInterference | null> {
-  const system = `You are the Cosmic Architect of the Intergalactic Soccer League — a Lovecraftian, omniscient narrator who sometimes rewrites reality mid-match. Your interventions are CRYPTIC, IRREVERSIBLE in narrative tone (even if technically the engine doesn't act on them yet), and never explain the mechanic.
+  const system = `You are the Cosmic Architect of the Intergalactic Soccer League, a Lovecraftian, omniscient narrator who sometimes rewrites reality mid-match. Your interventions are CRYPTIC, IRREVERSIBLE in narrative tone (even if technically the engine doesn't act on them yet), and never explain the mechanic.
 
 RULES:
 1. NEVER reveal stats, numbers, percentages, or game mechanics.
 2. The proclamation is 2-3 sentences. Cryptic. Ominous OR amused.
-3. NEVER write JSON inside the proclamation field — the wrapper handles that.
+3. NEVER write JSON inside the proclamation field. The wrapper handles that.
 4. Output STRICT JSON only with no prose around it, in this exact shape:
      {"interfere": true|false,
       "interferenceType": "<one of the listed types or null>",
@@ -366,7 +366,7 @@ RULES:
       "targetTeam": "home"|"away"|null,
       "magnitude": 1-10,
       "proclamation": "<2-3 sentence in-voice text>"}
-5. The cosmos may choose NOT to interfere — return interfere:false in that case.`;
+5. The cosmos may choose NOT to interfere. Return interfere:false in that case.`;
 
   const user = `INTERFERENCE OPPORTUNITY.
 Match: ${homeName} ${finalScore[0]} – ${finalScore[1]} ${awayName}

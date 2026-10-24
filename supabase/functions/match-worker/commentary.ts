@@ -117,19 +117,19 @@ const VOX_TEMPLATES: Record<string, readonly string[]> = {
     '{roar}! <player> for <team>, and {grand}!',
     '<player> scores! {grand}, and {crowd}!',
     "{roar}! That's <player>, and {verdict}!",
-    '<player> finds it for <team> — {grand}. {verdict}!',
+    '<player> finds it for <team>: {grand}. {verdict}!',
   ],
   shot_saved: [
-    '<player> lets fly from {area} — and <other> with {keeper}!',
+    '<player> lets fly from {area}, and <other> with {keeper}!',
     "Oh, <player> went for the lot there, but {keeper} from <other>!",
-    '<player> strikes it true from {area} — <other> says no! {keeper}!',
+    '<player> strikes it true from {area}. <other> says no! {keeper}!',
     '<player> tests him from {area}. {keeper}, and {crowd}!',
     '<other> denies <player>! {keeper}! {near} for the striker!',
-    '<player> goes for goal — {keeper} from <other>, and {crowd}!',
+    '<player> goes for goal: {keeper} from <other>, and {crowd}!',
   ],
   shot_missed: [
-    '<player> swings at it from {area} — {near}!',
-    "<player> has a go — {near}. He'll see that one again.",
+    '<player> swings at it from {area}. {near}!',
+    "<player> has a go: {near}. He'll see that one again.",
     '<player> tries his luck and it drifts wide. {near}!',
   ],
   // `<player>` IS the keeper here: a `save` event carries the saver in
@@ -138,12 +138,12 @@ const VOX_TEMPLATES: Record<string, readonly string[]> = {
   save: [
     '<player> with {keeper}! Where did that come from!',
     '{keeper} from <player>!',
-    '<player> — {keeperClause}! {crowd}!',
+    '<player>! {keeperClause}! {crowd}!',
     'Oh, <player> has pulled off {keeper} there!',
     '<player> stands tall! {keeperClause}!',
   ],
   woodwork: [
-    'OFF THE FRAME! <player> — {near}!',
+    'OFF THE FRAME! <player>, {near}!',
     '<player> rattles the woodwork! {near}!',
   ],
   penalty: [
@@ -151,7 +151,7 @@ const VOX_TEMPLATES: Record<string, readonly string[]> = {
     "The referee points to the spot! <team>! <player> has it in his hands, and {crowd}!",
   ],
   foul_card: [
-    '<player> goes into the book — {stern}.',
+    '<player> goes into the book: {stern}.',
     '{stern}. <player>, a <card> card.',
     '<player> is shown a <card>, and {scrap}.',
     "That's a <card> for <player>. {stern}, and {scrap}.",
@@ -159,12 +159,12 @@ const VOX_TEMPLATES: Record<string, readonly string[]> = {
   ],
   foul: [
     '<player> brings it to a halt. Free kick, and {scrap}.',
-    "That's a foul from <player> — {scrap}.",
+    "That's a foul from <player>. {scrap}.",
     '<player> gives it away in {area}. {restart}.',
     'Whistle. <player> the culprit, and {scrap}.',
   ],
   tackle: [
-    '<player> wins it back — {bite}!',
+    '<player> wins it back, {bite}!',
     'What a challenge from <player>! {bite}!',
     '<player> takes it cleanly in {area}. {bite}!',
     '<player> gets there first, and {restart}.',
@@ -172,18 +172,18 @@ const VOX_TEMPLATES: Record<string, readonly string[]> = {
   corner: [
     '<team> win a corner, and {crowd}!',
     'Corner to <team>. Here come the big men. {restart}.',
-    "Corner, <team> — {crowd}, and everyone's forward!",
+    "Corner, <team>! {crowd}, and everyone's forward!",
     '<team> have a corner in {area}. {crowd}!',
     'Corner, <team>, from {area}. {restart}, and here it comes!',
   ],
   substitution: [
-    '<team> go to the bench — <player> comes on.',
+    '<team> go to the bench: <player> comes on.',
     'A change for <team>: <player> enters the fray.',
     '<player> is on for <team>, and {restart}.',
     'Fresh legs for <team>. <player> gets his chance.',
   ],
   offside: [
-    '<player> is away — but the flag is up. Offside.',
+    '<player> is away, but the flag is up. Offside.',
     'Caught marginally offside, <player>. {near}!',
     '<player> times it wrong and the flag goes up. {near}! {restart}.',
     'Offside against <player> in {area}. {restart}.',
@@ -217,7 +217,7 @@ const NEXUS: Lexicon = {
     'the probability field has been revised', 'this result was in the tail',
   ],
   glitch: [
-    'Fascinating. Fascinating.', 'I — correction. Continuing.',
+    'Fascinating. Fascinating.', 'I. Correction. Continuing.',
     'Biological athletes remain difficult to model.',
     'Recalculating. Recalculating.', 'A pleasing number.',
   ],
@@ -333,20 +333,20 @@ const ZARA: Lexicon = {
 
 const ZARA_TEMPLATES: Record<string, readonly string[]> = {
   goal: [
-    '<player> scores — and {body}. {craft}.',
+    '<player> scores, and {body}. {craft}.',
     "That's <player> for <team>. {craft}, honestly.",
     '<player> gets it. {tactic}, and he punished it.',
   ],
   shot_saved: [
-    '<player> hits it well from {area}, but {body} — and <other> reads it.',
+    '<player> hits it well from {area}, but {body}. <other> reads it.',
     'Good contact from <player>. <other> was set, though. {tactic}.',
     '<player> goes early from {area}. {body}, and <other> has it covered.',
-    '<other> saves from <player> — {tactic}, so the angle was always closing.',
+    '<other> saves from <player>: {tactic}, so the angle was always closing.',
     '<player> strikes it. {craft}, but <other> was equal to it.',
   ],
   shot_missed: [
     '<player> drags it wide. {empathy}',
-    "<player> goes for it from {area} — {body}, but it won't drop.",
+    "<player> goes for it from {area}: {body}, but it won't drop.",
   ],
   save: [
     '<player> was moving before the strike. That is positioning, not reflex.',
@@ -360,14 +360,14 @@ const ZARA_TEMPLATES: Record<string, readonly string[]> = {
   foul_card: [
     '<player> had to take the card there. {tactic}.',
     "Card for <player>. He was beaten before he committed.",
-    '<card> for <player> — {tactic}, and {empathy}',
+    '<card> for <player>: {tactic}, and {empathy}',
     "<player> takes one for the team. {tactic}.",
     '<card>, <player>. {tactic}, and {body}.',
   ],
   corner: [
     'Corner for <team>. Watch the back post. {tactic}.',
     'Set piece, <team>. {tactic}.',
-    'Corner, <team> — the near-post run is the one to watch. {tactic}.',
+    'Corner, <team>. The near-post run is the one to watch. {tactic}.',
     '<team> from the corner, into {area}. {tactic}.',
   ],
   offside: [
@@ -378,18 +378,18 @@ const ZARA_TEMPLATES: Record<string, readonly string[]> = {
   ],
   foul: [
     '<player> commits. {tactic}.',
-    '<player> fouls — he was recovering ground he should not have lost.',
+    '<player> fouls: he was recovering ground he should not have lost.',
     "That's <player> stopping it the only way left to him. {tactic}.",
     '<player> gives it away in {area}. {tactic}.',
   ],
   tackle: [
     '<player> times it beautifully. {body}.',
     'Lovely challenge, <player>. All timing.',
-    '<player> wins it in {area} — {body}.',
+    '<player> wins it in {area}: {body}.',
     "<player> reads it early. That's experience, not pace.",
   ],
   substitution: [
-    '<player> comes on for <team> — that changes their shape.',
+    '<player> comes on for <team>. That changes their shape.',
     '<team> adjust. <player> on. {tactic}.',
     "<player> on for <team>. That's a message about {area}.",
     'A change from <team>: <player>. {tactic}.',

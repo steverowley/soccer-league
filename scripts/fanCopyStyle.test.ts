@@ -37,27 +37,42 @@ describe('the scanner itself', () => {
 
   mkdirSync(join(root, 'src'), { recursive: true });
   mkdirSync(join(root, 'supabase', 'functions', 'w'), { recursive: true });
-  writeFileSync(join(root, 'src', 'copy.tsx'), [
-    `// a comment ${D} never flagged`,
-    `export const line = 'Corner to the home side ${D} watch the back post';`,
-    `export const empty = '${D}';`,
-    `export const tpl = (n: string) => \`\${n} scores ${D} what a strike\`;`,
-    `export const Jsx = () => <p>Nothing is explained ${D} you learn by watching.</p>;`,
-    `console.warn('dev log ${D} not fan copy');`,
-  ].join('\n'));
+  writeFileSync(
+    join(root, 'src', 'copy.tsx'),
+    [
+      `// a comment ${D} never flagged`,
+      `export const line = 'Corner to the home side ${D} watch the back post';`,
+      `export const empty = '${D}';`,
+      `export const tpl = (n: string) => \`\${n} scores ${D} what a strike\`;`,
+      `export const Jsx = () => <p>Nothing is explained ${D} you learn by watching.</p>;`,
+      `console.warn('dev log ${D} not fan copy');`,
+      `export const gap = (a: string, b: string) => \`\${a} ${D} \${b}\`;`,
+    ].join('\n'),
+  );
   writeFileSync(join(root, 'src', 'copy.test.ts'), `export const t = 'test file ${D} skipped';`);
-  writeFileSync(join(root, 'supabase', 'functions', 'w', 'pool.ts'), `export const pool = ['the keeper ${D} again'];`);
+  writeFileSync(
+    join(root, 'supabase', 'functions', 'w', 'pool.ts'),
+    `export const pool = ['the keeper ${D} again'];`,
+  );
 
   const hits = findEmDashes(root);
 
   it('flags string literals, template text and JSX text in both roots', () => {
     const lines = hits.map((h) => `${h.file}:${h.line}`).sort();
-    expect(lines).toEqual(['src/copy.tsx:2', 'src/copy.tsx:4', 'src/copy.tsx:5', 'supabase/functions/w/pool.ts:1']);
+    // Line 7 is a dash-only gap between two template variables: a separator
+    // inside a sentence, not an empty-value placeholder.
+    expect(lines).toEqual([
+      'src/copy.tsx:2',
+      'src/copy.tsx:4',
+      'src/copy.tsx:5',
+      'src/copy.tsx:7',
+      'supabase/functions/w/pool.ts:1',
+    ]);
   });
 
   it('ignores comments, the lone placeholder, console calls and test files', () => {
     expect(hits.some((h) => h.text.includes('comment'))).toBe(false);
-    expect(hits.some((h) => h.text === D)).toBe(false);
+    expect(hits.some((h) => h.file === 'src/copy.tsx' && h.line === 3)).toBe(false); // the lone placeholder
     expect(hits.some((h) => h.text.includes('dev log'))).toBe(false);
     expect(hits.some((h) => h.file.endsWith('.test.ts'))).toBe(false);
   });

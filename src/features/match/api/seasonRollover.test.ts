@@ -163,7 +163,7 @@ describe('rolloverSeason', () => {
     // New season created (active, is_active, year+1, derived name).
     expect(result.alreadyRolled).toBe(false);
     expect(result.newSeasonId).toBeTruthy();
-    expect(result.newSeasonName).toBe('Season 2 — 2601');
+    expect(result.newSeasonName).toBe('Season 2 (2601)');
 
     const insertedSeason = state.inserted['seasons']?.[0];
     expect(insertedSeason).toMatchObject({ status: 'active', is_active: true, year: 2601 });
@@ -196,7 +196,7 @@ describe('rolloverSeason', () => {
     const narratives = state.inserted['narratives'] ?? [];
     expect(narratives).toHaveLength(1);
     expect(narratives[0]).toMatchObject({ kind: 'architect_whisper', season_id: result.newSeasonId });
-    expect(narratives[0]?.['summary']).toContain('Season 2 — 2601');
+    expect(narratives[0]?.['summary']).toContain('Season 2 (2601)');
   });
 
   it('anchors every fixture at or after firstKickoffMs (#569 real-time guard)', async () => {

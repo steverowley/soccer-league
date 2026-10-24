@@ -220,7 +220,7 @@ UPDATE teams SET short_name = 'SCA' WHERE id = 'scattered-disc';
 INSERT INTO seasons (id, name, year, is_active, start_date, end_date)
 VALUES (
   '00000000-0000-0000-0000-000000000001',  -- well-known Season 1 UUID
-  'Season 1 — 2600',
+  'Season 1 (2600)',
   2600,
   true,
   '2600-01-01',

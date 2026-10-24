@@ -233,5 +233,5 @@ function buildReason(
       : awayGrudge > homeGrudge
         ? `the book is short on ${context.awayTeamId} from earlier business`
         : `the mood says so`;
-  return `Bookie ${moodLabel}; the price leans ${direction} — ${grudgeText}.`;
+  return `Bookie ${moodLabel}; the price leans ${direction}: ${grudgeText}.`;
 }
