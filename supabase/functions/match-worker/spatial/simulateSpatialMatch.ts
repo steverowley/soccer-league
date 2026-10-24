@@ -66,6 +66,7 @@ export const DEFAULT_FLAGS: EngineFlags = {
   utilitySoftness: true,
   personality: true,
   confidence: true,
+  homeAdvantage: true,
   momentum: true,
   scoreClockTerm: true,
   bodyContact: true,
@@ -73,6 +74,9 @@ export const DEFAULT_FLAGS: EngineFlags = {
 
 /** Substitutions each side may make in a match (the standard three changes). */
 const MAX_SUBSTITUTIONS = 3;
+
+/** Starting stamina of a visiting player (home advantage: the journey). */
+const AWAY_TRAVEL_STAMINA = 0.9;
 
 /** Salt for the per-player imprecision streams. */
 const PLAYER_STREAM_SALT = 0x51;
@@ -161,7 +165,9 @@ function makeSimPlayer(
     traits:   flags.personality ? personalityWeights(input.personality) : NEUTRAL_WEIGHTS,
     pos:      home,
     vel:      vec(0, 0),
-    stamina:  1,
+    // A visiting side arrives with slightly heavier legs (home advantage,
+    // physical: lower stamina means a lower top speed and more error).
+    stamina:  flags.homeAdvantage && side === 'away' ? AWAY_TRAVEL_STAMINA : 1,
     confidence: 0.5,
     yellowCards: 0,
     foulsCommitted: 0,

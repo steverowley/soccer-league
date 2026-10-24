@@ -15,6 +15,15 @@ import { type Vec2, vec, sub, add, scale, len, normalize } from './vec2';
 import { rngGaussian } from './rng';
 import type { SimPlayer, SimWorld } from './types';
 
+/**
+ * Home advantage (design 4.7), applied only through human imprecision and
+ * perception, never through an outcome: the home side's execution error is
+ * a few per cent smaller and it reacts a fraction sooner.  Measured in
+ * scripts/batch-report.ts homeaway; see docs/emergent-engine.md.
+ */
+export const HOME_COMPOSURE = 0.85;
+export const HOME_ALERTNESS = 0.85;
+
 /** The circumstances of one action, for the error scale. */
 export interface Circumstance {
   /** Local pressure in [0,1] (see evaluate.pressureAt). */
@@ -38,6 +47,8 @@ export function errorScale(p: SimPlayer, skill: number, world: SimWorld, c: Circ
   e *= 1 + 0.7 * (1 - p.stamina);
   if (world.flags.confidence) e *= 1.15 - 0.3 * p.confidence;
   e *= 1 + 0.5 * c.awkward;
+  // The home crowd: a home player is a little more composed on the ball.
+  if (world.flags.homeAdvantage && p.side === 'home') e *= HOME_COMPOSURE;
   return Math.max(0.08, e);
 }
 
@@ -134,7 +145,7 @@ export function reactionDelay(p: SimPlayer, world: SimWorld): number {
     ? 0.17 + 0.2 * (1 - p.stats.goalkeeping / 100)
     : 0.16 + 0.22 * (1 - p.stats.positioning / 100);
   // The home crowd keeps the home side a fraction more alert.
-  const lift = world.flags.confidence && p.side === 'home' ? 0.92 : 1;
+  const lift = world.flags.homeAdvantage && p.side === 'home' ? HOME_ALERTNESS : 1;
   return base * lift + Math.abs(slip(p, world, 0.05));
 }
 

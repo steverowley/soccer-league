@@ -340,8 +340,10 @@ export interface EngineFlags {
   utilitySoftness: boolean;
   /** Personality multipliers on the evaluator. */
   personality:     boolean;
-  /** Per-player confidence (and the home crowd's lift to it). */
+  /** Per-player confidence (rises with success, falls with mistakes). */
   confidence:      boolean;
+  /** The home crowd: a little more alertness and running from the home side. */
+  homeAdvantage:   boolean;
   /** Per-team momentum (pressing intensity, shot appetite). */
   momentum:        boolean;
   /** Score-and-clock term (leading sits deeper, trailing takes risks). */

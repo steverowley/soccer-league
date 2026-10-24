@@ -137,8 +137,10 @@ function isPassKind(k: KickKind): boolean {
   return k === 'pass' || k === 'through' || k === 'cross' || k === 'long' || k === 'throw';
 }
 
-/** Confidence baseline (the same for both sides; the crowd works through
- *  HOME_LIFT on effort and alertness instead, see offball.ts and execution.ts). */
+/** Confidence baseline, the same for both sides.  Home advantage does NOT go
+ *  through confidence (a home confidence offset measurably cost the home side
+ *  goals, because confidence also lowers loss aversion); it works through
+ *  composure and alertness in execution.ts (HOME_COMPOSURE, HOME_ALERTNESS). */
 function confidenceBase(_p: SimPlayer): number {
   return 0.5;
 }
@@ -1249,11 +1251,16 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   } else if (world.ball.z < 0.6) {
     // A loose ball two men are racing for: either may commit to get there
     // first, and if the other arrives first the challenge meets the man.
+    // The man nearer the ball decides first (whoever is closer has the
+    // earlier say); never a fixed home-first order, which would hand one side
+    // the first commitment in every race.
     const hr = nearestRacer(world, 'home');
     const ar = nearestRacer(world, 'away');
     if (hr && ar) {
-      if (hr.job === 'chase') considerLunge(world, hr, ar);
-      if (ar.job === 'chase' && !hr.lunge) considerLunge(world, ar, hr);
+      const homeFirst = dist(hr.pos, world.ball.pos) <= dist(ar.pos, world.ball.pos);
+      const [r1, r2] = homeFirst ? [hr, ar] : [ar, hr];
+      if (r1.job === 'chase') considerLunge(world, r1, r2);
+      if (r2.job === 'chase' && !r1.lunge) considerLunge(world, r2, r1);
     }
   }
   for (const p of all) {
