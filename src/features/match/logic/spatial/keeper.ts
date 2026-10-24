@@ -23,13 +23,13 @@ export function diveSpeed(k: SimPlayer): number {
 }
 
 /** Dive speed model (shared with the shooter's estimate in evaluate.ts). */
-export const KEEPER_DIVE_BASE = 2.8;
+export const KEEPER_DIVE_BASE = 3.4;
 export const KEEPER_DIVE_SKILL = 2.4;
 
 /** Horizontal reach (m) of a keeper for a ball at height z. */
 export function keeperReach(k: SimPlayer, z: number): number {
   const diving = k.dive !== null;
-  const base = diving ? (z > 1.5 ? 1.15 : 1.35) : 0.95;
+  const base = diving ? (z > 1.5 ? 1.15 : 1.35) : 1.1;
   return base * (0.9 + 0.2 * (k.stats.goalkeeping / 100));
 }
 

@@ -124,11 +124,16 @@ export function buildContext(world: SimWorld): TickContext {
     else if (found.t < secondT[s]) secondT[s] = found.t;
   }
 
-  // Pressing order of the side out of possession (by time to the carrier).
+  // Pressing order of the side out of possession: by time to a point just
+  // goal-side of where the carrier will be (a man chasing from behind cannot
+  // confront him; the one in front can).
   const pressRank = new Map<string, number>();
   if (carrier) {
     const def = (carrier.side === 'home' ? world.away : world.home).filter((p) => !p.sentOff && p.role !== 'GK');
-    const ranked = def.map((p) => ({ p, t: timeToReach(p, carrier.pos, now) })).sort((a, b) => a.t - b.t);
+    const goal = vec(defendingGoalX(def[0]?.side ?? otherSide(carrier.side)), PITCH_WIDTH / 2);
+    const ahead = add(carrier.pos, scale(carrier.vel, 0.8));
+    const front = add(ahead, scale(normalize(sub(goal, ahead)), 2));
+    const ranked = def.map((p) => ({ p, t: timeToReach(p, front, now) })).sort((a, b) => a.t - b.t);
     ranked.forEach((r, i) => pressRank.set(r.p.id, i));
   }
   // Marking assignments for the side defending (authored organisation): the
@@ -223,7 +228,9 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     const danger = positionValue(c.pos, opp);
     const k = pressIntensity(p, world);
     // Pressing is keenest close to the ball; further away the block holds.
-    const near = 1 / (1 + Math.exp(-(11 - dist(p.pos, c.pos)) / 3));
+    // Within about 35 m of his own goal somebody must always engage.
+    const deepBall = Math.abs(c.pos.x - defendingGoalX(p.side)) < 35;
+    const near = deepBall ? 1 : 1 / (1 + Math.exp(-(11 - dist(p.pos, c.pos)) / 3));
     if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
     else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }

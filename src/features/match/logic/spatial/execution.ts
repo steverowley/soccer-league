@@ -131,7 +131,7 @@ export function firstTouch(p: SimPlayer, world: SimWorld, ballVel: Vec2, desired
  */
 export function reactionDelay(p: SimPlayer, world: SimWorld): number {
   const base = p.role === 'GK'
-    ? 0.2 + 0.25 * (1 - p.stats.goalkeeping / 100)
+    ? 0.17 + 0.2 * (1 - p.stats.goalkeeping / 100)
     : 0.16 + 0.22 * (1 - p.stats.positioning / 100);
   return base + Math.abs(slip(p, world, 0.05));
 }

@@ -244,8 +244,8 @@ export function estimateShot(
     const seg = segmentDistance(keeper.pos, from, aim);
     const tToKeeper = T * seg.t;
     const reach = (gz > 1.5 ? 1.15 : 1.35) * (0.9 + 0.2 * (keeper.stats.goalkeeping / 100));
-    const dive = 2.8 + 2.4 * (keeper.stats.goalkeeping / 100);
-    const react = 0.2 + 0.25 * (1 - keeper.stats.goalkeeping / 100);
+    const dive = 3.4 + 2.4 * (keeper.stats.goalkeeping / 100);
+    const react = 0.17 + 0.2 * (1 - keeper.stats.goalkeeping / 100);
     const need = react + Math.max(0, seg.d - reach) / dive;
     pBeat = sigmoid((tToKeeper - need) * -1 / 0.09);
     if (seg.d > reach + 4) pBeat = 1;

@@ -78,7 +78,7 @@ const YELLOW_SEVERITY = 1.2;
 const RED_SEVERITY = 2.1;
 
 /** Lunge appetite: base gain and base cost (expected-goal units). */
-const LUNGE_GAIN_BASE = 0.02;
+const LUNGE_GAIN_BASE = 0.01;
 const LUNGE_FOUL_COST = 0.02;
 
 /** Ball radius plus post radius (m), for woodwork. */
@@ -376,6 +376,9 @@ function shielded(world: SimWorld, opp: SimPlayer, ballPt: Vec2): boolean {
   return segmentDistance(owner.pos, opp.pos, ballPt).d < BODY_WIDTH;
 }
 
+/** A ball taken within this distance (m) of its carrier counts as a tackle. */
+const STEAL_DUEL_DIST = 1.5;
+
 /** Base back-lift time of a shot (s): about 0.3 s for a 70-rated striker. */
 const SHOT_WINDUP = 0.34;
 
@@ -482,10 +485,15 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
   // He judges the race by eye: a timing misread, larger for poorer tacklers
   // and when tired or rattled, is what makes a challenge late.
   const eT = errorScale(d, d.stats.tackling, world, { pressure: 0, awkward: 0 });
-  const misread = slip(d, world, 0.12 * eT);
+  const misread = slip(d, world, 0.2 * eT);
   const exposed = dist(seen, carrier.pos);
   const blocked = shielded(world, d, seen);
-  const pBall = sigmoid((tCar - tDef + misread) / 0.1) * sigmoid((reach - dReach) / 0.25) * (blocked ? 0.1 : 1);
+  // He expects a carrier who will see the foot coming to knock the ball on:
+  // the better the dribbler and the slower the lunge, the likelier.
+  const reactC = 0.16 + 0.22 * (1 - carrier.stats.positioning / 100);
+  const pEvade = 0.7 * sigmoid((LUNGE_TIME - 0.8 * reactC) / 0.05) * (0.4 + 0.6 * carrier.stats.dribbling / 100)
+    * (dist(carrier.pos, b.pos) <= FOOT_REACH ? 1 : 0.3);
+  const pBall = sigmoid((tCar - tDef + misread) / 0.1) * sigmoid((reach - dReach) / 0.25) * (blocked ? 0.1 : 1) * (1 - pEvade);
   const inBox = isInPenaltyArea(carrier.pos, carrier.side);
   const lastMan = isLastMan(world, d, carrier);
   const style = d.side === 'home' ? world.homeStyle : world.awayStyle;
@@ -809,7 +817,9 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
   p.holds = 0;
 
   // Labels: what did this touch take, and from whom?
-  if (prevOwner && prevOwner.side !== p.side && dist(prevOwner.pos, at) < 3) {
+  // Taken off a man who still had it at his feet: a tackle.  A heavy touch
+  // that ran away from him and was collected is a loose ball, not a duel.
+  if (prevOwner && prevOwner.side !== p.side && dist(prevOwner.pos, at) < STEAL_DUEL_DIST) {
     emit(events, world, minute, { type: 'tackle', side: p.side, playerId: p.id, otherId: prevOwner.id });
     bump(world, p, 0.03);
     bump(world, prevOwner, -0.03);
@@ -933,6 +943,12 @@ function resolveBall(world: SimWorld, from: Vec2, fromZ: number, events: SimEven
     // but only a fast ball counts (he cannot go for one he has not seen).
     if (now < p.reactUntil && len(b.vel) <= BLOCK_SPEED && p.role !== 'GK') continue;
     if (shielded(world, p, atPt)) continue;
+    // A ball still at its owner's feet, nearer his foot than this man's, is
+    // his: taking it needs a committed challenge (a lunge), not a brush.
+    if (owner && p.side !== owner.side && len(b.vel) < BLOCK_SPEED) {
+      const dOwn = dist(owner.pos, atPt);
+      if (dOwn <= FOOT_REACH && dOwn < dist(p.pos, atPt)) continue;
+    }
     if (sd.t < tBody || (sd.t === tBody && who && sd.d < whoD)) {
       tBody = sd.t; who = p; whoAt = atPt; whoZ = zAt; whoD = sd.d;
     }
