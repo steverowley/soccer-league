@@ -205,7 +205,7 @@ function buildWorld(home: SpatialTeamInput, away: SpatialTeamInput, cfg: SimConf
     awayStyle: resolveStyle(away.playStyle),
     ball: {
       pos: CENTRE_SPOT, vel: vec(0, 0), z: 0, vz: 0,
-      ownerId: null, lastTouchId: null, lastTouchSide: null, lastTouchSec: -1,
+      ownerId: null, lastTouchId: null, lastTouchSide: null, lastTouchSec: -1, controlSec: -1,
       kick: null, offsideFor: null,
     },
     score: [0, 0],

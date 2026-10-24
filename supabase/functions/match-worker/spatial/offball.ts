@@ -33,6 +33,9 @@ export const PATH_STRIDE = 2;
 export const FOOT_REACH = 0.85;
 export const HEAD_Z = 2.35;
 
+/** Beyond this distance (m) from his man the ball is loose, not carried. */
+export const LOOSE_DIST = 3.5;
+
 /** One player's earliest way to the ball. */
 export interface Intercept {
   /** Seconds until he can be at the ball. */
@@ -70,7 +73,12 @@ export function buildContext(world: SimWorld): TickContext {
   const ball = world.ball;
   const dt = world.dtSec;
   const all = [...world.home, ...world.away];
-  const carrier = ball.ownerId ? all.find((p) => p.id === ball.ownerId) ?? null : null;
+  let carrier = ball.ownerId ? all.find((p) => p.id === ball.ownerId) ?? null : null;
+  // A ball that has got away from its man is loose: anyone may go for it.
+  if (carrier && (carrier.sentOff || dist(carrier.pos, ball.pos) > LOOSE_DIST)) {
+    ball.ownerId = null;
+    carrier = null;
+  }
   const attacking: TeamSide | null = carrier ? carrier.side : ball.kick ? ball.kick.side : ball.lastTouchSide;
 
   const steps = PATH_SAMPLES * PATH_STRIDE;
@@ -180,8 +188,10 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     const rank = ctx.pressRank.get(p.id) ?? 99;
     const danger = positionValue(c.pos, opp);
     const k = pressIntensity(p, world);
-    if (rank === 0) push('press', (0.5 + 3 * danger) * k, c.id);
-    else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k, c.id);
+    // Pressing is keenest close to the ball; further away the block holds.
+    const near = 1 / (1 + Math.exp(-(11 - dist(p.pos, c.pos)) / 3));
+    if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
+    else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }
 
   if (!inPossession) {
@@ -257,7 +267,7 @@ const SUPPORT_ANGLES = [0, 0.7, -0.7, 1.4, -1.4, 2.3, -2.3] as const;
 // ── Movement ───────────────────────────────────────────────────────────────
 
 /** Distance (m) a presser holds goal-side of the ball while jockeying. */
-export const JOCKEY_DIST = 1.6;
+export const JOCKEY_DIST = 3.0;
 
 /**
  * Desired velocity for an outfielder doing his job this tick.
@@ -273,13 +283,15 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
         const ic = ctx.intercept.get(p.id);
         if (ic) p.jobTarget = ic.pt;
       }
-      return seek(p, p.jobTarget);
+      // Run hard at the meeting point, braking into it so the ball can be
+      // controlled rather than overrun.
+      return arrive(p, p.jobTarget, 2.2, 1);
     }
     case 'press': {
       const c = ctx.carrier;
       if (!c) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
       const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
-      const jockey = add(ball.pos, scale(normalize(sub(goal, ball.pos)), JOCKEY_DIST));
+      const jockey = add(c.pos, scale(normalize(sub(goal, c.pos)), JOCKEY_DIST));
       const d = dist(p.pos, jockey);
       return d > 4 ? seek(p, jockey) : arrive(p, jockey, 2.5, 0.95);
     }

@@ -20,13 +20,13 @@ import { shapePoint, clampIn } from './offball.ts';
 
 /** Minimum set-up time (s) for each kind of restart. */
 export const RESTART_PAUSE: Readonly<Record<RestartKind, number>> = {
-  kickoff: 30,
-  throw: 6,
-  corner: 16,
-  goalkick: 10,
-  freekick: 9,
-  penalty: 35,
-  keeper: 3,
+  kickoff: 45,
+  throw: 8,
+  corner: 22,
+  goalkick: 16,
+  freekick: 16,
+  penalty: 50,
+  keeper: 4,
 };
 
 /** Distance (m) opponents must keep from a free kick or corner. */

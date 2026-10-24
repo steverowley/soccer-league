@@ -270,6 +270,9 @@ export interface SimBall {
   lastTouchId: string | null;
   lastTouchSide: TeamSide | null;
   lastTouchSec: number;
+  /** When the current owner took control (he needs a moment to settle the
+   *  ball and look up before he can pass). */
+  controlSec: number;
   /** The last deliberate strike. */
   kick: KickInfo | null;
   /**

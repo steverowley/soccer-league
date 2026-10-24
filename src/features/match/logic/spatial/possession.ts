@@ -29,7 +29,7 @@ import {
   progressOf, nearestOpponentDist,
 } from './evaluate';
 import { errorScale, perceive } from './execution';
-import { effectiveMaxSpeed } from './steering';
+import { effectiveMaxSpeed, MAX_ACCEL } from './steering';
 import { GRAVITY, groundLaunchSpeed, airLaunchSpeed } from './ball';
 
 export { pressureAt } from './evaluate';
@@ -51,6 +51,9 @@ const HOLD_DECAY = 0.93;
 
 /** Carry probe length (m) for evaluating a dribble direction. */
 const CARRY_PROBE = 5;
+
+/** Value of a cross that does not find its man: a corner or a second ball. */
+const CROSS_SECOND_BALL = 0.012;
 
 /** Base decision temperature (expected-goal units). */
 const BASE_TEMPERATURE = 0.006;
@@ -167,8 +170,8 @@ export function temperatureOf(p: SimPlayer, world: SimWorld): number {
  * @returns        The chosen action plus the top options (for traces).
  */
 export function chooseAction(
-  carrier: SimPlayer, world: SimWorld, mode: ActionMode = 'open', indirect = false,
-): { action: CarrierAction; options: number } {
+  carrier: SimPlayer, world: SimWorld, mode: ActionMode = 'open', indirect = false, canPass = true,
+): { action: CarrierAction; options: number; top: string } {
   const side = carrier.side;
   const opp = otherSide(side);
   const mates = (side === 'home' ? world.home : world.away).filter((p) => p.id !== carrier.id && !p.sentOff);
@@ -209,7 +212,7 @@ export function chooseAction(
   const maxRange = mode === 'throw' ? 24 : 55;
   const fwd = side === 'home' ? 1 : -1;
   const line = offsideLineX(world, side);
-  for (const m of mates) {
+  for (const m of canPass ? mates : []) {
     if (mode === 'kickoff' && progressOf(m.pos, side) > 0.5) continue;
     if (m.role === 'GK' && !(progress < 0.33 && mode === 'open')) continue;
     // Players know the offside law: a passer does not pick a man he SEES
@@ -265,7 +268,7 @@ export function chooseAction(
 
   // ── Crosses (wide in the final third, or a corner / wide free kick) ───────
   const wide = Math.abs(from.y - PITCH_WIDTH / 2) > 13;
-  if ((mode === 'open' && wide && progress > 0.74) || mode === 'corner' || (mode === 'freekick' && wide && progress > 0.7)) {
+  if (canPass && (mode === 'open' && wide && progress > 0.74) || mode === 'corner' || (mode === 'freekick' && wide && progress > 0.7)) {
     const sign = side === 'home' ? -1 : 1; // from goal line back into the pitch
     const nearY = from.y < PITCH_WIDTH / 2 ? GOAL_Y_MIN + 1 : GOAL_Y_MAX - 1;
     const farY = from.y < PITCH_WIDTH / 2 ? GOAL_Y_MAX + 1 : GOAL_Y_MIN - 1;
@@ -284,9 +287,9 @@ export function chooseAction(
       const T = 0.9 + d * 0.025;
       const v0 = airLaunchSpeed(d, T);
       const est = estimatePass(from, z, v0, true, best, opponents, ePass * 1.4, now);
-      const vOwn = 0.55 * positionValue(z, side);
+      const vOwn = 0.8 * positionValue(z, side);
       options.push({ kind: 'pass', target: best, aim: z, speed: v0, vz: GRAVITY * T / 2, kick: 'cross',
-        utility: est.pC * vOwn * passMul - (1 - est.pC) * lam * 0.3 * positionValue(z, opp), pC: est.pC, lofted: true });
+        utility: est.pC * vOwn * passMul + (1 - est.pC) * CROSS_SECOND_BALL - (1 - est.pC) * lam * 0.3 * positionValue(z, opp), pC: est.pC, lofted: true });
     }
   }
 
@@ -302,7 +305,10 @@ export function chooseAction(
       const end = add(from, scale(dir, CARRY_PROBE));
       if (end.x < 1 || end.x > PITCH_LENGTH - 1 || end.y < 1 || end.y > PITCH_WIDTH - 1) continue;
       const mid = add(from, scale(dir, CARRY_PROBE * 0.4));
-      const tMe = CARRY_PROBE / vCarry;
+      // Turning against his own momentum costs time before he is away.
+      const vNow = carrier.vel;
+      const turn = (Math.hypot(vNow.x, vNow.y) - dot(vNow, dir)) / MAX_ACCEL;
+      const tMe = CARRY_PROBE / vCarry + turn;
       let margin = Infinity;
       for (const o of opponents) {
         if (dist(o.pos, from) > 14) continue;
@@ -338,17 +344,22 @@ export function chooseAction(
     const T = 0.6 + d * 0.03;
     if (near) {
       return { action: { kind: 'pass', target: near, aim, speed: airLaunchSpeed(d, T), vz: GRAVITY * T / 2,
-        kick: mode === 'throw' ? 'throw' : 'long', utility: 0, pC: 0, lofted: true }, options: 0 };
+        kick: mode === 'throw' ? 'throw' : 'long', utility: 0, pC: 0, lofted: true }, options: 0, top: '' };
     }
-    return { action: { kind: 'clear', aim, speed: airLaunchSpeed(d, T), vz: GRAVITY * T / 2, utility: 0 }, options: 0 };
+    return { action: { kind: 'clear', aim, speed: airLaunchSpeed(d, T), vz: GRAVITY * T / 2, utility: 0 }, options: 0, top: '' };
   }
   return finish(carrier, world, options);
 }
 
 /** Choose among the scored options. */
-function finish(carrier: SimPlayer, world: SimWorld, options: CarrierAction[]): { action: CarrierAction; options: number } {
+function finish(carrier: SimPlayer, world: SimWorld, options: CarrierAction[]): { action: CarrierAction; options: number; top: string } {
   const idx = softPick(carrier.rng, options.map((o) => o.utility), temperatureOf(carrier, world), world.flags.utilitySoftness);
-  return { action: options[idx]!, options: options.length };
+  // For traces only: the three best options and their utilities (x1000).
+  const top = world.trace
+    ? [...options].sort((a, b) => b.utility - a.utility).slice(0, 3)
+      .map((o) => o.kind + ':' + String(Math.round(o.utility * 10000) / 10)).join(',')
+    : '';
+  return { action: options[idx]!, options: options.length, top };
 }
 
 /** Shot target lines across the goal (inside the posts) and heights. */
