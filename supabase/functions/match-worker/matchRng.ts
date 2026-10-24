@@ -77,6 +77,60 @@ export function newMatchSeed(
 }
 
 /**
+ * Persist-then-read the seed for a match on its row (`matches.sim_seed`).
+ * Implemented by the worker against the database; injectable for tests.
+ *
+ * `persistIfUnset(seed)` must write `seed` only when the stored value is still
+ * null (`UPDATE ... WHERE sim_seed IS NULL`) and return whatever value the row
+ * holds afterwards: `seed` if this call won, the earlier value if another
+ * attempt got there first.  It must throw on a database error.
+ */
+export interface SeedStore {
+  persistIfUnset(seed: number): Promise<number | string | null>;
+}
+
+/** Normalise a stored bigint (number or numeric string) to an unsigned 32-bit seed, or null. */
+function storedSeed(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 0xffffffff) {
+    throw new Error(`matches.sim_seed holds an invalid seed: ${String(v)}`);
+  }
+  return n >>> 0;
+}
+
+/**
+ * The simulation seed for a claimed match, safe across worker retries.
+ *
+ * WHY: engine v2 draws a fresh seed per match.  A worker that crashes after
+ * claiming and is retried must simulate the SAME match, or it could persist a
+ * different result on top of the first attempt's partial rows.  So the seed
+ * lives on the match row (migration 0088): read it at claim time, and when it
+ * is still null generate one and store it BEFORE simulating.  A retry then
+ * reads the stored value back and replays the identical match.
+ *
+ * Never simulates with a seed that is not stored: if the write fails the
+ * error propagates and the attempt is abandoned (the match is requeued).
+ *
+ * @param claimedSeed  `sim_seed` as read on the claimed row (null on a first attempt).
+ * @param store        Conditional write-and-read-back against the row.
+ * @param source       Random source for a new seed (tests inject one).
+ * @returns            The seed to simulate with.
+ */
+export async function resolveMatchSeed(
+  claimedSeed: unknown,
+  store: SeedStore,
+  source?: (buf: Uint32Array) => Uint32Array,
+): Promise<number> {
+  const existing = storedSeed(claimedSeed);
+  if (existing !== null) return existing;
+  const fresh = newMatchSeed(source);
+  const after = storedSeed(await store.persistIfUnset(fresh));
+  if (after === null) throw new Error('sim_seed was not persisted; refusing to simulate an unrecorded match');
+  return after;
+}
+
+/**
  * Write the simulation seed into the payload of the first kickoff event so a
  * persisted match can be replayed.  Mutates the event in place; a feed with
  * no kickoff event is left untouched.

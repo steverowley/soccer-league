@@ -61,7 +61,7 @@ import {
 import { computeFanBoost } from './fanBoost.ts';
 import { decorateCommentary } from './commentary.ts';
 import { cosmicInterjections } from './cosmicVoices.ts';
-import { narrativeRngForMatch, newMatchSeed, recordSeedOnKickoff } from './matchRng.ts';
+import { narrativeRngForMatch, resolveMatchSeed, recordSeedOnKickoff } from './matchRng.ts';
 import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
 import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
@@ -278,7 +278,7 @@ async function claimNextDueMatch(opts?: { leagueOnly?: boolean }): Promise<any |
       // `round` is read post-match by postMatchLoreSave to surface the matchday
       // in the Architect verdict prompt (e.g. 'Matchday 7', 'Final').  Absent
       // matches still process — the field is treated as 0 downstream.
-      .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round');
+      .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round, sim_seed');
 
     if (claimError) {
       console.error('[match-worker] UPDATE claim failed:', claimError);
@@ -755,9 +755,9 @@ async function processMatch(match: any): Promise<boolean> {
     // The spatial engine is the only engine.  Convert raw DB rows to its typed
     // input, simulate with a fresh random seed (engine v2: matches are not
     // predetermined by their id), and adapt to the match_events shape.
-    // RETRY SAFETY: the seed must be stored on the match row at claim time and
-    // reused on a retry, or a crashed-and-retried run would persist a
-    // different match on top of the first one's rows.  See docs/emergent-engine.md.
+    // RETRY SAFETY: the seed is stored on the match row before simulating and
+    // reused on a retry (resolveMatchSeed), so a crashed-and-retried run
+    // replays the same match instead of persisting a different one.
     // `result` is mutated in place below by the
     // Architect interference passes (result.events / finalScore / playerStats).
     // Personality archetypes (read from the entities layer) nudge each player's
@@ -765,9 +765,27 @@ async function processMatch(match: any): Promise<boolean> {
     // stays byte-identical for an unchanged roster.
     const homeInput = applyTeamTraits(toSpatialTeamInput(homeData), await buildPersonalityMap(homeData));
     const awayInput = applyTeamTraits(toSpatialTeamInput(awayData), await buildPersonalityMap(awayData));
-    // Engine v2 (#698): a fresh random seed per match, recorded on the kickoff
-    // event below so the match can be replayed exactly.
-    const seed = newMatchSeed();
+    // Engine v2 (#698): a fresh random seed per match, stored on the match row
+    // (matches.sim_seed, migration 0088) before simulating and reused on any
+    // retry, and also recorded on the kickoff event so the match can be
+    // replayed exactly.  The conditional write means two racing attempts can
+    // never simulate with different seeds.
+    const seed = await resolveMatchSeed(match.sim_seed, {
+      async persistIfUnset(s: number) {
+        const { data, error } = await supabase
+          .from('matches')
+          .update({ sim_seed: s })
+          .eq('id', match.id)
+          .is('sim_seed', null)
+          .select('sim_seed');
+        if (error) throw new Error(`persisting sim_seed failed: ${error.message}`);
+        if (data && data.length > 0) return data[0].sim_seed;
+        const { data: row, error: readError } = await supabase
+          .from('matches').select('sim_seed').eq('id', match.id).single();
+        if (readError) throw new Error(`reading sim_seed failed: ${readError.message}`);
+        return row?.sim_seed ?? null;
+      },
+    });
 
     // The Architect's post-simulation passes roll against their own seeded
     // stream, derived from the same match id.  Without it a retry could annul a
