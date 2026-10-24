@@ -87,6 +87,10 @@ export default defineConfig({
           // editorial pages don't pull the simulator into their initial
           // chunk.
           if (id.includes('/src/gameEngine')) return 'engine';
+          // The canon export (pre-ISL history, ~400 seasons) is only read by
+          // the club and league pages, so it gets its own chunk rather than
+          // riding in 'engine', which most pages load for leagueData.
+          if (id.includes('/src/data/lore')) return 'lore';
           if (id.includes('/src/data/'))      return 'engine';
           return undefined;
         },

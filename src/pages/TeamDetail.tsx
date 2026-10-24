@@ -49,6 +49,8 @@ import {
 import { getTeamSupporterCount } from '../features/auth';
 import { RelationshipGraph, getEntityProfile } from '../features/entities';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
+import { ClubHistory } from '../components/LoreHistory';
+import { getClubLore } from '../data/lore';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 const { dust: DUST, abyss: ABYSS, phobosAsh: PHOBOS, terraNova: TERRA } = COLORS;
@@ -346,6 +348,15 @@ export default function TeamDetail() {
 
       {/* ── Preserved richer sections, rehomed below the shell ── */}
 
+      {/* History & honours: the canon, exported from the world bible. Static,
+          so it renders even when the live database is unreachable. */}
+      <section style={{ padding: '0 16px 64px' }}>
+        <Container>
+          <SectionLabel kicker="Before the ISL" title="History & Honours" />
+          <ClubHistory clubId={staticTeam.id} />
+        </Container>
+      </section>
+
       {/* Manager. */}
       <section style={{ padding: '0 16px 64px' }}>
         <Container>
@@ -390,6 +401,15 @@ export default function TeamDetail() {
         @media (max-width: 899px) {
           .isl-club-cols { grid-template-columns: 1fr !important; }
           .isl-club-rail { position: static !important; }
+        }
+        /* Phones: stack the hero (crest, name, honours) and fold the six-cell
+           stat strip into two rows of three, so nothing runs past its box. */
+        @media (max-width: 699px) {
+          .isl-club-hero { grid-template-columns: 1fr !important; gap: 20px !important; padding: 24px !important; }
+          .isl-club-hero > [aria-hidden="true"] { width: 88px !important; height: 88px !important; font-size: 32px !important; }
+          .isl-club-hero h1 { font-size: 32px !important; overflow-wrap: anywhere; }
+          .isl-club-honours > div { text-align: left !important; }
+          .isl-club-strip { grid-template-columns: repeat(3, 1fr) !important; }
         }
       `}</style>
     </div>
@@ -442,13 +462,14 @@ interface ClubHeroProps {
 }
 
 /**
- * Club hero — 160px monogram crest, 48px uppercase name + meta row, and an
- * honours block. The honours block carries League position only (real, from
- * standings); Titles and Seasons are omitted because the teams table has no
- * such columns to fill them.
+ * Club hero: 160px monogram crest, 48px uppercase name + meta row, and an
+ * honours block. League position is live (from standings); league titles come
+ * from the canon (the pre-ISL record in src/data/lore.ts), so they show even
+ * when the database is unreachable.
  */
 function ClubHero({ team, managerName, position, supporterCount }: ClubHeroProps) {
   const accent = team.color || DUST;
+  const titles = getClubLore(team.id)?.titles.length ?? null;
   const meta: ReactNode[] = [];
   meta.push(<span key="ground">Home • {team.homeGround}</span>);
   if (team.capacity) meta.push(<span key="cap">{team.capacity} souls</span>);
@@ -518,8 +539,16 @@ function ClubHero({ team, managerName, position, supporterCount }: ClubHeroProps
         </div>
       </div>
 
-      {/* Honours — League position only. */}
-      <div style={{ display: 'flex', gap: 32 }}>
+      {/* Honours: live league position, plus all-time titles from the canon. */}
+      <div className="isl-club-honours" style={{ display: 'flex', gap: 32 }}>
+        {titles != null && (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: 32 }}>{titles}</div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 6, color: DUST_70 }}>
+              League titles
+            </div>
+          </div>
+        )}
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontWeight: 700, fontSize: 32 }}>
             {position != null ? toRoman(position) : '—'}
@@ -902,7 +931,7 @@ function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
   const facts: Array<[string, string]> = (
     [
       ['Fans', str('fans_nickname')],
-      ['Founded', str('date_founded')],
+      ['Origins', str('date_founded')],
       ['Allegiance', str('political_leaning')],
       ['Following', str('number_of_fans')],
       ['Badge', str('badge')],
@@ -911,8 +940,10 @@ function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
       ['Third Kit', str('third_kit')],
     ] as Array<[string, string]>
   ).filter(([, v]) => v.length > 0);
-  const trophies = list('trophy_cabinet');
-  const legends = list('legends');
+  // Honours and legends are deliberately NOT read from the profile: the
+  // canon (History & Honours, above) owns those facts, and the hand-written
+  // profile lists predate it and contradict it (e.g. Celestial Cups Earth
+  // United never won). The profile keeps what it is good at: style prose.
   const achievements = list('achievements');
 
   const renderList = (label: string, items: string[]) =>
@@ -948,8 +979,6 @@ function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
           ))}
         </div>
       )}
-      {renderList('Trophy Cabinet', trophies)}
-      {renderList('Legends', legends)}
       {renderList('Achievements', achievements)}
     </div>
   );
