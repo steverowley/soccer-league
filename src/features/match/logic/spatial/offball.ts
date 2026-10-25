@@ -19,7 +19,7 @@ import {
   PITCH_LENGTH, PITCH_WIDTH, attackingGoalX, defendingGoalX, otherSide,
 } from './types';
 import { predictPath } from './ball';
-import { timeToReach, positionValue, nearestOpponentDist, pressureAt, progressOf } from './evaluate';
+import { timeToReach, timeToReachXY, positionValue, nearestOpponentDist, pressureAt, progressOf } from './evaluate';
 import { effectiveMaxSpeed, arrive, seek, separation } from './steering';
 import { dynamicAnchor } from './formation';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession';
@@ -77,6 +77,9 @@ const MARK_MAX_DIST = 22;
 
 const PATH_BUF = new Float64Array(3 * PATH_SAMPLES * PATH_STRIDE);
 
+/** Seconds of slack in buildContext's reach bound (rounding is ~1e-15 s). */
+const REACH_BOUND_MARGIN = 1e-6;
+
 /**
  * Build the tick context: predict the ball path and find, for every player,
  * the earliest point on it he can reach in time.
@@ -96,6 +99,20 @@ export function buildContext(world: SimWorld): TickContext {
 
   const steps = PATH_SAMPLES * PATH_STRIDE;
   predictPath(ball, steps, dt, PATH_BUF);
+  // CPU: the bounding box of the sampled path, so a player who could not
+  // reach even its nearest edge by the last sample skips the scan (see the
+  // reach bound below; every per-sample reach is at most the last one).
+  let boxMinX = Infinity, boxMaxX = -Infinity, boxMinY = Infinity, boxMaxY = -Infinity;
+  for (let s = 0; s < PATH_SAMPLES; s++) {
+    const i = (s + 1) * PATH_STRIDE - 1;
+    const x = PATH_BUF[3 * i]!;
+    const y = PATH_BUF[3 * i + 1]!;
+    if (x < boxMinX) boxMinX = x;
+    if (x > boxMaxX) boxMaxX = x;
+    if (y < boxMinY) boxMinY = y;
+    if (y > boxMaxY) boxMaxY = y;
+  }
+  const tBallLast = steps * dt; // tBall of the last sample
   const intercept = new Map<string, Intercept>();
   const best = { home: null as SimPlayer | null, away: null as SimPlayer | null };
   const bestT = { home: Infinity, away: Infinity };
@@ -109,14 +126,33 @@ export function buildContext(world: SimWorld): TickContext {
     if (ball.z <= reachZ && dist(p.pos, ball.pos) <= FOOT_REACH) {
       found = { t: 0, pt: ball.pos };
     } else {
-      for (let s = 0; s < PATH_SAMPLES; s++) {
+      // CPU: rule out, without the full timeToReach, every sample he cannot
+      // possibly make.  timeToReach is never below distance / top speed, so
+      // a sample further than (tBall + slack) * top can never satisfy
+      // tMe <= tBall; the margin dwarfs rounding.  The first sample found
+      // (and so the result) is exactly the one the full scan finds.
+      const top = effectiveMaxSpeed(p);
+      const slack = FOOT_REACH / v - Math.max(0, p.recoverUntil - now) + REACH_BOUND_MARGIN;
+      const px = p.pos.x;
+      const py = p.pos.y;
+      const gapX = boxMinX - px > 0 ? boxMinX - px : px - boxMaxX > 0 ? px - boxMaxX : 0;
+      const gapY = boxMinY - py > 0 ? boxMinY - py : py - boxMaxY > 0 ? py - boxMaxY : 0;
+      const reachLast = (tBallLast + slack) * top;
+      const hopeless = reachLast < 0 || gapX * gapX + gapY * gapY > reachLast * reachLast;
+      for (let s = 0; s < (hopeless ? 0 : PATH_SAMPLES); s++) {
         const i = (s + 1) * PATH_STRIDE - 1;
         const z = PATH_BUF[3 * i + 2]!;
         if (z > reachZ) continue;
-        const pt = vec(PATH_BUF[3 * i]!, PATH_BUF[3 * i + 1]!);
+        const x = PATH_BUF[3 * i]!;
+        const y = PATH_BUF[3 * i + 1]!;
         const tBall = (i + 1) * dt;
-        const tMe = timeToReach(p, pt, now) - FOOT_REACH / v;
-        if (tMe <= tBall) { found = { t: tBall, pt }; break; }
+        const reach = (tBall + slack) * top;
+        if (reach < 0) continue;
+        const ddx = x - px;
+        const ddy = y - py;
+        if (ddx * ddx + ddy * ddy > reach * reach) continue;
+        const tMe = timeToReachXY(p, x, y, now) - FOOT_REACH / v;
+        if (tMe <= tBall) { found = { t: tBall, pt: vec(x, y) }; break; }
       }
       if (!found) {
         const i = steps - 1;
@@ -155,15 +191,19 @@ export function buildContext(world: SimWorld): TickContext {
       .map((a) => ({ a, v: positionValue(a.pos, a.side) }))
       .filter((x) => x.v > MARK_MIN_VALUE)
       .sort((x, y) => y.v - x.v);
-    const free = new Set(def);
+    // Free defenders, visited in roster order (as the Set this replaced was).
+    const taken: boolean[] = def.map(() => false);
     for (const { a, v } of att) {
       let best: SimPlayer | null = null;
+      let bestK = -1;
       let bestD = MARK_MAX_DIST;
-      for (const d of free) {
+      for (let k = 0; k < def.length; k++) {
+        if (taken[k]) continue;
+        const d = def[k]!;
         const dd = dist(d.pos, a.pos);
-        if (dd < bestD) { bestD = dd; best = d; }
+        if (dd < bestD) { bestD = dd; best = d; bestK = k; }
       }
-      if (best) { markOf.set(best.id, { id: a.id, v }); free.delete(best); }
+      if (best) { markOf.set(best.id, { id: a.id, v }); taken[bestK] = true; }
     }
   }
   // Who offers for the carrier: his nearest team-mates, in order.  Only the

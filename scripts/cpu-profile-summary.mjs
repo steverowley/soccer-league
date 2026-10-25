@@ -54,3 +54,17 @@ const show = (title, m) => {
 console.log(`profile: ${file}`);
 show('SELF', self);
 show('INCLUSIVE', incl);
+
+// Optional: per-line self ticks inside one function (`--lines <name>`); line
+// numbers refer to the executed code (use an esbuild bundle for real lines).
+const li = process.argv.indexOf('--lines');
+if (li > 0) {
+  const fn = process.argv[li + 1];
+  const lines = new Map();
+  for (const n of prof.nodes) {
+    if (n.callFrame.functionName !== fn) continue;
+    for (const pt of n.positionTicks ?? []) lines.set(pt.line, (lines.get(pt.line) ?? 0) + pt.ticks);
+  }
+  console.log(`\nLINE TICKS in ${fn}`);
+  [...lines.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN).forEach(([l, t]) => console.log(`${String(t).padStart(7)}  line ${l}`));
+}

@@ -72,8 +72,21 @@ export function positionValue(pos: Vec2, side: TeamSide): number {
  * @param now  Match clock (for recovery).
  */
 export function timeToReach(p: SimPlayer, pt: Vec2, now: number): number {
-  const dx = pt.x - p.pos.x;
-  const dy = pt.y - p.pos.y;
+  return timeToReachXY(p, pt.x, pt.y, now);
+}
+
+/**
+ * timeToReach to the point (x, y), for hot loops that hold coordinates
+ * rather than a Vec2 (the same arithmetic in the same order, so the same
+ * result to the bit).
+ *
+ * Never less than the straight-line distance over his top speed
+ * (effectiveMaxSpeed): he starts at most that fast or accelerates up to it.
+ * buildContext relies on that bound to rule out ball-path samples cheaply.
+ */
+export function timeToReachXY(p: SimPlayer, x: number, y: number, now: number): number {
+  const dx = x - p.pos.x;
+  const dy = y - p.pos.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   const v = effectiveMaxSpeed(p);
   const along = d > 0.01 ? (p.vel.x * dx + p.vel.y * dy) / d : 0;
