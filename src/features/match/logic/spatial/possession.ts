@@ -499,6 +499,34 @@ export function isOffsidePosition(target: SimPlayer, ballPos: Vec2, world: SimWo
  * the second-last defender (or the halfway line, whichever is nearer goal).
  */
 export function offsideLineX(world: SimWorld, attackingSide: TeamSide): number {
+  // Hot path (shape points ask for it per player per tick): one pass for the
+  // two deepest defenders instead of filter + map + sort.  Equal values are
+  // resolved exactly as the stable sort below would (a later equal value
+  // becomes the second), so the result is bit-identical; any NaN position
+  // falls back to the sort, whose NaN handling the loop does not reproduce.
+  const team = attackingSide === 'home' ? world.away : world.home;
+  let first = attackingSide === 'home' ? -Infinity : Infinity;
+  let second = first;
+  let count = 0;
+  let nan = false;
+  for (const d of team) {
+    if (d.sentOff) continue;
+    const x = d.pos.x;
+    if (x !== x) { nan = true; break; }
+    count += 1;
+    if (attackingSide === 'home') {
+      if (x > first) { second = first; first = x; } else if (x > second) second = x;
+    } else if (x < first) { second = first; first = x; } else if (x < second) second = x;
+  }
+  if (!nan) {
+    if (count < 2) second = PITCH_LENGTH / 2;
+    return attackingSide === 'home' ? Math.max(PITCH_LENGTH / 2, second) : Math.min(PITCH_LENGTH / 2, second);
+  }
+  return offsideLineXBySort(world, attackingSide);
+}
+
+/** The reference implementation of offsideLineX (used for NaN positions). */
+function offsideLineXBySort(world: SimWorld, attackingSide: TeamSide): number {
   const defenders = (attackingSide === 'home' ? world.away : world.home).filter((d) => !d.sentOff);
   const xs = defenders.map((d) => d.pos.x);
   if (attackingSide === 'home') {
