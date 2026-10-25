@@ -228,3 +228,46 @@ shots come from point-blank range is a failure (research).
     passes, corners, throws).
 
 Never merge a partially built engine: every match played on it becomes canon.
+
+## 9. CPU budget
+
+The match worker is a Supabase edge function, and the edge runtime allows
+about **2 s of CPU per invocation**: past it the request is killed with
+HTTP 546 "CPU Time exceeded" and the match is requeued, so a too-slow engine
+means no match ever completes. The edge runtime runs this engine about 3x
+slower than a development laptop (a 1.8 s local simulation took 5 to 6 s
+there).
+
+**Budget: a full match must take at most 0.40 s (median) locally** on
+`npm run bench:engine` (six full matches of real ISL squads, prints the
+median), which is about 1.2 s at the edge, leaving headroom for the rest of
+the worker.
+
+Measured on the development laptop (October 2026), same machine, runs
+alternated:
+
+| Engine | Local median per match |
+|---|---|
+| Old roll-based engine | 0.32 s |
+| Emergent engine (#705) | 1.39 s |
+| Phases of play (#706, main 3cf93c1) | 1.74 s |
+| After perf/engine-cpu (byte-identical results) | 0.69 s |
+
+**The engine is still over budget** (0.69 s locally, about 2.1 s at the
+edge). See docs/reports/engine-cpu-report.txt for what was done, what is
+left, and the options.
+
+How to measure:
+
+- `npm run bench:engine` for the median.
+- `node --cpu-prof --cpu-prof-dir=<dir> --import tsx scripts/bench-engine.ts`
+  then `node scripts/cpu-profile-summary.mjs <dir> 30` for self and
+  inclusive time per function (`--lines <fn>` on an esbuild bundle of the
+  bench gives per-line ticks).
+- Any change made for speed must leave `npm run fingerprint:engine`
+  identical to docs/reports/engine-fingerprint-baseline.txt (15 full matches
+  hashed in full: events, frames, phases, traces). A deliberate behaviour
+  change regenerates that baseline in the same PR and says so.
+- No test asserts wall-clock time: CI runners are about 3x slower and noisy,
+  so such a test would flake. `cpuEquivalence.test.ts` instead pins the
+  rewritten hot helpers to the reference forms they replaced, bit for bit.

@@ -164,8 +164,9 @@ function cornerSlot(p: SimPlayer, world: SimWorld, attacking: boolean): Vec2 | n
     vec(gx + into * 7.5, PITCH_WIDTH / 2), vec(gx + into * 16, near ? 40 : 28),
   ];
   const team = (p.side === 'home' ? world.home : world.away).filter((q) => !q.sentOff && q.role !== 'GK' && q.id !== r.takerId);
+  const orders = cornerOrders(p.side, team);
   // The box group: forwards first, then the centre-backs, then midfielders.
-  const order = [...team].sort((a, b) => roleRank(a) - roleRank(b) || a.homePos.y - b.homePos.y);
+  const order = orders.attack;
   const idx = order.indexOf(p);
   if (attacking) {
     if (idx < 0 || idx >= zones.length) return null;
@@ -177,10 +178,35 @@ function cornerSlot(p: SimPlayer, world: SimWorld, attacking: boolean): Vec2 | n
     vec(gx + into * 5.5, GOAL_Y_MAX - 1), vec(gx + into * 9, PITCH_WIDTH / 2 - 4), vec(gx + into * 9, PITCH_WIDTH / 2 + 4),
     vec(gx + into * 12, PITCH_WIDTH / 2), vec(gx + into * 17, PITCH_WIDTH / 2),
   ];
-  const didx = [...team].sort((a, b) => defRank(a) - defRank(b) || a.homePos.y - b.homePos.y).indexOf(p);
+  const didx = orders.defence.indexOf(p);
   if (didx < 0 || didx >= dzones.length) return null;
   return dzones[didx]!;
 }
+
+/**
+ * The corner orderings of a side's eligible men (outfield, on the pitch, not
+ * the taker), attacking and defending.  CPU cache: cornerSlot runs for every
+ * player on every tick of a corner set-up and sorted the team twice per
+ * call.  The sort keys (role, home position) never change for a player on
+ * the pitch, so the orderings depend only on the eligible men and their
+ * order, and are reused while that list is the same.
+ */
+function cornerOrders(side: TeamSide, team: SimPlayer[]): { attack: SimPlayer[]; defence: SimPlayer[] } {
+  const c = CORNER_ORDERS[side];
+  if (c.team.length === team.length && c.team.every((q, i) => q === team[i])) return c;
+  const fresh = {
+    team,
+    attack: [...team].sort((a, b) => roleRank(a) - roleRank(b) || a.homePos.y - b.homePos.y),
+    defence: [...team].sort((a, b) => defRank(a) - defRank(b) || a.homePos.y - b.homePos.y),
+  };
+  CORNER_ORDERS[side] = fresh;
+  return fresh;
+}
+
+const CORNER_ORDERS: Record<TeamSide, { team: SimPlayer[]; attack: SimPlayer[]; defence: SimPlayer[] }> = {
+  home: { team: [], attack: [], defence: [] },
+  away: { team: [], attack: [], defence: [] },
+};
 
 function roleRank(p: SimPlayer): number {
   return p.role === 'FW' ? 0 : p.role === 'DF' ? 1 : 2;

@@ -72,8 +72,21 @@ export function positionValue(pos: Vec2, side: TeamSide): number {
  * @param now  Match clock (for recovery).
  */
 export function timeToReach(p: SimPlayer, pt: Vec2, now: number): number {
-  const dx = pt.x - p.pos.x;
-  const dy = pt.y - p.pos.y;
+  return timeToReachXY(p, pt.x, pt.y, now);
+}
+
+/**
+ * timeToReach to the point (x, y), for hot loops that hold coordinates
+ * rather than a Vec2 (the same arithmetic in the same order, so the same
+ * result to the bit).
+ *
+ * Never less than the straight-line distance over his top speed
+ * (effectiveMaxSpeed): he starts at most that fast or accelerates up to it.
+ * buildContext relies on that bound to rule out ball-path samples cheaply.
+ */
+export function timeToReachXY(p: SimPlayer, x: number, y: number, now: number): number {
+  const dx = x - p.pos.x;
+  const dy = y - p.pos.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   const v = effectiveMaxSpeed(p);
   const along = d > 0.01 ? (p.vel.x * dx + p.vel.y * dy) / d : 0;
@@ -174,21 +187,40 @@ export function estimatePass(
 ): PassEstimate {
   const d = dist(from, aim);
   const fr = lofted ? LOFT_FRACTIONS : GROUND_FRACTIONS;
-  const tAt = (f: number): number => (lofted ? airTravelTime(v0, f * d) : groundTravelTime(v0, f * d));
-  const tBall = tAt(1);
+  const tBall = laneTime(lofted, v0, 1 * d);
   const tRecv = timeToReach(receiver, aim, now);
+  // CPU: the ball's time to each lane point, and the lane itself, are the
+  // same for every opponent, so they are worked out once here rather than
+  // per opponent (travel times cost an exp, a log and two atans each).  The
+  // arithmetic is unchanged, so every margin is bit-identical.
+  for (let k = 0; k < fr.length; k++) LANE_TB[k] = laneTime(lofted, v0, fr[k]! * d);
+  const abx = aim.x - from.x;
+  const aby = aim.y - from.y;
+  const l2 = abx * abx + aby * aby;
   let oppMargin = Infinity;
   for (const o of opponents) {
     if (o.sentOff) continue;
     // Cheap prefilter: an opponent far from the whole lane cannot matter.
-    const sd = segmentDistance(o.pos, from, aim);
-    if (sd.d > 18) continue;
+    // (segmentDistance(o.pos, from, aim).d, in scalars.)
+    const apx = o.pos.x - from.x;
+    const apy = o.pos.y - from.y;
+    let sd: number;
+    if (l2 < 1e-9) {
+      sd = Math.sqrt(apx * apx + apy * apy);
+    } else {
+      let t = (apx * abx + apy * aby) / l2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = o.pos.x - (from.x + abx * t);
+      const qy = o.pos.y - (from.y + aby * t);
+      sd = Math.sqrt(qx * qx + qy * qy);
+    }
+    if (sd > 18) continue;
     const vO = Math.max(1, effectiveMaxSpeed(o));
-    for (const f of fr) {
-      const pt = vec(from.x + (aim.x - from.x) * f, from.y + (aim.y - from.y) * f);
-      const tb = tAt(f);
+    for (let k = 0; k < fr.length; k++) {
+      const f = fr[k]!;
+      const tb = LANE_TB[k]!;
       if (!Number.isFinite(tb)) continue;
-      const to = LANE_REACT + timeToReach(o, pt, now) - LANE_REACH / vO;
+      const to = LANE_REACT + timeToReachXY(o, from.x + (aim.x - from.x) * f, from.y + (aim.y - from.y) * f, now) - LANE_REACH / vO;
       const m = to - tb + (f === 1 && tRecv < tb ? RECEIVER_FIRST : 0);
       if (m < oppMargin) oppMargin = m;
     }
@@ -204,6 +236,13 @@ export function estimatePass(
 
 const GROUND_FRACTIONS = [0.2, 0.4, 0.6, 0.8, 1.0] as const;
 const LOFT_FRACTIONS = [0.06, 0.95, 1.0] as const;
+/** The ball's travel time over `x` metres of a pass launched at v0. */
+function laneTime(lofted: boolean, v0: number, x: number): number {
+  return lofted ? airTravelTime(v0, x) : groundTravelTime(v0, x);
+}
+
+/** Scratch for estimatePass: the ball's time to each lane fraction. */
+const LANE_TB = new Float64Array(GROUND_FRACTIONS.length);
 
 /** A shooter's estimate of one shot at one target. */
 export interface ShotEstimate {

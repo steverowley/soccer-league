@@ -9,7 +9,7 @@
 // All behaviours are pure: world state in, vector out, nothing mutated.
 
 import {
-  type Vec2, vec, sub, add, scale, len, normalize, dist, ZERO,
+  type Vec2, vec, sub, add, scale, normalize, dist, ZERO,
 } from './vec2.ts';
 import { type SimPlayer, defendingGoalX } from './types.ts';
 
@@ -37,9 +37,13 @@ export function effectiveMaxSpeed(p: SimPlayer): number {
  * @returns Desired velocity toward target; ZERO if already on it.
  */
 export function seek(p: SimPlayer, target: Vec2): Vec2 {
-  const toTarget = sub(target, p.pos);
-  if (len(toTarget) < 1e-6) return ZERO;
-  return scale(normalize(toTarget), effectiveMaxSpeed(p));
+  // Scalars, the same arithmetic as scale(normalize(sub(target, pos)), v).
+  const tx = target.x - p.pos.x;
+  const ty = target.y - p.pos.y;
+  const d = Math.sqrt(tx * tx + ty * ty);
+  if (d < 1e-6) return ZERO;
+  const v = effectiveMaxSpeed(p);
+  return vec((tx / d) * v, (ty / d) * v);
 }
 
 /**
@@ -53,13 +57,15 @@ export function seek(p: SimPlayer, target: Vec2): Vec2 {
  * @returns           Desired velocity, scaled down near the target.
  */
 export function arrive(p: SimPlayer, target: Vec2, slowRadius: number, speedFrac = 1): Vec2 {
-  const toTarget = sub(target, p.pos);
-  const d = len(toTarget);
+  // Scalars, the same arithmetic as scale(normalize(sub(target, pos)), s).
+  const tx = target.x - p.pos.x;
+  const ty = target.y - p.pos.y;
+  const d = Math.sqrt(tx * tx + ty * ty);
   if (d < 0.2) return ZERO; // close enough — stand still rather than jitter
   const maxV = effectiveMaxSpeed(p) * speedFrac;
   // Linear ramp: full speed beyond slowRadius, proportionally less inside it.
   const desiredSpeed = d >= slowRadius ? maxV : maxV * (d / slowRadius);
-  return scale(normalize(toTarget), desiredSpeed);
+  return vec((tx / d) * desiredSpeed, (ty / d) * desiredSpeed);
 }
 
 /**
@@ -96,19 +102,30 @@ export function pursueBall(p: SimPlayer, ballPos: Vec2, ballVel: Vec2): Vec2 {
  * @returns        A desired-velocity contribution pushing away from crowders.
  */
 export function separation(p: SimPlayer, others: readonly SimPlayer[], radius: number): Vec2 {
-  let push = ZERO;
+  // Scalar form (runs for every outfielder every tick): the same operations
+  // in the same order as sub / len / normalize / scale / add on Vec2s, so
+  // the same result to the bit, without allocating five vectors per mate.
+  let pushX = 0;
+  let pushY = 0;
+  const px = p.pos.x;
+  const py = p.pos.y;
   for (const o of others) {
     if (o.id === p.id) continue;
-    const away = sub(p.pos, o.pos);
-    const d = len(away);
+    const ax = px - o.pos.x;
+    const ay = py - o.pos.y;
+    const d = Math.sqrt(ax * ax + ay * ay);
     if (d > 1e-6 && d < radius) {
       // Weight ∝ how deep into personal space they are (1 at touching, 0 at edge).
-      push = add(push, scale(normalize(away), (radius - d) / radius));
+      const w = (radius - d) / radius;
+      pushX = pushX + (ax / d) * w;
+      pushY = pushY + (ay / d) * w;
     }
   }
-  if (len(push) < 1e-6) return ZERO;
+  const l = Math.sqrt(pushX * pushX + pushY * pushY);
+  if (l < 1e-6) return ZERO;
   // Cap separation at 55% of max speed — assertive but never dominant.
-  return scale(normalize(push), effectiveMaxSpeed(p) * 0.55);
+  const k = effectiveMaxSpeed(p) * 0.55;
+  return vec((pushX / l) * k, (pushY / l) * k);
 }
 
 /**

@@ -58,7 +58,7 @@ export function keeperVelocity(k: SimPlayer, world: SimWorld, ctx: TickContext):
   // Come for a loose ball he gets to first, inside his area (or just outside
   // it when it is running through on goal).
   if (!ctx.carrier && ctx.best[k.side]?.id === k.id && ctx.now >= k.reactUntil) {
-    const ic = ctx.intercept.get(k.id);
+    const ic = ctx.intercept.get(k);
     const oppT = ctx.bestT[k.side === 'home' ? 'away' : 'home'];
     // He comes for a ball on the ground he will clearly win, and for a high
     // ball only into his six-yard area: otherwise his defenders deal with it.

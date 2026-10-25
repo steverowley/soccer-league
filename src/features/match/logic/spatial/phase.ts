@@ -50,6 +50,14 @@ export interface TeamTactics {
   /** In-possession line per outfielder id: 0 back, 1 screen, 2 front; and his lane (0..1 across). */
   lines: Map<string, { line: 0 | 1 | 2; lane: number }>;
   linesKey: string;
+  /** CPU cache for possessionLines (no effect on results): the plan object,
+   *  final-third flag and outfield players (in roster order) that `linesKey`
+   *  was last built or matched from.  While all three are the same objects,
+   *  the key string would be the same, so `lines` is returned without
+   *  rebuilding the key. */
+  linesPlan: GameModel | null;
+  linesFinal: boolean;
+  linesTeam: SimPlayer[];
   /** The counter-pressers the plan sent after the last loss, and the loss
    *  (its changeSec) they were picked for. */
   cpIds: string[];
@@ -102,7 +110,7 @@ function depthScore(sub: SubRole, role: Role, m: GameModel): number {
 export function makeTactics(model: GameModel): TeamTactics {
   return {
     model, plan: model, planKey: '', phase: 'set_piece', hasBall: false, changeSec: -100,
-    lineAdjust: 0, lines: new Map(), linesKey: '', cpIds: [], cpFor: -1, cpKey: -1, timeline: [{ tSec: 0, phase: 'set_piece' }],
+    lineAdjust: 0, lines: new Map(), linesKey: '', linesPlan: null, linesFinal: false, linesTeam: [], cpIds: [], cpFor: -1, cpKey: -1, timeline: [{ tSec: 0, phase: 'set_piece' }],
   };
 }
 
@@ -285,9 +293,18 @@ const WIDTH_SPAN: Readonly<Record<string, number>> = { wide: 0.84, balanced: 0.7
  * final third.  Cached until the eleven or the plan changes.
  */
 function possessionLines(world: SimWorld, side: TeamSide, t: TeamTactics, final: boolean): Map<string, { line: 0 | 1 | 2; lane: number }> {
-  const team = (side === 'home' ? world.home : world.away).filter((p) => !p.sentOff && p.role !== 'GK');
+  const roster = side === 'home' ? world.home : world.away;
+  // CPU fast path (called per player per tick): the same plan object, flag
+  // and outfield players as when `linesKey` was last set mean the key below
+  // would come out the same (plans are never mutated and ids never change),
+  // so the cached lines are what the slow path would return.
+  if (t.linesPlan === t.plan && t.linesFinal === final && sameOutfield(roster, t.linesTeam)) return t.lines;
+  const team = roster.filter((p) => !p.sentOff && p.role !== 'GK');
   const m = t.plan;
   const key = `${final ? 'F' : 'B'}${m.buildUpShape}${m.restDefence}${m.restShape}${m.width}${m.fullBackRole}:${team.map((p) => p.id).join(',')}`;
+  t.linesPlan = m;
+  t.linesFinal = final;
+  t.linesTeam = team;
   if (key === t.linesKey) return t.lines;
   const n = team.length;
   let back: number, screen: number;
@@ -317,6 +334,17 @@ function possessionLines(world: SimWorld, side: TeamSide, t: TeamTactics, final:
   t.lines = out;
   t.linesKey = key;
   return out;
+}
+
+/** Whether a roster's outfielders still on the pitch are exactly `team`, in order. */
+function sameOutfield(roster: readonly SimPlayer[], team: readonly SimPlayer[]): boolean {
+  let j = 0;
+  for (const p of roster) {
+    if (p.sentOff || p.role === 'GK') continue;
+    if (team[j] !== p) return false;
+    j += 1;
+  }
+  return j === team.length;
 }
 
 /** Which in-possession line a player is in right now (2 when unknown). */

@@ -1,0 +1,17 @@
+# Engine fingerprint baseline: npx tsx scripts/engine-fingerprint.ts on main 3cf93c1 (before any CPU optimisation).
+# One SHA-256 per case over the canonical serialized result (score, events, frames, phases, traces). Check with --check.
+squad-earth-v-jupiter              00472e71082437d94e46a4d4f847cbcbdcee24c338451f15852cd860b1b0abfd  score=0-1 events=1474 frames=2756 traces=0
+squad-ceres-v-mars                 123b9a8d90547c1de4ac686bc770dc33c7be1b6f31e064d1738865cafec4f06e  score=0-1 events=1215 frames=2776 traces=0
+squad-europa-v-pluto               564a33ebb5348b33a37eac0599fb29b2698dc5463539ea96ee4062621492d684  score=2-1 events=1371 frames=2781 traces=0
+squad-jupiter-v-earth              84a723a891b44bfbd422ef1eab3da2f5bfe6d04f3a33ace3d7fb09f6ec642e54  score=1-1 events=1427 frames=2769 traces=0
+squad-mars-v-europa                fc43ea806a5f0616e57939aca52ea09e5a1e4fa657b996978f52257025c956a7  score=1-2 events=1186 frames=2801 traces=0
+squad-pluto-v-ceres                5ad4a4e0b67f556a80a46f284d5a04562668ac8739494305089def2bddc37224  score=1-0 events=1347 frames=2796 traces=0
+fixture-70-v-70                    9daa515c05d54138ad78787a4cdd63d2164eba1c1ad579de4a8bba6bf0fa57ed  score=1-1 events=1262 frames=2779 traces=0
+fixture-72-v-68                    636bed8640b41dc3308c81eafa010eaa6f9caa058c7873d421ea370e33bb210a  score=2-1 events=1245 frames=2801 traces=0
+direct343-v-possession451          32ab7e388c2563ea277630656f4f4c0e0ee7f9b0726798177bfc91fdf871a88f  score=2-2 events=1210 frames=2781 traces=0
+counter541-v-aggressive442         53a3bb12eeaf1788500ff3492221c8ba1ae8f12f232fca3cd170d03f39801287  score=0-3 events=1035 frames=2781 traces=0
+offensive-v-defensive              cf0dffc109cf112bf0c3cf918487d6d8cab45b1303b93d6a67cb1443f876ee16  score=4-1 events=1008 frames=2806 traces=0
+ablations-off                      bce14b00b6285afeb8651b102e1b936b0670b7129cba8f39cf92a8f7d70f9253  score=7-4 events=1199 frames=2866 traces=0
+trace-squad-earth-v-mars           25270226a2adea549a9db15a753e4ea714695fe99f868c4da97f43c9799a8b05  score=5-0 events=1222 frames=56101 traces=7872
+trace-balanced-80-v-60             57cbd9bf996280a102040fd403a437cf74014a8f6050969e5dea77a1163505e5  score=1-1 events=1123 frames=55751 traces=7227
+everytick-squad-pluto-v-jupiter    18621405528df1c8bafb32fa11768fa5efdf1ddd7e03cbd5118210f7d26c1523  score=1-2 events=1279 frames=56001 traces=0
