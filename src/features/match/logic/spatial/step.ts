@@ -28,8 +28,9 @@ import {
   attackingGoalX, defendingGoalX, otherSide,
 } from './types';
 import { effectiveMaxSpeed, MAX_ACCEL, seek } from './steering';
+import { updatePhases, noteRestart, tacticsOf } from './phase';
 import {
-  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom,
+  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom, lateness,
   type CarrierAction,
 } from './possession';
 import {
@@ -261,6 +262,7 @@ function maybeSubstitute(world: SimWorld, side: TeamSide, minute: number, events
   if (bi < 0) return;
   const fresh = bench.splice(bi, 1)[0]!;
   fresh.role = off.role;
+  fresh.subRole = off.subRole;
   fresh.homePos = off.homePos;
   fresh.pos = off.pos;
   fresh.vel = ZERO;
@@ -549,30 +551,109 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
   const style = d.side === 'home' ? world.homeStyle : world.awayStyle;
   const challengeMul = d.traits.challenge * (1 + 2 * style.tackle);
   const danger = positionValue(carrier.pos, carrier.side);
-  const gain = (danger + LUNGE_GAIN_BASE) * challengeMul;
+  // In his manager's counter-press, winning it back now is worth more: the
+  // opponent is not yet organised and the ball would be his side's high up
+  // the pitch.  He goes in on a closer call (and so fouls more often).
+  const cpWin = d.job === 'counterpress' ? CP_WIN_GAIN + positionValue(b.pos, d.side) : 0;
+  const gain = (danger + LUNGE_GAIN_BASE + cpWin) * challengeMul;
   // Missing means the carrier is past him: the cost grows with the danger.
   const booked = d.yellowCards > 0;
-  const cost = LUNGE_FOUL_COST + (inBox ? 0.9 : 0) + (booked ? 0.1 : 0) + (lastMan ? 0.15 : 0.03) + 1.5 * danger;
+  // The last man (or nearly: one team-mate left goal-side, who may be gone
+  // by the time the foot arrives) knows the law: taking the carrier down on a clear run at
+  // goal outside the box is a red card (a man down for the rest of the
+  // match), so a miss there is priced as that, not as a free kick.
+  const dogsoRisk = !inBox && dist(carrier.pos, vec(defendingGoalX(d.side), PITCH_WIDTH / 2)) < 28 && goalSideCount(world, d, carrier) <= 1;
+  const cost = LUNGE_FOUL_COST + (inBox ? 0.9 : 0) + (booked ? 0.1 : 0) + (dogsoRisk ? LAST_MAN_RED_COST : lastMan ? 0.15 : 0.03) + 1.5 * danger;
   const u = pBall * gain - (1 - pBall) * cost;
   // The professional foul: stop a dangerous break by taking the man, at the
   // price of a free kick and probably a booking.  Only outside his own box.
   const manAt = add(carrier.pos, scale(carrier.vel, LUNGE_TIME));
   const toGoalC = sub(vec(defendingGoalX(d.side), PITCH_WIDTH / 2), carrier.pos);
   const behind = dot(toGoalC, sub(d.pos, carrier.pos)) < 0;
-  const breaking = behind && owned(world, carrier) && progressOf(carrier.pos, carrier.side) > 0.5
-    && dist(d.pos, manAt) <= reach && goalSideCount(world, d, carrier) <= 2;
-  const uFoul = breaking && !inBox
-    ? (danger * 1.6 - (0.02 + TACTICAL_CARD_COST + (booked ? 0.25 : 0))) * challengeMul
-    : -1;
+  // In his side's defensive transition (the ball just lost) the counter is
+  // stopped earlier and further out: the tactical foul in transition.
+  const inTransition = tacticsOf(world, d.side).phase === 'defensive_transition';
+  const breaking = behind && owned(world, carrier) && progressOf(carrier.pos, carrier.side) > (inTransition ? 0.38 : 0.5)
+    && dist(d.pos, manAt) <= reach && goalSideCount(world, d, carrier) <= (inTransition ? 3 : 2);
+  // He knows the law and his options.  Left alone, the break is worth less
+  // than it looks when cover can get goal-side (a team-mate, or he himself
+  // recovering) or the keeper can come and narrow the angle before the
+  // carrier is in shooting range: then he delays rather than fouls.  And
+  // taking the man on a clear run at goal with nobody else back is a red
+  // card, a man down for the rest of the match (late on, for less of it).
+  let uFoul = -1;
+  if (breaking && !inBox) {
+    const goalPt = vec(defendingGoalX(d.side), PITCH_WIDTH / 2);
+    const dGoal = dist(carrier.pos, goalPt);
+    const keeper = keeperOf(world, d.side);
+    const keeperCovers = keeper !== undefined && !keeper.sentOff
+      && dist(keeper.pos, goalPt) < dGoal && dist(keeper.pos, carrier.pos) < 9;
+    const wouldBeDogso = dGoal < 28 && goalSideCount(world, d, carrier) <= 1 && !keeperCovers;
+    // (Only the last man weighs recovery: further out, a tactical foul costs
+    // a booking and stops the counter before the team is out of shape.)
+    const left = wouldBeDogso ? danger * (1 - RECOVER_DISCOUNT * recoverShare(world, d, carrier, dGoal)) : danger;
+    const cardCost = wouldBeDogso ? LAST_MAN_RED_COST * (0.3 + 0.7 * (1 - lateness(world))) : TACTICAL_CARD_COST;
+    uFoul = (left * 1.6 - (0.02 + cardCost + (booked ? 0.25 : 0))) * challengeMul;
+  }
   if (u <= 0 && uFoul <= 0) return;
   const closing = len(d.vel) + 1.5;
   const tactical = uFoul > u;
   d.lunge = { at: tactical ? manAt : seen, resolveSec: now + LUNGE_TIME, closing, targetId: carrier.id };
   trace(world, 'lunge', d, {
     carrier: carrier.id, exposed: r2(exposed), dReach: r2(dReach), tCar: r2(tCar), tDef: r2(tDef), misread: r2(misread),
-    holds: carrier.holds, pBall: r2(pBall), u: r2(u * 1000), uFoul: r2(uFoul * 1000), tactical, lastMan, inBox,
+    holds: carrier.holds, pBall: r2(pBall), u: r2(u * 1000), uFoul: r2(uFoul * 1000), tactical, lastMan, inBox, behind, dogsoRisk,
   });
 }
+
+/** Value (expected goals) a counter-presser puts on winning the ball back. */
+const CP_WIN_GAIN = 0.03;
+
+/** Expected-goal cost of a red card for denying a goalscoring chance. */
+const LAST_MAN_RED_COST = 0.6;
+
+/** Share of a break's danger the defence can still take away when cover
+ *  gets goal-side in time (it cannot take it all: the carrier may still get
+ *  his shot away). */
+const RECOVER_DISCOUNT = 0.7;
+
+/** Distance (m) from goal at which a carrier through on goal shoots. */
+const SHOOTING_RANGE = 16;
+
+/**
+ * How well the defence can recover without a foul: the time the carrier
+ * needs to reach shooting range against the time the quickest cover (a
+ * team-mate, the defender himself, or the keeper coming out to narrow the
+ * angle) needs to get goal-side of him.  0 = no hope, 1 = covered in time.
+ * A defender's judgement from what he sees; nothing drawn at random.
+ */
+function recoverShare(world: SimWorld, d: SimPlayer, carrier: SimPlayer, dGoal: number): number {
+  const now = world.clockSec;
+  const goalPt = vec(defendingGoalX(d.side), PITCH_WIDTH / 2);
+  const vC = Math.max(4, Math.min(effectiveMaxSpeed(carrier), len(carrier.vel) + 1.5));
+  const tShot = Math.max(0, dGoal - SHOOTING_RANGE) / vC;
+  // Goal-side of where he will be when he gets there.
+  const ahead = Math.min(dGoal - 2, Math.max(4, dGoal - SHOOTING_RANGE));
+  const coverPt = add(carrier.pos, scale(normalize(sub(goalPt, carrier.pos)), ahead));
+  let tOut = Infinity;
+  let tKeeper = Infinity;
+  for (const m of teamOf(world, d.side)) {
+    if (m.sentOff) continue;
+    if (m.role === 'GK') {
+      // The keeper narrows from his line: he needs only to reach a point a
+      // few metres off it in the carrier's path.  A one-on-one with the
+      // keeper out is still a chance, so his cover counts for less.
+      const pt = add(goalPt, scale(normalize(sub(carrier.pos, goalPt)), Math.min(8, dGoal - SHOOTING_RANGE / 2)));
+      tKeeper = timeToReach(m, pt, now) + 0.4;
+      continue;
+    }
+    const t = timeToReach(m, coverPt, now) + (m === d ? 0.3 : 0);
+    if (t < tOut) tOut = t;
+  }
+  return Math.max(sigmoid((tShot - tOut) / 0.4), KEEPER_COVER * sigmoid((tShot - tKeeper) / 0.4));
+}
+
+/** How much of the recovery a keeper narrowing the angle is worth. */
+const KEEPER_COVER = 0.55;
 
 /** Expected-goal cost a defender puts on the booking a tactical foul brings. */
 const TACTICAL_CARD_COST = 0.03;
@@ -900,6 +981,36 @@ export function deflectOff(
   return { vel: vec(tx * tangent + k * nx, ty * tangent + k * ny), vz: tz * tangent + k * nz };
 }
 
+/**
+ * The side a keeper turns his palm to: of the two, the one whose deflection
+ * (as he intends it, before any error) clears his goal by more, either going
+ * away from the line or crossing it furthest outside a post.  A keeper's
+ * decision from the ball's flight; nothing drawn at random.
+ */
+function parrySide(vel: Vec2, vz: number, at: Vec2, side: TeamSide, theta: number, up: number): Vec2 {
+  const gx = defendingGoalX(side);
+  let best = vec(0, 1);
+  let bestS = -Infinity;
+  for (const s of [1, -1]) {
+    const lat = vec(0, s);
+    const o = deflectOff(vel, vz, lat, theta, up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
+    const toward = (gx - at.x) * o.vel.x > 0;
+    // Best is round the post or over the bar (a corner); next, back out in
+    // front of goal (a rebound someone may reach); worst, into the net.
+    let score: number;
+    if (!toward || Math.abs(o.vel.x) < 1e-6) score = 5;
+    else {
+      const t = Math.abs(gx - at.x) / Math.abs(o.vel.x);
+      score = Math.abs(at.y + o.vel.y * t - PITCH_WIDTH / 2) - (GOAL_Y_MAX - GOAL_Y_MIN) / 2;
+      const zAt = Math.max(0, o.vz * t - 0.5 * GRAVITY * t * t);
+      if (zAt > GOAL_HEIGHT) score = Math.max(score, zAt - GOAL_HEIGHT);
+      if (score > 0) score += 10;
+    }
+    if (score > bestS) { bestS = score; best = lat; }
+  }
+  return best;
+}
+
 /** Sine of the steepest angle a keeper's palm meets the ball at full stretch
  *  (wrist and palm turned outward: even a fingertip changes the angle). */
 const PALM_ANGLE = 0.75;
@@ -990,10 +1101,13 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     const e = errorScale(p, p.stats.goalkeeping, world, { pressure: 0, awkward: 0.5 });
     const stretch = Math.min(1, closeD / Math.max(0.3, keeperReach(p, z)));
     const up = z > PARRY_HIGH ? Math.min(0.8, (z - PARRY_HIGH) / 0.8) : 0;
-    // He turns the palm to push the ball away from the middle of his goal,
-    // round the nearer post, whichever side of him it passes.
-    const wide = vec(0, at.y >= PITCH_WIDTH / 2 ? 1 : -1);
-    const out3 = deflectOff(b.vel, b.vz, wide, Math.asin(PALM_ANGLE * stretch) + slip(p, world, 0.12 * e),
+    // He turns the palm the way that takes the ball furthest from his goal:
+    // round whichever post the deflected ball would clear by more, given its
+    // own sideways run (a ball near the middle of the goal is not pushed a
+    // couple of metres toward a post it cannot reach before the line).
+    const theta = Math.asin(PALM_ANGLE * stretch);
+    const wide = parrySide(b.vel, b.vz, at, p.side, theta, up);
+    const out3 = deflectOff(b.vel, b.vz, wide, theta + slip(p, world, 0.12 * e),
       up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
     b.vel = out3.vel;
     b.vz = Math.max(0, out3.vz);
@@ -1380,6 +1494,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   const now = world.clockSec;
 
   if (world.phase === 'dead_ball' && world.restart) {
+    noteRestart(world);
     deadBallTick(world, dt, minute, events);
     driftTick(world, dt);
     return events;
@@ -1391,6 +1506,8 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   const ctx = buildContext(world);
   const carrier = ctx.carrier;
   const all = [...world.home, ...world.away];
+  // The phase of play each side is in, re-read from the state of the game.
+  updatePhases(world, carrier ? carrier.side : null, dt);
 
   // ── Off-ball decisions ──────────────────────────────────────────────────
   for (const p of all) {
@@ -1484,7 +1601,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     for (const d of teamOf(world, otherSide(owner.side))) {
       if (d.sentOff) continue;
       if (d.role === 'GK' && !inOwnBox(d, d.pos)) continue;
-      if (d.role !== 'GK' && d.job !== 'press' && d.job !== 'cover' && d.job !== 'chase') continue;
+      if (d.role !== 'GK' && d.job !== 'press' && d.job !== 'cover' && d.job !== 'chase' && d.job !== 'counterpress') continue;
       considerLunge(world, d, owner);
     }
   } else if (world.ball.z < 0.6) {
@@ -1498,8 +1615,9 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     if (hr && ar) {
       const homeFirst = dist(hr.pos, world.ball.pos) <= dist(ar.pos, world.ball.pos);
       const [r1, r2] = homeFirst ? [hr, ar] : [ar, hr];
-      if (r1.job === 'chase') considerLunge(world, r1, r2);
-      if (r2.job === 'chase' && !r1.lunge) considerLunge(world, r2, r1);
+      const racing = (q: SimPlayer): boolean => q.job === 'chase' || q.job === 'counterpress';
+      if (racing(r1)) considerLunge(world, r1, r2);
+      if (racing(r2) && !r1.lunge) considerLunge(world, r2, r1);
     }
   }
   for (const p of all) {

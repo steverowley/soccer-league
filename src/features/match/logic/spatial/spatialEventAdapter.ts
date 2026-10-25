@@ -12,6 +12,7 @@
 
 import type { SimEvent, SpatialMatchResult, PositionFrame, TeamSide, SimPlayerStats, Role } from './types';
 import type { SpatialTeamInput, SpatialPlayerInput } from './simulateSpatialMatch';
+import { parseGameModel } from './gameModel';
 
 // ── Player lookup index ───────────────────────────────────────────────────────
 
@@ -389,7 +390,9 @@ export function deriveSimStats(p: {
  * simulateSpatialMatch's slot-assignment logic.
  */
 export function toSpatialTeamInput(teamData: {
-  managers?: Array<{ preferred_formation?: string | null; style?: string | null }> | null;
+  /** `game_model` is the manager entity's `meta.game_model` (the worker
+   *  attaches it from entities.meta); any JSON, validated here. */
+  managers?: Array<{ preferred_formation?: string | null; style?: string | null; game_model?: unknown }> | null;
   players?:  Array<{
     id:           string;
     name:         string;
@@ -427,5 +430,9 @@ export function toSpatialTeamInput(teamData: {
     stats: deriveSimStats(p),
   }));
 
-  return { formation, players, bench, ...(playStyle ? { playStyle } : {}) };
+  // The manager's game model: his style preset with his own stored choices
+  // applied (unknown keys ignored, bad values fall back to the preset).
+  const gameModel = parseGameModel(playStyle, teamData.managers?.[0]?.game_model);
+
+  return { formation, players, bench, ...(playStyle ? { playStyle } : {}), gameModel };
 }

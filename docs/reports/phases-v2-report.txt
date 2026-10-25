@@ -1,0 +1,179 @@
+PHASES OF PLAY, SECOND PASS: MEASURED REPORT
+branch feat/phases-of-play. BEFORE = c8cf918 (end of pass one, report phases-v1-report.txt).
+AFTER = this pass (commits 6f55d5c, 67e9790, ce488fb, e59afca, c488c54 and this report).
+
+Standard batch = Balanced v Balanced, 4-4-2, ratings 60-80, seeds 1000+. Shape figures come
+from the observer classifier on replay frames (scripts/phase-metrics.ts, LIVE=0: every frame,
+as in v1, so the numbers compare). Section-7 figures from scripts/run-batch.sh + batch-report.
+
+== 1. COUNTER-PRESS THAT HAPPENS (item 1)
+Cause: the counter-press acted only on a carried ball (most losses leave the ball loose or in
+flight), ranked every outfielder including the rest defence, and competed with marking on a
+near coin flip (press about 0.74 v mark about 0.7 at softmax temperature 0.05).
+Fix: the plan's counterpressPlayers are picked at the moment of loss by time to the ball, the
+two deepest men goal-side of it stay as rest defence, and they react to the loss as a drilled
+trigger; the set is re-read whenever the ball changes feet or is played, so the press follows
+the ball for counterpressSec, then the side settles into its block. New job `counterpress`:
+first man closes the carrier goal-side and brakes into him, second cuts his escape, the rest go
+tight on the carrier's short options; on a pass out of the press they press the receiver; on a
+loose ball the first two go to it. A counter-presser values winning the ball back higher
+(opponent unorganised), so he goes in on a closer call. onLoss=recover: men caught upfield of
+the ball value getting back into the block above marking (0.75 v 0.3) and sprint.
+
+Metric (open-play losses, the engine's defensive_transition entry, play still live 1.5 s
+later): loser's outfielders within 10 m of the ball 1.5 s after the loss; regained in open
+play within 6 s. MODE=cp = same sides and ratings, one manager counter-presses 4 for 5 s, the
+other recovers, venue alternating, 28 matches.
+                               within 10 m @1.5 s     regained <= 6 s     regains/match
+                               before    after        before   after      before  after
+counterpress 4 for 5 s (cp)    1.64      2.19         43.5%    50.4%      43.9    53.8
+recover (cp)                   1.38      1.55         35.1%    35.9%      36.9    39.6
+std batch, Balanced 3 for 5 s  -         2.18         -        51.9%      -       63.2
+real squads (section 3):
+  counterpress 3 for 4 s       -         2.38         -        56.7%
+  counterpress 4 for 5 s       -         2.19         -        57.6%
+  recover                      -         1.43         -        33.5%
+Guard (counterpress.test.ts, fixed seeds 4100/4101, 4 for 5 s v recover): 2.08 v 1.58 within
+10 m, 56.5% v 33.9% regained; the v1 engine gives 1.72 v 1.34 and 45.3% v 35.6% and fails it.
+TARGET >= 3 within 10 m NOT REACHED. scripts/cp-diag.ts measures the physical ceiling: of the
+loser's outfielders, those who could be within 10 m of the ball's 1.5 s position by sprinting
+straight there from the loss average 2.61 (1.9 are within 10 m at the moment of loss; the ball
+moves more than 10 m in the first 1.5 s after 40% of losses, mostly clearances and the first
+pass out). Reaching 3 needs a more compact in-possession shape around the ball at the loss,
+not a harder press. Regains within 6 s are clearly higher for counter-pressing managers
+(50 to 58% v 34 to 36%).
+
+== 2. RED CARDS BY LAST-MAN BEHAVIOUR (item 2)
+Cause (scripts/red-diag.ts, 40 to 60 std matches): 23 of 36 reds were TACTICAL lunges from
+behind by the last man on a carrier breaking at goal: the professional-foul decision priced a
+free kick and a booking, never the red it would be, nor what the defence could still do.
+Fix: if taking the man would be DOGSO (outside the box, inside 28 m, no team-mate goal-side,
+keeper not covering) the foul costs the red card (a man down for the rest of the match, less of
+it late on), and the break is only worth stopping for what the defence cannot otherwise take
+away: recoverShare compares the carrier's time to shooting range with the quickest cover's time
+to get goal-side (a team-mate, the defender himself, or the keeper coming out to narrow, which
+counts for less). Judgement from what he sees; no rolls. Counter-pressers brake into the
+carrier (no charging through him).
+                     before    after (120 std)
+red cards            0.425     0.133   (band 0.05-0.2, IN)
+DOGSO tactical reds  ~0.23     ~0.05 a match (scripts/red-reasons.ts, 60 matches: 3 DOGSO lunges, 4 charges)
+
+== 3. OUT-OF-POSSESSION COMPACTNESS (item 3)
+Cause (scripts/block-extent.ts): forwards set the block's top 81% of the time, 30+ m ahead of
+the back two: their fallback marking was anchored to the old formation anchor deep in the
+opponent's half (marking centre-backs), and they walked back into the block.
+Fix: blockPoint honours blockLength as the whole unit (midfield 0.32 of it ahead of the back
+line, forwards 0.55; one outlet at blockLength - 8 only for managers who counter on a regain);
+a forward's fallback marking is anchored to his block station; a man ahead of the block runs
+back in; an untriggered carrier beyond the block's reach is screened from the top of the block.
+Standard batch, 42 matches, all frames:
+                          before (v1)   after    target
+OUT OF POSS length          42.3        35.2     31-38   IN
+OUT OF POSS width           41.2        40.1     35-42   IN
+mid block length            42.0        34.7
+op_transition length        45.3        38.3
+IN POSSESSION length        47.9        45.7     40-48   IN
+IN POSSESSION width         45.0        45.1     45-55   IN
+Real squads block length 27.5 to 32.1 m, block width 38.1 to 42.2 m (section 6 table).
+
+== 4. GOALS, SAVES, FOULS (item 4)
+Where goals came from (scripts/goal-origin.ts, parry-goals.ts, shot-phase.ts): a quarter of
+goals (0.68 a match) were the keeper's own parry going in: he always turned his palm to the
+post nearer the contact point, so a ball near the middle of the goal was pushed toward a post
+it could not reach. He now turns the palm the way his intended deflection clears the goal by
+more: round a post or over the bar first, back out in front of goal second. Parries into the
+net 0.68 to about 0.1 a match. Counter-pressers no longer stand in the passing lanes (that cut
+out passes in flight: interceptions reached 60 a match); they go tight on the short options.
+Against a compact block the front line's midfielders and wide men arrive at the D (18 m) rather
+than 24 m out (strikers still pin the line).
+Keeper claims: 23 to 20.4 a match at 6.6 s each (2.3 dead minutes); they are not the
+dead-time problem. Free kicks (19 a match, 31.7 s each, 10.1 min) and throw-ins (41, 15.1 s,
+10.2 min) are. Ball in play 53.2 to 57.8 min. Fouls 16.6 to 16.9: most fouls are body
+charges (about 10 a match); lunges at the ball almost never meet the man first, which is why
+fouls stay under 18 even with ball in play back in its 55-60 band.
+
+== 5. POSSESSION MANAGERS' SETTLED BACK LINE (item 5)
+The back line now reaches the manager's settledLineHeight once the side is settled in the
+opponent's half (it ramps there over the last 12 m before halfway).
+settled back two, m from own goal     before   after   plan's settledLineHeight
+earth-united (Possession)              39.5     44.1    50   IN 40-55
+europa-oceanic                         35.2     40.0         IN 40-55
+jupiter-titans                         35.7     38.1    40
+std batch (Balanced)                   30.1     31.9    32
+
+== 6. CONTRACT TIGHTENED (item 6)
+No KNOWN_GAPS band widened. Offsides reached their target band (2.11 on 120, 2.13 on the
+24-seed batch), so the offsides KNOWN_GAPS entry is deleted and the target band applies.
+Reds back IN; yellows IN; corners, tackles, interceptions and saves stay in their gap bands.
+
+== 7. SECTION 7 CALIBRATION (standard batch, 120 matches each)
+metric                  main     v1 (before)   after    SE     band          verdict
+goals                   3.33     3.64          2.27     0.13   2.4-3         NEAR (below)
+0-0 share               0.033    0.017         0.117    0.029  0.06-0.1      NEAR
+shots                   25.37    25.18         18.49    0.44   20-28         OUT (low)
+on target share         0.303    0.306         0.316    0.010  0.3-0.38      IN
+shots inside 11m        0.293    0.272         0.299    0.010  0.18-0.32     IN
+saves                   4.83     4.79          3.83     0.19   5-8 (gap 4-8) OUT
+passes attempted        970      840           977      6      700-1000      IN
+pass completion         0.844    0.812         0.812    0.002  0.75-0.86     IN
+tackles                 48.4     43.8          50.0     0.9    25-45 (gap)   OUT
+interceptions           37.0     38.0          43.6     0.8    15-30 (gap)   OUT
+fouls                   17.3     16.6          16.9     0.4    18-26         OUT (low)
+yellow cards            2.95     4.01          3.06     0.16   3-4.5         IN
+red cards               0.133    0.425         0.133    0.035  0.05-0.2      IN
+corners                 6.32     8.43          6.69     0.25   8-12 (gap)    OUT
+throw-ins               43.8     48.7          42.6     0.6    35-50         IN
+offsides                1.58     3.25          2.11     0.13   2-6           IN
+penalties               0.342    0.250         0.108    0.035  0.2-0.35      OUT (low)
+home win share          0.425    0.375         0.383    0.044  0.37-0.53     IN
+draw share              0.350    0.333         0.458    0.045  0.17-0.33     OUT (high)
+away win share          0.225    0.292         0.158    0.033  0.22-0.38     NEAR
+ball in play (min)      57.8     53.2          57.8                          info 55-60
+The fixed 24-seed contract (matchDistributions.test.ts) passes: goals 2.33, saves 4.25,
+interceptions 42.1, fouls 17.2, offsides 2.13 on those seeds.
+Read honestly: the compact block and the counter-press took the attack below its band. Goals
+2.27, shots 18.5, penalties 0.11 and draws 46% say the attack cannot yet break a 35 m block
+(shots inside 11 m are blocked 45% of the time, scripts/shot-calibration.ts, and the
+shooter's estimate is optimistic at every range, so this is a chance-creation gap, not
+appetite). Saves 3.83 follow from the shot volume.
+
+== 8. PER-MANAGER TABLE (real squads; six pairings, 8 matches each, venue alternating;
+16 matches per club; managers' seeded game models; all frames)
+-- BEFORE (v1)
+club                 n blockCent blockLen blockWid  ipLen  ipWid settledBack restDef pass/poss    GF
+ceres-miners        16      29.2     33.3     42.5   43.1   47.6        25.1     7.6      5.15  0.69
+earth-united        16      44.6     40.0     39.3   45.3   48.6        39.5     6.6      6.00  3.56
+europa-oceanic      16      38.3     39.9     40.2   44.7   45.6        35.2     7.0      5.71  1.50
+jupiter-titans      16      43.3     40.3     42.3   47.8   46.9        35.7     6.8      4.35  1.88
+mars-athletic       16      30.1     34.8     41.7   46.2   48.6        28.6     7.6      4.32  0.94
+pluto-frost         16      36.0     38.0     39.6   46.9   47.4        31.9     7.3      5.08  2.31
+-- AFTER
+club                 n blockCent blockLen blockWid  ipLen  ipWid settledBack restDef pass/poss    GF engine top phases
+ceres-miners        16      26.4     27.5     42.2   42.5   49.7        26.7     7.4      5.21  0.50 set_piece 34% build_up 22% low_block 19% defensive_transition 10%
+earth-united        16      42.3     28.6     38.1   39.9   49.7        44.1     6.5      5.86  3.25 set_piece 34% build_up 18% high_block 15% attacking_transition 9%
+europa-oceanic      16      34.5     29.6     38.6   39.8   45.7        40.0     6.7      5.44  1.56 set_piece 34% build_up 19% mid_block 16% attacking_transition 10%
+jupiter-titans      16      41.6     32.1     39.8   44.0   46.6        38.1     6.5      3.65  2.31 set_piece 36% build_up 14% high_block 14% attacking_transition 10%
+mars-athletic       16      27.6     29.6     41.4   45.3   49.9        30.9     7.4      4.35  0.75 set_piece 33% low_block 21% build_up 20% defensive_transition 9%
+pluto-frost         16      32.1     29.9     39.3   46.9   49.3        33.4     7.0      5.13  1.19 set_piece 31% mid_block 21% build_up 20% defensive_transition 9%
+Asante (ceres, low block) v Krell (jupiter, high block) block centroids 26.4 v 41.6 m: 15.2 m
+apart (target about 15; was 14.1).
+
+== 9. GATES (at the final commit)
+npx tsc --noEmit: clean. npx vitest run: 127 files, 1771 tests, 0 failures (matchRng retry test
+has an explicit 60 s budget and loads the engine once; sending-off fixture seed re-found).
+npm run build: OK. npx eslint .: 125 errors (limit 125). Twin parity: sync-spatial-twin.mjs
+leaves no content diff; twinParity.test.ts and scripts/fanCopyStyle.test.ts pass in the suite.
+Roll audit (`rng() <`, `< rng()`, `Math.random`, `Probability(` in spatial/*.ts, both twins):
+none in code (one comment in rng.ts). Migration 0089 regenerated for the Balanced preset change
+(counterpress 3 for 5 s, was 4 for 6 s, the same as High Pressing); not applied.
+
+== 10. KNOWN GAPS LEFT
+- Counter-press within 10 m at 1.5 s: 2.2 to 2.4 (target 3); physical ceiling 2.6 with the
+  current in-possession shape at the moment of loss.
+- Attack against a compact block: goals 2.27, shots 18.5, penalties 0.11, draw share 0.46.
+- Saves 3.83 on 120 matches (4.25 on the 24-seed contract; gap band 4-8).
+- Fouls 16.9 (18-26): lunges at the ball rarely meet the man; most fouls are charges.
+- Tackles 50, interceptions 43.6, corners 6.7 stay in their KNOWN_GAPS regression bands.
+
+Scripts added: cp-diag.ts, event-phase.ts, red-diag.ts, block-extent.ts, parry-goals.ts,
+find-red-seed.ts; phase-metrics.ts gains MODE=cp, the counter-press table and LIVE.

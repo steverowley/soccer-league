@@ -88,10 +88,6 @@ const KNOWN_GAPS: Record<string, { band: readonly [number, number]; cause: strin
     band: [5, 12],
     cause: 'parries at full stretch and glancing headers now go behind, but blocked shots mostly rebound into the field and few clearances or crosses go out off a defender',
   },
-  offsides: {
-    band: [1, 6],
-    cause: 'the back line now holds and runners break on their read of the pass, but forwards in shape never stand beyond the line and passers still rule out men they see clearly offside',
-  },
 };
 
 // ── Fixture builders ──────────────────────────────────────────────────────────

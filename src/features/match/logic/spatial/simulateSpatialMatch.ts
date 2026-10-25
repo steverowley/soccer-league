@@ -23,6 +23,8 @@ import { step } from './step';
 import { resolveStyle } from './playStyle';
 import { personalityWeights, NEUTRAL_WEIGHTS } from './traitModifiers';
 import { beginRestart, restartTarget } from './setpiece';
+import { type GameModel, NEUTRAL_GAME_MODEL, presetFor } from './gameModel';
+import { type SubRole, makeTactics, subRoleOf } from './phase';
 
 // ── Input shapes ──────────────────────────────────────────────────────────────
 
@@ -44,6 +46,9 @@ export interface SpatialTeamInput {
   bench?:    SpatialPlayerInput[];
   /** Manager's `managers.style` string; omitted/unknown means Balanced. */
   playStyle?: string;
+  /** The manager's game model (gameModel.ts): his style preset with his own
+   *  stored choices applied.  Omitted means the style preset. */
+  gameModel?: GameModel;
 }
 
 // ── Default config ──────────────────────────────────────────────────────────
@@ -70,6 +75,7 @@ export const DEFAULT_FLAGS: EngineFlags = {
   momentum: true,
   scoreClockTerm: true,
   bodyContact: true,
+  gameModel: true,
 };
 
 /** Substitutions each side may make in a match (the standard three changes). */
@@ -128,12 +134,13 @@ function buildTeam(
     }
     const home = slotToAbsolute(slot, side);
     const idx = indexBase + built.length;
+    const sub = subRoleOf(slot, slots);
     if (pick) {
-      built.push(makeSimPlayer(pick, slot.role, side, home, cfg, flags, idx));
+      built.push(makeSimPlayer(pick, slot.role, side, home, cfg, flags, idx, sub));
     } else {
       built.push(makeSimPlayer(
         { id: `${side}-filler-${built.length}`, name: 'Reserve', role: slot.role, stats: fillerStats() },
-        slot.role, side, home, cfg, flags, idx,
+        slot.role, side, home, cfg, flags, idx, sub,
       ));
     }
   }
@@ -152,11 +159,13 @@ function fillerStats(): SimPlayerStats {
 /** Build one live SimPlayer from static input + a resolved home position. */
 function makeSimPlayer(
   input: SpatialPlayerInput, role: Role, side: TeamSide, home: Vec2, cfg: SimConfig, flags: EngineFlags, index: number,
+  subRole: SubRole = DEFAULT_SUB_ROLE[role],
 ): SimPlayer {
   return {
     id:       input.id,
     name:     input.name,
     role,
+    subRole,
     side,
     stats:    input.stats,
     homePos:  home,
@@ -186,6 +195,16 @@ function makeSimPlayer(
     jobOffset: vec(0, 0),
     holds:    0,
   };
+}
+
+/** A bench player's sub-role until he comes on (he then inherits the slot's). */
+const DEFAULT_SUB_ROLE: Readonly<Record<Role, SubRole>> = { GK: 'GK', DF: 'CB', MF: 'CM', FW: 'ST' };
+
+/** A side's game model: the manager's own, or the neutral preset when the
+ *  `gameModel` ablation is off. */
+function modelFor(team: SpatialTeamInput, flags: EngineFlags): GameModel {
+  if (!flags.gameModel) return NEUTRAL_GAME_MODEL;
+  return team.gameModel ?? presetFor(team.playStyle);
 }
 
 /** Assemble the initial world, set up for the opening kickoff. */
@@ -228,6 +247,7 @@ function buildWorld(home: SpatialTeamInput, away: SpatialTeamInput, cfg: SimConf
     flags,
     trace: cfg.trace ?? null,
     dtSec: cfg.dtSec,
+    tactics: { home: makeTactics(modelFor(home, flags)), away: makeTactics(modelFor(away, flags)) },
   };
   // The opening kickoff: everyone starts in their kickoff position.
   beginRestart(world, 'kickoff', 'home', CENTRE_SPOT, -1000, false, taker?.id);
@@ -302,5 +322,6 @@ export function simulateSpatialMatch(
     finalScore: [world.score[0], world.score[1]],
     events,
     frames,
+    phases: { home: world.tactics.home.timeline, away: world.tactics.away.timeline },
   };
 }

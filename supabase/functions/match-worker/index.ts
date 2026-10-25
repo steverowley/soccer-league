@@ -403,6 +403,37 @@ async function fetchTeamForSimulation(teamId: string) {
   return data;
 }
 
+// ── Helper: Manager game model bridge (entities → engine) ───────────────────
+
+/**
+ * Attach the manager's game model (docs/phases-of-play.md 3.2) to a fetched
+ * team: `entities.meta.game_model` of the manager's entity, read through
+ * `managers.entity_id`, set as `managers[0].game_model` for
+ * toSpatialTeamInput to validate.  A separate query, like the personality
+ * bridge below, so a failure leaves the style preset in force rather than
+ * reverting the batch.  `meta` is an existing column: no migration is needed
+ * for this select to succeed.
+ *
+ * @param teamData  A team row from fetchTeamForSimulation (mutated in place).
+ */
+async function attachGameModel(
+  teamData: { managers?: Array<{ entity_id?: string | null; game_model?: unknown }> | null },
+): Promise<void> {
+  const mgr = teamData.managers?.[0];
+  if (!mgr || typeof mgr.entity_id !== 'string' || mgr.entity_id.length === 0) return;
+  const { data, error } = await supabase
+    .from('entities')
+    .select('id, meta')
+    .eq('id', mgr.entity_id)
+    .maybeSingle();
+  if (error) {
+    console.error('[match-worker] Failed to fetch manager game model:', error);
+    return;
+  }
+  const meta = (data?.meta ?? null) as Record<string, unknown> | null;
+  if (meta && typeof meta === 'object' && meta['game_model'] !== undefined) mgr.game_model = meta['game_model'];
+}
+
 // ── Helper: Personality trait bridge (entities → engine) ────────────────────
 
 /**
@@ -763,6 +794,8 @@ async function processMatch(match: any): Promise<boolean> {
     // Personality archetypes (read from the entities layer) nudge each player's
     // derived sim stats before kickoff — inputs only, so the seeded engine below
     // stays byte-identical for an unchanged roster.
+    await attachGameModel(homeData);
+    await attachGameModel(awayData);
     const homeInput = applyTeamTraits(toSpatialTeamInput(homeData), await buildPersonalityMap(homeData));
     const awayInput = applyTeamTraits(toSpatialTeamInput(awayData), await buildPersonalityMap(awayData));
     // Engine v2 (#698): a fresh random seed per match, stored on the match row
