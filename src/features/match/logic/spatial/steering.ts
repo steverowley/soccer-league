@@ -9,7 +9,7 @@
 // All behaviours are pure: world state in, vector out, nothing mutated.
 
 import {
-  type Vec2, vec, sub, add, scale, len, normalize, dist, ZERO,
+  type Vec2, vec, sub, add, scale, normalize, dist, ZERO,
 } from './vec2';
 import { type SimPlayer, defendingGoalX } from './types';
 

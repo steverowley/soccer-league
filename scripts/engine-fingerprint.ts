@@ -68,7 +68,7 @@ function fixtureTeam(prefix: string, base: number, opts: {
 }
 
 /** A real ISL squad from the bench fixture, through the production adapter. */
-function squad(i: number, side: 'home' | 'away'): SpatialTeamInput {
+function squad(i: number): SpatialTeamInput {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const t = (squads as any[])[i];
   const row = {
@@ -101,12 +101,12 @@ interface Case {
 
 const CASES: Case[] = [
   // The six real squads, each manager's own game model, in mixed pairings.
-  { name: 'squad-earth-v-jupiter',   home: () => squad(0, 'home'), away: () => squad(2, 'away'), seed: 1000 },
-  { name: 'squad-ceres-v-mars',      home: () => squad(4, 'home'), away: () => squad(1, 'away'), seed: 1001 },
-  { name: 'squad-europa-v-pluto',    home: () => squad(3, 'home'), away: () => squad(5, 'away'), seed: 1002 },
-  { name: 'squad-jupiter-v-earth',   home: () => squad(2, 'home'), away: () => squad(0, 'away'), seed: 2026 },
-  { name: 'squad-mars-v-europa',     home: () => squad(1, 'home'), away: () => squad(3, 'away'), seed: 31337 },
-  { name: 'squad-pluto-v-ceres',     home: () => squad(5, 'home'), away: () => squad(4, 'away'), seed: 7 },
+  { name: 'squad-earth-v-jupiter',   home: () => squad(0), away: () => squad(2), seed: 1000 },
+  { name: 'squad-ceres-v-mars',      home: () => squad(4), away: () => squad(1), seed: 1001 },
+  { name: 'squad-europa-v-pluto',    home: () => squad(3), away: () => squad(5), seed: 1002 },
+  { name: 'squad-jupiter-v-earth',   home: () => squad(2), away: () => squad(0), seed: 2026 },
+  { name: 'squad-mars-v-europa',     home: () => squad(1), away: () => squad(3), seed: 31337 },
+  { name: 'squad-pluto-v-ceres',     home: () => squad(5), away: () => squad(4), seed: 7 },
   // Standard test fixtures.
   { name: 'fixture-70-v-70',         home: () => fixtureTeam('H', 70), away: () => fixtureTeam('A', 70), seed: 99 },
   { name: 'fixture-72-v-68',         home: () => fixtureTeam('H', 72), away: () => fixtureTeam('A', 68), seed: 21 },
@@ -126,12 +126,12 @@ const CASES: Case[] = [
     away: () => fixtureTeam('A', 70, { style: 'Possession' }) },
   // Every-tick frames plus the full trace stream: the finest-grained checks.
   { name: 'trace-squad-earth-v-mars', seed: 4242, frameEverySec: 0.1, trace: true,
-    home: () => squad(0, 'home'), away: () => squad(1, 'away') },
+    home: () => squad(0), away: () => squad(1) },
   { name: 'trace-balanced-80-v-60', seed: 77, frameEverySec: 0.1, trace: true,
     home: () => fixtureTeam('H', 80, { style: 'Balanced', bench: true }),
     away: () => fixtureTeam('A', 60, { bench: true }) },
   { name: 'everytick-squad-pluto-v-jupiter', seed: 555, frameEverySec: 0.1,
-    home: () => squad(5, 'home'), away: () => squad(2, 'away') },
+    home: () => squad(5), away: () => squad(2) },
 ];
 
 // ── Canonical serialisation ─────────────────────────────────────────────────

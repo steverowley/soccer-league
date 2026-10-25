@@ -1,0 +1,168 @@
+ENGINE CPU REPORT: perf/engine-cpu (October 2026)
+==================================================
+
+Problem
+-------
+The Supabase match-worker edge function is killed with "CPU Time exceeded"
+(HTTP 546) at the end of every simulation since the emergent engine (#705)
+and phases of play (#706) shipped, so no match completes. The edge runtime
+allows about 2 s of CPU per invocation and runs this engine about 3x slower
+than the development laptop. Goal: at least 4.5x faster, local median at
+most 0.40 s per full match, without changing any result.
+
+Result
+------
+Bench: npx tsx scripts/bench-engine.ts (six full matches of real ISL squads,
+median of the six), same laptop, before and after runs alternated:
+
+  before (main 3cf93c1):  1746, 1733, 1746 ms   -> median 1746 ms
+  after  (this branch):    682,  687,  738 ms   -> median  687 ms
+
+Speed-up 2.5x. TARGET NOT MET: 0.69 s locally is about 2.1 s at the edge,
+still over the 2 s CPU limit. This branch alone does not fix the incident.
+
+Correctness
+-----------
+scripts/engine-fingerprint.ts (written and baselined first, commit 0a1c5be):
+15 fixed full matches (the six real squads with their managers' game
+models in six pairings; the uniform test fixtures; every style preset;
+all four formations; personalities; benches so substitutions happen; all
+ablation flags off; three every-tick-frame runs, two of them with the full
+trace stream). One SHA-256 per case over the canonical serialisation of
+the whole result (score, every event, every frame, both phase timelines,
+traces). Baseline: docs/reports/engine-fingerprint-baseline.txt.
+
+- After every step below: all 15 fingerprints identical to the baseline.
+- The oracle is sensitive: scaling separation's speed cap by 1 + 1e-10
+  changed 14 of the 15 fingerprints.
+- cpuEquivalence.test.ts pins the rewritten helpers (offsideLineX,
+  separation, seek, arrive, timeToReachXY) to the reference code they
+  replaced, bit for bit (Object.is, signed zeros and ties included), and
+  checks the bound the intercept pruning relies on.
+- No floating-point operation was reordered: every rewrite performs the
+  same operations in the same order, or skips work whose result is proved
+  unused or provably fails the test it feeds.
+
+Steps (each committed and pushed separately; gain = bench median at the
+time, tsx unless noted; single runs carry about +/-5% noise)
+--------------------------------------------------------------------------
+ 1. offsideLineX in one pass (no filter/map/sort; stable-sort tie order
+    reproduced; NaN falls back to the sort).            1808 -> 1356 ms
+ 2. possessionLines: skip rebuilding the key string while the plan object,
+    final-third flag and outfield players are the same objects.
+                                                         1356 -> 1082 ms
+ 3. buildContext intercept scan: skip path samples a player provably
+    cannot reach (timeToReach >= distance / top speed, 1e-6 s margin), skip
+    the scan when the whole path's bounding box is out of reach, read
+    samples as numbers (timeToReachXY), marking via a flag array.
+                                                         1082 ->  985 ms
+ 4. separation in scalars (no five Vec2s per team-mate).   985 ->  897 ms
+ 5. PlayerTable: the five per-tick Map<playerId, T> in the tick context
+    became arrays indexed by roster slot.      bundle  880 ->  765 ms
+ 6. estimatePass: lane travel times (exp, log, two atans) computed once per
+    pass option instead of per opponent; lane vector hoisted.
+                                               bundle  765 ->  748 ms
+ 7. No per-call closures in thinkJob / estimatePass (tsx keepNames wraps
+    each in __name per call).                               857 ->  768 ms
+ 8. shapePoint skips the formation anchor for outfielders (always replaced);
+    corner orderings cached per side.                       768 ->  713 ms
+ 9. integratePlayer, arrive and seek in scalars.            713 ->  665 ms
+
+Tried and reverted (no gain): a chunked, acceleration-aware reach bound for
+the intercept scan (no measurable change over step 3), and reusing the
+predicted ball path across ticks when the ball moved exactly as predicted
+(slower: the bookkeeping cost more than the rare hits saved).
+
+Profile before (node --cpu-prof, 6 matches, main 3cf93c1, total 11390 ms)
+--------------------------------------------------------------------------
+Self:
+ 16.4%    1865 ms  buildContext offball.ts:1
+ 13.8%    1572 ms  offsideLineX possession.ts:1
+ 10.9%    1245 ms  possessionLines phase.ts:1
+  5.5%     622 ms  (garbage collector) :0
+  4.8%     548 ms  step step.ts:1
+  4.6%     526 ms  (anon) possession.ts:1
+  3.8%     430 ms  separation steering.ts:1
+  3.7%     417 ms  possessionPoint phase.ts:1
+  2.7%     313 ms  integratePlayer step.ts:1
+  2.7%     311 ms  thinkJob offball.ts:1
+Inclusive:
+ 33.3%    3793 ms  shapePoint offball.ts:1
+ 27.8%    3168 ms  jobVelocity offball.ts:1
+ 23.0%    2616 ms  possessionPoint phase.ts:1
+ 21.6%    2455 ms  buildContext offball.ts:1
+ 18.3%    2080 ms  offsideLineX possession.ts:1
+ 15.5%    1763 ms  deadBallTick step.ts:1
+ 14.0%    1592 ms  restartVelocity setpiece.ts:1
+ 13.8%    1573 ms  restartTarget setpiece.ts:1
+ 11.1%    1265 ms  possessionLines phase.ts:1
+ 11.0%    1253 ms  thinkJob offball.ts:1
+
+Profile after (same bench, this branch, total 5044 ms)
+------------------------------------------------------
+Self:
+ 15.7%     792 ms  buildContext offball.ts:1
+ 13.8%     698 ms  step step.ts:1
+  6.1%     307 ms  jobVelocity offball.ts:1
+  5.7%     286 ms  (garbage collector) :0
+  4.7%     239 ms  thinkJob offball.ts:1
+  4.6%     235 ms  integratePlayer step.ts:1
+  3.5%     178 ms  stepBall ball.ts:1
+  3.2%     163 ms  possessionPoint phase.ts:1
+  2.2%     112 ms  resolveBall step.ts:1
+  2.0%     102 ms  (anon) offball.ts:1
+Inclusive:
+ 25.7%    1296 ms  buildContext offball.ts:1
+ 13.3%     671 ms  jobVelocity offball.ts:1
+  9.9%     497 ms  thinkJob offball.ts:1
+  7.6%     384 ms  shapePoint offball.ts:1
+  7.2%     364 ms  chooseAction possession.ts:1
+  7.1%     357 ms  deadBallTick step.ts:1
+  5.7%     286 ms  (garbage collector) :0
+  4.8%     243 ms  possessionPoint phase.ts:1
+  4.6%     235 ms  integratePlayer step.ts:1
+  4.6%     231 ms  restartVelocity setpiece.ts:1
+
+(step's self time includes buildContext and thinkJob work V8 inlined into
+it; under an esbuild bundle buildContext is about 20% of all time.)
+
+What is left, and the options
+-----------------------------
+The profile is now flat: per-player, per-tick AI (intercept scan, job
+velocities, job choice, shape points, carrier decisions) with no single
+team-level recomputation left to memoise. Per match (bundle): buildContext
+about 150 ms (the intercept scan over 25 ball-path samples for 22 players
+is most of it), job velocities about 100 ms, job choice about 60 ms,
+carrier decisions about 60 ms, dead-ball set-up about 50 ms, GC about 40 ms.
+Reaching 0.40 s with identical results would need a structural rewrite of
+those loops (struct-of-arrays player state, no Vec2 allocation in the AI),
+a large and risky change.
+
+The faster route to completed matches, with byte-identical results: split
+one match across several worker invocations (simulate N minutes, persist
+the world state, resume in the next invocation). The engine is
+deterministic for a given state, so the stitched match equals the
+single-run one, and two or three invocations of a match that costs about
+2.1 s of edge CPU in total fit the 2 s limit with room. It needs the world
+made serialisable first: the per-player rng streams are closures today
+(rng.ts makeRng), so their 32-bit state would have to be exposed, plus the
+module-level caches in this branch are validated by object identity and
+simply rebuild after a resume. The fingerprint oracle can verify the
+stitching exactly.
+
+Gates (final commit)
+--------------------
+- npm run fingerprint:engine: identical to the baseline (15 of 15 cases).
+- npx tsc --noEmit: clean.
+- npx vitest run: 128 files, 1774 tests, 0 failures (includes twinParity,
+  scripts/fanCopyStyle.test.ts and the new cpuEquivalence.test.ts).
+  Note: one earlier full run, made while npm run build ran alongside,
+  timed out fanCopyStyle at its 5 s default; it passes alone and in the
+  unloaded full run.
+- npm run build: succeeds.
+- npx eslint .: 125 errors, 12 warnings, the same as main 3cf93c1 (125).
+- Twin synced with node scripts/sync-spatial-twin.mjs; twinParity passes.
+- Roll grep (rng() <, < rng(), rngChance, Math.random, Probability( in
+  spatial/ non-test code, both twins): only the existing comment in rng.ts.
+- CPU-budget guard: npm run bench:engine and npm run fingerprint:engine;
+  docs/emergent-engine.md section 9 "CPU budget". No wall-clock test.
