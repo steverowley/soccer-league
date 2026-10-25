@@ -489,13 +489,11 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
     // defend the box when the ball gets near goal.
     a = blockPoint(p, world);
   }
-  if (!world.flags.scoreClockTerm) return a;
-  const L = lateness(world);
-  const gd = goalDiff(world, p.side);
-  if (L === 0 || gd === 0) return a;
-  const dir = p.side === 'home' ? 1 : -1;
-  const shift = (gd > 0 ? -5 : 5) * L * dir;
-  return clampIn(vec(a.x + shift, a.y));
+  // The score and the clock act through the manager's in-match plan
+  // (phase.ts adjustPlan: chasing pushes the block up and thins the rest
+  // defence, protecting a lead drops the block and secures the ball), not
+  // through a flat shift of the whole shape.
+  return a;
 }
 
 /**
