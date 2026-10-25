@@ -586,24 +586,27 @@ function counterpressVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext, r
     return arrive(p, add(c.pos, scale(normalize(sub(goal, c.pos)), CP_TIGHT)), CP_BRAKE, 1);
   }
   if (rank === 1) return arrive(p, add(c.pos, scale(normalize(sub(p.pos, c.pos)), 2.2)), CP_BRAKE, 1);
-  // Lanes: rank 2 takes the carrier's nearest team-mate, rank 3 the next.
+  // The short options: rank 2 goes tight on the carrier's nearest
+  // team-mate, rank 3 on the next, goal-side of him, so the easy pass out of
+  // the press is met by a man at the receiver.
   const mates = (c.side === 'home' ? world.home : world.away)
     .filter((q) => !q.sentOff && q !== c && q.role !== 'GK')
     .map((q) => ({ q, d: dist(q.pos, c.pos) }))
     .sort((a, b) => a.d - b.d);
   const target = mates[Math.min(mates.length - 1, rank - 2)];
   if (!target) return arrive(p, add(c.pos, scale(normalize(sub(p.pos, c.pos)), 4)), 3, 1);
-  const lane = sub(target.q.pos, c.pos);
-  const along = Math.min(CP_LANE_MAX, 0.45 * target.d);
-  return arrive(p, add(c.pos, scale(normalize(lane), along)), 3, 1);
+  const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+  const toBall = normalize(sub(c.pos, target.q.pos));
+  const pt = add(target.q.pos, scale(normalize(add(normalize(sub(goal, target.q.pos)), scale(toBall, 0.6))), CP_RECEIVER_GAP));
+  return arrive(p, pt, 3, 1);
 }
 
 /** How close (m) the first counter-presser closes on the carrier, goal-side. */
 const CP_TIGHT = 1.5;
 /** Distance (m) over which a counter-presser brakes into the carrier. */
 const CP_BRAKE = 4;
-/** Furthest (m) from the carrier a counter-presser screens a passing lane. */
-const CP_LANE_MAX = 4;
+/** How close (m) a counter-presser stands to a short option, goal-side. */
+const CP_RECEIVER_GAP = 1.5;
 
 /**
  * The authored shape point: the formation anchor shifted with the ball, with

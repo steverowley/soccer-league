@@ -398,7 +398,7 @@ const BACK_SPREAD = 52;
 
 /** Distance (m) from the opponent's goal at which midfielders in the front
  *  line wait against a deep block: the edge of the area. */
-const EDGE_OF_BOX = 24;
+const EDGE_OF_BOX = 18;
 
 /** Back-line height (m from own goal) of each default block. */
 const BLOCK_LINE: Readonly<Record<BlockHeight, number>> = { high: 40, mid: 29, low: 19 };

@@ -981,6 +981,36 @@ export function deflectOff(
   return { vel: vec(tx * tangent + k * nx, ty * tangent + k * ny), vz: tz * tangent + k * nz };
 }
 
+/**
+ * The side a keeper turns his palm to: of the two, the one whose deflection
+ * (as he intends it, before any error) clears his goal by more, either going
+ * away from the line or crossing it furthest outside a post.  A keeper's
+ * decision from the ball's flight; nothing drawn at random.
+ */
+function parrySide(vel: Vec2, vz: number, at: Vec2, side: TeamSide, theta: number, up: number): Vec2 {
+  const gx = defendingGoalX(side);
+  let best = vec(0, 1);
+  let bestS = -Infinity;
+  for (const s of [1, -1]) {
+    const lat = vec(0, s);
+    const o = deflectOff(vel, vz, lat, theta, up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
+    const toward = (gx - at.x) * o.vel.x > 0;
+    // Best is round the post or over the bar (a corner); next, back out in
+    // front of goal (a rebound someone may reach); worst, into the net.
+    let score: number;
+    if (!toward || Math.abs(o.vel.x) < 1e-6) score = 5;
+    else {
+      const t = Math.abs(gx - at.x) / Math.abs(o.vel.x);
+      score = Math.abs(at.y + o.vel.y * t - PITCH_WIDTH / 2) - (GOAL_Y_MAX - GOAL_Y_MIN) / 2;
+      const zAt = Math.max(0, o.vz * t - 0.5 * GRAVITY * t * t);
+      if (zAt > GOAL_HEIGHT) score = Math.max(score, zAt - GOAL_HEIGHT);
+      if (score > 0) score += 10;
+    }
+    if (score > bestS) { bestS = score; best = lat; }
+  }
+  return best;
+}
+
 /** Sine of the steepest angle a keeper's palm meets the ball at full stretch
  *  (wrist and palm turned outward: even a fingertip changes the angle). */
 const PALM_ANGLE = 0.75;
@@ -1071,10 +1101,13 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     const e = errorScale(p, p.stats.goalkeeping, world, { pressure: 0, awkward: 0.5 });
     const stretch = Math.min(1, closeD / Math.max(0.3, keeperReach(p, z)));
     const up = z > PARRY_HIGH ? Math.min(0.8, (z - PARRY_HIGH) / 0.8) : 0;
-    // He turns the palm to push the ball away from the middle of his goal,
-    // round the nearer post, whichever side of him it passes.
-    const wide = vec(0, at.y >= PITCH_WIDTH / 2 ? 1 : -1);
-    const out3 = deflectOff(b.vel, b.vz, wide, Math.asin(PALM_ANGLE * stretch) + slip(p, world, 0.12 * e),
+    // He turns the palm the way that takes the ball furthest from his goal:
+    // round whichever post the deflected ball would clear by more, given its
+    // own sideways run (a ball near the middle of the goal is not pushed a
+    // couple of metres toward a post it cannot reach before the line).
+    const theta = Math.asin(PALM_ANGLE * stretch);
+    const wide = parrySide(b.vel, b.vz, at, p.side, theta, up);
+    const out3 = deflectOff(b.vel, b.vz, wide, theta + slip(p, world, 0.12 * e),
       up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
     b.vel = out3.vel;
     b.vz = Math.max(0, out3.vz);
