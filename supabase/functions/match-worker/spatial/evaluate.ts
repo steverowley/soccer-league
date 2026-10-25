@@ -231,7 +231,7 @@ export interface ShotEstimate {
  */
 export function estimateShot(
   from: Vec2, side: TeamSide, gy: number, gz: number, speed: number, errScale: number,
-  keeper: SimPlayer | undefined, defenders: readonly SimPlayer[],
+  keeper: SimPlayer | undefined, defenders: readonly SimPlayer[], lead = 0,
 ): ShotEstimate {
   const gx = attackingGoalX(side);
   const aim = vec(gx, gy);
@@ -243,29 +243,85 @@ export function estimateShot(
   const pY = normCdf((GOAL_Y_MAX - 0.12 - gy) / sy) - normCdf((GOAL_Y_MIN + 0.12 - gy) / sy);
   const pZ = normCdf((GOAL_HEIGHT - 0.12 - gz) / sz);
   const pFrame = Math.max(0, pY) * pZ;
-  // Keeper: lateral distance from him to the line of the ball where it
-  // passes his position, against the time the ball needs to get there.
-  let pBeat = 1;
-  if (keeper && !keeper.sentOff) {
-    const seg = segmentDistance(keeper.pos, from, aim);
-    const tToKeeper = T * seg.t;
-    const reach = (gz > 1.5 ? 1.15 : 1.35) * (0.9 + 0.2 * (keeper.stats.goalkeeping / 100));
-    const dive = 3.4 + 2.4 * (keeper.stats.goalkeeping / 100);
-    const react = 0.17 + 0.2 * (1 - keeper.stats.goalkeeping / 100);
-    const need = react + Math.max(0, seg.d - reach) / dive;
-    pBeat = sigmoid((tToKeeper - need) * -1 / 0.09);
-    if (seg.d > reach + 4) pBeat = 1;
+  // Keeper, judged where the ball will REALLY go: the strike's lateral error
+  // is integrated over (5-point Gauss-Hermite), because an aim at the corner
+  // that stays on target has usually drifted toward the keeper.  Treating
+  // "on target" and "beats the keeper" as independent made every corner aim
+  // look like a goal (estimates of 0.3 scored 9%).
+  let pGoalLat = 0;
+  let pOnLat = 0;
+  for (let i = 0; i < GH_NODES.length; i++) {
+    const y = gy + sy * GH_NODES[i]!;
+    if (y <= GOAL_Y_MIN + 0.12 || y >= GOAL_Y_MAX - 0.12) continue;
+    pOnLat += GH_WEIGHTS[i]!;
+    pGoalLat += GH_WEIGHTS[i]! * beatKeeper(from, vec(gx, y), gz, T, keeper);
   }
+  const pBeat = pOnLat > 0 ? pGoalLat / pOnLat : 0;
   // Blockers: bodies near the lane, between shooter and goal.
   let pClear = 1;
   for (const o of defenders) {
     if (o.sentOff || o.role === 'GK') continue;
-    const seg = segmentDistance(o.pos, from, aim);
-    if (seg.t <= 0.02 || seg.t >= 0.98) continue;
-    // Within his reach plus a leg thrown out: a likely block.
-    if (seg.d < 2.6) pClear *= sigmoid((seg.d - 1.2) / 0.3);
+    // Where he will be when the ball is struck: a man closing the shooter
+    // down keeps coming through the back-lift.
+    const at = lead > 0 ? vec(o.pos.x + o.vel.x * lead, o.pos.y + o.vel.y * lead) : o.pos;
+    const seg = segmentDistance(at, from, aim);
+    // A man level with the ball (pressing the shooter) counts: a leg out
+    // beside the ball blocks it as it leaves the foot.  Only bodies behind
+    // the ball or beyond the line are out of it.
+    if (seg.t >= 0.98) continue;
+    if (seg.t <= 0 && dot(sub(at, from), sub(aim, from)) < -0.3 * d) continue;
+    // A hard shot is stopped only by a body in the lane, or by a leg thrown
+    // into it by a man close enough to see the back-lift (step.ts reachFor).
+    const reach = dist(at, from) <= BLOCKER_RANGE ? BLOCK_REACH_THROWN : BLOCK_REACH_BODY;
+    if (seg.d < reach + 0.6) pClear *= sigmoid((seg.d - reach) / 0.12);
   }
-  return { p: pFrame * pBeat * pClear, pFrame, pBeat, pClear };
+  return { p: pY > 0 ? Math.max(0, pZ * pGoalLat) * pClear : 0, pFrame, pBeat, pClear };
+}
+
+/**
+ * Lateral acceleration (m/s^2) of a diving keeper.  A dive is a push-off from
+ * a set stance, not an instant sprint: a keeper needs about 0.4 s to move his
+ * body a metre sideways.  Shared by the physics (step.ts) and the shooter's
+ * estimate, so what a striker expects is what the keeper can actually do.
+ */
+export const DIVE_ACCEL = 9;
+
+/** Time (s) for a keeper to move `s` metres sideways from a set stance. */
+export function diveTime(s: number, vmax: number): number {
+  if (s <= 0) return 0;
+  const sAcc = (vmax * vmax) / (2 * DIVE_ACCEL);
+  return s <= sAcc ? Math.sqrt((2 * s) / DIVE_ACCEL) : vmax / DIVE_ACCEL + (s - sAcc) / vmax;
+}
+
+/** 5-point Gauss-Hermite nodes and weights for a standard normal. */
+const GH_NODES = [-2.857, -1.3556, 0, 1.3556, 2.857] as const;
+const GH_WEIGHTS = [0.01126, 0.22208, 0.53333, 0.22208, 0.01126] as const;
+
+/** Shot-block geometry shared with step.ts: half-width (m) a standing body
+ *  covers, the same with a leg thrown into the lane, and how close (m) to the
+ *  shooter a man must be to see the back-lift and throw it. */
+export const BLOCK_REACH_BODY = 0.45;
+export const BLOCK_REACH_THROWN = 0.85;
+export const BLOCKER_RANGE = 7;
+
+/** Chance (judgement) the keeper cannot get a hand to a strike crossing at (aim, gz). */
+function beatKeeper(from: Vec2, aim: Vec2, gz: number, T: number, keeper: SimPlayer | undefined): number {
+  if (!keeper || keeper.sentOff) return 1;
+  const seg = segmentDistance(keeper.pos, from, aim);
+  const reach = (gz > 1.5 ? 1.15 : 1.35) * (0.9 + 0.2 * (keeper.stats.goalkeeping / 100));
+  if (seg.d > reach + 4) return 1;
+  const dive = 3.4 + 2.4 * (keeper.stats.goalkeeping / 100);
+  const react = 0.17 + 0.2 * (1 - keeper.stats.goalkeeping / 100);
+  const need = react + diveTime(Math.max(0, seg.d - reach), dive);
+  return sigmoid((need - T * seg.t) / 0.09);
+}
+
+/** Base back-lift time of a shot (s): about 0.3 s for a 70-rated striker. */
+export const SHOT_WINDUP = 0.34;
+
+/** A player's back-lift time (s): quicker for good strikers. */
+export function shotWindup(p: SimPlayer): number {
+  return SHOT_WINDUP * (1.3 - 0.6 * p.stats.shooting / 100);
 }
 
 /** Speed of a player's current motion (m/s). */

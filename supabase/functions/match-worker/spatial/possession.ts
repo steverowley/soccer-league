@@ -26,7 +26,7 @@ import {
 } from './types.ts';
 import {
   positionValue, xgGeom, estimatePass, estimateShot, pressureAt, timeToReach,
-  progressOf, nearestOpponentDist,
+  progressOf, nearestOpponentDist, shotWindup,
 } from './evaluate.ts';
 import { errorScale, perceive } from './execution.ts';
 import { effectiveMaxSpeed, MAX_ACCEL } from './steering.ts';
@@ -62,7 +62,9 @@ const BASE_TEMPERATURE = 0.006;
 
 /** The carrier's chosen action for this touch. */
 export type CarrierAction =
-  | { kind: 'shoot'; aim: Vec2; gz: number; speed: number; utility: number; est: number; chip: boolean }
+  | { kind: 'shoot'; aim: Vec2; gz: number; speed: number; utility: number; est: number; chip: boolean;
+      /** Estimate components (frame, keeper beaten, lane clear), for traces. */
+      parts?: { f: number; b: number; c: number } }
   | { kind: 'pass'; target: SimPlayer; aim: Vec2; speed: number; vz: number; kick: KickKind; utility: number; pC: number; lofted: boolean }
   | { kind: 'dribble'; dir: Vec2; utility: number }
   | { kind: 'clear'; aim: Vec2; speed: number; vz: number; utility: number };
@@ -196,13 +198,15 @@ export function chooseAction(
     const eShot = errorScale(carrier, carrier.stats.shooting, world, { pressure, awkward: 0 });
     const power = 21 + 10 * (carrier.stats.shooting / 100);
     const appetite = shotAppetite(carrier, world);
+    const lead = shotWindup(carrier);
     for (const gy of SHOT_YS) {
       for (const gz of SHOT_ZS) {
         // A placed shot low into the corner is struck a little softer.
         const speed = gz < 1 ? power * 0.94 : power;
-        const est = estimateShot(from, side, gy, gz, speed, eShot, keeper, opponents);
+        // Penalties and free kicks are struck from a set ball (no one closing in).
+        const est = estimateShot(from, side, gy, gz, speed, eShot, keeper, opponents, mode === 'open' ? lead : 0);
         const u = est.p * appetite + (1 - est.p) * 0.006 - (1 - est.p) * lam * 0.006;
-        options.push({ kind: 'shoot', aim: vec(gx, gy), gz, speed, utility: u, est: est.p, chip: false });
+        options.push({ kind: 'shoot', aim: vec(gx, gy), gz, speed, utility: u, est: est.p, chip: false, parts: { f: est.pFrame, b: est.pBeat, c: est.pClear } });
       }
     }
   }

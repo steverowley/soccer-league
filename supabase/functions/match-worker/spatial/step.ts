@@ -33,7 +33,8 @@ import {
   type CarrierAction,
 } from './possession.ts';
 import {
-  positionValue, pressureAt, sigmoid, estimateShot, segmentDistance, progressOf, timeToReach,
+  positionValue, pressureAt, sigmoid, estimateShot, segmentDistance, progressOf, timeToReach, DIVE_ACCEL, shotWindup,
+  BLOCK_REACH_BODY, BLOCK_REACH_THROWN, BLOCKER_RANGE,
 } from './evaluate.ts';
 import {
   errorScale, strike, firstTouch, reactionDelay, perceive, slip, KICK_ERROR,
@@ -294,6 +295,8 @@ function execute(
         kx: k ? r2(k.pos.x) : null, ky: k ? r2(k.pos.y) : null,
         dist: r2(d), speed: r2(action.speed), aimY: r2(action.aim.y), aimZ: r2(action.gz), est: r2(action.est),
         angErr: r2(s.angErr), errScale: r2(e), pressure: r2(pressure), restart: restart ?? 'open',
+        pF: action.parts ? r2(action.parts.f) : null, pB: action.parts ? r2(action.parts.b) : null, pCl: action.parts ? r2(action.parts.c) : null,
+        onTarget: headingOnTarget(world, otherSide(p.side)),
       });
       if (k) {
         k.dive = null;
@@ -392,8 +395,6 @@ const CHARGE_SPEED_BOX = 4.2;
 /** A ball taken within this distance (m) of its carrier counts as a tackle. */
 const STEAL_DUEL_DIST = 1.5;
 
-/** Base back-lift time of a shot (s): about 0.3 s for a 70-rated striker. */
-const SHOT_WINDUP = 0.34;
 
 /** Half a body width (m): how far either side of a player's centre he blocks. */
 const BODY_WIDTH = 0.45;
@@ -721,16 +722,40 @@ function headingOnTarget(world: SimWorld, defendingSide: TeamSide): boolean {
   return false;
 }
 
+const SIDES: readonly TeamSide[] = ['home', 'away'];
+
+/** A loose, fast ball travelling toward `side`'s goal and on target for it. */
+function ballThreatens(world: SimWorld, side: TeamSide): boolean {
+  const b = world.ball;
+  if (b.ownerId !== null || world.phase !== 'open_play') return false;
+  const gx = defendingGoalX(side);
+  const toward = gx === 0 ? -1 : 1;
+  if (b.vel.x * toward <= 0 || len(b.vel) < 9) return false;
+  if (Math.abs(b.pos.x - gx) > 40) return false;
+  return headingOnTarget(world, side);
+}
+
 // ── Touches (the ball meets a body) ─────────────────────────────────────────
 
 /** Can `p` touch a ball at height z this tick, and with what reach? */
-function reachFor(p: SimPlayer, z: number, at: Vec2, blocking: boolean): number {
+function reachFor(p: SimPlayer, z: number, at: Vec2, blocking: boolean, fast: boolean): number {
   if (p.role === 'GK' && inOwnBox(p, at) && z <= KEEPER_TOP) return keeperReach(p, z);
+  // A ball struck hard leaves no time to move a foot to it: only what is
+  // already in its way stops it, the body or a leg already thrown into the
+  // lane.  (Blocks used to take every hard ball within a stride, which
+  // stopped most shots before the keeper and steered goals into deflections.)
+  if (fast) {
+    if (z > BODY_TOP) return -1;
+    return blocking && z <= 0.9 ? BLOCK_REACH_THROWN : BLOCK_REACH_BODY;
+  }
   // A defender who has thrown himself into a shooting lane covers more.
   if (z <= 0.9) return FOOT_REACH + (blocking ? BLOCK_LUNGE : 0);
   if (z <= HEAD_Z) return 0.6 + (blocking ? BLOCK_LUNGE * 0.6 : 0);
   return -1;
 }
+
+/** Height (m) of a standing body: a fast ball above it passes over him. */
+const BODY_TOP = 1.85;
 
 /** Extra reach (m) of a leg or body thrown into a shooting lane. */
 const BLOCK_LUNGE = 0.55;
@@ -972,7 +997,7 @@ function resolveBall(world: SimWorld, from: Vec2, fromZ: number, events: SimEven
     const sd = segmentDistance(p.pos, from, to);
     const zAt = fromZ + (toZ - fromZ) * sd.t;
     const atPt = vec(from.x + (to.x - from.x) * sd.t, from.y + (to.y - from.y) * sd.t);
-    const reach = reachFor(p, zAt, atPt, shotFlying && now < p.blockUntil);
+    const reach = reachFor(p, zAt, atPt, shotFlying && now < p.blockUntil, len(b.vel) > BLOCK_SPEED);
     if (reach < 0 || sd.d > reach) continue;
     // A player who has not yet reacted to the ball can still be hit by it,
     // but only a fast ball counts (he cannot go for one he has not seen).
@@ -1078,7 +1103,10 @@ function scoreGoal(world: SimWorld, attacking: TeamSide, events: SimEvent[], min
   else if (world.lastShot && world.lastShot.side === attacking && world.clockSec - world.lastShot.tSec < 3) scorer = world.lastShot.playerId;
   if (kick && isShotKind(kick.kind)) kick.resolved = true;
   emit(events, world, minute, { type: 'goal', side: attacking, ...(scorer ? { playerId: scorer } : {}) });
-  trace(world, 'goal', findById(world, scorer ?? null), { y: r2(y), z: r2(z), ownGoal: scorer === undefined });
+  trace(world, 'goal', findById(world, scorer ?? null), {
+    y: r2(y), z: r2(z), ownGoal: scorer === undefined, kick: kick ? kick.kind : null, kickBy: kick ? kick.side === attacking : null,
+    sinceShot: world.lastShot ? r2(world.clockSec - world.lastShot.tSec) : null,
+  });
   const sc = findById(world, scorer ?? null);
   bump(world, sc, 0.08);
   for (const p of teamOf(world, attacking)) bump(world, p, 0.01);
@@ -1180,11 +1208,13 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     }
   }
 
-  // ── Keepers read shots ──────────────────────────────────────────────────
-  const kick = world.ball.kick;
-  if (kick && isShotKind(kick.kind) && !kick.resolved) {
-    const k = keeperOf(world, otherSide(kick.side));
-    if (k && !k.dive && now >= k.reactUntil) readShot(k, world);
+  // ── Keepers read any fast ball heading into their goal ─────────────────
+  // A shot, but equally a deflection, a parry or a miscued clearance: the
+  // keeper reacts to the ball's path (after his reaction delay), not to who
+  // kicked it or what it was meant to be.
+  for (const side of SIDES) {
+    const k = keeperOf(world, side);
+    if (k && !k.dive && now >= k.reactUntil && ballThreatens(world, side)) readShot(k, world);
   }
 
   // ── The carrier plays the ball when it is at his feet ────────────────────
@@ -1225,13 +1255,13 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     }
     if (action.kind === 'shoot') {
       // Back-lift: quicker for good strikers, a touch longer when stretched.
-      const wind = SHOT_WINDUP * (1.3 - 0.6 * carrier.stats.shooting / 100);
+      const wind = shotWindup(carrier);
       carrier.windup = { action, at: now + wind };
       // Defenders close enough who see the back-lift (after their reaction
       // time) throw a leg or body into the lane.
       for (const o of teamOf(world, otherSide(carrier.side))) {
         if (o.sentOff || o.role === 'GK') continue;
-        if (dist(o.pos, carrier.pos) > 7) continue;
+        if (dist(o.pos, carrier.pos) > BLOCKER_RANGE) continue;
         if (reactionDelay(o, world) < wind + 0.25) o.blockUntil = now + wind + 0.6;
       }
     } else {
@@ -1298,7 +1328,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   for (const p of all) {
     if (p.sentOff) continue;
     if (p.role === 'GK' && p.dive) {
-      integratePlayer(p, diveVelocity(p), dt, 25, diveSpeed(p));
+      integratePlayer(p, diveVelocity(p), dt, DIVE_ACCEL, diveSpeed(p));
       continue;
     }
     if (p.lunge) {
@@ -1325,10 +1355,12 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     && len(world.ball.vel) < 3 && world.ball.z === 0) {
     resolveShot(world, events, minute, 'shot');
   }
-  // Keepers stop diving once the ball is past or dealt with.
-  const k3 = world.ball.kick;
-  if (!k3 || !isShotKind(k3.kind) || k3.resolved) {
-    for (const p of all) if (p.dive) p.dive = null;
+  // Keepers stop diving once the ball is dealt with or no longer coming at
+  // their goal (held, slowed, or going the other way).
+  for (const p of all) {
+    if (!p.dive) continue;
+    const toward = defendingGoalX(p.side) === 0 ? -1 : 1;
+    if (world.ball.ownerId !== null || world.ball.vel.x * toward <= 0 || len(world.ball.vel) < 3) p.dive = null;
   }
 
   driftTick(world, dt);
