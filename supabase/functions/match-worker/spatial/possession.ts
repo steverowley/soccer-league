@@ -49,6 +49,9 @@ const SHOT_APPETITE = 0.3;
 /** Anti-passivity: each consecutive carry scales carry utility by this. */
 const HOLD_DECAY = 0.97;
 
+/** Reach (m) of an opponent's foot when judging whether a carry is safe. */
+const CARRY_FOOT = 0.9;
+
 /** Carry probe length (m) for evaluating a dribble direction. */
 const CARRY_PROBE = 5;
 
@@ -256,7 +259,7 @@ export function chooseAction(
         const v0 = Math.min(27, groundLaunchSpeed(d, arriveSpeed));
         const est = estimatePass(from, aim, v0, false, m, opponents, ePass, now);
         options.push({ kind: 'pass', target: m, aim, speed: v0, vz: 0, kick,
-          utility: est.pC * vOwn * passMul - (1 - est.pC) * lam * vLoss, pC: est.pC, lofted: false });
+          utility: est.pC * vOwn * receiveRoom(aim, est.tBall, opponents, now) * passMul - (1 - est.pC) * lam * vLoss, pC: est.pC, lofted: false });
       }
       if (d >= 18) {
         const T = 0.8 + d * 0.032;
@@ -265,7 +268,7 @@ export function chooseAction(
         // A lofted ball arrives dropping out of the sky: harder to use.
         const k: KickKind = kick === 'through' ? 'through' : 'long';
         options.push({ kind: 'pass', target: m, aim, speed: v0, vz: GRAVITY * T / 2, kick: k,
-          utility: est.pC * vOwn * 0.85 * passMul - (1 - est.pC) * lam * vLoss, pC: est.pC, lofted: true });
+          utility: est.pC * vOwn * receiveRoom(aim, est.tBall, opponents, now) * 0.85 * passMul - (1 - est.pC) * lam * vLoss, pC: est.pC, lofted: true });
       }
     }
   }
@@ -316,8 +319,10 @@ export function chooseAction(
       let margin = Infinity;
       for (const o of opponents) {
         if (dist(o.pos, from) > 14) continue;
-        const m1 = timeToReach(o, end, now) - tMe;
-        const m2 = timeToReach(o, mid, now) - tMe * 0.4;
+        // He only has to get a foot to it, not his body on the spot.
+        const footT = CARRY_FOOT / Math.max(1, effectiveMaxSpeed(o));
+        const m1 = timeToReach(o, end, now) - footT - tMe;
+        const m2 = timeToReach(o, mid, now) - footT - tMe * 0.4;
         const m = m1 < m2 ? m1 : m2;
         if (m < margin) margin = m;
       }
@@ -354,6 +359,31 @@ export function chooseAction(
   }
   return finish(carrier, world, options);
 }
+
+/**
+ * How much room the receiver will have when the ball gets to him (design 4.4:
+ * the receiver's space), as a multiplier on the value of the ball there.  A
+ * man who will have an opponent on him as the ball arrives can only lay it
+ * back; a man with a second to spare can turn and play forward.  Judged from
+ * the passer's view of who could close the aim point in the ball's travel.
+ */
+export function receiveRoom(aim: Vec2, tBall: number, opponents: readonly SimPlayer[], now: number): number {
+  let spare = Infinity;
+  for (const o of opponents) {
+    if (o.sentOff) continue;
+    if (Math.abs(o.pos.x - aim.x) > 20 || Math.abs(o.pos.y - aim.y) > 20) continue;
+    const t = timeToReach(o, aim, now) - tBall;
+    if (t < spare) spare = t;
+  }
+  if (spare === Infinity) return ROOM_MAX;
+  return ROOM_MIN + (ROOM_MAX - ROOM_MIN) / (1 + Math.exp(-(spare - ROOM_T) / ROOM_S));
+}
+
+/** Room multiplier range and its response (s of spare time when the ball arrives). */
+const ROOM_MIN = 0.7;
+const ROOM_MAX = 1.3;
+const ROOM_T = 0.7;
+const ROOM_S = 0.35;
 
 /** Choose among the scored options. */
 function finish(carrier: SimPlayer, world: SimWorld, options: CarrierAction[]): { action: CarrierAction; options: number; top: string } {

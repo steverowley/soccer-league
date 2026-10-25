@@ -62,6 +62,8 @@ export interface TickContext {
   pressRank: Map<string, number>;
   /** Marking assignment per defender id: the attacker he picks up and that man's value. */
   markOf: Map<string, { id: string; v: number }>;
+  /** Rank by distance to the carrier among his outfield team-mates. */
+  supportRank: Map<string, number>;
 }
 
 /** Attackers worth less than this (positionValue) are left to the zone. */
@@ -160,7 +162,18 @@ export function buildContext(world: SimWorld): TickContext {
       if (best) { markOf.set(best.id, { id: a.id, v }); free.delete(best); }
     }
   }
-  return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank, markOf };
+  // Who offers for the carrier: his nearest team-mates, in order.  Only the
+  // first few go to him; the rest keep the shape (width and depth) so the
+  // carrier has passes at different distances, not five men at his elbow.
+  const supportRank = new Map<string, number>();
+  if (carrier) {
+    const mates = (carrier.side === 'home' ? world.home : world.away)
+      .filter((p) => !p.sentOff && p.role !== 'GK' && p !== carrier)
+      .map((p) => ({ p, d: dist(p.pos, carrier.pos) }))
+      .sort((a, b) => a.d - b.d);
+    mates.forEach((m, i) => supportRank.set(m.p.id, i));
+  }
+  return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank, markOf, supportRank };
 }
 
 // ── Job evaluation ─────────────────────────────────────────────────────────
@@ -257,7 +270,8 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   if (inPossession && ctx.carrier) {
     const c = ctx.carrier;
     const dC = dist(p.pos, c.pos);
-    if (dC < 22) push('support', 0.34 + 0.06 * (1 - dC / 22), c.id);
+    const sr = ctx.supportRank.get(p.id) ?? 99;
+    if (dC < 25 && sr < SUPPORTERS) push('support', 0.34 + 0.06 * (1 - dC / 25), c.id);
     const cProg = side === 'home' ? c.pos.x / PITCH_LENGTH : 1 - c.pos.x / PITCH_LENGTH;
     const cPress = pressureAt(c.pos, opp === 'home' ? world.home : world.away);
     if ((p.role === 'FW' || (p.role === 'MF' && p.traits.dribble > 1.05)) && cProg > 0.3 && cPress < 0.6) {
@@ -271,7 +285,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   const job = jobs[i]!;
   p.job = job;
   p.jobRef = refs[i] ?? null;
-  if (job === 'support' && ctx.carrier) p.jobOffset = supportOffset(p, world, ctx.carrier);
+  if (job === 'support' && ctx.carrier) p.jobOffset = supportOffset(p, world, ctx.carrier, ctx.supportRank.get(p.id) ?? 0);
   if (job === 'run') {
     // Hold the shoulder of the last defender (as he reads the line), ready to
     // spin in behind the moment the ball is played.
@@ -297,7 +311,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
 }
 
 /** Pick the most open support angle around the carrier. */
-function supportOffset(p: SimPlayer, world: SimWorld, c: SimPlayer): Vec2 {
+function supportOffset(p: SimPlayer, world: SimWorld, c: SimPlayer, rank: number): Vec2 {
   const opps = (p.side === 'home' ? world.away : world.home);
   const gx = attackingGoalX(p.side);
   const toGoal = normalize(sub(vec(gx, PITCH_WIDTH / 2), c.pos));
@@ -305,7 +319,9 @@ function supportOffset(p: SimPlayer, world: SimWorld, c: SimPlayer): Vec2 {
   let best = vec(0, 10);
   let bestS = -Infinity;
   for (const a of SUPPORT_ANGLES) {
-    const r = a === 0 ? 14 : 11;
+    // The nearest man offers short, the next at a middle distance, the third
+    // further off: passes of different lengths are on.
+    const r = SUPPORT_DIST[Math.min(rank, SUPPORT_DIST.length - 1)]! + (a === 0 ? 3 : 0);
     const cs = Math.cos(a);
     const sn = Math.sin(a);
     const off = scale(vec(toGoal.x * cs - toGoal.y * sn, toGoal.x * sn + toGoal.y * cs), r);
@@ -319,6 +335,12 @@ function supportOffset(p: SimPlayer, world: SimWorld, c: SimPlayer): Vec2 {
 }
 
 const SUPPORT_ANGLES = [0, 0.7, -0.7, 1.4, -1.4, 2.3, -2.3] as const;
+
+/** How many team-mates come to offer for the carrier. */
+const SUPPORTERS = 3;
+
+/** Offer distance (m) by support rank. */
+const SUPPORT_DIST = [10, 15, 21] as const;
 
 // ── Movement ───────────────────────────────────────────────────────────────
 
@@ -366,7 +388,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
     case 'mark': {
       const a = findById(world, p.jobRef);
       if (!a) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
-      const mt = markTarget(p, a, 1.2);
+      const mt = markPoint(p, a, world);
       return add(arrive(p, mt, 3, (dist(p.pos, mt) > 5 ? 1 : 0.9) * work), scale(sep, 0.5));
     }
     case 'support': {
@@ -442,6 +464,32 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
   const shift = (gd > 0 ? -5 : 5) * L * dir;
   return clampIn(vec(a.x + shift, a.y));
 }
+
+/**
+ * Where a marker stands (authored zonal marking): tight and goal-side when his
+ * man is near the ball or near goal, where a pass to him is a threat now; a
+ * few metres off and on the ball side when the man is far from play, where
+ * the job is to deny the lane and still be able to step across.  Tight
+ * man-for-man marking all over the pitch is what made every receiver a
+ * contested ball and every pass a short one.
+ */
+export function markPoint(p: SimPlayer, a: SimPlayer, world: SimWorld): Vec2 {
+  const ball = world.ball.pos;
+  const own = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+  const dBall = dist(a.pos, ball);
+  const dGoal = dist(a.pos, own);
+  const far = Math.max(0, Math.min(1, (dBall - MARK_TIGHT_BALL) / 22)) * Math.max(0, Math.min(1, (dGoal - 18) / 14));
+  const gap = 1.2 + MARK_LOOSE_GAP * far;
+  const toGoal = normalize(sub(own, a.pos));
+  const toBall = normalize(sub(ball, a.pos));
+  const dir = normalize(add(toGoal, scale(toBall, 0.8 * far)));
+  return clampIn(add(a.pos, scale(dir, gap)));
+}
+
+/** Within this distance (m) of the ball a marker is tight on his man. */
+const MARK_TIGHT_BALL = 12;
+/** Extra standoff (m) for a marker whose man is far from play. */
+const MARK_LOOSE_GAP = 4.5;
 
 /** Clamp a point inside the pitch with a 1.5 m inset. */
 export function clampIn(pt: Vec2): Vec2 {
