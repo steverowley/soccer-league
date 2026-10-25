@@ -308,7 +308,7 @@ describe('simulateSpatialMatch — favourite/underdog separation (#589)', () => 
     expect(strongGoals).toBeGreaterThan(weakGoals * 2);
     // ...but the underdog is not crushed to nothing (upsets/variance survive).
     expect(weakGoals).toBeGreaterThan(0);
-  }, 45000);
+  }, 180_000); // a 10-match batch: about 60 s on the CI runner, so leave headroom
 });
 
 describe('simulateSpatialMatch — near-miss woodwork (#588)', () => {
