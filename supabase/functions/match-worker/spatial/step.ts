@@ -28,6 +28,7 @@ import {
   attackingGoalX, defendingGoalX, otherSide,
 } from './types.ts';
 import { effectiveMaxSpeed, MAX_ACCEL, seek } from './steering.ts';
+import { updatePhases, noteRestart } from './phase.ts';
 import {
   chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom,
   type CarrierAction,
@@ -261,6 +262,7 @@ function maybeSubstitute(world: SimWorld, side: TeamSide, minute: number, events
   if (bi < 0) return;
   const fresh = bench.splice(bi, 1)[0]!;
   fresh.role = off.role;
+  fresh.subRole = off.subRole;
   fresh.homePos = off.homePos;
   fresh.pos = off.pos;
   fresh.vel = ZERO;
@@ -1380,6 +1382,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   const now = world.clockSec;
 
   if (world.phase === 'dead_ball' && world.restart) {
+    noteRestart(world);
     deadBallTick(world, dt, minute, events);
     driftTick(world, dt);
     return events;
@@ -1391,6 +1394,8 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   const ctx = buildContext(world);
   const carrier = ctx.carrier;
   const all = [...world.home, ...world.away];
+  // The phase of play each side is in, re-read from the state of the game.
+  updatePhases(world, carrier ? carrier.side : null, dt);
 
   // ── Off-ball decisions ──────────────────────────────────────────────────
   for (const p of all) {

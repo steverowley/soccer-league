@@ -16,6 +16,7 @@
 
 import type { Vec2 } from './vec2';
 import type { Rng } from './rng';
+import type { TeamTactics, SubRole, PhaseChange } from './phase';
 
 // ── Pitch geometry ────────────────────────────────────────────────────────────
 
@@ -180,6 +181,9 @@ export interface SimPlayer {
   readonly id:    string;
   readonly name:  string;
   role:  Role;
+  /** Role inside his line (CB, FB, DM, CM, WM, W, ST), from his formation
+   *  slot; a substitute inherits it with the slot. */
+  subRole: SubRole;
   readonly side:  TeamSide;
   readonly stats: SimPlayerStats;
   /** Absolute home anchor in pitch metres (formationSlot mapped per side). */
@@ -350,6 +354,8 @@ export interface EngineFlags {
   scoreClockTerm:  boolean;
   /** Body contact: running into the carrier is a charge (a foul). */
   bodyContact:     boolean;
+  /** Each manager's own game model (off = one neutral preset for both sides). */
+  gameModel:       boolean;
 }
 
 /**
@@ -399,6 +405,8 @@ export interface SimWorld {
   readonly trace: ((r: TraceRecord) => void) | null;
   /** The fixed physics timestep (s) this match runs at. */
   readonly dtSec: number;
+  /** Each side's phase of play and the manager's plan (phase.ts). */
+  readonly tactics: { readonly home: TeamTactics; readonly away: TeamTactics };
 }
 
 // ── Emergent events ───────────────────────────────────────────────────────
@@ -491,4 +499,7 @@ export interface SpatialMatchResult {
   finalScore: [number, number];
   events: SimEvent[];
   frames: PositionFrame[];
+  /** Each side's phase-of-play timeline: the phase entered, on every change
+   *  (additive and optional; frames and events are unchanged). */
+  phases?: { home: PhaseChange[]; away: PhaseChange[] };
 }
