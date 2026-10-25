@@ -58,6 +58,11 @@ import {
 /** Minimum time (s) between two touches by the same carrier. */
 const TOUCH_GAP = 0.25;
 
+/** Time (s) a receiver needs to settle the ball and look up before he can
+ *  pick a pass, plus up to a second more for poor vision (pressure takes it
+ *  away: pressed, he releases sooner and less accurately). */
+const SETTLE_BASE = 1.0;
+
 /** Seconds after striking the ball before the kicker can touch it again. */
 const KICKER_LOCK = 0.35;
 
@@ -1452,7 +1457,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     // pick a pass (quicker for players who see the game early).
     // Under pressure he releases it at once (and less accurately).
     const press = pressureAt(carrier.pos, teamOf(world, otherSide(carrier.side)));
-    const settled = now - world.ball.controlSec >= (0.9 + 1.0 * (1 - carrier.stats.vision / 100)) * (1 - press);
+    const settled = now - world.ball.controlSec >= (SETTLE_BASE + 1.0 * (1 - carrier.stats.vision / 100)) * (1 - press);
     const { action, options, top } = chooseAction(carrier, world, 'open', false, settled);
     if (world.trace) {
       trace(world, 'decide', carrier, { action: action.kind, options, u: r2(action.utility * 1000), top });

@@ -66,33 +66,31 @@ const TARGET: Record<string, readonly [number, number]> = {
 /**
  * Metrics the engine does not yet reach, the measured reason, and the
  * regression band asserted instead (it contains the target band).
- * Measured at 80 matches: saves 4.0 (SE 0.3), passes 1100 (9), tackles 65 (1.1),
- * interceptions 44 (0.9), corners 2.9 (0.2), offsides 1.1 (0.1).
+ * Measured at 80 matches: saves 4.6 (SE 0.3), tackles 49 (1.1),
+ * interceptions 38 (0.7), corners 6.3 (0.3), offsides 1.6 (0.13).
+ * Passes (975, SE 7) reached their band in the fourth calibration pass and
+ * left this list.
  */
 const KNOWN_GAPS: Record<string, { band: readonly [number, number]; cause: string }> = {
   saves: {
-    band: [3, 8],
-    cause: 'shot volume sits at the low edge (about 20) while on-target shots convert at about 45%; saves rise with shots',
-  },
-  passes: {
-    band: [700, 1250],
-    cause: 'short safe recycling in a congested middle: possessions are short and the carrier re-decides every touch',
+    band: [4, 8],
+    cause: 'on-target shots convert at about 40% (target about 33%): the deep block fills the box but chances in behind a holding line are still clear',
   },
   tackles: {
-    band: [25, 80],
-    cause: 'the same congestion: pressing and cover jobs keep two men near the ball, so committed challenges are frequent',
+    band: [25, 60],
+    cause: 'carriers still take touches into a presser before they have settled the ball, and a defender who meets a ball knocked a stride ahead of its man wins it',
   },
   interceptions: {
-    band: [15, 60],
-    cause: 'many short lanes through a crowded middle third are cut out; follows passes and congestion',
+    band: [15, 45],
+    cause: 'passes into marked men in a crowded middle third are cut out; passers judge lanes slightly pessimistically yet still play into contested ones under pressure',
   },
   corners: {
-    band: [2, 12],
-    cause: 'parries go back into the field and blocks reflect the ball out; little goes behind off a defender (a fingertip parry that kept the ball travelling raised corners but turned saves into goals)',
+    band: [5, 12],
+    cause: 'parries at full stretch and glancing headers now go behind, but blocked shots mostly rebound into the field and few clearances or crosses go out off a defender',
   },
   offsides: {
-    band: [0.4, 6],
-    cause: 'passers filter men they see offside and runners only break after the carrier has settled the ball; the back line rarely steps up',
+    band: [1, 6],
+    cause: 'the back line now holds and runners break on their read of the pass, but forwards in shape never stand beyond the line and passers still rule out men they see clearly offside',
   },
 };
 

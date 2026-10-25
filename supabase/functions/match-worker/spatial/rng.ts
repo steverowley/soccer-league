@@ -84,16 +84,6 @@ export function rngInt(rng: Rng, minInclusive: number, maxInclusive: number): nu
 }
 
 /**
- * Bernoulli trial: true with probability `p`.
- *
- * @param rng  The seeded source.
- * @param p    Probability of `true` in [0, 1].  p≤0 → never, p≥1 → always.
- */
-export function rngChance(rng: Rng, p: number): boolean {
-  return rng() < p;
-}
-
-/**
  * Uniformly pick one element of a non-empty array.
  * Returns `undefined` for an empty array so callers can guard cleanly.
  */
