@@ -340,7 +340,9 @@ export function possessionPoint(p: SimPlayer, world: SimWorld): Vec2 {
   const settled = t.phase !== 'attacking_transition' && t.phase !== 'set_piece';
   // Back line: up with the ball to the plan's settled height, never level
   // with the ball once the side is past halfway (it is the rest defence).
-  const cap = settled ? m.settledLineHeight : Math.min(m.settledLineHeight, 34);
+  // Until the side is settled (a transition, a restart) the line stays
+  // nearer home.
+  const cap = settled ? m.settledLineHeight : Math.min(m.settledLineHeight, UNSETTLED_LINE);
   let backD = Math.min(cap, Math.max(12, 0.62 * ballD + 3));
   if (ballD > 40) backD = Math.min(backD, ballD - 10);
   let d: number;
@@ -355,8 +357,14 @@ export function possessionPoint(p: SimPlayer, world: SimWorld): Vec2 {
   } else {
     // The front: strikers and wingers pin the last line; the half-space
     // players sit a few metres off it, between the lines.
-    const halfSpace = Math.abs(slot.lane - 0.5) > 0.08 && Math.abs(slot.lane - 0.5) < 0.3;
-    d = lastLineD - (halfSpace ? 5 : 1);
+    const wide = Math.abs(slot.lane - 0.5) >= 0.3;
+    // Only the strikers pin the last line.  The wide men hold the
+    // touchline a few metres off it and everyone else between the lines;
+    // against a deep line they arrive from the edge of the area rather than
+    // stand in the box, which is where crosses and cut-backs find them.
+    const pin = p.subRole === 'ST';
+    d = lastLineD - (pin ? 1 : wide ? 3 : 5);
+    if (!pin) d = Math.min(d, PITCH_LENGTH - EDGE_OF_BOX);
     d = Math.min(d, backD + 50);
     d = Math.max(d, backD + 22);
     pull = 0.1;
@@ -364,6 +372,18 @@ export function possessionPoint(p: SimPlayer, world: SimWorld): Vec2 {
   const y = slot.lane * PITCH_WIDTH + (ball.y - PITCH_WIDTH / 2) * pull;
   return vec(own + dir * Math.max(4, Math.min(PITCH_LENGTH - 4, d)), Math.max(1.5, Math.min(PITCH_WIDTH - 1.5, y)));
 }
+
+/** Back-line cap (m from own goal) in possession before the side is settled. */
+const UNSETTLED_LINE = 26;
+
+/** Formation spread (m) the back line's lanes are scaled from: a back four
+ *  across about 31 m at a 40 m block width, so the gaps between centre-back
+ *  and full-back stay closable. */
+const BACK_SPREAD = 52;
+
+/** Distance (m) from the opponent's goal at which midfielders in the front
+ *  line wait against a deep block: the edge of the area. */
+const EDGE_OF_BOX = 24;
 
 /** Back-line height (m from own goal) of each default block. */
 const BLOCK_LINE: Readonly<Record<BlockHeight, number>> = { high: 40, mid: 29, low: 19 };
@@ -394,11 +414,18 @@ export function blockPoint(p: SimPlayer, world: SimWorld): Vec2 {
   const ball = world.ball.pos;
   const ballD = fromOwnGoal(side, ball.x);
   const lineD = blockLineD(world, side);
+  // Near goal the block sits in two tight lines across the face of the box
+  // with the forwards dropping in front of them; further out the lines
+  // spread to the plan's block length.
+  const deep = ballD < 35;
   let d = lineD;
-  if (p.role === 'MF') d = lineD + (ballD < 35 ? 9 : Math.min(14, 0.45 * m.blockLength));
-  else if (p.role === 'FW') d = lineD + (ballD < 35 ? Math.min(m.blockLength, 24) : m.blockLength);
-  const centre = PITCH_WIDTH / 2 + (ball.y - PITCH_WIDTH / 2) * (p.role === 'FW' ? 0.35 : 0.5);
-  const y = centre + (p.homePos.y - PITCH_WIDTH / 2) * (m.blockWidth / 48);
+  if (p.role === 'MF') d = lineD + (deep ? 7.5 : Math.min(14, 0.45 * m.blockLength));
+  else if (p.role === 'FW') d = lineD + (deep ? Math.min(m.blockLength, 19) : m.blockLength);
+  // Across: the back line always spans the box (the far post is never left
+  // empty), the lines ahead of it squeeze harder toward the ball.
+  const back = p.role === 'DF';
+  const centre = PITCH_WIDTH / 2 + (ball.y - PITCH_WIDTH / 2) * (back ? 0.4 : p.role === 'FW' ? 0.35 : 0.5);
+  const y = centre + (p.homePos.y - PITCH_WIDTH / 2) * (m.blockWidth / (back ? BACK_SPREAD : 48));
   return vec(own + dir * Math.max(3, Math.min(PITCH_LENGTH - 3, d)), Math.max(1.5, Math.min(PITCH_WIDTH - 1.5, y)));
 }
 
@@ -425,3 +452,4 @@ export function counterpressing(world: SimWorld, side: TeamSide): number {
   if (t.hasBall || t.phase !== 'defensive_transition' || t.plan.onLoss !== 'counterpress') return 0;
   return world.clockSec - t.changeSec < t.plan.counterpressSec ? t.plan.counterpressPlayers : 0;
 }
+

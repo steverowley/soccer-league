@@ -191,6 +191,9 @@ const JOB_TEMPERATURE = 0.05;
 const RUN_LEAD = 0.5;
 const RUN_TIMING = 0.45;
 
+/** Room (m) needed between the last line and the goal line for a run in behind. */
+const RUN_ROOM = 12;
+
 /** How far beyond the line (m) a runner aims once he breaks. */
 const RUN_BREAK = 7;
 
@@ -308,7 +311,11 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     // its runners at once; in settled play they go when the carrier is up
     // the pitch and has time.  The tempo the manager asks for scales it.
     const counter = transition && plan.onRegain === 'counter';
-    const front = line === 2 && (p.role !== 'DF' || plan.fullBackRole === 'overlap');
+    // Runners are the front line's forwards (and a dribbler from midfield),
+    // and only while
+    // there is room behind the last line to run into.
+    const room = Math.abs(attackingGoalX(side) - offsideLineX(world, side)) > RUN_ROOM;
+    const front = line === 2 && room && (p.role === 'FW' || (p.role === 'MF' && p.traits.dribble > 1.05));
     if (front && !(transition && plan.onRegain === 'secure') && (counter || (cProg > 0.3 && cPress < 0.6))) {
       let u = (p.role === 'FW' ? 0.36 : 0.3) * p.traits.work * TEMPO_RUN[plan.tempo]!;
       if (counter) u = Math.max(u, 0.5 * p.traits.work);
@@ -414,7 +421,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       // from where he is, cutting his escape, rather than queue behind the first.
       if ((ctx.pressRank.get(p.id) ?? 0) > 0) {
         const pt = add(c.pos, scale(normalize(sub(p.pos, c.pos)), 2.2));
-        return dist(p.pos, pt) > 3 ? seek(p, pt) : arrive(p, pt, 2.5, 0.9);
+        return arrive(p, pt, 4, 1);
       }
       // Tighter the nearer his own goal: in the last third he stands up close.
       const deep = dist(c.pos, goal) < 30;
@@ -456,7 +463,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const tac = tacticsOf(world, p.side);
       const beaten = (ctx.attacking !== null && ctx.attacking !== p.side
         && Math.abs(world.ball.pos.x - ownGoalX) < Math.abs(p.pos.x - ownGoalX))
-        || (tac.phase === 'defensive_transition' && tac.plan.onLoss === 'recover' && d > 4);
+        || (tac.phase === 'defensive_transition' && (tac.plan.onLoss === 'recover' || p.role === 'DF') && d > 4);
       return add(arrive(p, pt, 6, (beaten ? 1 : d > 12 ? 0.85 : 0.6) * work), sep);
     }
   }

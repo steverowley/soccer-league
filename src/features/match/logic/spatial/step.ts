@@ -28,7 +28,7 @@ import {
   attackingGoalX, defendingGoalX, otherSide,
 } from './types';
 import { effectiveMaxSpeed, MAX_ACCEL, seek } from './steering';
-import { updatePhases, noteRestart } from './phase';
+import { updatePhases, noteRestart, tacticsOf } from './phase';
 import {
   chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom,
   type CarrierAction,
@@ -554,15 +554,23 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
   const gain = (danger + LUNGE_GAIN_BASE) * challengeMul;
   // Missing means the carrier is past him: the cost grows with the danger.
   const booked = d.yellowCards > 0;
-  const cost = LUNGE_FOUL_COST + (inBox ? 0.9 : 0) + (booked ? 0.1 : 0) + (lastMan ? 0.15 : 0.03) + 1.5 * danger;
+  // The last man (or nearly: one team-mate left goal-side, who may be gone
+  // by the time the foot arrives) knows the law: taking the carrier down on a clear run at
+  // goal outside the box is a red card (a man down for the rest of the
+  // match), so a miss there is priced as that, not as a free kick.
+  const dogsoRisk = !inBox && dist(carrier.pos, vec(defendingGoalX(d.side), PITCH_WIDTH / 2)) < 28 && goalSideCount(world, d, carrier) <= 1;
+  const cost = LUNGE_FOUL_COST + (inBox ? 0.9 : 0) + (booked ? 0.1 : 0) + (dogsoRisk ? LAST_MAN_RED_COST : lastMan ? 0.15 : 0.03) + 1.5 * danger;
   const u = pBall * gain - (1 - pBall) * cost;
   // The professional foul: stop a dangerous break by taking the man, at the
   // price of a free kick and probably a booking.  Only outside his own box.
   const manAt = add(carrier.pos, scale(carrier.vel, LUNGE_TIME));
   const toGoalC = sub(vec(defendingGoalX(d.side), PITCH_WIDTH / 2), carrier.pos);
   const behind = dot(toGoalC, sub(d.pos, carrier.pos)) < 0;
-  const breaking = behind && owned(world, carrier) && progressOf(carrier.pos, carrier.side) > 0.5
-    && dist(d.pos, manAt) <= reach && goalSideCount(world, d, carrier) <= 2;
+  // In his side's defensive transition (the ball just lost) the counter is
+  // stopped earlier and further out: the tactical foul in transition.
+  const inTransition = tacticsOf(world, d.side).phase === 'defensive_transition';
+  const breaking = behind && owned(world, carrier) && progressOf(carrier.pos, carrier.side) > (inTransition ? 0.38 : 0.5)
+    && dist(d.pos, manAt) <= reach && goalSideCount(world, d, carrier) <= (inTransition ? 3 : 2);
   const uFoul = breaking && !inBox
     ? (danger * 1.6 - (0.02 + TACTICAL_CARD_COST + (booked ? 0.25 : 0))) * challengeMul
     : -1;
@@ -575,6 +583,9 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
     holds: carrier.holds, pBall: r2(pBall), u: r2(u * 1000), uFoul: r2(uFoul * 1000), tactical, lastMan, inBox,
   });
 }
+
+/** Expected-goal cost of a red card for denying a goalscoring chance. */
+const LAST_MAN_RED_COST = 0.6;
 
 /** Expected-goal cost a defender puts on the booking a tactical foul brings. */
 const TACTICAL_CARD_COST = 0.03;
