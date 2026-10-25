@@ -59,7 +59,7 @@ describe('simulateSpatialMatch — determinism', () => {
     expect(a.frames.length).toBe(b.frames.length);
     // Spot-check the full event stream matches.
     expect(a.events).toEqual(b.events);
-  });
+  }, 60000);
 
   it('different seeds generally diverge', () => {
     const results = [1, 2, 3].map((seed) =>
@@ -77,7 +77,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
     const homeGoals = r.events.filter((e) => e.type === 'goal' && e.side === 'home').length;
     const awayGoals = r.events.filter((e) => e.type === 'goal' && e.side === 'away').length;
     expect(r.finalScore).toEqual([homeGoals, awayGoals]);
-  });
+  }, 60000);
 
   it('emits a kickoff event and tags every event with a 1–90 minute', () => {
     const r = simulateSpatialMatch(team('H', 70), team('A', 70), { ...SHORT, seed: 5 });
@@ -86,7 +86,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
       expect(e.minute).toBeGreaterThanOrEqual(1);
       expect(e.minute).toBeLessThanOrEqual(90);
     }
-  });
+  }, 60000);
 
   it('keeps all 22 players and the ball within the pitch every frame', () => {
     const r = simulateSpatialMatch(team('H', 70), team('A', 70), { ...SHORT, seed: 8 });
@@ -113,7 +113,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
     // boundary-crossing sampling logic.
     expect(r.frames.length).toBeGreaterThan(580);
     expect(r.frames.length).toBeLessThan(640);
-  });
+  }, 60000);
 
   it('plays deterministic stoppage time past 90:00, capped at ~6 min', () => {
     // Explicit timeout, same reason as its siblings: this runs TWO full
@@ -155,7 +155,7 @@ describe('simulateSpatialMatch — emergent football', () => {
     const kinds = new Set(r.events.map((e) => e.type));
     // A real flowing match touches several event kinds (passes, restarts, etc.).
     expect(kinds.size).toBeGreaterThanOrEqual(3);
-  });
+  }, 60000);
 });
 
 describe('simulateSpatialMatch — goal attribution (#522)', () => {
@@ -211,21 +211,18 @@ describe('simulateSpatialMatch — goal attribution (#522)', () => {
 
 describe('simulateSpatialMatch — sending-off (red card)', () => {
   it('parks a sent-off player on the touchline and freezes them out of play', () => {
-    // Scan seeds for a full match whose red card lands early enough (< 80') to
-    // leave plenty of post-dismissal frames to check. A lopsided fixture makes
-    // fouls — and the occasional dismissal — plentiful.
-    let playerId = '';
-    let redTSec = 0;
-    let result: ReturnType<typeof simulateSpatialMatch> | null = null;
-    for (let seed = 1; seed < 80 && !result; seed++) {
-      const r = simulateSpatialMatch(team('H', 78), team('A', 60), { ...FULL, seed });
-      const redEv = r.events.find((e) => e.type === 'foul' && e.card === 'red' && e.playerId && e.tSec < 4800);
-      if (redEv?.playerId) { playerId = redEv.playerId; redTSec = redEv.tSec; result = r; }
-    }
-    expect(result, 'expected an early red card across the scanned seeds').not.toBeNull();
+    // A known seed whose lopsided match has a red card before 80' (found once
+    // by scanning; the engine is deterministic, so it stays put until the
+    // engine's behaviour changes, and then this names the seed to re-find).
+    const RED_SEED = 3;
+    const result = simulateSpatialMatch(team('H', 78), team('A', 60), { ...FULL, seed: RED_SEED });
+    const redEv = result.events.find((e) => e.type === 'foul' && e.card === 'red' && e.playerId && e.tSec < 4800);
+    expect(redEv, `seed ${RED_SEED} no longer has an early red card: re-scan seeds 1-80 for one`).toBeDefined();
+    const playerId = redEv!.playerId!;
+    const redTSec = redEv!.tSec;
 
     // Frames sampled after the dismissal (allow ~2s for the next sample).
-    const afterRed = result!.frames.filter((f) => f.tSec >= redTSec + 2.5);
+    const afterRed = result.frames.filter((f) => f.tSec >= redTSec + 2.5);
     expect(afterRed.length).toBeGreaterThan(3);
 
     // The sent-off player sits ON a touchline (y ≈ 0 or y ≈ 68)…

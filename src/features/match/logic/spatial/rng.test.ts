@@ -4,7 +4,7 @@
 // downstream would break.
 
 import { describe, it, expect } from 'vitest';
-import { makeRng, rngRange, rngInt, rngChance, rngPick, rngGaussian } from './rng';
+import { makeRng, rngRange, rngInt, rngPick, rngGaussian } from './rng';
 
 describe('makeRng determinism', () => {
   it('produces identical sequences for the same seed', () => {
@@ -52,14 +52,6 @@ describe('rng helpers', () => {
     }
     // All four discrete values should appear over 500 draws.
     expect(seen).toEqual(new Set([1, 2, 3, 4]));
-  });
-
-  it('rngChance honours the extremes', () => {
-    const r = makeRng(11);
-    for (let i = 0; i < 50; i++) {
-      expect(rngChance(r, 0)).toBe(false);
-      expect(rngChance(r, 1)).toBe(true);
-    }
   });
 
   it('rngPick returns an element, undefined for empty', () => {

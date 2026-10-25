@@ -41,6 +41,30 @@ export function makeRng(seed: number): Rng {
 }
 
 /**
+ * Derive an independent 32-bit stream seed from the match seed, a player's
+ * roster index and a salt: `hash(seed, playerIndex, salt)` (research build
+ * order #1).  Each player owns a private imprecision stream, so one player's
+ * extra draw never shifts anyone else's: a change to one decision perturbs
+ * that player, not the whole match.
+ *
+ * The mixer is the murmur3 32-bit finaliser applied over the three inputs.
+ *
+ * @param seed   The match seed.
+ * @param index  The player's roster index (or any stream number).
+ * @param salt   A constant distinguishing stream families.
+ * @returns      A well-mixed unsigned 32-bit seed.
+ */
+export function streamSeed(seed: number, index: number, salt: number): number {
+  let h = (seed >>> 0) ^ Math.imul(index + 1, 0x9e3779b1) ^ Math.imul(salt + 1, 0x85ebca77);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
  * Uniform float in [min, max).
  *
  * @param rng  The seeded source.
@@ -57,16 +81,6 @@ export function rngRange(rng: Rng, min: number, max: number): number {
  */
 export function rngInt(rng: Rng, minInclusive: number, maxInclusive: number): number {
   return minInclusive + Math.floor(rng() * (maxInclusive - minInclusive + 1));
-}
-
-/**
- * Bernoulli trial: true with probability `p`.
- *
- * @param rng  The seeded source.
- * @param p    Probability of `true` in [0, 1].  p≤0 → never, p≥1 → always.
- */
-export function rngChance(rng: Rng, p: number): boolean {
-  return rng() < p;
 }
 
 /**
@@ -93,7 +107,9 @@ export function rngPick<T>(rng: Rng, arr: readonly T[]): T | undefined {
  */
 export function rngGaussian(rng: Rng, mean = 0, stddev = 1): number {
   // Mean of 3 uniforms has mean 0.5 and variance 1/36; subtract 0.5 to centre,
-  // multiply by sqrt(12) ≈ 3.464 so the result has unit variance before scaling.
+  // multiply by 6 (= sqrt(36)) so the result has unit variance before scaling.
+  // (It used to multiply by sqrt(12), giving a spread of 0.58 x stddev, so every
+  // execution error in the engine was 42% smaller than the estimates assumed.)
   const u = (rng() + rng() + rng()) / 3 - 0.5;
-  return mean + u * 3.4641016 * stddev;
+  return mean + u * 6 * stddev;
 }

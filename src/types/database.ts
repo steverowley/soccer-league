@@ -1305,6 +1305,7 @@ export type Database = {
           referee_id: string | null
           round: string | null
           scheduled_at: string | null
+          sim_seed: number | null
           sim_away_score: number | null
           sim_home_score: number | null
           simulated_at: string | null
@@ -1325,6 +1326,7 @@ export type Database = {
           referee_id?: string | null
           round?: string | null
           scheduled_at?: string | null
+          sim_seed?: number | null
           sim_away_score?: number | null
           sim_home_score?: number | null
           simulated_at?: string | null
@@ -1345,6 +1347,7 @@ export type Database = {
           referee_id?: string | null
           round?: string | null
           scheduled_at?: string | null
+          sim_seed?: number | null
           sim_away_score?: number | null
           sim_home_score?: number | null
           simulated_at?: string | null

@@ -22,13 +22,45 @@
 // so this module stays importable by the Deno worker twin, which cannot reach
 // into src/constants.ts.
 
-import type { SimPlayerStats } from './types';
+import type { SimPlayerStats, PersonalityWeights } from './types';
 import type { SpatialTeamInput } from './simulateSpatialMatch';
 
 /** The narrative traits the engine input layer currently consults. */
 export interface PlayerTraits {
   /** One of the eight personality archetypes; unknown / null values no-op. */
   personality?: string | null;
+}
+
+/** The neutral personality: every multiplier 1. */
+export const NEUTRAL_WEIGHTS: PersonalityWeights = {
+  shoot: 1, pass: 1, dribble: 1, challenge: 1, work: 1, caution: 1,
+};
+
+/**
+ * Personality as multipliers on the utility evaluator (design 4.7): the
+ * decision half of an archetype.  A selfish striker values shooting more, an
+ * aggressive defender values committing to a challenge more, a lazy player
+ * puts less into his off-ball running.  Unknown archetypes are neutral.
+ */
+const PERSONALITY_WEIGHTS: Record<string, Partial<PersonalityWeights>> = {
+  balanced:    {},
+  selfish:     { shoot: 1.3, pass: 0.88, dribble: 1.1 },
+  team_player: { pass: 1.12, shoot: 0.85 },
+  aggressive:  { challenge: 1.45, caution: 0.9 },
+  cautious:    { challenge: 0.7, caution: 1.25, shoot: 0.9 },
+  creative:    { dribble: 1.25, pass: 1.05, caution: 0.9 },
+  lazy:        { work: 0.8 },
+  workhorse:   { work: 1.2 },
+};
+
+/**
+ * Resolve an archetype into its evaluator multipliers.
+ *
+ * @param personality  The archetype string, or null/undefined.
+ */
+export function personalityWeights(personality: string | null | undefined): PersonalityWeights {
+  const w = personality ? PERSONALITY_WEIGHTS[personality] : undefined;
+  return { ...NEUTRAL_WEIGHTS, ...(w ?? {}) };
 }
 
 /**
@@ -83,10 +115,17 @@ export function applyTeamTraits(
   team: SpatialTeamInput,
   personalityById: ReadonlyMap<string, string | null | undefined>,
 ): SpatialTeamInput {
-  const nudge = (player: SpatialTeamInput['players'][number]) => ({
-    ...player,
-    stats: applyTraitModifiers(player.stats, { personality: personalityById.get(player.id) ?? null }),
-  });
+  const nudge = (player: SpatialTeamInput['players'][number]) => {
+    const personality = personalityById.get(player.id) ?? null;
+    return {
+      ...player,
+      stats: applyTraitModifiers(player.stats, { personality }),
+      // The decision half: the engine reads the archetype as multipliers on
+      // its evaluator.  Only attached when known, so an untouched roster
+      // stays value-equal.
+      ...(personality ? { personality } : {}),
+    };
+  };
   return {
     ...team,
     players: team.players.map(nudge),

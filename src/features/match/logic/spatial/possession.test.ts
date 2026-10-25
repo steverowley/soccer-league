@@ -1,17 +1,21 @@
 // ── features/match/logic/spatial/possession.test.ts ──────────────────────────
-// Unit tests for the on-ball evaluation + contest probabilities.  These encode
-// the design promise that STATS drive OUTCOMES — so we assert the monotonic
-// relationships (better finisher → likelier goal, closer shot → higher quality)
-// rather than exact magic numbers.
+// Unit tests for on-ball geometry and for the emergent engine's contact,
+// keeper and booking mechanics.  The old roll model (tackleProbability,
+// foulProbability, cardForFoul, saveProbability, penaltyGoalProbability) is
+// gone: nothing in the engine decides an outcome with a probability.  These
+// tests assert the replacements: a challenge's outcome follows from what the
+// leg meets, a save from whether the keeper's reach gets to the ball in time,
+// a booking from the laws applied to what happened.
 
 import { describe, it, expect } from 'vitest';
 import {
-  shotQuality, pressureAt, tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
-  isInPenaltyArea, penaltyGoalProbability,
+  shotQuality, pressureAt, ballPathWithinReach, isOffsidePosition, isInPenaltyArea,
 } from './possession';
+import { contactOutcome, foulSeverity, lawsBooking } from './step';
+import { beatKeeper } from './evaluate';
+import { keeperReach } from './keeper';
 import { type SimPlayer, type SimWorld, type SimPlayerStats, PITCH_WIDTH } from './types';
 import { vec } from './vec2';
-import { makeRng } from './rng';
 
 function stats(overrides: Partial<SimPlayerStats> = {}): SimPlayerStats {
   return {
@@ -61,77 +65,6 @@ describe('pressureAt', () => {
     const tight = pressureAt(pos, [player({ pos: vec(51, 34) })]); // 1m away
     expect(tight).toBeGreaterThan(none);
     expect(tight).toBeLessThanOrEqual(1);
-  });
-});
-
-describe('tackleProbability', () => {
-  it('favours the better tackler but never reaches certainty', () => {
-    const ace = player({ stats: stats({ tackling: 95 }) });
-    const poor = player({ stats: stats({ tackling: 40 }) });
-    const slippery = player({ stats: stats({ dribbling: 95 }) });
-    expect(tackleProbability(ace, slippery)).toBeGreaterThan(tackleProbability(poor, slippery));
-    expect(tackleProbability(ace, slippery)).toBeLessThanOrEqual(0.88);
-    expect(tackleProbability(poor, slippery)).toBeGreaterThanOrEqual(0.12);
-  });
-});
-
-describe('saveProbability', () => {
-  it('falls as shot quality rises, clamped to [0.10, 0.94]', () => {
-    const keeper = player({ role: 'GK', stats: stats({ goalkeeping: 80 }) });
-    const easy = saveProbability(keeper, 0.1);
-    const worldie = saveProbability(keeper, 0.95);
-    expect(easy).toBeGreaterThan(worldie);
-    expect(worldie).toBeGreaterThanOrEqual(0.10);
-    expect(easy).toBeLessThanOrEqual(0.94);
-  });
-
-  it('a better keeper saves more at equal shot quality', () => {
-    const good = player({ role: 'GK', stats: stats({ goalkeeping: 90 }) });
-    const weak = player({ role: 'GK', stats: stats({ goalkeeping: 45 }) });
-    expect(saveProbability(good, 0.5)).toBeGreaterThan(saveProbability(weak, 0.5));
-  });
-});
-
-describe('foulProbability', () => {
-  it('rises when the carrier outclasses the defender, clamped to [0.002, 0.012] per tick', () => {
-    const slickCarrier = player({ stats: stats({ dribbling: 95 }) });
-    const beatenDefender = player({ stats: stats({ tackling: 40 }) });
-    const matchedDefender = player({ stats: stats({ tackling: 95 }) });
-    const high = foulProbability(beatenDefender, slickCarrier);
-    const low = foulProbability(matchedDefender, slickCarrier);
-    expect(high).toBeGreaterThan(low);
-    // Tiny by design — it fires every 0.1s a defender is in range.
-    expect(high).toBeLessThanOrEqual(0.012);
-    expect(low).toBeGreaterThanOrEqual(0.002);
-  });
-});
-
-describe('cardForFoul', () => {
-  it('books cynical fouls near the attacked goal more than fouls deep in own half', () => {
-    // home attacks x=105: a foul on a home attacker at x=100 is advanced/cynical.
-    const rng = makeRng(42);
-    let nearGoal = 0;
-    let deep = 0;
-    for (let i = 0; i < 2000; i++) {
-      if (cardForFoul(vec(100, PITCH_WIDTH / 2), 'home', rng)) nearGoal++;
-      if (cardForFoul(vec(10, PITCH_WIDTH / 2), 'home', rng)) deep++;
-    }
-    expect(nearGoal).toBeGreaterThan(deep);
-  });
-
-  it('mostly gives no card, and reds are rarer than yellows', () => {
-    const rng = makeRng(7);
-    let none = 0;
-    let yellow = 0;
-    let red = 0;
-    for (let i = 0; i < 3000; i++) {
-      const c = cardForFoul(vec(70, PITCH_WIDTH / 2), 'home', rng);
-      if (c === null) none++;
-      else if (c === 'yellow') yellow++;
-      else red++;
-    }
-    expect(none).toBeGreaterThan(yellow + red); // most fouls are just a free kick
-    expect(yellow).toBeGreaterThan(red);        // straight reds are rare
   });
 });
 
@@ -204,20 +137,87 @@ describe('isInPenaltyArea (home attacks x=105, away attacks x=0)', () => {
   });
 });
 
-describe('penaltyGoalProbability', () => {
-  it('anchors high, and a stronger taker against the same keeper edges higher', () => {
-    const keeper = player({ stats: stats({ goalkeeping: 70 }) });
-    const weak = player({ stats: stats({ shooting: 40 }) });
-    const strong = player({ stats: stats({ shooting: 95 }) });
-    expect(penaltyGoalProbability(weak, keeper)).toBeGreaterThan(0.5);
-    expect(penaltyGoalProbability(strong, keeper)).toBeGreaterThan(penaltyGoalProbability(weak, keeper));
-  });
 
-  it('clamps to [0.55, 0.92] against a keeper and is near-certain with none', () => {
-    const upper = penaltyGoalProbability(player({ stats: stats({ shooting: 99 }) }), player({ stats: stats({ goalkeeping: 5 }) }));
-    const lower = penaltyGoalProbability(player({ stats: stats({ shooting: 5 }) }), player({ stats: stats({ goalkeeping: 99 }) }));
-    expect(upper).toBeLessThanOrEqual(0.92);
-    expect(lower).toBeGreaterThanOrEqual(0.55);
-    expect(penaltyGoalProbability(player(), undefined)).toBeGreaterThan(0.92); // empty net
+describe('contactOutcome (a challenge is decided by what the leg meets)', () => {
+  // Defender at (50,34) lunging east toward (51,34).
+  const def = vec(50, 34);
+  it('wins the ball when the foot reaches the ball first', () => {
+    const c = contactOutcome(def, vec(51, 34), vec(50.9, 34), vec(52.2, 34), true);
+    expect(c.outcome).toBe('ball');
+  });
+  it('fouls when the leg meets the man before the ball', () => {
+    // Carrier between the defender and the ball: the sweep hits him first.
+    const c = contactOutcome(def, vec(51, 34), vec(52.5, 34), vec(50.8, 34.2), true);
+    expect(c.outcome).toBe('man');
+  });
+  it('misses (the defender is beaten) when neither is within reach', () => {
+    const c = contactOutcome(def, vec(51, 34), vec(51, 37), vec(51, 38), true);
+    expect(c.outcome).toBe('miss');
+  });
+  it('cannot win an unplayable ball (in the air): the same lunge meets the man', () => {
+    const playable = contactOutcome(def, vec(51, 34), vec(50.9, 34), vec(51.2, 34.3), true);
+    const aerial = contactOutcome(def, vec(51, 34), vec(50.9, 34), vec(51.2, 34.3), false);
+    expect(playable.outcome).toBe('ball');
+    expect(aerial.outcome).toBe('man');
+  });
+  it('is pure geometry: identical inputs give identical outcomes', () => {
+    const a = contactOutcome(def, vec(51, 34.4), vec(50.9, 34.1), vec(51.3, 34.6), true);
+    const b = contactOutcome(def, vec(51, 34.4), vec(50.9, 34.1), vec(51.3, 34.6), true);
+    expect(a).toEqual(b);
+  });
+});
+
+describe('foulSeverity and lawsBooking (bookings by law, no card roll)', () => {
+  it('severity rises with closing speed, contact from behind and an unplayable ball', () => {
+    expect(foulSeverity(8, false, 0.5)).toBeGreaterThan(foulSeverity(3, false, 0.5));
+    expect(foulSeverity(5, true, 0.5)).toBeGreaterThan(foulSeverity(5, false, 0.5));
+    expect(foulSeverity(5, false, 2)).toBeGreaterThan(foulSeverity(5, false, 0.5));
+  });
+  const facts = { severity: 0.5, dogso: false, spa: false, persistent: false, inBox: false };
+  it('a careless foul is a free kick only', () => {
+    expect(lawsBooking(facts)).toBeUndefined();
+  });
+  it('stopping a promising attack or persistent infringement is a yellow', () => {
+    expect(lawsBooking({ ...facts, spa: true })).toBe('yellow');
+    expect(lawsBooking({ ...facts, persistent: true })).toBe('yellow');
+  });
+  it('a reckless foul is a yellow, serious foul play a red', () => {
+    expect(lawsBooking({ ...facts, severity: foulSeverity(9, false, 0.5) + 0.25 })).toBe('yellow');
+    expect(lawsBooking({ ...facts, severity: foulSeverity(14, true, 2) })).toBe('red');
+  });
+  it('DOGSO is a red outside the area and a yellow inside it (the penalty restores the chance)', () => {
+    expect(lawsBooking({ ...facts, dogso: true })).toBe('red');
+    expect(lawsBooking({ ...facts, dogso: true, inBox: true })).toBe('yellow');
+  });
+});
+
+describe('keeper reach decides the save (no save roll)', () => {
+  const keeper = (gk: number, y = PITCH_WIDTH / 2): SimPlayer =>
+    player({ id: 'gk', role: 'GK', side: 'away', pos: vec(103.5, y), stats: stats({ goalkeeping: gk }), dive: null });
+  const from = vec(91, PITCH_WIDTH / 2); // 14 m out, central (home attacks x=105)
+  it('a strike straight at the keeper is held', () => {
+    expect(beatKeeper(from, vec(105, PITCH_WIDTH / 2), 0.4, 26, keeper(70))).toBeLessThan(0.05);
+  });
+  it('a hard strike into the far corner beats him', () => {
+    expect(beatKeeper(from, vec(105, PITCH_WIDTH / 2 + 3.2), 0.3, 28, keeper(70))).toBeGreaterThan(0.8);
+  });
+  it('a softer strike gives him time to get there', () => {
+    const hard = beatKeeper(from, vec(105, PITCH_WIDTH / 2 + 2.2), 0.4, 28, keeper(70));
+    const soft = beatKeeper(from, vec(105, PITCH_WIDTH / 2 + 2.2), 0.4, 12, keeper(70));
+    expect(hard).toBeGreaterThan(soft);
+  });
+  it('a better keeper reaches strikes a weaker one cannot', () => {
+    const aim = vec(105, PITCH_WIDTH / 2 + 2.4);
+    expect(beatKeeper(from, aim, 0.4, 24, keeper(95))).toBeLessThan(beatKeeper(from, aim, 0.4, 24, keeper(40)));
+  });
+  it('an empty goal cannot be saved', () => {
+    expect(beatKeeper(from, vec(105, PITCH_WIDTH / 2), 0.4, 20, undefined)).toBe(1);
+  });
+  it('diving and goalkeeping both extend his reach', () => {
+    const k = keeper(70);
+    const standing = keeperReach(k, 0.5);
+    const diving = keeperReach({ ...k, dive: { at: vec(103.5, 30), z: 0.5 } } as SimPlayer, 0.5);
+    expect(diving).toBeGreaterThan(standing);
+    expect(keeperReach(keeper(95), 0.5)).toBeGreaterThan(keeperReach(keeper(40), 0.5));
   });
 });

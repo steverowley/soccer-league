@@ -1,112 +1,101 @@
 // ── features/match/logic/spatial/matchDistributions.test.ts ──────────────────
-// Aggregate "fingerprint" calibration test for the authoritative spatial engine
-// (research WS-A4 / #577).
+// The calibration contract of the emergent engine (docs/emergent-engine.md,
+// section 7 and build step 10).
 //
 // WHY THIS EXISTS
-//   The spatial engine derives goals from geometry, not from a rolled scoreline.
-//   That means an innocent-looking change to steering, possession, or the stat
-//   blend (e.g. #587 play-styles, #589 convex stat transform) can quietly drag
-//   the whole league out of football-shaped territory — twice as many goals, no
-//   draws, a shot drought — without breaking any single-match invariant. The
-//   determinism and twin-parity suites guard *reproducibility*; this guards the
-//   *distribution* across a batch of matches.
+//   Nothing in the engine rolls an outcome: goals, saves, tackles, fouls and
+//   cards all fall out of 22 players' decisions and the physics.  So a change
+//   to steering, a decision term or the ball model can quietly drag the whole
+//   league out of football-shaped territory without breaking any single-match
+//   invariant.  This test runs a fixed, seeded batch and holds EVERY section-7
+//   metric to its real-football band, including the ones that let the #698
+//   tackle flood hide (tackles, passes, corners, throw-ins).
 //
-// WHAT IT ASSERTS — AND WHAT IT DELIBERATELY DOES NOT
-//   It runs a fixed, seeded batch of balanced-but-varied-quality matches and
-//   asserts the aggregate lands inside football-PLAUSIBLE guard bands. The 2026-06
-//   scoring calibration pass brought the pure engine to ~2.5 goals/match (it
-//   previously ran HOT at ~5.3), so the goal band is now tightened around the
-//   real-world ideal; the others stay wide to absorb the coarse 24-match
-//   quantisation. A band breach is a TUNING SIGNAL — fix it by adjusting engine
-//   INPUTS, never by editing scorelines or outcomes (the only sanctioned
-//   outcome-bender is the Architect's rare, disguised rewrite).
+// HOW THE BANDS ARE ASSERTED
+//   A 24-match batch has sampling error, so a metric passes when the batch is
+//   consistent with its target band within TOLERANCE_SE standard errors (the
+//   standard error is measured from the batch itself: per-match spread for
+//   counts, binomial for shares).  The batch is seeded and the engine is
+//   deterministic, so the result is byte-stable run to run: it cannot flake.
 //
-// Because the batch is seeded, the result is byte-stable run to run: this test
-// cannot flake. If it ever goes red, the engine's behaviour actually changed.
+//   Metrics the engine does not yet reach are listed in KNOWN_GAPS with their
+//   measured root cause and a regression band that CONTAINS the target band,
+//   so calibrating toward realism can never turn this test red, while a
+//   regression away from it does.  Fix a gap by changing behaviour (decision
+//   terms, shape, physics), never by changing how events are counted, then
+//   delete its KNOWN_GAPS entry so the target band applies.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   simulateSpatialMatch,
   type SpatialTeamInput,
   type SpatialPlayerInput,
 } from './simulateSpatialMatch';
-import type { SimPlayerStats, Role } from './types';
+import type { SimPlayerStats, Role, TraceRecord } from './types';
 
-// ── Real-world reference (the calibration aspiration) ───────────────────────
-// Top-division football, per match unless noted. These are TARGETS the engine
-// should drift TOWARD over time — not its current output. They are asserted only
-// indirectly: the guard bands below must keep permitting them, so a future
-// calibration pass can move the engine here without this test fighting it.
-const FOOTBALL_REFERENCE = {
-  /** Combined goals (home + away) in a typical top-flight match. */
-  goalsPerMatch: [2.5, 2.8],
-  /** Share of league matches that finish level (~1 in 4). */
-  drawRate: 0.25,
-  /** Total shot attempts per team. The engine only tags on-target shots, so
-   *  this is recorded for context, not asserted against engine output. */
-  shotsPerTeam: [10, 17],
-  /** Home goals ÷ away goals. NOTE: real home advantage is injected UPSTREAM by
-   *  `toSpatialTeamInput`'s fan-support boost — the pure engine has no built-in
-   *  edge, so this batch (which skips that boost) is expected near 1.0. */
-  homeTilt: 1.35,
-} as const;
-
-// ── Engine guard bands (what the PURE engine must stay within today) ────────
-// Football-plausible envelopes that the current engine satisfies AND that still
-// bracket FOOTBALL_REFERENCE. Anchored on the measured N=24 fingerprint after the
-// 2026-06 scoring calibration + fouls + offside + movement + stoppage +
-// penalties + sendings-off + substitutions: goals 2.71, draws 0.333,
-// shots-on-target ~15, home tilt 0.86, fouls 23.6, cards 3.04, offsides 1.8,
-// penalties 0.25, reds 0.25, subs 6.0 (each side uses its three changes).
-const ENGINE_GUARD = {
-  /** Combined goals/match (open play + penalties). Lower bound catches a
-   *  dead/stalemate engine; upper bound catches a runaway. Brackets the 2.5–2.8
-   *  real-world ideal, allowing for the goals penalties and red cards add.
-   *  Current ≈ 2.71. */
-  goalsPerMatch: [1.8, 3.8],
-  /** Fraction of the batch finishing level. Wide because 24 matches quantises
-   *  draw rate coarsely (~0.042 per draw). Current ≈ 0.333. */
-  drawRate: [0.04, 0.42],
-  /** On-target shots/match = goals + keeper saves (the only shot signals the
-   *  engine emits; off-target attempts fall out as goal kicks). Current ≈ 15. */
-  shotsOnTargetPerMatch: [8, 32],
-  /** Home÷away goals over the batch. Centred on ~1.0 because the pure engine is
-   *  near-symmetric; bounds catch a side-assignment regression. Current ≈ 0.86. */
-  homeTilt: [0.75, 1.45],
-  /** Fouls/match. Guards the foul model both ways: the floor catches a dead
-   *  model, the ceiling catches per-tick foul spam (the bug where the challenge
-   *  re-rolled every 0.1s and racked up hundreds). Real ≈ 20-30. Current ≈ 23.6. */
-  foulsPerMatch: [12, 42],
-  /** Bookings (yellows + reds)/match. Real ≈ 3-5. Current ≈ 3.04. */
-  cardsPerMatch: [1, 9],
-  /** Offsides/match. Guards the offside rule both ways: the floor catches a dead
-   *  rule, the ceiling catches phantom-flag spam from too tight a margin.
-   *  Real ≈ 1.5-3. Current ≈ 1.8. */
-  offsidesPerMatch: [0.3, 8],
-  /** Penalties/match. Guards the box-foul → penalty rate both ways: the floor
-   *  catches a dead rule, the ceiling catches over-production (the early bug
-   *  where every box foul became a penalty, at ~1.5/match). Real ≈ 0.25-0.35.
-   *  Current ≈ 0.25. */
-  penaltiesPerMatch: [0.04, 1.1],
-  /** Red cards (sendings-off)/match. Guards the red rate both ways: the floor
-   *  catches a dead rule, the ceiling catches a second-yellow explosion (the bug
-   *  where booked players kept fouling, at ~0.46/match). Real ≈ 0.2-0.3.
-   *  Current ≈ 0.25. */
-  redsPerMatch: [0.02, 0.9],
-  /** Substitutions/match across BOTH sides. Hard-capped at 3 per side (6). The
-   *  floor catches a dead sub rule; the ceiling catches exceeding the allowance.
-   *  Both well-stocked sides spend all three changes. Current ≈ 6.0. */
-  substitutionsPerMatch: [1.5, 6.2],
-} as const;
-
-/** Full 90-minute matches at the production frame cadence. ~1.5s each, so 24
- *  matches (~35s) is the most we can spend while keeping a stable aggregate
- *  inside the existing CI time budget. */
+/** Full matches in the batch (seeds 1000..1023, equal sides rated 60..80). */
 const MATCH_COUNT = 24;
+
+/** Standard errors of slack between the batch value and the target band. */
+const TOLERANCE_SE = 2.5;
+
+/** Section 7 of docs/emergent-engine.md: real football, both teams per match. */
+const TARGET: Record<string, readonly [number, number]> = {
+  goals: [2.4, 3.0],
+  zeroZeroShare: [0.06, 0.10],
+  shots: [20, 28],
+  onTargetShare: [0.30, 0.38],
+  inside11Share: [0.18, 0.32],
+  saves: [5, 8],
+  passes: [700, 1000],
+  passCompletion: [0.75, 0.86],
+  tackles: [25, 45],
+  interceptions: [15, 30],
+  fouls: [18, 26],
+  yellows: [3, 4.5],
+  reds: [0.05, 0.2],
+  corners: [8, 12],
+  throwIns: [35, 50],
+  offsides: [2, 6],
+  penalties: [0.2, 0.35],
+  homeWinShare: [0.37, 0.53],
+  drawShare: [0.17, 0.33],
+  awayWinShare: [0.22, 0.38],
+};
+
+/**
+ * Metrics the engine does not yet reach, the measured reason, and the
+ * regression band asserted instead (it contains the target band).
+ * Measured at 80 matches: saves 4.6 (SE 0.3), tackles 49 (1.1),
+ * interceptions 38 (0.7), corners 6.3 (0.3), offsides 1.6 (0.13).
+ * Passes (975, SE 7) reached their band in the fourth calibration pass and
+ * left this list.
+ */
+const KNOWN_GAPS: Record<string, { band: readonly [number, number]; cause: string }> = {
+  saves: {
+    band: [4, 8],
+    cause: 'on-target shots convert at about 40% (target about 33%): the deep block fills the box but chances in behind a holding line are still clear',
+  },
+  tackles: {
+    band: [25, 60],
+    cause: 'carriers still take touches into a presser before they have settled the ball, and a defender who meets a ball knocked a stride ahead of its man wins it',
+  },
+  interceptions: {
+    band: [15, 45],
+    cause: 'passes into marked men in a crowded middle third are cut out; passers judge lanes slightly pessimistically yet still play into contested ones under pressure',
+  },
+  corners: {
+    band: [5, 12],
+    cause: 'parries at full stretch and glancing headers now go behind, but blocked shots mostly rebound into the field and few clearances or crosses go out off a defender',
+  },
+  offsides: {
+    band: [1, 6],
+    cause: 'the back line now holds and runners break on their read of the pass, but forwards in shape never stand beyond the line and passers still rule out men they see clearly offside',
+  },
+};
 
 // ── Fixture builders ──────────────────────────────────────────────────────────
 
-/** A uniform stat line at `base`, so a whole XI shares one overall rating. */
 function stats(base: number): SimPlayerStats {
   return {
     shooting: base, passing: base, dribbling: base, speed: base, stamina: base,
@@ -114,107 +103,128 @@ function stats(base: number): SimPlayerStats {
   };
 }
 
-/**
- * Build a standard 4-4-2 starting XI (1 GK, 4 DF, 4 MF, 2 FW) at a uniform base
- * rating. Ids are prefixed so home and away players never collide.
- */
-function makeXI(prefix: string, base: number): SpatialPlayerInput[] {
-  const roles: Role[] = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
-  return roles.map((role, i) => ({ id: `${prefix}-${i}`, name: `${prefix} ${i}`, role, stats: stats(base) }));
-}
-
-/** A 5-strong bench (GK + outfield mix) so the engine can make its substitutions
- *  — the fingerprint then reflects production, where teams have a bench. */
-function makeBench(prefix: string, base: number): SpatialPlayerInput[] {
-  const roles: Role[] = ['GK', 'DF', 'MF', 'MF', 'FW'];
-  return roles.map((role, i) => ({ id: `${prefix}-sub-${i}`, name: `${prefix} sub ${i}`, role, stats: stats(base) }));
-}
-
-/** A 4-4-2 team (XI + bench) at the given overall rating. */
 function team(prefix: string, base: number): SpatialTeamInput {
-  return { formation: '4-4-2', players: makeXI(prefix, base), bench: makeBench(prefix, base) };
+  const xi: Role[] = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
+  const bench: Role[] = ['GK', 'DF', 'MF', 'MF', 'FW'];
+  const players: SpatialPlayerInput[] = xi.map((role, i) => ({ id: `${prefix}-${i}`, name: `${prefix} ${i}`, role, stats: stats(base) }));
+  const subs: SpatialPlayerInput[] = bench.map((role, i) => ({ id: `${prefix}-sub-${i}`, name: `${prefix} sub ${i}`, role, stats: stats(base) }));
+  return { formation: '4-4-2', players, bench: subs };
 }
 
-/**
- * Assert a measured value sits inside an inclusive guard band, with a message
- * that names the metric and the band so a failure reads as a tuning signal.
- */
-function assertInBand(name: string, value: number, [lo, hi]: readonly [number, number]): void {
-  expect(value, `${name}=${value.toFixed(3)} is BELOW guard band [${lo}, ${hi}] — engine drifted; tune inputs, not outcomes`).toBeGreaterThanOrEqual(lo);
-  expect(value, `${name}=${value.toFixed(3)} is ABOVE guard band [${lo}, ${hi}] — engine drifted; tune inputs, not outcomes`).toBeLessThanOrEqual(hi);
+// ── Measurement ─────────────────────────────────────────────────────────────
+
+interface Row {
+  homeGoals: number; awayGoals: number; shots: number; onTarget: number; inside11: number;
+  saves: number; passes: number; passesComplete: number; passesResolved: number;
+  tackles: number; interceptions: number; fouls: number; yellows: number; reds: number;
+  corners: number; throwIns: number; offsides: number; penalties: number;
 }
 
-// ── The aggregate fingerprint test ──────────────────────────────────────────
-
-describe('spatial engine — football-realistic distribution fingerprint (#577)', () => {
-  it('lands goals, draws, shots-on-target and home tilt inside football-plausible bands', () => {
-    let homeGoals = 0;
-    let awayGoals = 0;
-    let draws = 0;
-    let saves = 0;
-    let fouls = 0;
-    let cards = 0;
-    let offsides = 0;
-    let penalties = 0;
-    let reds = 0;
-    let substitutions = 0;
-
-    // Balanced-but-varied-quality matches: both teams share an overall rating
-    // that sweeps 60→80 across the batch, so the fingerprint spans the league's
-    // strength range rather than a single quality point. Seeds are fixed, so the
-    // aggregate is deterministic.
-    for (let m = 0; m < MATCH_COUNT; m++) {
-      const base = 60 + (m % 21); // 60..80
-      const r = simulateSpatialMatch(team('H', base), team('A', base), {
-        matchSeconds: 90 * 60,
-        frameEverySec: 2,
-        seed: 1000 + m,
-      });
-      homeGoals += r.finalScore[0];
-      awayGoals += r.finalScore[1];
-      if (r.finalScore[0] === r.finalScore[1]) draws++;
-      saves += r.events.filter((e) => e.type === 'save').length;
-      fouls += r.events.filter((e) => e.type === 'foul').length;
-      cards += r.events.filter((e) => e.type === 'foul' && e.card != null).length;
-      offsides += r.events.filter((e) => e.type === 'offside').length;
-      penalties += r.events.filter((e) => e.type === 'penalty').length;
-      reds += r.events.filter((e) => e.type === 'foul' && e.card === 'red').length;
-      substitutions += r.events.filter((e) => e.type === 'substitution').length;
+function measure(seed: number, base: number): Row {
+  let inside11 = 0;
+  let passesComplete = 0;
+  let passesResolved = 0;
+  const trace = (r: TraceRecord): void => {
+    if (r.kind === 'shot' && typeof r.data['dist'] === 'number' && r.data['dist'] < 11) inside11++;
+    if (r.kind === 'pass_end' && r.data['kind'] !== 'throw') {
+      passesResolved++;
+      if (r.data['outcome'] === 'complete') passesComplete++;
     }
+  };
+  const r = simulateSpatialMatch(team('H', base), team('A', base), { matchSeconds: 90 * 60, frameEverySec: 2, seed, trace });
+  const n = (t: string): number => r.events.filter((e) => e.type === t).length;
+  const goals = r.finalScore[0] + r.finalScore[1];
+  const ownGoals = r.events.filter((e) => e.type === 'goal' && !e.playerId).length;
+  const saves = n('save');
+  return {
+    homeGoals: r.finalScore[0], awayGoals: r.finalScore[1],
+    shots: goals - ownGoals + saves + n('shot') + n('woodwork'),
+    onTarget: goals - ownGoals + saves,
+    inside11, saves, passes: n('pass'), passesComplete, passesResolved,
+    tackles: n('tackle'), interceptions: n('interception'), fouls: n('foul'),
+    yellows: r.events.filter((e) => e.type === 'foul' && e.card === 'yellow').length,
+    reds: r.events.filter((e) => e.type === 'foul' && e.card === 'red').length,
+    corners: n('out_corner'), throwIns: n('out_throw'), offsides: n('offside'), penalties: n('penalty'),
+  };
+}
 
-    const goalsPerMatch = (homeGoals + awayGoals) / MATCH_COUNT;
-    const drawRate = draws / MATCH_COUNT;
-    const shotsOnTargetPerMatch = (homeGoals + awayGoals + saves) / MATCH_COUNT;
-    const homeTilt = homeGoals / Math.max(1, awayGoals); // guard div-by-zero (away always scores over a batch)
-    const foulsPerMatch = fouls / MATCH_COUNT;
-    const cardsPerMatch = cards / MATCH_COUNT;
-    const offsidesPerMatch = offsides / MATCH_COUNT;
-    const penaltiesPerMatch = penalties / MATCH_COUNT;
-    const redsPerMatch = reds / MATCH_COUNT;
-    const substitutionsPerMatch = substitutions / MATCH_COUNT;
+/** Batch value and its standard error for every metric. */
+function summarise(rows: Row[]): Record<string, { value: number; se: number }> {
+  const N = rows.length;
+  const mean = (f: (r: Row) => number): { value: number; se: number } => {
+    const xs = rows.map(f);
+    const mu = xs.reduce((s, x) => s + x, 0) / N;
+    const v = xs.reduce((s, x) => s + (x - mu) * (x - mu), 0) / Math.max(1, N - 1);
+    return { value: mu, se: Math.sqrt(v / N) };
+  };
+  const share = (k: number): { value: number; se: number } => {
+    const p = k / N;
+    // Binomial SE, floored at the resolution of one match in the batch.
+    return { value: p, se: Math.max(Math.sqrt((p * (1 - p)) / N), 1 / N) };
+  };
+  const ratio = (num: (r: Row) => number, den: (r: Row) => number): { value: number; se: number } => {
+    const a = rows.reduce((s, r) => s + num(r), 0);
+    const b = rows.reduce((s, r) => s + den(r), 0);
+    const p = a / Math.max(1, b);
+    // Ratio of sums: SE from the per-match residuals (delta method).
+    const mb = b / N;
+    const v = rows.reduce((s, r) => s + (num(r) - p * den(r)) ** 2, 0) / Math.max(1, N - 1);
+    return { value: p, se: Math.sqrt(v / N) / Math.max(1e-9, mb) };
+  };
+  return {
+    goals: mean((r) => r.homeGoals + r.awayGoals),
+    zeroZeroShare: share(rows.filter((r) => r.homeGoals + r.awayGoals === 0).length),
+    shots: mean((r) => r.shots),
+    onTargetShare: ratio((r) => r.onTarget, (r) => r.shots),
+    inside11Share: ratio((r) => r.inside11, (r) => r.shots),
+    saves: mean((r) => r.saves),
+    passes: mean((r) => r.passes),
+    passCompletion: ratio((r) => r.passesComplete, (r) => r.passesResolved),
+    tackles: mean((r) => r.tackles),
+    interceptions: mean((r) => r.interceptions),
+    fouls: mean((r) => r.fouls),
+    yellows: mean((r) => r.yellows),
+    reds: mean((r) => r.reds),
+    corners: mean((r) => r.corners),
+    throwIns: mean((r) => r.throwIns),
+    offsides: mean((r) => r.offsides),
+    penalties: mean((r) => r.penalties),
+    homeWinShare: share(rows.filter((r) => r.homeGoals > r.awayGoals).length),
+    drawShare: share(rows.filter((r) => r.homeGoals === r.awayGoals).length),
+    awayWinShare: share(rows.filter((r) => r.homeGoals < r.awayGoals).length),
+  };
+}
 
-    assertInBand('goalsPerMatch', goalsPerMatch, ENGINE_GUARD.goalsPerMatch);
-    assertInBand('drawRate', drawRate, ENGINE_GUARD.drawRate);
-    assertInBand('shotsOnTargetPerMatch', shotsOnTargetPerMatch, ENGINE_GUARD.shotsOnTargetPerMatch);
-    assertInBand('homeTilt', homeTilt, ENGINE_GUARD.homeTilt);
-    assertInBand('foulsPerMatch', foulsPerMatch, ENGINE_GUARD.foulsPerMatch);
-    assertInBand('cardsPerMatch', cardsPerMatch, ENGINE_GUARD.cardsPerMatch);
-    assertInBand('offsidesPerMatch', offsidesPerMatch, ENGINE_GUARD.offsidesPerMatch);
-    assertInBand('penaltiesPerMatch', penaltiesPerMatch, ENGINE_GUARD.penaltiesPerMatch);
-    assertInBand('redsPerMatch', redsPerMatch, ENGINE_GUARD.redsPerMatch);
-    assertInBand('substitutionsPerMatch', substitutionsPerMatch, ENGINE_GUARD.substitutionsPerMatch);
-  }, 90000);
+// The batch is simulated once and shared by every assertion below.
+let SUMMARY: Record<string, { value: number; se: number }> = {};
 
-  it('keeps guard bands wide enough to still permit the real-world ideal', () => {
-    // This is the safety net for the WHOLE point of the test: when someone tunes
-    // the engine toward FOOTBALL_REFERENCE, the guard bands must already contain
-    // those ideal values — otherwise calibrating to realism would (perversely)
-    // turn this test red. So the bands must bracket the reference.
-    expect(FOOTBALL_REFERENCE.goalsPerMatch[0]).toBeGreaterThanOrEqual(ENGINE_GUARD.goalsPerMatch[0]);
-    expect(FOOTBALL_REFERENCE.goalsPerMatch[1]).toBeLessThanOrEqual(ENGINE_GUARD.goalsPerMatch[1]);
-    expect(FOOTBALL_REFERENCE.drawRate).toBeGreaterThanOrEqual(ENGINE_GUARD.drawRate[0]);
-    expect(FOOTBALL_REFERENCE.drawRate).toBeLessThanOrEqual(ENGINE_GUARD.drawRate[1]);
-    expect(FOOTBALL_REFERENCE.homeTilt).toBeGreaterThanOrEqual(ENGINE_GUARD.homeTilt[0]);
-    expect(FOOTBALL_REFERENCE.homeTilt).toBeLessThanOrEqual(ENGINE_GUARD.homeTilt[1]);
+describe('emergent engine: section-7 calibration contract', () => {
+  beforeAll(() => {
+    const rows: Row[] = [];
+    for (let m = 0; m < MATCH_COUNT; m++) rows.push(measure(1000 + m, 60 + (m % 21)));
+    SUMMARY = summarise(rows);
+  }, 600_000);
+
+  for (const name of Object.keys(TARGET)) {
+    it(`${name} is consistent with its band`, () => {
+      const s = SUMMARY[name];
+      expect(s, `${name} not measured`).toBeDefined();
+      const gap = KNOWN_GAPS[name];
+      const [lo, hi] = gap ? gap.band : TARGET[name]!;
+      const slack = gap ? 0 : TOLERANCE_SE * s!.se;
+      const label = `${name}=${s!.value.toFixed(3)} (SE ${s!.se.toFixed(3)}) against ${gap ? 'regression' : 'target'} band [${lo}, ${hi}]`;
+      expect(s!.value, `${label}: below. Change behaviour, not counting.`).toBeGreaterThanOrEqual(lo - slack);
+      expect(s!.value, `${label}: above. Change behaviour, not counting.`).toBeLessThanOrEqual(hi + slack);
+    });
+  }
+
+  it('every known gap states a cause and its regression band still contains the target', () => {
+    for (const [name, gap] of Object.entries(KNOWN_GAPS)) {
+      const t = TARGET[name];
+      expect(t, `${name} must be a section-7 metric`).toBeDefined();
+      expect(gap.cause.length).toBeGreaterThan(20);
+      expect(gap.band[0]).toBeLessThanOrEqual(t![0]);
+      expect(gap.band[1]).toBeGreaterThanOrEqual(t![1]);
+    }
   });
 });

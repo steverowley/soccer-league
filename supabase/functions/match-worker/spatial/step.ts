@@ -1,317 +1,1362 @@
 // ── features/match/logic/spatial/step.ts ─────────────────────────────────────
-// One physics tick of the spatial match: assign each player a role for this
-// instant, steer them, integrate motion, move the ball, and DERIVE events from
-// the geometry (a goal because the ball crossed the line — never a roll).
-//
-// step() mutates the world in place and returns the events that emerged this
-// tick.  It's deterministic given the same world + rng, which is the whole
-// point: same seed ⇒ same match.
+// One physics tick of the emergent match (engine v2, docs/emergent-engine.md).
 //
 // PER-TICK SHAPE
-//   1. Role assignment   — who chases, who presses, who holds shape.
-//   2. Desired velocities — steering blend per player.
-//   3. Integrate players  — accelerate toward desire, move, drain stamina.
-//   4. Ball update        — glued to carrier + decisions, OR loose physics.
-//   5. Event resolution   — goals / saves / out-of-play / tackles / collection.
+//   1. Restart set-up, if the ball is dead (players take position, the taker
+//      plays it through the normal decision and kick model).
+//   2. Perception: predict the ball's path; who can reach it first.
+//   3. Decisions: off-ball jobs (at each player's think cadence), the carrier's
+//      action when the ball is at his feet, a defender's choice to commit to a
+//      challenge, a keeper's dive once he has read a shot.
+//   4. Movement: steer and integrate every body.
+//   5. Ball physics: integrate the 2.5D ball, then judge what it met first on
+//      this tick's path: a post, a line, a keeper's hand, a defender's body, a
+//      receiver's foot.  Events are emitted when the thing physically happens.
+//
+// NO OUTCOME ROLLS.  The only randomness is execution and perception error
+// (execution.ts) and the softmax choice among near-best options
+// (possession.softPick).  A tackle, a save, a foul, an interception and a goal
+// are all decided by where bodies and the ball are, and when.
 
 import {
-  type Vec2, vec, add, sub, scale, len, dist, dist2, truncate, normalize, ZERO,
+  type Vec2, vec, add, sub, scale, len, dist, dot, normalize, truncate, ZERO,
 } from './vec2.ts';
-import { type Rng } from './rng.ts';
 import {
-  type SimPlayer, type SimWorld, type SimEvent, type TeamSide,
-  PITCH_LENGTH, PITCH_WIDTH, GOAL_Y_MIN, GOAL_Y_MAX, CENTRE_SPOT,
-  attackingGoalX, defendingGoalX,
+  type SimPlayer, type SimWorld, type SimEvent, type TeamSide, type KickInfo, type KickKind,
+  type RestartKind,
+  PITCH_LENGTH, PITCH_WIDTH, GOAL_Y_MIN, GOAL_Y_MAX, GOAL_HEIGHT, CENTRE_SPOT,
+  attackingGoalX, defendingGoalX, otherSide,
 } from './types.ts';
+import { effectiveMaxSpeed, MAX_ACCEL, seek } from './steering.ts';
 import {
-  effectiveMaxSpeed, seek, arrive, pursueBall, separation,
-} from './steering.ts';
-import {
-  chooseAction, passKick, shotKick, shotQuality,
-  tackleProbability, foulProbability, cardForFoul, saveProbability, ballPathWithinReach, isOffsidePosition,
-  isInPenaltyArea, penaltyGoalProbability, kickToward,
+  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom,
+  type CarrierAction,
 } from './possession.ts';
-import { dynamicAnchor } from './formation.ts';
+import {
+  positionValue, pressureAt, sigmoid, estimateShot, beatKeeper, segmentDistance, progressOf, timeToReach, DIVE_ACCEL, shotWindup,
+  BLOCK_REACH_BODY, BLOCK_REACH_THROWN, BLOCKER_RANGE,
+} from './evaluate.ts';
+import {
+  errorScale, strike, firstTouch, reactionDelay, perceive, slip, KICK_ERROR,
+} from './execution.ts';
+import {
+  stepBall, airTravelTime, verticalLaunchSpeed, ROLL_DECEL, DRAG_K, predictPath, GRAVITY,
+} from './ball.ts';
+import {
+  buildContext, thinkJob, jobVelocity, type TickContext, FOOT_REACH, HEAD_Z, findById,
+  PATH_SAMPLES, PATH_STRIDE,
+} from './offball.ts';
+import {
+  keeperVelocity, readShot, diveVelocity, keeperReach, KEEPER_TOP, catchSpeed, inOwnBox, diveSpeed,
+} from './keeper.ts';
+import {
+  beginRestart, restartVelocity, penaltySpot, goalKickSpot, cornerSpot,
+} from './setpiece.ts';
 
-// ── Tunable physics constants ─────────────────────────────────────────────────
+// ── Tunable constants ─────────────────────────────────────────────────────────
 
-/** Max player acceleration in m/s².  Caps how fast velocity can change — gives
- *  mass/inertia so dots ease into motion rather than teleporting. */
-const MAX_ACCEL = 9;
+/** Minimum time (s) between two touches by the same carrier. */
+const TOUCH_GAP = 0.25;
 
-/** Loose-ball rolling deceleration in m/s².  Brings a struck ball to rest over
- *  a realistic distance (a 24 m/s pass dies after ~25m). */
-const BALL_DECEL = 11;
+/** Time (s) a receiver needs to settle the ball and look up before he can
+ *  pick a pass, plus up to a second more for poor vision (pressure takes it
+ *  away: pressed, he releases sooner and less accurately). */
+const SETTLE_BASE = 1.0;
 
-/** Radius (m) within which a player collects a loose ball on its path. */
-const CONTROL_RADIUS = 1.4;
+/** Seconds after striking the ball before the kicker can touch it again. */
+const KICKER_LOCK = 0.35;
 
-/** Radius (m) within which a defender may attempt a tackle on the carrier. */
-const TACKLE_RADIUS = 1.7;
+/** Seconds a committed lunge takes to reach its point. */
+const LUNGE_TIME = 0.35;
 
-/** Seconds a carrier holds the ball between decisions (shoot/pass/dribble). */
-const DECISION_INTERVAL_SEC = 0.45;
+/** Leg reach (m) at the end of a lunge. */
+const LEG_REACH = 0.95;
 
-/** How far ahead of the carrier the ball sits while dribbling (m). */
-const DRIBBLE_LEAD = 1.3;
+/** Contact radii (m): foot on ball, foot on the man. */
+const BALL_CONTACT = 0.5;
+const MAN_CONTACT = 0.8;
 
-/** How far toward goal a dribbler aims each carry (m). */
-const DRIBBLE_REACH = 9;
+/** Ball speed (m/s) above which a body in the way deflects rather than controls. */
+const BLOCK_SPEED = 17;
 
-/** Distance (m) from own goal within which the keeper rushes a loose ball. */
-const KEEPER_RUSH_DIST = 15;
+/** Foul severity thresholds for a yellow and a straight red. */
+const YELLOW_SEVERITY = 1.2;
+const RED_SEVERITY = 2.1;
 
-/** Seconds of dead-ball pause after a goal (celebration / reset breather). */
-const GOAL_PAUSE_SEC = 1.5;
+/** Lunge appetite: base gain and base cost (expected-goal units). */
+const LUNGE_GAIN_BASE = 0.01;
+const LUNGE_FOUL_COST = 0.02;
 
-/** Slow-down radius (m) used by arrive() for holding formation anchors. */
-const ANCHOR_SLOW_RADIUS = 6;
+/** Ball radius plus post radius (m), for woodwork. */
+const FRAME_HIT = 0.17;
 
-/** Teammate personal-space radius (m) for separation. */
-const SEPARATION_RADIUS = 4.5;
-
-/** Cooldown ticks applied to a freshly-loose ball so the kicker can't instantly
- *  re-collect their own pass/shot. */
-const LOOSE_POP_COOLDOWN_TICKS = 3;
-
-// ── Corner delivery (#698) ───────────────────────────────────────────────────
-// A corner is modelled as a cross into the area rather than as a ball left at
-// rest on the byline. At rest 0.5m from the goal line, the next contest simply
-// knocked it back over for another corner: 214 per match, median gap 0.4s.
-
-/** Depth (m) from the goal line the delivery is aimed at: the six-yard area. */
-const CORNER_DELIVERY_DEPTH = 6;
-
-/** Delivery pace (m/s). Brisk enough to clear the byline scramble entirely. */
-const CORNER_DELIVERY_SPEED = 17;
-
-/** Lateral error (m std) on the cross, so deliveries are not identical. */
-const CORNER_DELIVERY_ERR = 4;
-
-/** How close to a post (m) a shot must cross the line to count as hitting the
- *  woodwork — a near-miss highlight beat.  Purely a label on a shot that was
- *  already going out; the restart (corner / goal kick) is unchanged. */
-const WOODWORK_MARGIN = 1.3;
-
-/** Share of fouls committed inside the box that are given as a penalty.  Most
- *  box contact is waved away or advantage is played; only clear fouls are given,
- *  the rest become a quick free kick (as before).  Tuned so penalties land at a
- *  realistic ~0.25-0.3/match given how much play this engine funnels into the
- *  box.  Drawn only on box fouls, so open-play scoring is left undisturbed. */
-const PENALTY_AWARD_RATE = 0.13;
-
-/** Multiplier on the foul chance of a player who is ALREADY on a yellow card.
- *  A booked player jockeys rather than dives in (a second yellow means a red), so
- *  they foul far less — which keeps second-yellow dismissals realistic. */
-const BOOKED_FOUL_FACTOR = 0.45;
-
-/** Earliest match-clock second a tactical substitution is considered (≈ 55'). */
+/** Earliest match-clock second a tactical substitution is considered (55'). */
 const SUB_MIN_SEC = 55 * 60;
 
-/** Spacing (s) between a side's changes so all three don't fire at once (≈ 9'),
- *  giving a realistic ~55' / 64' / 73' cadence. */
+/** Spacing (s) between a side's changes (about 9'). */
 const SUB_SPACING_SEC = 9 * 60;
 
-/** A tiring starter is replaced once their stamina drops below this. Tuned so a
- *  side makes ~2-3 changes over a full match. */
+/** A tiring starter is replaced once their stamina drops below this. */
 const SUB_STAMINA_THRESHOLD = 0.55;
 
-/** How strongly a play-style's press+tackle deltas scale tackle commitment.
- *  With the summed deltas in ±0.30, K=2 spans ≈ ×0.80 (Counter) … ×1.60 (High
- *  Pressing) — visible differences in tackles won and where the ball is won. */
-const STYLE_PRESS_K = 2;
+/** Confidence drift time constant (s) back toward the player's baseline. */
+const CONFIDENCE_TAU = 600;
+
+/** Momentum smoothing time constant (s). */
+const MOMENTUM_TAU = 150;
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
-/** Outfield players (everyone but the keeper) of a side, sent-off players excluded. */
-function outfield(players: readonly SimPlayer[]): SimPlayer[] {
-  return players.filter((p) => p.role !== 'GK' && !p.sentOff);
+function emit(events: SimEvent[], world: SimWorld, minute: number, e: Omit<SimEvent, 'tSec' | 'minute'>): void {
+  events.push({ tSec: world.clockSec, minute, ...e });
 }
 
-/** The keeper of a side, or undefined if (defensively) none is flagged GK. */
-function keeperOf(players: readonly SimPlayer[]): SimPlayer | undefined {
-  return players.find((p) => p.role === 'GK');
+function trace(world: SimWorld, kind: string, p: SimPlayer | null, data: Record<string, number | string | boolean | null>): void {
+  if (!world.trace) return;
+  const b = world.ball;
+  world.trace({
+    tSec: Math.round(world.clockSec * 10) / 10,
+    kind,
+    ...(p ? { playerId: p.id, side: p.side } : {}),
+    ball: { x: r2(b.pos.x), y: r2(b.pos.y), z: r2(b.z) },
+    data,
+  });
 }
 
-/** Nearest player in `list` to a point, with its distance.  null for empty list. */
-function nearestTo(list: readonly SimPlayer[], p: Vec2): { player: SimPlayer; d: number } | null {
-  let best: SimPlayer | null = null;
-  let bestD2 = Infinity;
-  for (const pl of list) {
-    const d2 = dist2(pl.pos, p);
-    if (d2 < bestD2) { bestD2 = d2; best = pl; }
+/**
+ * For traces only: the opponent outfielder nearest the realised line of a
+ * shot at the strike (distance off the line, distance from the ball, and
+ * whether he had thrown himself into the lane).
+ */
+function laneTrace(world: SimWorld, shooter: SimPlayer, vel: Vec2): Record<string, number> {
+  const from = world.ball.pos;
+  const to = add(from, scale(vel, 1.2));
+  let best = 99, bestFrom = 99, bestBlk = 0;
+  for (const o of teamOf(world, otherSide(shooter.side))) {
+    if (o.sentOff || o.role === 'GK') continue;
+    const sd = segmentDistance(o.pos, from, to);
+    if (sd.t <= 0 || sd.t >= 0.98) continue;
+    if (sd.d < best) { best = sd.d; bestFrom = dist(o.pos, from); bestBlk = world.clockSec < o.blockUntil ? 1 : 0; }
   }
-  return best ? { player: best, d: Math.sqrt(bestD2) } : null;
+  return { laneD: r2(best), laneFrom: r2(bestFrom), laneBlk: bestBlk };
 }
 
-/** Where the keeper should sit: just off its own line, tracking the ball's y. */
-function keeperHold(keeper: SimPlayer, ballPos: Vec2): Vec2 {
-  const goalX = defendingGoalX(keeper.side);
-  const offset = goalX === 0 ? 3 : -3; // stand 3m in front of the line
-  const y = Math.max(GOAL_Y_MIN - 2, Math.min(GOAL_Y_MAX + 2, ballPos.y));
-  return vec(goalX + offset, y);
+/** Where a ball struck with horizontal velocity `vel` meets the goal line at `gx`. */
+function realisedAim(from: Vec2, vel: Vec2, gx: number): Vec2 {
+  const t = Math.abs(vel.x) > 1e-6 ? (gx - from.x) / vel.x : 0;
+  return vec(gx, from.y + vel.y * Math.max(0, t));
+}
+
+function r2(x: number): number {
+  return Math.round(x * 100) / 100;
+}
+
+function teamOf(world: SimWorld, side: TeamSide): SimPlayer[] {
+  return side === 'home' ? world.home : world.away;
+}
+
+function keeperOf(world: SimWorld, side: TeamSide): SimPlayer | undefined {
+  return teamOf(world, side).find((p) => p.role === 'GK' && !p.sentOff);
+}
+
+function isShotKind(k: KickKind): boolean {
+  return k === 'shot' || k === 'penalty';
+}
+
+function isPassKind(k: KickKind): boolean {
+  return k === 'pass' || k === 'through' || k === 'cross' || k === 'long' || k === 'throw';
+}
+
+/** Confidence baseline, the same for both sides.  Home advantage does NOT go
+ *  through confidence (a home confidence offset measurably cost the home side
+ *  goals, because confidence also lowers loss aversion); it works through
+ *  composure and alertness in execution.ts (HOME_COMPOSURE, HOME_ALERTNESS). */
+function confidenceBase(_p: SimPlayer): number {
+  return 0.5;
+}
+
+function bump(world: SimWorld, p: SimPlayer | null | undefined, d: number): void {
+  if (!p || !world.flags.confidence) return;
+  p.confidence = Math.max(0, Math.min(1, p.confidence + d));
+}
+
+function shotImpulse(world: SimWorld, side: TeamSide, k: number): void {
+  if (!world.flags.momentum) return;
+  const s = side === 'home' ? 1 : -1;
+  world.momentum[0] = Math.max(-1, Math.min(1, world.momentum[0] + s * k));
+  world.momentum[1] = -world.momentum[0];
+}
+
+/** Everyone re-reads the game after the ball's path changes (reaction delay). */
+function newBallPath(world: SimWorld, except: SimPlayer | null): void {
+  const now = world.clockSec;
+  for (const p of world.home) if (p !== except && !p.sentOff) p.reactUntil = now + reactionDelay(p, world);
+  for (const p of world.away) if (p !== except && !p.sentOff) p.reactUntil = now + reactionDelay(p, world);
+}
+
+/** Record that `p` touched the ball now. */
+function touched(world: SimWorld, p: SimPlayer): void {
+  const b = world.ball;
+  b.lastTouchId = p.id;
+  b.lastTouchSide = p.side;
+  b.lastTouchSec = world.clockSec;
 }
 
 // ── Player integration ──────────────────────────────────────────────────────
 
 /**
- * Move one player toward a desired velocity, respecting acceleration + top
+ * Move one player toward a desired velocity, respecting acceleration and top
  * speed, then integrate position and drain/recover stamina.  Mutates `p`.
- *
- * @param p        The player.
- * @param desired  Desired velocity from the steering blend (m/s).
- * @param dt       Timestep (s).
  */
-function integratePlayer(p: SimPlayer, desired: Vec2, dt: number): void {
-  // Accelerate toward the desired velocity, capped by MAX_ACCEL·dt.
-  const deltaV = truncate(sub(desired, p.vel), MAX_ACCEL * dt);
-  p.vel = truncate(add(p.vel, deltaV), effectiveMaxSpeed(p));
+function integratePlayer(p: SimPlayer, desired: Vec2, dt: number, accel = MAX_ACCEL, cap = effectiveMaxSpeed(p)): void {
+  const deltaV = truncate(sub(desired, p.vel), accel * dt);
+  p.vel = truncate(add(p.vel, deltaV), cap);
   p.pos = add(p.pos, scale(p.vel, dt));
-
-  // Keep on the pitch (touchline/goal-line are hard walls for bodies).
-  p.pos = vec(
-    Math.max(0, Math.min(PITCH_LENGTH, p.pos.x)),
-    Math.max(0, Math.min(PITCH_WIDTH, p.pos.y)),
-  );
-
-  // Stamina: drains with the square of speed fraction (sprinting costs most),
-  // recovers gently when nearly stationary.  Clamped to [0.2, 1].
+  p.pos = vec(Math.max(0, Math.min(PITCH_LENGTH, p.pos.x)), Math.max(0, Math.min(PITCH_WIDTH, p.pos.y)));
+  // Stamina drains with the square of speed fraction (sprinting costs most),
+  // faster for players with less engine, and recovers gently at walking pace.
   const speedFrac = len(p.vel) / Math.max(1, p.maxSpeed);
   if (speedFrac > 0.3) {
-    p.stamina -= speedFrac * speedFrac * 0.0016 * dt * 60; // ~tuned for 90 min
+    p.stamina -= speedFrac * speedFrac * 0.0016 * dt * 60 * (1.2 - 0.4 * (p.stats.stamina / 100));
   } else {
     p.stamina += 0.0006 * dt * 60;
   }
   p.stamina = Math.max(0.2, Math.min(1, p.stamina));
 }
 
-// ── Restarts ──────────────────────────────────────────────────────────────────
+// ── Sendings-off and substitutions ──────────────────────────────────────────
 
-/** Reset both teams to their formation home positions (used after a goal).
- *  Sent-off players are left parked off the pitch — they don't re-join. */
-function resetToFormation(world: SimWorld): void {
-  for (const p of [...world.home, ...world.away]) {
-    if (p.sentOff) continue;
-    p.pos = p.homePos;
-    p.vel = ZERO;
-  }
-}
-
-/**
- * Give the ball to a side at a restart spot.  Picks the nearest player of that
- * side to the spot as the receiver and glues the ball to them.
- */
-function awardBall(world: SimWorld, side: TeamSide, spot: Vec2): void {
-  const list = side === 'home' ? world.home : world.away;
-  const receiver = nearestTo(list, spot)?.player ?? list[0];
-  world.ball.pos = spot;
-  world.ball.vel = ZERO;
-  world.ball.ownerId = receiver ? receiver.id : null;
-  world.ball.heldSec = 0;
-  world.ball.loosePopCooldown = 0;
-  world.ball.lastTouch = null;
-  world.ball.offsideFor = null;
-}
-
-/** Full kickoff reset after a goal: shape reset + ball to centre for conceder. */
-function kickoffReset(world: SimWorld, concedingSide: TeamSide): void {
-  resetToFormation(world);
-  awardBall(world, concedingSide, CENTRE_SPOT);
-}
-
-/**
- * Send a player off (a red card, or a second yellow).  They're parked on the
- * nearest touchline and flagged `sentOff`, which excludes them from role
- * assignment, integration, challenges and ball collection — so their team
- * finishes the match a man down.  They stay in the roster (and in replay frames)
- * so the viewer simply renders them off the field of play.  Mutates `player`.
- */
+/** Send a player off: parked on the nearest touchline, out of play for good. */
 function sendOff(player: SimPlayer): void {
   player.sentOff = true;
   player.vel = ZERO;
+  player.lunge = null;
   player.pos = vec(player.pos.x, player.pos.y < PITCH_WIDTH / 2 ? 0 : PITCH_WIDTH);
 }
 
 /**
- * Consider a tactical substitution for one side.  After the hour mark (and with
- * the three changes spaced out), the most tired outfield starter — never the
- * keeper, the ball-carrier or an already sent-off player — is replaced by a
- * fresh bench player who inherits their formation slot and comes on with full
- * stamina.  The outgoing player simply leaves the pitch (and the replay frames);
- * the team stays eleven strong.  Deterministic (no rng), so it's twin-identical.
- * Mutates the world and emits a `substitution` event when a change is made.
- *
- * @param world   The match world.
- * @param side    Which side to consider subbing.
- * @param minute  Current match minute (for the emitted event).
- * @param events  The tick's event sink.
+ * Consider a tactical substitution for one side: after the hour mark (changes
+ * spaced out), the most tired outfield starter (never the keeper or the
+ * carrier) is replaced by a fresh bench player who inherits his slot.
+ * Deterministic (no randomness).
  */
 function maybeSubstitute(world: SimWorld, side: TeamSide, minute: number, events: SimEvent[]): void {
   const subsLeft = side === 'home' ? world.homeSubsLeft : world.awaySubsLeft;
   const bench = side === 'home' ? world.homeBench : world.awayBench;
   if (subsLeft <= 0 || bench.length === 0) return;
-  // Space the changes: the Nth change waits until ≈ 55' + N·spacing (the 3 is
-  // the standard change allowance the world is seeded with).
   const made = 3 - subsLeft;
   if (world.clockSec < SUB_MIN_SEC + made * SUB_SPACING_SEC) return;
-
-  const team = side === 'home' ? world.home : world.away;
+  const team = teamOf(world, side);
   let off: SimPlayer | null = null;
   for (const p of team) {
-    if (p.role === 'GK' || p.sentOff || p.id === world.ball.ownerId) continue;
+    if (p.role === 'GK' || p.sentOff || p.id === world.ball.ownerId || p.lunge) continue;
     if (!off || p.stamina < off.stamina) off = p;
   }
   if (!off || off.stamina > SUB_STAMINA_THRESHOLD) return;
-
-  // Prefer a like-for-like bench player; fall back to whoever's available.
   let bi = bench.findIndex((b) => b.role === off!.role);
-  if (bi < 0) bi = 0;
+  // No like-for-like replacement left: any outfield substitute, never the
+  // reserve keeper (he used to come on up front once the bench ran out of
+  // the right role, because the fallback took whoever was listed first).
+  if (bi < 0) bi = bench.findIndex((b) => b.role !== 'GK');
+  if (bi < 0) return;
   const fresh = bench.splice(bi, 1)[0]!;
-  // The sub inherits the outgoing player's slot (role + home anchor) and comes
-  // on where they left, with a full tank.
-  const on: SimPlayer = {
-    ...fresh, role: off.role, homePos: off.homePos, pos: off.pos,
-    vel: ZERO, stamina: 1, yellowCards: 0, sentOff: false,
-  };
-  team[team.indexOf(off)] = on;
+  fresh.role = off.role;
+  fresh.homePos = off.homePos;
+  fresh.pos = off.pos;
+  fresh.vel = ZERO;
+  fresh.stamina = 1;
+  fresh.job = 'shape';
+  fresh.nextThinkSec = world.clockSec;
+  team[team.indexOf(off)] = fresh;
   if (side === 'home') world.homeSubsLeft -= 1; else world.awaySubsLeft -= 1;
-  events.push({ tSec: world.clockSec, minute, type: 'substitution', side, playerId: on.id, otherId: off.id });
+  emit(events, world, minute, { type: 'substitution', side, playerId: fresh.id, otherId: off.id });
+}
+
+// ── Kicking ─────────────────────────────────────────────────────────────────
+
+/** Awkwardness of striking in `dir` while running with velocity `vel`, in [0,1]. */
+function awkwardness(vel: Vec2, dir: Vec2): number {
+  const sp = len(vel);
+  if (sp < 1.5) return 0;
+  const c = dot(normalize(vel), dir);
+  return Math.max(0, (1 - c) / 2) * Math.min(1, sp / 6);
+}
+
+/** Set the ball off on a deliberate strike. */
+function launch(world: SimWorld, p: SimPlayer, kind: KickKind, vel: Vec2, vz: number, aim: Vec2, targetId: string | null): void {
+  const b = world.ball;
+  b.vel = vel;
+  b.vz = vz;
+  if (vz > 0 && b.z <= 0) b.z = 0.01;
+  b.ownerId = null;
+  touched(world, p);
+  const info: KickInfo = { kind, side: p.side, playerId: p.id, from: b.pos, tSec: world.clockSec, targetId, aim, resolved: false, woodwork: false };
+  b.kick = info;
+  p.noTouchUntil = world.clockSec + KICKER_LOCK;
+  p.holds = 0;
+  newBallPath(world, p);
 }
 
 /**
- * Resolve a penalty kick awarded for a foul in the box: the fouled side's taker
- * against the defending keeper.  Emits a `penalty` award beat, then resolves on a
- * single rng draw weighted by taker-vs-keeper quality:
- *   - GOAL → credit the side, then the normal post-goal reset + dead-ball pause
- *     (identical to an open-play goal, so the restart looks the same).
- *   - SAVE → the keeper gathers and play restarts with the defending side.
- * Mutates the world in place.
+ * Carry out the carrier's chosen action through the kick model.
  *
- * @param world  The match world.
- * @param taker  The fouled attacker, who takes the kick.
- * @param minute The current match minute (for the emitted events).
- * @param rng    Seeded source (exactly one draw — keeps the twin streams aligned).
- * @param events The tick's event sink.
+ * @param restart  The restart being taken, if any (offside does not apply from
+ *                 throw-ins, corners and goal kicks; the kick kind is labelled).
  */
-function resolvePenalty(world: SimWorld, taker: SimPlayer, minute: number, rng: Rng, events: SimEvent[]): void {
-  const attackingSide = taker.side;
-  const defendingSide: TeamSide = attackingSide === 'home' ? 'away' : 'home';
-  const keeper = keeperOf(defendingSide === 'home' ? world.home : world.away);
-  events.push({ tSec: world.clockSec, minute, type: 'penalty', side: attackingSide, playerId: taker.id });
-
-  if (rng() < penaltyGoalProbability(taker, keeper)) {
-    if (attackingSide === 'home') world.score[0] += 1; else world.score[1] += 1;
-    events.push({ tSec: world.clockSec, minute, type: 'goal', side: attackingSide, playerId: taker.id });
-    kickoffReset(world, defendingSide);
-    world.deadBallTicks = Math.round(GOAL_PAUSE_SEC / world.dtSec);
-    world.phase = 'dead_ball';
-  } else if (keeper) {
-    // Saved: keeper gathers, play restarts with the defending side.
-    events.push({ tSec: world.clockSec, minute, type: 'save', side: defendingSide, playerId: keeper.id, otherId: taker.id });
-    awardBall(world, defendingSide, keeper.pos);
-  } else {
-    awardBall(world, defendingSide, CENTRE_SPOT);
+function execute(
+  world: SimWorld, p: SimPlayer, action: CarrierAction, events: SimEvent[], minute: number, restart: RestartKind | null,
+): void {
+  const b = world.ball;
+  const from = b.pos;
+  const opponents = teamOf(world, otherSide(p.side)).filter((o) => !o.sentOff);
+  const pressure = restart ? 0 : pressureAt(from, opponents);
+  switch (action.kind) {
+    case 'shoot': {
+      const d = dist(from, action.aim);
+      const dir = normalize(sub(action.aim, from));
+      const T = airTravelTime(action.speed, d);
+      const vz = verticalLaunchSpeed(b.z, action.gz, T);
+      // A penalty is a placed strike at a still ball: about half the spread.
+      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) }) * (restart === 'penalty' ? 0.5 : 1);
+      const s = strike(p, world, dir, action.speed, vz, KICK_ERROR.shot, e);
+      const kind: KickKind = restart === 'penalty' ? 'penalty' : 'shot';
+      launch(world, p, kind, s.vel, s.vz, action.aim, null);
+      world.lastShot = { playerId: p.id, side: p.side, tSec: world.clockSec };
+      shotImpulse(world, p.side, 0.15);
+      const k = keeperOf(world, otherSide(p.side));
+      trace(world, 'shot', p, {
+        kx: k ? r2(k.pos.x) : null, ky: k ? r2(k.pos.y) : null,
+        dist: r2(d), speed: r2(action.speed), aimY: r2(action.aim.y), aimZ: r2(action.gz), est: r2(action.est),
+        angErr: r2(s.angErr), errScale: r2(e), pressure: r2(pressure), restart: restart ?? 'open',
+        pF: action.parts ? r2(action.parts.f) : null, pB: action.parts ? r2(action.parts.b) : null, pCl: action.parts ? r2(action.parts.c) : null,
+        onTarget: headingOnTarget(world, otherSide(p.side)),
+        ...(world.trace ? laneTrace(world, p, s.vel) : {}),
+        ...(world.trace && k ? { kAtStrike: r2(beatKeeper(from, realisedAim(from, s.vel, defendingGoalX(k.side)), action.gz, len(s.vel), k)) } : {}),
+      });
+      if (k) {
+        k.dive = null;
+        if (restart === 'penalty') {
+          // A keeper cannot react to a penalty in time; he commits as it is
+          // struck (a decision among equally good guesses, not a roll).
+          const gx = defendingGoalX(k.side);
+          const ys = [GOAL_Y_MIN + 1.2, PITCH_WIDTH / 2, GOAL_Y_MAX - 1.2];
+          const i = softPick(k.rng, [0, -0.0005, 0], 0.001, world.flags.utilitySoftness);
+          k.dive = { at: vec(gx, ys[i]!), z: 0.6 };
+          trace(world, 'keeper_guess', k, { y: r2(ys[i]!) });
+        }
+      }
+      return;
+    }
+    case 'pass': {
+      const d = dist(from, action.aim);
+      const dir = normalize(sub(action.aim, from));
+      const e = errorScale(p, p.stats.passing, world, { pressure, awkward: awkwardness(p.vel, dir) });
+      const base = action.kick === 'cross' ? KICK_ERROR.cross : action.kick === 'throw' ? KICK_ERROR.throw
+        : action.lofted ? KICK_ERROR.lofted : KICK_ERROR.pass;
+      const s = strike(p, world, dir, action.speed, action.vz, base, e);
+      const offside = restart === 'throw' || restart === 'corner' || restart === 'goalkick'
+        ? null : (isOffsidePosition(action.target, from, world) ? action.target.id : null);
+      launch(world, p, action.kick, s.vel, s.vz, action.aim, action.target.id);
+      b.offsideFor = offside;
+      if (action.kick !== 'throw') emit(events, world, minute, { type: 'pass', side: p.side, playerId: p.id, otherId: action.target.id });
+      trace(world, 'pass', p, {
+        kind: action.kick, target: action.target.id, dist: r2(d), pC: r2(action.pC), u: r2(action.utility * 1000),
+        angErr: r2(s.angErr), errScale: r2(e), lofted: action.lofted, offside: offside !== null, restart: restart ?? 'open',
+      });
+      return;
+    }
+    case 'clear': {
+      const dir = normalize(sub(action.aim, from));
+      const e = errorScale(p, p.stats.passing, world, { pressure, awkward: awkwardness(p.vel, dir) });
+      const s = strike(p, world, dir, action.speed, action.vz, KICK_ERROR.clear, e);
+      launch(world, p, 'clear', s.vel, s.vz, action.aim, null);
+      trace(world, 'clear', p, { dist: r2(dist(from, action.aim)), angErr: r2(s.angErr) });
+      return;
+    }
+    case 'dribble': {
+      // Knock the ball ahead: far enough to run onto, close enough to keep.
+      // Running at a line he keeps the ball closer, so it does not run out.
+      const D = Math.min(touchDistance(p, opponents, pressure), Math.max(0.4, 0.3 * lineRoom(from, action.dir)));
+      const e = errorScale(p, p.stats.dribbling, world, { pressure, awkward: awkwardness(p.vel, action.dir) });
+      const ang = slip(p, world, 0.09 * e);
+      const c = Math.cos(ang);
+      const sn = Math.sin(ang);
+      const dir = vec(action.dir.x * c - action.dir.y * sn, action.dir.x * sn + action.dir.y * c);
+      const dd = Math.max(0.3, D * (1 + slip(p, world, 0.18 * e)));
+      // The ball is played relative to how fast he is already going that
+      // way: on the run it is pushed into his stride, on the turn it is
+      // rolled softly so he can get round to it.
+      const va = Math.max(0, dot(p.vel, dir));
+      const aEff = ROLL_DECEL + DRAG_K * (va + 1.5) * (va + 1.5);
+      const u = va + Math.sqrt(2 * aEff * dd);
+      b.vel = scale(dir, u);
+      b.vz = 0;
+      b.z = 0;
+      b.ownerId = p.id;
+      touched(world, p);
+      b.kick = null;
+      b.offsideFor = null;
+      p.holds += 1;
+      return;
+    }
   }
+}
+
+// ── Shielding ───────────────────────────────────────────────────────────────
+
+/**
+ * True when the carrier's body stands between an opponent and the ball: the
+ * straight line from the opponent to the ball passes within a body width of
+ * the carrier, who is the nearer of the two to the ball.  Bodies block
+ * access; this is geometry, not a chance.
+ */
+function shielded(world: SimWorld, opp: SimPlayer, ballPt: Vec2): boolean {
+  const owner = world.ball.ownerId ? findById(world, world.ball.ownerId) : null;
+  if (!owner || owner.side === opp.side || owner.sentOff) return false;
+  const dOwner = dist(owner.pos, ballPt);
+  if (dOwner > 1.2 || dOwner >= dist(opp.pos, ballPt)) return false;
+  return segmentDistance(owner.pos, opp.pos, ballPt).d < BODY_WIDTH;
+}
+
+/** The foul count at which a referee books for persistent infringement. */
+const PERSISTENT_FOULS = 4;
+
+/** Centre-to-centre distance (m) at which two bodies are in contact. */
+const BODY_CONTACT = 0.7;
+/** Closing speed (m/s) above which running into a man is a charge. */
+const CHARGE_SPEED = 2.6;
+/** The same inside the penalty area. */
+const CHARGE_SPEED_BOX = 4.2;
+
+/** A ball taken within this distance (m) of its carrier counts as a tackle. */
+const STEAL_DUEL_DIST = 1.5;
+
+
+/** Half a body width (m): how far either side of a player's centre he blocks. */
+const BODY_WIDTH = 0.45;
+
+/**
+ * A lunge aimed at `carrier` that he has had time to see (committed at least
+ * his reaction delay ago) and that has not yet landed.
+ */
+function incomingLunge(world: SimWorld, carrier: SimPlayer): SimPlayer | null {
+  const now = world.clockSec;
+  for (const d of teamOf(world, otherSide(carrier.side))) {
+    const L = d.lunge;
+    if (!L || L.targetId !== carrier.id || now >= L.resolveSec) continue;
+    const committed = L.resolveSec - LUNGE_TIME;
+    if (now - committed >= reactionDelay(carrier, world) * 0.8) return d;
+  }
+  return null;
+}
+
+/**
+ * The carrier's answer to a challenge he has seen: a short touch away from
+ * where the foot is going, toward goal where he can.  A decision and a touch
+ * with ordinary execution error; whether it gets the ball out of reach is
+ * then physics.
+ */
+function evade(world: SimWorld, p: SimPlayer, d: SimPlayer): void {
+  const b = world.ball;
+  const L = d.lunge!;
+  const away = normalize(sub(b.pos, L.at));
+  const toGoal = normalize(sub(vec(attackingGoalX(p.side), PITCH_WIDTH / 2), p.pos));
+  let dir = normalize(add(scale(away, 1.4), toGoal));
+  if (len(dir) < 1e-6) dir = toGoal;
+  const opponents = teamOf(world, otherSide(p.side)).filter((o) => !o.sentOff);
+  const pressure = pressureAt(p.pos, opponents);
+  const e = errorScale(p, p.stats.dribbling, world, { pressure, awkward: awkwardness(p.vel, dir) });
+  const ang = slip(p, world, 0.12 * e);
+  const c = Math.cos(ang);
+  const sn = Math.sin(ang);
+  const dd = vec(dir.x * c - dir.y * sn, dir.x * sn + dir.y * c);
+  const va = Math.max(0, dot(p.vel, dd));
+  b.vel = scale(dd, va + 2.2 + slip(p, world, 0.4 * e));
+  b.vz = 0;
+  touched(world, p);
+  b.ownerId = p.id;
+  b.kick = null;
+  p.holds += 1;
+  trace(world, 'evade', p, { from: d.id });
+}
+
+/** The outfielder of a side nearest a loose ball, if within racing distance. */
+function nearestRacer(world: SimWorld, side: TeamSide): SimPlayer | null {
+  let best: SimPlayer | null = null;
+  let bestD = 2.5;
+  for (const p of teamOf(world, side)) {
+    if (p.sentOff || p.role === 'GK') continue;
+    const d = dist(p.pos, world.ball.pos);
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return best;
+}
+
+// ── Challenges (design 4.3) ─────────────────────────────────────────────────
+
+/** True if no outfield team-mate of `d` stands between the carrier and goal. */
+function isLastMan(world: SimWorld, d: SimPlayer, carrier: SimPlayer): boolean {
+  const goal = vec(defendingGoalX(d.side), PITCH_WIDTH / 2);
+  const dc = dist(carrier.pos, goal);
+  for (const m of teamOf(world, d.side)) {
+    if (m === d || m.sentOff || m.role === 'GK') continue;
+    if (dist(m.pos, goal) < dc && Math.abs(m.pos.y - carrier.pos.y) < 14) return false;
+  }
+  return true;
+}
+
+/**
+ * A defender near the carrier decides whether to commit to a challenge.  He
+ * judges (with perception error) where the ball will be when his foot gets
+ * there and how exposed it is from the carrier's body; the value of winning
+ * it against the cost of fouling or being beaten.  A positive utility commits.
+ */
+function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void {
+  const now = world.clockSec;
+  const b = world.ball;
+  if (d.lunge || d.sentOff || now < d.recoverUntil || now < d.reactUntil || now < d.noTouchUntil) return;
+  if (b.z > 0.6) return;
+  const dB = dist(d.pos, b.pos);
+  if (dB > 2.8) return;
+  const pred = add(b.pos, scale(b.vel, LUNGE_TIME));
+  const seen = perceive(d, world, pred, 0.5);
+  const reach = 1.3 + 0.6 * (d.stats.tackling / 100) + LEG_REACH * 0.5;
+  const dReach = dist(d.pos, seen);
+  if (dReach > reach + 0.6) return;
+  // A race for the ball: his foot needs LUNGE_TIME to arrive; the carrier
+  // needs to get to his own touch (and cannot play it again within the touch
+  // gap).  If the carrier gets there first the lunge meets the man.
+  const tDef = LUNGE_TIME + Math.max(0, dReach - reach) / 7;
+  const vC = Math.max(1, effectiveMaxSpeed(carrier));
+  const tCar = Math.max(
+    timeToReach(carrier, seen, now) - FOOT_REACH / vC,
+    b.lastTouchSec + TOUCH_GAP - now,
+  );
+  // He judges the race by eye: a timing misread, larger for poorer tacklers
+  // and when tired or rattled, is what makes a challenge late.
+  const eT = errorScale(d, d.stats.tackling, world, { pressure: 0, awkward: 0 });
+  const misread = slip(d, world, 0.2 * eT);
+  const exposed = dist(seen, carrier.pos);
+  const blocked = shielded(world, d, seen);
+  // He expects a carrier who will see the foot coming to knock the ball on:
+  // the better the dribbler and the slower the lunge, the likelier.
+  const reactC = 0.16 + 0.22 * (1 - carrier.stats.positioning / 100);
+  const pEvade = 0.7 * sigmoid((LUNGE_TIME - 0.8 * reactC) / 0.05) * (0.4 + 0.6 * carrier.stats.dribbling / 100)
+    * (dist(carrier.pos, b.pos) <= FOOT_REACH ? 1 : 0.3);
+  const pBall = sigmoid((tCar - tDef + misread) / 0.1) * sigmoid((reach - dReach) / 0.25) * (blocked ? 0.1 : 1) * (1 - pEvade);
+  const inBox = isInPenaltyArea(carrier.pos, carrier.side);
+  const lastMan = isLastMan(world, d, carrier);
+  const style = d.side === 'home' ? world.homeStyle : world.awayStyle;
+  const challengeMul = d.traits.challenge * (1 + 2 * style.tackle);
+  const danger = positionValue(carrier.pos, carrier.side);
+  const gain = (danger + LUNGE_GAIN_BASE) * challengeMul;
+  // Missing means the carrier is past him: the cost grows with the danger.
+  const booked = d.yellowCards > 0;
+  const cost = LUNGE_FOUL_COST + (inBox ? 0.9 : 0) + (booked ? 0.1 : 0) + (lastMan ? 0.15 : 0.03) + 1.5 * danger;
+  const u = pBall * gain - (1 - pBall) * cost;
+  // The professional foul: stop a dangerous break by taking the man, at the
+  // price of a free kick and probably a booking.  Only outside his own box.
+  const manAt = add(carrier.pos, scale(carrier.vel, LUNGE_TIME));
+  const toGoalC = sub(vec(defendingGoalX(d.side), PITCH_WIDTH / 2), carrier.pos);
+  const behind = dot(toGoalC, sub(d.pos, carrier.pos)) < 0;
+  const breaking = behind && owned(world, carrier) && progressOf(carrier.pos, carrier.side) > 0.5
+    && dist(d.pos, manAt) <= reach && goalSideCount(world, d, carrier) <= 2;
+  const uFoul = breaking && !inBox
+    ? (danger * 1.6 - (0.02 + TACTICAL_CARD_COST + (booked ? 0.25 : 0))) * challengeMul
+    : -1;
+  if (u <= 0 && uFoul <= 0) return;
+  const closing = len(d.vel) + 1.5;
+  const tactical = uFoul > u;
+  d.lunge = { at: tactical ? manAt : seen, resolveSec: now + LUNGE_TIME, closing, targetId: carrier.id };
+  trace(world, 'lunge', d, {
+    carrier: carrier.id, exposed: r2(exposed), dReach: r2(dReach), tCar: r2(tCar), tDef: r2(tDef), misread: r2(misread),
+    holds: carrier.holds, pBall: r2(pBall), u: r2(u * 1000), uFoul: r2(uFoul * 1000), tactical, lastMan, inBox,
+  });
+}
+
+/** Expected-goal cost a defender puts on the booking a tactical foul brings. */
+const TACTICAL_CARD_COST = 0.03;
+
+/** True if `p` is in possession (the ball is his and near him). */
+function owned(world: SimWorld, p: SimPlayer): boolean {
+  return world.ball.ownerId === p.id && dist(p.pos, world.ball.pos) < 2;
+}
+
+/** How many of `d`'s outfield team-mates stand between the carrier and goal. */
+function goalSideCount(world: SimWorld, d: SimPlayer, carrier: SimPlayer): number {
+  const goal = vec(defendingGoalX(d.side), PITCH_WIDTH / 2);
+  const dc = dist(carrier.pos, goal);
+  let n = 0;
+  for (const m of teamOf(world, d.side)) {
+    if (m === d || m.sentOff || m.role === 'GK') continue;
+    if (dist(m.pos, goal) < dc && Math.abs(m.pos.y - carrier.pos.y) < 15) n++;
+  }
+  return n;
+}
+
+/** Resolve a lunge whose foot has arrived: ball, man, or nothing. */
+/**
+ * What a committed challenge physically meets (design 4.3).  The leg sweeps
+ * the last LEG_REACH metres toward the point the defender went for; whatever
+ * it meets first along that sweep decides it: the ball (a clean tackle), the
+ * man (a foul) or nothing (the defender is beaten).  Pure geometry.
+ *
+ * @param defPos    The defender at the moment of contact.
+ * @param lungeAt   The point he committed to.
+ * @param ballPos   The ball.
+ * @param manPos    The carrier (null if there is none).
+ * @param playable  Whether the ball can be played (on the ground, in play, not shielded).
+ */
+export function contactOutcome(
+  defPos: Vec2, lungeAt: Vec2, ballPos: Vec2, manPos: Vec2 | null, playable: boolean,
+): { outcome: 'ball' | 'man' | 'miss'; ballD: number; manD: number } {
+  const to = sub(lungeAt, defPos);
+  const tl = len(to);
+  const foot = tl <= LEG_REACH ? lungeAt : add(defPos, scale(normalize(to), LEG_REACH));
+  const legFrom = tl > 1e-6 ? sub(foot, scale(normalize(to), Math.min(LEG_REACH, tl))) : foot;
+  const sb = segmentDistance(ballPos, legFrom, foot);
+  const sm = manPos ? segmentDistance(manPos, legFrom, foot) : { d: Infinity, t: 1 };
+  const ballHit = playable && sb.d <= BALL_CONTACT;
+  const manHit = sm.d <= MAN_CONTACT;
+  if (ballHit && (!manHit || sb.t <= sm.t + 0.15)) return { outcome: 'ball', ballD: sb.d, manD: sm.d };
+  return { outcome: manHit ? 'man' : 'miss', ballD: sb.d, manD: sm.d };
+}
+
+/**
+ * Severity of a foul from how it happened: closing speed (m/s), contact from
+ * behind, and whether the ball was even playable (ball more than 1.5 m from
+ * the contact).  Pure.
+ */
+export function foulSeverity(closing: number, fromBehind: boolean, ballD: number): number {
+  return closing / 9 + (fromBehind ? 0.4 : 0) + (ballD > 1.5 ? 0.25 : 0);
+}
+
+/** What the referee saw, for the laws' sanction (no accumulation). */
+export interface FoulFacts {
+  severity: number;
+  /** Denied an obvious goal-scoring opportunity. */
+  dogso: boolean;
+  /** Stopped a promising attack. */
+  spa: boolean;
+  /** Persistent infringement. */
+  persistent: boolean;
+  /** The foul was inside the fouler's own penalty area (a penalty). */
+  inBox: boolean;
+}
+
+/**
+ * The laws' sanction for one foul (Law 12): serious foul play is a red; DOGSO
+ * is a red outside the area and a yellow inside it (the penalty already
+ * restores the chance); a reckless foul, stopping a promising attack or
+ * persistent infringement is a yellow.  Second-yellow accumulation is the
+ * caller's.  Pure: no chance in it.
+ */
+export function lawsBooking(f: FoulFacts): 'yellow' | 'red' | undefined {
+  if (f.severity >= RED_SEVERITY || (f.dogso && !f.inBox)) return 'red';
+  if (f.severity >= YELLOW_SEVERITY || f.dogso || f.spa || f.persistent) return 'yellow';
+  return undefined;
+}
+
+function resolveLunge(world: SimWorld, d: SimPlayer, events: SimEvent[], minute: number): void {
+  const L = d.lunge!;
+  d.lunge = null;
+  const now = world.clockSec;
+  const b = world.ball;
+  const to = sub(L.at, d.pos);
+  const carrier = findById(world, L.targetId);
+  const playable = world.phase === 'open_play' && b.z < 0.6 && !shielded(world, d, b.pos);
+  const contact = contactOutcome(d.pos, L.at, b.pos, carrier ? carrier.pos : null, playable);
+  const ballD = contact.ballD;
+  const manD = contact.manD;
+  if (contact.outcome === 'ball') {
+    // Foot meets ball first: clean.  A soft ball sticks to a good tackler;
+    // otherwise it is knocked loose.
+    const rel = len(sub(b.vel, d.vel));
+    const skill = d.stats.tackling / 100;
+    const owner = b.ownerId;
+    if (rel < 3 + 4 * skill) {
+      b.vel = scale(d.vel, 0.5);
+      b.ownerId = d.id;
+      b.controlSec = now;
+    } else {
+      const away = normalize(sub(b.pos, carrier ? carrier.pos : d.pos));
+      b.vel = add(scale(away, 4 + 3 * (1 - skill)), vec(slip(d, world, 1.2), slip(d, world, 1.2)));
+      b.ownerId = null;
+    }
+    b.vz = 0;
+    b.kick = { kind: 'poke', side: d.side, playerId: d.id, from: b.pos, tSec: now, targetId: null, aim: b.pos, resolved: true, woodwork: false };
+    b.offsideFor = null;
+    touched(world, d);
+    newBallPath(world, d);
+    if (carrier && owner === carrier.id) {
+      emit(events, world, minute, { type: 'tackle', side: d.side, playerId: d.id, otherId: carrier.id });
+      bump(world, d, 0.03);
+      bump(world, carrier, -0.03);
+      carrier.noTouchUntil = now + 0.35;
+    }
+    trace(world, 'challenge', d, { outcome: 'ball', ballD: r2(ballD), manD: r2(manD) });
+    return;
+  }
+  if (carrier && !carrier.sentOff && contact.outcome === 'man' && world.phase === 'open_play') {
+    commitFoul(world, d, carrier, L.closing, normalize(to), ballD, 'lunge', events, minute);
+    return;
+  }
+  // Foot meets nothing: beaten, and it costs real time to recover.
+  d.recoverUntil = now + 0.9 - 0.4 * (d.stats.tackling / 100);
+  d.noTouchUntil = now + 0.5;
+  bump(world, d, -0.02);
+  trace(world, 'challenge', d, { outcome: 'miss', ballD: r2(ballD), manD: r2(manD) });
+}
+
+/**
+ * A defender has made contact with the man rather than the ball: a foul.
+ * Severity from closing speed, angle and whether the ball was even playable;
+ * the card follows from severity and from denying an obvious chance.  No
+ * randomness: everything here is geometry already decided by the contact.
+ */
+function commitFoul(
+  world: SimWorld, d: SimPlayer, carrier: SimPlayer, closing: number, approach: Vec2, ballD: number,
+  how: 'lunge' | 'charge', events: SimEvent[], minute: number,
+): void {
+  const b = world.ball;
+  const facing = len(carrier.vel) > 0.5 ? normalize(carrier.vel)
+    : normalize(sub(vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2), carrier.pos));
+  const fromBehind = dot(approach, facing) > 0.5;
+  const severity = foulSeverity(closing, fromBehind, ballD);
+  const goal = vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2);
+  const inBox = isInPenaltyArea(carrier.pos, carrier.side);
+  // Denying an obvious goal-scoring chance: close to goal, ball under
+  // control, heading for goal, no outfield cover and the keeper not between.
+  const keeper = keeperOf(world, d.side);
+  const keeperCovers = keeper !== undefined && !keeper.sentOff
+    && dist(keeper.pos, goal) < dist(carrier.pos, goal) && dist(keeper.pos, carrier.pos) < 9;
+  const dogso = dist(carrier.pos, goal) < 25 && dist(b.pos, carrier.pos) < 1.5 && isLastMan(world, d, carrier)
+    && goalSideCount(world, d, carrier) === 0 && !keeperCovers
+    && dot(facing, normalize(sub(goal, carrier.pos))) > 0.5;
+  // Stopping a promising attack (a booking in the laws): the carrier in the
+  // attacking half, going forward, with little cover behind the fouler.
+  const spa = progressOf(carrier.pos, carrier.side) > 0.5 && dist(b.pos, carrier.pos) < 2
+    && dot(facing, normalize(sub(goal, carrier.pos))) > 0.3 && goalSideCount(world, d, carrier) <= 2;
+  d.foulsCommitted += 1;
+  const persistent = d.foulsCommitted >= PERSISTENT_FOULS && d.yellowCards === 0;
+  let card = lawsBooking({ severity, dogso, spa, persistent, inBox });
+  if (card === 'yellow') {
+    d.yellowCards += 1;
+    if (d.yellowCards >= 2) card = 'red';
+  }
+  emit(events, world, minute, { type: 'foul', side: d.side, playerId: d.id, otherId: carrier.id, ...(card ? { card } : {}) });
+  trace(world, 'challenge', d, {
+    outcome: 'foul', how, ballD: r2(ballD), severity: r2(severity), fromBehind, dogso, spa, persistent, card: card ?? null, inBox,
+  });
+  bump(world, d, -0.01);
+  if (card === 'red') sendOff(d);
+  if (inBox) {
+    emit(events, world, minute, { type: 'penalty', side: carrier.side, playerId: carrier.id });
+    beginRestart(world, 'penalty', carrier.side, penaltySpot(carrier.side));
+  } else {
+    beginRestart(world, 'freekick', carrier.side, clampSpot(carrier.pos), card ? 12 : 0);
+  }
+}
+
+function clampSpot(p: Vec2): Vec2 {
+  return vec(Math.max(0.5, Math.min(PITCH_LENGTH - 0.5, p.x)), Math.max(0.5, Math.min(PITCH_WIDTH - 0.5, p.y)));
+}
+
+// ── Shots ───────────────────────────────────────────────────────────────────
+
+/** Emit the single outcome event for an unresolved shot. */
+function resolveShot(
+  world: SimWorld, events: SimEvent[], minute: number, outcome: 'shot' | 'save', saver?: SimPlayer,
+): void {
+  const k = world.ball.kick;
+  if (!k || !isShotKind(k.kind) || k.resolved) return;
+  k.resolved = true;
+  const shooter = findById(world, k.playerId);
+  if (outcome === 'save' && saver) {
+    emit(events, world, minute, { type: 'save', side: saver.side, playerId: saver.id, otherId: k.playerId });
+    bump(world, saver, 0.04);
+    bump(world, shooter, -0.02);
+  } else if (k.woodwork) {
+    emit(events, world, minute, { type: 'woodwork', side: k.side, playerId: k.playerId });
+  } else {
+    emit(events, world, minute, { type: 'shot', side: k.side, playerId: k.playerId });
+    bump(world, shooter, -0.03);
+  }
+  trace(world, 'shot_end', shooter, { outcome: outcome === 'save' ? 'save' : k.woodwork ? 'woodwork' : 'shot' });
+}
+
+const ON_TARGET_PATH = new Float64Array(3 * 60);
+
+/** Would the ball, untouched, cross the goal line inside the frame? */
+function headingOnTarget(world: SimWorld, defendingSide: TeamSide): boolean {
+  const gx = defendingGoalX(defendingSide);
+  const b = world.ball;
+  const n = predictPath(b, 60, world.dtSec, ON_TARGET_PATH);
+  let px = b.pos.x;
+  let py = b.pos.y;
+  let pz = b.z;
+  for (let i = 0; i < n; i++) {
+    const x = ON_TARGET_PATH[3 * i]!;
+    const y = ON_TARGET_PATH[3 * i + 1]!;
+    const z = ON_TARGET_PATH[3 * i + 2]!;
+    if ((gx === 0 && x <= 0) || (gx === PITCH_LENGTH && x >= PITCH_LENGTH)) {
+      const t = Math.abs(x - px) < 1e-9 ? 1 : (gx - px) / (x - px);
+      const yc = py + (y - py) * t;
+      const zc = pz + (z - pz) * t;
+      return yc > GOAL_Y_MIN && yc < GOAL_Y_MAX && zc < GOAL_HEIGHT;
+    }
+    px = x; py = y; pz = z;
+  }
+  return false;
+}
+
+const SIDES: readonly TeamSide[] = ['home', 'away'];
+
+/** A loose, fast ball travelling toward `side`'s goal and on target for it. */
+function ballThreatens(world: SimWorld, side: TeamSide): boolean {
+  const b = world.ball;
+  if (b.ownerId !== null || world.phase !== 'open_play') return false;
+  const gx = defendingGoalX(side);
+  const toward = gx === 0 ? -1 : 1;
+  if (b.vel.x * toward <= 0 || len(b.vel) < 9) return false;
+  if (Math.abs(b.pos.x - gx) > 40) return false;
+  return headingOnTarget(world, side);
+}
+
+// ── Touches (the ball meets a body) ─────────────────────────────────────────
+
+/** Can `p` touch a ball at height z this tick, and with what reach? */
+function reachFor(p: SimPlayer, z: number, at: Vec2, blocking: boolean, fast: boolean): number {
+  if (p.role === 'GK' && inOwnBox(p, at) && z <= KEEPER_TOP) return keeperReach(p, z);
+  // A ball struck hard leaves no time to move a foot to it: only what is
+  // already in its way stops it, the body or a leg already thrown into the
+  // lane.  (Blocks used to take every hard ball within a stride, which
+  // stopped most shots before the keeper and steered goals into deflections.)
+  if (fast) {
+    if (z > BODY_TOP) return -1;
+    return blocking && z <= 0.9 ? BLOCK_REACH_THROWN : BLOCK_REACH_BODY;
+  }
+  // A defender who has thrown himself into a shooting lane covers more.
+  if (z <= 0.9) return FOOT_REACH + (blocking ? BLOCK_LUNGE : 0);
+  if (z <= HEAD_Z) return 0.6 + (blocking ? BLOCK_LUNGE * 0.6 : 0);
+  return -1;
+}
+
+/**
+ * A defender who has read a back-lift throws himself at the line of the
+ * shot: toward the nearest point of the line from the ball to where the
+ * shooter is shaping to hit it (during the windup) or along the ball's path
+ * (once it is struck).  Null when the line is already behind him.
+ */
+function laneVelocity(p: SimPlayer, world: SimWorld, carrier: SimPlayer | null): Vec2 | null {
+  const b = world.ball;
+  let to: Vec2;
+  if (carrier && carrier.windup && carrier.side !== p.side) {
+    const wa = carrier.windup.action as CarrierAction;
+    if (wa.kind !== 'shoot') return null;
+    to = wa.aim;
+  } else if (b.ownerId === null && b.kick && isShotKind(b.kick.kind) && !b.kick.resolved && b.kick.side !== p.side && len(b.vel) > 1) {
+    to = add(b.pos, scale(b.vel, 2));
+  } else {
+    return null;
+  }
+  const sd = segmentDistance(p.pos, b.pos, to);
+  if (sd.t <= 0) return null;
+  const pt = vec(b.pos.x + (to.x - b.pos.x) * sd.t, b.pos.y + (to.y - b.pos.y) * sd.t);
+  return sd.d < 0.05 ? ZERO : seek(p, pt);
+}
+
+/**
+ * The ball off a surface (a palm, a shin, a hip) along a contact normal.
+ * The normal lies between straight back along the ball's path (theta 0: hit
+ * full on) and the outward side, away from the player's centre (theta 90:
+ * a glancing touch), tilted upward by `up` for a hand going over the top.
+ * The normal component reverses with the restitution, the tangential one
+ * keeps `tangent` of itself, and `push` is the hand driving through it.
+ * Pure geometry: the only imprecision is in the theta the caller passes.
+ */
+export function deflectOff(
+  vel: Vec2, vz: number, lateral: Vec2, theta: number, up: number, restitution: number, tangent: number, push: number,
+): { vel: Vec2; vz: number } {
+  const sp = len(vel);
+  if (sp < 1e-6) return { vel, vz };
+  const u = scale(vel, 1 / sp);
+  // Outward: from his centre to the ball, square to its path.
+  let l = sub(lateral, scale(u, dot(lateral, u)));
+  l = len(l) > 1e-6 ? normalize(l) : vec(-u.y, u.x);
+  const c = Math.cos(theta);
+  const sn = Math.sin(theta);
+  let nx = -c * u.x + sn * (1 - up) * l.x;
+  let ny = -c * u.y + sn * (1 - up) * l.y;
+  let nz = sn * up;
+  const nl = Math.hypot(nx, ny, nz);
+  nx /= nl; ny /= nl; nz /= nl;
+  const vn = vel.x * nx + vel.y * ny + vz * nz;
+  if (vn >= 0) return { vel: vec(vel.x + push * nx, vel.y + push * ny), vz: vz + push * nz };
+  const tx = vel.x - vn * nx;
+  const ty = vel.y - vn * ny;
+  const tz = vz - vn * nz;
+  const k = -restitution * vn + push;
+  return { vel: vec(tx * tangent + k * nx, ty * tangent + k * ny), vz: tz * tangent + k * nz };
+}
+
+/** Sine of the steepest angle a keeper's palm meets the ball at full stretch
+ *  (wrist and palm turned outward: even a fingertip changes the angle). */
+const PALM_ANGLE = 0.75;
+/** A palm is soft: little of the normal pace comes back. */
+const PALM_RESTITUTION = 0.3;
+/** Share of the along-surface pace a palm leaves the ball. */
+const PALM_TANGENT = 0.85;
+/** Speed (m/s) a keeper's hand drives through the ball along the normal. */
+const PALM_PUSH = 2;
+/** Above this height (m) a parry goes up and over rather than round. */
+const PARRY_HIGH = 1.7;
+/** How much of his catching speed a keeper loses at full stretch. */
+const CATCH_STRETCH = 0.6;
+/** Sine of the steepest contact angle on a body at the edge of its reach. */
+const BODY_ANGLE = 0.95;
+/** A body or a shin returns a little more of the pace than a palm. */
+const BODY_RESTITUTION = 0.4;
+/** Share of the along-surface pace a glancing body contact leaves the ball. */
+const BODY_TANGENT = 0.8;
+
+/** Spread of how far off-centre a header is met (at an error scale of 1),
+ *  and the share of the incoming pace that runs on through, from a clean
+ *  contact to a complete miss-hit. */
+const HEADER_MISS = 0.5;
+const HEADER_KEEP_MIN = 0.25;
+const HEADER_KEEP_MAX = 0.85;
+
+/** Highest ball (m) a player brings down on his chest rather than heads. */
+const CHEST_TOP = 1.55;
+
+/** Height (m) of a standing body: a fast ball above it passes over him. */
+const BODY_TOP = 1.85;
+
+/** Extra reach (m) of a leg or body thrown into a shooting lane. */
+const BLOCK_LUNGE = 0.55;
+
+/**
+ * The ball has met `p` at `at` (height z).  Decide what physically happens:
+ * a keeper's catch or parry, a block, a header, or a controlled first touch;
+ * then label it (save, interception, tackle, completed pass).
+ */
+function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: number, events: SimEvent[], minute: number): void {
+  const b = world.ball;
+  const now = world.clockSec;
+  const kick = b.kick;
+  const prevOwner = b.ownerId ? findById(world, b.ownerId) : null;
+  b.pos = at;
+  b.z = z;
+
+  // Offside: the flagged receiver is the next to play the ball.
+  if (b.offsideFor === p.id) {
+    emit(events, world, minute, { type: 'offside', side: p.side, playerId: p.id });
+    passEnd(world, 'offside');
+    beginRestart(world, 'freekick', otherSide(p.side), clampSpot(p.pos), -3, true);
+    return;
+  }
+  b.offsideFor = null;
+
+  const shotLive = kick !== null && isShotKind(kick.kind) && !kick.resolved;
+  const speed = len(b.vel);
+  const opponents = teamOf(world, otherSide(p.side)).filter((o) => !o.sentOff);
+
+  // ── Keeper with his hands ──────────────────────────────────────────────
+  const backPass = kick !== null && kick.side === p.side && isPassKind(kick.kind) && kick.kind !== 'throw';
+  if (p.role === 'GK' && inOwnBox(p, at) && z <= KEEPER_TOP && !backPass) {
+    const onTarget = shotLive && kick!.side !== p.side ? headingOnTarget(world, p.side) : false;
+    const rel = Math.hypot(speed, b.vz);
+    const body = 0.75 + 0.35 * (p.stats.goalkeeping / 100);
+    // Holding needs both hands behind the ball: the further he has to stretch
+    // for it, the softer it must be to stick.
+    const reachNow = Math.max(0.3, keeperReach(p, z));
+    const holdable = catchSpeed(p) * (1 - CATCH_STRETCH * Math.min(1, closeD / reachNow) ** 2);
+    if (rel <= holdable && closeD <= body) {
+      if (shotLive && kick!.side !== p.side) resolveShot(world, events, minute, onTarget ? 'save' : 'shot', p);
+      passEnd(world, kick && kick.side !== p.side ? 'lost' : 'complete');
+      touched(world, p);
+      trace(world, 'keeper', p, { action: 'catch', speed: r2(rel), closeD: r2(closeD), onTarget, kx: r2(p.pos.x), ky: r2(p.pos.y) });
+      p.dive = null;
+      const hold = world.flags.scoreClockTerm && leadingLate(world, p.side) ? 5 : 0;
+      beginRestart(world, 'keeper', p.side, clampSpot(p.pos), hold, false, p.id);
+      b.ownerId = p.id;
+      return;
+    }
+    // Parry: the ball meets a palm, and the contact decides where it goes.
+    // Square on (the ball at his body) it comes back out; at full stretch the
+    // hand only meets it at an angle, so the ball keeps much of its pace and
+    // is turned wide (or over, when it is high): a corner, not a rebound.
+    const e = errorScale(p, p.stats.goalkeeping, world, { pressure: 0, awkward: 0.5 });
+    const stretch = Math.min(1, closeD / Math.max(0.3, keeperReach(p, z)));
+    const up = z > PARRY_HIGH ? Math.min(0.8, (z - PARRY_HIGH) / 0.8) : 0;
+    // He turns the palm to push the ball away from the middle of his goal,
+    // round the nearer post, whichever side of him it passes.
+    const wide = vec(0, at.y >= PITCH_WIDTH / 2 ? 1 : -1);
+    const out3 = deflectOff(b.vel, b.vz, wide, Math.asin(PALM_ANGLE * stretch) + slip(p, world, 0.12 * e),
+      up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
+    b.vel = out3.vel;
+    b.vz = Math.max(0, out3.vz);
+    b.ownerId = null;
+    if (shotLive && kick!.side !== p.side) resolveShot(world, events, minute, onTarget ? 'save' : 'shot', p);
+    passEnd(world, 'lost');
+    b.kick = { kind: 'parry', side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
+    touched(world, p);
+    p.noTouchUntil = now + 0.4;
+    newBallPath(world, p);
+    trace(world, 'keeper', p, { action: 'parry', speed: r2(rel), closeD: r2(closeD), stretch: r2(stretch), out: r2(len(b.vel)), onTarget, kx: r2(p.pos.x), ky: r2(p.pos.y) });
+    return;
+  }
+
+  // ── A fast ball into a body: a block / deflection ───────────────────────
+  const intended = kick !== null && kick.targetId === p.id;
+  if (speed > BLOCK_SPEED && !intended) {
+    // The contact normal comes from where on the body (or the thrown leg)
+    // the ball strikes: full on, it comes back off him; off the edge of a
+    // shin or a hip it is only turned, keeping most of its pace, which is
+    // how a goal-bound shot is blocked behind for a corner.
+    const reach = Math.max(0.2, reachFor(p, z, at, shotLive && now < p.blockUntil, true));
+    const edge = Math.min(1, closeD / reach);
+    const out3 = deflectOff(b.vel, b.vz, sub(at, p.pos), Math.asin(BODY_ANGLE * edge) + slip(p, world, 0.15),
+      0, BODY_RESTITUTION, BODY_TANGENT, 0);
+    b.vel = out3.vel;
+    b.vz = Math.max(0, out3.vz) + (z > 0.4 ? 0.8 : 0.3);
+    b.ownerId = null;
+    if (shotLive) resolveShot(world, events, minute, 'shot');
+    passEnd(world, kick && kick.side === p.side ? 'complete' : 'lost');
+    b.kick = { kind: 'deflection', side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
+    touched(world, p);
+    newBallPath(world, p);
+    trace(world, 'block', p, { speed: r2(speed), edge: r2(edge), out: r2(len(b.vel)), kick: kick ? kick.kind : null });
+    return;
+  }
+
+  if (shotLive) resolveShot(world, events, minute, 'shot');
+
+  // ── Header ────────────────────────────────────────────────────────────
+  // A ball dropping at chest height that is not travelling too fast is
+  // brought down (chest or thigh) and played like any first touch; only a
+  // higher or harder ball, or one a defender in his own third wants rid of,
+  // is headed.  (Heading every waist-high ball sent throw-ins straight back
+  // out of play.)
+  const relZ = Math.hypot(speed, b.vz);
+  const chestCap = 9 + 6 * (p.stats.dribbling / 100);
+  const wantRid = kick !== null && kick.side !== p.side && progressOf(p.pos, p.side) < 0.33;
+  if (z > 0.9 && (z > CHEST_TOP || relZ > chestCap || wantRid)) {
+    header(world, p, events, minute);
+    passEnd(world, kick && kick.side === p.side ? 'complete' : 'lost');
+    return;
+  }
+
+  // ── Controlled first touch ──────────────────────────────────────────────
+  const gx = attackingGoalX(p.side);
+  const toGoal = normalize(sub(vec(gx, PITCH_WIDTH / 2), p.pos));
+  let away = ZERO;
+  let nearD = Infinity;
+  for (const o of opponents) {
+    const dd = dist(o.pos, p.pos);
+    if (dd < nearD) { nearD = dd; away = normalize(sub(p.pos, o.pos)); }
+  }
+  const tdir = normalize(add(toGoal, scale(away, nearD < 6 ? 1.2 : 0.3)));
+  const pressure = pressureAt(p.pos, opponents);
+  // He takes the ball on in the direction he is already moving; asked to go
+  // against his run (or squeezed), he kills it at his feet instead.
+  const along = Math.max(0, dot(p.vel, tdir));
+  const desired = scale(tdir, (along * 0.8 + 0.3) * (1 - 0.6 * pressure));
+  const incoming = b.vel;
+  b.vel = firstTouch(p, world, incoming, desired, pressure);
+  b.vz = 0;
+  b.z = 0;
+  b.ownerId = p.id;
+  b.controlSec = now;
+  touched(world, p);
+  p.holds = 0;
+
+  // Labels: what did this touch take, and from whom?
+  // Taken off a man who still had it at his feet: a tackle.  A heavy touch
+  // that ran away from him and was collected is a loose ball, not a duel.
+  if (prevOwner && prevOwner.side !== p.side && dist(prevOwner.pos, at) < STEAL_DUEL_DIST) {
+    emit(events, world, minute, { type: 'tackle', side: p.side, playerId: p.id, otherId: prevOwner.id });
+    bump(world, p, 0.03);
+    bump(world, prevOwner, -0.03);
+    trace(world, 'steal', p, { from: prevOwner.id, gap: r2(dist(prevOwner.pos, at)) });
+  } else if (kick && isPassKind(kick.kind) && !kick.resolved) {
+    if (kick.side !== p.side) {
+      // Cut out on its way (read and stepped into), not a loose ball collected.
+      const cutOut = speed >= 7 && dist(at, kick.aim) > 5;
+      if (cutOut) emit(events, world, minute, { type: 'interception', side: p.side, playerId: p.id });
+      passEnd(world, cutOut ? 'intercepted' : 'lost');
+      bump(world, findById(world, kick.playerId), -0.02);
+      bump(world, p, 0.02);
+    } else {
+      passEnd(world, 'complete');
+      bump(world, findById(world, kick.playerId), 0.01);
+    }
+  }
+  b.kick = null;
+  trace(world, 'control', p, { incoming: r2(len(incoming)), out: r2(len(b.vel)), pressure: r2(pressure) });
+  newBallPath(world, p);
+}
+
+/** Close out a pass in flight with its outcome (instrumentation only). */
+function passEnd(world: SimWorld, outcome: string): void {
+  const k = world.ball.kick;
+  if (!k || !isPassKind(k.kind) || k.resolved) return;
+  k.resolved = true;
+  if (world.trace) trace(world, 'pass_end', findById(world, k.playerId), { kind: k.kind, outcome });
+}
+
+function leadingLate(world: SimWorld, side: TeamSide): boolean {
+  const gd = side === 'home' ? world.score[0] - world.score[1] : world.score[1] - world.score[0];
+  return gd > 0 && world.clockSec > world.matchSeconds * 0.75;
+}
+
+/** A header: at goal in the attacking box, away in defence, on to a mate otherwise. */
+function header(world: SimWorld, p: SimPlayer, _events: SimEvent[], _minute: number): void {
+  const b = world.ball;
+  const side = p.side;
+  const gx = attackingGoalX(side);
+  const goal = vec(gx, PITCH_WIDTH / 2);
+  const dGoal = dist(b.pos, goal);
+  const opponents = teamOf(world, otherSide(side)).filter((o) => !o.sentOff);
+  const pressure = pressureAt(b.pos, opponents);
+  const e = errorScale(p, (p.stats.shooting + p.stats.positioning) / 2, world, { pressure, awkward: 0.3 });
+  if (dGoal < 15 && progressOf(b.pos, side) > 0.8) {
+    // Header at goal: pick the target the keeper is furthest from.
+    const keeper = keeperOf(world, otherSide(side));
+    const speed = 11 + 7 * (p.stats.shooting / 100);
+    let best = 0;
+    let bestP = -1;
+    const ys = [GOAL_Y_MIN + 0.6, PITCH_WIDTH / 2, GOAL_Y_MAX - 0.6];
+    const ps = ys.map((gy) => estimateShot(b.pos, side, gy, 0.4, speed, e * 2, keeper, opponents).p);
+    for (let i = 0; i < ys.length; i++) if (ps[i]! > bestP) { bestP = ps[i]!; best = i; }
+    const aim = vec(gx, ys[best]!);
+    const d = dist(b.pos, aim);
+    const T = airTravelTime(speed, d);
+    const vz = verticalLaunchSpeed(b.z, 0.4, T);
+    const s = strike(p, world, normalize(sub(aim, b.pos)), speed, Math.max(0, vz), KICK_ERROR.header, e);
+    launch(world, p, 'shot', s.vel, s.vz, aim, null);
+    b.vz = s.vz + Math.min(0, vz);
+    world.lastShot = { playerId: p.id, side, tSec: world.clockSec };
+    shotImpulse(world, side, 0.12);
+    trace(world, 'shot', p, { dist: r2(d), speed: r2(speed), aimY: r2(aim.y), aimZ: 0.4, est: r2(bestP), header: true, errScale: r2(e) });
+    return;
+  }
+  // Defensive or midfield header: away from danger, toward a mate if one is near.
+  let mate: SimPlayer | null = null;
+  let bestS = -Infinity;
+  for (const m of teamOf(world, side)) {
+    if (m === p || m.sentOff || m.role === 'GK') continue;
+    const d = dist(m.pos, b.pos);
+    if (d < 5 || d > 20) continue;
+    const s = progressOf(m.pos, side) * 10 - d * 0.2;
+    if (s > bestS) { bestS = s; mate = m; }
+  }
+  const ownHalf = progressOf(b.pos, side) < 0.45;
+  const aim = mate && !ownHalf ? mate.pos : add(b.pos, scale(normalize(sub(b.pos, vec(defendingGoalX(side), PITCH_WIDTH / 2))), 20));
+  const d = Math.max(3, dist(b.pos, aim));
+  const T = 0.6 + d * 0.03;
+  const speed = Math.min(16, (Math.exp(DRAG_K * d) - 1) / (DRAG_K * T));
+  const s = strike(p, world, normalize(sub(aim, b.pos)), speed, GRAVITY * T / 2, KICK_ERROR.header, e);
+  // A header redirects a moving ball; it cannot cancel its momentum, so part
+  // of the incoming pace carries on.  How much depends on how squarely he
+  // meets it: rushed, stretched or under pressure he catches it off-centre
+  // and more of the ball's own pace runs on through (which is how crosses
+  // are glanced behind for corners).  The miss is execution imprecision.
+  const incoming = b.vel;
+  const miss = Math.min(1, Math.abs(slip(p, world, HEADER_MISS * e)));
+  const keep = HEADER_KEEP_MIN + (HEADER_KEEP_MAX - HEADER_KEEP_MIN) * miss;
+  launch(world, p, mate && !ownHalf ? 'header' : 'clear', add(scale(s.vel, 1 - keep), scale(incoming, keep)), s.vz * (1 - 0.5 * keep), aim, mate && !ownHalf ? mate.id : null);
+  trace(world, 'header', p, { dist: r2(d), toMate: mate !== null && !ownHalf });
+}
+
+// ── Ball resolution: lines, frame and bodies along this tick's path ─────────
+
+/**
+ * After the ball moved from (from, fromZ) to its new position, find what it
+ * met first: a body (touch), the frame (woodwork), or a line (goal / out).
+ */
+function resolveBall(world: SimWorld, from: Vec2, fromZ: number, events: SimEvent[], minute: number): void {
+  const b = world.ball;
+  const to = b.pos;
+  const toZ = b.z;
+  const now = world.clockSec;
+
+  // First body on the path.
+  let tBody = Infinity;
+  let who: SimPlayer | null = null;
+  let whoAt = to;
+  let whoZ = toZ;
+  let whoD = 0;
+  const owner = b.ownerId ? findById(world, b.ownerId) : null;
+  const ownerNear = owner ? dist(owner.pos, to) < 4 : false;
+  const shotFlying = b.kick !== null && isShotKind(b.kick.kind) && !b.kick.resolved;
+  for (const p of [...world.home, ...world.away]) {
+    if (p.sentOff || p.lunge || now < p.noTouchUntil) continue;
+    if (owner && p === owner) continue; // the carrier plays it by decision
+    if (owner && ownerNear && p.side === owner.side) continue; // nobody takes it off his own man
+    const sd = segmentDistance(p.pos, from, to);
+    // A fast ball leaving a man level with or behind its starting point is
+    // travelling away from him: he cannot get a body to it (a presser at the
+    // shooter's shoulder used to block every shot he stood within a leg of).
+    if (sd.t <= 0 && len(b.vel) > BLOCK_SPEED && dot(sub(p.pos, from), sub(to, from)) <= 0) continue;
+    const zAt = fromZ + (toZ - fromZ) * sd.t;
+    const atPt = vec(from.x + (to.x - from.x) * sd.t, from.y + (to.y - from.y) * sd.t);
+    const reach = reachFor(p, zAt, atPt, shotFlying && now < p.blockUntil, len(b.vel) > BLOCK_SPEED);
+    if (reach < 0 || sd.d > reach) continue;
+    // A player who has not yet reacted to the ball can still be hit by it,
+    // but only a fast ball counts (he cannot go for one he has not seen).
+    if (now < p.reactUntil && len(b.vel) <= BLOCK_SPEED && p.role !== 'GK') continue;
+    if (shielded(world, p, atPt)) continue;
+    // A ball still at its owner's feet, nearer his foot than this man's, is
+    // his: taking it needs a committed challenge (a lunge), not a brush.
+    if (owner && p.side !== owner.side && len(b.vel) < BLOCK_SPEED) {
+      const dOwn = dist(owner.pos, atPt);
+      if (dOwn <= FOOT_REACH && dOwn < dist(p.pos, atPt)) continue;
+    }
+    if (sd.t < tBody || (sd.t === tBody && who && sd.d < whoD)) {
+      tBody = sd.t; who = p; whoAt = atPt; whoZ = zAt; whoD = sd.d;
+    }
+  }
+
+  // Goal-line crossing on this segment.
+  let tLine = Infinity;
+  let lineX = 0;
+  if (to.x <= 0 || to.x >= PITCH_LENGTH) {
+    lineX = to.x <= 0 ? 0 : PITCH_LENGTH;
+    const dx = to.x - from.x;
+    tLine = Math.abs(dx) < 1e-9 ? 0 : Math.max(0, Math.min(1, (lineX - from.x) / dx));
+  }
+  let tTouch = Infinity;
+  if (to.y <= 0 || to.y >= PITCH_WIDTH) {
+    const ly = to.y <= 0 ? 0 : PITCH_WIDTH;
+    const dy = to.y - from.y;
+    tTouch = Math.abs(dy) < 1e-9 ? 0 : Math.max(0, Math.min(1, (ly - from.y) / dy));
+  }
+
+  if (who && tBody <= tLine && tBody <= tTouch) {
+    touchBall(world, who, whoAt, whoZ, whoD, events, minute);
+    return;
+  }
+
+  if (tLine <= tTouch && tLine !== Infinity) {
+    const yAt = from.y + (to.y - from.y) * tLine;
+    const zAt = fromZ + (toZ - fromZ) * tLine;
+    const defending: TeamSide = lineX === 0 ? 'home' : 'away';
+    const attacking = otherSide(defending);
+    const kick = b.kick;
+    // The frame: posts and crossbar.
+    const nearPost = Math.min(Math.abs(yAt - GOAL_Y_MIN), Math.abs(yAt - GOAL_Y_MAX));
+    const inMouth = yAt > GOAL_Y_MIN && yAt < GOAL_Y_MAX;
+    const hitPost = nearPost < FRAME_HIT && zAt < GOAL_HEIGHT + FRAME_HIT;
+    const hitBar = inMouth && Math.abs(zAt - GOAL_HEIGHT) < FRAME_HIT;
+    if (hitPost || hitBar) {
+      const into = lineX === 0 ? 1 : -1;
+      b.pos = vec(lineX + into * 0.15, yAt);
+      b.z = Math.max(0, zAt);
+      if (hitPost) {
+        const post = Math.abs(yAt - GOAL_Y_MIN) < Math.abs(yAt - GOAL_Y_MAX) ? GOAL_Y_MIN : GOAL_Y_MAX;
+        b.vel = vec(-b.vel.x * 0.55, b.vel.y * 0.6 + Math.sign(yAt - post || 1) * Math.abs(b.vel.x) * 0.25);
+      } else {
+        b.vel = vec(-b.vel.x * 0.5, b.vel.y * 0.8);
+        b.vz = -Math.abs(b.vz) * 0.5 - 1;
+      }
+      if (kick && isShotKind(kick.kind) && !kick.resolved) kick.woodwork = true;
+      trace(world, 'frame', null, { post: hitPost, bar: hitBar, y: r2(yAt), z: r2(zAt) });
+      newBallPath(world, null);
+      return;
+    }
+    if (inMouth && zAt < GOAL_HEIGHT - 0.11 && yAt > GOAL_Y_MIN + 0.11 && yAt < GOAL_Y_MAX - 0.11) {
+      scoreGoal(world, attacking, events, minute, yAt, zAt);
+      return;
+    }
+    // Out over the goal line.
+    if (kick && isShotKind(kick.kind)) resolveShot(world, events, minute, 'shot');
+    passEnd(world, 'out');
+    if (b.lastTouchSide === defending) {
+      emit(events, world, minute, { type: 'out_corner', side: attacking });
+      shotImpulse(world, attacking, 0.05);
+      beginRestart(world, 'corner', attacking, cornerSpot(attacking, yAt));
+    } else {
+      emit(events, world, minute, { type: 'out_goalkick', side: defending });
+      beginRestart(world, 'goalkick', defending, goalKickSpot(defending));
+    }
+    return;
+  }
+
+  if (tTouch !== Infinity) {
+    const xAt = from.x + (to.x - from.x) * tTouch;
+    const yLine = to.y <= 0 ? 0 : PITCH_WIDTH;
+    const kick = b.kick;
+    if (kick && isShotKind(kick.kind)) resolveShot(world, events, minute, 'shot');
+    passEnd(world, 'out');
+    const throwTo: TeamSide = b.lastTouchSide === 'home' ? 'away' : 'home';
+    emit(events, world, minute, { type: 'out_throw', side: throwTo });
+    beginRestart(world, 'throw', throwTo, vec(Math.max(1, Math.min(PITCH_LENGTH - 1, xAt)), yLine));
+  }
+}
+
+/** A goal: the ball crossed the line between the posts and under the bar. */
+function scoreGoal(world: SimWorld, attacking: TeamSide, events: SimEvent[], minute: number, y: number, z: number): void {
+  const b = world.ball;
+  const kick = b.kick;
+  if (attacking === 'home') world.score[0] += 1; else world.score[1] += 1;
+  // Credit: the last attacker to touch it; or the shooter if a keeper or
+  // defender only diverted his shot; otherwise nobody (an own goal).
+  let scorer: string | undefined;
+  if (b.lastTouchSide === attacking && b.lastTouchId) scorer = b.lastTouchId;
+  else if (world.lastShot && world.lastShot.side === attacking && world.clockSec - world.lastShot.tSec < 3) scorer = world.lastShot.playerId;
+  if (kick && isShotKind(kick.kind)) kick.resolved = true;
+  emit(events, world, minute, { type: 'goal', side: attacking, ...(scorer ? { playerId: scorer } : {}) });
+  trace(world, 'goal', findById(world, scorer ?? null), {
+    y: r2(y), z: r2(z), ownGoal: scorer === undefined, kick: kick ? kick.kind : null, kickBy: kick ? kick.side === attacking : null,
+    sinceShot: world.lastShot ? r2(world.clockSec - world.lastShot.tSec) : null,
+  });
+  const sc = findById(world, scorer ?? null);
+  bump(world, sc, 0.08);
+  for (const p of teamOf(world, attacking)) bump(world, p, 0.01);
+  for (const p of teamOf(world, otherSide(attacking))) bump(world, p, -0.01);
+  shotImpulse(world, attacking, 0.2);
+  beginRestart(world, 'kickoff', otherSide(attacking), CENTRE_SPOT);
+}
+
+// ── Dead ball ───────────────────────────────────────────────────────────────
+
+function deadBallTick(world: SimWorld, dt: number, minute: number, events: SimEvent[]): void {
+  const r = world.restart!;
+  const now = world.clockSec;
+  for (const p of [...world.home, ...world.away]) {
+    if (p.sentOff) continue;
+    integratePlayer(p, restartVelocity(p, world), dt);
+  }
+  let taker = findById(world, r.takerId);
+  if (!taker || taker.sentOff) {
+    const team = teamOf(world, r.side).filter((p) => !p.sentOff && p.role !== 'GK');
+    taker = team[0] ?? null;
+    if (!taker) return;
+    r.takerId = taker.id;
+  }
+  if (r.kind === 'keeper') world.ball.pos = taker.pos;
+  if (now < r.readyAt) return;
+  const atSpot = dist(taker.pos, r.spot) < 0.8;
+  if (!atSpot && now < r.readyAt + 25) return;
+  // Take it.
+  taker.pos = r.spot;
+  taker.vel = ZERO;
+  world.ball.pos = r.spot;
+  world.phase = 'open_play';
+  world.restart = null;
+  world.ball.ownerId = taker.id;
+  for (const p of [...world.home, ...world.away]) {
+    p.job = 'shape';
+    p.nextThinkSec = now;
+    p.reactUntil = now;
+  }
+  const { action } = chooseAction(taker, world, r.kind, r.indirect);
+  trace(world, 'restart', taker, { kind: r.kind, action: action.kind });
+  execute(world, taker, action, events, minute, r.kind);
+  // The taker may not play it again until someone else has.
+  taker.noTouchUntil = now + 0.8;
 }
 
 // ── The tick ───────────────────────────────────────────────────────────────
@@ -320,439 +1365,260 @@ function resolvePenalty(world: SimWorld, taker: SimPlayer, minute: number, rng: 
  * Advance the world by one timestep and return any events that emerged.
  *
  * @param world  The mutable match world.
- * @param rng    Seeded random source (decisions, contests).
  * @param dt     Timestep in seconds.
  * @returns      Events emitted this tick (often empty).
  */
-export function step(world: SimWorld, rng: Rng, dt: number): SimEvent[] {
+export function step(world: SimWorld, dt: number): SimEvent[] {
   const events: SimEvent[] = [];
   world.clockSec += dt;
-  // No upper clamp: stoppage time runs past 90:00, so added-time events read as
-  // minute 91+ (the DB allows 0–120).  The tick loop bounds how far this goes.
-  //
-  // clockSec is accumulated by repeated `+= dt`, so after thousands of ticks it
-  // carries floating-point drift: at 90:00 it is 5400.000000000x rather than
-  // 5400. Feeding that straight to Math.ceil pushed every event landing exactly
-  // on a minute boundary into the NEXT minute, and at full time produced a
-  // minute-91 event in a match played with stoppage disabled. Rounding to
-  // milliseconds first removes the drift while preserving real sub-second
-  // timing, which the sub-minute ordering depends on.
+  // clockSec accumulates by repeated `+= dt`, so after thousands of ticks it
+  // carries floating-point drift (5400.000000000x at 90:00).  Rounding to
+  // milliseconds before Math.ceil keeps an event that lands exactly on a
+  // minute boundary in its own minute.
   const clockMs = Math.round(world.clockSec * 1000) / 1000;
   const minute = Math.max(1, Math.ceil(clockMs / 60));
+  const now = world.clockSec;
 
-  // ── Dead-ball pause (post-goal breather) ──────────────────────────────────
-  // Players drift home; nobody acts on the ball until the pause elapses.
-  if (world.phase === 'dead_ball') {
-    world.deadBallTicks -= 1;
-    for (const p of [...world.home, ...world.away]) {
-      if (p.sentOff) continue; // sent off — stays parked, doesn't reset to shape
-      integratePlayer(p, arrive(p, p.homePos, ANCHOR_SLOW_RADIUS), dt);
-    }
-    if (world.deadBallTicks <= 0) world.phase = 'open_play';
+  if (world.phase === 'dead_ball' && world.restart) {
+    deadBallTick(world, dt, minute, events);
+    driftTick(world, dt);
     return events;
   }
 
-  // ── Substitutions ─────────────────────────────────────────────────────────
-  // Once players tire in the second half, each side may bring on fresh legs.
   maybeSubstitute(world, 'home', minute, events);
   maybeSubstitute(world, 'away', minute, events);
 
-  const ball = world.ball;
-  if (ball.loosePopCooldown > 0) ball.loosePopCooldown -= 1;
+  const ctx = buildContext(world);
+  const carrier = ctx.carrier;
+  const all = [...world.home, ...world.away];
 
-  const owner = ball.ownerId
-    ? [...world.home, ...world.away].find((p) => p.id === ball.ownerId) ?? null
-    : null;
-  const possessingSide: TeamSide | null = owner ? owner.side : null;
+  // ── Off-ball decisions ──────────────────────────────────────────────────
+  for (const p of all) {
+    if (p.sentOff || p.role === 'GK' || p === carrier || p.lunge) continue;
+    if (now >= p.nextThinkSec) thinkJob(p, world, ctx);
+  }
 
-  // ── 1+2. Role assignment & desired velocities ─────────────────────────────
-  // Build a desired velocity for every player based on their role this tick.
-  const desired = new Map<string, Vec2>();
-
-  // Identify the press/chase players up front.
-  const homeOut = outfield(world.home);
-  const awayOut = outfield(world.away);
-  const nearestHome = nearestTo(homeOut, ball.pos);
-  const nearestAway = nearestTo(awayOut, ball.pos);
-
-  for (const side of ['home', 'away'] as const) {
-    const team = side === 'home' ? world.home : world.away;
-    const mates = team;
-    const nearest = side === 'home' ? nearestHome : nearestAway;
-
-    for (const p of team) {
-      // A sent-off player takes no part: no role, no desired velocity — they sit
-      // parked on the touchline (skipped in integration below).
-      if (p.sentOff) continue;
-      // Keeper logic: rush a nearby loose ball, else hold the line.
-      if (p.role === 'GK') {
-        const ballNear = dist(ball.pos, vec(defendingGoalX(side), PITCH_WIDTH / 2)) < KEEPER_RUSH_DIST;
-        if (!owner && ballNear) {
-          desired.set(p.id, pursueBall(p, ball.pos, ball.vel));
-        } else {
-          desired.set(p.id, arrive(p, keeperHold(p, ball.pos), 3));
-        }
-        continue;
-      }
-
-      if (owner && p.id === owner.id) {
-        // The carrier is handled in the ball section (dribble target); hold
-        // position here as a placeholder so it has a desired velocity entry.
-        desired.set(p.id, ball.vel);
-        continue;
-      }
-
-      const isPossessing = possessingSide === side;
-      const sep = separation(p, mates, SEPARATION_RADIUS);
-
-      if (!owner) {
-        // Loose ball: this side's nearest outfielder chases; others hold shape.
-        if (nearest && p.id === nearest.player.id) {
-          desired.set(p.id, pursueBall(p, ball.pos, ball.vel));
-        } else {
-          desired.set(p.id, add(arrive(p, dynamicAnchor(p, ball.pos), ANCHOR_SLOW_RADIUS), sep));
-        }
-      } else if (isPossessing) {
-        // Supporting the carrier: hold the (ball-shifted) formation anchor.
-        desired.set(p.id, add(arrive(p, dynamicAnchor(p, ball.pos), ANCHOR_SLOW_RADIUS), sep));
-      } else {
-        // Defending: the nearest outfielder presses the ball; rest hold shape.
-        if (nearest && p.id === nearest.player.id) {
-          desired.set(p.id, seek(p, ball.pos));
-        } else {
-          desired.set(p.id, add(arrive(p, dynamicAnchor(p, ball.pos), ANCHOR_SLOW_RADIUS), sep));
-        }
-      }
+  // ── Offside: flagged once the offside man is clearly going for the ball ──
+  // (the first to it on his side and committed to the chase), as an
+  // assistant referee does, rather than only when he finally touches it.
+  if (world.ball.offsideFor) {
+    const op = findById(world, world.ball.offsideFor);
+    const k0 = world.ball.kick;
+    if (op && !op.sentOff && op.job === 'chase' && ctx.best[op.side]?.id === op.id && k0 && now - k0.tSec > 0.4) {
+      emit(events, world, minute, { type: 'offside', side: op.side, playerId: op.id });
+      passEnd(world, 'offside');
+      world.ball.offsideFor = null;
+      beginRestart(world, 'freekick', otherSide(op.side), clampSpot(op.pos), -3, true);
+      return events;
     }
   }
 
-  // ── 3. Integrate all players ──────────────────────────────────────────────
-  for (const p of [...world.home, ...world.away]) {
-    if (p.sentOff) continue; // parked off the pitch — frozen in place
-    integratePlayer(p, desired.get(p.id) ?? ZERO, dt);
+  // ── Keepers read any fast ball heading into their goal ─────────────────
+  // A shot, but equally a deflection, a parry or a miscued clearance: the
+  // keeper reacts to the ball's path (after his reaction delay), not to who
+  // kicked it or what it was meant to be.
+  for (const side of SIDES) {
+    const k = keeperOf(world, side);
+    if (k && !k.dive && now >= k.reactUntil && ballThreatens(world, side)) {
+      readShot(k, world);
+      const kd = k.dive as SimPlayer['dive'];
+      if (kd) trace(world, 'dive', k, { kx: r2(k.pos.x), ky: r2(k.pos.y), vx: r2(k.vel.x), vy: r2(k.vel.y), toY: r2(kd.at.y), z: r2(kd.z) });
+    }
   }
 
-  // ── 4. Ball update ────────────────────────────────────────────────────────
+  // ── The carrier plays the ball when it is at his feet ────────────────────
+  // First, a carrier who has seen a challenge coming (after his reaction
+  // time) knocks the ball away from the incoming foot if he can reach it.
+  if (carrier && !carrier.sentOff && now >= carrier.noTouchUntil
+    && dist(carrier.pos, world.ball.pos) <= FOOT_REACH && world.ball.z < 0.7
+    && now - world.ball.lastTouchSec >= 0.1) {
+    const threat = incomingLunge(world, carrier);
+    if (threat) evade(world, carrier, threat);
+  }
+  // A wound-up strike goes off when its back-lift is done, if the ball is
+  // still there to hit; if the ball has gone (tackled, blocked, run away) the
+  // chance is gone with it.
+  for (const p of all) {
+    if (!p.windup) continue;
+    if (p !== carrier || world.phase !== 'open_play') { p.windup = null; continue; }
+    if (now < p.windup.at) continue;
+    const act = p.windup.action as CarrierAction;
+    p.windup = null;
+    if (dist(p.pos, world.ball.pos) <= FOOT_REACH + 0.2 && world.ball.z < 0.7) {
+      execute(world, p, act, events, minute, null);
+    } else if (world.trace) {
+      trace(world, 'windup_lost', p, { ballD: r2(dist(p.pos, world.ball.pos)) });
+    }
+  }
+  if (carrier && !carrier.sentOff && !carrier.windup && now >= carrier.noTouchUntil
+    && dist(carrier.pos, world.ball.pos) <= FOOT_REACH && world.ball.z < 0.7
+    && now - world.ball.lastTouchSec >= TOUCH_GAP) {
+    // A receiver needs a moment to settle the ball and look up before he can
+    // pick a pass (quicker for players who see the game early).
+    // Under pressure he releases it at once (and less accurately).
+    const press = pressureAt(carrier.pos, teamOf(world, otherSide(carrier.side)));
+    const settled = now - world.ball.controlSec >= (SETTLE_BASE + 1.0 * (1 - carrier.stats.vision / 100)) * (1 - press);
+    const { action, options, top } = chooseAction(carrier, world, 'open', false, settled);
+    if (world.trace) {
+      trace(world, 'decide', carrier, { action: action.kind, options, u: r2(action.utility * 1000), top });
+    }
+    if (action.kind === 'shoot') {
+      // Back-lift: quicker for good strikers, a touch longer when stretched.
+      const wind = shotWindup(carrier);
+      carrier.windup = { action, at: now + wind };
+      // Defenders close enough who see the back-lift (after their reaction
+      // time) throw a leg or body into the lane.
+      for (const o of teamOf(world, otherSide(carrier.side))) {
+        if (o.sentOff || o.role === 'GK') continue;
+        if (dist(o.pos, carrier.pos) > BLOCKER_RANGE) continue;
+        if (reactionDelay(o, world) < wind + 0.25) o.blockUntil = now + wind + 0.6;
+      }
+    } else {
+      execute(world, carrier, action, events, minute, null);
+    }
+  }
+
+  // ── Challenges ───────────────────────────────────────────────────────────
+  const owner = world.ball.ownerId ? findById(world, world.ball.ownerId) : null;
   if (owner) {
-    // ── Owned: glue ball just ahead of the carrier, then maybe act ──────────
-    const heading = len(owner.vel) > 0.5 ? normalize(owner.vel) : normalize(sub(vec(attackingGoalX(owner.side), PITCH_WIDTH / 2), owner.pos));
-    // Clamp the glued position to the pitch: a real dribbler keeps the ball in
-    // play, so the ball never sits off the touchline just because the carrier
-    // is hugging it (which would otherwise show as out-of-bounds in a frame).
-    const glued = add(owner.pos, scale(heading, DRIBBLE_LEAD));
-    ball.pos = vec(
-      Math.max(0, Math.min(PITCH_LENGTH, glued.x)),
-      Math.max(0, Math.min(PITCH_WIDTH, glued.y)),
-    );
-    ball.vel = owner.vel;
-    ball.heldSec += dt;
-
-    // A defender in range challenges: win the ball cleanly, foul (free kick),
-    // or miss and let the carrier play on.  RNG draws are ordered tackle →
-    // foul → card so the seeded stream stays deterministic across both twins.
-    const defenders = owner.side === 'home' ? awayOut : homeOut;
-    const challenger = nearestTo(defenders, owner.pos);
-    let challengeResolved = false;
-    if (challenger && challenger.d < TACKLE_RADIUS) {
-      // STYLE: the defending manager's press/tackle deltas scale how committed
-      // the challenge is — High Pressing & Aggressive win the ball more often
-      // (and higher up), Counterattacking sits off.  Balanced = 1×.
-      const dStyle = challenger.player.side === 'home' ? world.homeStyle : world.awayStyle;
-      const pressFactor = 1 + (dStyle.press + dStyle.tackle) * STYLE_PRESS_K;
-      // Clamp so a high press is a BOUNDED nudge, never a guaranteed tackle: the
-      // miss/foul branches must stay reachable.  tackleProbability maxes at 0.88,
-      // so ×1.6 (High Pressing) would otherwise exceed 1.0 and suppress fouls.
-      const styledTackleP = Math.min(0.94, tackleProbability(challenger.player, owner) * pressFactor);
-      if (rng() < styledTackleP) {
-        // Tackle won: ball pops loose toward the tackler.
-        ball.ownerId = null;
-        ball.vel = scale(normalize(sub(challenger.player.pos, owner.pos)), 6);
-        ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
-        ball.heldSec = 0;
-        ball.lastTouch = { side: challenger.player.side, isShot: false, sq: 0 };
-        ball.offsideFor = null;
-        events.push({ tSec: world.clockSec, minute, type: 'tackle', side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id });
-        challengeResolved = true;
-      } else if (rng() < foulProbability(challenger.player, owner) * (challenger.player.yellowCards > 0 ? BOOKED_FOUL_FACTOR : 1)) {
-        // Foul.  A cynical foul near goal may draw a yellow or (rarely) red; a
-        // SECOND yellow to the same player becomes a red, and any red sends them
-        // off (no extra rng draw — the count is deterministic on the cards shown).
-        let card = cardForFoul(owner.pos, owner.side, rng);
-        if (card === 'yellow') {
-          challenger.player.yellowCards += 1;
-          if (challenger.player.yellowCards >= 2) card = 'red'; // second booking → off
-        }
-        if (card === 'red') sendOff(challenger.player);
-        events.push({
-          tSec: world.clockSec, minute, type: 'foul',
-          side: challenger.player.side, playerId: challenger.player.id, otherId: owner.id,
-          ...(card ? { card } : {}),
-        });
-        // A clear foul inside the box is a penalty (the rng draw fires only there,
-        // so open-play stays undisturbed); otherwise a quick free kick at the spot.
-        if (isInPenaltyArea(owner.pos, owner.side) && rng() < PENALTY_AWARD_RATE) {
-          resolvePenalty(world, owner, minute, rng, events);
-        } else {
-          awardBall(world, owner.side, owner.pos);
-        }
-        challengeResolved = true;
-      }
-      // else: challenge missed — fall through to the carrier's decision.
+    for (const d of teamOf(world, otherSide(owner.side))) {
+      if (d.sentOff) continue;
+      if (d.role === 'GK' && !inOwnBox(d, d.pos)) continue;
+      if (d.role !== 'GK' && d.job !== 'press' && d.job !== 'cover' && d.job !== 'chase') continue;
+      considerLunge(world, d, owner);
     }
-
-    if (!challengeResolved && ball.heldSec >= DECISION_INTERVAL_SEC) {
-      // Time to decide.
-      ball.heldSec = 0;
-      const action = chooseAction(owner, world, rng);
-      if (action.kind === 'shoot') {
-        const sq = shotQuality(owner.pos, owner.side);
-        ball.ownerId = null;
-        ball.vel = shotKick(owner, rng);
-        ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
-        ball.lastTouch = { side: owner.side, isShot: true, sq, playerId: owner.id };
-        ball.offsideFor = null;
-        // The 'shot' vs 'goal'/'save' event is emitted on resolution below.
-      } else if (action.kind === 'pass') {
-        ball.ownerId = null;
-        ball.vel = passKick(owner, action.target, rng);
-        ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
-        ball.lastTouch = { side: owner.side, isShot: false, sq: 0 };
-        // Flag the pass if it's played to a player standing in an offside
-        // position; offside is only CALLED if that same player collects it
-        // (resolveLooseBall).  An onside teammate or a defender collecting it
-        // clears the flag with no whistle.
-        ball.offsideFor = isOffsidePosition(action.target, owner.pos, world) ? action.target.id : null;
-        events.push({ tSec: world.clockSec, minute, type: 'pass', side: owner.side, playerId: owner.id, otherId: action.target.id });
-      } else {
-        // Dribble: aim a carry toward goal; ball stays glued next tick.
-        // (No state change needed — the carrier's steering already drives
-        //  toward goal via the dribble target computed below.)
-      }
-    }
-
-    // If still dribbling (owner unchanged), nudge the carrier's desired
-    // velocity toward goal for next tick by overwriting their integration is
-    // already done; instead we set their velocity target implicitly through
-    // the glued ball.  To actually advance, give the owner a goal-ward shove.
-    if (ball.ownerId === owner.id) {
-      // Carry FORWARD toward the goal line, drifting only gently toward the
-      // centre so wide players keep the width instead of every carrier
-      // funnelling through the middle.  The lateral pull sharpens as the carrier
-      // nears the goal — wingers stay wide in build-up and cut inside in the
-      // final third to shoot.
-      const goalX = attackingGoalX(owner.side);
-      const goalProximity = 1 - Math.min(1, Math.abs(owner.pos.x - goalX) / 35); // 0 far … 1 at the line
-      const centreBias = 0.22 + 0.5 * goalProximity;                             // 0.22 wide → 0.72 in the box
-      const aimY = owner.pos.y * (1 - centreBias) + (PITCH_WIDTH / 2) * centreBias;
-      const goalPt = vec(goalX, aimY);
-      const carryTarget = add(owner.pos, scale(normalize(sub(goalPt, owner.pos)), DRIBBLE_REACH));
-      const drive = seek(owner, carryTarget);
-      // Re-integrate the owner with the dribble drive (overrides the placeholder).
-      const deltaV = truncate(sub(drive, owner.vel), MAX_ACCEL * dt);
-      owner.vel = truncate(add(owner.vel, deltaV), effectiveMaxSpeed(owner));
-      // Position already moved this tick with the old vel; the corrected vel
-      // takes effect next tick — acceptable at 10Hz and keeps integration single-pass.
-    }
-  } else {
-    // ── Loose / in flight: friction + collision/goal/out resolution ─────────
-    const from = ball.pos;
-    // Apply rolling friction to the ball's speed.
-    const spd = len(ball.vel);
-    if (spd > 0) {
-      const newSpd = Math.max(0, spd - BALL_DECEL * dt);
-      ball.vel = newSpd === 0 ? ZERO : scale(normalize(ball.vel), newSpd);
-    }
-    const to = add(from, scale(ball.vel, dt));
-    ball.pos = to;
-
-    const resolved = resolveLooseBall(world, from, to, rng, minute, events);
-    if (!resolved) {
-      // Nobody intercepted, no goal/out — leave the ball where it rolled.
-      ball.pos = to;
+  } else if (world.ball.z < 0.6) {
+    // A loose ball two men are racing for: either may commit to get there
+    // first, and if the other arrives first the challenge meets the man.
+    // The man nearer the ball decides first (whoever is closer has the
+    // earlier say); never a fixed home-first order, which would hand one side
+    // the first commitment in every race.
+    const hr = nearestRacer(world, 'home');
+    const ar = nearestRacer(world, 'away');
+    if (hr && ar) {
+      const homeFirst = dist(hr.pos, world.ball.pos) <= dist(ar.pos, world.ball.pos);
+      const [r1, r2] = homeFirst ? [hr, ar] : [ar, hr];
+      if (r1.job === 'chase') considerLunge(world, r1, r2);
+      if (r2.job === 'chase' && !r1.lunge) considerLunge(world, r2, r1);
     }
   }
+  for (const p of all) {
+    if (p.lunge && now >= p.lunge.resolveSec && world.phase === 'open_play') resolveLunge(world, p, events, minute);
+  }
+  if (world.phase !== 'open_play') { driftTick(world, dt); return events; }
 
+  // ── Body contact: a man running through the carrier ─────────────────────
+  // Bodies are about a metre across; an opponent who arrives into the
+  // carrier from behind or the side faster than a shoulder-to-shoulder
+  // challenge allows has charged him.  Geometry and speed, no roll.
+  if (owner && !owner.sentOff && world.ball.ownerId === owner.id && world.phase === 'open_play' && world.flags.bodyContact) {
+    for (const o of teamOf(world, otherSide(owner.side))) {
+      if (o.sentOff || o.role === 'GK' || o.lunge) continue;
+      const gap = dist(o.pos, owner.pos);
+      if (gap > BODY_CONTACT || gap < 1e-6) continue;
+      const n = normalize(sub(owner.pos, o.pos));
+      const closing = dot(sub(o.vel, owner.vel), n);
+      const facing = len(owner.vel) > 0.5 ? normalize(owner.vel) : n;
+      const fromFront = dot(n, facing) < -0.3;
+      // Referees allow more contact inside the box before giving a penalty.
+      // A booked man holds back from contact.
+      const limit = (isInPenaltyArea(owner.pos, owner.side) ? CHARGE_SPEED_BOX : CHARGE_SPEED) + (o.yellowCards > 0 ? 1.2 : 0);
+      if (closing > limit && !fromFront) {
+        commitFoul(world, o, owner, closing, n, dist(owner.pos, world.ball.pos), 'charge', events, minute);
+        break;
+      }
+    }
+  }
+  if (world.phase !== 'open_play') { driftTick(world, dt); return events; }
+
+  // ── Movement ─────────────────────────────────────────────────────────────
+  const ctx2 = carrier === (world.ball.ownerId ? findById(world, world.ball.ownerId) : null) ? ctx : buildContext(world);
+  const carrierNow = ctx2.carrier;
+  for (const p of all) {
+    if (p.sentOff) continue;
+    if (p.role === 'GK' && p.dive) {
+      integratePlayer(p, diveVelocity(p), dt, DIVE_ACCEL, diveSpeed(p));
+      continue;
+    }
+    if (p.lunge) {
+      const v = sub(p.lunge.at, p.pos);
+      const rem = Math.max(0.05, p.lunge.resolveSec - now);
+      integratePlayer(p, truncate(scale(v, 1 / rem), 7), dt, 20, 7);
+      continue;
+    }
+    if (p === carrierNow) { integratePlayer(p, carrierVelocity(p, world), dt); continue; }
+    if (now < p.blockUntil && p.role !== 'GK') {
+      const v = laneVelocity(p, world, carrierNow);
+      if (v) { integratePlayer(p, v, dt); continue; }
+    }
+    if (p.role === 'GK') { integratePlayer(p, keeperVelocity(p, world, ctx2), dt); continue; }
+    const slowed = now < p.recoverUntil ? 0.35 : 1;
+    integratePlayer(p, scale(jobVelocity(p, world, ctx2), slowed), dt);
+  }
+
+  // ── Ball physics and what it meets ──────────────────────────────────────
+  const from = world.ball.pos;
+  const fromZ = world.ball.z;
+  stepBall(world.ball, dt);
+  resolveBall(world, from, fromZ, events, minute);
+
+  // A shot that has died without meeting anyone is over.
+  const k2 = world.ball.kick;
+  if (world.phase === 'open_play' && k2 && isShotKind(k2.kind) && !k2.resolved
+    && len(world.ball.vel) < 3 && world.ball.z === 0) {
+    resolveShot(world, events, minute, 'shot');
+  }
+  // Keepers stop diving once the ball is dealt with or no longer coming at
+  // their goal (held, slowed, or going the other way).
+  for (const p of all) {
+    if (!p.dive) continue;
+    const toward = defendingGoalX(p.side) === 0 ? -1 : 1;
+    if (world.ball.ownerId !== null || world.ball.vel.x * toward <= 0 || len(world.ball.vel) < 3) p.dive = null;
+  }
+
+  driftTick(world, dt);
   return events;
 }
 
-/**
- * Resolve what happens to a loose ball that travelled `from`→`to` this tick:
- * a goal-line crossing (goal / save / goal-kick / corner), a touchline exit
- * (throw-in), or collection/interception by the nearest reaching player.
- *
- * Mutates the world (score, ball ownership, phase) and pushes any events.
- *
- * @returns true if the ball's state was changed (collected / restarted), so
- *          the caller knows resolution happened this tick.
- */
-function resolveLooseBall(
-  world: SimWorld,
-  from: Vec2,
-  to: Vec2,
-  rng: Rng,
-  minute: number,
-  events: SimEvent[],
-): boolean {
-  const ball = world.ball;
-
-  // ── Goal-line exits (x ≤ 0 is home's goal, x ≥ 105 is away's) ──────────────
-  // Detect by ABSOLUTE endpoint position rather than a sign-change crossing:
-  // a ball released exactly on the line (e.g. a carrier dispossessed on the
-  // byline) would otherwise slip past the crossing test and drift off-pitch
-  // forever.  Absolute detection catches both the clean crossing and the
-  // already-beyond case.
-  if (to.x <= 0 || to.x >= PITCH_LENGTH) {
-    const lineX = to.x <= 0 ? 0 : PITCH_LENGTH;
-    // y where the path meets the line (interpolated); if the start is already
-    // beyond the line, fall back to the endpoint's y.
-    const denom = (to.x - from.x);
-    const t = Math.abs(denom) < 1e-9 ? 1 : (lineX - from.x) / denom;
-    const tt = t < 0 ? 0 : t > 1 ? 1 : t;
-    const yAt = from.y + tt * (to.y - from.y);
-    // defendingSide is whoever's goal this line is.
-    const defendingSide: TeamSide = lineX === 0 ? 'home' : 'away';
-    const attackingSide: TeamSide = lineX === 0 ? 'away' : 'home';
-
-    if (yAt >= GOAL_Y_MIN && yAt <= GOAL_Y_MAX) {
-      // On target for the goal mouth — keeper gets a save attempt.
-      const team = defendingSide === 'home' ? world.home : world.away;
-      const keeper = keeperOf(team);
-      const sq = ball.lastTouch?.isShot ? ball.lastTouch.sq : 0.2; // stray rollers easy to save
-      const saved = keeper ? rng() < saveProbability(keeper, sq) : false;
-      if (saved && keeper) {
-        events.push({ tSec: world.clockSec, minute, type: 'save', side: defendingSide, playerId: keeper.id });
-        // Keeper claims it.
-        ball.pos = keeper.pos;
-        ball.vel = ZERO;
-        ball.ownerId = keeper.id;
-        ball.heldSec = 0;
-        ball.loosePopCooldown = 0;
-        ball.lastTouch = null;
-        ball.offsideFor = null;
-        return true;
-      }
-      // GOAL.  Credit the scorer's side, reset for kickoff, and start the
-      // post-goal dead-ball pause (GOAL_PAUSE_SEC converted to ticks via the
-      // world's fixed timestep).
-      const lastTouch = ball.lastTouch;
-      const scorerSide = lastTouch?.side ?? attackingSide;
-      if (scorerSide === 'home') world.score[0] += 1; else world.score[1] += 1;
-      // Attribute the goal to the shooter only when it came from their shot, so a
-      // deflection or stray roll into the net (an own-goal in spirit) credits nobody
-      // rather than a phantom striker.  The adapter increments the scorer's goal
-      // tally + payload team off this playerId.
-      events.push({
-        tSec: world.clockSec,
-        minute,
-        type: 'goal',
-        side: scorerSide,
-        ...(lastTouch?.isShot && lastTouch.playerId ? { playerId: lastTouch.playerId } : {}),
-      });
-      kickoffReset(world, scorerSide === 'home' ? 'away' : 'home');
-      world.deadBallTicks = Math.round(GOAL_PAUSE_SEC / world.dtSec);
-      world.phase = 'dead_ball';
-      return true;
-    }
-
-    // Near-miss: a SHOT that crossed the line a whisker outside a post rattled
-    // the woodwork — a first-class highlight beat (#588).  It changes nothing
-    // about the restart (still the corner / goal kick below), only adds the beat.
-    if (ball.lastTouch?.isShot
-      && (Math.abs(yAt - GOAL_Y_MIN) <= WOODWORK_MARGIN || Math.abs(yAt - GOAL_Y_MAX) <= WOODWORK_MARGIN)) {
-      events.push({
-        tSec: world.clockSec, minute, type: 'woodwork', side: attackingSide,
-        ...(ball.lastTouch.playerId ? { playerId: ball.lastTouch.playerId } : {}),
-      });
-    }
-
-    // Crossed the goal line OUTSIDE the mouth → corner or goal kick.
-    if (ball.lastTouch?.side === attackingSide || ball.lastTouch == null) {
-      // Attacker put it out → goal kick to the defending side.
-      events.push({ tSec: world.clockSec, minute, type: 'out_goalkick', side: defendingSide });
-      const spot = vec(defendingSide === 'home' ? 5 : PITCH_LENGTH - 5, PITCH_WIDTH / 2);
-      awardBall(world, defendingSide, spot);
-    } else {
-      // Defender put it out → corner to the attacking side.
-      //
-      // The corner is modelled as a DELIVERED cross, not as a stationary ball
-      // at the flag. Leaving it at rest 0.5m from the goal line meant the very
-      // next contest knocked it straight back over, awarding another corner,
-      // then another: 214 corners per match with a median gap of 0.4s, 78% of
-      // them within 3s of the one before (#698). The engine has no set-piece
-      // taker, so a ball sitting on the byline has nowhere to go but out.
-      //
-      // Delivering it is both the fix and the more faithful model: a corner in
-      // football is a cross into the area, and what follows is the scramble.
-      events.push({ tSec: world.clockSec, minute, type: 'out_corner', side: attackingSide });
-      const cornerY = yAt < PITCH_WIDTH / 2 ? 0.5 : PITCH_WIDTH - 0.5;
-      const spot = vec(lineX === 0 ? 0.5 : PITCH_LENGTH - 0.5, cornerY);
-      awardBall(world, attackingSide, spot);
-
-      // Aim at the heart of the six-yard area, with delivery error. Keeping
-      // lastTouch on the ATTACKING side matters: if the cross goes out off a
-      // defender it is correctly another corner, and off an attacker it is
-      // correctly a goal kick.
-      const targetX = lineX === 0 ? CORNER_DELIVERY_DEPTH : PITCH_LENGTH - CORNER_DELIVERY_DEPTH;
-      const target = vec(targetX, PITCH_WIDTH / 2);
-      ball.vel = kickToward(spot, target, CORNER_DELIVERY_SPEED, CORNER_DELIVERY_ERR, rng);
-      ball.ownerId = null;
-      ball.heldSec = 0;
-      // Brief in-flight window so the delivery is not reclaimed on the spot.
-      ball.loosePopCooldown = LOOSE_POP_COOLDOWN_TICKS;
-      // playerId omitted deliberately: no set-piece taker is modelled, so the
-      // delivery belongs to the side rather than to a named player.
-      ball.lastTouch = { side: attackingSide, isShot: false, sq: 0 };
-    }
-    return true;
+/** The carrier runs onto his own touch. */
+function carrierVelocity(p: SimPlayer, world: SimWorld): Vec2 {
+  const b = world.ball;
+  let target = add(b.pos, scale(b.vel, 0.25));
+  // With an opponent close, he puts his body between that man and the ball.
+  let near: SimPlayer | null = null;
+  let nearD = 3;
+  for (const o of teamOf(world, otherSide(p.side))) {
+    if (o.sentOff) continue;
+    const dd = dist(o.pos, b.pos);
+    if (dd < nearD) { nearD = dd; near = o; }
   }
-
-  // ── Touchline exits (y = 0 or y = 68) → throw-in to the other team ────────
-  if (to.y <= 0 || to.y >= PITCH_WIDTH) {
-    const throwTo: TeamSide = ball.lastTouch?.side === 'home' ? 'away' : 'home';
-    const spot = vec(
-      Math.max(1, Math.min(PITCH_LENGTH - 1, to.x)),
-      to.y <= 0 ? 0.5 : PITCH_WIDTH - 0.5,
-    );
-    events.push({ tSec: world.clockSec, minute, type: 'out_throw', side: throwTo });
-    awardBall(world, throwTo, spot);
-    return true;
-  }
-
-  // ── Collection / interception by the nearest reaching player ──────────────
-  if (ball.loosePopCooldown <= 0) {
-    let claimer: SimPlayer | null = null;
-    let claimerD2 = Infinity;
-    for (const p of [...world.home, ...world.away]) {
-      if (p.sentOff) continue; // off the pitch — can't reach the ball
-      if (ballPathWithinReach(p.pos, from, to, CONTROL_RADIUS)) {
-        const d2 = dist2(p.pos, to);
-        if (d2 < claimerD2) { claimerD2 = d2; claimer = p; }
-      }
-    }
-    if (claimer) {
-      // Offside: the flagged attacker collecting their own team's pass is caught
-      // offside → indirect free kick to the defending side at the spot.
-      if (ball.offsideFor === claimer.id) {
-        const defendingSide: TeamSide = claimer.side === 'home' ? 'away' : 'home';
-        events.push({ tSec: world.clockSec, minute, type: 'offside', side: claimer.side, playerId: claimer.id });
-        awardBall(world, defendingSide, claimer.pos); // awardBall clears offsideFor
-        return true;
-      }
-      const wasAttackingSide = ball.lastTouch?.side ?? null;
-      ball.ownerId = claimer.id;
-      ball.pos = claimer.pos;
-      ball.vel = ZERO;
-      ball.heldSec = 0;
-      ball.lastTouch = null;
-      ball.offsideFor = null;
-      // If the claimer is the OPPONENT of whoever last kicked it, that's an
-      // interception (a defensive read), worth surfacing as an event.
-      if (wasAttackingSide && claimer.side !== wasAttackingSide) {
-        events.push({ tSec: world.clockSec, minute, type: 'interception', side: claimer.side, playerId: claimer.id });
-      }
-      return true;
-    }
-  }
-
-  return false;
+  if (near && dist(p.pos, b.pos) < 1.6) target = add(target, scale(normalize(sub(near.pos, b.pos)), 0.4));
+  const d = dist(p.pos, target);
+  const want = Math.min(effectiveMaxSpeed(p), Math.max(1.5, len(b.vel) + 0.8 + d * 0.9));
+  const v = seek(p, target);
+  const l = len(v);
+  return l > 1e-6 ? scale(v, want / l) : ZERO;
 }
+
+/** Slow drifts: confidence toward baseline, momentum toward territory. */
+function driftTick(world: SimWorld, dt: number): void {
+  if (world.flags.confidence) {
+    const a = dt / CONFIDENCE_TAU;
+    for (const p of world.home) p.confidence += (confidenceBase(p) - p.confidence) * a;
+    for (const p of world.away) p.confidence += (confidenceBase(p) - p.confidence) * a;
+    // Instrumentation: team mean confidence once a minute.
+    if (world.trace && Math.floor(world.clockSec / 60) !== Math.floor((world.clockSec - dt) / 60)) {
+      const mean = (ps: readonly SimPlayer[]): number => r2(ps.reduce((s, p) => s + p.confidence, 0) / ps.length);
+      world.trace({ tSec: r2(world.clockSec), kind: 'confidence', ball: { x: 0, y: 0, z: 0 }, data: { home: mean(world.home), away: mean(world.away) } });
+    }
+  }
+  if (world.flags.momentum && world.phase === 'open_play') {
+    const territory = (world.ball.pos.x / PITCH_LENGTH) * 2 - 1;
+    const m = world.momentum[0] + (territory * 0.5 - world.momentum[0]) * (dt / MOMENTUM_TAU);
+    world.momentum[0] = Math.max(-1, Math.min(1, m));
+    world.momentum[1] = -world.momentum[0];
+  }
+}
+
+export { PATH_SAMPLES, PATH_STRIDE };
+export type { TickContext };

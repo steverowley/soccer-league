@@ -13,6 +13,10 @@ import {
 } from './vec2.ts';
 import { type SimPlayer, defendingGoalX } from './types.ts';
 
+/** Max player acceleration in m/s^2: gives bodies inertia, so a player who
+ *  is running the wrong way needs real time to turn and recover. */
+export const MAX_ACCEL = 8;
+
 /**
  * A player's current top speed, after stamina drain.
  * At full stamina they hit maxSpeed; fully drained they manage 60% of it.
@@ -48,11 +52,11 @@ export function seek(p: SimPlayer, target: Vec2): Vec2 {
  * @param slowRadius  Distance within which to start decelerating (metres).
  * @returns           Desired velocity, scaled down near the target.
  */
-export function arrive(p: SimPlayer, target: Vec2, slowRadius: number): Vec2 {
+export function arrive(p: SimPlayer, target: Vec2, slowRadius: number, speedFrac = 1): Vec2 {
   const toTarget = sub(target, p.pos);
   const d = len(toTarget);
   if (d < 0.2) return ZERO; // close enough — stand still rather than jitter
-  const maxV = effectiveMaxSpeed(p);
+  const maxV = effectiveMaxSpeed(p) * speedFrac;
   // Linear ramp: full speed beyond slowRadius, proportionally less inside it.
   const desiredSpeed = d >= slowRadius ? maxV : maxV * (d / slowRadius);
   return scale(normalize(toTarget), desiredSpeed);
