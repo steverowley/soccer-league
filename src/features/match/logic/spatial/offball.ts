@@ -24,7 +24,7 @@ import { effectiveMaxSpeed, arrive, seek, separation } from './steering';
 import { dynamicAnchor } from './formation';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession';
 import { perceive, slip } from './execution';
-import { tacticsOf, possessionPoint, lineOf } from './phase';
+import { tacticsOf, possessionPoint, lineOf, counterpressing } from './phase';
 
 /** Ball-path lookahead: samples, and ticks per sample. */
 export const PATH_SAMPLES = 25;
@@ -230,7 +230,12 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     jobs.push(j); utils.push(u + (p.job === j ? JOB_HYSTERESIS : 0)); refs.push(ref);
   };
 
-  push('shape', 0.3);
+  // Recovering after a loss (the manager's `recover`): a man caught upfield
+  // of the ball values getting back into the block above anything else.
+  const tacS = tacticsOf(world, side);
+  const recovering = !inPossession && tacS.phase === 'defensive_transition' && tacS.plan.onLoss === 'recover'
+    && Math.abs(p.pos.x - defendingGoalX(side)) > Math.abs(ball.pos.x - defendingGoalX(side)) + 2;
+  push('shape', recovering ? 0.55 : 0.3);
 
   if (looseOrFlight) {
     const kick = ball.kick;
@@ -251,7 +256,11 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     // Within about 35 m of his own goal somebody must always engage.
     const deepBall = Math.abs(c.pos.x - defendingGoalX(p.side)) < 35;
     const near = deepBall ? 1 : 1 / (1 + Math.exp(-(11 - dist(p.pos, c.pos)) / 3));
-    if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
+    // Counter-press (the manager's `counterpress`): for the first seconds
+    // after a loss his nearest N men all go for the ball.
+    const swarm = counterpressing(world, side);
+    if (swarm > 0 && rank < swarm && dist(p.pos, c.pos) < 25) push('press', (0.7 + 2 * danger) * Math.max(1, k) - 0.04 * rank, c.id);
+    else if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
     else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }
 
@@ -396,6 +405,12 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const c = ctx.carrier;
       if (!c) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
       const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+      // A second or third man in a counter-press closes the carrier down
+      // from where he is, cutting his escape, rather than queue behind the first.
+      if ((ctx.pressRank.get(p.id) ?? 0) > 0) {
+        const pt = add(c.pos, scale(normalize(sub(p.pos, c.pos)), 2.2));
+        return dist(p.pos, pt) > 3 ? seek(p, pt) : arrive(p, pt, 2.5, 0.9);
+      }
       // Tighter the nearer his own goal: in the last third he stands up close.
       const deep = dist(c.pos, goal) < 30;
       const jockey = add(c.pos, scale(normalize(sub(goal, c.pos)), deep ? JOCKEY_DIST_DEEP : JOCKEY_DIST));
@@ -433,8 +448,10 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       // Caught upfield with the ball between him and his own goal, he
       // sprints back; otherwise he shuffles across at a working pace.
       const ownGoalX = defendingGoalX(p.side);
-      const beaten = ctx.attacking !== null && ctx.attacking !== p.side
-        && Math.abs(world.ball.pos.x - ownGoalX) < Math.abs(p.pos.x - ownGoalX);
+      const tac = tacticsOf(world, p.side);
+      const beaten = (ctx.attacking !== null && ctx.attacking !== p.side
+        && Math.abs(world.ball.pos.x - ownGoalX) < Math.abs(p.pos.x - ownGoalX))
+        || (tac.phase === 'defensive_transition' && tac.plan.onLoss === 'recover' && d > 4);
       return add(arrive(p, pt, 6, (beaten ? 1 : d > 12 ? 0.85 : 0.6) * work), sep);
     }
   }
