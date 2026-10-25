@@ -249,7 +249,11 @@ function maybeSubstitute(world: SimWorld, side: TeamSide, minute: number, events
   }
   if (!off || off.stamina > SUB_STAMINA_THRESHOLD) return;
   let bi = bench.findIndex((b) => b.role === off!.role);
-  if (bi < 0) bi = 0;
+  // No like-for-like replacement left: any outfield substitute, never the
+  // reserve keeper (he used to come on up front once the bench ran out of
+  // the right role, because the fallback took whoever was listed first).
+  if (bi < 0) bi = bench.findIndex((b) => b.role !== 'GK');
+  if (bi < 0) return;
   const fresh = bench.splice(bi, 1)[0]!;
   fresh.role = off.role;
   fresh.homePos = off.homePos;
