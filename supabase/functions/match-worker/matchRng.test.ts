@@ -134,6 +134,13 @@ describe('engine v2 match seed', () => {
   });
 });
 // ── Retry safety: the seed lives on the match row ──────────────────────────
+/** The spatial engine, imported once for the whole file. */
+let enginePromise: Promise<typeof import('./spatial/simulateSpatialMatch.ts')> | null = null;
+function engine(): Promise<typeof import('./spatial/simulateSpatialMatch.ts')> {
+  enginePromise ??= import('./spatial/simulateSpatialMatch.ts');
+  return enginePromise;
+}
+
 // A worker that crashes after claiming is retried.  The retry must simulate
 // the SAME match, so the seed is stored on matches.sim_seed before the first
 // simulation and read back on every later attempt (migration 0088).
@@ -171,8 +178,11 @@ describe('resolveMatchSeed (worker retry safety)', () => {
     expect(row.writes).toBe(1);
   });
 
+  // Two ten-minute simulations: well over vitest's 5 s default when the full
+  // suite runs in parallel, so the budget is explicit.  The engine module is
+  // loaded once and shared (the import is most of the cold-start cost).
   it('a retry replays a byte-identical match', async () => {
-    const { simulateSpatialMatch } = await import('./spatial/simulateSpatialMatch.ts');
+    const { simulateSpatialMatch } = await engine();
     const stats = { shooting: 70, passing: 70, dribbling: 70, speed: 70, stamina: 70, tackling: 70, positioning: 70, goalkeeping: 70, vision: 70 };
     const roles = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'] as const;
     const side = (p: string) => ({ formation: '4-4-2', players: roles.map((role, i) => ({ id: `${p}${i}`, name: `${p}${i}`, role, stats })) });
@@ -183,7 +193,7 @@ describe('resolveMatchSeed (worker retry safety)', () => {
     const a = simulateSpatialMatch(side('h'), side('a'), { ...short, seed: s1 });
     const b = simulateSpatialMatch(side('h'), side('a'), { ...short, seed: s2 });
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-  });
+  }, 60_000);
 
   it('accepts a bigint column read back as a numeric string', async () => {
     const row = rowStore('4294967295');
