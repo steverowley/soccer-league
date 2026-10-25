@@ -47,7 +47,7 @@ const STYLE_DRIBBLE_K = 1.5;
 const SHOT_APPETITE = 0.3;
 
 /** Anti-passivity: each consecutive carry scales carry utility by this. */
-const HOLD_DECAY = 0.93;
+const HOLD_DECAY = 0.97;
 
 /** Carry probe length (m) for evaluating a dribble direction. */
 const CARRY_PROBE = 5;
@@ -328,9 +328,9 @@ export function chooseAction(
   }
 
   // ── Clearance (deep and pressed) ─────────────────────────────────────────
-  if (mode === 'open' && progress < 0.25 && pressure > 0.5) {
+  if (mode === 'open' && progress < 0.3 && pressure > 0.35) {
     const fwd = side === 'home' ? 1 : -1;
-    const y = from.y < PITCH_WIDTH / 2 ? 18 : PITCH_WIDTH - 18;
+    const y = from.y < PITCH_WIDTH / 2 ? 12 : PITCH_WIDTH - 12;
     const aim = clampPitch(vec(from.x + fwd * 40, y));
     const d = dist(from, aim);
     const T = 1.6 + d * 0.02;
