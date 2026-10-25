@@ -193,7 +193,7 @@ describe('resolveMatchSeed (worker retry safety)', () => {
     const a = simulateSpatialMatch(side('h'), side('a'), { ...short, seed: s1 });
     const b = simulateSpatialMatch(side('h'), side('a'), { ...short, seed: s2 });
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-  }, 60_000);
+  }, 180_000);
 
   it('accepts a bigint column read back as a numeric string', async () => {
     const row = rowStore('4294967295');

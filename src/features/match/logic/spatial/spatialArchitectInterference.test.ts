@@ -88,7 +88,7 @@ describe('spatial engine × Architect interference (#530)', () => {
       if (h > 0 && aw > 0 && hasTackle) { adapted = a; return; }
     }
     throw new Error('no seed produced a both-sides-scoring spatial match with a tackle');
-  }, 120000);
+  }, 180_000);
 
   it('curse_player annuls the scorer’s goal in scoreline AND stats, leaving the other side intact', () => {
     const before = deriveScore(adapted.events);

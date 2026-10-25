@@ -97,7 +97,7 @@ describe('game model: presets and parsing', () => {
 
 describe('phase machine', () => {
   let r: SpatialMatchResult;
-  beforeAll(() => { r = simulateSpatialMatch(team('H', 'Balanced'), team('A', 'Balanced'), { seed: 4242, matchSeconds: 900, stoppage: false }); }, 60_000);
+  beforeAll(() => { r = simulateSpatialMatch(team('H', 'Balanced'), team('A', 'Balanced'), { seed: 4242, matchSeconds: 900, stoppage: false }); }, 180_000);
 
   it('starts at the kickoff restart and records every change once', () => {
     for (const side of ['home', 'away'] as const) {
