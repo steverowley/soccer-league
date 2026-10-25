@@ -20,7 +20,7 @@ import {
 } from './types';
 import { predictPath } from './ball';
 import { timeToReach, positionValue, nearestOpponentDist, pressureAt, progressOf } from './evaluate';
-import { effectiveMaxSpeed, arrive, seek, separation, markTarget } from './steering';
+import { effectiveMaxSpeed, arrive, seek, separation } from './steering';
 import { dynamicAnchor } from './formation';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession';
 import { perceive, slip } from './execution';

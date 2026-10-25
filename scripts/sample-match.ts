@@ -63,8 +63,8 @@ for (let i = 0; i < recs.length; i++) {
   if (x.kind === 'shot') {
     lastShot = x;
     const header = d['header'] === true;
-    const res = recs.slice(i + 1, i + 12).find((y) => ['goal', 'keeper', 'block', 'shot_end'].includes(y.kind) && y.tSec - x.tSec < 3);
-    let fate = '';
+    const res = recs.slice(i + 1, i + 60).find((y) => ['goal', 'keeper', 'block', 'shot_end'].includes(y.kind) && y.tSec - x.tSec < 4);
+    let fate = 'still live after 4 s (a slow ball nobody reached)';
     if (res?.kind === 'goal') shotGoalTimes.push(res.tSec);
     if (res?.kind === 'goal') fate = `GOAL, crossing the line at y=${f2(res.data['y'])} m, height ${f2(res.data['z'])} m`;
     else if (res?.kind === 'keeper') fate = `${res.data['action'] === 'catch' ? 'held' : 'parried'} by ${who(res.playerId)}: ball at ${f2(res.data['speed'])} m/s came ${f2(res.data['closeD'])} m from his centre`;

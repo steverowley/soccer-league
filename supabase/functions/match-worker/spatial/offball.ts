@@ -20,7 +20,7 @@ import {
 } from './types.ts';
 import { predictPath } from './ball.ts';
 import { timeToReach, positionValue, nearestOpponentDist, pressureAt, progressOf } from './evaluate.ts';
-import { effectiveMaxSpeed, arrive, seek, separation, markTarget } from './steering.ts';
+import { effectiveMaxSpeed, arrive, seek, separation } from './steering.ts';
 import { dynamicAnchor } from './formation.ts';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession.ts';
 import { perceive, slip } from './execution.ts';
