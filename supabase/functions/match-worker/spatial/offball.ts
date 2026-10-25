@@ -682,9 +682,12 @@ const CP_RECEIVER_GAP = 1.5;
 export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
   // The keeper keeps the formation anchor shifted with the ball; the
   // outfielders take the shape of their phase and their manager's plan.
-  let a = dynamicAnchor(p, world.ball.pos);
+  // (CPU: the anchor is only worked out for the keeper, the one player who
+  // keeps it; every outfielder's point replaces it below.)
+  if (p.role === 'GK') return dynamicAnchor(p, world.ball.pos);
+  let a: Vec2;
   const inPossession = tacticsOf(world, p.side).hasBall;
-  if (inPossession && p.role !== 'GK') {
+  if (inPossession) {
     // In possession the manager's structure (phase.ts): back line up to his
     // settled height, a screen, the front pinning the last line in five lanes.
     a = possessionPoint(p, world);
@@ -693,8 +696,7 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
     const fwd = p.side === 'home' ? 1 : -1;
     const line = offsideLineX(world, p.side);
     if ((a.x - (line - fwd)) * fwd > 0) a = vec(line - fwd, a.y);
-  }
-  if (!inPossession && p.role !== 'GK') {
+  } else {
     // Out of possession the manager's block (phase.ts): the back line at
     // his block height, stepping up on a covered ball and dropping on an
     // uncovered one; midfield and attack ahead of it within his block length;
