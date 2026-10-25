@@ -915,6 +915,13 @@ const BODY_RESTITUTION = 0.4;
 /** Share of the along-surface pace a glancing body contact leaves the ball. */
 const BODY_TANGENT = 0.8;
 
+/** Spread of how far off-centre a header is met (at an error scale of 1),
+ *  and the share of the incoming pace that runs on through, from a clean
+ *  contact to a complete miss-hit. */
+const HEADER_MISS = 0.5;
+const HEADER_KEEP_MIN = 0.25;
+const HEADER_KEEP_MAX = 0.85;
+
 /** Highest ball (m) a player brings down on his chest rather than heads. */
 const CHEST_TOP = 1.55;
 
@@ -1147,9 +1154,14 @@ function header(world: SimWorld, p: SimPlayer, _events: SimEvent[], _minute: num
   const speed = Math.min(16, (Math.exp(DRAG_K * d) - 1) / (DRAG_K * T));
   const s = strike(p, world, normalize(sub(aim, b.pos)), speed, GRAVITY * T / 2, KICK_ERROR.header, e);
   // A header redirects a moving ball; it cannot cancel its momentum, so part
-  // of the incoming pace carries on (which is how crosses get headed behind).
+  // of the incoming pace carries on.  How much depends on how squarely he
+  // meets it: rushed, stretched or under pressure he catches it off-centre
+  // and more of the ball's own pace runs on through (which is how crosses
+  // are glanced behind for corners).  The miss is execution imprecision.
   const incoming = b.vel;
-  launch(world, p, mate && !ownHalf ? 'header' : 'clear', add(scale(s.vel, 0.7), scale(incoming, 0.3)), s.vz, aim, mate && !ownHalf ? mate.id : null);
+  const miss = Math.min(1, Math.abs(slip(p, world, HEADER_MISS * e)));
+  const keep = HEADER_KEEP_MIN + (HEADER_KEEP_MAX - HEADER_KEEP_MIN) * miss;
+  launch(world, p, mate && !ownHalf ? 'header' : 'clear', add(scale(s.vel, 1 - keep), scale(incoming, keep)), s.vz * (1 - 0.5 * keep), aim, mate && !ownHalf ? mate.id : null);
   trace(world, 'header', p, { dist: r2(d), toMate: mate !== null && !ownHalf });
 }
 
