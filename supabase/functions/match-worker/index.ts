@@ -64,7 +64,7 @@ import { cosmicInterjections } from './cosmicVoices.ts';
 import { narrativeRngForMatch, resolveMatchSeed, recordSeedOnKickoff } from './matchRng.ts';
 import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import { ensureOddsForUpcoming } from './oddsGenerator.ts';
-import { simulateSpatialMatch } from './spatial/simulateSpatialMatch.ts';
+import { simulateRemotely, DEFAULT_SIM_URL } from './remoteSim.ts';
 import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
 import { applyTeamTraits } from './spatial/traitModifiers.ts';
 import type { PositionFrame } from './spatial/types.ts';
@@ -82,6 +82,13 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
  * completion is never blocked on this key being present.
  */
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+
+/**
+ * The remote simulation endpoint (Vercel, api/simulate.mjs).  Defaults to
+ * production; set the SIM_URL secret to point a worker at a preview build.
+ * See remoteSim.ts for why the engine runs there and not in this isolate.
+ */
+const SIM_URL = Deno.env.get('SIM_URL') || DEFAULT_SIM_URL;
 
 /**
  * Which engine writes the Architect's in-match judgement. Deterministic unless
@@ -826,7 +833,37 @@ async function processMatch(match: any): Promise<boolean> {
     // from an identical simulation.
     const narrativeRng = narrativeRngForMatch(match.id);
 
-    const spatialResult = simulateSpatialMatch(homeInput, awayInput, { seed });
+    // ── Remote simulation (Vercel) ─────────────────────────────────────────
+    // The engine no longer runs in this isolate: a full match costs about 5 s
+    // of CPU on the edge against a budget of about 2 s, so production killed
+    // every match with HTTP 546 right here.  simulateRemotely mints a one-time
+    // ticket (sim_tickets, migration 0090), POSTs both inputs and the seed to
+    // the Vercel function (api/simulate.mjs, the same engine) and awaits it;
+    // waiting is I/O, not CPU.  It returns the exact SpatialMatchResult an
+    // in-process call would have, so everything below is unchanged.  Any
+    // failure throws into the catch at the bottom, which cleans up and puts
+    // the match back to 'scheduled'.  No in-process fallback: it cannot finish
+    // inside the edge CPU budget.
+    const remoteSim = await simulateRemotely({
+      url:     SIM_URL,
+      fetch:   (input, init) => fetch(input, init),
+      matchId: match.id,
+      home:    homeInput,
+      away:    awayInput,
+      seed,
+      tickets: {
+        async insert(row) {
+          const { data, error } = await supabase.from('sim_tickets').insert(row).select('id').single();
+          if (error || !data) throw new Error(`creating sim ticket failed: ${error?.message ?? 'no row returned'}`);
+          return data.id as string;
+        },
+      },
+    });
+    const spatialResult = remoteSim.result;
+    console.log(
+      `[match-worker] Remote sim for ${match.id}: engine ${remoteSim.simMs ?? '?'} ms, ` +
+      `round trip ${remoteSim.totalMs} ms, ${Math.round(remoteSim.bytes / 1024)} KB gzipped`,
+    );
 
     // Build the id → { name, teamName, side } index the adapter needs to map
     // spatial player ids back to names (the worker's playerIndex join is keyed
