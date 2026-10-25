@@ -214,7 +214,8 @@ describe('simulateSpatialMatch — sending-off (red card)', () => {
     // A known seed whose lopsided match has a red card before 80' (found once
     // by scanning; the engine is deterministic, so it stays put until the
     // engine's behaviour changes, and then this names the seed to re-find).
-    const RED_SEED = 3;
+    // Re-scanned for the phases-of-play engine (seed 3 lost its early red).
+    const RED_SEED = 1;
     const result = simulateSpatialMatch(team('H', 78), team('A', 60), { ...FULL, seed: RED_SEED });
     const redEv = result.events.find((e) => e.type === 'foul' && e.card === 'red' && e.playerId && e.tSec < 4800);
     expect(redEv, `seed ${RED_SEED} no longer has an early red card: re-scan seeds 1-80 for one`).toBeDefined();
