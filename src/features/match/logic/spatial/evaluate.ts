@@ -190,18 +190,38 @@ export function estimatePass(
   const tAt = (f: number): number => (lofted ? airTravelTime(v0, f * d) : groundTravelTime(v0, f * d));
   const tBall = tAt(1);
   const tRecv = timeToReach(receiver, aim, now);
+  // CPU: the ball's time to each lane point, and the lane itself, are the
+  // same for every opponent, so they are worked out once here rather than
+  // per opponent (travel times cost an exp, a log and two atans each).  The
+  // arithmetic is unchanged, so every margin is bit-identical.
+  for (let k = 0; k < fr.length; k++) LANE_TB[k] = tAt(fr[k]!);
+  const abx = aim.x - from.x;
+  const aby = aim.y - from.y;
+  const l2 = abx * abx + aby * aby;
   let oppMargin = Infinity;
   for (const o of opponents) {
     if (o.sentOff) continue;
     // Cheap prefilter: an opponent far from the whole lane cannot matter.
-    const sd = segmentDistance(o.pos, from, aim);
-    if (sd.d > 18) continue;
+    // (segmentDistance(o.pos, from, aim).d, in scalars.)
+    const apx = o.pos.x - from.x;
+    const apy = o.pos.y - from.y;
+    let sd: number;
+    if (l2 < 1e-9) {
+      sd = Math.sqrt(apx * apx + apy * apy);
+    } else {
+      let t = (apx * abx + apy * aby) / l2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = o.pos.x - (from.x + abx * t);
+      const qy = o.pos.y - (from.y + aby * t);
+      sd = Math.sqrt(qx * qx + qy * qy);
+    }
+    if (sd > 18) continue;
     const vO = Math.max(1, effectiveMaxSpeed(o));
-    for (const f of fr) {
-      const pt = vec(from.x + (aim.x - from.x) * f, from.y + (aim.y - from.y) * f);
-      const tb = tAt(f);
+    for (let k = 0; k < fr.length; k++) {
+      const f = fr[k]!;
+      const tb = LANE_TB[k]!;
       if (!Number.isFinite(tb)) continue;
-      const to = LANE_REACT + timeToReach(o, pt, now) - LANE_REACH / vO;
+      const to = LANE_REACT + timeToReachXY(o, from.x + (aim.x - from.x) * f, from.y + (aim.y - from.y) * f, now) - LANE_REACH / vO;
       const m = to - tb + (f === 1 && tRecv < tb ? RECEIVER_FIRST : 0);
       if (m < oppMargin) oppMargin = m;
     }
@@ -217,6 +237,8 @@ export function estimatePass(
 
 const GROUND_FRACTIONS = [0.2, 0.4, 0.6, 0.8, 1.0] as const;
 const LOFT_FRACTIONS = [0.06, 0.95, 1.0] as const;
+/** Scratch for estimatePass: the ball's time to each lane fraction. */
+const LANE_TB = new Float64Array(GROUND_FRACTIONS.length);
 
 /** A shooter's estimate of one shot at one target. */
 export interface ShotEstimate {
