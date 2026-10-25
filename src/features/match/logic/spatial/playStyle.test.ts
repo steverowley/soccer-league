@@ -104,7 +104,7 @@ describe('play-styles → distinct match profiles (#587)', () => {
     for (const s of ['Offensive', 'Possession', 'Direct', 'High Pressing', 'Counterattacking']) {
       profile(s);
     }
-  }, 180_000);
+  }, 420_000); // 30 full matches: about 3 min on the CI runner since phases of play
 
   it('Offensive takes more shots than Possession', () => {
     expect(profile('Offensive').shots).toBeGreaterThan(profile('Possession').shots);

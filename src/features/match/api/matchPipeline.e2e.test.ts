@@ -237,7 +237,7 @@ describe('across several matches', () => {
         expect(r.parsed.length, `seed ${seeds[i]} produced no events`).toBeGreaterThan(5);
       });
     },
-    30_000,
+    120_000, // several full matches through the pipeline; CI runners are slow
   );
 
   it(
@@ -248,6 +248,6 @@ describe('across several matches', () => {
       const total = allRuns().reduce((n, r) => n + r.cosmic.length, 0);
       expect(total).toBeGreaterThan(0);
     },
-    30_000,
+    120_000, // several full matches through the pipeline; CI runners are slow
   );
 });
