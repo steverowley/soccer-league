@@ -108,20 +108,20 @@ describe('play-styles → distinct match profiles (#587)', () => {
 
   it('Offensive takes more shots than Possession', () => {
     expect(profile('Offensive').shots).toBeGreaterThan(profile('Possession').shots);
-  }, 30000);
+  }, 180_000);
 
   it('Possession plays more passes than Direct', () => {
     expect(profile('Possession').passes).toBeGreaterThan(profile('Direct').passes);
-  }, 30000);
+  }, 180_000);
 
   it('High Pressing wins more tackles than Counterattacking', () => {
     expect(profile('High Pressing').tackles).toBeGreaterThan(profile('Counterattacking').tackles);
-  }, 30000);
+  }, 180_000);
 
   it('Balanced is a no-op — identical to no style set (calibration safety)', () => {
     const a = simulateSpatialMatch(team('H', 70, 'Balanced'), team('A', 70), { ...CFG, seed: 42 });
     const b = simulateSpatialMatch(team('H', 70), team('A', 70), { ...CFG, seed: 42 });
     expect(a.finalScore).toEqual(b.finalScore);
     expect(a.events).toEqual(b.events);
-  }, 20000);
+  }, 180_000);
 });

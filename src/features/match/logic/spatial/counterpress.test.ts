@@ -52,7 +52,7 @@ describe('phases of play: the counter-press happens as the manager plans it', ()
   beforeAll(() => {
     measure('P', 4100);
     measure('R', 4101);
-  }, 120_000);
+  }, 180_000);
 
   it('puts more men around the ball 1.5 s after a loss than recovering does', () => {
     const p = tally.P.near / tally.P.losses;

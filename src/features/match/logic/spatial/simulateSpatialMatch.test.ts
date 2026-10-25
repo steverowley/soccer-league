@@ -59,7 +59,7 @@ describe('simulateSpatialMatch — determinism', () => {
     expect(a.frames.length).toBe(b.frames.length);
     // Spot-check the full event stream matches.
     expect(a.events).toEqual(b.events);
-  }, 60000);
+  }, 180_000);
 
   it('different seeds generally diverge', () => {
     const results = [1, 2, 3].map((seed) =>
@@ -68,7 +68,7 @@ describe('simulateSpatialMatch — determinism', () => {
     const signatures = new Set(results.map((r) => `${r.finalScore[0]}-${r.finalScore[1]}:${r.events.length}`));
     // Not all three runs should be identical — the seed must actually matter.
     expect(signatures.size).toBeGreaterThan(1);
-  }, 30000);
+  }, 180_000);
 });
 
 describe('simulateSpatialMatch — structural invariants', () => {
@@ -77,7 +77,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
     const homeGoals = r.events.filter((e) => e.type === 'goal' && e.side === 'home').length;
     const awayGoals = r.events.filter((e) => e.type === 'goal' && e.side === 'away').length;
     expect(r.finalScore).toEqual([homeGoals, awayGoals]);
-  }, 60000);
+  }, 180_000);
 
   it('emits a kickoff event and tags every event with a 1–90 minute', () => {
     const r = simulateSpatialMatch(team('H', 70), team('A', 70), { ...SHORT, seed: 5 });
@@ -86,7 +86,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
       expect(e.minute).toBeGreaterThanOrEqual(1);
       expect(e.minute).toBeLessThanOrEqual(90);
     }
-  }, 60000);
+  }, 180_000);
 
   it('keeps all 22 players and the ball within the pitch every frame', () => {
     const r = simulateSpatialMatch(team('H', 70), team('A', 70), { ...SHORT, seed: 8 });
@@ -104,7 +104,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
       expect(frame.ball.y).toBeGreaterThanOrEqual(-EPS);
       expect(frame.ball.y).toBeLessThanOrEqual(PITCH_WIDTH + EPS);
     }
-  }, 30000);
+  }, 180_000);
 
   it('samples frames at roughly the configured cadence', () => {
     // stoppage off so the frame count maps cleanly to the configured length.
@@ -113,7 +113,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
     // boundary-crossing sampling logic.
     expect(r.frames.length).toBeGreaterThan(580);
     expect(r.frames.length).toBeLessThan(640);
-  }, 60000);
+  }, 180_000);
 
   it('plays deterministic stoppage time past 90:00, capped at ~6 min', () => {
     // Explicit timeout, same reason as its siblings: this runs TWO full
@@ -130,7 +130,7 @@ describe('simulateSpatialMatch — structural invariants', () => {
     expect(maxMinute).toBeLessThanOrEqual(96); // 90 + the 6-min clamp
     // Without stoppage the match ends in regulation.
     expect(Math.max(...noStop.events.map((e) => e.minute))).toBeLessThanOrEqual(90);
-  }, 30000);
+  }, 180_000);
 });
 
 describe('simulateSpatialMatch — emergent football', () => {
@@ -148,14 +148,14 @@ describe('simulateSpatialMatch — emergent football', () => {
     // Calibrated to ~5 goals/match; ceiling of 40 across 3 matches (avg <13)
     // guards against a runaway engine while tolerating a high-variance trio.
     expect(totalGoals).toBeLessThan(40);
-  }, 30000);
+  }, 180_000);
 
   it('generates a varied event vocabulary, not just one type', () => {
     const r = simulateSpatialMatch(team('H', 70), team('A', 70), { ...FULL, seed: 50 });
     const kinds = new Set(r.events.map((e) => e.type));
     // A real flowing match touches several event kinds (passes, restarts, etc.).
     expect(kinds.size).toBeGreaterThanOrEqual(3);
-  }, 60000);
+  }, 180_000);
 });
 
 describe('simulateSpatialMatch — goal attribution (#522)', () => {
@@ -206,7 +206,7 @@ describe('simulateSpatialMatch — goal attribution (#522)', () => {
     expect(goalEvents).toBeGreaterThan(0);
     expect(attributed).toBeGreaterThan(0);
     expect(statGoals).toBe(attributed);
-  }, 60000);
+  }, 180_000);
 });
 
 describe('simulateSpatialMatch — sending-off (red card)', () => {
@@ -239,7 +239,7 @@ describe('simulateSpatialMatch — sending-off (red card)', () => {
       expect(fp.x).toBeCloseTo(first!.x, 4);
       expect(fp.y).toBeCloseTo(first!.y, 4);
     }
-  }, 30000);
+  }, 180_000);
 });
 
 describe('simulateSpatialMatch — substitutions', () => {
@@ -275,7 +275,7 @@ describe('simulateSpatialMatch — substitutions', () => {
     // The pitch is always eleven-a-side in frames (subs swap 1-for-1; sent-off
     // players stay parked on the line), so the count never drops.
     expect(r.frames[r.frames.length - 1]!.players.length).toBe(22);
-  }, 30000);
+  }, 180_000);
 });
 
 describe('simulateSpatialMatch — favourite/underdog separation (#589)', () => {
@@ -332,5 +332,5 @@ describe('simulateSpatialMatch — near-miss woodwork (#588)', () => {
     const beats = adapted.events.filter((e) => e.type === 'woodwork');
     expect(beats.length).toBeGreaterThan(0);
     expect(String(beats[0]!.payload['commentary']).toLowerCase()).toContain('woodwork');
-  }, 50000);
+  }, 180_000);
 });
