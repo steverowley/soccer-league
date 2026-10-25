@@ -38,6 +38,7 @@ const L = 105;
 const CLASSES = ['ip_transition', 'build_up', 'progression', 'final_third', 'op_transition', 'high_block', 'mid_block', 'low_block'] as const;
 type Cls = typeof CLASSES[number];
 const TRANSITION_SEC = 6;
+const LIVE = (process.env['LIVE'] ?? '1') !== '0';
 
 interface Acc { n: number; cent: number; len: number; wid: number; back: number; behind: number }
 const acc0 = (): Acc => ({ n: 0, cent: 0, len: 0, wid: 0, back: 0, behind: 0 });
@@ -114,6 +115,16 @@ function measureMatch(home: SpatialTeamInput, away: SpatialTeamInput, seed: numb
       out[owner].possessions++;
     }
     if (!poss) continue;
+    // Restarts (the engine's set_piece phase) are set plays, not blocks or
+    // possession phases: with LIVE=1 (the default) they are left out, as the
+    // tracking studies measure open play.  An engine with no phase timeline
+    // keeps every frame.
+    if (LIVE && phases && (['home', 'away'] as const).some((s) => {
+      const tl = phases[s];
+      let k = 0;
+      while (k + 1 < tl.length && tl[k + 1]!.tSec <= f.tSec) k++;
+      return tl[k]?.phase === 'set_piece';
+    })) continue;
     for (const s of ['home', 'away'] as const) {
       const own = s === 'home' ? 0 : L;
       const dOwn = (x: number): number => Math.abs(x - own);

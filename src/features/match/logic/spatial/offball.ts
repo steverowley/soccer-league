@@ -24,7 +24,7 @@ import { effectiveMaxSpeed, arrive, seek, separation } from './steering';
 import { dynamicAnchor } from './formation';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession';
 import { perceive, slip } from './execution';
-import { tacticsOf, possessionPoint, lineOf, counterpressing, blockPoint, pressTriggered } from './phase';
+import { tacticsOf, possessionPoint, lineOf, counterpressing, blockPoint, pressTriggered, blockLineD } from './phase';
 
 /** Ball-path lookahead: samples, and ticks per sample. */
 export const PATH_SAMPLES = 25;
@@ -337,8 +337,10 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   if (!inPossession && assigned) {
     push('mark', 0.3 + 8 * assigned.v, assigned.id);
   } else if (!inPossession) {
-    // Mark the most dangerous attacker near my anchor.
-    const anchor = dynamicAnchor(p, ball.pos);
+    // Mark the most dangerous attacker near my anchor.  A forward's anchor
+    // is his station in the manager's block (the old formation anchor left
+    // forwards marking centre-backs high up the pitch, stretching the block).
+    const anchor = p.role === 'FW' ? shapePoint(p, world) : dynamicAnchor(p, ball.pos);
     let bestA: SimPlayer | null = null;
     let bestV = 0;
     for (const a of opp === 'home' ? world.home : world.away) {
@@ -486,7 +488,17 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       }
       // Tighter the nearer his own goal: in the last third he stands up close.
       const deep = dist(c.pos, goal) < 30;
-      const jockey = add(c.pos, scale(normalize(sub(goal, c.pos)), deep ? JOCKEY_DIST_DEEP : JOCKEY_DIST));
+      let jockey = add(c.pos, scale(normalize(sub(goal, c.pos)), deep ? JOCKEY_DIST_DEEP : JOCKEY_DIST));
+      // A carrier beyond the block's reach with no press trigger is not
+      // chased: the first man screens him from the top of the block (the
+      // manager's block length), so the block stays one unit.
+      const tac = tacticsOf(world, p.side);
+      const own = defendingGoalX(p.side);
+      const topD = blockLineD(world, p.side) + tac.plan.blockLength;
+      if (Math.abs(c.pos.x - own) > BLOCK_REACH[tac.plan.blockHeight]! && !pressTriggered(world, p.side, c)
+        && Math.abs(jockey.x - own) > topD) {
+        jockey = vec(own + (p.side === 'home' ? 1 : -1) * topD, jockey.y);
+      }
       const d = dist(p.pos, jockey);
       return d > 4 ? seek(p, jockey) : arrive(p, jockey, 2.5, 0.95);
     }
@@ -530,7 +542,10 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const beaten = (ctx.attacking !== null && ctx.attacking !== p.side
         && Math.abs(world.ball.pos.x - ownGoalX) < Math.abs(p.pos.x - ownGoalX))
         || (tac.phase === 'defensive_transition' && (tac.plan.onLoss === 'recover' || p.role === 'DF') && d > 4);
-      return add(arrive(p, pt, 6, (beaten ? 1 : d > 12 ? 0.85 : 0.6) * work), sep);
+      // Out of possession the block moves as one unit: a man left ahead of
+      // it gets back in at a run, not a walk.
+      const behindBlock = !tac.hasBall && d > 5;
+      return add(arrive(p, pt, 6, (beaten ? 1 : d > 12 || behindBlock ? 0.85 : 0.6) * work), sep);
     }
   }
 }

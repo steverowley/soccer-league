@@ -432,16 +432,34 @@ export function blockPoint(p: SimPlayer, world: SimWorld): Vec2 {
   // Near goal the block sits in two tight lines across the face of the box
   // with the forwards dropping in front of them; further out the lines
   // spread to the plan's block length.
+  // The block moves as one unit at the manager's length: midfield about
+  // two-fifths of it ahead of the back line, the forwards at seven-tenths;
+  // only a manager who counters on a regain keeps one man up as the outlet,
+  // at the top of the block.
   const deep = ballD < 35;
   let d = lineD;
-  if (p.role === 'MF') d = lineD + (deep ? 7.5 : Math.min(14, 0.45 * m.blockLength));
-  else if (p.role === 'FW') d = lineD + (deep ? Math.min(m.blockLength, 19) : m.blockLength);
+  if (p.role === 'MF') d = lineD + (deep ? 7.5 : BLOCK_MID * m.blockLength);
+  else if (p.role === 'FW') {
+    const outlet = m.onRegain === 'counter' && outletOf(world, side) === p;
+    d = lineD + (outlet ? (deep ? Math.min(m.blockLength - 4, 19) : m.blockLength - 8) : deep ? 13 : BLOCK_FRONT * m.blockLength);
+  }
   // Across: the back line always spans the box (the far post is never left
   // empty), the lines ahead of it squeeze harder toward the ball.
   const back = p.role === 'DF';
   const centre = PITCH_WIDTH / 2 + (ball.y - PITCH_WIDTH / 2) * (back ? 0.4 : p.role === 'FW' ? 0.35 : 0.5);
   const y = centre + (p.homePos.y - PITCH_WIDTH / 2) * (m.blockWidth / (back ? BACK_SPREAD : 48));
   return vec(own + dir * Math.max(3, Math.min(PITCH_LENGTH - 3, d)), Math.max(1.5, Math.min(PITCH_WIDTH - 1.5, y)));
+}
+
+/** Midfield and forward lines of the block, as fractions of its length. */
+const BLOCK_MID = 0.32;
+const BLOCK_FRONT = 0.55;
+
+/** The forward a countering side leaves up as the outlet: its first
+ *  forward on the pitch (a fixed choice, so the role does not flicker). */
+function outletOf(world: SimWorld, side: TeamSide): SimPlayer | null {
+  for (const q of side === 'home' ? world.home : world.away) if (!q.sentOff && q.role === 'FW') return q;
+  return null;
 }
 
 // ── Pressing ──────────────────────────────────────────────────────────────
