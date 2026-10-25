@@ -24,7 +24,7 @@ import { effectiveMaxSpeed, arrive, seek, separation } from './steering';
 import { dynamicAnchor } from './formation';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession';
 import { perceive, slip } from './execution';
-import { tacticsOf, possessionPoint, lineOf, counterpressing } from './phase';
+import { tacticsOf, possessionPoint, lineOf, counterpressing, blockPoint, pressTriggered } from './phase';
 
 /** Ball-path lookahead: samples, and ticks per sample. */
 export const PATH_SAMPLES = 25;
@@ -251,7 +251,12 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     const c = ctx.carrier;
     const rank = ctx.pressRank.get(p.id) ?? 99;
     const danger = positionValue(c.pos, opp);
-    const k = pressIntensity(p, world);
+    // The block engages by the manager's plan: on one of his press triggers
+    // it goes hard; with no trigger it only engages within its own reach (a
+    // low block lets the opponent have the ball in his own half).
+    const ownD = Math.abs(c.pos.x - defendingGoalX(side));
+    const reach = BLOCK_REACH[tacS.plan.blockHeight]!;
+    const k = pressIntensity(p, world) * (pressTriggered(world, side, c) ? 1.35 : ownD > reach ? 0.55 : 1);
     // Pressing is keenest close to the ball; further away the block holds.
     // Within about 35 m of his own goal somebody must always engage.
     const deepBall = Math.abs(c.pos.x - defendingGoalX(p.side)) < 35;
@@ -462,11 +467,9 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
  * the score-and-clock line shift (leading late sits deeper).
  */
 export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
+  // The keeper keeps the formation anchor shifted with the ball; the
+  // outfielders take the shape of their phase and their manager's plan.
   let a = dynamicAnchor(p, world.ball.pos);
-  // Out of possession the block compacts (authored): midfield and attack drop
-  // toward their own back line and everyone squeezes toward the ball's side,
-  // so the space between and behind the lines closes.
-  const ball = world.ball;
   const inPossession = tacticsOf(world, p.side).hasBall;
   if (inPossession && p.role !== 'GK') {
     // In possession the manager's structure (phase.ts): back line up to his
@@ -479,35 +482,12 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
     if ((a.x - (line - fwd)) * fwd > 0) a = vec(line - fwd, a.y);
   }
   if (!inPossession && p.role !== 'GK') {
-    const back = p.side === 'home' ? -1 : 1;
-    const drop = p.role === 'MF' ? 7 : p.role === 'FW' ? 9 : 2;
-    // The squeeze toward the ball's side is strongest for the back line and
-    // in their own half, where the space between centre-back and full-back
-    // is what gets attacked.
-    const ownHalf = (ball.pos.x - PITCH_LENGTH / 2) * back > 0;
-    const squeeze = (p.role === 'DF' ? 0.32 : 0.24) * (ownHalf ? 1.25 : 0.8);
-    a = clampIn(vec(a.x + back * drop, a.y + (ball.pos.y - a.y) * squeeze));
-    // Keep the lines close: midfield within 11 m of the back line, the
-    // forwards within 24 m, so there is no free pocket between them.
-    if (p.role === 'MF' || p.role === 'FW') {
-      const df = (p.side === 'home' ? world.home : world.away).find((q) => q.role === 'DF' && !q.sentOff);
-      if (df) {
-        const dfX = dynamicAnchor(df, ball.pos).x + back * 2;
-        const gap = p.role === 'MF' ? 11 : 24;
-        const fwd = -back;
-        if ((a.x - dfX) * fwd > gap) a = vec(dfX + fwd * gap, a.y);
-      }
-    }
-    // Defending the box (authored): with the ball in the last third the back
-    // line drops toward the six-yard box and midfield to the edge of the
-    // area, so the space in front of goal is full of bodies rather than the
-    // block holding the line it held in midfield.
-    const own = defendingGoalX(p.side);
-    const ballD = Math.abs(ball.pos.x - own);
-    if (ballD < DEEP_BALL && p.role !== 'FW') {
-      const lineD = Math.max(DEEP_LINE_MIN, DEEP_LINE_K * ballD + DEEP_LINE_BASE) + (p.role === 'MF' ? DEEP_MF_GAP : 0);
-      if (Math.abs(a.x - own) > lineD) a = vec(own - back * lineD, a.y);
-    }
+    // Out of possession the manager's block (phase.ts): the back line at
+    // his block height, stepping up on a covered ball and dropping on an
+    // uncovered one; midfield and attack ahead of it within his block length;
+    // squeezed across toward the ball to his block width; dropping to
+    // defend the box when the ball gets near goal.
+    a = blockPoint(p, world);
   }
   if (!world.flags.scoreClockTerm) return a;
   const L = lateness(world);
@@ -549,14 +529,9 @@ export function markPoint(p: SimPlayer, a: SimPlayer, world: SimWorld): Vec2 {
   return pt;
 }
 
-/** Ball within this distance (m) of goal: the block drops to defend the box. */
-const DEEP_BALL = 35;
-/** Back line depth (m from goal) then: this share of the ball's distance plus a base, never deeper than the minimum. */
-const DEEP_LINE_K = 0.45;
-const DEEP_LINE_BASE = 2;
-const DEEP_LINE_MIN = 6;
-/** Midfield sits this far (m) in front of the back line when defending the box. */
-const DEEP_MF_GAP = 9;
+/** Beyond this distance (m) from its own goal a block engages the carrier
+ *  only on a press trigger. */
+const BLOCK_REACH: Readonly<Record<string, number>> = { high: 105, mid: 62, low: 45 };
 
 /** Inside this distance (m) of his goal a defender tracks his man, line or not. */
 const HOLD_LINE_GOAL = 24;
