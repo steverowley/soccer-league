@@ -29,7 +29,7 @@ import {
 } from './types';
 import { effectiveMaxSpeed, MAX_ACCEL, seek } from './steering';
 import {
-  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick,
+  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom,
   type CarrierAction,
 } from './possession';
 import {
@@ -370,7 +370,8 @@ function execute(
     }
     case 'dribble': {
       // Knock the ball ahead: far enough to run onto, close enough to keep.
-      const D = touchDistance(p, opponents, pressure);
+      // Running at a line he keeps the ball closer, so it does not run out.
+      const D = Math.min(touchDistance(p, opponents, pressure), Math.max(0.4, 0.3 * lineRoom(from, action.dir)));
       const e = errorScale(p, p.stats.dribbling, world, { pressure, awkward: awkwardness(p.vel, action.dir) });
       const ang = slip(p, world, 0.09 * e);
       const c = Math.cos(ang);
@@ -860,6 +861,61 @@ function laneVelocity(p: SimPlayer, world: SimWorld, carrier: SimPlayer | null):
   return sd.d < 0.05 ? ZERO : seek(p, pt);
 }
 
+/**
+ * The ball off a surface (a palm, a shin, a hip) along a contact normal.
+ * The normal lies between straight back along the ball's path (theta 0: hit
+ * full on) and the outward side, away from the player's centre (theta 90:
+ * a glancing touch), tilted upward by `up` for a hand going over the top.
+ * The normal component reverses with the restitution, the tangential one
+ * keeps `tangent` of itself, and `push` is the hand driving through it.
+ * Pure geometry: the only imprecision is in the theta the caller passes.
+ */
+export function deflectOff(
+  vel: Vec2, vz: number, lateral: Vec2, theta: number, up: number, restitution: number, tangent: number, push: number,
+): { vel: Vec2; vz: number } {
+  const sp = len(vel);
+  if (sp < 1e-6) return { vel, vz };
+  const u = scale(vel, 1 / sp);
+  // Outward: from his centre to the ball, square to its path.
+  let l = sub(lateral, scale(u, dot(lateral, u)));
+  l = len(l) > 1e-6 ? normalize(l) : vec(-u.y, u.x);
+  const c = Math.cos(theta);
+  const sn = Math.sin(theta);
+  let nx = -c * u.x + sn * (1 - up) * l.x;
+  let ny = -c * u.y + sn * (1 - up) * l.y;
+  let nz = sn * up;
+  const nl = Math.hypot(nx, ny, nz);
+  nx /= nl; ny /= nl; nz /= nl;
+  const vn = vel.x * nx + vel.y * ny + vz * nz;
+  if (vn >= 0) return { vel: vec(vel.x + push * nx, vel.y + push * ny), vz: vz + push * nz };
+  const tx = vel.x - vn * nx;
+  const ty = vel.y - vn * ny;
+  const tz = vz - vn * nz;
+  const k = -restitution * vn + push;
+  return { vel: vec(tx * tangent + k * nx, ty * tangent + k * ny), vz: tz * tangent + k * nz };
+}
+
+/** Sine of the steepest angle a keeper's palm meets the ball at full stretch
+ *  (wrist and palm turned outward: even a fingertip changes the angle). */
+const PALM_ANGLE = 0.75;
+/** A palm is soft: little of the normal pace comes back. */
+const PALM_RESTITUTION = 0.3;
+/** Share of the along-surface pace a palm leaves the ball. */
+const PALM_TANGENT = 0.85;
+/** Speed (m/s) a keeper's hand drives through the ball along the normal. */
+const PALM_PUSH = 2;
+/** Above this height (m) a parry goes up and over rather than round. */
+const PARRY_HIGH = 1.7;
+/** Sine of the steepest contact angle on a body at the edge of its reach. */
+const BODY_ANGLE = 0.95;
+/** A body or a shin returns a little more of the pace than a palm. */
+const BODY_RESTITUTION = 0.4;
+/** Share of the along-surface pace a glancing body contact leaves the ball. */
+const BODY_TANGENT = 0.8;
+
+/** Highest ball (m) a player brings down on his chest rather than heads. */
+const CHEST_TOP = 1.55;
+
 /** Height (m) of a standing body: a fast ball above it passes over him. */
 const BODY_TOP = 1.85;
 
@@ -909,16 +965,17 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
       b.ownerId = p.id;
       return;
     }
-    // Parry: the ball comes back off his hands, pushed wide of the goal.
-    const gx = defendingGoalX(p.side);
-    const out = gx === 0 ? 1 : -1;
-    const side = b.pos.y >= p.pos.y ? 1 : -1;
+    // Parry: the ball meets a palm, and the contact decides where it goes.
+    // Square on (the ball at his body) it comes back out; at full stretch the
+    // hand only meets it at an angle, so the ball keeps much of its pace and
+    // is turned wide (or over, when it is high): a corner, not a rebound.
     const e = errorScale(p, p.stats.goalkeeping, world, { pressure: 0, awkward: 0.5 });
-    b.vel = vec(
-      Math.abs(b.vel.x) * 0.22 * out + slip(p, world, 2.5 * e),
-      b.vel.y * 0.3 + side * speed * 0.45 + slip(p, world, 2.5 * e),
-    );
-    b.vz = 1.5 + Math.abs(b.vz) * 0.3;
+    const stretch = Math.min(1, closeD / Math.max(0.3, keeperReach(p, z)));
+    const up = z > PARRY_HIGH ? Math.min(0.8, (z - PARRY_HIGH) / 0.8) : 0;
+    const out3 = deflectOff(b.vel, b.vz, sub(at, p.pos), Math.asin(PALM_ANGLE * stretch) + slip(p, world, 0.12 * e),
+      up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
+    b.vel = out3.vel;
+    b.vz = Math.max(0, out3.vz);
     b.ownerId = null;
     if (shotLive && kick!.side !== p.side) resolveShot(world, events, minute, onTarget ? 'save' : 'shot', p);
     passEnd(world, 'lost');
@@ -926,33 +983,45 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     touched(world, p);
     p.noTouchUntil = now + 0.4;
     newBallPath(world, p);
-    trace(world, 'keeper', p, { action: 'parry', speed: r2(rel), closeD: r2(closeD), onTarget, kx: r2(p.pos.x), ky: r2(p.pos.y) });
+    trace(world, 'keeper', p, { action: 'parry', speed: r2(rel), closeD: r2(closeD), stretch: r2(stretch), out: r2(len(b.vel)), onTarget, kx: r2(p.pos.x), ky: r2(p.pos.y) });
     return;
   }
 
   // ── A fast ball into a body: a block / deflection ───────────────────────
   const intended = kick !== null && kick.targetId === p.id;
   if (speed > BLOCK_SPEED && !intended) {
-    const n0 = sub(at, p.pos);
-    const n = len(n0) > 1e-6 ? normalize(n0) : scale(normalize(b.vel), -1);
-    const vn = dot(b.vel, n);
-    const refl = vn < 0 ? sub(b.vel, scale(n, 1.3 * vn)) : b.vel;
-    b.vel = add(scale(refl, 0.55), vec(slip(p, world, 1.5), slip(p, world, 1.5)));
-    b.vz = Math.abs(b.vz) * 0.3 + 0.8;
+    // The contact normal comes from where on the body (or the thrown leg)
+    // the ball strikes: full on, it comes back off him; off the edge of a
+    // shin or a hip it is only turned, keeping most of its pace, which is
+    // how a goal-bound shot is blocked behind for a corner.
+    const reach = Math.max(0.2, reachFor(p, z, at, shotLive && now < p.blockUntil, true));
+    const edge = Math.min(1, closeD / reach);
+    const out3 = deflectOff(b.vel, b.vz, sub(at, p.pos), Math.asin(BODY_ANGLE * edge) + slip(p, world, 0.15),
+      0, BODY_RESTITUTION, BODY_TANGENT, 0);
+    b.vel = out3.vel;
+    b.vz = Math.max(0, out3.vz) + (z > 0.4 ? 0.8 : 0.3);
     b.ownerId = null;
     if (shotLive) resolveShot(world, events, minute, 'shot');
     passEnd(world, kick && kick.side === p.side ? 'complete' : 'lost');
     b.kick = { kind: 'deflection', side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
     touched(world, p);
     newBallPath(world, p);
-    trace(world, 'block', p, { speed: r2(speed) });
+    trace(world, 'block', p, { speed: r2(speed), edge: r2(edge), out: r2(len(b.vel)) });
     return;
   }
 
   if (shotLive) resolveShot(world, events, minute, 'shot');
 
   // ── Header ────────────────────────────────────────────────────────────
-  if (z > 0.9) {
+  // A ball dropping at chest height that is not travelling too fast is
+  // brought down (chest or thigh) and played like any first touch; only a
+  // higher or harder ball, or one a defender in his own third wants rid of,
+  // is headed.  (Heading every waist-high ball sent throw-ins straight back
+  // out of play.)
+  const relZ = Math.hypot(speed, b.vz);
+  const chestCap = 9 + 6 * (p.stats.dribbling / 100);
+  const wantRid = kick !== null && kick.side !== p.side && progressOf(p.pos, p.side) < 0.33;
+  if (z > 0.9 && (z > CHEST_TOP || relZ > chestCap || wantRid)) {
     header(world, p, events, minute);
     passEnd(world, kick && kick.side === p.side ? 'complete' : 'lost');
     return;

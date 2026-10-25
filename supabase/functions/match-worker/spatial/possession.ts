@@ -326,7 +326,11 @@ export function chooseAction(
         const m = m1 < m2 ? m1 : m2;
         if (m < margin) margin = m;
       }
-      const pKeep = margin === Infinity ? 0.97 : 0.97 / (1 + Math.exp(-(margin - 0.1) / 0.22));
+      // He knows where the lines are: a carry that runs at the touchline or
+      // the goal line is a carry that may run out of play.
+      const room = lineRoom(end, dir);
+      const pIn = 1 / (1 + Math.exp(-(room - LINE_MARGIN) / 0.6));
+      const pKeep = (margin === Infinity ? 0.97 : 0.97 / (1 + Math.exp(-(margin - 0.1) / 0.22))) * pIn;
       const u = pKeep * positionValue(end, side) * dribbleMul - (1 - pKeep) * lam * positionValue(mid, opp);
       options.push({ kind: 'dribble', dir, utility: u });
     }
@@ -402,6 +406,22 @@ const SHOT_ZS = [0.25, 1.75] as const;
 
 /** Carry directions relative to the line to goal (radians). */
 const CARRY_ANGLES = [0, 0.5, -0.5, 1.05, -1.05, 1.7, -1.7, Math.PI] as const;
+
+/**
+ * Distance (m) from a point to the line it is heading for along dir (the
+ * touchline or goal line the ball would cross first), capped at 30.
+ */
+export function lineRoom(pt: Vec2, dir: Vec2): number {
+  let t = 30;
+  if (dir.x > 1e-6) t = Math.min(t, (PITCH_LENGTH - pt.x) / dir.x);
+  else if (dir.x < -1e-6) t = Math.min(t, -pt.x / dir.x);
+  if (dir.y > 1e-6) t = Math.min(t, (PITCH_WIDTH - pt.y) / dir.y);
+  else if (dir.y < -1e-6) t = Math.min(t, -pt.y / dir.y);
+  return Math.max(0, t);
+}
+
+/** Room (m) a carrier wants between his probe point and the line he runs at. */
+const LINE_MARGIN = 2.5;
 
 /** Clamp a point onto the pitch with a 1 m inset. */
 function clampPitch(p: Vec2): Vec2 {

@@ -24,6 +24,21 @@ for (const seed of seeds) {
   const recs: TraceRecord[] = [];
   const r = simulateSpatialMatch(team('H', base), team('A', base), { seed, trace: (x: TraceRecord) => { recs.push(x); } });
   for (const e of r.events) add('ev.' + e.type);
+  // What sent the ball out: the last ball-affecting trace before the event.
+  const KINDS = new Set(['pass', 'clear', 'block', 'keeper', 'header', 'control', 'challenge', 'evade', 'shot', 'decide', 'restart']);
+  for (const e of r.events) {
+    if (e.type !== 'out_throw' && e.type !== 'out_corner') continue;
+    let last = 'none';
+    for (let j = recs.length - 1; j >= 0; j--) {
+      const y = recs[j]!;
+      if (y.tSec > e.tSec + 0.05) continue;
+      if (!KINDS.has(y.kind)) continue;
+      last = y.kind === 'pass' ? 'pass:' + String(y.data['kind']) : y.kind === 'decide' ? 'decide:' + String(y.data['action'])
+        : y.kind === 'challenge' ? 'challenge:' + String(y.data['outcome']) : y.kind === 'keeper' ? 'keeper:' + String(y.data['action']) : y.kind;
+      break;
+    }
+    add('cause.' + e.type + '.' + last);
+  }
   // Shape, sampled from the stored frames while someone has the ball.
   for (const f of r.frames ?? []) {
     if (!f.ball.ownerId) continue;
@@ -79,6 +94,8 @@ for (const seed of seeds) {
       for (let j = i + 1; j < recs.length && recs[j]!.tSec - x.tSec < 4; j++) {
         const y = recs[j]!;
         if (y.kind === 'goal') { fate = 'goal'; break; }
+        const ev = r.events.find((e) => e.tSec > x.tSec - 0.05 && e.tSec <= y.tSec + 0.05 && e.type.startsWith('out_'));
+        if (ev) { fate = ev.type; break; }
         if (y.kind === 'restart') { fate = String(y.data['kind']); break; }
         if (y.kind === 'control') { fate = y.side === x.side ? 'ours' : 'theirs'; break; }
       }
