@@ -12,7 +12,6 @@ const tally: Record<string, number> = {};
 const lungeTally: Record<string, number> = {};
 let reds = 0;
 const fouls: Record<string, number> = {};
-let dogsoLunges = 0;
 for (let m = 0; m < n; m++) {
   const base = 60 + (m % 21);
   const last = new Map<string, Record<string, unknown>>();
@@ -20,7 +19,6 @@ for (let m = 0; m < n; m++) {
     const id = r.playerId ?? '';
     if (r.kind === 'lunge') {
       last.set(id, r.data);
-      if (r.data['lastMan']) dogsoLunges++;
       const k = `${r.data['tactical'] ? 'tactical' : 'ball'}${r.data['lastMan'] ? ' lastMan' : ''}${r.data['inBox'] ? ' inBox' : ''}`;
       lungeTally[k] = (lungeTally[k] ?? 0) + 1;
     }
