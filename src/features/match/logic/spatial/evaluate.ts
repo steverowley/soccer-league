@@ -187,14 +187,13 @@ export function estimatePass(
 ): PassEstimate {
   const d = dist(from, aim);
   const fr = lofted ? LOFT_FRACTIONS : GROUND_FRACTIONS;
-  const tAt = (f: number): number => (lofted ? airTravelTime(v0, f * d) : groundTravelTime(v0, f * d));
-  const tBall = tAt(1);
+  const tBall = laneTime(lofted, v0, 1 * d);
   const tRecv = timeToReach(receiver, aim, now);
   // CPU: the ball's time to each lane point, and the lane itself, are the
   // same for every opponent, so they are worked out once here rather than
   // per opponent (travel times cost an exp, a log and two atans each).  The
   // arithmetic is unchanged, so every margin is bit-identical.
-  for (let k = 0; k < fr.length; k++) LANE_TB[k] = tAt(fr[k]!);
+  for (let k = 0; k < fr.length; k++) LANE_TB[k] = laneTime(lofted, v0, fr[k]! * d);
   const abx = aim.x - from.x;
   const aby = aim.y - from.y;
   const l2 = abx * abx + aby * aby;
@@ -237,6 +236,11 @@ export function estimatePass(
 
 const GROUND_FRACTIONS = [0.2, 0.4, 0.6, 0.8, 1.0] as const;
 const LOFT_FRACTIONS = [0.06, 0.95, 1.0] as const;
+/** The ball's travel time over `x` metres of a pass launched at v0. */
+function laneTime(lofted: boolean, v0: number, x: number): number {
+  return lofted ? airTravelTime(v0, x) : groundTravelTime(v0, x);
+}
+
 /** Scratch for estimatePass: the ball's time to each lane fraction. */
 const LANE_TB = new Float64Array(GROUND_FRACTIONS.length);
 

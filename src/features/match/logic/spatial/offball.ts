@@ -296,6 +296,15 @@ const CP_KEEP_BONUS = 0.6;
 
 // ── Job evaluation ─────────────────────────────────────────────────────────
 
+const JOBS: OffBallJob[] = [];
+const UTILS: number[] = [];
+const REFS: Array<string | null> = [];
+
+/** Offer job `j` at utility `u` to thinkJob's choice (with hysteresis for the current job). */
+function pushJob(p: SimPlayer, j: OffBallJob, u: number, ref: string | null = null): void {
+  JOBS.push(j); UTILS.push(u + (p.job === j ? JOB_HYSTERESIS : 0)); REFS.push(ref);
+}
+
 /** Bonus for staying with the current job (stops flicker). */
 const JOB_HYSTERESIS = 0.07;
 
@@ -343,32 +352,34 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   const theyHaveIt = ctx.carrier !== null && ctx.carrier.side === opp;
   const looseOrFlight = ctx.carrier === null;
 
-  const jobs: OffBallJob[] = [];
-  const utils: number[] = [];
-  const refs: Array<string | null> = [];
-  const push = (j: OffBallJob, u: number, ref: string | null = null): void => {
-    jobs.push(j); utils.push(u + (p.job === j ? JOB_HYSTERESIS : 0)); refs.push(ref);
-  };
+  // The candidate jobs, their utilities and references (module scratch,
+  // emptied per call: thinkJob runs for a few players every tick).
+  const jobs = JOBS;
+  const utils = UTILS;
+  const refs = REFS;
+  jobs.length = 0;
+  utils.length = 0;
+  refs.length = 0;
 
   // Recovering after a loss (the manager's `recover`): a man caught upfield
   // of the ball values getting back into the block above anything else.
   const tacS = tacticsOf(world, side);
   const recovering = !inPossession && tacS.phase === 'defensive_transition' && tacS.plan.onLoss === 'recover'
     && Math.abs(p.pos.x - defendingGoalX(side)) > Math.abs(ball.pos.x - defendingGoalX(side)) + 2;
-  push('shape', recovering ? 0.75 : 0.3);
+  pushJob(p, 'shape', recovering ? 0.75 : 0.3);
 
   // One of the manager's counter-pressers: the plan says go, and he goes.
   const cpr = ctx.cpRank.get(p);
-  if (cpr !== undefined && !inPossession) push('counterpress', 1.5 - 0.05 * cpr, ctx.carrier?.id ?? null);
+  if (cpr !== undefined && !inPossession) pushJob(p, 'counterpress', 1.5 - 0.05 * cpr, ctx.carrier?.id ?? null);
 
   if (looseOrFlight) {
     const kick = ball.kick;
     const intendedForMe = kick !== null && kick.targetId === p.id && kick.side === side;
     const tOppBest = ctx.bestT[opp];
     const iAmBest = ctx.best[side]?.id === p.id;
-    if (intendedForMe) push('chase', 1.2);
-    else if (iAmBest) push('chase', 0.55 + 0.4 / (1 + Math.exp(-(tOppBest - tMe + 0.3) / 0.25)));
-    else if (tMe - ctx.bestT[side] < 0.7 && tMe < 2.5) push('chase', 0.36);
+    if (intendedForMe) pushJob(p, 'chase', 1.2);
+    else if (iAmBest) pushJob(p, 'chase', 0.55 + 0.4 / (1 + Math.exp(-(tOppBest - tMe + 0.3) / 0.25)));
+    else if (tMe - ctx.bestT[side] < 0.7 && tMe < 2.5) pushJob(p, 'chase', 0.36);
   }
 
   if (theyHaveIt && ctx.carrier) {
@@ -385,13 +396,13 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     // Within about 35 m of his own goal somebody must always engage.
     const deepBall = Math.abs(c.pos.x - defendingGoalX(p.side)) < 35;
     const near = deepBall ? 1 : 1 / (1 + Math.exp(-(11 - dist(p.pos, c.pos)) / 3));
-    if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
-    else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
+    if (rank === 0) pushJob(p, 'press', (0.5 + 3 * danger) * k * near, c.id);
+    else if (rank === 1) pushJob(p, 'cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }
 
   const assigned = ctx.markOf.get(p);
   if (!inPossession && assigned) {
-    push('mark', 0.3 + 8 * assigned.v, assigned.id);
+    pushJob(p, 'mark', 0.3 + 8 * assigned.v, assigned.id);
   } else if (!inPossession) {
     // Mark the most dangerous attacker near my anchor.  A forward's anchor
     // is his station in the manager's block (the old formation anchor left
@@ -406,7 +417,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
       const v = positionValue(a.pos, opp) * (1 - d / 16);
       if (v > bestV) { bestV = v; bestA = a; }
     }
-    if (bestA) push('mark', 0.26 + 6 * bestV, bestA.id);
+    if (bestA) pushJob(p, 'mark', 0.26 + 6 * bestV, bestA.id);
   }
 
   if (inPossession && ctx.carrier) {
@@ -423,7 +434,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     const rest = line === 0 || (line === 1 && tac.phase === 'final_third');
     const ahead = (c.pos.x - p.pos.x) * (side === 'home' ? 1 : -1);
     const supporters = transition && plan.onRegain === 'secure' ? SUPPORTERS + 1 : SUPPORTERS;
-    if (dC < 25 && sr < supporters && !(rest && ahead > 8)) push('support', 0.34 + 0.06 * (1 - dC / 25), c.id);
+    if (dC < 25 && sr < supporters && !(rest && ahead > 8)) pushJob(p, 'support', 0.34 + 0.06 * (1 - dC / 25), c.id);
     const cProg = side === 'home' ? c.pos.x / PITCH_LENGTH : 1 - c.pos.x / PITCH_LENGTH;
     const cPress = pressureAt(c.pos, opp === 'home' ? world.home : world.away);
     // The front line attacks the space behind: a counter on a regain commits
@@ -439,7 +450,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
       let u = (p.role === 'FW' ? 0.36 : 0.3) * p.traits.work * TEMPO_RUN[plan.tempo]!;
       if (counter) u = Math.max(u, 0.5 * p.traits.work);
       if (world.flags.scoreClockTerm && goalDiff(world, side) < 0) u *= 1 + 0.3 * lateness(world);
-      push('run', u);
+      pushJob(p, 'run', u);
     }
   }
 
