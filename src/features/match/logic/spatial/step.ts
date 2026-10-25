@@ -30,7 +30,7 @@ import {
 import { effectiveMaxSpeed, MAX_ACCEL, seek } from './steering';
 import { updatePhases, noteRestart, tacticsOf } from './phase';
 import {
-  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom,
+  chooseAction, isOffsidePosition, isInPenaltyArea, touchDistance, softPick, lineRoom, lateness,
   type CarrierAction,
 } from './possession';
 import {
@@ -575,9 +575,26 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
   const inTransition = tacticsOf(world, d.side).phase === 'defensive_transition';
   const breaking = behind && owned(world, carrier) && progressOf(carrier.pos, carrier.side) > (inTransition ? 0.38 : 0.5)
     && dist(d.pos, manAt) <= reach && goalSideCount(world, d, carrier) <= (inTransition ? 3 : 2);
-  const uFoul = breaking && !inBox
-    ? (danger * 1.6 - (0.02 + TACTICAL_CARD_COST + (booked ? 0.25 : 0))) * challengeMul
-    : -1;
+  // He knows the law and his options.  Left alone, the break is worth less
+  // than it looks when cover can get goal-side (a team-mate, or he himself
+  // recovering) or the keeper can come and narrow the angle before the
+  // carrier is in shooting range: then he delays rather than fouls.  And
+  // taking the man on a clear run at goal with nobody else back is a red
+  // card, a man down for the rest of the match (late on, for less of it).
+  let uFoul = -1;
+  if (breaking && !inBox) {
+    const goalPt = vec(defendingGoalX(d.side), PITCH_WIDTH / 2);
+    const dGoal = dist(carrier.pos, goalPt);
+    const keeper = keeperOf(world, d.side);
+    const keeperCovers = keeper !== undefined && !keeper.sentOff
+      && dist(keeper.pos, goalPt) < dGoal && dist(keeper.pos, carrier.pos) < 9;
+    const wouldBeDogso = dGoal < 28 && goalSideCount(world, d, carrier) <= 1 && !keeperCovers;
+    // (Only the last man weighs recovery: further out, a tactical foul costs
+    // a booking and stops the counter before the team is out of shape.)
+    const left = wouldBeDogso ? danger * (1 - RECOVER_DISCOUNT * recoverShare(world, d, carrier, dGoal)) : danger;
+    const cardCost = wouldBeDogso ? LAST_MAN_RED_COST * (0.3 + 0.7 * (1 - lateness(world))) : TACTICAL_CARD_COST;
+    uFoul = (left * 1.6 - (0.02 + cardCost + (booked ? 0.25 : 0))) * challengeMul;
+  }
   if (u <= 0 && uFoul <= 0) return;
   const closing = len(d.vel) + 1.5;
   const tactical = uFoul > u;
@@ -593,6 +610,50 @@ const CP_WIN_GAIN = 0.03;
 
 /** Expected-goal cost of a red card for denying a goalscoring chance. */
 const LAST_MAN_RED_COST = 0.6;
+
+/** Share of a break's danger the defence can still take away when cover
+ *  gets goal-side in time (it cannot take it all: the carrier may still get
+ *  his shot away). */
+const RECOVER_DISCOUNT = 0.7;
+
+/** Distance (m) from goal at which a carrier through on goal shoots. */
+const SHOOTING_RANGE = 16;
+
+/**
+ * How well the defence can recover without a foul: the time the carrier
+ * needs to reach shooting range against the time the quickest cover (a
+ * team-mate, the defender himself, or the keeper coming out to narrow the
+ * angle) needs to get goal-side of him.  0 = no hope, 1 = covered in time.
+ * A defender's judgement from what he sees; nothing drawn at random.
+ */
+function recoverShare(world: SimWorld, d: SimPlayer, carrier: SimPlayer, dGoal: number): number {
+  const now = world.clockSec;
+  const goalPt = vec(defendingGoalX(d.side), PITCH_WIDTH / 2);
+  const vC = Math.max(4, Math.min(effectiveMaxSpeed(carrier), len(carrier.vel) + 1.5));
+  const tShot = Math.max(0, dGoal - SHOOTING_RANGE) / vC;
+  // Goal-side of where he will be when he gets there.
+  const ahead = Math.min(dGoal - 2, Math.max(4, dGoal - SHOOTING_RANGE));
+  const coverPt = add(carrier.pos, scale(normalize(sub(goalPt, carrier.pos)), ahead));
+  let tOut = Infinity;
+  let tKeeper = Infinity;
+  for (const m of teamOf(world, d.side)) {
+    if (m.sentOff) continue;
+    if (m.role === 'GK') {
+      // The keeper narrows from his line: he needs only to reach a point a
+      // few metres off it in the carrier's path.  A one-on-one with the
+      // keeper out is still a chance, so his cover counts for less.
+      const pt = add(goalPt, scale(normalize(sub(carrier.pos, goalPt)), Math.min(8, dGoal - SHOOTING_RANGE / 2)));
+      tKeeper = timeToReach(m, pt, now) + 0.4;
+      continue;
+    }
+    const t = timeToReach(m, coverPt, now) + (m === d ? 0.3 : 0);
+    if (t < tOut) tOut = t;
+  }
+  return Math.max(sigmoid((tShot - tOut) / 0.4), KEEPER_COVER * sigmoid((tShot - tKeeper) / 0.4));
+}
+
+/** How much of the recovery a keeper narrowing the angle is worth. */
+const KEEPER_COVER = 0.55;
 
 /** Expected-goal cost a defender puts on the booking a tactical foul brings. */
 const TACTICAL_CARD_COST = 0.03;
