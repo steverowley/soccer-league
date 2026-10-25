@@ -906,6 +906,8 @@ const PALM_TANGENT = 0.85;
 const PALM_PUSH = 2;
 /** Above this height (m) a parry goes up and over rather than round. */
 const PARRY_HIGH = 1.7;
+/** How much of his catching speed a keeper loses at full stretch. */
+const CATCH_STRETCH = 0.6;
 /** Sine of the steepest contact angle on a body at the edge of its reach. */
 const BODY_ANGLE = 0.95;
 /** A body or a shin returns a little more of the pace than a palm. */
@@ -954,7 +956,11 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     const onTarget = shotLive && kick!.side !== p.side ? headingOnTarget(world, p.side) : false;
     const rel = Math.hypot(speed, b.vz);
     const body = 0.75 + 0.35 * (p.stats.goalkeeping / 100);
-    if (rel <= catchSpeed(p) && closeD <= body) {
+    // Holding needs both hands behind the ball: the further he has to stretch
+    // for it, the softer it must be to stick.
+    const reachNow = Math.max(0.3, keeperReach(p, z));
+    const holdable = catchSpeed(p) * (1 - CATCH_STRETCH * Math.min(1, closeD / reachNow) ** 2);
+    if (rel <= holdable && closeD <= body) {
       if (shotLive && kick!.side !== p.side) resolveShot(world, events, minute, onTarget ? 'save' : 'shot', p);
       passEnd(world, kick && kick.side !== p.side ? 'lost' : 'complete');
       touched(world, p);
@@ -972,7 +978,10 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     const e = errorScale(p, p.stats.goalkeeping, world, { pressure: 0, awkward: 0.5 });
     const stretch = Math.min(1, closeD / Math.max(0.3, keeperReach(p, z)));
     const up = z > PARRY_HIGH ? Math.min(0.8, (z - PARRY_HIGH) / 0.8) : 0;
-    const out3 = deflectOff(b.vel, b.vz, sub(at, p.pos), Math.asin(PALM_ANGLE * stretch) + slip(p, world, 0.12 * e),
+    // He turns the palm to push the ball away from the middle of his goal,
+    // round the nearer post, whichever side of him it passes.
+    const wide = vec(0, at.y >= PITCH_WIDTH / 2 ? 1 : -1);
+    const out3 = deflectOff(b.vel, b.vz, wide, Math.asin(PALM_ANGLE * stretch) + slip(p, world, 0.12 * e),
       up, PALM_RESTITUTION, PALM_TANGENT, PALM_PUSH);
     b.vel = out3.vel;
     b.vz = Math.max(0, out3.vz);
@@ -1006,7 +1015,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     b.kick = { kind: 'deflection', side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
     touched(world, p);
     newBallPath(world, p);
-    trace(world, 'block', p, { speed: r2(speed), edge: r2(edge), out: r2(len(b.vel)) });
+    trace(world, 'block', p, { speed: r2(speed), edge: r2(edge), out: r2(len(b.vel)), kick: kick ? kick.kind : null });
     return;
   }
 

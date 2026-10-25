@@ -75,6 +75,14 @@ for (const seed of seeds) {
         if (y.kind === 'pass' && y.playerId === x.playerId) {
           const dd = Number(y.data['dist']);
           add('passEndLen.' + String(d['outcome']) + (dd < 10 ? '.<10' : dd < 20 ? '.10-20' : '.20+'));
+          if (y.data['restart'] === 'open' && !y.data['lofted']) {
+            const pc = Number(y.data['pC']);
+            const bin = pc < 0.5 ? 'a<0.5' : pc < 0.7 ? 'b0.5-0.7' : pc < 0.85 ? 'c0.7-0.85' : pc < 0.93 ? 'd0.85-0.93' : 'e0.93+';
+            add('calib.' + bin + '.n');
+            add('calib.' + bin + '.estSum', pc);
+            if (d['outcome'] === 'complete') add('calib.' + bin + '.ok');
+            if (d['outcome'] === 'intercepted') add('calib.' + bin + '.int');
+          }
           break;
         }
       }
@@ -87,7 +95,7 @@ for (const seed of seeds) {
     if (x.kind === 'decide') add('decide.' + String(d['action']));
     if (x.kind === 'clear') add('clear');
     if (x.kind === 'keeper' || x.kind === 'block') {
-      const tag = x.kind === 'keeper' ? 'keeper.' + String(d['action']) : 'block';
+      const tag = x.kind === 'keeper' ? 'keeper.' + String(d['action']) : 'block.' + String(d['kick']);
       add(tag);
       // What became of the ball: the next restart / control within 4 s.
       let fate = 'play';
