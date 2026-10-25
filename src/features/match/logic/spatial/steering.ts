@@ -96,19 +96,30 @@ export function pursueBall(p: SimPlayer, ballPos: Vec2, ballVel: Vec2): Vec2 {
  * @returns        A desired-velocity contribution pushing away from crowders.
  */
 export function separation(p: SimPlayer, others: readonly SimPlayer[], radius: number): Vec2 {
-  let push = ZERO;
+  // Scalar form (runs for every outfielder every tick): the same operations
+  // in the same order as sub / len / normalize / scale / add on Vec2s, so
+  // the same result to the bit, without allocating five vectors per mate.
+  let pushX = 0;
+  let pushY = 0;
+  const px = p.pos.x;
+  const py = p.pos.y;
   for (const o of others) {
     if (o.id === p.id) continue;
-    const away = sub(p.pos, o.pos);
-    const d = len(away);
+    const ax = px - o.pos.x;
+    const ay = py - o.pos.y;
+    const d = Math.sqrt(ax * ax + ay * ay);
     if (d > 1e-6 && d < radius) {
       // Weight ∝ how deep into personal space they are (1 at touching, 0 at edge).
-      push = add(push, scale(normalize(away), (radius - d) / radius));
+      const w = (radius - d) / radius;
+      pushX = pushX + (ax / d) * w;
+      pushY = pushY + (ay / d) * w;
     }
   }
-  if (len(push) < 1e-6) return ZERO;
+  const l = Math.sqrt(pushX * pushX + pushY * pushY);
+  if (l < 1e-6) return ZERO;
   // Cap separation at 55% of max speed — assertive but never dominant.
-  return scale(normalize(push), effectiveMaxSpeed(p) * 0.55);
+  const k = effectiveMaxSpeed(p) * 0.55;
+  return vec((pushX / l) * k, (pushY / l) * k);
 }
 
 /**
