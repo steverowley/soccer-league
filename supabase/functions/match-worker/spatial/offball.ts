@@ -24,6 +24,7 @@ import { effectiveMaxSpeed, arrive, seek, separation } from './steering.ts';
 import { dynamicAnchor } from './formation.ts';
 import { softPick, lateness, goalDiff, momentumOf, offsideLineX } from './possession.ts';
 import { perceive, slip } from './execution.ts';
+import { tacticsOf, possessionPoint, lineOf } from './phase.ts';
 
 /** Ball-path lookahead: samples, and ticks per sample. */
 export const PATH_SAMPLES = 25;
@@ -274,13 +275,29 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
 
   if (inPossession && ctx.carrier) {
     const c = ctx.carrier;
+    const tac = tacticsOf(world, side);
+    const plan = tac.plan;
+    const line = lineOf(world, p);
+    const transition = tac.phase === 'attacking_transition';
     const dC = dist(p.pos, c.pos);
     const sr = ctx.supportRank.get(p.id) ?? 99;
-    if (dC < 25 && sr < SUPPORTERS) push('support', 0.34 + 0.06 * (1 - dC / 25), c.id);
+    // The rest defence (the back line, and the screen once the side is in
+    // the final third) holds its station behind the ball: it offers only a
+    // pass back or across, never a run up to a carrier who is past it.
+    const rest = line === 0 || (line === 1 && tac.phase === 'final_third');
+    const ahead = (c.pos.x - p.pos.x) * (side === 'home' ? 1 : -1);
+    const supporters = transition && plan.onRegain === 'secure' ? SUPPORTERS + 1 : SUPPORTERS;
+    if (dC < 25 && sr < supporters && !(rest && ahead > 8)) push('support', 0.34 + 0.06 * (1 - dC / 25), c.id);
     const cProg = side === 'home' ? c.pos.x / PITCH_LENGTH : 1 - c.pos.x / PITCH_LENGTH;
     const cPress = pressureAt(c.pos, opp === 'home' ? world.home : world.away);
-    if ((p.role === 'FW' || (p.role === 'MF' && p.traits.dribble > 1.05)) && cProg > 0.3 && cPress < 0.6) {
-      let u = 0.36 * p.traits.work;
+    // The front line attacks the space behind: a counter on a regain commits
+    // its runners at once; in settled play they go when the carrier is up
+    // the pitch and has time.  The tempo the manager asks for scales it.
+    const counter = transition && plan.onRegain === 'counter';
+    const front = line === 2 && (p.role !== 'DF' || plan.fullBackRole === 'overlap');
+    if (front && !(transition && plan.onRegain === 'secure') && (counter || (cProg > 0.3 && cPress < 0.6))) {
+      let u = (p.role === 'FW' ? 0.36 : 0.3) * p.traits.work * TEMPO_RUN[plan.tempo]!;
+      if (counter) u = Math.max(u, 0.5 * p.traits.work);
       if (world.flags.scoreClockTerm && goalDiff(world, side) < 0) u *= 1 + 0.3 * lateness(world);
       push('run', u);
     }
@@ -340,6 +357,9 @@ function supportOffset(p: SimPlayer, world: SimWorld, c: SimPlayer, rank: number
 }
 
 const SUPPORT_ANGLES = [0, 0.7, -0.7, 1.4, -1.4, 2.3, -2.3] as const;
+
+/** Appetite for runs in behind by the manager's tempo. */
+const TEMPO_RUN: Readonly<Record<string, number>> = { patient: 0.85, vertical: 1, direct: 1.2 };
 
 /** How many team-mates come to offer for the carrier. */
 const SUPPORTERS = 3;
@@ -430,10 +450,11 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
   // toward their own back line and everyone squeezes toward the ball's side,
   // so the space between and behind the lines closes.
   const ball = world.ball;
-  const inPossession = ball.ownerId !== null
-    ? (p.side === 'home' ? world.home : world.away).some((q) => q.id === ball.ownerId)
-    : ball.lastTouchSide === p.side;
+  const inPossession = tacticsOf(world, p.side).hasBall;
   if (inPossession && p.role !== 'GK') {
+    // In possession the manager's structure (phase.ts): back line up to his
+    // settled height, a screen, the front pinning the last line in five lanes.
+    a = possessionPoint(p, world);
     // In possession nobody takes up a station beyond the offside line: a man
     // standing offside is no use to the passer.
     const fwd = p.side === 'home' ? 1 : -1;
