@@ -37,9 +37,13 @@ export function effectiveMaxSpeed(p: SimPlayer): number {
  * @returns Desired velocity toward target; ZERO if already on it.
  */
 export function seek(p: SimPlayer, target: Vec2): Vec2 {
-  const toTarget = sub(target, p.pos);
-  if (len(toTarget) < 1e-6) return ZERO;
-  return scale(normalize(toTarget), effectiveMaxSpeed(p));
+  // Scalars, the same arithmetic as scale(normalize(sub(target, pos)), v).
+  const tx = target.x - p.pos.x;
+  const ty = target.y - p.pos.y;
+  const d = Math.sqrt(tx * tx + ty * ty);
+  if (d < 1e-6) return ZERO;
+  const v = effectiveMaxSpeed(p);
+  return vec((tx / d) * v, (ty / d) * v);
 }
 
 /**
@@ -53,13 +57,15 @@ export function seek(p: SimPlayer, target: Vec2): Vec2 {
  * @returns           Desired velocity, scaled down near the target.
  */
 export function arrive(p: SimPlayer, target: Vec2, slowRadius: number, speedFrac = 1): Vec2 {
-  const toTarget = sub(target, p.pos);
-  const d = len(toTarget);
+  // Scalars, the same arithmetic as scale(normalize(sub(target, pos)), s).
+  const tx = target.x - p.pos.x;
+  const ty = target.y - p.pos.y;
+  const d = Math.sqrt(tx * tx + ty * ty);
   if (d < 0.2) return ZERO; // close enough — stand still rather than jitter
   const maxV = effectiveMaxSpeed(p) * speedFrac;
   // Linear ramp: full speed beyond slowRadius, proportionally less inside it.
   const desiredSpeed = d >= slowRadius ? maxV : maxV * (d / slowRadius);
-  return scale(normalize(toTarget), desiredSpeed);
+  return vec((tx / d) * desiredSpeed, (ty / d) * desiredSpeed);
 }
 
 /**

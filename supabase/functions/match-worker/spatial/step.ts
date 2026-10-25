@@ -210,10 +210,39 @@ function touched(world: SimWorld, p: SimPlayer): void {
  * speed, then integrate position and drain/recover stamina.  Mutates `p`.
  */
 function integratePlayer(p: SimPlayer, desired: Vec2, dt: number, accel = MAX_ACCEL, cap = effectiveMaxSpeed(p)): void {
-  const deltaV = truncate(sub(desired, p.vel), accel * dt);
-  p.vel = truncate(add(p.vel, deltaV), cap);
-  p.pos = add(p.pos, scale(p.vel, dt));
-  p.pos = vec(Math.max(0, Math.min(PITCH_LENGTH, p.pos.x)), Math.max(0, Math.min(PITCH_WIDTH, p.pos.y)));
+  // Scalar form of truncate(sub(desired, vel), accel * dt), then
+  // truncate(add(vel, deltaV), cap), then the clamped add(pos, vel * dt):
+  // the same operations in the same order (CPU: this runs for all 22
+  // players every tick, and allocated five vectors each time).
+  const maxDv = accel * dt;
+  let dvx = 0;
+  let dvy = 0;
+  if (maxDv > 0) {
+    dvx = desired.x - p.vel.x;
+    dvy = desired.y - p.vel.y;
+    const l2 = dvx * dvx + dvy * dvy;
+    if (l2 > maxDv * maxDv) {
+      const l = Math.sqrt(l2);
+      dvx = (dvx / l) * maxDv;
+      dvy = (dvy / l) * maxDv;
+    }
+  }
+  if (cap <= 0) {
+    p.vel = ZERO;
+  } else {
+    let vx = p.vel.x + dvx;
+    let vy = p.vel.y + dvy;
+    const l2 = vx * vx + vy * vy;
+    if (l2 > cap * cap) {
+      const l = Math.sqrt(l2);
+      vx = (vx / l) * cap;
+      vy = (vy / l) * cap;
+    }
+    p.vel = vec(vx, vy);
+  }
+  const nx = p.pos.x + p.vel.x * dt;
+  const ny = p.pos.y + p.vel.y * dt;
+  p.pos = vec(Math.max(0, Math.min(PITCH_LENGTH, nx)), Math.max(0, Math.min(PITCH_WIDTH, ny)));
   // Stamina drains with the square of speed fraction (sprinting costs most),
   // faster for players with less engine, and recovers gently at walking pace.
   const speedFrac = len(p.vel) / Math.max(1, p.maxSpeed);
