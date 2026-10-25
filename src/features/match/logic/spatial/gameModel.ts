@@ -94,7 +94,7 @@ export const STYLE_PRESETS: Readonly<Record<string, GameModel>> = Object.freeze(
   },
   Balanced: {
     buildUpShape: '3-2-5', fullBackRole: 'overlap', restDefence: 5, restShape: '3+2', settledLineHeight: 32,
-    width: 'balanced', tempo: 'vertical', onRegain: 'counter', onLoss: 'counterpress', counterpressPlayers: 4, counterpressSec: 6,
+    width: 'balanced', tempo: 'vertical', onRegain: 'counter', onLoss: 'counterpress', counterpressPlayers: 3, counterpressSec: 5,
     blockHeight: 'mid', pressTriggers: ['back_pass', 'bad_touch'], blockLength: 34, blockWidth: 40, lineManagement: 'measured',
   },
   Defensive: {

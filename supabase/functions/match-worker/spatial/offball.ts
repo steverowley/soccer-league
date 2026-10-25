@@ -65,6 +65,9 @@ export interface TickContext {
   markOf: Map<string, { id: string; v: number }>;
   /** Rank by distance to the carrier among his outfield team-mates. */
   supportRank: Map<string, number>;
+  /** The counter-pressers of a side that has just lost the ball and whose
+   *  manager counter-presses: id to rank (0 goes for the ball). */
+  cpRank: Map<string, number>;
 }
 
 /** Attackers worth less than this (positionValue) are left to the zone. */
@@ -174,8 +177,66 @@ export function buildContext(world: SimWorld): TickContext {
       .sort((a, b) => a.d - b.d);
     mates.forEach((m, i) => supportRank.set(m.p.id, i));
   }
-  return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank, markOf, supportRank };
+  // The counter-press (the manager's `counterpress`, for his counterpress
+  // seconds after a loss): his N men quickest to the ball go, wherever it is
+  // (at a man's feet or still loose).  The deepest men goal-side of the ball
+  // are the rest defence and stay unless they are already the nearest to it.
+  // The men are picked at the moment of loss and hunt the ball for the whole
+  // window (a pass out of the press does not call them off); among them, who
+  // goes at the ball and who takes the lanes is re-read every tick.
+  const cpRank = new Map<string, number>();
+  for (const side of ['home', 'away'] as const) {
+    const n = counterpressing(world, side);
+    if (n <= 0) continue;
+    const tac = tacticsOf(world, side);
+    const team = (side === 'home' ? world.home : world.away).filter((p) => !p.sentOff && p.role !== 'GK');
+    // Re-read whenever the ball changes feet or is played: the press follows
+    // the ball (the men already in it keep their place over a fresh man
+    // unless he is clearly nearer).
+    const key = ball.ownerId ? ball.controlSec : ball.kick ? ball.kick.tSec : -1;
+    if (tac.cpFor !== tac.changeSec || tac.cpKey !== key) {
+      const same = tac.cpFor === tac.changeSec;
+      const own = defendingGoalX(side);
+      const ballD = Math.abs(ball.pos.x - own);
+      const keep = new Set(team
+        .filter((p) => Math.abs(p.pos.x - own) < ballD - CP_REST_GAP)
+        .sort((a, b) => Math.abs(a.pos.x - own) - Math.abs(b.pos.x - own))
+        .slice(0, CP_REST_KEEP)
+        .map((p) => p.id));
+      const picked = team
+        .map((p) => ({ p, t: timeToReach(p, ball.pos, now) - (same && tac.cpIds.includes(p.id) ? CP_KEEP_BONUS : 0) }))
+        .filter((x) => x.t < CP_MAX_T && (!keep.has(x.p.id) || dist(x.p.pos, ball.pos) < CP_REST_NEAR))
+        .sort((a, b) => a.t - b.t)
+        .slice(0, n);
+      const before = same ? tac.cpIds : [];
+      tac.cpIds = picked.map((x) => x.p.id);
+      tac.cpFor = tac.changeSec;
+      tac.cpKey = key;
+      // The moment of loss is a trigger every one of them is drilled on:
+      // he reacts to it (after his reaction time) rather than at his next look.
+      for (const x of picked) if (!before.includes(x.p.id)) x.p.nextThinkSec = Math.min(x.p.nextThinkSec, now + CP_REACT);
+    }
+    team
+      .filter((p) => tac.cpIds.includes(p.id))
+      .map((p) => ({ p, t: intercept.get(p.id)?.t ?? Infinity }))
+      .sort((a, b) => a.t - b.t)
+      .forEach((x, i) => cpRank.set(x.p.id, i));
+  }
+  return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank, markOf, supportRank, cpRank };
 }
+
+/** Rest defence a counter-press leaves behind: the deepest this many men
+ *  more than CP_REST_GAP m goal-side of the ball stay unless within
+ *  CP_REST_NEAR m of it. */
+const CP_REST_KEEP = 2;
+const CP_REST_GAP = 4;
+const CP_REST_NEAR = 6;
+/** A man more than this many seconds from the ball does not counter-press. */
+const CP_MAX_T = 4;
+/** Seconds after the loss at which a counter-presser re-reads his job. */
+const CP_REACT = 0.2;
+/** Seconds of head start a man already in the press keeps over a fresh one. */
+const CP_KEEP_BONUS = 0.6;
 
 // ── Job evaluation ─────────────────────────────────────────────────────────
 
@@ -238,7 +299,11 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   const tacS = tacticsOf(world, side);
   const recovering = !inPossession && tacS.phase === 'defensive_transition' && tacS.plan.onLoss === 'recover'
     && Math.abs(p.pos.x - defendingGoalX(side)) > Math.abs(ball.pos.x - defendingGoalX(side)) + 2;
-  push('shape', recovering ? 0.55 : 0.3);
+  push('shape', recovering ? 0.75 : 0.3);
+
+  // One of the manager's counter-pressers: the plan says go, and he goes.
+  const cpr = ctx.cpRank.get(p.id);
+  if (cpr !== undefined && !inPossession) push('counterpress', 1.5 - 0.05 * cpr, ctx.carrier?.id ?? null);
 
   if (looseOrFlight) {
     const kick = ball.kick;
@@ -264,11 +329,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     // Within about 35 m of his own goal somebody must always engage.
     const deepBall = Math.abs(c.pos.x - defendingGoalX(p.side)) < 35;
     const near = deepBall ? 1 : 1 / (1 + Math.exp(-(11 - dist(p.pos, c.pos)) / 3));
-    // Counter-press (the manager's `counterpress`): for the first seconds
-    // after a loss his nearest N men all go for the ball.
-    const swarm = counterpressing(world, side);
-    if (swarm > 0 && rank < swarm && dist(p.pos, c.pos) < 25) push('press', (0.7 + 2 * danger) * Math.max(1, k) - 0.04 * rank, c.id);
-    else if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
+    if (rank === 0) push('press', (0.5 + 3 * danger) * k * near, c.id);
     else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }
 
@@ -429,6 +490,11 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const d = dist(p.pos, jockey);
       return d > 4 ? seek(p, jockey) : arrive(p, jockey, 2.5, 0.95);
     }
+    case 'counterpress': {
+      const rank = ctx.cpRank.get(p.id);
+      if (rank === undefined) return arrive(p, shapePoint(p, world), 6, work);
+      return counterpressVelocity(p, world, ctx, rank);
+    }
     case 'cover': {
       const c = ctx.carrier;
       if (!c) return arrive(p, shapePoint(p, world), 5, 0.6 * work);
@@ -468,6 +534,61 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
     }
   }
 }
+
+/**
+ * A counter-presser's run (the manager's plan, the first seconds after a
+ * loss), all at a sprint: the first man goes straight at the ball (or the
+ * point where he meets a loose one), the second closes the carrier from his
+ * own side to cut the escape, the rest step into the passing lanes from the
+ * carrier to his nearest team-mates, a few metres off the ball.
+ */
+function counterpressVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext, rank: number): Vec2 {
+  const c = ctx.carrier;
+  const ic = ctx.intercept.get(p.id);
+  if (!c || c.side === p.side) {
+    if (!ic) return arrive(p, shapePoint(p, world), 6, 1);
+    const opp = otherSide(p.side);
+    const ob = ctx.best[opp];
+    const meet = ob ? ctx.intercept.get(ob.id)?.pt ?? ic.pt : ic.pt;
+    const own = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+    const kick = world.ball.kick;
+    if (kick && kick.side === opp && !kick.resolved) {
+      // They have played their way out of the press: press the pass, not
+      // the ball's flight.  The first man arrives on the receiver as the
+      // ball does, the others a few metres off him, goal-side.
+      const off = rank === 0 ? 2 : 4;
+      return arrive(p, add(meet, scale(normalize(sub(own, meet)), off)), 3, 1);
+    }
+    // A loose ball: the first two go to where they meet it; the others to
+    // where the opponent will, a few metres goal-side, for the second ball.
+    if (rank <= 1) return arrive(p, ic.pt, 2, 1);
+    return arrive(p, add(meet, scale(normalize(sub(own, meet)), 4)), 3, 1);
+  }
+  // Both close at a sprint and brake into the last metres (a man who runs
+  // through the carrier has fouled him, and the challenge is the lunge's job).
+  if (rank === 0) {
+    const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+    return arrive(p, add(c.pos, scale(normalize(sub(goal, c.pos)), CP_TIGHT)), CP_BRAKE, 1);
+  }
+  if (rank === 1) return arrive(p, add(c.pos, scale(normalize(sub(p.pos, c.pos)), 2.2)), CP_BRAKE, 1);
+  // Lanes: rank 2 takes the carrier's nearest team-mate, rank 3 the next.
+  const mates = (c.side === 'home' ? world.home : world.away)
+    .filter((q) => !q.sentOff && q !== c && q.role !== 'GK')
+    .map((q) => ({ q, d: dist(q.pos, c.pos) }))
+    .sort((a, b) => a.d - b.d);
+  const target = mates[Math.min(mates.length - 1, rank - 2)];
+  if (!target) return arrive(p, add(c.pos, scale(normalize(sub(p.pos, c.pos)), 4)), 3, 1);
+  const lane = sub(target.q.pos, c.pos);
+  const along = Math.min(CP_LANE_MAX, 0.45 * target.d);
+  return arrive(p, add(c.pos, scale(normalize(lane), along)), 3, 1);
+}
+
+/** How close (m) the first counter-presser closes on the carrier, goal-side. */
+const CP_TIGHT = 1.5;
+/** Distance (m) over which a counter-presser brakes into the carrier. */
+const CP_BRAKE = 4;
+/** Furthest (m) from the carrier a counter-presser screens a passing lane. */
+const CP_LANE_MAX = 4;
 
 /**
  * The authored shape point: the formation anchor shifted with the ball, with

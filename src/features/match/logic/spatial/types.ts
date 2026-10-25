@@ -154,6 +154,7 @@ export type OffBallJob =
   | 'shape'    // hold the authored formation anchor
   | 'chase'    // go for a loose ball / meet a pass
   | 'press'    // close down the carrier (jockey goal-side)
+  | 'counterpress' // one of the manager's counter-pressers just after a loss
   | 'cover'    // second defender behind the presser
   | 'mark'     // goal-side of an attacker
   | 'support'  // offer an angle to the carrier

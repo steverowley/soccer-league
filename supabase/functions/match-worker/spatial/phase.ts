@@ -50,6 +50,12 @@ export interface TeamTactics {
   /** In-possession line per outfielder id: 0 back, 1 screen, 2 front; and his lane (0..1 across). */
   lines: Map<string, { line: 0 | 1 | 2; lane: number }>;
   linesKey: string;
+  /** The counter-pressers the plan sent after the last loss, and the loss
+   *  (its changeSec) they were picked for. */
+  cpIds: string[];
+  cpFor: number;
+  /** The ball event (control or kick time) the press was last re-read on. */
+  cpKey: number;
   readonly timeline: PhaseChange[];
 }
 
@@ -96,7 +102,7 @@ function depthScore(sub: SubRole, role: Role, m: GameModel): number {
 export function makeTactics(model: GameModel): TeamTactics {
   return {
     model, plan: model, planKey: '', phase: 'set_piece', hasBall: false, changeSec: -100,
-    lineAdjust: 0, lines: new Map(), linesKey: '', timeline: [{ tSec: 0, phase: 'set_piece' }],
+    lineAdjust: 0, lines: new Map(), linesKey: '', cpIds: [], cpFor: -1, cpKey: -1, timeline: [{ tSec: 0, phase: 'set_piece' }],
   };
 }
 
@@ -343,7 +349,10 @@ export function possessionPoint(p: SimPlayer, world: SimWorld): Vec2 {
   // Until the side is settled (a transition, a restart) the line stays
   // nearer home.
   const cap = settled ? m.settledLineHeight : Math.min(m.settledLineHeight, UNSETTLED_LINE);
-  let backD = Math.min(cap, Math.max(12, 0.62 * ballD + 3));
+  // Settled with the ball in the opponent's half, the line is up at the
+  // manager's height (it ramps there over the last 12 m before halfway).
+  const settledUp = settled ? cap - Math.max(0, PITCH_LENGTH / 2 - ballD) * 0.85 : 0;
+  let backD = Math.min(cap, Math.max(12, 0.62 * ballD + 3, settledUp));
   if (ballD > 40) backD = Math.min(backD, ballD - 10);
   let d: number;
   let pull: number;
@@ -351,7 +360,10 @@ export function possessionPoint(p: SimPlayer, world: SimWorld): Vec2 {
     d = backD;
     pull = 0.18;
   } else if (slot.line === 1) {
-    d = backD + 13;
+    // The screen: ahead of the back line, and once the ball is in the
+    // opponent's half within counter-press distance behind it, so a loss
+    // can be pressed at once (the rest defence's job, section 2).
+    d = Math.max(backD + 13, ballD - SCREEN_GAP);
     if (ballD > 45) d = Math.min(d, ballD - 3);
     pull = 0.22;
   } else {
@@ -372,6 +384,9 @@ export function possessionPoint(p: SimPlayer, world: SimWorld): Vec2 {
   const y = slot.lane * PITCH_WIDTH + (ball.y - PITCH_WIDTH / 2) * pull;
   return vec(own + dir * Math.max(4, Math.min(PITCH_LENGTH - 4, d)), Math.max(1.5, Math.min(PITCH_WIDTH - 1.5, y)));
 }
+
+/** Furthest (m) the in-possession screen sits behind the ball. */
+const SCREEN_GAP = 12;
 
 /** Back-line cap (m from own goal) in possession before the side is settled. */
 const UNSETTLED_LINE = 26;

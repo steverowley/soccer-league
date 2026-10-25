@@ -50,10 +50,10 @@ UPDATE public.entities e
 --   - a young club learning organisation: on a loss they drop into shape rather than chase.
 --   - six held back while the side learns to believe in itself.
 UPDATE public.entities e
-   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"recover","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
+   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"recover","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
   FROM public.managers m
  WHERE m.entity_id = e.id AND m.team_id = 'charon-united' AND m.name = 'Binary Nakamura'
-   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"recover","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
+   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"recover","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
 
 -- Priya Okafor (earth-united, Possession preset, 4-4-2).
 --   adjusts settledLineHeight, counterpressPlayers, blockHeight from the preset, because:
@@ -133,10 +133,10 @@ UPDATE public.entities e
 --   - almost never careless: full-backs stay at home.
 --   - six behind the ball so the opponent has to make the mistakes.
 UPDATE public.entities e
-   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"4-2-4","fullBackRole":"stay","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
+   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"4-2-4","fullBackRole":"stay","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
   FROM public.managers m
  WHERE m.entity_id = e.id AND m.team_id = 'juno-city' AND m.name = 'Order Mensah'
-   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"4-2-4","fullBackRole":"stay","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
+   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"4-2-4","fullBackRole":"stay","restDefence":6,"restShape":"4+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
 
 -- Titan Krell (jupiter-titans, Aggressive preset, 5-4-1).
 --   adjusts buildUpShape, restDefence, restShape, counterpressPlayers, blockLength from the preset, because:
@@ -206,10 +206,10 @@ UPDATE public.entities e
 --   - no fixed shape: full-backs step inside into midfield.
 --   - builds a 2-3-5 the opponent has not prepared for.
 UPDATE public.entities e
-   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"2-3-5","fullBackRole":"invert","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
+   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"2-3-5","fullBackRole":"invert","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
   FROM public.managers m
  WHERE m.entity_id = e.id AND m.team_id = 'pallas-wanderers' AND m.name = 'Nomad Ferreira'
-   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"2-3-5","fullBackRole":"invert","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
+   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"2-3-5","fullBackRole":"invert","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"vertical","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
 
 -- Glacis Montoya (pluto-frost, Defensive preset, 4-4-2).
 --   adjusts blockHeight, settledLineHeight from the preset, because:
@@ -246,10 +246,10 @@ UPDATE public.entities e
 --   - chaotic and improvisational: his side stretches the pitch to the touchlines.
 --   - survival football: the ball goes forward early.
 UPDATE public.entities e
-   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"wide","tempo":"direct","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
+   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"wide","tempo":"direct","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
   FROM public.managers m
  WHERE m.entity_id = e.id AND m.team_id = 'scattered-disc' AND m.name = 'Void Larsen'
-   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"wide","tempo":"direct","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
+   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"wide","tempo":"direct","onRegain":"counter","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
 
 -- Patient Okonkwo (sedna-mariners, Defensive preset, 3-4-3).
 --   adjusts settledLineHeight, blockLength from the preset, because:
@@ -266,10 +266,10 @@ UPDATE public.entities e
 --   - cerebral and studied: circulates until the opening is there.
 --   - on a regain she keeps the ball and resets rather than gamble.
 UPDATE public.entities e
-   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"patient","onRegain":"secure","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
+   SET meta = jsonb_set(COALESCE(e.meta, '{}'::jsonb), '{game_model}', $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"patient","onRegain":"secure","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb, true)
   FROM public.managers m
  WHERE m.entity_id = e.id AND m.team_id = 'solar-city' AND m.name = 'Luma Vasquez'
-   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"patient","onRegain":"secure","onLoss":"counterpress","counterpressPlayers":4,"counterpressSec":6,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
+   AND (e.meta -> 'game_model') IS DISTINCT FROM $gm${"buildUpShape":"3-2-5","fullBackRole":"overlap","restDefence":5,"restShape":"3+2","settledLineHeight":32,"width":"balanced","tempo":"patient","onRegain":"secure","onLoss":"counterpress","counterpressPlayers":3,"counterpressSec":5,"blockHeight":"mid","pressTriggers":["back_pass","bad_touch"],"blockLength":34,"blockWidth":40,"lineManagement":"measured"}$gm$::jsonb;
 
 -- Drill Rashidi (solar-miners, High Pressing preset, 3-4-3).
 --   adjusts counterpressSec, counterpressPlayers from the preset, because:

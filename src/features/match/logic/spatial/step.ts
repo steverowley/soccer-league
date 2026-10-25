@@ -551,7 +551,11 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
   const style = d.side === 'home' ? world.homeStyle : world.awayStyle;
   const challengeMul = d.traits.challenge * (1 + 2 * style.tackle);
   const danger = positionValue(carrier.pos, carrier.side);
-  const gain = (danger + LUNGE_GAIN_BASE) * challengeMul;
+  // In his manager's counter-press, winning it back now is worth more: the
+  // opponent is not yet organised and the ball would be his side's high up
+  // the pitch.  He goes in on a closer call (and so fouls more often).
+  const cpWin = d.job === 'counterpress' ? CP_WIN_GAIN + positionValue(b.pos, d.side) : 0;
+  const gain = (danger + LUNGE_GAIN_BASE + cpWin) * challengeMul;
   // Missing means the carrier is past him: the cost grows with the danger.
   const booked = d.yellowCards > 0;
   // The last man (or nearly: one team-mate left goal-side, who may be gone
@@ -580,9 +584,12 @@ function considerLunge(world: SimWorld, d: SimPlayer, carrier: SimPlayer): void 
   d.lunge = { at: tactical ? manAt : seen, resolveSec: now + LUNGE_TIME, closing, targetId: carrier.id };
   trace(world, 'lunge', d, {
     carrier: carrier.id, exposed: r2(exposed), dReach: r2(dReach), tCar: r2(tCar), tDef: r2(tDef), misread: r2(misread),
-    holds: carrier.holds, pBall: r2(pBall), u: r2(u * 1000), uFoul: r2(uFoul * 1000), tactical, lastMan, inBox,
+    holds: carrier.holds, pBall: r2(pBall), u: r2(u * 1000), uFoul: r2(uFoul * 1000), tactical, lastMan, inBox, behind, dogsoRisk,
   });
 }
+
+/** Value (expected goals) a counter-presser puts on winning the ball back. */
+const CP_WIN_GAIN = 0.03;
 
 /** Expected-goal cost of a red card for denying a goalscoring chance. */
 const LAST_MAN_RED_COST = 0.6;
@@ -1500,7 +1507,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     for (const d of teamOf(world, otherSide(owner.side))) {
       if (d.sentOff) continue;
       if (d.role === 'GK' && !inOwnBox(d, d.pos)) continue;
-      if (d.role !== 'GK' && d.job !== 'press' && d.job !== 'cover' && d.job !== 'chase') continue;
+      if (d.role !== 'GK' && d.job !== 'press' && d.job !== 'cover' && d.job !== 'chase' && d.job !== 'counterpress') continue;
       considerLunge(world, d, owner);
     }
   } else if (world.ball.z < 0.6) {
@@ -1514,8 +1521,9 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     if (hr && ar) {
       const homeFirst = dist(hr.pos, world.ball.pos) <= dist(ar.pos, world.ball.pos);
       const [r1, r2] = homeFirst ? [hr, ar] : [ar, hr];
-      if (r1.job === 'chase') considerLunge(world, r1, r2);
-      if (r2.job === 'chase' && !r1.lunge) considerLunge(world, r2, r1);
+      const racing = (q: SimPlayer): boolean => q.job === 'chase' || q.job === 'counterpress';
+      if (racing(r1)) considerLunge(world, r1, r2);
+      if (racing(r2) && !r1.lunge) considerLunge(world, r2, r1);
     }
   }
   for (const p of all) {

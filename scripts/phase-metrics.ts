@@ -18,13 +18,20 @@
 //
 //   MODE=std N=24 SHARD=0 SHARDS=1 OUT=x.jsonl npx tsx scripts/phase-metrics.ts
 //   MODE=isl PAIRS=ceres-miners:jupiter-titans N=4 OUT=x.jsonl npx tsx scripts/phase-metrics.ts
+//   MODE=cp N=24 OUT=x.jsonl npx tsx scripts/phase-metrics.ts  counter-press v recover
 //   REPORT=<prefix> npx tsx scripts/phase-metrics.ts        aggregate shards
+//
+// Counter-press metric (per plan type, the side's manager's onLoss): every
+// open-play loss (the engine's defensive_transition entry) with play still
+// live 1.5 s later; the loser's outfielders within 10 m of the ball then, and
+// whether the loser regained the ball in open play within 6 s.
 
 import { appendFileSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, basename, join } from 'node:path';
 import { simulateSpatialMatch, type SpatialTeamInput } from '../src/features/match/logic/spatial/simulateSpatialMatch';
 import type { EngineFlags, PositionFrame, TeamSide } from '../src/features/match/logic/spatial/types';
 import { team } from './lib/engineMetrics';
+import { STYLE_PRESETS, NEUTRAL_GAME_MODEL, presetFor, type GameModel } from '../src/features/match/logic/spatial/gameModel';
 import { islTeam } from './lib/islSquads';
 
 const L = 105;
@@ -44,10 +51,17 @@ export interface SideMetrics {
   passes: number;
   possessions: number;
   goals: number;
+  /** Counter-press metric: plan label, losses measured, sum of players within
+   *  10 m of the ball 1.5 s after, regains within 6 s. */
+  cp?: { plan: string; losses: number; near: number; regain6: number };
+}
+
+function planLabel(m: GameModel): string {
+  return m.onLoss === 'counterpress' ? `counterpress ${m.counterpressPlayers} for ${m.counterpressSec}s` : 'recover';
 }
 
 function measureMatch(home: SpatialTeamInput, away: SpatialTeamInput, seed: number, names: [string, string], flags?: Partial<EngineFlags>): { seed: number; sides: Record<TeamSide, SideMetrics> } {
-  const r = simulateSpatialMatch(home, away, { seed, frameEverySec: 1, ...(flags ? { flags } : {}) });
+  const r = simulateSpatialMatch(home, away, { seed, frameEverySec: 0.5, ...(flags ? { flags } : {}) });
   const sideOf = new Map<string, TeamSide>();
   const gk = new Set<string>();
   for (const [s, t] of [['home', home], ['away', away]] as const) {
@@ -59,9 +73,31 @@ function measureMatch(home: SpatialTeamInput, away: SpatialTeamInput, seed: numb
   });
   const out: Record<TeamSide, SideMetrics> = { home: mk(names[0]), away: mk(names[1]) };
   for (const e of r.events) if (e.side && e.type === 'pass') out[e.side].passes++;
+  const modelOf = (t: SpatialTeamInput): GameModel => (flags?.gameModel === false ? NEUTRAL_GAME_MODEL : t.gameModel ?? presetFor(t.playStyle));
+  out.home.cp = { plan: planLabel(modelOf(home)), losses: 0, near: 0, regain6: 0 };
+  out.away.cp = { plan: planLabel(modelOf(away)), losses: 0, near: 0, regain6: 0 };
   out.home.goals = r.finalScore[0];
   out.away.goals = r.finalScore[1];
   const phases = (r as unknown as { phases?: Record<TeamSide, Array<{ tSec: number; phase: string }>> }).phases;
+
+  if (phases) {
+    const frames = r.frames as PositionFrame[];
+    for (const s of ['home', 'away'] as const) {
+      const tl = phases[s];
+      for (let i = 0; i < tl.length; i++) {
+        if (tl[i]!.phase !== 'defensive_transition') continue;
+        const t0 = tl[i]!.tSec;
+        // Play must still be live 1.5 s later (no restart in between).
+        if (tl.some((c) => c.tSec > t0 && c.tSec <= t0 + 1.5 && c.phase === 'set_piece')) continue;
+        const f = frames.find((x) => x.tSec >= t0 + 1.5 - 1e-6);
+        if (!f) continue;
+        const near = f.players.filter((p) => sideOf.get(p.id) === s && !gk.has(p.id) && p.x >= 0 && Math.hypot(p.x - f.ball.x, p.y - f.ball.y) <= 10).length;
+        const back = tl.some((c) => c.tSec > t0 && c.tSec <= t0 + 6 && c.phase === 'attacking_transition');
+        const cp = out[s].cp!;
+        cp.losses++; cp.near += near; if (back) cp.regain6++;
+      }
+    }
+  }
 
   let poss: TeamSide | null = null;
   let changeAt = -100;
@@ -162,6 +198,23 @@ export function shapeTable(sides: SideMetrics[]): string {
   const passes = sides.reduce((s, x) => s + x.passes, 0);
   const poss = sides.reduce((s, x) => s + x.possessions, 0);
   lines.push(`passes per possession ${(passes / Math.max(1, poss)).toFixed(2)}`);
+  lines.push(cpTable(sides));
+  return lines.join('\n');
+}
+
+/** Counter-press metric by plan type. */
+export function cpTable(sides: SideMetrics[]): string {
+  const by = new Map<string, { losses: number; near: number; regain6: number; n: number }>();
+  for (const x of sides) {
+    if (!x.cp) continue;
+    const a = by.get(x.cp.plan) ?? { losses: 0, near: 0, regain6: 0, n: 0 };
+    a.losses += x.cp.losses; a.near += x.cp.near; a.regain6 += x.cp.regain6; a.n++;
+    by.set(x.cp.plan, a);
+  }
+  const lines = ['counter-press metric (open-play losses, live 1.5 s later)', `${'plan on loss'.padEnd(26)} ${'sides'.padStart(5)} ${'losses/m'.padStart(8)} ${'within10m@1.5s'.padStart(14)} ${'regain<=6s'.padStart(10)} ${'regains/m'.padStart(9)}`];
+  for (const [k, a] of [...by.entries()].sort()) {
+    lines.push(`${k.padEnd(26)} ${String(a.n).padStart(5)} ${(a.losses / a.n).toFixed(1).padStart(8)} ${(a.near / Math.max(1, a.losses)).toFixed(2).padStart(14)} ${(a.regain6 / Math.max(1, a.losses)).toFixed(3).padStart(10)} ${(a.regain6 / a.n).toFixed(1).padStart(9)}`);
+  }
   return lines.join('\n');
 }
 
@@ -203,7 +256,19 @@ if (report) {
   for (const f of off) (flags as Record<string, boolean>)[f] = false;
   writeFileSync(out, '');
   const jobs: Array<() => Row> = [];
-  if (mode === 'std') {
+  if (mode === 'cp') {
+    // Same sides, same ratings; one manager counter-presses (four men for
+    // five seconds), the other recovers into the block.  Venue alternates.
+    const bal = STYLE_PRESETS['Balanced']!;
+    const press: GameModel = { ...bal, onLoss: 'counterpress', counterpressPlayers: 4, counterpressSec: 5 };
+    const drop: GameModel = { ...bal, onLoss: 'recover' };
+    for (let m = 0; m < n; m++) {
+      const base = 60 + (m % 21);
+      const P = { ...team('P', base), gameModel: press };
+      const R = { ...team('R', base), gameModel: drop };
+      jobs.push(() => (m % 2 === 0 ? measureMatch(P, R, 1000 + m, ['P', 'R'], flags) : measureMatch(R, P, 1000 + m, ['R', 'P'], flags)));
+    }
+  } else if (mode === 'std') {
     for (let m = 0; m < n; m++) {
       const base = 60 + (m % 21);
       jobs.push(() => measureMatch(team('H', base), team('A', base), 1000 + m, ['H', 'A'], flags));
