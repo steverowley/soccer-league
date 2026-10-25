@@ -58,6 +58,9 @@ const CARRY_PROBE = 5;
 /** Value of a cross that does not find its man: a corner or a second ball. */
 const CROSS_SECOND_BALL = 0.03;
 
+/** How far (m) beyond the line a passer must see a man to rule him out as offside. */
+const SEEN_OFFSIDE = 1.5;
+
 /** Base decision temperature (expected-goal units). */
 const BASE_TEMPERATURE = 0.006;
 
@@ -227,7 +230,9 @@ export function chooseAction(
     const offsideRule = mode !== 'throw' && mode !== 'corner' && mode !== 'goalkick';
     if (offsideRule) {
       const seenX = perceive(carrier, world, m.pos, 3.2).x;
-      const beyond = (seenX - line) * fwd > 0 && (seenX - from.x) * fwd > 0 && progressOf(vec(seenX, m.pos.y), side) > 0.5;
+      // He can only see a CLEAR offside from where he stands; a man a
+      // stride beyond the line looks level to him (and to most passers).
+      const beyond = (seenX - line) * fwd > SEEN_OFFSIDE && (seenX - from.x) * fwd > 0 && progressOf(vec(seenX, m.pos.y), side) > 0.5;
       if (beyond) continue;
     }
     const lead = Math.min(1.4, Math.max(0.3, dist(from, m.pos) / 14));

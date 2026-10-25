@@ -185,6 +185,11 @@ const JOB_HYSTERESIS = 0.07;
 const JOB_TEMPERATURE = 0.05;
 
 
+/** When (s after the carrier takes the ball) a runner breaks, anticipating
+ *  the pass, and the spread of his timing: going early is how he is caught. */
+const RUN_LEAD = 0.5;
+const RUN_TIMING = 0.45;
+
 /** How far beyond the line (m) a runner aims once he breaks. */
 const RUN_BREAK = 7;
 
@@ -299,7 +304,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     // how he is caught offside.
     const c = ctx.carrier;
     const goNow = c !== null && c.side === side && c.id !== p.id
-      && world.clockSec - world.ball.controlSec > 0.5 + slip(p, world, 0.3)
+      && world.clockSec - world.ball.controlSec > RUN_LEAD + slip(p, world, RUN_TIMING)
       // A run that is not found within a couple of seconds is checked back
       // onside rather than left standing offside.
       && world.clockSec - world.ball.controlSec < 2.2
@@ -455,6 +460,16 @@ export function shapePoint(p: SimPlayer, world: SimWorld): Vec2 {
         if ((a.x - dfX) * fwd > gap) a = vec(dfX + fwd * gap, a.y);
       }
     }
+    // Defending the box (authored): with the ball in the last third the back
+    // line drops toward the six-yard box and midfield to the edge of the
+    // area, so the space in front of goal is full of bodies rather than the
+    // block holding the line it held in midfield.
+    const own = defendingGoalX(p.side);
+    const ballD = Math.abs(ball.pos.x - own);
+    if (ballD < DEEP_BALL && p.role !== 'FW') {
+      const lineD = Math.max(DEEP_LINE_MIN, DEEP_LINE_K * ballD + DEEP_LINE_BASE) + (p.role === 'MF' ? DEEP_MF_GAP : 0);
+      if (Math.abs(a.x - own) > lineD) a = vec(own - back * lineD, a.y);
+    }
   }
   if (!world.flags.scoreClockTerm) return a;
   const L = lateness(world);
@@ -483,8 +498,30 @@ export function markPoint(p: SimPlayer, a: SimPlayer, world: SimWorld): Vec2 {
   const toGoal = normalize(sub(own, a.pos));
   const toBall = normalize(sub(ball, a.pos));
   const dir = normalize(add(toGoal, scale(toBall, 0.8 * far)));
-  return clampIn(add(a.pos, scale(dir, gap)));
+  let pt = clampIn(add(a.pos, scale(dir, gap)));
+  // A back-line defender holds the line rather than follow a forward who
+  // drifts beyond it while the ball is still at a man's feet: he leaves him
+  // offside (the line is the defence's, not each marker's).  Near goal, or
+  // once the ball is played, he goes with him.
+  if (p.role === 'DF' && world.ball.ownerId !== null && dGoal > HOLD_LINE_GOAL) {
+    const hold = shapePoint(p, world).x;
+    const towardOwn = defendingGoalX(p.side) === 0 ? -1 : 1;
+    if ((pt.x - hold) * towardOwn > 0) pt = vec(hold, pt.y);
+  }
+  return pt;
 }
+
+/** Ball within this distance (m) of goal: the block drops to defend the box. */
+const DEEP_BALL = 35;
+/** Back line depth (m from goal) then: this share of the ball's distance plus a base, never deeper than the minimum. */
+const DEEP_LINE_K = 0.45;
+const DEEP_LINE_BASE = 2;
+const DEEP_LINE_MIN = 6;
+/** Midfield sits this far (m) in front of the back line when defending the box. */
+const DEEP_MF_GAP = 9;
+
+/** Inside this distance (m) of his goal a defender tracks his man, line or not. */
+const HOLD_LINE_GOAL = 24;
 
 /** Within this distance (m) of the ball a marker is tight on his man. */
 const MARK_TIGHT_BALL = 12;
