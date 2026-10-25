@@ -194,6 +194,7 @@ function makeSimPlayer(
     reactUntil: 0,
     jobOffset: vec(0, 0),
     holds:    0,
+    slot:     -1,
   };
 }
 

@@ -53,21 +53,34 @@ export interface TickContext {
   /** The side in possession (carrier's side, or the side whose kick is in flight). */
   attacking: TeamSide | null;
   /** Earliest intercept per player id. */
-  intercept: Map<string, Intercept>;
+  intercept: PlayerTable<Intercept>;
   /** Fastest outfielder (or keeper) to the ball per side, with the time. */
   best: { home: SimPlayer | null; away: SimPlayer | null };
   bestT: { home: number; away: number };
   /** Second-fastest per side, with the time. */
   secondT: { home: number; away: number };
   /** Rank by time to the carrier among outfielders of the side NOT in possession. */
-  pressRank: Map<string, number>;
+  pressRank: PlayerTable<number>;
   /** Marking assignment per defender id: the attacker he picks up and that man's value. */
-  markOf: Map<string, { id: string; v: number }>;
+  markOf: PlayerTable<{ id: string; v: number }>;
   /** Rank by distance to the carrier among his outfield team-mates. */
-  supportRank: Map<string, number>;
+  supportRank: PlayerTable<number>;
   /** The counter-pressers of a side that has just lost the ball and whose
    *  manager counter-presses: id to rank (0 goes for the ball). */
-  cpRank: Map<string, number>;
+  cpRank: PlayerTable<number>;
+}
+
+/**
+ * Per-tick values keyed by player: what a Map from player id did, indexed by
+ * the player's roster slot instead (CPU: five of these are rebuilt every
+ * tick and read per player, and a Map hashed an id string on every call).
+ * Only players on the pitch at buildContext are ever set or read; an unset
+ * player reads undefined, as a missing Map key did.
+ */
+export class PlayerTable<T> {
+  private readonly values: Array<T | undefined> = [];
+  get(p: SimPlayer): T | undefined { return this.values[p.slot]; }
+  set(p: SimPlayer, value: T): void { this.values[p.slot] = value; }
 }
 
 /** Attackers worth less than this (positionValue) are left to the zone. */
@@ -89,6 +102,9 @@ export function buildContext(world: SimWorld): TickContext {
   const ball = world.ball;
   const dt = world.dtSec;
   const all = [...world.home, ...world.away];
+  // Roster slots for this tick's PlayerTables (substitutions happen before
+  // the context is built, so the slots hold for every use of it).
+  for (let k = 0; k < all.length; k++) all[k]!.slot = k;
   let carrier = ball.ownerId ? all.find((p) => p.id === ball.ownerId) ?? null : null;
   // A ball that has got away from its man is loose: anyone may go for it.
   if (carrier && (carrier.sentOff || dist(carrier.pos, ball.pos) > LOOSE_DIST)) {
@@ -113,7 +129,7 @@ export function buildContext(world: SimWorld): TickContext {
     if (y > boxMaxY) boxMaxY = y;
   }
   const tBallLast = steps * dt; // tBall of the last sample
-  const intercept = new Map<string, Intercept>();
+  const intercept = new PlayerTable<Intercept>();
   const best = { home: null as SimPlayer | null, away: null as SimPlayer | null };
   const bestT = { home: Infinity, away: Infinity };
   const secondT = { home: Infinity, away: Infinity };
@@ -160,7 +176,7 @@ export function buildContext(world: SimWorld): TickContext {
         found = { t: Math.max(steps * dt, timeToReach(p, pt, now)), pt };
       }
     }
-    intercept.set(p.id, found);
+    intercept.set(p, found);
     const s = p.side;
     if (found.t < bestT[s]) { secondT[s] = bestT[s]; bestT[s] = found.t; best[s] = p; }
     else if (found.t < secondT[s]) secondT[s] = found.t;
@@ -169,23 +185,23 @@ export function buildContext(world: SimWorld): TickContext {
   // Pressing order of the side out of possession: by time to a point just
   // goal-side of where the carrier will be (a man chasing from behind cannot
   // confront him; the one in front can).
-  const pressRank = new Map<string, number>();
+  const pressRank = new PlayerTable<number>();
   if (carrier) {
     const def = (carrier.side === 'home' ? world.away : world.home).filter((p) => !p.sentOff && p.role !== 'GK');
     const goal = vec(defendingGoalX(def[0]?.side ?? otherSide(carrier.side)), PITCH_WIDTH / 2);
     const ahead = add(carrier.pos, scale(carrier.vel, 0.8));
     const front = add(ahead, scale(normalize(sub(goal, ahead)), 2));
     const ranked = def.map((p) => ({ p, t: timeToReach(p, front, now) })).sort((a, b) => a.t - b.t);
-    ranked.forEach((r, i) => pressRank.set(r.p.id, i));
+    ranked.forEach((r, i) => pressRank.set(r.p, i));
   }
   // Marking assignments for the side defending (authored organisation): the
   // most dangerous attackers, in order, each picked up by the nearest free
   // defender who is not the first presser.  Greedy, O(attackers x defenders).
-  const markOf = new Map<string, { id: string; v: number }>();
+  const markOf = new PlayerTable<{ id: string; v: number }>();
   const defSide = attacking === 'home' ? 'away' : attacking === 'away' ? 'home' : null;
   if (defSide) {
     const def = (defSide === 'home' ? world.home : world.away)
-      .filter((p) => !p.sentOff && p.role !== 'GK' && pressRank.get(p.id) !== 0);
+      .filter((p) => !p.sentOff && p.role !== 'GK' && pressRank.get(p) !== 0);
     const att = (defSide === 'home' ? world.away : world.home)
       .filter((a) => !a.sentOff && a.role !== 'GK' && a !== carrier)
       .map((a) => ({ a, v: positionValue(a.pos, a.side) }))
@@ -203,19 +219,19 @@ export function buildContext(world: SimWorld): TickContext {
         const dd = dist(d.pos, a.pos);
         if (dd < bestD) { bestD = dd; best = d; bestK = k; }
       }
-      if (best) { markOf.set(best.id, { id: a.id, v }); taken[bestK] = true; }
+      if (best) { markOf.set(best, { id: a.id, v }); taken[bestK] = true; }
     }
   }
   // Who offers for the carrier: his nearest team-mates, in order.  Only the
   // first few go to him; the rest keep the shape (width and depth) so the
   // carrier has passes at different distances, not five men at his elbow.
-  const supportRank = new Map<string, number>();
+  const supportRank = new PlayerTable<number>();
   if (carrier) {
     const mates = (carrier.side === 'home' ? world.home : world.away)
       .filter((p) => !p.sentOff && p.role !== 'GK' && p !== carrier)
       .map((p) => ({ p, d: dist(p.pos, carrier.pos) }))
       .sort((a, b) => a.d - b.d);
-    mates.forEach((m, i) => supportRank.set(m.p.id, i));
+    mates.forEach((m, i) => supportRank.set(m.p, i));
   }
   // The counter-press (the manager's `counterpress`, for his counterpress
   // seconds after a loss): his N men quickest to the ball go, wherever it is
@@ -224,7 +240,7 @@ export function buildContext(world: SimWorld): TickContext {
   // The men are picked at the moment of loss and hunt the ball for the whole
   // window (a pass out of the press does not call them off); among them, who
   // goes at the ball and who takes the lanes is re-read every tick.
-  const cpRank = new Map<string, number>();
+  const cpRank = new PlayerTable<number>();
   for (const side of ['home', 'away'] as const) {
     const n = counterpressing(world, side);
     if (n <= 0) continue;
@@ -258,9 +274,9 @@ export function buildContext(world: SimWorld): TickContext {
     }
     team
       .filter((p) => tac.cpIds.includes(p.id))
-      .map((p) => ({ p, t: intercept.get(p.id)?.t ?? Infinity }))
+      .map((p) => ({ p, t: intercept.get(p)?.t ?? Infinity }))
       .sort((a, b) => a.t - b.t)
-      .forEach((x, i) => cpRank.set(x.p.id, i));
+      .forEach((x, i) => cpRank.set(x.p, i));
   }
   return { now, carrier, attacking, intercept, best, bestT, secondT, pressRank, markOf, supportRank, cpRank };
 }
@@ -321,7 +337,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   const side = p.side;
   const opp = otherSide(side);
   const ball = world.ball;
-  const mine = ctx.intercept.get(p.id);
+  const mine = ctx.intercept.get(p);
   const tMe = mine ? mine.t : Infinity;
   const inPossession = ctx.attacking === side && ctx.carrier !== null && ctx.carrier.side === side;
   const theyHaveIt = ctx.carrier !== null && ctx.carrier.side === opp;
@@ -342,7 +358,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   push('shape', recovering ? 0.75 : 0.3);
 
   // One of the manager's counter-pressers: the plan says go, and he goes.
-  const cpr = ctx.cpRank.get(p.id);
+  const cpr = ctx.cpRank.get(p);
   if (cpr !== undefined && !inPossession) push('counterpress', 1.5 - 0.05 * cpr, ctx.carrier?.id ?? null);
 
   if (looseOrFlight) {
@@ -357,7 +373,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
 
   if (theyHaveIt && ctx.carrier) {
     const c = ctx.carrier;
-    const rank = ctx.pressRank.get(p.id) ?? 99;
+    const rank = ctx.pressRank.get(p) ?? 99;
     const danger = positionValue(c.pos, opp);
     // The block engages by the manager's plan: on one of his press triggers
     // it goes hard; with no trigger it only engages within its own reach (a
@@ -373,7 +389,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     else if (rank === 1) push('cover', (0.32 + 1.5 * danger) * k * near, c.id);
   }
 
-  const assigned = ctx.markOf.get(p.id);
+  const assigned = ctx.markOf.get(p);
   if (!inPossession && assigned) {
     push('mark', 0.3 + 8 * assigned.v, assigned.id);
   } else if (!inPossession) {
@@ -400,7 +416,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
     const line = lineOf(world, p);
     const transition = tac.phase === 'attacking_transition';
     const dC = dist(p.pos, c.pos);
-    const sr = ctx.supportRank.get(p.id) ?? 99;
+    const sr = ctx.supportRank.get(p) ?? 99;
     // The rest defence (the back line, and the screen once the side is in
     // the final third) holds its station behind the ball: it offers only a
     // pass back or across, never a run up to a carrier who is past it.
@@ -431,7 +447,7 @@ export function thinkJob(p: SimPlayer, world: SimWorld, ctx: TickContext): void 
   const job = jobs[i]!;
   p.job = job;
   p.jobRef = refs[i] ?? null;
-  if (job === 'support' && ctx.carrier) p.jobOffset = supportOffset(p, world, ctx.carrier, ctx.supportRank.get(p.id) ?? 0);
+  if (job === 'support' && ctx.carrier) p.jobOffset = supportOffset(p, world, ctx.carrier, ctx.supportRank.get(p) ?? 0);
   if (job === 'run') {
     // Hold the shoulder of the last defender (as he reads the line), ready to
     // spin in behind the moment the ball is played.
@@ -509,7 +525,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
   switch (p.job) {
     case 'chase': {
       if (ctx.now >= p.reactUntil) {
-        const ic = ctx.intercept.get(p.id);
+        const ic = ctx.intercept.get(p);
         if (ic) p.jobTarget = ic.pt;
       }
       // Run hard at the meeting point, braking into it so the ball can be
@@ -522,7 +538,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
       // A second or third man in a counter-press closes the carrier down
       // from where he is, cutting his escape, rather than queue behind the first.
-      if ((ctx.pressRank.get(p.id) ?? 0) > 0) {
+      if ((ctx.pressRank.get(p) ?? 0) > 0) {
         const pt = add(c.pos, scale(normalize(sub(p.pos, c.pos)), 2.2));
         return arrive(p, pt, 4, 1);
       }
@@ -543,7 +559,7 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
       return d > 4 ? seek(p, jockey) : arrive(p, jockey, 2.5, 0.95);
     }
     case 'counterpress': {
-      const rank = ctx.cpRank.get(p.id);
+      const rank = ctx.cpRank.get(p);
       if (rank === undefined) return arrive(p, shapePoint(p, world), 6, work);
       return counterpressVelocity(p, world, ctx, rank);
     }
@@ -599,12 +615,12 @@ export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Ve
  */
 function counterpressVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext, rank: number): Vec2 {
   const c = ctx.carrier;
-  const ic = ctx.intercept.get(p.id);
+  const ic = ctx.intercept.get(p);
   if (!c || c.side === p.side) {
     if (!ic) return arrive(p, shapePoint(p, world), 6, 1);
     const opp = otherSide(p.side);
     const ob = ctx.best[opp];
-    const meet = ob ? ctx.intercept.get(ob.id)?.pt ?? ic.pt : ic.pt;
+    const meet = ob ? ctx.intercept.get(ob)?.pt ?? ic.pt : ic.pt;
     const own = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
     const kick = world.ball.kick;
     if (kick && kick.side === opp && !kick.resolved) {

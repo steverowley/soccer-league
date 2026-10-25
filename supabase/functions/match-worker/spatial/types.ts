@@ -239,6 +239,9 @@ export interface SimPlayer {
   jobOffset: Vec2;
   /** Consecutive carry decisions (anti-passivity decay). */
   holds: number;
+  /** Bookkeeping, not state: his index in world.home then world.away as of
+   *  the latest buildContext (offball.ts PlayerTable); -1 before then. */
+  slot: number;
 }
 
 // ── Ball ──────────────────────────────────────────────────────────────────
