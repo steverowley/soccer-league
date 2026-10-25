@@ -10,13 +10,14 @@ const n = Number(process.env['MATCHES'] ?? 20);
 type S = { d: number; pF: number; pB: number; pCl: number; est: number; onT: boolean; out: string };
 const shots: S[] = [];
 let cur: S | null = null;
+let t0 = 0;
 for (let m = 0; m < n; m++) {
   simulateSpatialMatch(team('H', 70), team('A', 70), { seed: 9100 + m, trace: (r) => {
     if (r.kind === 'shot' && r.data['pF'] !== undefined && r.data['pF'] !== null) {
       cur = { d: Number(r.data['dist']), pF: Number(r.data['pF']), pB: Number(r.data['pB']), pCl: Number(r.data['pCl']), est: Number(r.data['est']), onT: r.data['onTarget'] === true, out: '?' };
-      shots.push(cur);
+      shots.push(cur); t0 = r.tSec;
     } else if (r.kind === 'shot') cur = null;
-    if (cur && cur.out === 'shot' && r.kind === 'block') { cur.out = 'block'; return; }
+    if (cur && cur.out === 'shot' && r.kind === 'block' && r.tSec - t0 < 1.5) { cur.out = 'block'; return; }
     if (!cur || cur.out !== '?') return;
     if (r.kind === 'block') cur.out = 'block';
     else if (r.kind === 'keeper') cur.out = 'save';

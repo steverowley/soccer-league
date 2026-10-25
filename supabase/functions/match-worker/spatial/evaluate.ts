@@ -14,7 +14,7 @@ import {
   attackingGoalX,
 } from './types.ts';
 import { effectiveMaxSpeed, MAX_ACCEL } from './steering.ts';
-import { groundTravelTime, airTravelTime } from './ball.ts';
+import { groundTravelTime, airTravelTime, stepBall, verticalLaunchSpeed, type BallBody } from './ball.ts';
 import { KICK_ERROR } from './execution.ts';
 
 /** Logistic squash. */
@@ -250,11 +250,15 @@ export function estimateShot(
   // look like a goal (estimates of 0.3 scored 9%).
   let pGoalLat = 0;
   let pOnLat = 0;
-  for (let i = 0; i < GH_NODES.length; i++) {
-    const y = gy + sy * GH_NODES[i]!;
-    if (y <= GOAL_Y_MIN + 0.12 || y >= GOAL_Y_MAX - 0.12) continue;
-    pOnLat += GH_WEIGHTS[i]!;
-    pGoalLat += GH_WEIGHTS[i]! * beatKeeper(from, vec(gx, y), gz, T, keeper);
+  // The spread is often a sizeable fraction of the goal mouth (3 m at 20 m
+  // for an average striker), so the integral runs over the mouth itself on
+  // a fine grid rather than over a few quadrature nodes about the aim.
+  for (let y = GOAL_Y_MIN + 0.12 + MOUTH_STEP / 2; y < GOAL_Y_MAX - 0.12; y += MOUTH_STEP) {
+    const z = (y - gy) / sy;
+    if (z * z > 9) continue;
+    const w = Math.exp(-0.5 * z * z) * MOUTH_STEP / (sy * 2.5066283);
+    pOnLat += w;
+    pGoalLat += w * beatKeeper(from, vec(gx, y), gz, speed, keeper);
   }
   const pBeat = pOnLat > 0 ? pGoalLat / pOnLat : 0;
   // Blockers: bodies near the lane, between shooter and goal.
@@ -269,13 +273,22 @@ export function estimateShot(
     // beside the ball blocks it as it leaves the foot.  Only bodies behind
     // the ball or beyond the line are out of it.
     if (seg.t >= 0.98) continue;
-    if (seg.t <= 0 && dot(sub(at, from), sub(aim, from)) < -0.3 * d) continue;
-    // A hard shot is stopped only by a body in the lane, or by a leg thrown
-    // into it by a man close enough to see the back-lift (step.ts reachFor).
-    const reach = dist(at, from) <= BLOCKER_RANGE ? BLOCK_REACH_THROWN : BLOCK_REACH_BODY;
-    if (seg.d < reach + 0.6) pClear *= sigmoid((seg.d - reach) / 0.12);
+    if (seg.t <= 0) continue; // behind the ball: it is going away from him (step.ts resolveBall)
+    // A hard shot is stopped only by a body in the lane, or by a man close
+    // enough to see the back-lift, who moves into the lane from his reaction
+    // until the ball passes him and throws a leg (step.ts laneVelocity).
+    if (dist(o.pos, from) <= BLOCKER_RANGE && lead > 0) {
+      const so = segmentDistance(o.pos, from, aim);
+      if (so.t <= 0) continue;
+      const tBall = lead + airTravelTime(speed, so.t * d);
+      const s = laneCover(o, tBall - BLOCK_REACT, sub(aimPointOn(from, aim, so.t), o.pos));
+      const gap = so.d - BLOCK_REACH_THROWN - s;
+      if (gap < 0.6) pClear *= sigmoid(gap / 0.12);
+    } else if (seg.d < BLOCK_REACH_BODY + 0.6) {
+      pClear *= sigmoid((seg.d - BLOCK_REACH_BODY) / 0.12);
+    }
   }
-  return { p: pY > 0 ? Math.max(0, pZ * pGoalLat) * pClear : 0, pFrame, pBeat, pClear };
+  return { p: Math.max(0, pZ * pGoalLat) * pClear, pFrame, pBeat, pClear };
 }
 
 /**
@@ -293,9 +306,33 @@ export function diveTime(s: number, vmax: number): number {
   return s <= sAcc ? Math.sqrt((2 * s) / DIVE_ACCEL) : vmax / DIVE_ACCEL + (s - sAcc) / vmax;
 }
 
-/** 5-point Gauss-Hermite nodes and weights for a standard normal. */
-const GH_NODES = [-2.857, -1.3556, 0, 1.3556, 2.857] as const;
-const GH_WEIGHTS = [0.01126, 0.22208, 0.53333, 0.22208, 0.01126] as const;
+/** Grid step (m) across the goal mouth for the shot integral. */
+const MOUTH_STEP = 0.45;
+
+/** Lag (s) before a blocker who has read the back-lift is moving at the lane
+ *  (step.ts sets him going on the tick the shooter shapes: half a tick). */
+export const BLOCK_REACT = 0.05;
+
+/** Point at fraction t along a-b. */
+function aimPointOn(a: Vec2, b: Vec2, t: number): Vec2 {
+  const tt = t < 0 ? 0 : t > 1 ? 1 : t;
+  return vec(a.x + (b.x - a.x) * tt, a.y + (b.y - a.y) * tt);
+}
+
+/**
+ * Distance (m) a man can cover toward the lane in `t` seconds, starting
+ * from his current velocity, with the same acceleration and top speed the
+ * physics gives him (steering.ts).  `toLane` points from him to the lane.
+ */
+export function laneCover(p: SimPlayer, t: number, toLane: Vec2): number {
+  if (t <= 0) return 0;
+  const l = len(toLane);
+  const u0 = l > 1e-6 ? Math.max(0, dot(p.vel, toLane) / l) : 0;
+  const v = effectiveMaxSpeed(p);
+  const tAcc = Math.max(0, (v - u0) / MAX_ACCEL);
+  if (t <= tAcc) return u0 * t + 0.5 * MAX_ACCEL * t * t;
+  return u0 * tAcc + 0.5 * MAX_ACCEL * tAcc * tAcc + v * (t - tAcc);
+}
 
 /** Shot-block geometry shared with step.ts: half-width (m) a standing body
  *  covers, the same with a leg thrown into the lane, and how close (m) to the
@@ -304,16 +341,54 @@ export const BLOCK_REACH_BODY = 0.45;
 export const BLOCK_REACH_THROWN = 0.85;
 export const BLOCKER_RANGE = 7;
 
-/** Chance (judgement) the keeper cannot get a hand to a strike crossing at (aim, gz). */
-function beatKeeper(from: Vec2, aim: Vec2, gz: number, T: number, keeper: SimPlayer | undefined): number {
+/** Physics timestep the shooter's mental run uses (simulateSpatialMatch dtSec). */
+const SIM_DT = 0.1;
+
+/**
+ * Judgement that the keeper cannot get a hand to a strike at (aim, gz): the
+ * shooter runs the strike forward in his head with the same ball model
+ * (ball.ts stepBall, so bounces and drag are what really happen) and the
+ * same keeper (keeper.ts: he reacts after his reaction time, on a tick, then
+ * dives from his current lateral speed with DIVE_ACCEL up to his dive speed,
+ * with his diving reach).  The closest the ball comes to his hands, relative
+ * to his reach, is squashed into a judgement.  Pure: no randomness.
+ */
+export function beatKeeper(from: Vec2, aim: Vec2, gz: number, speed: number, keeper: SimPlayer | undefined): number {
   if (!keeper || keeper.sentOff) return 1;
-  const seg = segmentDistance(keeper.pos, from, aim);
-  const reach = (gz > 1.5 ? 1.15 : 1.35) * (0.9 + 0.2 * (keeper.stats.goalkeeping / 100));
-  if (seg.d > reach + 4) return 1;
-  const dive = 3.4 + 2.4 * (keeper.stats.goalkeeping / 100);
-  const react = 0.17 + 0.2 * (1 - keeper.stats.goalkeeping / 100);
-  const need = react + diveTime(Math.max(0, seg.d - reach), dive);
-  return sigmoid((need - T * seg.t) / 0.09);
+  const g = keeper.stats.goalkeeping / 100;
+  const react = 0.17 + 0.2 * (1 - g) + 0.023;
+  const tReact = Math.ceil(react / SIM_DT - 1e-9) * SIM_DT;
+  const vmax = 3.4 + 2.4 * g;
+  const d = dist(from, aim);
+  const T = airTravelTime(speed, d);
+  const ux = (aim.x - from.x) / Math.max(1e-6, d);
+  const uy = (aim.y - from.y) / Math.max(1e-6, d);
+  const ball: BallBody = { pos: from, vel: vec(ux * speed, uy * speed), z: 0, vz: verticalLaunchSpeed(0, gz, T) };
+  // Where he reads the ball crossing his line (x), as readShot does.
+  const kx = keeper.pos.x;
+  const crossT = Math.abs(ux) > 1e-6 ? (kx - from.x) / ux : 0;
+  const crossY = from.y + uy * Math.max(0, crossT);
+  let ky = keeper.pos.y;
+  let vy = keeper.vel.y;
+  const dirY = Math.sign(crossY - ky);
+  let best = Infinity;
+  for (let t = SIM_DT; t <= 2.5; t += SIM_DT) {
+    // Keeper first (the physics moves players before the ball).
+    if (t > tReact + 1e-9) {
+      const rem = (crossY - ky) * dirY;
+      const want = rem > 0.05 ? dirY * Math.min(vmax, rem / SIM_DT) : 0;
+      const dv = Math.max(-DIVE_ACCEL * SIM_DT, Math.min(DIVE_ACCEL * SIM_DT, want - vy));
+      vy = Math.max(-vmax, Math.min(vmax, vy + dv));
+    }
+    ky += vy * SIM_DT;
+    const prev = ball.pos;
+    stepBall(ball, SIM_DT);
+    const seg = segmentDistance(vec(kx, ky), prev, ball.pos);
+    const reach = (t > tReact + 1e-9 ? (ball.z > 1.5 ? 1.15 : 1.35) : 1.1) * (0.9 + 0.2 * g);
+    if (ball.z <= 2.65) best = Math.min(best, seg.d - reach);
+    if ((ball.pos.x - aim.x) * Math.sign(ux || 1) >= 0) break;
+  }
+  return sigmoid(best / 0.15);
 }
 
 /** Base back-lift time of a shot (s): about 0.3 s for a 70-rated striker. */

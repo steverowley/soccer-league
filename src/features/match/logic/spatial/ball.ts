@@ -25,8 +25,8 @@ export const DRAG_K = 0.010;
 /** Vertical restitution of a bounce (fraction of the downward speed kept). */
 const RESTITUTION = 0.45;
 
-/** Horizontal speed kept through a bounce (grass grabs the ball). */
-const BOUNCE_KEEP = 0.78;
+/** Ball-on-grass friction coefficient at a bounce. */
+const BOUNCE_MU = 0.5;
 
 /** A landing slower than this (m/s) settles into a roll instead of bouncing. */
 const SETTLE_VZ = 1.1;
@@ -61,13 +61,24 @@ export function stepBall(b: BallBody, dt: number): void {
   }
   b.pos = vec(b.pos.x + b.vel.x * dt, b.pos.y + b.vel.y * dt);
   if (airborne) {
+    // Exact for constant gravity (not semi-implicit Euler): at 10 Hz the
+    // Euler drop of g*dt*t/2 sent every aimed ball about 0.4 m low over a
+    // second of flight, so low shots bounced short of the line and lost a
+    // fifth of their pace, and no kick arrived where its kicker aimed it.
+    b.z += b.vz * dt - 0.5 * GRAVITY * dt * dt;
     b.vz -= GRAVITY * dt;
-    b.z += b.vz * dt;
     if (b.z <= 0) {
       b.z = 0;
       if (-b.vz > SETTLE_VZ) {
+        // Coulomb friction at the bounce: the grass takes at most mu times
+        // the normal impulse from the horizontal speed, and never more than
+        // the 2/7 a sliding ball loses on the way to rolling.  A skimming
+        // drive keeps most of its pace; a dropping lofted ball is checked.
+        const loss = Math.min(BOUNCE_MU * (1 + RESTITUTION) * -b.vz, (2 / 7) * Math.hypot(b.vel.x, b.vel.y));
+        const vh = Math.hypot(b.vel.x, b.vel.y);
+        const keep = vh > 1e-9 ? (vh - loss) / vh : 0;
         b.vz = -b.vz * RESTITUTION;
-        b.vel = vec(b.vel.x * BOUNCE_KEEP, b.vel.y * BOUNCE_KEEP);
+        b.vel = vec(b.vel.x * keep, b.vel.y * keep);
       } else {
         b.vz = 0;
       }

@@ -117,7 +117,9 @@ export function rngPick<T>(rng: Rng, arr: readonly T[]): T | undefined {
  */
 export function rngGaussian(rng: Rng, mean = 0, stddev = 1): number {
   // Mean of 3 uniforms has mean 0.5 and variance 1/36; subtract 0.5 to centre,
-  // multiply by sqrt(12) ≈ 3.464 so the result has unit variance before scaling.
+  // multiply by 6 (= sqrt(36)) so the result has unit variance before scaling.
+  // (It used to multiply by sqrt(12), giving a spread of 0.58 x stddev, so every
+  // execution error in the engine was 42% smaller than the estimates assumed.)
   const u = (rng() + rng() + rng()) / 3 - 0.5;
-  return mean + u * 3.4641016 * stddev;
+  return mean + u * 6 * stddev;
 }

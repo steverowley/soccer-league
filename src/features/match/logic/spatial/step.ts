@@ -33,7 +33,7 @@ import {
   type CarrierAction,
 } from './possession';
 import {
-  positionValue, pressureAt, sigmoid, estimateShot, segmentDistance, progressOf, timeToReach, DIVE_ACCEL, shotWindup,
+  positionValue, pressureAt, sigmoid, estimateShot, beatKeeper, segmentDistance, progressOf, timeToReach, DIVE_ACCEL, shotWindup,
   BLOCK_REACH_BODY, BLOCK_REACH_THROWN, BLOCKER_RANGE,
 } from './evaluate';
 import {
@@ -116,6 +116,30 @@ function trace(world: SimWorld, kind: string, p: SimPlayer | null, data: Record<
     ball: { x: r2(b.pos.x), y: r2(b.pos.y), z: r2(b.z) },
     data,
   });
+}
+
+/**
+ * For traces only: the opponent outfielder nearest the realised line of a
+ * shot at the strike (distance off the line, distance from the ball, and
+ * whether he had thrown himself into the lane).
+ */
+function laneTrace(world: SimWorld, shooter: SimPlayer, vel: Vec2): Record<string, number> {
+  const from = world.ball.pos;
+  const to = add(from, scale(vel, 1.2));
+  let best = 99, bestFrom = 99, bestBlk = 0;
+  for (const o of teamOf(world, otherSide(shooter.side))) {
+    if (o.sentOff || o.role === 'GK') continue;
+    const sd = segmentDistance(o.pos, from, to);
+    if (sd.t <= 0 || sd.t >= 0.98) continue;
+    if (sd.d < best) { best = sd.d; bestFrom = dist(o.pos, from); bestBlk = world.clockSec < o.blockUntil ? 1 : 0; }
+  }
+  return { laneD: r2(best), laneFrom: r2(bestFrom), laneBlk: bestBlk };
+}
+
+/** Where a ball struck with horizontal velocity `vel` meets the goal line at `gx`. */
+function realisedAim(from: Vec2, vel: Vec2, gx: number): Vec2 {
+  const t = Math.abs(vel.x) > 1e-6 ? (gx - from.x) / vel.x : 0;
+  return vec(gx, from.y + vel.y * Math.max(0, t));
 }
 
 function r2(x: number): number {
@@ -297,6 +321,8 @@ function execute(
         angErr: r2(s.angErr), errScale: r2(e), pressure: r2(pressure), restart: restart ?? 'open',
         pF: action.parts ? r2(action.parts.f) : null, pB: action.parts ? r2(action.parts.b) : null, pCl: action.parts ? r2(action.parts.c) : null,
         onTarget: headingOnTarget(world, otherSide(p.side)),
+        ...(world.trace ? laneTrace(world, p, s.vel) : {}),
+        ...(world.trace && k ? { kAtStrike: r2(beatKeeper(from, realisedAim(from, s.vel, defendingGoalX(k.side)), action.gz, len(s.vel), k)) } : {}),
       });
       if (k) {
         k.dive = null;
@@ -754,6 +780,30 @@ function reachFor(p: SimPlayer, z: number, at: Vec2, blocking: boolean, fast: bo
   return -1;
 }
 
+/**
+ * A defender who has read a back-lift throws himself at the line of the
+ * shot: toward the nearest point of the line from the ball to where the
+ * shooter is shaping to hit it (during the windup) or along the ball's path
+ * (once it is struck).  Null when the line is already behind him.
+ */
+function laneVelocity(p: SimPlayer, world: SimWorld, carrier: SimPlayer | null): Vec2 | null {
+  const b = world.ball;
+  let to: Vec2;
+  if (carrier && carrier.windup && carrier.side !== p.side) {
+    const wa = carrier.windup.action as CarrierAction;
+    if (wa.kind !== 'shoot') return null;
+    to = wa.aim;
+  } else if (b.ownerId === null && b.kick && isShotKind(b.kick.kind) && !b.kick.resolved && b.kick.side !== p.side && len(b.vel) > 1) {
+    to = add(b.pos, scale(b.vel, 2));
+  } else {
+    return null;
+  }
+  const sd = segmentDistance(p.pos, b.pos, to);
+  if (sd.t <= 0) return null;
+  const pt = vec(b.pos.x + (to.x - b.pos.x) * sd.t, b.pos.y + (to.y - b.pos.y) * sd.t);
+  return sd.d < 0.05 ? ZERO : seek(p, pt);
+}
+
 /** Height (m) of a standing body: a fast ball above it passes over him. */
 const BODY_TOP = 1.85;
 
@@ -796,7 +846,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
       if (shotLive && kick!.side !== p.side) resolveShot(world, events, minute, onTarget ? 'save' : 'shot', p);
       passEnd(world, kick && kick.side !== p.side ? 'lost' : 'complete');
       touched(world, p);
-      trace(world, 'keeper', p, { action: 'catch', speed: r2(rel), closeD: r2(closeD), onTarget });
+      trace(world, 'keeper', p, { action: 'catch', speed: r2(rel), closeD: r2(closeD), onTarget, kx: r2(p.pos.x), ky: r2(p.pos.y) });
       p.dive = null;
       const hold = world.flags.scoreClockTerm && leadingLate(world, p.side) ? 5 : 0;
       beginRestart(world, 'keeper', p.side, clampSpot(p.pos), hold, false, p.id);
@@ -820,7 +870,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     touched(world, p);
     p.noTouchUntil = now + 0.4;
     newBallPath(world, p);
-    trace(world, 'keeper', p, { action: 'parry', speed: r2(rel), closeD: r2(closeD), onTarget });
+    trace(world, 'keeper', p, { action: 'parry', speed: r2(rel), closeD: r2(closeD), onTarget, kx: r2(p.pos.x), ky: r2(p.pos.y) });
     return;
   }
 
@@ -995,6 +1045,10 @@ function resolveBall(world: SimWorld, from: Vec2, fromZ: number, events: SimEven
     if (owner && p === owner) continue; // the carrier plays it by decision
     if (owner && ownerNear && p.side === owner.side) continue; // nobody takes it off his own man
     const sd = segmentDistance(p.pos, from, to);
+    // A fast ball leaving a man level with or behind its starting point is
+    // travelling away from him: he cannot get a body to it (a presser at the
+    // shooter's shoulder used to block every shot he stood within a leg of).
+    if (sd.t <= 0 && len(b.vel) > BLOCK_SPEED && dot(sub(p.pos, from), sub(to, from)) <= 0) continue;
     const zAt = fromZ + (toZ - fromZ) * sd.t;
     const atPt = vec(from.x + (to.x - from.x) * sd.t, from.y + (to.y - from.y) * sd.t);
     const reach = reachFor(p, zAt, atPt, shotFlying && now < p.blockUntil, len(b.vel) > BLOCK_SPEED);
@@ -1214,7 +1268,11 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
   // kicked it or what it was meant to be.
   for (const side of SIDES) {
     const k = keeperOf(world, side);
-    if (k && !k.dive && now >= k.reactUntil && ballThreatens(world, side)) readShot(k, world);
+    if (k && !k.dive && now >= k.reactUntil && ballThreatens(world, side)) {
+      readShot(k, world);
+      const kd = k.dive as SimPlayer['dive'];
+      if (kd) trace(world, 'dive', k, { kx: r2(k.pos.x), ky: r2(k.pos.y), vx: r2(k.vel.x), vy: r2(k.vel.y), toY: r2(kd.at.y), z: r2(kd.z) });
+    }
   }
 
   // ── The carrier plays the ball when it is at his feet ────────────────────
@@ -1338,6 +1396,10 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
       continue;
     }
     if (p === carrierNow) { integratePlayer(p, carrierVelocity(p, world), dt); continue; }
+    if (now < p.blockUntil && p.role !== 'GK') {
+      const v = laneVelocity(p, world, carrierNow);
+      if (v) { integratePlayer(p, v, dt); continue; }
+    }
     if (p.role === 'GK') { integratePlayer(p, keeperVelocity(p, world, ctx2), dt); continue; }
     const slowed = now < p.recoverUntil ? 0.35 : 1;
     integratePlayer(p, scale(jobVelocity(p, world, ctx2), slowed), dt);
