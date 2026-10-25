@@ -67,7 +67,7 @@ describe('slotToAbsolute', () => {
 
 describe('dynamicAnchor', () => {
   // Build a minimal home midfielder whose home slot is at the halfway line.
-  const mf: SimPlayer = {
+  const mf = {
     id: 'm', name: 'M', role: 'MF', side: 'home',
     stats: {
       shooting: 60, passing: 60, dribbling: 60, speed: 60, stamina: 60,
@@ -76,7 +76,7 @@ describe('dynamicAnchor', () => {
     homePos: vec(PITCH_LENGTH / 2, PITCH_WIDTH / 2),
     maxSpeed: 8, pos: vec(0, 0), vel: vec(0, 0), stamina: 1,
     yellowCards: 0, sentOff: false,
-  };
+  } as unknown as SimPlayer;
 
   it('pushes the home block forward when the ball is in the attacking third', () => {
     const deep = dynamicAnchor(mf, vec(20, 34));  // ball near home's own goal

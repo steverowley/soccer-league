@@ -585,26 +585,80 @@ function goalSideCount(world: SimWorld, d: SimPlayer, carrier: SimPlayer): numbe
 }
 
 /** Resolve a lunge whose foot has arrived: ball, man, or nothing. */
+/**
+ * What a committed challenge physically meets (design 4.3).  The leg sweeps
+ * the last LEG_REACH metres toward the point the defender went for; whatever
+ * it meets first along that sweep decides it: the ball (a clean tackle), the
+ * man (a foul) or nothing (the defender is beaten).  Pure geometry.
+ *
+ * @param defPos    The defender at the moment of contact.
+ * @param lungeAt   The point he committed to.
+ * @param ballPos   The ball.
+ * @param manPos    The carrier (null if there is none).
+ * @param playable  Whether the ball can be played (on the ground, in play, not shielded).
+ */
+export function contactOutcome(
+  defPos: Vec2, lungeAt: Vec2, ballPos: Vec2, manPos: Vec2 | null, playable: boolean,
+): { outcome: 'ball' | 'man' | 'miss'; ballD: number; manD: number } {
+  const to = sub(lungeAt, defPos);
+  const tl = len(to);
+  const foot = tl <= LEG_REACH ? lungeAt : add(defPos, scale(normalize(to), LEG_REACH));
+  const legFrom = tl > 1e-6 ? sub(foot, scale(normalize(to), Math.min(LEG_REACH, tl))) : foot;
+  const sb = segmentDistance(ballPos, legFrom, foot);
+  const sm = manPos ? segmentDistance(manPos, legFrom, foot) : { d: Infinity, t: 1 };
+  const ballHit = playable && sb.d <= BALL_CONTACT;
+  const manHit = sm.d <= MAN_CONTACT;
+  if (ballHit && (!manHit || sb.t <= sm.t + 0.15)) return { outcome: 'ball', ballD: sb.d, manD: sm.d };
+  return { outcome: manHit ? 'man' : 'miss', ballD: sb.d, manD: sm.d };
+}
+
+/**
+ * Severity of a foul from how it happened: closing speed (m/s), contact from
+ * behind, and whether the ball was even playable (ball more than 1.5 m from
+ * the contact).  Pure.
+ */
+export function foulSeverity(closing: number, fromBehind: boolean, ballD: number): number {
+  return closing / 9 + (fromBehind ? 0.4 : 0) + (ballD > 1.5 ? 0.25 : 0);
+}
+
+/** What the referee saw, for the laws' sanction (no accumulation). */
+export interface FoulFacts {
+  severity: number;
+  /** Denied an obvious goal-scoring opportunity. */
+  dogso: boolean;
+  /** Stopped a promising attack. */
+  spa: boolean;
+  /** Persistent infringement. */
+  persistent: boolean;
+  /** The foul was inside the fouler's own penalty area (a penalty). */
+  inBox: boolean;
+}
+
+/**
+ * The laws' sanction for one foul (Law 12): serious foul play is a red; DOGSO
+ * is a red outside the area and a yellow inside it (the penalty already
+ * restores the chance); a reckless foul, stopping a promising attack or
+ * persistent infringement is a yellow.  Second-yellow accumulation is the
+ * caller's.  Pure: no chance in it.
+ */
+export function lawsBooking(f: FoulFacts): 'yellow' | 'red' | undefined {
+  if (f.severity >= RED_SEVERITY || (f.dogso && !f.inBox)) return 'red';
+  if (f.severity >= YELLOW_SEVERITY || f.dogso || f.spa || f.persistent) return 'yellow';
+  return undefined;
+}
+
 function resolveLunge(world: SimWorld, d: SimPlayer, events: SimEvent[], minute: number): void {
   const L = d.lunge!;
   d.lunge = null;
   const now = world.clockSec;
   const b = world.ball;
   const to = sub(L.at, d.pos);
-  const tl = len(to);
-  const foot = tl <= LEG_REACH ? L.at : add(d.pos, scale(normalize(to), LEG_REACH));
   const carrier = findById(world, L.targetId);
-  // The leg sweeps the last LEG_REACH metres to the foot: whatever it meets
-  // first along that sweep, ball or man, decides the challenge.
-  const legFrom = tl > 1e-6 ? sub(foot, scale(normalize(to), Math.min(LEG_REACH, tl))) : foot;
-  const sb = segmentDistance(b.pos, legFrom, foot);
-  const sm = carrier ? segmentDistance(carrier.pos, legFrom, foot) : { d: Infinity, t: 1 };
-  const ballD = sb.d;
-  const manD = sm.d;
-  const ballFree = world.phase === 'open_play' && b.z < 0.6;
-  const ballHit = ballFree && ballD <= BALL_CONTACT && !shielded(world, d, b.pos);
-  const manHit = manD <= MAN_CONTACT;
-  if (ballHit && (!manHit || sb.t <= sm.t + 0.15)) {
+  const playable = world.phase === 'open_play' && b.z < 0.6 && !shielded(world, d, b.pos);
+  const contact = contactOutcome(d.pos, L.at, b.pos, carrier ? carrier.pos : null, playable);
+  const ballD = contact.ballD;
+  const manD = contact.manD;
+  if (contact.outcome === 'ball') {
     // Foot meets ball first: clean.  A soft ball sticks to a good tackler;
     // otherwise it is knocked loose.
     const rel = len(sub(b.vel, d.vel));
@@ -633,7 +687,7 @@ function resolveLunge(world: SimWorld, d: SimPlayer, events: SimEvent[], minute:
     trace(world, 'challenge', d, { outcome: 'ball', ballD: r2(ballD), manD: r2(manD) });
     return;
   }
-  if (carrier && !carrier.sentOff && manHit && world.phase === 'open_play') {
+  if (carrier && !carrier.sentOff && contact.outcome === 'man' && world.phase === 'open_play') {
     commitFoul(world, d, carrier, L.closing, normalize(to), ballD, 'lunge', events, minute);
     return;
   }
@@ -658,7 +712,7 @@ function commitFoul(
   const facing = len(carrier.vel) > 0.5 ? normalize(carrier.vel)
     : normalize(sub(vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2), carrier.pos));
   const fromBehind = dot(approach, facing) > 0.5;
-  const severity = closing / 9 + (fromBehind ? 0.4 : 0) + (ballD > 1.5 ? 0.25 : 0);
+  const severity = foulSeverity(closing, fromBehind, ballD);
   const goal = vec(attackingGoalX(carrier.side), PITCH_WIDTH / 2);
   const inBox = isInPenaltyArea(carrier.pos, carrier.side);
   // Denying an obvious goal-scoring chance: close to goal, ball under
@@ -675,9 +729,7 @@ function commitFoul(
     && dot(facing, normalize(sub(goal, carrier.pos))) > 0.3 && goalSideCount(world, d, carrier) <= 2;
   d.foulsCommitted += 1;
   const persistent = d.foulsCommitted >= PERSISTENT_FOULS && d.yellowCards === 0;
-  let card: 'yellow' | 'red' | undefined;
-  if (severity >= RED_SEVERITY || (dogso && !inBox)) card = 'red';
-  else if (severity >= YELLOW_SEVERITY || dogso || spa || persistent) card = 'yellow';
+  let card = lawsBooking({ severity, dogso, spa, persistent, inBox });
   if (card === 'yellow') {
     d.yellowCards += 1;
     if (d.yellowCards >= 2) card = 'red';
@@ -966,7 +1018,7 @@ function leadingLate(world: SimWorld, side: TeamSide): boolean {
 }
 
 /** A header: at goal in the attacking box, away in defence, on to a mate otherwise. */
-function header(world: SimWorld, p: SimPlayer, events: SimEvent[], minute: number): void {
+function header(world: SimWorld, p: SimPlayer, _events: SimEvent[], _minute: number): void {
   const b = world.ball;
   const side = p.side;
   const gx = attackingGoalX(side);

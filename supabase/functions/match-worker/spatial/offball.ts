@@ -332,7 +332,6 @@ export const JOCKEY_DIST_DEEP = 1.8;
  * Desired velocity for an outfielder doing his job this tick.
  */
 export function jobVelocity(p: SimPlayer, world: SimWorld, ctx: TickContext): Vec2 {
-  const ball = world.ball;
   const mates = p.side === 'home' ? world.home : world.away;
   const sep = separation(p, mates, 3.5);
   const work = Math.sqrt(p.traits.work);

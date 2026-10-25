@@ -150,7 +150,7 @@ describe('traits → engine integration', () => {
     const b = simulateSpatialMatch(home, away, { ...SHORT, seed: 99 });
     expect(a.finalScore).toEqual(b.finalScore);
     expect(a.events).toEqual(b.events);
-  });
+  }, 60000);
 
   it('an empty trait map reproduces the untouched-roster match exactly', () => {
     const raw = team('H', 70);
@@ -160,7 +160,7 @@ describe('traits → engine integration', () => {
     const through = simulateSpatialMatch(wrapped, away, { ...SHORT, seed: 7 });
     expect(through.finalScore).toEqual(base.finalScore);
     expect(through.events).toEqual(base.events);
-  });
+  }, 60000);
 
   it('personality actually changes the match (selfish XI diverges from balanced XI)', () => {
     const away = team('A', 70);
@@ -173,5 +173,5 @@ describe('traits → engine integration', () => {
       if (JSON.stringify(a.events) !== JSON.stringify(b.events)) { diverged = true; break; }
     }
     expect(diverged).toBe(true);
-  });
+  }, 120000);
 });

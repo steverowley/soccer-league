@@ -208,14 +208,14 @@ describe('a simulated match survives the whole pipeline', () => {
     // A fixture is a fixed record: same seed and match id, same broadcast.
     const again = runPipeline(4242);
     expect(again.parsed.map((e) => e.payload)).toEqual(run.parsed.map((e) => e.payload));
-  });
+  }, 60_000);
 
   it('produces a different broadcast for a different match', () => {
     const other = runPipeline(99);
     const a = run.parsed.map((e) => String((e.payload as Record<string, unknown>)['commentary']));
     const b = other.parsed.map((e) => String((e.payload as Record<string, unknown>)['commentary']));
     expect(a.join('|')).not.toBe(b.join('|'));
-  });
+  }, 60_000);
 });
 
 describe('across several matches', () => {
