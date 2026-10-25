@@ -43,6 +43,9 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      // Generated esbuild bundle of the Vercel simulate function (npm run
+      // build:api); its sources under src/ are linted instead.
+      'api/simulate.mjs',
       'node_modules/**',
       'coverage/**',
       // Edge function entry points (always Deno-only).
