@@ -27,7 +27,7 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import type { PublicReadClient } from '../shared/supabase/publicReadClient';
-import { getLiveMatches, getUpcomingMatches, useSeasonPhase } from '../features/match';
+import { getLiveMatches, getUpcomingMatches, useLiveScores, useSeasonPhase, type LiveScoreView } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { AsyncView, EmptyState, PreSeasonState } from '../shared/ui';
 // Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
@@ -51,6 +51,8 @@ const DUST_70  = COLORS.dust70;
 // state and the filter dispatch reads as a plain switch.
 const FILTER_ALL       = 'all';
 const FILTER_LIVE      = 'live';
+/** Quiet refresh of all three lists (the read cache's matches TTL). */
+const FIXTURES_REFRESH_MS = 30_000;
 const FILTER_SCHEDULED = 'scheduled';
 const FILTER_COMPLETED = 'completed';
 
@@ -173,10 +175,16 @@ export default function Matches() {
       completed: c,
     })),
     [publicDb],
+    // Refreshed quietly so matches move from upcoming to live to full time
+    // without a reload.
+    { refreshMs: FIXTURES_REFRESH_MS },
   );
   const phase = useSeasonPhase();
 
   const live      = fixtures.data?.live ?? [];
+  // Live rows show the goals revealed so far, exactly as the match page does:
+  // the published score stays empty until full time.
+  const liveScores = useLiveScores(live);
   const upcoming  = fixtures.data?.upcoming ?? [];
   const completed = fixtures.data?.completed ?? [];
   const noFixtures = live.length + upcoming.length + completed.length === 0;
@@ -257,6 +265,7 @@ export default function Matches() {
                       label={SECTION_LABELS[sectionKey] ?? sectionKey}
                       status={sectionKey}
                       matches={bySection[sectionKey] ?? []}
+                      liveScores={liveScores}
                     />
                   ))}
                 </div>
@@ -383,6 +392,8 @@ interface MatchSectionProps {
   label: string;
   status: string;
   matches: MatchRow[];
+  /** Live score per match id (live rows only), from useLiveScores. */
+  liveScores: ReadonlyMap<string, LiveScoreView>;
 }
 
 /**
@@ -391,7 +402,7 @@ interface MatchSectionProps {
  * children.  Empty groups render an italic placeholder so the section
  * still appears in the layout (signals "we checked, there's nothing").
  */
-function MatchSection({ label, status, matches }: MatchSectionProps) {
+function MatchSection({ label, status, matches, liveScores }: MatchSectionProps) {
   return (
     <div>
       <header style={{
@@ -421,7 +432,7 @@ function MatchSection({ label, status, matches }: MatchSectionProps) {
           display: 'flex', flexDirection: 'column',
         }}>
           {matches.map((m: any) => (
-            <MatchRowItem key={m.id} match={m} status={status} />
+            <MatchRowItem key={m.id} match={m} status={status} live={liveScores.get(m.id) ?? null} />
           ))}
         </ul>
       )}
@@ -444,6 +455,8 @@ function emptyMessageFor(status: string): string {
 interface MatchRowItemProps {
   match: MatchRow;
   status: string;
+  /** Live rows: goals revealed so far and the minute.  Null otherwise. */
+  live: LiveScoreView | null;
 }
 
 /**
@@ -456,11 +469,14 @@ interface MatchRowItemProps {
 // Memoised: the Matches page re-renders when any section's data arrives
 // (live / upcoming / completed fetch in parallel); memo means an upcoming
 // fetch completing does not re-render the already-painted live match rows.
-const MatchRowItem = memo(function MatchRowItem({ match, status }: MatchRowItemProps) {
+const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRowItemProps) {
   const homeName    = match.home_team?.name ?? '?';
   const awayName    = match.away_team?.name ?? '?';
-  const homeScore   = match.home_score ?? 0;
-  const awayScore   = match.away_score ?? 0;
+  // A live row never reads home_score: it stays empty until full time and
+  // read as 0-0 all match.  It shows the goals revealed so far ("–" until known).
+  const isLiveRow   = status === FILTER_LIVE;
+  const homeScore   = isLiveRow ? (live?.score ? live.score[0] : '–') : match.home_score ?? 0;
+  const awayScore   = isLiveRow ? (live?.score ? live.score[1] : '–') : match.away_score ?? 0;
   const competition = match.competitions?.name ?? 'League';
   const round       = match.round ?? '';
 
@@ -542,7 +558,7 @@ const MatchRowItem = memo(function MatchRowItem({ match, status }: MatchRowItemP
             {competition}
             {round && <> <span style={{ color: DUST_50 }}>•</span> {round}</>}
           </div>
-          <StatusPip status={status} />
+          <StatusPip status={status} live={live} />
         </div>
       </Link>
     </li>
@@ -553,8 +569,9 @@ const MatchRowItem = memo(function MatchRowItem({ match, status }: MatchRowItemP
 
 interface ScoreBlockProps {
   status: string;
-  home: number;
-  away: number;
+  /** A number, or '–' for a live score not known yet. */
+  home: number | string;
+  away: number | string;
 }
 
 /**
@@ -616,6 +633,8 @@ function ScoreBlock({ status, home, away }: ScoreBlockProps) {
 
 interface StatusPipProps {
   status: string;
+  /** Live rows: adds the minute ("Live 37'"), or "Full time" once revealed. */
+  live?: LiveScoreView | null;
 }
 
 /**
@@ -624,8 +643,11 @@ interface StatusPipProps {
  *   completed → dust "FT"
  *   scheduled → faint "Scheduled"
  */
-function StatusPip({ status }: StatusPipProps) {
+function StatusPip({ status, live }: StatusPipProps) {
   if (status === FILTER_LIVE) {
+    const label = live?.fullTime
+      ? 'Full time'
+      : live && live.minute > 0 ? `Live ${live.minute}'` : 'Live';
     return (
       <div style={{
         marginTop: 4,
@@ -639,8 +661,9 @@ function StatusPip({ status }: StatusPipProps) {
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
         fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
       }}>
-        Live
+        {label}
       </div>
     );
   }

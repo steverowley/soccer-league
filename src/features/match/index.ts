@@ -159,9 +159,16 @@ export { computeElapsedGameMinute, filterEventsByElapsedMinute } from './logic/e
 export {
   computeLiveScore,
   isRevealing,
+  liveScoreAt,
+  type LiveScoreState,
   type Scoreline,
   type ScorableEvent,
+  type TimedScorableEvent,
 } from './logic/liveScore';
+// Live scores for the matches a page LISTS (home card, fixtures list), derived
+// the same way the match page derives its own scoreboard.
+export { useLiveScores, type LiveScoreMatch, type LiveScoreView } from './hooks/useLiveScores';
+export { getGoalEventsForMatches, type GoalEventRow } from './api/matchEvents';
 export {
   getLiveMatch,
   getMatchEvents,

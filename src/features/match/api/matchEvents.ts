@@ -243,3 +243,49 @@ export async function getMatchDurationSeconds(
   if (cfgErr || !cfgRow) return DEFAULT_MATCH_DURATION_SECONDS;
   return cfgRow.match_duration_seconds;
 }
+
+// ── Goal events for several live matches at once ───────────────────────────
+
+/** One goal event as the list surfaces need it (see liveScoreAt). */
+export interface GoalEventRow {
+  match_id: string;
+  minute:   number;
+  type:     string;
+  payload:  unknown;
+}
+
+/**
+ * Goal events for a set of matches, in ONE request.
+ *
+ * Used by the home page card and the fixtures list to show live scores
+ * without fetching each match's full event log.  The ids are sorted so every
+ * visitor watching the same live matches produces the same URL, which the
+ * read cache (docs/read-cache.md) then serves from one database read.
+ *
+ * @param db        Public read client (goes through the cached proxy).
+ * @param matchIds  Matches to read; an empty list returns [] without a request.
+ * @returns         Goal rows in no particular order.
+ * @throws          On a failed read, so callers can keep their last good data
+ *                  instead of showing a misleading 0-0.
+ */
+export async function getGoalEventsForMatches(
+  db:       PublicReadClient,
+  matchIds: readonly string[],
+): Promise<GoalEventRow[]> {
+  if (matchIds.length === 0) return [];
+  const ids = [...new Set(matchIds)].sort();
+  const { data, error } = await db
+    .from('match_events')
+    .select('match_id, minute, type, payload')
+    .in('match_id', ids)
+    .eq('type', 'goal');
+  if (error) throw error;
+  const rows: GoalEventRow[] = [];
+  for (const r of (data ?? []) as unknown[]) {
+    const row = r as Partial<GoalEventRow>;
+    if (typeof row.match_id === 'string' && typeof row.minute === 'number' && typeof row.type === 'string') {
+      rows.push({ match_id: row.match_id, minute: row.minute, type: row.type, payload: row.payload });
+    }
+  }
+  return rows;
+}

@@ -16,6 +16,8 @@
 // PURE LOGIC — no React, no Supabase.  Callers pass the already-filtered event
 // list (see filterEventsByElapsedMinute in logic/elapsedMinute.ts).
 
+import { computeElapsedGameMinute } from './elapsedMinute';
+
 /** The minimum shape this module needs from a match event row. */
 export interface ScorableEvent {
   type:     string;
@@ -88,4 +90,59 @@ export function computeLiveScore(revealedEvents: readonly ScorableEvent[]): Scor
  */
 export function isRevealing(status: string | null | undefined): boolean {
   return status === 'live' || status === 'in_progress';
+}
+
+// ── Live scoreboard for a match seen from OUTSIDE its page ─────────────────
+// The home page card and the fixtures list show live matches too.  They must
+// show exactly what the match page shows at the same moment, so they share
+// this one function rather than each estimating the minute their own way.
+
+/** A goal event as the list surfaces fetch it: the minute is what paces it. */
+export interface TimedScorableEvent extends ScorableEvent {
+  minute: number;
+}
+
+/** What a spectator should see for one live match right now. */
+export interface LiveScoreState {
+  /** Goals revealed so far, [home, away]. */
+  score:    Scoreline;
+  /** Game minute on the wall clock, 0 to 90. */
+  minute:   number;
+  /**
+   * The reveal window has closed: every goal (stoppage time included) is
+   * shown, even though the row may still say `live` until the worker's next
+   * tick publishes the result.
+   */
+  fullTime: boolean;
+}
+
+/**
+ * The scoreline and minute a spectator should see for a live match at `now`.
+ *
+ * Mirrors the match page exactly: the minute comes from computeElapsedGameMinute
+ * (wall clock since `scheduled_at`, scaled to 90 over the season's
+ * match_duration_seconds), goals at or before that minute count, and once the
+ * window closes every goal counts.
+ *
+ * @param goals            Goal events of this match (any order; non-goals are ignored).
+ * @param kickoffAt        The match's `scheduled_at`.
+ * @param now              Wall clock.
+ * @param durationSeconds  Real seconds a match takes to reveal (season_config).
+ */
+export function liveScoreAt(
+  goals:           readonly TimedScorableEvent[],
+  kickoffAt:       string,
+  now:             Date,
+  durationSeconds: number,
+): LiveScoreState {
+  const endMs = new Date(kickoffAt).getTime() + durationSeconds * 1000;
+  if (now.getTime() >= endMs) {
+    return { score: computeLiveScore(goals), minute: 90, fullTime: true };
+  }
+  const minute = Math.min(90, computeElapsedGameMinute(kickoffAt, now, durationSeconds));
+  return {
+    score:    computeLiveScore(goals.filter((g) => g.minute <= minute)),
+    minute,
+    fullTime: false,
+  };
 }
