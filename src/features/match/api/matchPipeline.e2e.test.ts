@@ -108,7 +108,7 @@ function runPipeline(seed: number) {
   );
   const adapted = adaptSpatialResult(spatial, index);
 
-  decorateCommentary(adapted.events, MATCH_ID);
+  decorateCommentary(adapted.events, MATCH_ID, { home: 'Mars United FC', away: 'Venus Rovers' });
   let events = filterNotableEvents(adapted.events);
   const cosmic = cosmicInterjections(events, MATCH_ID);
   events = [...events, ...cosmic].sort((a, b) => a.minute - b.minute || a.subminute - b.subminute);
@@ -201,6 +201,16 @@ describe('a simulated match survives the whole pipeline', () => {
       expect(text).not.toMatch(/\{[a-z0-9_|]+\}/);
       expect(text).not.toMatch(/<[a-z0-9_]+>/);
       expect(text).not.toMatch(/\bundefined\b|\bnull\b|\band and\b/);
+    }
+  });
+
+  it('names clubs as fans know them: no three-letter codes, no "the home side"', () => {
+    // Season 1, matchday 1: 252 of 863 lines said "EUN adjust" or "Corner for
+    // the away side".  The persisted broadcast must name the club.
+    for (const e of run.parsed) {
+      const text = String((e.payload as Record<string, unknown>)['commentary'] ?? '');
+      expect(text, text).not.toMatch(/\b(MAR|VEN)\b/);
+      expect(text, text).not.toMatch(/\bthe (home|away) side\b/i);
     }
   });
 
