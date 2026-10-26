@@ -66,6 +66,8 @@ import {
 } from '../features/match';
 import { getMatchPositions, type PositionSnapshot } from '@features/match';
 import TeachingStrip from '../components/TeachingStrip';
+import { ErrorState, LoadingState } from '../shared/ui';
+import { useAsyncData, withTimeout, isTimeoutError } from '../shared/hooks/useAsyncData';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives LIVE indicators; FLARE is retained for both
@@ -122,9 +124,13 @@ export default function MatchDetail() {
   const { matchId } = useParams();
   const db = useSupabase();
 
-  const [match, setMatch] = useState<MatchRow | null>(null);
-  const [loadError, setLoadError] = useState<unknown>(null);
-  const [loaded, setLoaded] = useState<boolean>(false);
+  // One read for the whole page. useAsyncData turns a hang into a visible
+  // timeout after 10 s and gives the error state a retry.
+  const matchState = useAsyncData(
+    () => (matchId ? getMatch(db, matchId) : Promise.resolve(null)) as Promise<MatchRow | null>,
+    [db, matchId],
+  );
+  const match: MatchRow | null = matchState.status === 'success' ? (matchState.data ?? null) : null;
   // Cosmos-wide watcher count for the live presence badge (#382). 0 ≡
   // no watchers OR fetch error — both rendered the same (no badge).
   // Refreshed on a 60-second interval so the badge stays roughly in
@@ -138,29 +144,6 @@ export default function MatchDetail() {
   // published `home_score` is deliberately NULL — see logic/liveScore.ts — so
   // this is the only scoreline the board can honestly show mid-reveal.
   const [revealedScore, setRevealedScore] = useState<Scoreline | null>(null);
-
-  useEffect(() => {
-    if (!matchId) return undefined;
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error/loading state, fire fetch, settle into match+loaded state once it resolves
-    setLoadError(null);
-    setLoaded(false);
-    getMatch(db, matchId)
-      .then((data: MatchRow | null) => {
-        if (cancelled) return;
-        setMatch(data);
-        setLoaded(true);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.warn('[MatchDetail] getMatch failed:', err);
-        setLoadError(err);
-        setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [db, matchId]);
 
   // Live presence count — fetch immediately + on 60s interval. The
   // count is cosmos-wide today rather than per-match because the
@@ -187,7 +170,7 @@ export default function MatchDetail() {
     };
   }, [db]);
 
-  if (loaded && !match && !loadError) return <UnknownMatch matchId={matchId} />;
+  if (matchState.status === 'success' && !match) return <UnknownMatch matchId={matchId} />;
 
   return (
     <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
@@ -198,22 +181,21 @@ export default function MatchDetail() {
         <header style={{ padding: '48px 0 0' }}>
           <BackLink to="/matches">All Matches</BackLink>
 
-          {!loaded && (
-            <p style={{ marginTop: 32, color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
-              Loading match…
-            </p>
+          {matchState.status === 'loading' && <LoadingState label="Loading match" style={{ marginTop: 16 }} />}
+
+          {(matchState.status === 'error' || matchState.status === 'timeout') && (
+            <ErrorState
+              what="This match"
+              timedOut={matchState.status === 'timeout'}
+              onRetry={matchState.retry}
+              style={{ marginTop: 32 }}
+            />
           )}
 
-          {loadError != null && (
-            <p style={{ marginTop: 32, color: FLARE, fontStyle: 'italic', fontSize: 13 }}>
-              Match data unavailable. The void has swallowed the result.
-            </p>
-          )}
-
-          {match && !loadError && <MatchBreadcrumb match={match} />}
+          {match && <MatchBreadcrumb match={match} />}
         </header>
 
-        {match && !loadError && (
+        {match && (
           <>
             {/* Section II — scoreboard (the prototype's `.board`). */}
             <Scoreboard match={match} watcherCount={watcherCount} revealedScore={revealedScore} />
@@ -332,6 +314,15 @@ export default function MatchDetail() {
           .match-main { grid-template-columns: 1fr !important; }
           .match-rail { position: static !important; }
         }
+        /* Phone scoreboard (the owner's acceptance width is 390 px): tighter
+           padding and gaps, names sized so a two-word club wraps onto two
+           lines instead of clipping, and the score kept on one line. */
+        @media (max-width: 599px) {
+          .match-board { padding: 20px 16px !important; gap: 20px !important; }
+          .match-board-teams { gap: 10px !important; }
+          .match-team-name { font-size: 14px !important; letter-spacing: 0 !important; }
+          .match-score { font-size: 36px !important; gap: 6px !important; padding-top: 18px !important; }
+        }
       `}</style>
     </div>
   );
@@ -424,9 +415,12 @@ function Scoreboard({
 
   // Attendance — only shown when a real count exists.
   const attendance = typeof match.attendance === 'number' ? match.attendance : null;
+  // The ground is the home side's stadium (see matchGroundName).
+  const ground = matchGroundName(match);
 
   return (
     <div
+      className="match-board"
       style={{
         border: `1px solid ${HAIRLINE}`,
         padding: 32,
@@ -455,11 +449,11 @@ function Scoreboard({
             color: DUST_70,
           }}
         >
-          {match.stadium ?? 'Unknown Ground'}
+          {ground}
           {attendance != null && (
             <>
-              {' '}
-              <span style={{ color: DUST_50 }}>•</span> Attendance {attendance.toLocaleString()}
+              {ground ? <>{' '}<span style={{ color: DUST_50 }}>•</span>{' '}</> : null}
+              Attendance {attendance.toLocaleString()}
             </>
           )}
         </span>
@@ -469,10 +463,13 @@ function Scoreboard({
       <div style={{ height: 0, borderTop: `1px solid ${BORDER_FAINT}` }} />
 
       {/* Teams row — crest / name / sub … score … crest / name / sub. */}
+      {/* minmax(0, 1fr): the name columns may shrink below their content
+          width, so a long name wraps instead of being clipped (390 px). */}
       <div
+        className="match-board-teams"
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
+          gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
           alignItems: 'flex-start',
           gap: 32,
         }}
@@ -536,11 +533,13 @@ function ScoreDisplay({ status, home, away }: { status: string; home: number; aw
   }
   return (
     <div
+      className="match-score"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 16,
+        whiteSpace: 'nowrap',
         fontSize: 64,
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
@@ -560,8 +559,8 @@ function ScoreDisplay({ status, home, away }: { status: string; home: number; aw
           }}
         />
       )}
-      <span>
-        {home} <span style={{ color: DUST_50, fontSize: 44 }}>·</span> {away}
+      <span style={{ whiteSpace: 'nowrap' }}>
+        {home} <span style={{ color: DUST_50, fontSize: '0.7em' }}>·</span> {away}
       </span>
     </div>
   );
@@ -576,6 +575,25 @@ function ScoreDisplay({ status, home, away }: { status: string; home: number; aw
  * @param {string} props.location
  * @param {string|null} props.color
  */
+/**
+ * The ground a match is played at, or null when nothing is known.
+ *
+ * `matches.stadium` exists in the schema but no fixture generator writes
+ * it, so the page always fell back to "Unknown Ground". The ground is the
+ * home side's stadium: its `entities` row (kind 'stadium', joined in
+ * getMatch through teams.stadium_entity_id), else teams.home_ground.
+ */
+export function matchGroundName(match: MatchRow): string | null {
+  const pick = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+  return (
+    pick(match.stadium) ??
+    pick(match.home_team?.stadium?.name) ??
+    pick(match.home_team?.home_ground) ??
+    null
+  );
+}
+
 function TeamScoreBlock({
   side,
   name,
@@ -588,10 +606,15 @@ function TeamScoreBlock({
   color: string | null;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minWidth: 0 }}>
       <TeamCrest color={color} />
       <h2
+        className="match-team-name"
+        lang="en"
         style={{
+          maxWidth: '100%',
+          overflowWrap: 'anywhere',
+          hyphens: 'auto',
           fontSize: 26,
           fontWeight: 700,
           textTransform: 'uppercase',
@@ -1093,6 +1116,8 @@ export function LiveCommentary({
   const [elapsedMinute, setElapsedMinute] = useState<number>(0);
   const [loaded, setLoaded] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<unknown>(null);
+  // Bumped by the error state's retry button to re-run the initial fetch.
+  const [attempt, setAttempt] = useState(0);
 
   // Derived "is the viewer still inside the paced window?" — true while
   // wall-clock elapsed-from-kickoff is < match_duration_seconds.
@@ -1108,7 +1133,8 @@ export function LiveCommentary({
     setEvents([]);
     setLoaded(false);
     setLoadError(null);
-    Promise.all([getMatchEvents(db, match.id), getMatchDurationSeconds(db, match.id)])
+    // withTimeout: a hung read becomes a visible error after 10 s.
+    withTimeout(Promise.all([getMatchEvents(db, match.id), getMatchDurationSeconds(db, match.id)]))
       .then(([evRows, durSeconds]) => {
         if (cancelled) return;
         // Merge against current state (not []) so a Realtime row that landed
@@ -1126,7 +1152,7 @@ export function LiveCommentary({
     return () => {
       cancelled = true;
     };
-  }, [db, match?.id, showSection]);
+  }, [db, match?.id, showSection, attempt]);
 
   // ── Elapsed-minute clock ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1291,16 +1317,15 @@ export function LiveCommentary({
         </div>
 
         {loadError != null && (
-          <p style={{ color: FLARE, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
-            Commentary feed unavailable. The cosmic broadcast has cut out.
-          </p>
+          <ErrorState
+            bare
+            what="The commentary"
+            timedOut={isTimeoutError(loadError)}
+            onRetry={() => setAttempt((n) => n + 1)}
+          />
         )}
 
-        {!loadError && !loaded && (
-          <p style={{ color: DUST_50, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
-            Tuning into the cosmic broadcast…
-          </p>
-        )}
+        {!loadError && !loaded && <LoadingState label="Tuning into the broadcast" style={{ padding: 0 }} />}
 
         {!loadError && loaded && visibleEvents.length === 0 && (
           <p style={{ color: DUST_50, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
@@ -1480,7 +1505,7 @@ function CommentaryRow({ event }: { event: MatchEventRow }) {
           letterSpacing: isArchitect ? '0.04em' : 'normal',
         }}
       >
-        {isArchitect ? text : `“${text}”`}
+        {isArchitect || event.type === 'mvp' ? text : `“${text}”`}
       </p>
     </div>
   );
@@ -1529,6 +1554,10 @@ export function isArchitectEvent(event: MatchEventRow): boolean {
  */
 export function eventProse(event: MatchEventRow): string | null {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
+  // The worker's full-time 'mvp' event carries only the player's name.
+  if (event.type === 'mvp') {
+    return typeof payload.player === 'string' && payload.player.length > 0 ? payload.player : null;
+  }
   if (typeof payload.commentary === 'string' && payload.commentary.length > 0)
     return payload.commentary;
   if (typeof payload.proclamation === 'string' && payload.proclamation.length > 0)
@@ -1543,6 +1572,8 @@ export function eventProse(event: MatchEventRow): string | null {
  */
 export function eventHeading(event: MatchEventRow): string {
   if (event.type === 'architect_interference') return 'The Architect';
+  // The full-time award. Was rendered as the raw type label "Mvp." at 91'.
+  if (event.type === 'mvp') return 'Player of the Match';
   // A cosmic voice gets a glyph, not a name. Balance and Chaos are uncredited:
   // the accent colour and the register are the only things a fan has to go on,
   // which is the point.
