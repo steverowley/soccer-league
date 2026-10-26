@@ -37,7 +37,7 @@ import { ErrorState } from '../shared/ui';
 import { useParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, Footer } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getPlayer, getPlayerIdolRank } from '../features/match';
 import {
   getPlayerRecentMatches,
@@ -135,7 +135,7 @@ interface IdolRank {
  */
 export default function PlayerDetail() {
   const { playerId }  = useParams<{ playerId: string }>();
-  const db            = useSupabase();
+  const publicDb = usePublicReadClient();
 
   const [player,        setPlayer]        = useState<PlayerWithStats | null>(null);
   const [idol,          setIdol]          = useState<IdolRank | null>(null);
@@ -163,7 +163,7 @@ export default function PlayerDetail() {
     // Every read is time-boxed (withTimeout, 10 s) so each *Done flag
     // always settles and no section spins forever.
     // Player data (including season stats aggregate)
-    withTimeout(getPlayer(db, playerId))
+    withTimeout(getPlayer(publicDb, playerId))
       .then((p) => {
         if (cancelled) return;
         setPlayer(p as unknown as PlayerWithStats);
@@ -179,7 +179,7 @@ export default function PlayerDetail() {
       .finally(() => { if (!cancelled) setPlayerDone(true); });
 
     // Idol rank from player_idol_score view (DI-aware — uses db from context)
-    withTimeout(getPlayerIdolRank(db, playerId))
+    withTimeout(getPlayerIdolRank(publicDb, playerId))
       .then((rank) => {
         if (cancelled) return;
         setIdol(rank as IdolRank | null);
@@ -189,20 +189,20 @@ export default function PlayerDetail() {
 
     // Last 10 appearances — feature API already returns [] on error so the
     // section degrades to an empty state without a catch().
-    withTimeout(getPlayerRecentMatches(db, playerId, 10))
+    withTimeout(getPlayerRecentMatches(publicDb, playerId, 10))
       .then((rows) => { if (!cancelled) setRecentMatches(rows); })
       .catch(() => { /* section shows its empty state */ })
       .finally(() => { if (!cancelled) setMatchesDone(true); });
 
     // Last 10 narratives mentioning the player's entity_id.  Empty when
     // the player has no entity link or no narratives reference them.
-    withTimeout(getNarrativesMentioningPlayer(db, playerId, 10))
+    withTimeout(getNarrativesMentioningPlayer(publicDb, playerId, 10))
       .then((rows) => { if (!cancelled) setNarratives(rows); })
       .catch(() => { /* section shows its empty state */ })
       .finally(() => { if (!cancelled) setNarrativesDone(true); });
 
     return () => { cancelled = true; };
-  }, [db, playerId, attempt]);
+  }, [publicDb, playerId, attempt]);
 
   // Narrative profile (entities.meta.profile) — fetched in its own effect once
   // the player's entity_id resolves. Supplementary content: the section is
@@ -211,11 +211,11 @@ export default function PlayerDetail() {
     const entityId = player?.entity_id;
     if (!entityId) return undefined;
     let cancelled = false;
-    getEntityProfile(db, entityId)
+    getEntityProfile(publicDb, entityId)
       .then((res) => { if (!cancelled) setProfile(res?.profile ?? null); })
       .catch(() => { /* supplementary; silently omit on error */ });
     return () => { cancelled = true; };
-  }, [db, player?.entity_id]);
+  }, [publicDb, player?.entity_id]);
 
   // ── Unknown player ────────────────────────────────────────────────────────
   // Only show the error surface once the player fetch has settled (to avoid

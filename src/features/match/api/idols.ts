@@ -27,6 +27,7 @@
 // useSupabase() client through.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 // ── Row + result types ───────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ export interface TopIdolForArchitect {
  * @returns           `{ global, byTeam }`. Throws on Supabase error.
  */
 export async function getIdolBoard(
-  db:     IslSupabaseClient,
+  db:     PublicReadClient,
   { globalLimit = DEFAULT_GLOBAL_LIMIT, teamLimit = DEFAULT_TEAM_LIMIT } = {},
 ): Promise<IdolBoardResult> {
   const { data: topRows, error: topErr } = await db
@@ -155,7 +156,7 @@ export async function getIdolBoard(
  * @param playerId  Player UUID.
  */
 export async function getPlayerIdolRank(
-  db:        IslSupabaseClient,
+  db:        PublicReadClient,
   playerId:  string,
 ): Promise<IdolRow | null> {
   const { data, error } = await db

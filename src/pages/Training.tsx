@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import {
   XP_PER_CLICK,
@@ -83,7 +83,7 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Training() {
   usePageTitle('Training Facility');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const { user, profile } = useAuth();
   const teamId = profile?.favourite_team_id ?? null;
 
@@ -101,7 +101,7 @@ export default function Training() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error/loading state, fire fetch, settle into players + default starter once it resolves
     setLoadError(null);
     setLoaded(false);
-    getPlayersForTeam(db, teamId)
+    getPlayersForTeam(publicDb, teamId)
       .then((rows) => {
         if (cancelled) return;
         setPlayers(rows);
@@ -122,7 +122,7 @@ export default function Training() {
     return () => {
       cancelled = true;
     };
-  }, [db, teamId]);
+  }, [publicDb, teamId]);
 
   const selected = useMemo(
     () => players.find((p) => p.id === selectedId) ?? null,

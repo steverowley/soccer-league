@@ -33,7 +33,7 @@ import {
   Footer,
   SectionHeader,
 } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonList, type SeasonSummary } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { AsyncView, PreSeasonState } from '../shared/ui';
@@ -81,10 +81,10 @@ function formatRange(s: SeasonSummary): string {
  * order.  Each card links to `/seasons/:id` for the detail view.
  */
 export default function Seasons() {
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   // getSeasonList throws on a failed read, so an outage is an error state
   // and an empty list really means no season has been played (pre-season).
-  const seasonsState = useAsyncData(() => getSeasonList(db), [db]);
+  const seasonsState = useAsyncData(() => getSeasonList(publicDb), [publicDb]);
 
   return (
     <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>

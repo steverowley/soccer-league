@@ -109,10 +109,10 @@ export { PitchSurface } from './ui/pitch/PitchSurface';
 
 // ── Mini-pitch chip + shared broadcast hook (issue isl-a8i) ───────────────
 // MiniPitch is a tiny pitch preview for the Matches list page that
-// shows a live match's ball position in ~100px width.  It subscribes
-// via useMatchEventLatest, which opens ONE shared Realtime channel
-// regardless of how many MiniPitch chips mount on the page — see
-// the isl-a8i acceptance criterion.
+// shows a live match's ball position in ~100px width.  It reads
+// useMatchEventLatest, which runs ONE shared poll of the read cache
+// regardless of how many MiniPitch chips mount on the page (it replaced
+// a shared Realtime channel, docs/read-cache.md).
 export { MiniPitch } from './ui/pitch/MiniPitch';
 export type { MiniPitchProps } from './ui/pitch/MiniPitch';
 export { useMatchEventLatest } from './ui/pitch/useMatchEventsBroadcast';
@@ -166,7 +166,7 @@ export {
   getLiveMatch,
   getMatchEvents,
   getMatchDurationSeconds,
-  subscribeToMatchEvents,
+  getLatestMatchEvent,
   DEFAULT_MATCH_DURATION_SECONDS,
 } from './api/matchEvents';
 export type { LiveMatchRow, MatchEventRow } from './api/matchEvents';

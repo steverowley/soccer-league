@@ -48,7 +48,7 @@ import { useParams } from 'react-router-dom';
 
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, Footer } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   getPersona,
   listMemoriesForEntity,
@@ -197,7 +197,7 @@ function snippetStyle(snippet: SnippetRow, now: Date): React.CSSProperties {
  */
 export default function EntityDetail() {
   const { entityId } = useParams<{ entityId: string }>();
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // Independent loading states for each query so each section can paint
   // as soon as its data is in hand.
@@ -214,7 +214,7 @@ export default function EntityDetail() {
       // Header — distinguish "not found" from "load error" so the page
       // can render an explicit message rather than silently spinning.
       // Time-boxed: a hung read lands in the error branch after 10 s.
-      const headerQ = await withTimeout(Promise.resolve(db
+      const headerQ = await withTimeout(Promise.resolve(publicDb
         .from('entities')
         .select('id, name, display_name, kind')
         .eq('id', entityId)
@@ -233,9 +233,9 @@ export default function EntityDetail() {
       // Other queries are best-effort — failures degrade silently
       // because the page is informative even when one section is empty.
       const [p, s, m] = await Promise.all([
-        getPersona(db, entityId),
-        listSnippetsForEntity(db, entityId),
-        listMemoriesForEntity(db, entityId, 15),
+        getPersona(publicDb, entityId),
+        listSnippetsForEntity(publicDb, entityId),
+        listMemoriesForEntity(publicDb, entityId, 15),
       ]);
       if (cancelled) return;
       setPersona(p);
@@ -250,7 +250,7 @@ export default function EntityDetail() {
     return () => {
       cancelled = true;
     };
-  }, [db, entityId]);
+  }, [publicDb, entityId]);
 
   const now = new Date();
 

@@ -28,7 +28,7 @@
 
 import { z } from 'zod';
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { Entity, EntityKind, EntityRelationship } from '../types';
 
 // ── Zod row schemas ──────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ function toRelationship(row: z.infer<typeof RelationshipRowSchema>): EntityRelat
  * @returns         Validated Entity, or null on miss / error.
  */
 export async function getEntity(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   entityId: string,
 ): Promise<Entity | null> {
   const { data, error } = await db
@@ -169,7 +169,7 @@ export async function getEntity(
  *                  Empty array on any error.
  */
 export async function getEntityRelationships(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   entityId: string,
 ): Promise<EntityRelationship[]> {
   const [outRes, inRes] = await Promise.all([
@@ -228,7 +228,7 @@ export async function getEntityRelationships(
  *             deduped by (from_id, to_id, kind).  Empty on empty input / error.
  */
 export async function getRelationshipsForIds(
-  db:  IslSupabaseClient,
+  db:  PublicReadClient,
   ids: readonly string[],
 ): Promise<EntityRelationship[]> {
   if (ids.length === 0) return [];
@@ -292,7 +292,7 @@ export async function getRelationshipsForIds(
  *                to just the seed's edges when it has no neighbours.
  */
 export async function getEntityNeighbourhood(
-  db:     IslSupabaseClient,
+  db:     PublicReadClient,
   seedId: string,
 ): Promise<EntityRelationship[]> {
   const firstHop = await getEntityRelationships(db, seedId);
@@ -347,7 +347,7 @@ export async function getEntityNeighbourhood(
  * @returns      Validated Entity rows sorted by name.  Empty on error.
  */
 export async function listEntities(
-  db:     IslSupabaseClient,
+  db:     PublicReadClient,
   kinds?: string[],
   limit = 200,
 ): Promise<Entity[]> {
@@ -400,7 +400,7 @@ export async function listEntities(
  * @returns    Validated Entity rows.  Empty on error or empty input.
  */
 export async function getEntitiesByIds(
-  db:  IslSupabaseClient,
+  db:  PublicReadClient,
   ids: readonly string[],
 ): Promise<Entity[]> {
   if (ids.length === 0) return [];

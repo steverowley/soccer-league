@@ -17,6 +17,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 import {
   getEntity,
@@ -82,7 +83,7 @@ function makeQueryMock() {
   const db = { from: vi.fn((t: string) => queryFor(t)) };
 
   return {
-    db: db as unknown as IslSupabaseClient,
+    db: db as unknown as IslSupabaseClient & PublicReadClient,
     queue: {
       push(table: string, data: unknown, error: { message: string } | null = null) {
         const list = queue.get(table) ?? [];

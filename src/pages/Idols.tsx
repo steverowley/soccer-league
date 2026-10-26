@@ -39,7 +39,7 @@ import { withTimeout } from '../shared/hooks/useAsyncData';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
@@ -110,7 +110,7 @@ function heatLevel(score: number, topScore: number): number {
  */
 export default function Idols() {
   usePageTitle('Idols');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   const [board,     setBoard]     = useState<IdolBoardRow[]>([]);
   const [movers,    setMovers]    = useState<IdolBoardRow[]>([]);
@@ -122,8 +122,8 @@ export default function Idols() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire fetch, settle into success/error state once it resolves
     setLoadError(null);
     withTimeout(Promise.all([
-      getIdolBoard(db, { globalLimit: GLOBAL_LIMIT }),
-      getIdolBoard(db, { globalLimit: MOVERS_LIMIT }),
+      getIdolBoard(publicDb, { globalLimit: GLOBAL_LIMIT }),
+      getIdolBoard(publicDb, { globalLimit: MOVERS_LIMIT }),
     ]))
       .then(([b, m]) => {
         if (cancelled) return;
@@ -138,7 +138,7 @@ export default function Idols() {
         setLoaded(true);
       });
     return () => { cancelled = true; };
-  }, [db]);
+  }, [publicDb]);
 
   // Top score anchors every row's heat meter; the board comes back sorted by
   // global_rank, so the first row holds the maximum.

@@ -12,13 +12,12 @@
 //   a single ball whose CSS transition keeps the cursor of action
 //   readable at a glance.
 //
-// SUBSCRIPTION DISCIPLINE
-//   This component does NOT open its own Realtime channel.  It reads
-//   from `useMatchEventLatest(matchId)`, which shares ONE table-wide
-//   Realtime channel across every mounted MiniPitch (and any future
-//   broadcast consumer).  See the isl-a8i acceptance criterion: "no
-//   more than 1 Realtime subscription regardless of how many live
-//   matches".
+// POLLING DISCIPLINE
+//   This component does not fetch on its own.  It reads from
+//   `useMatchEventLatest(matchId)`, which runs ONE shared poll of the
+//   read cache for every mounted MiniPitch (it replaced a shared Realtime
+//   channel, docs/read-cache.md), so the cost stays flat however many
+//   live matches the list shows (the isl-a8i acceptance criterion).
 
 import { useMemo } from 'react';
 

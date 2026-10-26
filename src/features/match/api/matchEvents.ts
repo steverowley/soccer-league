@@ -4,30 +4,30 @@
 // WHAT THIS MODULE OWNS
 //   • Fetching the full event list for a match (initial page-load query).
 //   • Fetching the match row (scheduled_at, status, scores, team metadata).
-//   • Subscribing to Supabase Realtime postgres_changes for new event rows
-//     so late-joiners and live viewers see events as the worker writes them.
+//   • Reading the latest event of a match, which the live views poll
+//     through the read cache (docs/read-cache.md).  This replaced Realtime
+//     postgres_changes subscriptions, which cost the database per viewer.
 //   • Reading the per-season match_duration_seconds knob so the viewer can
 //     pace its wall-clock → game-minute conversion correctly.
 //
 // WHAT THIS MODULE DOES NOT DO
-//   • No React.  All functions take an injected `db: IslSupabaseClient` so
+//   • No React.  All functions take an injected `db: PublicReadClient` so
 //     unit tests inject a fake without patching globals.
 //   • No elapsed-minute math — that lives in logic/elapsedMinute.ts.
 //   • No event-rendering or sorting — the viewer renders what it gets here.
 //
 // WHY A SEPARATE FILE FROM api/matches.ts (which doesn't exist yet)
 //   matches.ts will hold the broader CRUD surface (insert, update, list).
-//   The live viewer only needs read + realtime, and the surface is small
+//   The live viewer only needs reads, and the surface is small
 //   enough that a dedicated file keeps the test mocks compact.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { Database } from '@/types/database';
 // #386 slice 2: drift-catch the match_events rows + the LiveMatchRow
 // nested-join shape at the api boundary. Malformed rows warn-log and
 // drop instead of half-rendering the viewer header.
 import {
   parseLiveMatchRow,
-  parseMatchEventRow,
   parseMatchEventRows,
 } from './matchEvents.schema';
 
@@ -97,7 +97,7 @@ export const DEFAULT_MATCH_DURATION_SECONDS = 600;
  * @returns         The joined match row, or null on error / not found.
  */
 export async function getLiveMatch(
-  db:      IslSupabaseClient,
+  db:      PublicReadClient,
   matchId: string,
 ): Promise<LiveMatchRow | null> {
   const { data, error } = await db
@@ -137,7 +137,7 @@ export async function getLiveMatch(
  *                  simulated yet.
  */
 export async function getMatchEvents(
-  db:      IslSupabaseClient,
+  db:      PublicReadClient,
   matchId: string,
 ): Promise<MatchEventRow[]> {
   const { data, error } = await db
@@ -158,74 +158,38 @@ export async function getMatchEvents(
   return parseMatchEventRows((data ?? []) as unknown[], 'getMatchEvents') as MatchEventRow[];
 }
 
-// ── Realtime subscription ────────────────────────────────────────────────────
+// ── Latest event (live polling) ─────────────────────────────────────────────
 
 /**
- * Subscribe to INSERT events on `match_events` filtered by match_id.
+ * Fetch the most recent event of a match: the last row by (minute,
+ * subminute).  The matches list polls this for each live match's mini
+ * pitch through the read cache, so every viewer shares one database query
+ * per match per cache TTL.  It replaced a table-wide Realtime
+ * `postgres_changes` channel (docs/read-cache.md, "As built").
  *
- * SUPABASE REALTIME CONTRACT
- *   • Migration 0013 publishes `match_events` to `supabase_realtime`, so
- *     INSERTs broadcast on the `postgres_changes` channel.
- *   • A server-side filter `match_id=eq.<id>` keeps clients from receiving
- *     events for matches they aren't watching — important for bandwidth
- *     when many matches play concurrently.
- *
- * USAGE PATTERN
- *   useEffect(() => {
- *     const unsub = subscribeToMatchEvents(db, matchId, (ev) => {
- *       setEvents(prev => [...prev, ev]);
- *     });
- *     return unsub;
- *   }, [db, matchId]);
- *
- * @param db        Injected Supabase client.
- * @param matchId   UUID to filter events by.
- * @param onInsert  Called once per new event row.  The row shape matches
- *                  MatchEventRow exactly (Realtime returns the full row).
- * @returns         Cleanup function — call to unsubscribe and free the
- *                  underlying WebSocket channel.
+ * @param db        The public-read client.
+ * @param matchId   UUID of the match.
+ * @returns         The latest event, or null when there is none or the read
+ *                  failed (the next poll retries).
  */
-export function subscribeToMatchEvents(
-  db:       IslSupabaseClient,
-  matchId:  string,
-  onInsert: (event: MatchEventRow) => void,
-): () => void {
-  // Channel name is conventionally `<table>:<filter>` to make Realtime debug
-  // logs readable.  The exact name is not visible to users.
-  const channel = db
-    .channel(`match_events:${matchId}`)
-    .on(
-      // Type assertion: supabase-js's typed channel API is open-shaped here;
-      // 'postgres_changes' is the correct event name per the Realtime docs
-      // but isn't in the strict union.  Cast keeps the call surface clean.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      'postgres_changes' as any,
-      {
-        event:  'INSERT',
-        schema: 'public',
-        table:  'match_events',
-        filter: `match_id=eq.${matchId}`,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (payload: any) => {
-        // Realtime delivers the inserted row in payload.new with the same
-        // column shape as the table's Row type. Run it through the Zod
-        // parser so a future shape regression in the broadcast wire
-        // doesn't poison the viewer's event list — bad rows warn-log and
-        // are silently dropped at the subscription edge.
-        if (!payload?.new) return;
-        const validated = parseMatchEventRow(payload.new, 'subscribeToMatchEvents');
-        if (validated) onInsert(validated as MatchEventRow);
-      },
-    )
-    .subscribe();
+export async function getLatestMatchEvent(
+  db:      PublicReadClient,
+  matchId: string,
+): Promise<MatchEventRow | null> {
+  const { data, error } = await db
+    .from('match_events')
+    .select('*')
+    .eq('match_id', matchId)
+    .order('minute',    { ascending: false })
+    .order('subminute', { ascending: false })
+    .limit(1);
 
-  return () => {
-    // removeChannel sends UNSUBSCRIBE and closes the underlying WS channel.
-    // Returning the cleanup from useEffect lets React invoke it on unmount
-    // / matchId change so we never leak channels.
-    db.removeChannel(channel);
-  };
+  if (error) {
+    console.warn('[getLatestMatchEvent] failed:', error.message);
+    return null;
+  }
+  const rows = parseMatchEventRows((data ?? []) as unknown[], 'getLatestMatchEvent') as MatchEventRow[];
+  return rows[0] ?? null;
 }
 
 // ── Season pacing ────────────────────────────────────────────────────────────
@@ -248,7 +212,7 @@ export function subscribeToMatchEvents(
  *                  90-minute simulated match.  Falls back to 600 s on miss.
  */
 export async function getMatchDurationSeconds(
-  db:      IslSupabaseClient,
+  db:      PublicReadClient,
   matchId: string,
 ): Promise<number> {
   // Step 1: get the competition id for the match.

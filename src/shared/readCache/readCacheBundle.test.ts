@@ -12,7 +12,7 @@
 // no-store on every non-200, timeout (504) and unreachable upstream (502),
 // content-type and content-range passed through, HEAD with a count.
 
-import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -44,7 +44,7 @@ let mod: BundleModule;
 let handler: (r: Request) => Promise<Response>;
 
 /** Fake PostgREST: answers by resource name so each test can pick a status. */
-function fakePostgrest(req: IncomingMessage, res: import('node:http').ServerResponse): void {
+function fakePostgrest(req: IncomingMessage, res: ServerResponse): void {
   seen.push({ method: req.method ?? '', url: req.url ?? '', headers: req.headers });
   const path = (req.url ?? '').split('?')[0] ?? '';
   const resource = path.replace(/^\/rest\/v1\//, '');

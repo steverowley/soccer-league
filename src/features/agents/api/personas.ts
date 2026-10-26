@@ -22,6 +22,7 @@
 import { z } from 'zod';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { PersonaInsert, PersonaRow } from '../types';
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ const PersonaRowSchema = z.object({
  * @returns         The persona row, or null when missing / on error.
  */
 export async function getPersona(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   entityId: string,
 ): Promise<PersonaRow | null> {
   const { data, error } = await db
@@ -96,7 +97,7 @@ export async function getPersona(
  *                   absent from the result.
  */
 export async function listPersonasForEntities(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   entityIds: readonly string[],
 ): Promise<PersonaRow[]> {
   if (entityIds.length === 0) return [];

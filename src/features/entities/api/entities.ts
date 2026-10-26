@@ -3,7 +3,7 @@
 // hydration (Phase 5.1) and the news feed (Phase 8) read from these queries.
 // All queries take an injected Supabase client; no direct imports.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { Narrative } from '../types';
 // #386 slice 4: drift-validate every narrative row at the api edge.
 // The Architect's in-memory lore store + the news feed both project
@@ -38,7 +38,7 @@ import { parseNarrativeRows } from './entities.schema';
  *                the only caller (`/news`) renders a wire-down state.
  */
 export async function getRecentNarratives(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   limit = 50,
   source?: string,
   kind?: string,

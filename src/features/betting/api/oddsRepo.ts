@@ -5,6 +5,7 @@
 // can snapshot them at placement time.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { MatchOdds } from '../types';
 import { parseMatchOddsRow } from './oddsRepo.schema';
 
@@ -18,7 +19,7 @@ import { parseMatchOddsRow } from './oddsRepo.schema';
  * @returns        MatchOdds row, or null if not found.
  */
 export async function getMatchOdds(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   matchId: string,
 ): Promise<MatchOdds | null> {
   const { data, error } = await db

@@ -28,7 +28,7 @@ import { Link } from 'react-router-dom';
 
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard, useSeasonPhase } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { AsyncView, EmptyState } from '../shared/ui';
@@ -76,16 +76,16 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Leaderboards(): JSX.Element {
   usePageTitle('Leaderboards');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // Two independent reads so one board failing never blanks the other.
   // useAsyncData adds the 10 s timeout and a retry to each.
-  const wagers = useAsyncData(() => getWagerLeaderboard(db, BOARD_LIMIT), [db]);
+  const wagers = useAsyncData(() => getWagerLeaderboard(publicDb, BOARD_LIMIT), [publicDb]);
   // Idol rows are loosely typed (the SQL view returns dynamic columns).
   const idols = useAsyncData(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    () => getIdolBoard(db, { globalLimit: BOARD_LIMIT }).then((r) => (r.global ?? []) as any[]),
-    [db],
+    () => getIdolBoard(publicDb, { globalLimit: BOARD_LIMIT }).then((r) => (r.global ?? []) as any[]),
+    [publicDb],
   );
   const phase = useSeasonPhase();
   const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';

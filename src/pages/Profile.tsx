@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { Button, useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '@features/auth';
@@ -71,6 +71,7 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 export default function Profile() {
   usePageTitle('Profile');
   const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const navigate = useNavigate();
   const { user, profile, loading, refreshProfile, signOut, deleteAccount } = useAuth();
   const toast = useToast();
@@ -121,7 +122,7 @@ export default function Profile() {
   // stable across the session.
   useEffect(() => {
     let cancelled = false;
-    getTeams(db)
+    getTeams(publicDb)
       .then((rows) => {
         if (!cancelled) setTeams(rows ?? []);
       })
@@ -131,7 +132,7 @@ export default function Profile() {
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [publicDb]);
 
   // Refetch the roster every time the active teamId changes (including
   // the initial hydration).  Empty teamId → empty roster so the player
@@ -142,7 +143,7 @@ export default function Profile() {
       return undefined;
     }
     let cancelled = false;
-    getPlayersForTeam(db, teamId)
+    getPlayersForTeam(publicDb, teamId)
       .then((rows) => {
         if (!cancelled) setPlayers(rows ?? []);
       })
@@ -153,7 +154,7 @@ export default function Profile() {
     return () => {
       cancelled = true;
     };
-  }, [db, teamId]);
+  }, [publicDb, teamId]);
 
   // Pre-grouped team options for the picker — by league, alphabetised.
   // Computed via useMemo so the team-by-league bucketing doesn't run

@@ -10,8 +10,9 @@
 //   2. Mid-simulation join     — a viewer opens the page while the worker is
 //                                still inserting events; the initial fetch
 //                                returns the rows written so far and the
-//                                Realtime subscription delivers the rest as
-//                                the worker writes them.
+//                                15 s live poll of the read cache delivers
+//                                the rest (it replaced a Realtime
+//                                subscription, docs/read-cache.md).
 //   3. Early completion        — the worker flips matches.status to
 //                                `completed` within seconds of kickoff (its
 //                                normal mode) while the viewer is still
@@ -20,16 +21,19 @@
 //                                scheduled_at + duration regardless.
 //
 // AUDIT GOALS (also asserted explicitly):
-//   • Dedup-by-id holds across the initial fetch + the Realtime stream
-//     when the same row is delivered twice.
-//   • filterEventsByElapsedMinute is applied UNIFORMLY to both sources —
-//     events from Realtime that arrive ahead of their game-minute do not
-//     leak into the visible feed.
+//   • Dedup-by-id holds across the initial fetch + the live poll when the
+//     same row is delivered twice.
+//   • filterEventsByElapsedMinute is applied UNIFORMLY to both sources:
+//     polled events that arrive ahead of their game-minute do not leak into
+//     the visible feed.
+//   • The poll runs only inside the paced window, pauses while the tab is
+//     hidden, and no Realtime channel is ever opened.
 //
 // MOCK STRATEGY:
-//   Reuses the chainable-query + channel-stub pattern from
-//   matchEvents.test.ts:200-255.  The component receives the fake client
-//   via <SupabaseProvider>, so no module-level mocking is required.
+//   Reuses the chainable-query pattern from matchEvents.test.ts.  The
+//   component receives the fake client via <SupabaseProvider>, so no
+//   module-level mocking is required.  Channel stubs stay so the tests can
+//   assert that no Realtime channel is opened.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
@@ -40,7 +44,7 @@ import { SupabaseProvider } from '../shared/supabase/SupabaseProvider';
 import type { IslSupabaseClient } from '../shared/supabase/client';
 import type { MatchEventRow } from '../features/match';
 
-// ── Chainable query + Realtime channel mock ──────────────────────────────────
+// ── Chainable query mock (plus channel stubs to prove none is opened) ──────
 // Lifted from src/features/match/api/matchEvents.test.ts:31-100 with one
 // addition: a `flush()` helper that resolves the pending promise queue so
 // tests can advance React effect cycles deterministically without having to
@@ -81,8 +85,7 @@ function makeQueryMock() {
     return builder;
   }
 
-  // Channel stubs let tests pull the Realtime callback the component
-  // registered and invoke it as the Supabase Realtime broker would.
+  // Channel stubs: the component must never call these any more.
   const channelStubs: Array<{
     name: string;
     on: ReturnType<typeof vi.fn>;
@@ -117,19 +120,6 @@ function makeQueryMock() {
         queue.set(table, list);
       },
     },
-    /**
-     * Fire the most recent Realtime channel's INSERT handler with a row,
-     * mimicking what the Supabase broker does when a Postgres `INSERT`
-     * matches the channel's filter.  Returns the channel stub so callers
-     * can also assert on it.
-     */
-    fireRealtimeInsert(row: Partial<MatchEventRow>) {
-      const stub = channelStubs[channelStubs.length - 1];
-      if (!stub) throw new Error('no realtime channel registered yet');
-      const handler = stub.on.mock.calls[0]?.[2] as ((p: { new: unknown }) => void) | undefined;
-      if (!handler) throw new Error('channel.on() not called yet');
-      handler({ new: row });
-    },
     channelStubs,
     removeChannel,
   };
@@ -161,6 +151,17 @@ async function flushEffects() {
     await Promise.resolve();
     await Promise.resolve();
   });
+}
+
+/** Flip document.visibilityState and fire visibilitychange, as a browser would. */
+function setVisibility(state: 'visible' | 'hidden') {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+/** How many queries the component has sent for the event log so far. */
+function eventReads(db: IslSupabaseClient): number {
+  return (db.from as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[0] === 'match_events').length;
 }
 
 // ── Fixture builders ─────────────────────────────────────────────────────────
@@ -280,12 +281,11 @@ describe('LiveCommentary — paced live viewer', () => {
 
   // ── Scenario 2: Mid-simulation join ────────────────────────────────────────
   // Viewer mounts mid-simulation.  Initial fetch returns the events written
-  // so far; the worker keeps inserting; Realtime fills the gap.  We then
-  // simulate the same row arriving from both sources (a real race the worker
-  // can produce when batch insertion and a viewer's fetch overlap) and
-  // assert dedup-by-id holds.
+  // so far; the worker keeps inserting; the 15 s poll fills the gap.  The
+  // next poll returns the same rows again plus one from the future, and
+  // dedup-by-id plus the elapsed-minute gate must hold.
 
-  it('Scenario 2: mid-simulation join — Realtime events fill the gap and dedup by id', async () => {
+  it('Scenario 2: mid-simulation join: the live poll fills the gap and dedups by id', async () => {
     const mock = makeQueryMock();
     // 60 s in: viewer joins mid-simulation, paced window still open.
     vi.setSystemTime(new Date(KICKOFF_MS + 60_000));
@@ -299,31 +299,29 @@ describe('LiveCommentary — paced live viewer', () => {
 
     expect(screen.getByText('FETCHED')).toBeInTheDocument();
 
-    // Realtime delivers a NEW event the initial fetch missed.  Its minute (8)
-    // is within elapsed-minute 9, so it should appear immediately.
-    const realtimeEvent = ev({ id: 'realtime', minute: 8, payload: { commentary: 'REALTIME' } });
+    // The first poll (15 s later, elapsed minute 11) brings an event the
+    // initial fetch missed.
+    const polled = ev({ id: 'polled', minute: 8, payload: { commentary: 'POLLED' } });
+    mock.queue.push('match_events', [fetched, polled]);
     await act(async () => {
-      mock.fireRealtimeInsert(realtimeEvent);
+      vi.advanceTimersByTime(15_000);
     });
-    expect(screen.getByText('REALTIME')).toBeInTheDocument();
+    await flushEffects();
+    expect(screen.getByText('POLLED')).toBeInTheDocument();
+    expect(screen.getAllByText('FETCHED')).toHaveLength(1);
 
-    // Same row delivered AGAIN (race the worker batch + Realtime can produce
-    // if the broker re-delivers under reconnect).  Dedup must prevent a
-    // duplicate row in the feed.
+    // The next poll returns the same rows again plus one AHEAD of its minute
+    // (minute 80 at elapsed about 13).  No duplicate row, and the future one
+    // stays hidden: the poll does not bypass the elapsed-minute gate.
+    const future = ev({ id: 'future', minute: 80, payload: { commentary: 'FUTURE' } });
+    mock.queue.push('match_events', [fetched, polled, future]);
     await act(async () => {
-      mock.fireRealtimeInsert(realtimeEvent);
+      vi.advanceTimersByTime(15_000);
     });
-    expect(screen.getAllByText('REALTIME')).toHaveLength(1);
-
-    // Realtime delivers an event AHEAD of its minute (minute 80 at elapsed 9).
-    // filterEventsByElapsedMinute must hold it back uniformly — i.e. the
-    // Realtime source should not bypass the elapsed-minute gate that the
-    // initial fetch is subject to.
-    const futureEvent = ev({ id: 'future', minute: 80, payload: { commentary: 'FUTURE' } });
-    await act(async () => {
-      mock.fireRealtimeInsert(futureEvent);
-    });
+    await flushEffects();
+    expect(screen.getAllByText('POLLED')).toHaveLength(1);
     expect(screen.queryByText('FUTURE')).not.toBeInTheDocument();
+    expect(mock.channelStubs).toHaveLength(0);
   });
 
   // ── Scenario 3: Early completion ───────────────────────────────────────────
@@ -383,12 +381,13 @@ describe('LiveCommentary — paced live viewer', () => {
     expect(screen.getByText(/The Replay/i)).toBeInTheDocument();
   });
 
-  // ── Subscription lifecycle: opened during pacing, closed after ────────────
-  // Confirms the channel is opened during the paced window (so a viewer
-  // who joined mid-simulation receives Realtime events) and removed when
-  // the window closes (no further inserts can arrive).
+  // ── Poll lifecycle: during pacing only, paused while hidden ─────────────────
+  // The poll replaced a Realtime channel (docs/read-cache.md): it must run
+  // every 15 s inside the paced window, send nothing while the tab is
+  // hidden, catch up at once when the tab is shown again, and stop for good
+  // once the window closes.
 
-  it('opens the Realtime channel during the paced window and removes it after replay starts', async () => {
+  it('polls every 15 s during the paced window, pauses while hidden and stops after replay starts', async () => {
     const mock = makeQueryMock();
     vi.setSystemTime(new Date(KICKOFF_MS + 60_000));
     mock.queue.push('match_events', []);
@@ -396,19 +395,33 @@ describe('LiveCommentary — paced live viewer', () => {
 
     renderLive({ id: 'm1', status: 'in_progress', scheduled_at: KICKOFF_ISO }, mock.db);
     await flushEffects();
+    expect(eventReads(mock.db)).toBe(1); // the initial fetch
 
-    expect(mock.channelStubs).toHaveLength(1);
-    expect(mock.channelStubs[0]?.name).toBe('match_events:m1');
-    expect(mock.removeChannel).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(eventReads(mock.db)).toBe(2);
 
-    // Cross the end of the pacing window.  The next render must clean up
-    // the channel because `livePacingWindowOpen` flips to false.
+    try {
+      await act(async () => { setVisibility('hidden'); });
+      await act(async () => { vi.advanceTimersByTime(60_000); });
+      expect(eventReads(mock.db)).toBe(2); // nothing while hidden
+
+      await act(async () => { setVisibility('visible'); });
+      expect(eventReads(mock.db)).toBe(3); // immediate catch-up
+    } finally {
+      setVisibility('visible');
+    }
+
+    // Cross the end of the pacing window: polling stops for good.
     await act(async () => {
       vi.setSystemTime(new Date(KICKOFF_MS + 600_001));
       vi.advanceTimersByTime(1000);
     });
     await flushEffects();
-    expect(mock.removeChannel).toHaveBeenCalledTimes(1);
+    const afterWindow = eventReads(mock.db);
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    expect(eventReads(mock.db)).toBe(afterWindow);
+    expect(mock.channelStubs).toHaveLength(0);
+    expect(mock.removeChannel).not.toHaveBeenCalled();
   });
 
   // ── Scenario 4: Cross-match navigation — no stale event leak ───────────────

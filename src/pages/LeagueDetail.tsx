@@ -24,7 +24,7 @@ import { LeagueRollOfHonour } from '../components/LoreHistory';
 import { getLeagueLore } from '../data/lore';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { Team } from '../data/leagueData';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { fetchLeagueStandingsResult, useSeasonPhase } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { AsyncView, PreSeasonState } from '../shared/ui';
@@ -53,7 +53,7 @@ const DUST_70  = COLORS.dust70;
  */
 export default function LeagueDetail() {
   const { leagueId } = useParams<{ leagueId: string }>();
-  const db     = useSupabase();
+  const publicDb = usePublicReadClient();
   const league = LEAGUES.find((l) => l.id === leagueId);
 
   // ── Standings fetch ──────────────────────────────────────────────────────
@@ -71,13 +71,13 @@ export default function LeagueDetail() {
   // table. useAsyncData adds the 10 s timeout and the retry.
   const standings = useAsyncData(
     async () => {
-      const result = await fetchLeagueStandingsResult(db, league!.id);
+      const result = await fetchLeagueStandingsResult(publicDb, league!.id);
       if (!result.ok) throw new Error(`standings unavailable: ${String(result.reason)}`);
       // Stamp 1-based position so StandingsTable's qualification /
       // relegation pipes know which rows to highlight.
       return result.rows.map((row, idx) => ({ ...row, position: idx + 1 }));
     },
-    [db, league?.id],
+    [publicDb, league?.id],
     { enabled: league != null },
   );
   const phase = useSeasonPhase();

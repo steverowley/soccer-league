@@ -6,7 +6,7 @@
 // entity_traits bundle so the page can render bio fields without a
 // chain of follow-up queries.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { Json } from '@/types/database';
 
 // ── Public types ──────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ export interface ManagerWithContext {
  *                   missing / the primary query errors.
  */
 export async function getManager(
-  db:         IslSupabaseClient,
+  db:         PublicReadClient,
   managerId:  string,
 ): Promise<ManagerWithContext | null> {
   const { data: managerRow, error: managerErr } = await db

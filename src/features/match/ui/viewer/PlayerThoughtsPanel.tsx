@@ -13,7 +13,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { COLORS } from '../../../../components/Layout';
-import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 import {
   getPersona,
   listSnippetsForEntity,
@@ -70,7 +70,7 @@ function strOrNull(v: unknown): string | null {
  * @param props.playerId  The selected player's id, or null when none is selected.
  */
 export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const [data, setData] = useState<PlayerInspect | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -85,13 +85,13 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
     setLoading(true);
     (async () => {
       try {
-        const player = await getPlayer(db, playerId);
+        const player = await getPlayer(publicDb, playerId);
         const entityId = strOrNull((player as Record<string, unknown>).entity_id);
         // Persona + snippets are optional — a player may have no entity yet.
         const [persona, snippets] = entityId
           ? await Promise.all([
-              getPersona(db, entityId).catch(() => null),
-              listSnippetsForEntity(db, entityId).catch(() => [] as SnippetRow[]),
+              getPersona(publicDb, entityId).catch(() => null),
+              listSnippetsForEntity(publicDb, entityId).catch(() => [] as SnippetRow[]),
             ])
           : [null, [] as SnippetRow[]];
         if (cancelled) return;
@@ -117,7 +117,7 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
     return () => {
       cancelled = true;
     };
-  }, [db, playerId]);
+  }, [publicDb, playerId]);
 
   // ── Empty / loading states ────────────────────────────────────────────────
   if (!playerId) {

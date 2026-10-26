@@ -31,7 +31,7 @@ import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { Team, League } from '../data/leagueData';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { fetchLeagueStandings } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
@@ -114,7 +114,7 @@ function gdLabel(gd: number): string {
  */
 export default function Teams() {
   usePageTitle('Teams');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const [filter, setFilter] = useState<string>(FILTER_ALL);
   const [statsById, setStatsById] = useState<Record<string, TeamStats>>({});
 
@@ -127,7 +127,7 @@ export default function Teams() {
     let cancelled = false;
     Promise.all(
       LEAGUES.map((l: League) =>
-        fetchLeagueStandings(db, l.id).then((rows) => ({ rows })),
+        fetchLeagueStandings(publicDb, l.id).then((rows) => ({ rows })),
       ),
     )
       .then((results) => {
@@ -153,7 +153,7 @@ export default function Teams() {
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [publicDb]);
 
   const visibleTeams =
     filter === FILTER_ALL ? ALL_TEAMS : ALL_TEAMS.filter((t) => t.leagueId === filter);

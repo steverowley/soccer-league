@@ -34,7 +34,7 @@ import {
   BackLink,
   SectionHeader,
 } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonSummary, type SeasonSummary } from '../features/match';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function formatStamp(iso: string | null): string {
  */
 export default function SeasonDetail() {
   const { seasonId } = useParams<{ seasonId: string }>();
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // `seasonId === undefined` is treated as "loaded with no season" so we
   // can render the not-found surface immediately without a setState
@@ -73,13 +73,13 @@ export default function SeasonDetail() {
   useEffect(() => {
     if (!seasonId) return;
     let cancelled = false;
-    getSeasonSummary(db, seasonId).then((row) => {
+    getSeasonSummary(publicDb, seasonId).then((row) => {
       if (cancelled) return;
       setSeason(row);
       setLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [db, seasonId]);
+  }, [publicDb, seasonId]);
 
   // ── Not found ─────────────────────────────────────────────────────────
   if (loaded && !season) {

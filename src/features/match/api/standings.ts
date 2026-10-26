@@ -27,7 +27,7 @@
 // us anything we can't compute client-side in O(n).  Keeping it inline
 // means a hot-fix to the aggregation rules is just a TS edit.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 // #386: drift-validate both reads at the api boundary. Malformed rows
 // warn-log and drop instead of NaN-ing the whole table via a blind cast.
 import { parseStandingsMatchRows, parseStandingsTeamRows } from './standings.schema';
@@ -117,7 +117,7 @@ export type StandingsResult =
  *                  tell an empty table from a failed query.
  */
 export async function fetchLeagueStandings(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   leagueId: string,
 ): Promise<StandingsRow[]> {
   const result = await fetchLeagueStandingsResult(db, leagueId);
@@ -164,7 +164,7 @@ type SeasonScope =
  * @param db  Injected typed Supabase client.
  * @returns   The season to scope to, `null` to skip scoping, or a failure.
  */
-async function resolveCurrentSeasonId(db: IslSupabaseClient): Promise<SeasonScope> {
+async function resolveCurrentSeasonId(db: PublicReadClient): Promise<SeasonScope> {
   const { data, error } = await db
     .from('seasons')
     .select('id, year, is_active')
@@ -184,7 +184,7 @@ async function resolveCurrentSeasonId(db: IslSupabaseClient): Promise<SeasonScop
 }
 
 export async function fetchLeagueStandingsResult(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   leagueId: string,
 ): Promise<StandingsResult> {
   // ── Step 0: pin the table to one season ─────────────────────────────────

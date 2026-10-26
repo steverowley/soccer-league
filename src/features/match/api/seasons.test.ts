@@ -17,6 +17,7 @@ import {
   getSeasonIdForMatch,
 } from './seasons';
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 // ── In-memory store shape ────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ interface FakeStore {
  * in / update / maybeSingle / await-thenable.  Anything outside that
  * surface throws (the test that triggers the mismatch will fail loudly).
  */
-function makeFakeDb(store: FakeStore): IslSupabaseClient {
+function makeFakeDb(store: FakeStore): IslSupabaseClient & PublicReadClient {
   function from(table: keyof FakeStore) {
     type Filter = { col: string; val: unknown; kind: 'eq' | 'in' };
     const filters: Filter[] = [];
@@ -84,7 +85,7 @@ function makeFakeDb(store: FakeStore): IslSupabaseClient {
     return builder;
   }
 
-  return { from } as unknown as IslSupabaseClient;
+  return { from } as unknown as IslSupabaseClient & PublicReadClient;
 }
 
 let store: FakeStore;

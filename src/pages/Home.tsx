@@ -48,7 +48,7 @@ import {
   TeamCrest,
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   AsyncView,
   Button,
@@ -111,7 +111,7 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Home() {
   usePageTitle(null);
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // ── Season phase ──────────────────────────────────────────────────────────
   // Decides between the season view (live panel, fixtures, table) and the
@@ -124,9 +124,9 @@ export default function Home() {
   // Read even in pre-season: a scheduled Season 1 with a future start date
   // already has fixtures worth showing.
   const fixtures = useAsyncData(
-    () => Promise.all([getLiveMatches(db), getUpcomingMatches(db, 3)])
+    () => Promise.all([getLiveMatches(publicDb), getUpcomingMatches(publicDb, 3)])
       .then(([live, upcoming]) => ({ live, upcoming })),
-    [db],
+    [publicDb],
   );
   const liveMatches = fixtures.data?.live ?? [];
   const upcomingMatches = fixtures.data?.upcoming ?? [];
@@ -136,7 +136,7 @@ export default function Home() {
   // first match every row is zero, and a table of zeros is not a table.
   const featuredLeague = LEAGUES[0]!;
   const standings = useAsyncData(
-    () => fetchLeagueStandingsResult(db, featuredLeague.id).then((result) => {
+    () => fetchLeagueStandingsResult(publicDb, featuredLeague.id).then((result) => {
       if (!result.ok) throw new Error(`standings unavailable: ${String(result.reason)}`);
       return result.rows;
     }).then((rows) => rows.map((row, idx) => ({
@@ -146,7 +146,7 @@ export default function Home() {
       club:      row.team,
       team_link: row.teamLink,
     }))),
-    [db, featuredLeague.id],
+    [publicDb, featuredLeague.id],
     { enabled: inSeason },
   );
 

@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 import { getChronicle, ChronicleEventSchema } from './chronicle';
 
@@ -42,7 +43,7 @@ function makeDb(result: MockResult) {
 
   const db = {
     from(table: string) { record('from', [table]); return builder; },
-  } as unknown as IslSupabaseClient;
+  } as unknown as IslSupabaseClient & PublicReadClient;
 
   return { db, calls };
 }

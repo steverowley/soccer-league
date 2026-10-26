@@ -20,7 +20,7 @@
 //   AuthProvider.tsx).  The watcher count is a derived read against the
 //   same underlying column, so it belongs in the same feature.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 /**
  * Fetch the count of fans active in the last 5 minutes.
@@ -33,7 +33,7 @@ import type { IslSupabaseClient } from '@shared/supabase/client';
  * @param db  Injected Supabase client.
  * @returns   Non-negative integer count.
  */
-export async function getActiveWatcherCount(db: IslSupabaseClient): Promise<number> {
+export async function getActiveWatcherCount(db: PublicReadClient): Promise<number> {
   try {
     const { data, error } = await db
       .from('active_watchers_v')

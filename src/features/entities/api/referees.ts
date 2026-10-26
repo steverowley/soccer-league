@@ -10,7 +10,7 @@
 //   match_referee_v                         — convenience view in 0015
 // ──────────────────────────────────────────────────────────────────────────────
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 // ── Public shapes ─────────────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ export interface RefereeWithStrictness {
  * @returns   Array of referees with strictness, sorted by name for stable iteration.
  */
 export async function getRefereesWithStrictness(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
 ): Promise<RefereeWithStrictness[]> {
   const { data, error } = await db
     .from('entities')

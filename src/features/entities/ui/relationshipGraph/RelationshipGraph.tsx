@@ -95,7 +95,7 @@ const TOOLTIP_META_KEYS: readonly string[] = [
 import { useNavigate } from 'react-router-dom';
 
 import { COLORS } from '../../../../components/Layout';
-import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 
 import { getEntitiesByIds, getEntity, getEntityNeighbourhood } from '../../api/relationships';
 import { buildGraph } from '../../logic/relationshipGraph';
@@ -235,7 +235,7 @@ export function RelationshipGraph({
   maxNeighbours,
   className,
 }: RelationshipGraphProps) {
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const navigate = useNavigate();
 
   // ── Wrapper sizing ───────────────────────────────────────────────────
@@ -311,7 +311,7 @@ export function RelationshipGraph({
 
     (async () => {
       try {
-        const seedRow = await getEntity(db, entityId);
+        const seedRow = await getEntity(publicDb, entityId);
         if (cancelled) return;
         if (!seedRow) {
           setFetchState({ kind: 'not_found', entityId });
@@ -321,7 +321,7 @@ export function RelationshipGraph({
         // Two-hop fetch: the seed's edges PLUS its neighbours' edges, so the
         // extractor below has the friends-of-friends needed to render a real
         // second layer (a single-hop fetch can only ever yield a 1-hop star).
-        const edgeRows = await getEntityNeighbourhood(db, entityId);
+        const edgeRows = await getEntityNeighbourhood(publicDb, entityId);
         if (cancelled) return;
 
         // Run the extractor inline here so we know which entity ids
@@ -334,7 +334,7 @@ export function RelationshipGraph({
           ...(maxNeighbours !== undefined && { maxNeighbours }),
         });
         const otherIds = Array.from(sub.nodeIds).filter((id) => id !== entityId);
-        const hydrated = otherIds.length > 0 ? await getEntitiesByIds(db, otherIds) : [];
+        const hydrated = otherIds.length > 0 ? await getEntitiesByIds(publicDb, otherIds) : [];
         if (cancelled) return;
 
         // Build the lookup map including the seed so the renderer can
@@ -360,7 +360,7 @@ export function RelationshipGraph({
     return () => {
       cancelled = true;
     };
-  }, [db, entityId, maxHops, maxNeighbours]);
+  }, [publicDb, entityId, maxHops, maxNeighbours]);
 
   // Render-time projections of the state machine.  Wrapped in useMemo
   // so the references stay stable across renders that don't change the
