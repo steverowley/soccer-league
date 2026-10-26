@@ -68,6 +68,7 @@ import { simulateRemotely, DEFAULT_SIM_URL } from './remoteSim.ts';
 import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotableEvents } from './spatial/spatialEventAdapter.ts';
 import { applyTeamTraits } from './spatial/traitModifiers.ts';
 import type { PositionFrame } from './spatial/types.ts';
+import { legalSubminute } from './subminute.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -1162,7 +1163,9 @@ async function processMatch(match: any): Promise<boolean> {
       const eventRows = chunk.map((ev) => ({
         match_id: match.id,
         minute: ev.minute,
-        subminute: ev.subminute,
+        // Last line of defence for the column's CHECK: one illegal value
+        // rejects the whole batch and the retry fails identically forever.
+        subminute: legalSubminute(ev.subminute),
         type: ev.type,
         payload: ev.payload,
       }));

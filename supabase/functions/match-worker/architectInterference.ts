@@ -50,6 +50,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { directInterferences } from './interferenceDirector.ts';
+import { subminuteAfter } from './subminute.ts';
 import type { NarrativeMode } from './narrativeMode.ts';
 import type { SimulatedEvent } from './simEvent.ts';
 
@@ -308,7 +309,7 @@ function pickInterferenceSlots(events: SimulatedEvent[]): PickedSlot[] {
       const context = describeMoment(ev, homeScore, awayScore);
       candidates.push({
         minute:    ev.minute,
-        subminute: ev.subminute + 0.005, // sub-slot just after the trigger
+        subminute: subminuteAfter(ev.subminute), // sub-slot just after the trigger, never past the minute
         context,
         players:   [...allPlayers].slice(0, 12),
       });
