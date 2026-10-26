@@ -22,6 +22,7 @@ import {
   READ_CACHE_BUNDLE_PATH,
 } from '../../../scripts/lib/apiBundle.mjs';
 import { READ_CACHE_ALLOW_LIST, cacheControlFor } from './allowList';
+import { createPublicReadClient } from '../supabase/publicReadClient';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -251,5 +252,37 @@ describe('read cache: cache headers', () => {
     const res = await dead(new Request(`${SITE}/api/db/rest/v1/teams`));
     expect(res.status).toBe(502);
     expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('read cache: end to end with supabase-js', () => {
+  /** Plays Vercel: applies the vercel.json rewrite, then calls the bundled function. */
+  const viaVercel: typeof fetch = async (input, init) => {
+    const url = new URL(String(input instanceof Request ? input.url : input));
+    const m = /^\/api\/db\/rest\/v1\/([^/]+)$/.exec(url.pathname);
+    const target = m
+      ? `${url.origin}/api/db${url.search ? `${url.search}&` : '?'}__resource=${m[1]}`
+      : url.href;
+    return handler(new Request(target, init));
+  };
+
+  it('the public client reads through the committed bundle: lists, single rows, counts, refusals', async () => {
+    const db = createPublicReadClient(`${SITE}/api/db`, 'sb_publishable_test', 'proxy', viaVercel);
+
+    const list = await db.from('teams').select('id, name').order('name');
+    expect(list.status).toBe(200);
+    expect(list.data).toEqual([{ id: 1, resource: 'teams' }, { id: 2, resource: 'teams' }]);
+    expect(seen[0]!.url).toBe('/rest/v1/teams?select=id%2Cname&order=name.asc');
+    expect(seen[0]!.headers.authorization).toBeUndefined();
+    expect(seen[0]!.headers.apikey).toBe('sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP');
+
+    const count = await db.from('matches').select('*', { count: 'exact', head: true });
+    expect(count.status).toBe(200);
+    expect(count.count).toBe(2);
+    expect(seen[1]!.method).toBe('HEAD');
+
+    const personal = await db.from('profiles').select('*');
+    expect(personal.status).toBe(404);
+    expect(seen).toHaveLength(2); // the refusal never reached the database
   });
 });
