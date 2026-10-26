@@ -28,7 +28,7 @@
 
 import { z } from 'zod';
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 // ── Zod row schemas ──────────────────────────────────────────────────────────
 // These mirror the columns we ask for in the SELECTs below.  We use
@@ -170,7 +170,7 @@ export interface NarrativeMention {
  *                  appeared in a completed match.
  */
 export async function getPlayerRecentMatches(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   playerId: string,
   limit:    number = 10,
 ): Promise<PlayerRecentMatch[]> {
@@ -296,7 +296,7 @@ export async function getPlayerRecentMatches(
  *                  or any query fails.
  */
 export async function getNarrativesMentioningPlayer(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   playerId: string,
   limit:    number = 10,
 ): Promise<NarrativeMention[]> {

@@ -25,8 +25,8 @@ import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import type { IslSupabaseClient } from '../shared/supabase/client';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
+import type { PublicReadClient } from '../shared/supabase/publicReadClient';
 import { getLiveMatches, getUpcomingMatches, useSeasonPhase } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { AsyncView, EmptyState, PreSeasonState } from '../shared/ui';
@@ -125,7 +125,7 @@ interface MatchRow {
  * @throws      Re-throws the Supabase error if the query fails.
  */
 async function fetchCompletedMatches(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   limit = FETCH_COMPLETED_LIMIT,
 ): Promise<MatchRow[]> {
   const { data, error } = await db
@@ -156,7 +156,7 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Matches() {
   usePageTitle('Matches');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const [filter, setFilter] = useState<string>(FILTER_ALL);
 
   // All three lists in one read: the page is either answered or it is not.
@@ -164,15 +164,15 @@ export default function Matches() {
   // of 2026-10-26 left this page on "Loading fixtures..." indefinitely).
   const fixtures = useAsyncData(
     () => Promise.all([
-      getLiveMatches(db),
-      getUpcomingMatches(db, FETCH_UPCOMING_LIMIT),
-      fetchCompletedMatches(db, FETCH_COMPLETED_LIMIT),
+      getLiveMatches(publicDb),
+      getUpcomingMatches(publicDb, FETCH_UPCOMING_LIMIT),
+      fetchCompletedMatches(publicDb, FETCH_COMPLETED_LIMIT),
     ]).then(([l, u, c]) => ({
       live:      l as unknown as MatchRow[],
       upcoming:  u as unknown as MatchRow[],
       completed: c,
     })),
-    [db],
+    [publicDb],
   );
   const phase = useSeasonPhase();
 

@@ -20,6 +20,7 @@
 //   so the queries below are fully typed end-to-end — no AnyDb casts.
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { Database } from '@/types/database';
 import type {
   LeagueFixtureCounts,
@@ -45,7 +46,7 @@ import type {
  * @returns         Current status, or null on miss / error.
  */
 export async function getSeasonStatus(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   seasonId: string,
 ): Promise<SeasonStatus | null> {
   const { data, error } = await db
@@ -75,7 +76,7 @@ export async function getSeasonStatus(
  *                  false (safe no-op).
  */
 export async function getLeagueFixtureCountsForSeason(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   seasonId: string,
 ): Promise<LeagueFixtureCounts> {
   // ── Step 1: pull all league competition UUIDs for this season ──────────
@@ -213,7 +214,7 @@ export interface SeasonSummary {
  * @returns   Validated SeasonSummary rows newest-first, or [] on error.
  */
 export async function listAllSeasons(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
 ): Promise<SeasonSummary[]> {
   const { data, error } = await db
     .from('seasons')
@@ -236,7 +237,7 @@ export async function listAllSeasons(
  * @returns         The summary row, or null on miss / error.
  */
 export async function getSeasonSummary(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   seasonId: string,
 ): Promise<SeasonSummary | null> {
   const { data, error } = await db
@@ -261,7 +262,7 @@ export async function getSeasonSummary(
  * @returns         The seasons.id this match belongs to, or null on miss.
  */
 export async function getSeasonIdForMatch(
-  db:       IslSupabaseClient,
+  db:       PublicReadClient,
   matchId:  string,
 ): Promise<string | null> {
   // Step 1: match → competition_id.
@@ -386,7 +387,7 @@ function shortSeasonName(name: string): string {
  * THROWS on a failed request, so a page can tell "no season yet" (a real,
  * intentional state) from "the database did not answer" (an outage).
  */
-export async function getSeasonPhase(db: IslSupabaseClient): Promise<SeasonPhase> {
+export async function getSeasonPhase(db: PublicReadClient): Promise<SeasonPhase> {
   const { data, error } = await db
     .from('seasons')
     .select('id, name, is_active, start_date, started_at')
@@ -400,7 +401,7 @@ export async function getSeasonPhase(db: IslSupabaseClient): Promise<SeasonPhase
  * Every season, newest first, THROWING on a failed read. listAllSeasons
  * returns [] on error, which made an outage look like an empty archive.
  */
-export async function getSeasonList(db: IslSupabaseClient): Promise<SeasonSummary[]> {
+export async function getSeasonList(db: PublicReadClient): Promise<SeasonSummary[]> {
   const { data, error } = await db
     .from('seasons')
     .select('id, name, year, status, started_at, ended_at, start_date, end_date, is_active')

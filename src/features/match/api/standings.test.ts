@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 import { fetchLeagueStandings, fetchLeagueStandingsResult } from './standings';
 
@@ -38,7 +39,7 @@ function makeDb(byTable: Record<string, MockResult>) {
     return builder;
   }
 
-  return { from: (table: string) => builderFor(table) } as unknown as IslSupabaseClient;
+  return { from: (table: string) => builderFor(table) } as unknown as IslSupabaseClient & PublicReadClient;
 }
 
 /** One completed league fixture as the nested PostgREST select returns it. */

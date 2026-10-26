@@ -39,7 +39,7 @@ import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer, BackLink } from '../components/Layout';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   getTeam,
   fetchLeagueStandings,
@@ -176,7 +176,7 @@ function findStaticTeam(teamId: string | undefined): StaticTeam | null {
  */
 export default function TeamDetail() {
   const { teamId } = useParams();
-  const db         = useSupabase();
+  const publicDb = usePublicReadClient();
   const staticTeam = findStaticTeam(teamId);
   usePageTitle(staticTeam?.name ?? 'Club');
 
@@ -201,18 +201,18 @@ export default function TeamDetail() {
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire fetch, settle into liveTeam once it resolves
     setLoadError(null);
-    getTeam(db, teamId)
+    getTeam(publicDb, teamId)
       .then((data) => { if (!cancelled) setLiveTeam(data as unknown as LiveTeam); })
       .catch((err) => {
         if (cancelled) return;
         console.warn('[TeamDetail] getTeam failed:', err);
         setLoadError(err);
       });
-    getTeamSupporterCount(db, teamId).then((n) => {
+    getTeamSupporterCount(publicDb, teamId).then((n) => {
       if (!cancelled) setSupporterCount(n);
     });
     return () => { cancelled = true; };
-  }, [db, teamId, staticTeam]);
+  }, [publicDb, teamId, staticTeam]);
 
   // ── Standings for the stat strip / form / position ─────────────────────────
   // One query for this club's league. Rows arrive pre-sorted, so the row index
@@ -220,7 +220,7 @@ export default function TeamDetail() {
   useEffect(() => {
     if (!staticTeam || !teamId) return undefined;
     let cancelled = false;
-    fetchLeagueStandings(db, staticTeam.leagueId)
+    fetchLeagueStandings(publicDb, staticTeam.leagueId)
       .then((rows) => {
         if (cancelled) return;
         const idx = rows.findIndex((r) => r.id === teamId);
@@ -234,7 +234,7 @@ export default function TeamDetail() {
         console.warn('[TeamDetail] standings fetch failed:', err);
       });
     return () => { cancelled = true; };
-  }, [db, teamId, staticTeam]);
+  }, [publicDb, teamId, staticTeam]);
 
   // ── Next fixture ───────────────────────────────────────────────────────────
   // Scan the upcoming-match window for the first fixture involving this club.
@@ -242,7 +242,7 @@ export default function TeamDetail() {
   useEffect(() => {
     if (!teamId) return undefined;
     let cancelled = false;
-    getUpcomingMatches(db, 50)
+    getUpcomingMatches(publicDb, 50)
       .then((rows) => {
         if (cancelled) return;
         const list = rows as unknown as UpcomingMatch[];
@@ -256,18 +256,18 @@ export default function TeamDetail() {
         console.warn('[TeamDetail] upcoming matches fetch failed:', err);
       });
     return () => { cancelled = true; };
-  }, [db, teamId]);
+  }, [publicDb, teamId]);
 
   // ── Authored club profile (dossier) ────────────────────────────────────────
   useEffect(() => {
     const entityId = liveTeam?.entity_id ?? undefined;
     if (!entityId) return undefined;
     let cancelled = false;
-    getEntityProfile(db, entityId)
+    getEntityProfile(publicDb, entityId)
       .then((res) => { if (!cancelled) setProfile(res?.profile ?? null); })
       .catch(() => { /* supplementary; silently omit on error */ });
     return () => { cancelled = true; };
-  }, [db, liveTeam?.entity_id]);
+  }, [publicDb, liveTeam?.entity_id]);
 
   if (!staticTeam) return <UnknownClub teamId={teamId} />;
 

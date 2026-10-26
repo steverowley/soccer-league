@@ -10,14 +10,13 @@
 //
 // WHY THIS SLICE MATTERS
 // ──────────────────────
-// MatchEvent rows arrive in two distinct paths:
-//   1. The initial bulk fetch in getMatchEvents — known shape, table
-//      row type from database.ts.
-//   2. Realtime postgres_changes broadcasts in subscribeToMatchEvents —
-//      same row shape, but routed through Supabase's broadcast wire,
-//      which has historically had subtle shape drift (extra event-
-//      metadata keys, missing payload, etc.). Validating both paths
-//      with the same schema keeps the viewer's filter pipeline safe.
+// MatchEvent rows arrive through two reads, both through the read cache:
+//   1. The bulk fetch in getMatchEvents (initial load and the 15 s live
+//      poll of an open match page).
+//   2. getLatestMatchEvent, polled for the mini pitches on the matches list.
+// Both replaced Realtime postgres_changes broadcasts (docs/read-cache.md).
+// Validating every path with the same schema keeps the viewer's filter
+// pipeline safe from shape drift.
 //
 // LiveMatchRow is even more important because the nested team join
 // (`teams!matches_home_team_id_fkey(...)`) is hand-typed; a future

@@ -21,6 +21,7 @@
 import { z } from 'zod';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { MemoryInsert, MemoryRow } from '../types';
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ const MemoryRowSchema = z.object({
  *                  error or no memories.
  */
 export async function listMemoriesForEntity(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   entityId: string,
   limit: number = 50,
 ): Promise<MemoryRow[]> {

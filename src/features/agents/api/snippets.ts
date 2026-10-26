@@ -21,7 +21,7 @@
 
 import { z } from 'zod';
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { SnippetRow } from '../types';
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ const SnippetRowSchema = z.object({
  *                 entities pre-enrichment).
  */
 export async function listSnippetsForEntity(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   entityId: string,
 ): Promise<SnippetRow[]> {
   const { data, error } = await db

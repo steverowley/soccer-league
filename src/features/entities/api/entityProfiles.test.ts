@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 import { getEntityProfile } from './entityProfiles';
 
@@ -22,7 +23,7 @@ const validPlayerProfile = {
 };
 
 /** Build a stub client whose entities query resolves to the given row/error. */
-function makeDb(result: { data: unknown; error: unknown }): IslSupabaseClient {
+function makeDb(result: { data: unknown; error: unknown }): IslSupabaseClient & PublicReadClient {
   return {
     from: () => ({
       select: () => ({
@@ -31,7 +32,7 @@ function makeDb(result: { data: unknown; error: unknown }): IslSupabaseClient {
         }),
       }),
     }),
-  } as unknown as IslSupabaseClient;
+  } as unknown as IslSupabaseClient & PublicReadClient;
 }
 
 describe('getEntityProfile', () => {

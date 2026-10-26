@@ -1,156 +1,99 @@
 // ── features/match/ui/pitch/useMatchEventsBroadcast.ts ──────────────────────
-// Shared Realtime broadcast for match_events INSERTs (isl-a8i).
+// Shared live feed of the latest match_events row per match, for the mini
+// pitches on the matches list (isl-a8i).
 //
-// WHY THIS EXISTS
-//   The Matches list page can show 1..N concurrently-live matches.
-//   Opening a separate Supabase Realtime channel per match would
-//   multiply WebSocket cost linearly with concurrent live matches.
-//   The acceptance criterion for isl-a8i is "no more than 1 Realtime
-//   subscription regardless of how many live matches".  This hook
-//   opens ONE table-wide subscription and demuxes by match_id
-//   client-side, so consumers (one <MiniPitch> per row) read their
-//   matches's latest event via a tiny `useMatchEventLatest(id)` hook.
+// WHY POLLING, NOT REALTIME (docs/read-cache.md, "As built")
+//   This used to open one table-wide Supabase Realtime `postgres_changes`
+//   channel for every visitor of the matches list.  postgres_changes makes
+//   the database do work per subscriber, and on the free Nano instance that
+//   load grows with the number of fans.  The hook now runs ONE shared poll
+//   (whatever the number of mounted chips) that asks the cached read proxy
+//   for each live match's latest event every 15 s.  Identical requests from
+//   every fan inside the match_events TTL (10 s) are answered by Vercel's
+//   CDN, so the database sees about one query per live match per TTL in
+//   total.  The poll pauses while the tab is hidden.
 //
-// SUBSCRIPTION SHAPE
-//   • Single supabase.channel('match_events:broadcast') with a
-//     postgres_changes filter for INSERTs on `match_events` (no
-//     match_id filter — table-wide).
-//   • Latest-event map keyed by match_id lives in a module-level
-//     store (Map<string, MatchEventRow>) plus a per-key version
-//     counter so React useSyncExternalStore-style consumers re-
-//     render when their match's latest event changes.
-//   • Reference-counted: the first hook to mount opens the channel,
-//     the last to unmount closes it.  Intermediate (un)mounts are
-//     no-ops.
-//
-// WHY NOT useSyncExternalStore
-//   The hook target audience is the existing useChoreographyQueue
-//   pattern (per-render snapshot reads).  A simple useState +
-//   subscribe + useEffect is the smallest surface that delivers
-//   correctness without pulling in the SSR-only ceremony of
-//   useSyncExternalStore.
+// SHAPE
+//   • Latest-event map keyed by match_id in a module-level store, plus a
+//     per-match set of subscriber callbacks.
+//   • Reference-counted: the first hook to mount starts the poller, the last
+//     to unmount stops it.  The cache survives so a re-mount paints the last
+//     known state at once.
+//   • The file name is kept from the Realtime version so imports and the
+//     barrel did not move.
 
 import { useEffect, useState } from 'react';
 
-import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
-import type { IslSupabaseClient } from '@shared/supabase/client';
-import type { MatchEventRow } from '../../api/matchEvents';
+import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
+import { LIVE_POLL_MS, startVisibleInterval } from '@shared/hooks/useVisibleInterval';
+import { getLatestMatchEvent, type MatchEventRow } from '../../api/matchEvents';
 
 // ── Module-level shared store ───────────────────────────────────────────────
 
-/**
- * Latest event per match_id.  Populated by the single shared
- * channel's onInsert handler; read by per-match consumers via the
- * `useMatchEventLatest` hook below.  Module-level rather than
- * React-context because the store is single-process / single-tab and
- * doesn't need to participate in any provider tree.
- */
+/** Latest event per match_id, filled by the shared poller. */
 const latestByMatch = new Map<string, MatchEventRow>();
 
-/**
- * Per-match-id set of subscriber callbacks.  Each `useMatchEventLatest`
- * mount registers a setter here; the onInsert handler dispatches the
- * row to every matching subscriber.  Unmounts remove from the set.
- */
+/** Per-match subscriber callbacks registered by mounted hooks. */
 const subscribers = new Map<string, Set<(row: MatchEventRow) => void>>();
 
-/**
- * Reference count of active hook instances.  We open the Realtime
- * channel when the count transitions 0 → 1 and close it when the
- * count transitions 1 → 0.  Intermediate (un)mounts are no-ops.
- */
+/** Active hook instances: the poller runs while this is above zero. */
 let refCount = 0;
 
-/**
- * Active Realtime channel.  Held at module scope so the open/close
- * lifecycle survives across the React tree's mount/unmount cycles.
- */
-let activeChannel: ReturnType<IslSupabaseClient['channel']> | null = null;
+/** Stops the active poller (null when none runs). */
+let stopPoller: (() => void) | null = null;
 
-/**
- * The Supabase client the active channel was opened against.  Stored
- * so the close path can call `db.removeChannel(activeChannel)` even
- * when the most recent mount is for a different React subtree.
- */
-let activeClient: IslSupabaseClient | null = null;
+/** The client the active poller reads through. */
+let activeClient: PublicReadClient | null = null;
 
-/**
- * Open the shared Realtime channel.  Idempotent — re-opening when
- * a channel is already active is a no-op.
- *
- * The filter is table-wide: every match_events INSERT lands in this
- * channel, regardless of match_id.  Bandwidth is bounded (a few hundred
- * events per match × small concurrent live count).
- *
- * @param db  Injected Supabase client.
- */
-function openChannel(db: IslSupabaseClient): void {
-  if (activeChannel) return;
-  activeClient = db;
-  activeChannel = db
-    .channel('match_events:broadcast')
-    .on(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      'postgres_changes' as any,
-      {
-        event:  'INSERT',
-        schema: 'public',
-        table:  'match_events',
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (payload: any) => {
-        const row = payload?.new as MatchEventRow | undefined;
-        if (!row?.match_id) return;
-        latestByMatch.set(row.match_id, row);
-        const set = subscribers.get(row.match_id);
-        if (set) {
-          for (const cb of set) cb(row);
-        }
-      },
-    )
-    .subscribe();
+/** Fetch the latest event of every subscribed match and notify on change. */
+function pollOnce(): void {
+  const db = activeClient;
+  if (!db) return;
+  for (const matchId of subscribers.keys()) {
+    void getLatestMatchEvent(db, matchId).then((row) => {
+      if (!row) return;
+      const prev = latestByMatch.get(matchId);
+      if (prev && prev.id === row.id) return;
+      latestByMatch.set(matchId, row);
+      const set = subscribers.get(matchId);
+      if (set) for (const cb of set) cb(row);
+    });
+  }
 }
 
-/**
- * Close the shared Realtime channel.  Called when the last consumer
- * unmounts.  Resets all module-level state so a future mount opens a
- * fresh channel without inheriting stale latest-event entries.
- */
-function closeChannel(): void {
-  if (activeChannel && activeClient) {
-    activeClient.removeChannel(activeChannel);
-  }
-  activeChannel = null;
-  activeClient  = null;
-  // Don't clear `latestByMatch` — the cache survives across
-  // open/close cycles so a re-mount immediately paints the last
-  // known position without waiting for the next event.
+/** Start the shared poller (idempotent). */
+function startPolling(db: PublicReadClient): void {
+  if (stopPoller) return;
+  activeClient = db;
+  stopPoller = startVisibleInterval(pollOnce, LIVE_POLL_MS, { immediate: true });
+}
+
+/** Stop the shared poller; the latest-event cache is kept. */
+function stopPolling(): void {
+  stopPoller?.();
+  stopPoller = null;
+  activeClient = null;
+}
+
+/** Test hook: reset the module state between tests. */
+export function __resetMatchEventLatestForTests(): void {
+  stopPolling();
+  refCount = 0;
+  latestByMatch.clear();
+  subscribers.clear();
 }
 
 // ── Public hook ─────────────────────────────────────────────────────────────
 
 /**
- * Subscribe to the latest match_events row for a single match.
+ * The latest match_events row for one match, refreshed by the shared poll.
  *
- * Lifecycle:
- *   • Bumps the module-level refCount on mount; opens the shared
- *     channel when refCount transitions 0 → 1.
- *   • Registers a setter that React calls when a new event for this
- *     match_id arrives.
- *   • Unmounts decrement refCount; the LAST unmount closes the
- *     shared channel.
- *
- * @param matchId  UUID of the match whose latest event to track.
- *                 Pass `null` or `undefined` to disable the
- *                 subscription (the hook still respects the
- *                 refCount transitions so dynamic enables work).
- * @returns        The most recent event for this match_id, or
- *                 `null` if none has arrived since the channel
- *                 opened (or since the page loaded with the row
- *                 not in cache yet).
+ * @param matchId  UUID of the match, or null/undefined to disable.
+ * @returns        The most recent event, or null before the first answer.
  */
 export function useMatchEventLatest(matchId: string | null | undefined): MatchEventRow | null {
-  const db = useSupabase();
+  const db = usePublicReadClient();
   const [latest, setLatest] = useState<MatchEventRow | null>(() =>
     matchId ? latestByMatch.get(matchId) ?? null : null,
   );
@@ -158,13 +101,7 @@ export function useMatchEventLatest(matchId: string | null | undefined): MatchEv
   useEffect(() => {
     if (!matchId) return;
 
-    // ── Open / increment ───────────────────────────────────────────────
-    refCount++;
-    if (refCount === 1) openChannel(db);
-
-    // ── Register per-match callback ────────────────────────────────────
-    // Wrap the setter so the callback identity is stable across renders
-    // (Set membership is reference-equality).
+    // Register first so the immediate first poll includes this match.
     const cb = (row: MatchEventRow) => setLatest(row);
     let set = subscribers.get(matchId);
     if (!set) {
@@ -173,27 +110,38 @@ export function useMatchEventLatest(matchId: string | null | undefined): MatchEv
     }
     set.add(cb);
 
-    // Seed from cache so a re-mount after page navigation immediately
-    // paints the last known state instead of waiting for the next
-    // event.
-    const cached = latestByMatch.get(matchId);
-    if (cached) setLatest(cached);
+    refCount++;
+    if (refCount === 1) startPolling(db);
+    else pollOneSoon(matchId);
 
     return () => {
-      // ── Deregister ──────────────────────────────────────────────────
       const inner = subscribers.get(matchId);
       if (inner) {
         inner.delete(cb);
         if (inner.size === 0) subscribers.delete(matchId);
       }
-      // ── Decrement / close ───────────────────────────────────────────
       refCount--;
       if (refCount <= 0) {
         refCount = 0;
-        closeChannel();
+        stopPolling();
       }
     };
   }, [db, matchId]);
 
   return latest;
+}
+
+/**
+ * A chip that mounts while the poller already runs gets its own first read
+ * straight away instead of waiting up to a full interval.
+ */
+function pollOneSoon(matchId: string): void {
+  const db = activeClient;
+  if (!db || latestByMatch.has(matchId)) return;
+  void getLatestMatchEvent(db, matchId).then((row) => {
+    if (!row) return;
+    latestByMatch.set(matchId, row);
+    const set = subscribers.get(matchId);
+    if (set) for (const cb of set) cb(row);
+  });
 }

@@ -3,9 +3,16 @@
   "functions": {
     "api/simulate.mjs": {
       "maxDuration": 60
+    },
+    "api/db.mjs": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
+    {
+      "source": "/api/db/rest/v1/:resource",
+      "destination": "/api/db?__resource=:resource"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"

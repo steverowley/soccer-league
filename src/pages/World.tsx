@@ -45,7 +45,7 @@ import { withTimeout } from '../shared/hooks/useAsyncData';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
 import { Button } from '../shared/ui';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { listEntities, RelationshipGraph, kindColor } from '../features/entities';
 import type { Entity } from '../features/entities';
@@ -163,7 +163,7 @@ const EYEBROW = ['World', 'The web of influence', 'Season cycle 014'];
  */
 export default function World() {
   usePageTitle('Galaxy Atlas');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // ── Filter state ───────────────────────────────────────────────────────────
   // Default to 'world' — the most narratively interesting group.
@@ -200,7 +200,7 @@ export default function World() {
     const group = KIND_GROUPS.find((g) => g.key === activeGroup);
     const kinds = group && group.kinds.length > 0 ? [...group.kinds] : undefined;
 
-    withTimeout(listEntities(db, kinds, LIST_LIMIT))
+    withTimeout(listEntities(publicDb, kinds, LIST_LIMIT))
       .then((rows) => {
         if (cancelled) return;
         setEntities(rows);
@@ -216,7 +216,7 @@ export default function World() {
       });
 
     return () => { cancelled = true; };
-  }, [db, activeGroup]);
+  }, [publicDb, activeGroup]);
 
   // ── Derived: search-filtered list ──────────────────────────────────────────
   // Case-insensitive match over the entity's display name / name.  Memoised so

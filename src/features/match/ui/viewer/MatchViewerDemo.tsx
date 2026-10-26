@@ -10,7 +10,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 
 import { COLORS } from '../../../../components/Layout';
-import { useSupabase } from '../../../../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 import { getTeams, getTeam } from '../../api/teams';
 import {
   generateDemoMatch,
@@ -39,7 +39,7 @@ interface TeamOption {
  * re-simulates the same matchup with a fresh seed.
  */
 export function MatchViewerDemo() {
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [homeId, setHomeId] = useState<string>('');
@@ -57,7 +57,7 @@ export function MatchViewerDemo() {
   // DB / offline) → drop straight to the synthetic fallback match.
   useEffect(() => {
     let cancelled = false;
-    getTeams(db)
+    getTeams(publicDb)
       .then((rows) => {
         if (cancelled) return;
         const list: TeamOption[] = (rows as unknown as Array<{ id: unknown; name: unknown }>).map((r) => ({
@@ -81,7 +81,7 @@ export function MatchViewerDemo() {
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [publicDb]);
 
   // (Re)simulate whenever the matchup or seed changes.  The 90-minute sim is
   // synchronous (~1-2s), so we yield once via setTimeout(0) to let the
@@ -92,7 +92,7 @@ export function MatchViewerDemo() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: flag the loading state before the (blocking) sim
     setLoading(true);
     const handle = setTimeout(() => {
-      Promise.all([getTeam(db, homeId), getTeam(db, awayId)])
+      Promise.all([getTeam(publicDb, homeId), getTeam(publicDb, awayId)])
         .then(([home, away]) => {
           if (cancelled) return;
           const vm = simulateMatchFromTeams(
@@ -118,7 +118,7 @@ export function MatchViewerDemo() {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [db, homeId, awayId, seed]);
+  }, [publicDb, homeId, awayId, seed]);
 
   // Loop: restart the replay each time the watch window elapses.
   useEffect(() => {

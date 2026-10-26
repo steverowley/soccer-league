@@ -36,7 +36,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, SectionHeader, Footer } from '../components/Layout';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getManager, type ManagerWithContext } from '../features/match';
 import { RelationshipGraph } from '../features/entities';
 
@@ -110,7 +110,7 @@ function readTraitValue(value: unknown): string | null {
  */
 export default function ManagerDetail(): JSX.Element {
   const { managerId } = useParams<{ managerId: string }>();
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   const [manager, setManager] = useState<ManagerWithContext | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +119,7 @@ export default function ManagerDetail(): JSX.Element {
   useEffect(() => {
     if (!managerId) return undefined;
     let cancelled = false;
-    withTimeout(getManager(db, managerId))
+    withTimeout(getManager(publicDb, managerId))
       .then((row) => {
         if (cancelled) return;
         if (!row) {
@@ -134,7 +134,7 @@ export default function ManagerDetail(): JSX.Element {
       })
       .finally(() => { if (!cancelled) setDone(true); });
     return () => { cancelled = true; };
-  }, [db, managerId]);
+  }, [publicDb, managerId]);
 
   // ── Unknown manager surface ────────────────────────────────────────────
   // Only render this once the fetch has settled to avoid the

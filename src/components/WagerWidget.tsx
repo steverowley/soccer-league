@@ -15,7 +15,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { COLORS } from './Layout';
 import { Card } from '../shared/ui';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { MIN_BET, canAffordBet } from '../features/auth';
 import {
@@ -86,6 +86,7 @@ interface ExistingWager {
  */
 function WagerWidget({ match }: { match: MatchRef }) {
   const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const { user, profile, refreshProfile } = useAuth();
 
   const [odds,       setOdds]       = useState<OddsRow | null>(null);
@@ -113,7 +114,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
     (async () => {
       try {
         const [o, w] = await Promise.all([
-          getMatchOdds(db, match.id),
+          getMatchOdds(publicDb, match.id),
           user ? getUserWagerForMatch(db, user.id, match.id) : Promise.resolve(null),
         ]);
         if (cancelled) return;
@@ -127,7 +128,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [db, match?.id, user, isScheduled, refreshKey]);
+  }, [publicDb, db, match?.id, user, isScheduled, refreshKey]);
 
   // Compute the potential payout for the currently-selected side + stake.
   // Pure derivation — re-runs on every keystroke without any round-trip.

@@ -34,7 +34,7 @@ import Header from '../components/Header';
 import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
 import WagerWidget from '../components/WagerWidget';
 import { useAuth } from '../features/auth';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { updateProfile } from '@features/auth';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { getPlayersForTeam, getUpcomingMatches } from '../features/match';
@@ -344,14 +344,14 @@ function StarterBetStep({
   playerId: string | null;
   onDone: () => void;
 }) {
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [nextMatch, setNextMatch] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    getUpcomingMatches(db, 25)
+    getUpcomingMatches(publicDb, 25)
       .then((rows) => {
         if (cancelled) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -367,7 +367,7 @@ function StarterBetStep({
     return () => {
       cancelled = true;
     };
-  }, [db, teamId]);
+  }, [publicDb, teamId]);
 
   // Suppress unused-var warning for playerId — captured here for analytics
   // when the post-bet narrative wires through in a follow-up.

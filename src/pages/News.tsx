@@ -37,7 +37,7 @@ import { withTimeout } from '../shared/hooks/useAsyncData';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
 import { Button, Skeleton } from '../shared/ui';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   getRecentNarratives,
   collapseFloodRuns,
@@ -108,7 +108,7 @@ const FALLBACK_QUOTE = {
  */
 export default function News() {
   usePageTitle('Galaxy Dispatch');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
   const [filter, setFilter] = useState(FILTER_ALL);
   const [limit,  setLimit]  = useState(PAGE_SIZE);
 
@@ -124,7 +124,7 @@ export default function News() {
     setLoadError(null);
     setLoaded(false);
     const kindArg = filter === FILTER_ALL ? undefined : filter;
-    withTimeout(getRecentNarratives(db, limit, undefined, kindArg))
+    withTimeout(getRecentNarratives(publicDb, limit, undefined, kindArg))
       .then((data) => {
         if (cancelled) return;
         setRows(data);
@@ -137,7 +137,7 @@ export default function News() {
         setLoaded(true);
       });
     return () => { cancelled = true; };
-  }, [db, filter, limit]);
+  }, [publicDb, filter, limit]);
 
   // Switching filters drops back to the first page so the reader doesn't carry
   // a 200-row cap forward and pay for it again.

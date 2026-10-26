@@ -17,7 +17,7 @@
 //   source tag is new — so the Chronicle parses `source` permissively. The
 //   `/news` path is intentionally left untouched.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import { z } from 'zod';
 
 // ── Row schema ──────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ export interface ChronicleQuery {
  * @returns      Matching Chronicle events, newest first (validated, drift-tolerant).
  */
 export async function getChronicle(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   query: ChronicleQuery = {},
 ): Promise<ChronicleEvent[]> {
   const { actorEntityId, placeEntityId, seasonId, action, kind, involvingEntityId, limit = 50 } = query;

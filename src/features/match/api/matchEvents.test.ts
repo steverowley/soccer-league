@@ -8,7 +8,7 @@ import {
   getLiveMatch,
   getMatchEvents,
   getMatchDurationSeconds,
-  subscribeToMatchEvents,
+  getLatestMatchEvent,
   DEFAULT_MATCH_DURATION_SECONDS,
 } from './matchEvents';
 
@@ -51,6 +51,7 @@ function makeQueryMock() {
       eq(..._args: unknown[])     { pushCall(table, 'eq', _args);     return builder; },
       lte(..._args: unknown[])    { pushCall(table, 'lte', _args);    return builder; },
       order(..._args: unknown[])  { pushCall(table, 'order', _args);  return builder; },
+      limit(..._args: unknown[])  { pushCall(table, 'limit', _args);  return builder; },
       single() {
         pushCall(table, 'single', []);
         if (!resolved) resolved = Promise.resolve(dequeue(table));
@@ -197,71 +198,34 @@ describe('getMatchDurationSeconds', () => {
   });
 });
 
-describe('subscribeToMatchEvents', () => {
+describe('getLatestMatchEvent', () => {
   let mock: ReturnType<typeof makeQueryMock>;
   beforeEach(() => { mock = makeQueryMock(); });
 
-  it('opens a channel and registers an INSERT handler scoped to match_id', () => {
-    const onInsert = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const unsub = subscribeToMatchEvents(mock.db as any, 'm1', onInsert);
-
-    expect(mock.channelStubs).toHaveLength(1);
-    const stub = mock.channelStubs[0]!;
-    expect(stub.name).toBe('match_events:m1');
-
-    // Inspect the .on() call args
-    const onCall = stub.on.mock.calls[0]!;
-    expect(onCall[0]).toBe('postgres_changes');
-    expect(onCall[1]).toMatchObject({
-      event:  'INSERT',
-      schema: 'public',
-      table:  'match_events',
-      filter: 'match_id=eq.m1',
-    });
-    expect(stub.subscribe).toHaveBeenCalledTimes(1);
-
-    // Unsubscribe should remove the channel.
-    unsub();
-    expect(mock.removeChannel).toHaveBeenCalledTimes(1);
+  it('asks for the single latest row by minute then subminute, newest first', async () => {
+    const latest = { id: 'e9', match_id: 'm1', minute: 88, subminute: 0.5, type: 'shot', payload: {}, created_at: 'x' };
+    mock.queue.push('match_events', [latest]);
+    const row = await getLatestMatchEvent(mock.db as any, 'm1');
+    expect(row).toEqual(latest);
+    expect(mock.calls.find((c) => c.method === 'eq')?.args).toEqual(['match_id', 'm1']);
+    const orders = mock.calls.filter((c) => c.method === 'order');
+    expect(orders.map((c) => c.args)).toEqual([
+      ['minute', { ascending: false }],
+      ['subminute', { ascending: false }],
+    ]);
+    expect(mock.calls.find((c) => c.method === 'limit')?.args).toEqual([1]);
   });
 
-  it('forwards realtime payload.new to the onInsert callback', () => {
-    const onInsert = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subscribeToMatchEvents(mock.db as any, 'm1', onInsert);
-
-    // Pull the registered callback and invoke it as Realtime would.
-    const stub = mock.channelStubs[0]!;
-    const handler = stub.on.mock.calls[0]![2];
-    // Fixture now includes every column the match_events schema
-    // requires — the api boundary (#386 slice 2) Zod-validates the
-    // Realtime payload before forwarding to onInsert, so a partial
-    // fixture would be silently dropped.
-    const fakeEvent = {
-      id:          'e1',
-      match_id:    'm1',
-      minute:      5,
-      subminute:   0,
-      type:        'shot',
-      payload:     {},
-      created_at:  '2026-05-24T12:00:00Z',
-    };
-    handler({ new: fakeEvent });
-
-    expect(onInsert).toHaveBeenCalledWith(fakeEvent);
+  it('returns null when the match has no events or the read fails', async () => {
+    mock.queue.push('match_events', []);
+    expect(await getLatestMatchEvent(mock.db as any, 'm1')).toBeNull();
+    mock.queue.push('match_events', null, { message: 'timeout' });
+    expect(await getLatestMatchEvent(mock.db as any, 'm1')).toBeNull();
   });
 
-  it('ignores realtime payloads with no new row', () => {
-    const onInsert = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subscribeToMatchEvents(mock.db as any, 'm1', onInsert);
-
-    const stub = mock.channelStubs[0]!;
-    const handler = stub.on.mock.calls[0]![2];
-    handler({});           // no new key
-    handler({ new: null }); // explicit null
-
-    expect(onInsert).not.toHaveBeenCalled();
+  it('never opens a Realtime channel (live views poll the read cache)', async () => {
+    mock.queue.push('match_events', []);
+    await getLatestMatchEvent(mock.db as any, 'm1');
+    expect(mock.channelStubs).toHaveLength(0);
   });
 });

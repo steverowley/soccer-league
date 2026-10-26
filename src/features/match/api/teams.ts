@@ -14,7 +14,7 @@
 // All take the typed `IslSupabaseClient` via parameter injection so the
 // rest of the app can drop the lib singleton.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 // ── getTeams ──────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ import type { IslSupabaseClient } from '@shared/supabase/client';
  *                    payload small.
  */
 export async function getTeams(
-  db:          IslSupabaseClient,
+  db:          PublicReadClient,
   leagueId:    string | null = null,
   withPlayers: boolean       = false,
 ) {
@@ -63,7 +63,7 @@ export async function getTeams(
  * @param teamId  Team slug (matches `teams.id`).
  * @returns       The joined team row.
  */
-export async function getTeam(db: IslSupabaseClient, teamId: string) {
+export async function getTeam(db: PublicReadClient, teamId: string) {
   const { data, error } = await db
     .from('teams')
     .select(
@@ -99,7 +99,7 @@ export async function getTeam(db: IslSupabaseClient, teamId: string) {
  *                jersey-number ascending.
  */
 export async function getPlayersForTeam(
-  db:     IslSupabaseClient,
+  db:     PublicReadClient,
   teamId: string,
 ): Promise<Array<Record<string, unknown>>> {
   const { data, error } = await db

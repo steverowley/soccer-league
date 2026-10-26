@@ -18,7 +18,7 @@
 //   feature, same as `last_seen_at`.  Keeping per-team derived reads
 //   here colocates the schema knowledge.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 /**
  * Fetch the supporter count for a single team.
@@ -34,7 +34,7 @@ import type { IslSupabaseClient } from '@shared/supabase/client';
  * @returns       Non-negative integer count.
  */
 export async function getTeamSupporterCount(
-  db:     IslSupabaseClient,
+  db:     PublicReadClient,
   teamId: string,
 ): Promise<number> {
   try {

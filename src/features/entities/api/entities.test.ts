@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 import { getRecentNarratives } from './entities';
 
@@ -40,7 +41,7 @@ function makeDb(result: MockResult) {
 
   const db = {
     from(table: string) { record('from', [table]); return builder; },
-  } as unknown as IslSupabaseClient;
+  } as unknown as IslSupabaseClient & PublicReadClient;
 
   return { db, calls };
 }

@@ -36,12 +36,17 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 import type { IslSupabaseClient } from './client';
+import type { PublicReadClient } from './publicReadClient';
 
 // ── Context definition ────────────────────────────────────────────────────────
 // The context value is the typed Supabase client, or `null` when accessed
 // outside a provider (which `useSupabase()` turns into a descriptive error).
+// A second context carries the public-read client (docs/read-cache.md); when
+// a provider is given none (unit tests), `usePublicReadClient()` falls back to
+// the injected client so existing fakes keep serving both.
 
 const SupabaseContext = createContext<IslSupabaseClient | null>(null);
+const PublicReadContext = createContext<PublicReadClient | null>(null);
 
 // ── Provider component ────────────────────────────────────────────────────────
 
@@ -53,6 +58,12 @@ interface SupabaseProviderProps {
    * In tests this should be a fake/stub that satisfies `IslSupabaseClient`.
    */
   client: IslSupabaseClient;
+  /**
+   * The public-read client (reads through the Vercel read cache).  In
+   * production this is `publicReadClient` from `@shared/supabase/publicReadClient`.
+   * Optional: tests omit it and `usePublicReadClient()` returns `client`.
+   */
+  publicClient?: PublicReadClient;
   /** The React subtree that will have access to the Supabase client. */
   children: ReactNode;
 }
@@ -70,8 +81,14 @@ interface SupabaseProviderProps {
  *   <RouterProvider router={router} />
  * </SupabaseProvider>
  */
-export function SupabaseProvider({ client, children }: SupabaseProviderProps) {
-  return <SupabaseContext.Provider value={client}>{children}</SupabaseContext.Provider>;
+export function SupabaseProvider({ client, publicClient, children }: SupabaseProviderProps) {
+  return (
+    <SupabaseContext.Provider value={client}>
+      <PublicReadContext.Provider value={publicClient ?? (client as unknown as PublicReadClient)}>
+        {children}
+      </PublicReadContext.Provider>
+    </SupabaseContext.Provider>
+  );
 }
 
 // ── useSupabase hook ──────────────────────────────────────────────────────────
@@ -105,6 +122,30 @@ export function useSupabase(): IslSupabaseClient {
       'useSupabase() was called outside of a <SupabaseProvider>. ' +
         'Wrap your component tree with <SupabaseProvider client={supabaseClient}> ' +
         'in src/main.tsx (or in your test render helper).',
+    );
+  }
+
+  return client;
+}
+
+// ── usePublicReadClient hook ──────────────────────────────────────────────────
+
+/**
+ * Returns the public-read client: reads through the Vercel read cache
+ * (docs/read-cache.md).  Use it for every read whose answer is the same for
+ * all visitors (fixtures, teams, players, live events); keep `useSupabase()`
+ * for personal reads, admin and writes.  The api functions' parameter types
+ * enforce the split at compile time.
+ *
+ * @throws {Error} If called outside a `<SupabaseProvider>`.
+ */
+export function usePublicReadClient(): PublicReadClient {
+  const client = useContext(PublicReadContext);
+
+  if (client === null) {
+    throw new Error(
+      'usePublicReadClient() was called outside of a <SupabaseProvider>. ' +
+        'Wrap your component tree with <SupabaseProvider client={supabaseClient} publicClient={publicReadClient}>.',
     );
   }
 

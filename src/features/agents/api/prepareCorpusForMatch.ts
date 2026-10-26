@@ -26,7 +26,7 @@
 //   (one for personas, one for memories) so the helper stays O(1)
 //   round-trips regardless of squad size.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { MemoryRow, PersonaRow } from '../types';
 import { listPersonasForEntities } from './personas';
 import { listMemoriesForEntity } from './memories';
@@ -85,7 +85,7 @@ export interface AgentCorpusSnapshot {
  * @returns          The hydrated snapshot ready to slot into `genCtx`.
  */
 export async function prepareCorpusForMatch(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   entityIds: readonly string[],
 ): Promise<AgentCorpusSnapshot> {
   // Empty input shortcut — avoids two no-op round trips when the caller

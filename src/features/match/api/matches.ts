@@ -23,7 +23,7 @@
 // wide and #386 (Zod boundary schemas) is the right place to lock it
 // down, not here.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 // #386: drift-validate the live/upcoming list rows at the api boundary.
 // Malformed rows warn-log and drop, preserving the original (wide) row type.
 import { dropInvalidMatchListRows } from './matches.schema';
@@ -74,7 +74,7 @@ function stripWithheldResult<T>(row: T): T {
  *                 unchanged — preserves the previous lib-singleton
  *                 contract.
  */
-export async function getMatch(db: IslSupabaseClient, matchId: string) {
+export async function getMatch(db: PublicReadClient, matchId: string) {
   const { data, error } = await db
     .from('matches')
     .select(
@@ -129,7 +129,7 @@ export async function getMatch(db: IslSupabaseClient, matchId: string) {
  *            Empty array on no live matches.
  * @throws    Re-throws the Supabase error if the query fails.
  */
-export async function getLiveMatches(db: IslSupabaseClient) {
+export async function getLiveMatches(db: PublicReadClient) {
   const { data, error } = await db
     .from('matches')
     .select(
@@ -162,7 +162,7 @@ export async function getLiveMatches(db: IslSupabaseClient) {
  *               by scheduled_at ASC (next kickoff first).
  * @throws       Re-throws the Supabase error if the query fails.
  */
-export async function getUpcomingMatches(db: IslSupabaseClient, limit = 6) {
+export async function getUpcomingMatches(db: PublicReadClient, limit = 6) {
   const { data, error } = await db
     .from('matches')
     .select(

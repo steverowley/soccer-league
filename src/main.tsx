@@ -56,6 +56,7 @@ initSentry();
 // /login once it's rebuilt — has access to the auth context.
 import { SupabaseProvider } from './shared/supabase/SupabaseProvider';
 import { supabaseClient }   from './shared/supabase/client';
+import { publicReadClient } from './shared/supabase/publicReadClient';
 import { AuthProvider }     from './features/auth';
 
 // ── Cross-feature side-effect listeners ───────────────────────────────────────
@@ -205,7 +206,7 @@ createRoot(document.getElementById('root')!).render(
     {/* Error boundary outside everything so render errors anywhere in the
         tree — including providers and listeners — show the fallback. */}
     <ErrorBoundary>
-      <SupabaseProvider client={supabaseClient}>
+      <SupabaseProvider client={supabaseClient} publicClient={publicReadClient}>
         {/* Listeners mounted before AuthProvider so they're alive for the
             entire session, including the moment auth state changes. */}
         <CupRoundAdvancerListener />

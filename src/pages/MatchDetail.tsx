@@ -30,7 +30,8 @@
 //     and match_player_stats (with player meta)
 //   - getMatchEvents(db, matchId) — full pre-simulated event log
 //   - getMatchDurationSeconds(db, matchId) — season pacing knob
-//   - subscribeToMatchEvents(db, matchId, onInsert) — Realtime event stream
+//   - getMatchEvents polled every 15 s while the paced window is open (the
+//     read cache replaced the Realtime stream, docs/read-cache.md)
 //   - getMatchPositions(db, matchId) — spatial frames for the 2D viewer
 //
 // 404 case: matchId returns no row → renders an "Unknown Match" surface.
@@ -47,7 +48,7 @@ import {
   TeamCrest,
 } from '../components/Layout';
 import WagerWidget from '../components/WagerWidget';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getActiveWatcherCount } from '../features/auth';
 import {
   getMatch,
@@ -55,7 +56,6 @@ import {
   filterEventsByElapsedMinute,
   getMatchEvents,
   getMatchDurationSeconds,
-  subscribeToMatchEvents,
   DEFAULT_MATCH_DURATION_SECONDS,
   MatchViewer,
   computeLiveScore,
@@ -68,6 +68,7 @@ import { getMatchPositions, type PositionSnapshot } from '@features/match';
 import TeachingStrip from '../components/TeachingStrip';
 import { ErrorState, LoadingState } from '../shared/ui';
 import { useAsyncData, withTimeout, isTimeoutError } from '../shared/hooks/useAsyncData';
+import { LIVE_POLL_MS, useVisibleInterval } from '../shared/hooks/useVisibleInterval';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // QUANTUM (focus) drives LIVE indicators; FLARE is retained for both
@@ -122,13 +123,13 @@ type WagerMatch = ComponentProps<typeof WagerWidget>['match'];
  */
 export default function MatchDetail() {
   const { matchId } = useParams();
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // One read for the whole page. useAsyncData turns a hang into a visible
   // timeout after 10 s and gives the error state a retry.
   const matchState = useAsyncData(
-    () => (matchId ? getMatch(db, matchId) : Promise.resolve(null)) as Promise<MatchRow | null>,
-    [db, matchId],
+    () => (matchId ? getMatch(publicDb, matchId) : Promise.resolve(null)) as Promise<MatchRow | null>,
+    [publicDb, matchId],
   );
   const match: MatchRow | null = matchState.status === 'success' ? (matchState.data ?? null) : null;
   // Cosmos-wide watcher count for the live presence badge (#382). 0 ≡
@@ -155,7 +156,7 @@ export default function MatchDetail() {
   useEffect(() => {
     let cancelled = false;
     const tick = () => {
-      getActiveWatcherCount(db).then((n) => {
+      getActiveWatcherCount(publicDb).then((n) => {
         if (!cancelled) setWatcherCount(n);
       });
     };
@@ -168,7 +169,7 @@ export default function MatchDetail() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [db]);
+  }, [publicDb]);
 
   if (matchState.status === 'success' && !match) return <UnknownMatch matchId={matchId} />;
 
@@ -960,9 +961,13 @@ function UnknownMatch({ matchId }: { matchId?: string | undefined }) {
 //      simulated 0–90 minute axis.  A setInterval re-runs the helper once
 //      per second so freshly-elapsed events appear without a page refresh.
 //
-//   2. subscribeToMatchEvents(db, matchId, onInsert) — Supabase Realtime
-//      filtered to `match_id=eq.<id>` so a late-joining viewer doesn't miss
-//      events the worker writes after the page loaded.
+//   2. A poll of getMatchEvents every 15 s (LIVE_POLL_MS) while the paced
+//      window is open, so a viewer who opened the page before the worker
+//      published the events still gets them.  It reads through the cached
+//      proxy (match_events TTL 10 s), so every viewer of a match shares one
+//      database query per TTL; it pauses while the tab is hidden.  This
+//      replaced a Realtime postgres_changes subscription, which cost the
+//      database work per subscriber (docs/read-cache.md, "As built").
 //
 // THE FOUR RENDER BRANCHES (driven by match.status):
 //   • scheduled  → nothing renders (no events to show pre-kickoff)
@@ -1039,13 +1044,13 @@ const LIVE_TICK_MS = 1000;
 /**
  * Merge two event lists into one, de-duplicating by `id` and re-sorting
  * chronologically by (minute, subminute).  The single funnel through which
- * BOTH the initial `getMatchEvents()` fetch and the Realtime `INSERT` stream
+ * BOTH the initial `getMatchEvents()` fetch and the live poll
  * pass — that uniformity is what makes `filterEventsByElapsedMinute` correct
  * regardless of which source delivered a given row first.
  *
  * @param existing  The current event list held in React state.
  * @param incoming  Newly arrived events from either the initial fetch or the
- *                  Realtime channel.
+ *                  live poll.
  * @returns         A new array (never the same reference as either input)
  *                  containing every unique-by-id event, ordered by (minute
  *                  ASC, subminute ASC).
@@ -1084,7 +1089,7 @@ interface LiveCommentaryMatch {
  * the full log immediately (completed).  Scheduled and cancelled matches
  * return null so the section disappears entirely.
  *
- * Realtime subscription is only attached while the paced window is open;
+ * The live poll only runs while the paced window is open;
  * completed-and-past matches have no further events incoming.
  *
  * @param props.match  Match row from getMatch() — needs id, status, and
@@ -1097,7 +1102,7 @@ export function LiveCommentary({
   match: LiveCommentaryMatch;
   onRevealedScore?: (s: Scoreline) => void;
 }) {
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // The "live experience" anchors on wall-clock vs scheduled_at, NOT on the
   // match's row status.  STATUS still gates a few things:
@@ -1134,10 +1139,10 @@ export function LiveCommentary({
     setLoaded(false);
     setLoadError(null);
     // withTimeout: a hung read becomes a visible error after 10 s.
-    withTimeout(Promise.all([getMatchEvents(db, match.id), getMatchDurationSeconds(db, match.id)]))
+    withTimeout(Promise.all([getMatchEvents(publicDb, match.id), getMatchDurationSeconds(publicDb, match.id)]))
       .then(([evRows, durSeconds]) => {
         if (cancelled) return;
-        // Merge against current state (not []) so a Realtime row that landed
+        // Merge against current state (not []) so a polled row that landed
         // between the setEvents([]) above and this resolution is preserved.
         setEvents((prev) => mergeAndSortEvents(prev, evRows));
         setDuration(durSeconds);
@@ -1152,7 +1157,7 @@ export function LiveCommentary({
     return () => {
       cancelled = true;
     };
-  }, [db, match?.id, showSection, attempt]);
+  }, [publicDb, match?.id, showSection, attempt]);
 
   // ── Elapsed-minute clock ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1192,13 +1197,25 @@ export function LiveCommentary({
     };
   }, [status, match?.scheduled_at, duration]);
 
-  // ── Realtime subscription (whenever new events may still arrive) ──────────
-  useEffect(() => {
-    if (!showSection || !livePacingWindowOpen || !match?.id) return undefined;
-    return subscribeToMatchEvents(db, match.id, (row) => {
-      setEvents((prev) => mergeAndSortEvents(prev, [row]));
-    });
-  }, [db, match?.id, showSection, livePacingWindowOpen]);
+  // ── Live poll (whenever new events may still arrive) ──────────────────────
+  // Polls the cached read proxy instead of holding a Realtime channel: the
+  // events of a match are published in one batch, so a 15 s poll is plenty,
+  // and it stops while the tab is hidden (useVisibleInterval).
+  const liveMatchId = showSection && livePacingWindowOpen ? match?.id ?? null : null;
+  useVisibleInterval(
+    () => {
+      if (!liveMatchId) return;
+      getMatchEvents(publicDb, liveMatchId)
+        .then((rows) => {
+          if (rows.length > 0) setEvents((prev) => mergeAndSortEvents(prev, rows));
+        })
+        .catch(() => {
+          /* transient: the next poll retries */
+        });
+    },
+    LIVE_POLL_MS,
+    liveMatchId !== null,
+  );
 
   // ── Visible-event derivation ─────────────────────────────────────────────
   const visibleEvents = useMemo(
@@ -1786,6 +1803,7 @@ function MatchPitchPanel({
   awayScore?: number;
 }) {
   const db = useSupabase();
+  const publicDb = usePublicReadClient();
   /**
    * Match metadata that drives the viewer: per-side formation, kit colour (the
    * sprite shirt accent), and the starting XI (id + position).  One state slot
@@ -1826,9 +1844,9 @@ function MatchPitchPanel({
     setPositionFrames([]);
     setScheduledAt(null);
     Promise.all([
-      getMatch(db, matchId),
+      getMatch(publicDb, matchId),
       getMatchPositions(db, matchId),
-      getMatchDurationSeconds(db, matchId),
+      getMatchDurationSeconds(publicDb, matchId),
     ])
       .then(([m, posRows, durSeconds]) => {
         if (cancelled) return;
@@ -1873,7 +1891,7 @@ function MatchPitchPanel({
     return () => {
       cancelled = true;
     };
-  }, [db, matchId]);
+  }, [publicDb, db, matchId]);
 
   // ── Late-arriving frames (open-before-kickoff) ─────────────────────────
   // The worker writes every position frame in a single burst at kickoff, and

@@ -17,7 +17,7 @@
 
 import { z } from 'zod';
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 import type { WagerLeaderboardEntry } from '../types';
 
 // ── Tuning constants ───────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ const WagerLeaderboardEntrySchema = z.object({
  * @returns       Validated rows.  Empty array on error / no data.
  */
 export async function getWagerLeaderboard(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   limit: number = DEFAULT_LIMIT,
 ): Promise<WagerLeaderboardEntry[]> {
   const { data, error } = await db

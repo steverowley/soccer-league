@@ -10,7 +10,7 @@
 // the idol-board cluster and land in a separate slice so the player
 // vs idol surfaces stay split by domain.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 // #386: validate the player row (Critical Invariant #1 columns) + the per-match
 // stat rows at the api boundary. The player row is checked for drift (warn,
 // then returned unchanged); malformed stat rows warn-log and drop.
@@ -67,7 +67,7 @@ type PlayerWithStats = {
  *                  signature) plus the aggregated `seasonStats`.
  */
 export async function getPlayer(
-  db:        IslSupabaseClient,
+  db:        PublicReadClient,
   playerId:  string,
 ): Promise<PlayerWithStats> {
   const [playerResult, statsResult] = await Promise.all([

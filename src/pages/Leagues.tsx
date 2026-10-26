@@ -31,7 +31,7 @@ import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { Card, Skeleton } from '../shared/ui';
 import { LEAGUES } from '../data/leagueData';
 import type { League } from '../data/leagueData';
-import { useSupabase } from '../shared/supabase/SupabaseProvider';
+import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { fetchLeagueStandingsResult, useSeasonPhase, type LeagueStandingsRow } from '../features/match';
 import { withTimeout } from '../shared/hooks/useAsyncData';
 
@@ -97,7 +97,7 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Leagues() {
   usePageTitle('Leagues');
-  const db = useSupabase();
+  const publicDb = usePublicReadClient();
 
   // ── Per-league top-N standings state ──────────────────────────────────────
   // Keyed by league id so each card looks up its own state without
@@ -119,7 +119,7 @@ export default function Leagues() {
       // announce "Awaiting first kick-off" over a failed read.
       // withTimeout: a hung read ends as 'unavailable' after 10 s rather
       // than a skeleton that never resolves.
-      withTimeout(fetchLeagueStandingsResult(db, league.id))
+      withTimeout(fetchLeagueStandingsResult(publicDb, league.id))
         .then((result): LeagueStandingsState =>
           result.ok
             ? { status: 'ready', rows: result.rows.map((row, idx) => ({ ...row, position: idx + 1 })) }
@@ -137,7 +137,7 @@ export default function Leagues() {
         });
     }
     return () => { cancelled = true; };
-  }, [db]);
+  }, [publicDb]);
 
   // Pre-season: every card says so instead of ranking clubs on 0 points.
   const phase = useSeasonPhase();

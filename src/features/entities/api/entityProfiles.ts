@@ -8,7 +8,7 @@
 //   kind, or a profile that fails its schema. A drifted profile is logged and
 //   dropped rather than crashing the detail page that consumes it.
 
-import type { IslSupabaseClient } from '@shared/supabase/client';
+import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
 import { isProfiledKind, parseProfile, type ProfiledKind } from '../logic/entityProfile';
 
@@ -27,7 +27,7 @@ export interface EntityProfileResult {
  * @returns The validated profile and kind, or null when absent/invalid.
  */
 export async function getEntityProfile(
-  db: IslSupabaseClient,
+  db: PublicReadClient,
   entityId: string,
 ): Promise<EntityProfileResult | null> {
   const { data, error } = await db

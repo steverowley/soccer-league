@@ -2,3 +2,4 @@
 # LF everywhere so the committed bytes match the build on every platform, and
 # marked generated so GitHub collapses it in pull request diffs.
 api/simulate.mjs linguist-generated=true eol=lf
+api/db.mjs linguist-generated=true eol=lf
