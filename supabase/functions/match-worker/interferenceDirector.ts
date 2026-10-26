@@ -34,6 +34,7 @@
 
 import { expand, rngFor, totalVariants, type Lexicon, type Rng } from './grammar.ts';
 import type { SimulatedEvent } from './simEvent.ts';
+import { subminuteAfter } from './subminute.ts';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ function readMoments(input: DirectorInput): Moment[] {
       minute:    ev.minute,
       // Sub-slot just after the trigger, so the interference reads as a
       // reaction to the moment rather than a cause of it.
-      subminute: ev.subminute + 0.005,
+      subminute: subminuteAfter(ev.subminute),
       homeScore,
       awayScore,
       kind:      isGoal ? 'goal' : isRedCard ? 'red_card' : 'tension',
