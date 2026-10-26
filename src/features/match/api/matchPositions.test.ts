@@ -7,7 +7,7 @@
 // The compact-format (v2) decoding is covered in matchPositions.compact.test.ts;
 // the rows here are deliberately legacy v1 so the two concerns stay separate.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getMatchPositions } from './matchPositions';
 
 /** A valid legacy (v1) `match_positions` row (one 2-second snapshot). */
@@ -101,10 +101,21 @@ function makePagedDb(
   const from = vi.fn((table: string) =>
     table === 'match_position_rosters' ? rosterBuilder() : frameBuilder(),
   );
-  return { db: { from }, ranges };
+  return { db: { from, storage: { from: () => ({ getPublicUrl: (p: string) => ({ data: { publicUrl: `https://storage.test/replays/${p}` } }) }) } }, ranges };
 }
 
 describe('getMatchPositions — pagination', () => {
+  // Since replays moved to Storage (docs/mvp-free-tier.md) the reader fetches
+  // replays/<matchId>.json.gz first and reads these legacy tables ONLY when that
+  // file 404s. These tests are about the table path, so every fetch answers 404
+  // and the mock client exposes a storage stub that hands out a public URL.
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('loads every snapshot of a full match, not just the first page', async () => {
     const all = Array.from({ length: 2300 }, (_, i) => makeRow(i)); // > 2× the 1000 cap
     const { db, ranges } = makePagedDb(all, { serverCap: 1000 });

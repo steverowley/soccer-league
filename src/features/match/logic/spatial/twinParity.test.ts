@@ -124,6 +124,18 @@ const CODE_TWINS: ReadonlyArray<{ name: string; src: string; worker: string }> =
     worker: 'supabase/functions/match-worker/narrativeMode.ts',
   },
   {
+    // Gates drama-tick's model call (docs/mvp-free-tier.md, decision 6).
+    name: 'narrativeMode (drama-tick)',
+    src: 'src/shared/narrative/narrativeMode.ts',
+    worker: 'supabase/functions/drama-tick/narrativeMode.ts',
+  },
+  {
+    // Gates corpus-enricher's model call (docs/mvp-free-tier.md, decision 6).
+    name: 'narrativeMode (corpus-enricher)',
+    src: 'src/shared/narrative/narrativeMode.ts',
+    worker: 'supabase/functions/corpus-enricher/narrativeMode.ts',
+  },
+  {
     name: 'simEvent',
     src: 'src/features/match/logic/simEvent.ts',
     worker: 'supabase/functions/match-worker/simEvent.ts',

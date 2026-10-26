@@ -1,5 +1,6 @@
 // ── match-worker/index.ts ─────────────────────────────────────────────────
-// Deno edge function scheduled by pg_cron to run every minute.
+// Deno edge function scheduled by pg_cron to run every 2 minutes (migration
+// 0093; it was every minute before the free-tier MVP, docs/mvp-free-tier.md).
 //
 // RESPONSIBILITIES
 // ────────────────
@@ -35,7 +36,10 @@
 // Workers run in parallel but claim atomically: the optimistic lock
 // (UPDATE ... WHERE status='scheduled') means only one worker can flip a given
 // match to 'in_progress', so racing workers never double-simulate.  On error a
-// match reverts to 'scheduled' for retry.
+// match reverts to 'scheduled' with its attempt counted and a backoff (5, 15,
+// 45 min); after 3 failures it is parked (simAttempts.ts, migration 0092).
+// THROTTLE: at most MAX_IN_FLIGHT (2) sims at once and MAX_CLAIMS_PER_TICK (2)
+//   claims per dispatcher tick, so a backlog drains steadily.
 // requeueStaleInProgress() recovers any match a killed isolate still left
 //   stranded in 'in_progress' (older than STALE_IN_PROGRESS_MS), requeuing it
 //   so it completes on a later tick instead of staying stuck (and scoreless,
@@ -69,6 +73,16 @@ import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotable
 import { applyTeamTraits } from './spatial/traitModifiers.ts';
 import type { PositionFrame } from './spatial/types.ts';
 import { legalSubminute } from './subminute.ts';
+import { deleteReplays, uploadReplay, REPLAY_BUCKET, type ReplayStorage } from './replayFile.ts';
+import {
+  applyClaimableFilter,
+  backstopClaimBudget,
+  fanOutSlots,
+  planSimFailure,
+  MAX_CLAIMS_PER_TICK,
+  MAX_IN_FLIGHT,
+  MAX_SIM_ATTEMPTS,
+} from './simAttempts.ts';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -77,8 +91,11 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
 
 /**
  * Anthropic API key for Architect LLM calls (pre-match omen + post-match
- * verdict).  Optional: when empty, the architect falls back to deterministic
- * templates and the post-match save only writes a match-ledger entry — no
+ * verdict).  Used ONLY when the deployment also sets ISL_NARRATIVE_MODE=llm
+ * (docs/mvp-free-tier.md, decision 6): with the default deterministic mode no
+ * model is called even when this secret is set.  When unused, the architect
+ * falls back to deterministic templates and the post-match save only writes
+ * a match-ledger entry — no
  * verdict, no player-arc updates, no relationship mutations.  Match
  * completion is never blocked on this key being present.
  */
@@ -113,10 +130,13 @@ const DEFAULT_MATCH_DURATION_SECONDS = 600;
 
 /**
  * Most `live` matches one finalizer pass will publish.  The pass runs every
- * cron minute and each match costs a handful of cheap row updates (no
- * simulation), so this only needs to exceed the number of matches that can
- * reach full time within one minute — a whole staggered matchday is far below
- * it.  Bounds the tick if a backlog ever builds (e.g. cron was down).
+ * cron tick (every 2 minutes) and each match costs a handful of cheap row
+ * updates (no simulation), so this only needs to exceed the number of matches
+ * that can reach full time between two ticks; a whole staggered matchday is
+ * far below it.  Publishing compares the wall clock with scheduled_at plus the
+ * reveal window, so it does not depend on the tick length: a longer tick only
+ * publishes up to one tick late.  Bounds the tick if a backlog ever builds
+ * (e.g. cron was down).
  */
 const FINALIZE_BATCH_SIZE = 64;
 
@@ -158,10 +178,13 @@ const STALE_IN_PROGRESS_MS = 10 * 60_000;
  * ticks stacked dozens of 150s isolates and starved the database.  The
  * `in_progress` count is the natural cross-isolate semaphore: claims flip a
  * match to `in_progress` atomically, and the reaper (above) frees leaked slots
- * within STALE_IN_PROGRESS_MS.  4 keeps the worker fleet well inside the
- * small-instance database's comfort zone.
+ * within STALE_IN_PROGRESS_MS.
+ *
+ * MAX_IN_FLIGHT (now 2, was 4) and MAX_CLAIMS_PER_TICK (2: fan-out plus
+ * backstop combined) live in simAttempts.ts with their tests.  Together with
+ * the 2-minute scheduler they keep the free Nano instance out of CPU bursts
+ * and drain a backlog of overdue fixtures steadily (docs/mvp-free-tier.md).
  */
-const MAX_IN_FLIGHT = 4;
 
 /**
  * How many single-match worker invocations the dispatcher runs CONCURRENTLY per
@@ -173,9 +196,11 @@ const MAX_IN_FLIGHT = 4;
  * AND under the database's write throughput: 3 concurrent sims (each streaming
  * events + ~2,700 position frames) is what the small instance sustains without
  * slowing every isolate past its CPU budget (see the 2026-07-16 storm).
- * Fan-out is additionally bounded by MAX_IN_FLIGHT across overlapping ticks.
+ * Fan-out is additionally bounded by MAX_IN_FLIGHT across overlapping ticks
+ * and by MAX_CLAIMS_PER_TICK within one tick, both 2, so 2 is the most a wave
+ * could ever use.
  */
-const FANOUT_CONCURRENCY = 3;
+const FANOUT_CONCURRENCY = 2;
 
 /**
  * Hard cap on fan-out waves per dispatcher tick.  FANOUT_CONCURRENCY ×
@@ -217,6 +242,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
+/** Service-role Storage access for replay files (replayFile.ts). */
+const replayStorage = supabase.storage as unknown as ReplayStorage;
+
 // ── Helper: Claim the next due match ───────────────────────────────────────
 
 /** In-place Fisher–Yates shuffle; returns the same array for chaining. */
@@ -229,9 +257,10 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 /**
- * Claim ONE due match (status='scheduled', scheduled_at <= now) by atomically
- * flipping it to 'in_progress', and return the claimed row — or null when
- * nothing claimable is left.
+ * Claim ONE due match (status='scheduled', scheduled_at <= now, not backing off
+ * after a failure, not parked: see applyClaimableFilter in simAttempts.ts) by
+ * atomically flipping it to 'in_progress', and return the claimed row, or null
+ * when nothing claimable is left.
  *
  * DISTINCT CLAIMS UNDER FAN-OUT: a fan-out wave runs FANOUT_CONCURRENCY of these
  * concurrently.  If each only looked at the single oldest due row they'd all
@@ -258,12 +287,15 @@ async function claimNextDueMatch(opts?: { leagueOnly?: boolean }): Promise<any |
 
   // Pull a pool of due candidates (oldest first) so concurrent claimers can
   // pick DISTINCT rows.  league-only uses an inner join on competitions so a
-  // cup tie is never handed to a parallel worker.
-  let query = supabase
-    .from('matches')
-    .select(opts?.leagueOnly ? 'id, competitions!inner(type)' : 'id')
-    .eq('status', 'scheduled')
-    .lte('scheduled_at', now)
+  // cup tie is never handed to a parallel worker.  The claimable filter also
+  // skips matches backing off after a failure and parked poison pills
+  // (migration 0092).
+  let query = applyClaimableFilter(
+    supabase
+      .from('matches')
+      .select(opts?.leagueOnly ? 'id, competitions!inner(type)' : 'id'),
+    now,
+  )
     .order('scheduled_at', { ascending: true })
     .limit(CLAIM_CANDIDATE_POOL);
   if (opts?.leagueOnly) query = query.eq('competitions.type', 'league');
@@ -286,7 +318,9 @@ async function claimNextDueMatch(opts?: { leagueOnly?: boolean }): Promise<any |
       // `round` is read post-match by postMatchLoreSave to surface the matchday
       // in the Architect verdict prompt (e.g. 'Matchday 7', 'Final').  Absent
       // matches still process — the field is treated as 0 downstream.
-      .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round, sim_seed');
+      // `sim_attempts` (migration 0092) feeds the failure plan on the error
+      // path, so a retry knows how many attempts came before it.
+      .select('id, home_team_id, away_team_id, scheduled_at, competition_id, round, sim_seed, sim_attempts');
 
     if (claimError) {
       console.error('[match-worker] UPDATE claim failed:', claimError);
@@ -311,10 +345,10 @@ async function claimNextDueMatch(opts?: { leagueOnly?: boolean }): Promise<any |
  * league table.  This reverts it to `scheduled` so a later tick re-simulates it.
  *
  * Before requeuing it deletes any partial rows the killed run may have written
- * (mirrors processMatch's error-path cleanup): `match_positions` has a
- * (match_id, minute, second) primary key and `match_events` has no per-event
- * unique index, so leftover rows would otherwise conflict or duplicate on the
- * re-simulation.  The `.eq('status','in_progress')` predicate on the UPDATE
+ * (mirrors processMatch's error-path cleanup): `match_events` has no per-event
+ * unique index, so leftover rows would otherwise duplicate on the
+ * re-simulation, and a half-finished run may already have uploaded its replay
+ * file.  The `.eq('status','in_progress')` predicate on the UPDATE
  * guards against racing a worker that legitimately finished one between our
  * SELECT and UPDATE.
  *
@@ -328,7 +362,7 @@ async function requeueStaleInProgress(): Promise<number> {
 
   const { data: stale, error: selectError } = await supabase
     .from('matches')
-    .select('id')
+    .select('id, sim_attempts')
     .eq('status', 'in_progress')
     .lt('played_at', cutoff);
 
@@ -338,29 +372,56 @@ async function requeueStaleInProgress(): Promise<number> {
   }
   if (!stale || stale.length === 0) return 0;
 
-  const ids = stale.map((m) => m.id);
+  const ids = stale.map((m) => m.id as string);
 
   // Clear partial rows so the retry starts from a clean slate.
   await supabase.from('match_events').delete().in('match_id', ids);
   await supabase.from('match_player_stats').delete().in('match_id', ids);
-  await supabase.from('match_positions').delete().in('match_id', ids);
-  // The roster is the decoding key for those frames (migration 0084), so it
-  // goes with them — a roster without frames is dead weight, and a retry
-  // upserts a fresh one anyway.
-  await supabase.from('match_position_rosters').delete().in('match_id', ids);
+  // The replay file, if the killed run got as far as uploading it.  Legacy
+  // frame tables are no longer written, so there is nothing to clear there.
+  await deleteReplays(replayStorage, ids);
 
-  const { data: reverted, error: updateError } = await supabase
-    .from('matches')
-    .update({ status: 'scheduled', played_at: null })
-    .in('id', ids)
-    .eq('status', 'in_progress')
-    .select('id');
+  // A stranded match counts as a failed attempt (docs/mvp-free-tier.md,
+  // decision 4): an isolate that is killed every time (CPU limit, a hang)
+  // would otherwise be reaped and re-claimed forever.  Each row carries its
+  // own attempt count, so each gets its own update.
+  const now = new Date();
+  let requeued = 0;
+  for (const row of stale) {
+    const plan = planSimFailure(
+      row.sim_attempts as number | null,
+      `stale in_progress for over ${STALE_IN_PROGRESS_MS / 60_000} min (isolate killed or timed out); requeued by the reaper`,
+      now,
+    );
+    const { data: reverted, error: updateError } = await supabase
+      .from('matches')
+      .update({
+        status: 'scheduled',
+        played_at: null,
+        sim_attempts: plan.sim_attempts,
+        sim_last_error: plan.sim_last_error,
+        sim_next_attempt_at: plan.sim_next_attempt_at,
+        sim_parked_at: plan.sim_parked_at,
+      })
+      .eq('id', row.id)
+      .eq('status', 'in_progress')
+      .select('id');
 
-  if (updateError) {
-    console.error('[match-worker] Requeue stale in_progress failed:', updateError);
-    return 0;
+    if (updateError) {
+      console.error(`[match-worker] Requeue stale in_progress failed for ${row.id}:`, updateError);
+      continue;
+    }
+    if (reverted && reverted.length > 0) {
+      requeued++;
+      if (plan.parked) {
+        console.error(
+          `[match-worker] PARKED match ${row.id} after ${plan.sim_attempts} failed attempts ` +
+          `(cap ${MAX_SIM_ATTEMPTS}); it will NOT be retried automatically. Last error: ${plan.sim_last_error}`,
+        );
+      }
+    }
   }
-  return reverted?.length ?? 0;
+  return requeued;
 }
 
 // ── Helper: Fetch teams with rosters ───────────────────────────────────────
@@ -788,7 +849,8 @@ async function processMatch(match: any): Promise<boolean> {
     // Full agent-based spatial simulation: 22 autonomous players with Reynolds
     // steering, formation slots, and possession physics.  Events (goals,
     // tackles, saves) emerge from geometry rather than probability rolls, and
-    // real per-player (x,y) frames are stored in `match_positions` for the
+    // real per-player (x,y) frames are stored as a replay file in Storage
+    // (replays/<matchId>.json.gz) for the
     // pitch viewer.
     //
     // The spatial engine is the only engine.  Convert raw DB rows to its typed
@@ -1181,119 +1243,39 @@ async function processMatch(match: any): Promise<boolean> {
 
     console.log(`[match-worker] Inserted ${result.events.length} events`);
 
-    // ── Persist spatial position frames ───────────────────────────────────
-    // The frames are written in the same batch-insert style as events
-    // (500 rows/call) and stored in `match_positions` keyed by
-    // (match_id, minute, second).
+    // ── Persist the replay (Supabase Storage, not Postgres) ────────────────
+    // One gzipped file per match: replays/<matchId>.json.gz in the public
+    // 'replays' bucket (migration 0091), written with the service role.  It
+    // holds exactly what `match_position_rosters` + `match_positions` used to
+    // (the union roster plus compact v2 frames; see replayFile.ts for the
+    // shape and why the roster is the union), and the viewer decodes it with
+    // the same v2 decoder.
     //
-    // STORED SHAPE (compact v2, migration 0084)
-    //   { v: 2, p: [x0, y0, x1, y1, …], b: [ballX, ballY, ownerIdx] }
-    // `p` holds 2N coordinates in roster order; `b` holds the ball plus the
-    // roster index of its carrier (-1 when the ball is loose).  The roster
-    // itself is written ONCE per match into `match_position_rosters`, which
-    // is the whole point: v1 repeated all 22 36-char UUIDs in every one of
-    // ~2 731 frames and stored a `hasBall` flag already derivable from
-    // `ball.ownerId`.  Measured 4.81 MB/match before, 0.67 MB/match after
-    // (86% smaller) — the quota blow-out that took the game down (#666).
-    // `hasBall` is no longer stored; the reader derives it from ownerIdx.
+    // WHY: as Postgres rows a replay cost 2.6 MB per match, so one season of
+    // replays was larger than the free plan's whole 500 MB database quota
+    // (incident #712).  The gzipped file is about 0.2 MB and lives in
+    // Storage's separate 1 GB allowance.  The frame tables are no longer
+    // written (a later migration can drop them).
     //
-    // Frame → row mapping (unchanged):
-    //   minute  = floor(tSec / 60) + 1, clamped to [1, 120] (extra time)
-    //   second  = floor(tSec % 60)          — second within the minute
+    // CPU: building and gzipping the payload measured about 45 ms per match
+    // on the laptop (scripts/measure-replay-size.ts); the gzip itself runs in
+    // native CompressionStream code, well inside the edge budget.
     //
-    // Coordinates are rounded to 0.1 m.  The pitch is 105×68 m rendered a
-    // few hundred pixels wide, so 0.1 m is far below one rendered pixel and
-    // the viewer interpolates between 2-second frames anyway.
-    //
-    // Failure is non-fatal: the match is already committed as completed and
-    // position data is cosmetic (viewer only).  A missing frame just means
-    // the viewer interpolates across a wider gap.
+    // Failure is non-fatal, as it was for frames: the replay is cosmetic
+    // (viewer only) and the viewer falls back to a static formation.  It is
+    // never regenerated from the seed later (docs/mvp-free-tier.md, decision 2).
     if (positionFrames.length > 0) {
-      /** Round to 0.1 m — below one rendered pixel, drops float noise. */
-      const r1 = (n: number) => Math.round(n * 10) / 10;
-      /**
-       * Coordinate meaning "not on the pitch in this frame". Real rounded
-       * coordinates live in [0, 105] x [0, 68], so a negative can never
-       * collide with one. Must match OFF_PITCH in
-       * src/features/match/api/matchPositions.ts.
-       */
-      const OFF_PITCH = -1;
-
-      // The roster is the UNION of every player appearing in ANY frame, not the
-      // starting XI.  The engine DOES substitute (3 per side from minute 55,
-      // `maybeSubstitute` in spatial/step.ts): the outgoing player leaves the
-      // frames and the incoming one joins, so the player SET changes mid-match
-      // while staying 11-a-side.
-      //
-      // Building the roster from frame 0 therefore misattributed every
-      // coordinate after the first substitution (~minute 56, about 40% of the
-      // match), and because the per-frame count stayed at 22 the reader's
-      // length check could never detect it.  Measured: 6 subs/match, frame-0
-      // roster 22, union roster 28.
-      const rosterIds: string[] = [];
-      const rosterIndex = new Map<string, number>();
-      for (const frame of positionFrames) {
-        for (const p of frame.players) {
-          if (!rosterIndex.has(p.id)) {
-            rosterIndex.set(p.id, rosterIds.length);
-            rosterIds.push(p.id);
-          }
-        }
-      }
-
-      // Upsert (not insert) so a retry of a previously-failed match replaces
-      // its roster rather than conflicting on the match_id primary key.
-      const { error: rosterErr } = await supabase
-        .from('match_position_rosters')
-        .upsert({ match_id: match.id, player_ids: rosterIds }, { onConflict: 'match_id' });
-
-      if (rosterErr) {
-        // Non-fatal, but the frames are undecodable without the roster, so
-        // skip writing them instead of storing orphaned coordinate arrays.
-        console.warn(`[match-worker] match_position_rosters upsert failed: ${rosterErr.message}`);
-      } else {
-        const posRows = positionFrames.map((frame) => {
-          const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
-          const second = Math.floor(frame.tSec % 60);
-          // Fixed-width coordinate array over the UNION roster. Roster members
-          // absent from this frame (subbed off, or not yet brought on) keep the
-          // OFF_PITCH sentinel, which the reader skips. Writing only the
-          // present players positionally is what broke identity after a
-          // substitution.
-          const p: number[] = new Array<number>(rosterIds.length * 2).fill(OFF_PITCH);
-          for (const player of frame.players) {
-            const idx = rosterIndex.get(player.id);
-            if (idx === undefined) continue;
-            p[idx * 2] = r1(player.x);
-            p[idx * 2 + 1] = r1(player.y);
-          }
-          const ownerIdx =
-            frame.ball.ownerId == null ? -1 : (rosterIndex.get(frame.ball.ownerId) ?? -1);
-          return {
-            match_id:  match.id,
-            minute,
-            second,
-            snapshots: {
-              v: 2,
-              p,
-              b: [r1(frame.ball.x), r1(frame.ball.y), ownerIdx],
-            },
-          };
-        });
-
-        for (let i = 0; i < posRows.length; i += EVENT_INSERT_BATCH_SIZE) {
-          const chunk = posRows.slice(i, i + EVENT_INSERT_BATCH_SIZE);
-          const { error: posErr } = await supabase.from('match_positions').insert(chunk);
-          if (posErr) {
-            // Non-fatal: log and continue — position data is cosmetic.
-            console.warn(`[match-worker] match_positions insert failed: ${posErr.message}`);
-            break;
-          }
-        }
+      try {
+        const startedAt = performance.now();
+        const stored = await uploadReplay(replayStorage, match.id, positionFrames);
         console.log(
-          `[match-worker] Persisted ${posRows.length} compact position frames ` +
-          `(${rosterIds.length}-player roster stored once)`,
+          `[match-worker] Replay stored: ${REPLAY_BUCKET}/${stored.path}, ${stored.frames} frames, ` +
+          `${stored.roster}-player roster, ${Math.round(stored.rawBytes / 1024)} KB json -> ` +
+          `${Math.round(stored.gzipBytes / 1024)} KB gzip in ${Math.round(performance.now() - startedAt)} ms`,
         );
+      } catch (err) {
+        // Non-fatal: log and continue; position data is cosmetic.
+        console.warn(`[match-worker] replay upload failed for ${match.id}:`, (err as Error)?.message ?? err);
       }
     }
 
@@ -1461,17 +1443,31 @@ async function processMatch(match: any): Promise<boolean> {
     // this attempt left behind before flipping status back to 'scheduled'.
     await supabase.from('match_events').delete().eq('match_id', match.id);
     await supabase.from('match_player_stats').delete().eq('match_id', match.id);
-    // Spatial position frames are cosmetic but must be cleaned up too so a
-    // retry doesn't hit the (match_id, minute, second) primary-key conflict.
-    await supabase.from('match_positions').delete().eq('match_id', match.id);
-    await supabase.from('match_position_rosters').delete().eq('match_id', match.id);
+    // The replay file, if this attempt uploaded one before failing.  Best
+    // effort (deleteReplays logs and never throws).
+    await deleteReplays(replayStorage, [match.id]);
 
-    // Revert status so another worker (or next cron invocation) will retry.
+    // ── Count the failure (poison-pill handling, migration 0092) ──────────
+    // A retry reuses sim_seed, so a deterministic failure fails identically
+    // every time.  Instead of an instant requeue, record the attempt and the
+    // error, back off 5, 15, then 45 minutes, and park the match after
+    // MAX_SIM_ATTEMPTS failures so it is never retried automatically.
+    const plan = planSimFailure(match.sim_attempts as number | null | undefined, err, new Date());
+
+    // Revert status so a later tick retries it once the backoff has passed.
     // We don't throw — the worker must process the rest of the batch even
-    // if one match fails.
+    // if one match fails.  A parked match goes back to 'scheduled' too (it
+    // was never played), but sim_parked_at keeps every claim away from it.
     const { error: revertError } = await supabase
       .from('matches')
-      .update({ status: 'scheduled', played_at: null })
+      .update({
+        status: 'scheduled',
+        played_at: null,
+        sim_attempts: plan.sim_attempts,
+        sim_last_error: plan.sim_last_error,
+        sim_next_attempt_at: plan.sim_next_attempt_at,
+        sim_parked_at: plan.sim_parked_at,
+      })
       .eq('id', match.id)
       // Only ever un-claim a match still mid-simulation.  Since the reveal
       // model landed, a row can legitimately be 'live' (simulated, awaiting
@@ -1483,6 +1479,16 @@ async function processMatch(match: any): Promise<boolean> {
 
     if (revertError) {
       console.error(`[match-worker] Failed to revert match ${match.id}:`, revertError);
+    } else if (plan.parked) {
+      console.error(
+        `[match-worker] PARKED match ${match.id} after ${plan.sim_attempts} failed attempts ` +
+        `(cap ${MAX_SIM_ATTEMPTS}); it will NOT be retried automatically. Last error: ${plan.sim_last_error}`,
+      );
+    } else {
+      console.warn(
+        `[match-worker] Match ${match.id} failed attempt ${plan.sim_attempts}/${MAX_SIM_ATTEMPTS}; ` +
+        `next attempt not before ${plan.sim_next_attempt_at}`,
+      );
     }
 
     return false;
@@ -1554,11 +1560,14 @@ async function countInFlight(): Promise<number> {
 
 async function countDueMatches(opts?: { leagueOnly?: boolean }): Promise<number> {
   const now = new Date().toISOString();
-  let query = supabase
-    .from('matches')
-    .select(opts?.leagueOnly ? 'id, competitions!inner(type)' : 'id', { count: 'exact', head: true })
-    .eq('status', 'scheduled')
-    .lte('scheduled_at', now);
+  // Same filter as the claim, so a match that is backing off or parked never
+  // makes fan-out spawn a worker that would come back empty.
+  let query = applyClaimableFilter(
+    supabase
+      .from('matches')
+      .select(opts?.leagueOnly ? 'id, competitions!inner(type)' : 'id', { count: 'exact', head: true }),
+    now,
+  );
   if (opts?.leagueOnly) query = query.eq('competitions.type', 'league');
   const { count, error } = await query;
   if (error) {
@@ -1813,14 +1822,23 @@ async function finalizeDueMatches(): Promise<number> {
  * Claims are atomic (claimNextDueMatch), so two workers can never grab the same
  * match even though they race in parallel.
  *
- * @returns Number of matches processed across all waves this tick.
+ * CATCH-UP CAP: a tick starts at most MAX_CLAIMS_PER_TICK workers in total
+ * (fanOutSlots), so a backlog of overdue fixtures drains a couple per tick
+ * instead of all at once.  Every spawned worker counts against the cap whether
+ * or not it reported success, because one that timed out may still have
+ * claimed a match.
+ *
+ * @returns Matches processed (workers that reported a claim) and workers
+ *          spawned (the claims this tick may have started) across all waves.
  */
-async function fanOutDueMatches(): Promise<number> {
+async function fanOutDueMatches(): Promise<{ processed: number; spawned: number }> {
   const startedAt = Date.now();
   let totalProcessed = 0;
+  let spawned = 0;
 
   for (let wave = 0; wave < FANOUT_MAX_WAVES; wave++) {
     if (Date.now() - startedAt >= FANOUT_TIME_BUDGET_MS) break;
+    if (spawned >= MAX_CLAIMS_PER_TICK) break;
     const due = await countDueMatches({ leagueOnly: true });
     if (due === 0) break;
 
@@ -1828,13 +1846,13 @@ async function fanOutDueMatches(): Promise<number> {
     // ticks) exceed MAX_IN_FLIGHT concurrent sims.  Re-counted every wave —
     // in-flight rises as this wave's workers claim and falls as they finish.
     const inFlight  = await countInFlight();
-    const available = MAX_IN_FLIGHT - inFlight;
-    if (available <= 0) {
+    const slots = fanOutSlots({ due, inFlight, claimsUsed: spawned, concurrency: FANOUT_CONCURRENCY });
+    if (slots <= 0) {
       console.log(`[match-worker] Fan-out deferred: ${inFlight} sims already in flight (cap ${MAX_IN_FLIGHT})`);
       break;
     }
 
-    const slots = Math.min(due, FANOUT_CONCURRENCY, available);
+    spawned += slots;
     const results = await Promise.all(Array.from({ length: slots }, () => spawnWorker()));
     const processedThisWave = results.filter(Boolean).length;
     totalProcessed += processedThisWave;
@@ -1843,7 +1861,7 @@ async function fanOutDueMatches(): Promise<number> {
     if (processedThisWave === 0) break;
   }
 
-  return totalProcessed;
+  return { processed: totalProcessed, spawned };
 }
 
 /**
@@ -1853,15 +1871,17 @@ async function fanOutDueMatches(): Promise<number> {
  * guarantees forward progress if self-invocation is disabled or a wave failed —
  * degrading at worst to the pre-fan-out behaviour, never to "nothing happens".
  *
+ * @param maxClaims  Most matches this call may claim (what is left of the
+ *                   tick's MAX_CLAIMS_PER_TICK after fan-out).
  * @returns Per-match tallies for the tick summary.
  */
-async function processWithinBudget(): Promise<{ processed: number; succeeded: number; failed: number }> {
+async function processWithinBudget(maxClaims: number): Promise<{ processed: number; succeeded: number; failed: number }> {
   const startedAt = Date.now();
   let processed = 0;
   let succeeded = 0;
   let failed = 0;
 
-  while (Date.now() - startedAt < CLAIM_TIME_BUDGET_MS) {
+  while (processed < maxClaims && Date.now() - startedAt < CLAIM_TIME_BUDGET_MS) {
     const match = await claimNextDueMatch();
     if (!match) break; // nothing due (or we lost the claim race) — done this tick
     processed++;
@@ -1938,22 +1958,30 @@ async function runDispatcherMode(): Promise<Response> {
   // shared bracket JSON isn't safe to advance concurrently.  Skipped only if
   // self-invocation isn't configured (SUPABASE_URL unset).
   let fannedOut = 0;
+  let spawned = 0;
   if (SELF_INVOKE_URL) {
-    fannedOut = await fanOutDueMatches();
+    const fan = await fanOutDueMatches();
+    fannedOut = fan.processed;
+    spawned = fan.spawned;
   }
 
   // ── Backstop: sequentially drain whatever fan-out didn't — cup ties (kept off
   // the parallel path on purpose, so their bracket advances one at a time),
   // plus any league leftovers or a match that became due mid-tick.  No-ops when
-  // the queue is already empty.  Skipped entirely when the fleet is already at
-  // the MAX_IN_FLIGHT cap — under load the backstop's own sim would just be one
-  // more isolate competing for the same starved database (2026-07-16 lesson);
-  // whatever it would have claimed simply waits for a later, calmer tick.
+  // the queue is already empty.  Bounded by what is left of this tick's
+  // MAX_CLAIMS_PER_TICK after fan-out and by the MAX_IN_FLIGHT cap — under load
+  // the backstop's own sim would just be one more isolate competing for the
+  // same starved database (2026-07-16 lesson); whatever it would have claimed
+  // simply waits for a later, calmer tick.
   let local = { processed: 0, succeeded: 0, failed: 0 };
-  if ((await countInFlight()) < MAX_IN_FLIGHT) {
-    local = await processWithinBudget();
+  const backstopBudget = backstopClaimBudget({ inFlight: await countInFlight(), claimsUsed: spawned });
+  if (backstopBudget > 0) {
+    local = await processWithinBudget(backstopBudget);
   } else {
-    console.log(`[match-worker] Backstop deferred: fleet at in-flight cap (${MAX_IN_FLIGHT})`);
+    console.log(
+      `[match-worker] Backstop deferred: in-flight cap (${MAX_IN_FLIGHT}) or tick claim cap ` +
+      `(${MAX_CLAIMS_PER_TICK}) reached`,
+    );
   }
 
   const processed = fannedOut + local.processed;

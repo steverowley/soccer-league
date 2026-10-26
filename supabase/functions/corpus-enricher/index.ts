@@ -57,6 +57,8 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
 // tree, with React + Zod deps that don't belong on Deno).  Keep the two
 // files in sync — see the WHY block in `./voiceGuard.ts`.
 import { acceptSnippet, type GuardPersona } from './voiceGuard.ts';
+// Model calls are opt-in per deployment (ISL_NARRATIVE_MODE=llm); see handler().
+import { resolveNarrativeMode } from './narrativeMode.ts';
 
 // ── Tuning constants ────────────────────────────────────────────────────────
 // Conservative defaults — Phase 5 ships with a small enrichment surface so
@@ -588,6 +590,18 @@ async function tokensSpentToday(db: any): Promise<number> {
  * @returns  Response with `{ enriched, snippetsInserted, tokensSpent }`.
  */
 async function handler(): Promise<Response> {
+  // Narrative mode gate (docs/mvp-free-tier.md decision 6).  This function's
+  // only work is a model call, so with the default deterministic mode it does
+  // nothing at all: no database reads, no key required.  Its cron job is also
+  // unscheduled (migration 0093); this gate keeps a manual or leftover
+  // invocation from spending tokens.
+  if (resolveNarrativeMode(Deno.env.get('ISL_NARRATIVE_MODE')) !== 'llm') {
+    console.log('[corpus-enricher] narrative mode is deterministic; skipping (no model call)');
+    return new Response(JSON.stringify({ skipped: true, reason: 'narrative_mode_deterministic' }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
   const supabaseUrl = requireEnv('SUPABASE_URL');
   const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
   const anthropicKey = requireEnv('ANTHROPIC_API_KEY');
