@@ -43,6 +43,7 @@
 //   only — the page itself never blocks on a single failed query.
 
 import { useEffect, useState } from 'react';
+import { withTimeout } from '../shared/hooks/useAsyncData';
 import { useParams } from 'react-router-dom';
 
 import Header from '../components/Header';
@@ -212,11 +213,13 @@ export default function EntityDetail() {
       if (!entityId) return;
       // Header — distinguish "not found" from "load error" so the page
       // can render an explicit message rather than silently spinning.
-      const headerQ = await db
+      // Time-boxed: a hung read lands in the error branch after 10 s.
+      const headerQ = await withTimeout(Promise.resolve(db
         .from('entities')
         .select('id, name, display_name, kind')
         .eq('id', entityId)
-        .maybeSingle();
+        .maybeSingle()))
+        .catch((error: unknown) => ({ data: null, error: { message: String(error) } }));
       if (cancelled) return;
       if (headerQ.error) {
         console.warn('[EntityDetail] header fetch failed:', headerQ.error.message);

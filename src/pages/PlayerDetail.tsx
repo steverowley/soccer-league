@@ -32,6 +32,8 @@
 //   URL stays, inline error surface — same pattern as TeamDetail).
 
 import { useEffect, useState } from 'react';
+import { withTimeout, isTimeoutError } from '../shared/hooks/useAsyncData';
+import { ErrorState } from '../shared/ui';
 import { useParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, BackLink, Footer } from '../components/Layout';
@@ -117,7 +119,9 @@ interface IdolRank {
   global_rank:        number;
   team_rank:          number;
   favourite_count:    number;
-  training_count_14d: number;
+  // The view column is `training_count` (already a 14-day window, migration
+  // 0020). Reading a non-existent `training_count_14d` crashed the page.
+  training_count:     number;
   idol_score?:        number;
 }
 
@@ -143,6 +147,10 @@ export default function PlayerDetail() {
   const [matchesDone,   setMatchesDone]   = useState(false);
   const [narrativesDone, setNarrativesDone] = useState(false);
   const [profile,       setProfile]       = useState<Record<string, unknown> | null>(null);
+  // True when the player read failed for a reason other than "no such row";
+  // the page then offers a retry instead of claiming the player is unknown.
+  const [playerOutage,  setPlayerOutage]  = useState<'error' | 'timeout' | null>(null);
+  const [attempt,       setAttempt]       = useState(0);
 
   // ── Parallel fetch on mount ───────────────────────────────────────────────
   // Four queries fire simultaneously.  Each `*Done` flag gates its own
@@ -152,8 +160,10 @@ export default function PlayerDetail() {
     if (!playerId) return undefined;
     let cancelled = false;
 
+    // Every read is time-boxed (withTimeout, 10 s) so each *Done flag
+    // always settles and no section spins forever.
     // Player data (including season stats aggregate)
-    getPlayer(db, playerId)
+    withTimeout(getPlayer(db, playerId))
       .then((p) => {
         if (cancelled) return;
         setPlayer(p as unknown as PlayerWithStats);
@@ -162,11 +172,14 @@ export default function PlayerDetail() {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
         setPlayerErr(msg);
+        // PGRST116 = zero rows for .single(): a genuinely unknown id.
+        const notFound = (err as { code?: string } | null)?.code === 'PGRST116';
+        setPlayerOutage(notFound ? null : isTimeoutError(err) ? 'timeout' : 'error');
       })
       .finally(() => { if (!cancelled) setPlayerDone(true); });
 
     // Idol rank from player_idol_score view (DI-aware — uses db from context)
-    getPlayerIdolRank(db, playerId)
+    withTimeout(getPlayerIdolRank(db, playerId))
       .then((rank) => {
         if (cancelled) return;
         setIdol(rank as IdolRank | null);
@@ -176,18 +189,20 @@ export default function PlayerDetail() {
 
     // Last 10 appearances — feature API already returns [] on error so the
     // section degrades to an empty state without a catch().
-    getPlayerRecentMatches(db, playerId, 10)
+    withTimeout(getPlayerRecentMatches(db, playerId, 10))
       .then((rows) => { if (!cancelled) setRecentMatches(rows); })
+      .catch(() => { /* section shows its empty state */ })
       .finally(() => { if (!cancelled) setMatchesDone(true); });
 
     // Last 10 narratives mentioning the player's entity_id.  Empty when
     // the player has no entity link or no narratives reference them.
-    getNarrativesMentioningPlayer(db, playerId, 10)
+    withTimeout(getNarrativesMentioningPlayer(db, playerId, 10))
       .then((rows) => { if (!cancelled) setNarratives(rows); })
+      .catch(() => { /* section shows its empty state */ })
       .finally(() => { if (!cancelled) setNarrativesDone(true); });
 
     return () => { cancelled = true; };
-  }, [db, playerId]);
+  }, [db, playerId, attempt]);
 
   // Narrative profile (entities.meta.profile) — fetched in its own effect once
   // the player's entity_id resolves. Supplementary content: the section is
@@ -205,6 +220,31 @@ export default function PlayerDetail() {
   // ── Unknown player ────────────────────────────────────────────────────────
   // Only show the error surface once the player fetch has settled (to avoid
   // a flash of "Unknown Player" while the fetch is in flight).
+  if (playerDone && playerOutage) {
+    return (
+      <>
+        <Header />
+        <main>
+          <Container>
+            <div style={{ padding: '48px 0 80px' }}>
+              <ErrorState
+                what="This player"
+                timedOut={playerOutage === 'timeout'}
+                onRetry={() => {
+                  setPlayerErr(null);
+                  setPlayerOutage(null);
+                  setPlayerDone(false);
+                  setAttempt((n) => n + 1);
+                }}
+              />
+            </div>
+          </Container>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
   if (playerDone && (playerErr || !player)) {
     return (
       <>
@@ -633,7 +673,7 @@ function IdolPanel({ idol }: { idol: IdolRank }) {
     { label: 'Global Rank',       value: `#${idol.global_rank}`                      },
     { label: 'Club Rank',         value: `#${idol.team_rank}`                        },
     { label: 'Fan Favourites',    value: idol.favourite_count.toLocaleString('en-GB') },
-    { label: 'Training (14 days)',value: idol.training_count_14d.toLocaleString('en-GB') },
+    { label: 'Training (14 days)',value: idol.training_count.toLocaleString('en-GB') },
     ...(idol.idol_score != null
       ? [{ label: 'Idol Score', value: idol.idol_score.toLocaleString('en-GB') }]
       : []),

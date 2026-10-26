@@ -31,6 +31,7 @@
 //   same pattern as TeamDetail / PlayerDetail.
 
 import { useEffect, useState } from 'react';
+import { withTimeout } from '../shared/hooks/useAsyncData';
 import { Link, useParams } from 'react-router-dom';
 
 import Header from '../components/Header';
@@ -118,7 +119,7 @@ export default function ManagerDetail(): JSX.Element {
   useEffect(() => {
     if (!managerId) return undefined;
     let cancelled = false;
-    getManager(db, managerId)
+    withTimeout(getManager(db, managerId))
       .then((row) => {
         if (cancelled) return;
         if (!row) {
