@@ -507,7 +507,26 @@ export function bucketFor(type: string, payload: Readonly<Record<string, unknown
   }
 }
 
-/** Minimal shape `decorateCommentary` needs — matches the adapter's output. */
+/**
+ * A club's name as a commentator says it: the registered name without a
+ * trailing "FC", "AFC" or "SC" ("Earth United FC" is "Earth United" on air).
+ * A suffix in the middle of a canon name ("Sedna FC Mariners") is kept.
+ *
+ * @param name  The club's registered name (`teams.name`).
+ * @returns     The spoken name; the input unchanged when stripping would empty it.
+ */
+export function spokenClubName(name: string): string {
+  const spoken = name.trim().replace(/\s+(?:A?FC|SC)$/u, '');
+  return spoken !== '' ? spoken : name.trim();
+}
+
+/** The two clubs of a match, by registered name. */
+export interface MatchClubs {
+  home: string;
+  away: string;
+}
+
+/** Minimal shape `decorateCommentary` needs: matches the adapter's output. */
 export interface VoiceableEvent {
   type: string;
   payload: Record<string, unknown>;
@@ -526,17 +545,28 @@ export interface VoiceableEvent {
  *
  * @param events   Adapted events, mutated in place and returned.
  * @param matchId  Seeds every line, so a replay is identical.
+ * @param clubs    The two clubs' registered names; lines name the club from
+ *                 the event's `side` (see spokenClubName).
  * @returns        The same array, with richer `payload.commentary` and a
  *                 `voice` / `voiceIndex` attribution where one was generated.
  */
-export function decorateCommentary<T extends VoiceableEvent>(events: T[], matchId: string): T[] {
+export function decorateCommentary<T extends VoiceableEvent>(events: T[], matchId: string, clubs: MatchClubs): T[] {
+  const spoken = { home: spokenClubName(clubs.home), away: spokenClubName(clubs.away) };
   events.forEach((ev, i) => {
+    // The club is named from the event's side.  `payload.team` is the club's
+    // three-letter code (a machine key the worker matches goals on), and a
+    // corner carries no team at all, so on air they read "EUN adjust" and
+    // "Corner for the away side" before this.
+    const side = ev.payload['side'];
+    const team = side === 'home' || side === 'away'
+      ? spoken[side]
+      : String(ev.payload['team'] ?? 'the side in possession');
     const bucket = bucketFor(ev.type, ev.payload);
     if (!bucket) return;
     const line = commentaryFor(bucket, matchId, i, {
       player: String(ev.payload['player'] ?? 'A player'),
       other:  String(ev.payload['keeper'] ?? 'the keeper'),
-      team:   String(ev.payload['team'] ?? (ev.payload['side'] === 'home' ? 'the home side' : 'the away side')),
+      team,
       card:   String(ev.payload['cardType'] ?? 'yellow'),
     });
     if (!line) return;

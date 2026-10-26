@@ -20,6 +20,7 @@ import {
   commentaryVariety,
   bucketFor,
   decorateCommentary,
+  spokenClubName,
 } from './commentary.ts';
 
 const VARS = { player: 'Rix Vanto', other: 'Del Oru', team: 'Mars United', card: 'yellow' };
@@ -153,12 +154,28 @@ describe('bucketFor', () => {
   });
 });
 
+/** Two real clubs: one with an FC suffix commentators drop, one without. */
+const CLUBS = { home: 'Earth United FC', away: 'Mars Athletic' };
+
+describe('spokenClubName', () => {
+  it('drops a trailing FC, AFC or SC the way commentators do', () => {
+    expect(spokenClubName('Earth United FC')).toBe('Earth United');
+    expect(spokenClubName('Venus Volcanic SC')).toBe('Venus Volcanic');
+    expect(spokenClubName('Vesta FC')).toBe('Vesta');
+  });
+  it('keeps names without a suffix and suffixes inside a canon name', () => {
+    expect(spokenClubName('Mars Athletic')).toBe('Mars Athletic');
+    expect(spokenClubName('Sedna FC Mariners')).toBe('Sedna FC Mariners');
+    expect(spokenClubName('FC')).toBe('FC');
+  });
+});
+
 describe('decorateCommentary', () => {
   it('replaces placeholder commentary and attributes the voice', () => {
     const events = [
       { type: 'goal', payload: { commentary: 'Rix Vanto scores for Mars United!', player: 'Rix Vanto', team: 'Mars United' } },
     ];
-    decorateCommentary(events, 'match-abc');
+    decorateCommentary(events, 'match-abc', CLUBS);
     expect(events[0]!.payload['commentary']).not.toBe('Rix Vanto scores for Mars United!');
     expect(events[0]!.payload['voice']).toBeDefined();
     expect(events[0]!.payload['voiceIndex']).toBeDefined();
@@ -170,19 +187,49 @@ describe('decorateCommentary', () => {
     // losing its commentary entirely — otherwise adding an event type to the
     // engine silently blanks it in the feed.
     const events = [{ type: 'pass', payload: { commentary: 'A player plays the ball forward.' } }];
-    decorateCommentary(events, 'match-abc');
+    decorateCommentary(events, 'match-abc', CLUBS);
     expect(events[0]!.payload['commentary']).toBe('A player plays the ball forward.');
     expect(events[0]!.payload['voice']).toBeUndefined();
   });
 
   it('falls back to readable names when the scorer could not be resolved', () => {
     // Observed in production: `{"isGoal":true,"commentary":"A player scores for
-    // Away!"}` — the player never resolved, so only `side` was present.
+    // Away!"}`: the player never resolved, so only `side` was present.
     const events = [{ type: 'goal', payload: { commentary: 'x', side: 'away' } }];
-    decorateCommentary(events, 'match-abc');
+    decorateCommentary(events, 'match-abc', CLUBS);
     const text = String(events[0]!.payload['commentary']);
     expect(text).not.toMatch(/undefined|null|<[a-z_]+>/);
-    expect(text).toContain('the away side');
+    expect(text).toContain('Mars Athletic');
+  });
+
+  // Season 1, matchday 1: 126 of 863 lines said "the home side" / "the away
+  // side" (every corner: corners carry a side but no team) and 126 used the
+  // club's three-letter code ("EUN adjust. Amara Diallo on.", "Priya Sharma
+  // for EUN"), because `payload.team` is the code the worker matches goals on.
+  it('names the club on air, never its code or "the home/away side"', () => {
+    for (let i = 0; i < 40; i++) {
+      const events = [
+        { type: 'out_corner',   payload: { commentary: 'c', side: i % 2 ? 'home' : 'away' } },
+        { type: 'substitution', payload: { commentary: 's', side: 'home', team: 'EUN', player: 'Amara Diallo' } },
+        { type: 'goal',         payload: { commentary: 'g', side: 'away', team: 'MRS', player: 'Priya Sharma' } },
+      ];
+      decorateCommentary(events, `match-${i}`, CLUBS);
+      for (const ev of events) {
+        const text = String(ev.payload['commentary']);
+        expect(text, text).not.toMatch(/\bthe (home|away) side\b/i);
+        expect(text, text).not.toMatch(/\b(EUN|MRS)\b/);
+      }
+      expect(String(events[1]!.payload['commentary'])).toContain('Earth United');
+      expect(String(events[1]!.payload['commentary'])).not.toContain('Earth United FC');
+      // Corners always name the club; a goal line may not name it at all.
+      expect(String(events[0]!.payload['commentary'])).toMatch(i % 2 ? /Earth United/ : /Mars Athletic/);
+    }
+  });
+
+  it('keeps payload.team (the machine key) untouched', () => {
+    const events = [{ type: 'goal', payload: { commentary: 'g', side: 'home', team: 'EUN', player: 'P' } }];
+    decorateCommentary(events, 'match-abc', CLUBS);
+    expect(events[0]!.payload['team']).toBe('EUN');
   });
 
   it('is stable across runs for the same match', () => {
@@ -191,21 +238,21 @@ describe('decorateCommentary', () => {
       { type: 'foul', payload: { commentary: 'y', player: 'B' } },
       { type: 'tackle', payload: { commentary: 'z', player: 'C' } },
     ];
-    const a = decorateCommentary(build(), 'match-same');
-    const b = decorateCommentary(build(), 'match-same');
+    const a = decorateCommentary(build(), 'match-same', CLUBS);
+    const b = decorateCommentary(build(), 'match-same', CLUBS);
     expect(a.map((e) => e.payload['commentary'])).toEqual(b.map((e) => e.payload['commentary']));
   });
 
   it('gives different matches different broadcasts', () => {
     const build = () => [{ type: 'goal', payload: { commentary: 'x', player: 'A', team: 'T' } }];
-    const a = decorateCommentary(build(), 'match-one');
-    const b = decorateCommentary(build(), 'match-two');
+    const a = decorateCommentary(build(), 'match-one', CLUBS);
+    const b = decorateCommentary(build(), 'match-two', CLUBS);
     // Not a strict inequality assertion on one event — with three voices and a
     // shared pool a collision is possible — but across ten matches they must
     // not all be identical.
     const texts = new Set<string>();
     for (let i = 0; i < 10; i++) {
-      texts.add(String(decorateCommentary(build(), `match-${i}`)[0]!.payload['commentary']));
+      texts.add(String(decorateCommentary(build(), `match-${i}`, CLUBS)[0]!.payload['commentary']));
     }
     expect(texts.size).toBeGreaterThan(3);
     expect([a, b]).toHaveLength(2);

@@ -944,7 +944,7 @@ async function processMatch(match: any): Promise<boolean> {
     // Deterministic on the match id, so a replay reads identically, and done
     // here rather than inside the adapter because `spatial/` is parity-guarded
     // against its src twin on code AND prose.
-    decorateCommentary(result.events, match.id);
+    decorateCommentary(result.events, match.id, { home: homeData.name, away: awayData.name });
 
     const positionFrames: PositionFrame[] = spatialResult.frames;
 
