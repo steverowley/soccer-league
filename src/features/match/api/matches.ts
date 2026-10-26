@@ -83,6 +83,7 @@ export async function getMatch(db: IslSupabaseClient, matchId: string) {
       competitions (id, name, type, format),
       home_team:teams!matches_home_team_id_fkey (
         *,
+        stadium:entities!teams_stadium_entity_id_fkey (name),
         managers (id, name, preferred_formation, style),
         players (id, name, position, starter, jersey_number, overall_rating)
       ),
@@ -98,7 +99,9 @@ export async function getMatch(db: IslSupabaseClient, matchId: string) {
     `,
     )
     .eq('id', matchId)
-    .single();
+    // maybeSingle: an unknown id is null (the page shows "no such match"),
+    // not an error (which the page would report as an outage).
+    .maybeSingle();
   if (error) throw error;
   // Never hand the withheld result to the page — see stripWithheldResult.
   return stripWithheldResult(data);

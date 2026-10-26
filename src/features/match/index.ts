@@ -205,8 +205,12 @@ export {
   listAllSeasons,
   getSeasonSummary,
   getActiveSeason,
+  getSeasonPhase,
+  getSeasonList,
+  deriveSeasonPhase,
 } from './api/seasons';
-export type { SeasonSummary } from './api/seasons';
+export type { SeasonSummary, SeasonPhase, SeasonPhaseRow } from './api/seasons';
+export { useSeasonPhase } from './hooks/useSeasonPhase';
 
 // ── Automatic season rollover (#568) ───────────────────────────────────────
 // The idempotent "create season N+1" engine lives in api/seasonRollover.ts.

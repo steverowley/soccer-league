@@ -24,7 +24,6 @@
 //   list means the DB connection is degraded, which the global error
 //   surfaces handle elsewhere.
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Header from '../components/Header';
@@ -35,7 +34,9 @@ import {
   SectionHeader,
 } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { listAllSeasons, type SeasonSummary } from '../features/match';
+import { getSeasonList, type SeasonSummary } from '../features/match';
+import { useAsyncData } from '../shared/hooks/useAsyncData';
+import { AsyncView, PreSeasonState } from '../shared/ui';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const { abyss: ABYSS, dust: DUST, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
@@ -81,18 +82,9 @@ function formatRange(s: SeasonSummary): string {
  */
 export default function Seasons() {
   const db = useSupabase();
-  const [seasons, setSeasons] = useState<SeasonSummary[]>([]);
-  const [loaded,  setLoaded]  = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    listAllSeasons(db).then((rows) => {
-      if (cancelled) return;
-      setSeasons(rows);
-      setLoaded(true);
-    });
-    return () => { cancelled = true; };
-  }, [db]);
+  // getSeasonList throws on a failed read, so an outage is an error state
+  // and an empty list really means no season has been played (pre-season).
+  const seasonsState = useAsyncData(() => getSeasonList(db), [db]);
 
   return (
     <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
@@ -110,15 +102,16 @@ export default function Seasons() {
           </section>
 
           <section style={{ padding: '0 0 80px' }}>
-            {!loaded ? (
-              <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
-                Reading the cosmic ledger…
-              </p>
-            ) : seasons.length === 0 ? (
-              <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
-                The void offers no record of past seasons.
-              </p>
-            ) : (
+            <AsyncView
+              state={seasonsState}
+              what="the season archive"
+              loading="Reading the ledger"
+              isEmpty={(rows) => rows.length === 0}
+              empty={(
+                <PreSeasonState detail="The archive opens once the first season is played." />
+              )}
+            >
+              {(seasons) => (
               <ul style={{
                 listStyle:     'none',
                 padding:       0,
@@ -183,7 +176,8 @@ export default function Seasons() {
                   </li>
                 ))}
               </ul>
-            )}
+              )}
+            </AsyncView>
           </section>
         </Container>
       </main>

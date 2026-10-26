@@ -35,6 +35,7 @@
 // fans can react without the simulation handing them a number to optimise.
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { withTimeout } from '../shared/hooks/useAsyncData';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
@@ -120,10 +121,10 @@ export default function Idols() {
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire fetch, settle into success/error state once it resolves
     setLoadError(null);
-    Promise.all([
+    withTimeout(Promise.all([
       getIdolBoard(db, { globalLimit: GLOBAL_LIMIT }),
       getIdolBoard(db, { globalLimit: MOVERS_LIMIT }),
-    ])
+    ]))
       .then(([b, m]) => {
         if (cancelled) return;
         setBoard((b.global as unknown as IdolBoardRow[]) ?? []);

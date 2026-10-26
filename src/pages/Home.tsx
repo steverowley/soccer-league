@@ -35,7 +35,6 @@
 // IMAGE ASSETS (already in /public/img/):
 //   - hero-pillars.png — full-bleed nebula halftone for the hero left
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import {
@@ -50,14 +49,25 @@ import {
 } from '../components/Layout';
 import StandingsTable from '../components/StandingsTable';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { Button, Card, Chip, EmptyState, SectionPanel } from '../shared/ui';
-import { LEAGUES } from '../data/leagueData';
 import {
-  fetchLeagueStandings,
-  getActiveSeason,
+  AsyncView,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PreSeasonState,
+  SectionPanel,
+} from '../shared/ui';
+import { useAsyncData } from '../shared/hooks/useAsyncData';
+import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
+import {
+  fetchLeagueStandingsResult,
+  useSeasonPhase,
+  type SeasonPhase,
   getLiveMatches,
   getUpcomingMatches,
-  type LeagueStandingsRow,
 } from '../features/match';
 
 // ── Palette aliases ─────────────────────────────────────────────────────────
@@ -70,7 +80,7 @@ import {
 // FLARE is kept for future error states.  Both are imported even when
 // only one is currently referenced so the alias block stays a stable
 // single source of truth for this page.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
 const HAIRLINE   = COLORS.hairline;
 const DUST_50    = COLORS.dust50;
 const DUST_70    = COLORS.dust70;
@@ -103,177 +113,217 @@ export default function Home() {
   usePageTitle(null);
   const db = useSupabase();
 
-  // ── Live + upcoming match state ───────────────────────────────────────────
-  // Single fetch on mount; live + upcoming are stable for a session.  No
-  // polling — live updates would come through Realtime subscriptions in
-  // a follow-up.
-  const [liveMatches, setLiveMatches] = useState<any[]>([]);
-  const [upcomingMatches, setUpcomingMatches] = useState<any[]>([]);
+  // ── Season phase ──────────────────────────────────────────────────────────
+  // Decides between the season view (live panel, fixtures, table) and the
+  // pre-season view. A failed read is an error, never a silent "no season".
+  const phase = useSeasonPhase();
+  const inSeason = phase.status === 'success' && phase.data?.phase === 'in-season';
+  const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
-  // ── Active season state ──────────────────────────────────────────────────
-  // Fetched once on mount and drives hero stat values (current matchday,
-  // season year, completion percentage).  Stable across session.
-  const [activeSeason, setActiveSeason] = useState<any>(null);
-
-  // Surface fetch failures instead of silently rendering an empty matchday
-  // (#532). retryNonce re-triggers both data effects when the user retries.
-  const [loadError, setLoadError] = useState(false);
-  const [retryNonce, setRetryNonce] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      getLiveMatches(db),
-      getUpcomingMatches(db, 3),
-      getActiveSeason(db),
-    ])
-      .then(([live, upcoming, season]) => {
-        if (cancelled) return;
-        setLiveMatches(live);
-        setUpcomingMatches(upcoming);
-        setActiveSeason(season);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.warn('[Home] fixture/season fetch failed:', err);
-        setLoadError(true);
-      });
-    return () => { cancelled = true; };
-  }, [db, retryNonce]);
-
-  const featuredLive = liveMatches[0] ?? null;
+  // ── Live + upcoming fixtures ──────────────────────────────────────────────
+  // Read even in pre-season: a scheduled Season 1 with a future start date
+  // already has fixtures worth showing.
+  const fixtures = useAsyncData(
+    () => Promise.all([getLiveMatches(db), getUpcomingMatches(db, 3)])
+      .then(([live, upcoming]) => ({ live, upcoming })),
+    [db],
+  );
+  const liveMatches = fixtures.data?.live ?? [];
+  const upcomingMatches = fixtures.data?.upcoming ?? [];
 
   // ── Featured standings ────────────────────────────────────────────────────
-  // Rocky Inner is the default featured league on Home.  Standings are
-  // fetched from Supabase (completed matches in this league's competitions)
-  // and sorted by points DESC → GD DESC → GF DESC.  We stamp a 1-based
-  // position on each row so the renderer can show the 3-tier pipe
-  // (dust top-3 / none middle / flare bottom-2).
-  //
-  // Loaded asynchronously via fetchLeagueStandings — Home renders a
-  // placeholder strip while pending so we don't paint zeros that get
-  // replaced 200ms later.
+  // Rocky Inner is the featured league. Only fetched in season: before the
+  // first match every row is zero, and a table of zeros is not a table.
   const featuredLeague = LEAGUES[0]!;
-  const [standingsRows, setStandingsRows] = useState<
-    Array<LeagueStandingsRow & { position: number; club: string; team_link: string }>
-  >([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchLeagueStandings(db, featuredLeague.id)
-      .then((rows) => {
-        if (cancelled) return;
-        setStandingsRows(rows.map((row, idx) => ({
-          ...row,
-          position:  idx + 1,
-          // StandingsTable accepts both `team` and `club` for the label;
-          // keep the duplicated key so any consumer that reads `club`
-          // continues to work without prop edits.
-          club:      row.team,
-          team_link: row.teamLink,
-        })));
-      })
-      .catch((err) => { console.warn('[Home] standings fetch failed:', err); });
-    return () => { cancelled = true; };
-  }, [db, featuredLeague.id, retryNonce]);
+  const standings = useAsyncData(
+    () => fetchLeagueStandingsResult(db, featuredLeague.id).then((result) => {
+      if (!result.ok) throw new Error(`standings unavailable: ${String(result.reason)}`);
+      return result.rows;
+    }).then((rows) => rows.map((row, idx) => ({
+      ...row,
+      position:  idx + 1,
+      // StandingsTable accepts both `team` and `club` for the label.
+      club:      row.team,
+      team_link: row.teamLink,
+    }))),
+    [db, featuredLeague.id],
+    { enabled: inSeason },
+  );
 
   return (
     <div style={{
-        ...(undefined as any),
       background: ABYSS,
       color: DUST,
       minHeight: '100vh',
     }}>
       <Header />
 
-      {loadError && (
-        <div role="alert" style={{
-          background: '#241012',
-          color: DUST,
-          borderBottom: `1px solid ${FLARE}`,
-          fontSize: 13,
-          padding: '12px 0',
-        }}>
+      {/* Hero — full bleed, two-column. */}
+      <Hero
+        phase={phase.status === 'success' ? phase.data ?? null : null}
+        liveMatchCount={fixtures.status === 'success' ? liveMatches.length : 0}
+      />
+
+      {/* The season could not be read at all: say so once, with a retry,
+          instead of guessing which world to paint. */}
+      {(phase.status === 'error' || phase.status === 'timeout') && (
+        <section style={{ padding: '32px 0 64px' }}>
           <Container>
-            <span style={{ color: FLARE }}>Signal lost</span>: the league feed didn&apos;t load.{' '}
-            <button
-              type="button"
-              onClick={() => { setLoadError(false); setRetryNonce((n) => n + 1); }}
-              style={{
-                color: FLARE, background: 'none', border: 'none', padding: 0,
-                font: 'inherit', textDecoration: 'underline', cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
+            <ErrorState
+              what="the league calendar"
+              timedOut={phase.status === 'timeout'}
+              onRetry={() => { phase.retry(); fixtures.retry(); }}
+            />
+            {/* The clubs are static canon, so they still render offline. */}
+            <div style={{ marginTop: 32 }}><LeagueClubsGrid /></div>
           </Container>
-        </div>
+        </section>
       )}
 
-      {/* Hero — full bleed, two-column. */}
-      <Hero season={activeSeason} liveMatchCount={liveMatches.length} />
+      {phase.status === 'loading' && (
+        <section style={{ padding: '32px 0 64px' }}>
+          <Container><LoadingState label="Reading the league calendar" /></Container>
+        </section>
+      )}
 
-      {/* Section II — Live From The Void. */}
-      <section style={{ padding: '64px 0' }}>
-        <Container>
-          <SectionHeader
-            pageKicker="The Present"
-            kicker="I"
-            label="Live From The Void"
-            title="In Progress"
-            subtitle="Matches in progress. Position updates every ninety seconds. Architect interference reflected in real time."
-            actionLabel="View All Matches"
-            actionTo="/matches"
-          />
-          <div className="isl-live-grid" style={{
-        ...(undefined as any),
-            display: 'grid',
-            gridTemplateColumns: '2fr 1fr',
-            gap: 32,
-            marginTop: 32,
-          }}>
-            {/* When a live match exists, the LiveMatchPanel renders it.
-                Otherwise we surface the next upcoming match in the same
-                slot with a "next kickoff" countdown — pre-#385 the slot
-                rendered "The void is silent.", which left the headline
-                CTA on Home feeling like a dead end during quiet hours. */}
-            <LiveMatchPanel match={featuredLive} fallbackUpcoming={upcomingMatches[0] ?? null} />
-            <UpcomingPanel matches={upcomingMatches} />
-          </div>
-        </Container>
-      </section>
+      {/* Pre-season: the league, its clubs and what is coming. */}
+      {preSeason && phase.data && (
+        <section style={{ padding: '48px 0 80px' }}>
+          <Container>
+            <SectionHeader
+              pageKicker="The League"
+              kicker="I"
+              label="Pre-season"
+              title="Four Leagues, Thirty-Two Clubs"
+              subtitle="Every club is ready. Fixtures appear here once the season is scheduled."
+              actionLabel="All Clubs"
+              actionTo="/teams"
+            />
+            <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 32 }}>
+              <PreSeasonState
+                seasonName={phase.data.nextName}
+                startsAt={phase.data.startsAt}
+                detail="Pick a club, learn the squads and be here for the first whistle."
+              />
+              {upcomingMatches.length > 0 && <UpcomingPanel matches={upcomingMatches} />}
+              <LeagueClubsGrid />
+            </div>
+          </Container>
+        </section>
+      )}
 
-      {/* Section III — Standings. */}
-      <section style={{ padding: '0 0 80px' }}>
-        <Container>
-          <SectionHeader
-            pageKicker="Tables"
-            kicker="II"
-            label={featuredLeague.name}
-            title="The Standings"
-            subtitle="Top of the table after fourteen matchdays. Form column shows the last five results."
-            actionLabel="View All Leagues"
-            actionTo="/leagues"
-          />
-          <div style={{ marginTop: 24 }}>
-            <StandingsTable rows={standingsRows} />
-          </div>
-        </Container>
-      </section>
+      {/* In season — Section II, Live From The Void. */}
+      {inSeason && (
+        <section style={{ padding: '64px 0' }}>
+          <Container>
+            <SectionHeader
+              pageKicker="The Present"
+              kicker="I"
+              label="Live From The Void"
+              title={liveMatches.length > 0 ? 'In Progress' : 'Next Up'}
+              subtitle="Matches in progress and the next fixtures. Architect interference reflected in real time."
+              actionLabel="View All Matches"
+              actionTo="/matches"
+            />
+            <div style={{ marginTop: 32 }}>
+              <AsyncView state={fixtures} what="the live feed" loading="Loading fixtures">
+                {() => (
+                  <div className="isl-live-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: '2fr 1fr',
+                    gap: 32,
+                  }}>
+                    {/* A live match, else the next fixture, else a quiet
+                        placeholder (#385). */}
+                    <LiveMatchPanel match={liveMatches[0] ?? null} fallbackUpcoming={upcomingMatches[0] ?? null} />
+                    <UpcomingPanel matches={upcomingMatches} />
+                  </div>
+                )}
+              </AsyncView>
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {/* In season — Section III, Standings. */}
+      {inSeason && (
+        <section style={{ padding: '0 0 80px' }}>
+          <Container>
+            <SectionHeader
+              pageKicker="Tables"
+              kicker="II"
+              label={featuredLeague.name}
+              title="The Standings"
+              subtitle="The current table. Form column shows the last five results."
+              actionLabel="View All Leagues"
+              actionTo="/leagues"
+            />
+            <div style={{ marginTop: 24 }}>
+              <AsyncView state={standings} what="the table" loading="Loading the table">
+                {(rows) => <StandingsTable rows={rows} />}
+              </AsyncView>
+            </div>
+          </Container>
+        </section>
+      )}
 
       <Footer />
 
       {/* Responsive grids for tablet and mobile. */}
       <style>{`
+        .isl-hero-img { min-height: 480px; }
         @media (max-width: 899px) {
           .isl-live-grid { grid-template-columns: 1fr !important; }
           .isl-hero-grid { grid-template-columns: 1fr !important; }
-          .isl-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .isl-stats-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .isl-hero-img { min-height: 0 !important; }
+          .isl-league-grid { grid-template-columns: 1fr 1fr !important; }
         }
         @media (max-width: 599px) {
-          .isl-stats-grid { grid-template-columns: 1fr !important; }
+          .isl-league-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ── Pre-season league + clubs grid ──────────────────────────────────────────
+
+/**
+ * The four leagues and their clubs, from the static league data (no network
+ * read, so it renders even when the database is slow). Each club links to
+ * its page.
+ */
+function LeagueClubsGrid() {
+  return (
+    <div className="isl-league-grid" style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+      gap: 24,
+    }}>
+      {LEAGUES.map((league) => (
+        <div key={league.id} style={{ border: `1px solid ${HAIRLINE}`, padding: 20 }}>
+          <Link
+            to={`/leagues/${league.id}`}
+            style={{
+              color: DUST, textDecoration: 'none', fontWeight: 700, fontSize: 14,
+              textTransform: 'uppercase', letterSpacing: '0.04em',
+            }}
+          >
+            {league.name}
+          </Link>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '14px 0 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(TEAMS_BY_LEAGUE[league.id] ?? []).map((team) => (
+              <li key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, flex: 'none' }} />
+                <Link to={`/teams/${team.id}`} style={{ color: DUST_70, textDecoration: 'none', fontSize: 14 }}>
+                  {team.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
@@ -284,36 +334,34 @@ export default function Home() {
  * Hero section — full-bleed Pillars halftone left, content stack right.
  *
  * Right stack: kicker row → hairline → display masthead → coords row →
- * body prose → primary + flare CTAs → 4-cell stats grid.
+ * body prose → CTAs → stats grid.
+ *
+ * Honesty rules: the "Live now" cue appears only when a match is genuinely
+ * live; the season label comes from the database (or says pre-season); the
+ * CTA points at a live match only when one exists.
  *
  * Collapses to single column < 900 px (image stacks above content).
  *
- * @param {{ season: any | null, liveMatchCount: number }} props
- *   - season: active season row with year, current_round, total_rounds
- *   - liveMatchCount: number of matches currently in progress
- * @returns {JSX.Element}
+ * @param props.phase           Season phase, or null while unknown.
+ * @param props.liveMatchCount  Matches live right now (0 when unknown).
  */
-function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: number }) {
-  // ── Compute hero stats from live data ─────────────────────────────────────
-  // Season is fetched on Home mount; fallback to placeholders during load.
-  // The seasons table only stores year, name, is_active, start/end dates.
-  // Matchday/round tracking happens via match completion counts.
-  const year = season?.year ?? '—';
-  const seasonLabel = `SEASON ${year}`;
-  // Hero stat — live matches in progress.
-  //
-  // Pre-#385 was hard-coded `/ 16` (the count of fixtures in a single
-  // league round). That denominator is wrong any time the universe isn't
-  // running exactly one round in flight — it implies "16 possible live
-  // matches" when there may be 0 or 32. Drop the denominator entirely;
-  // a single tabular number reads cleaner and never lies about the
-  // theoretical maximum.
-  const matchesStr = String(liveMatchCount).padStart(2, '0');
+function Hero({ phase, liveMatchCount }: { phase: SeasonPhase | null; liveMatchCount: number }) {
+  const isLive = liveMatchCount > 0;
+  const seasonLabel = phase == null
+    ? null
+    : phase.phase === 'in-season'
+      ? (phase.active?.name ?? 'Season')
+      : `Pre-season`;
+  const seasonValue = phase == null
+    ? 'Unknown'
+    : phase.phase === 'in-season'
+      ? (phase.active?.name ?? 'In season')
+      : `${phase.nextName} soon`;
+  const clubCount = Object.values(TEAMS_BY_LEAGUE).reduce((n, teams) => n + teams.length, 0);
   return (
     <section style={{ padding: '0 0 0 0' }}>
       <Container>
         <div className="isl-hero-grid" style={{
-        ...(undefined as any),
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
           gap: 48,
@@ -321,18 +369,17 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
           padding: '32px 16px',
         }}>
           {/* Pillars image — fixed aspect frame so the page rhythm is
-              stable even before the PNG loads.  No border decoration;
-              the image carries its own halftone edge. */}
-          <div style={{
-        ...(undefined as any),
+              stable even before the image loads. */}
+          {/* min-height lives in the stylesheet below: on a phone a 480 px
+              floor plus the 4:5 ratio forced a 384 px wide box into a
+              326 px column and pushed the page sideways. */}
+          <div className="isl-hero-img" style={{
             aspectRatio: '4 / 5',
             overflow: 'hidden',
             background: '#000',
-            minHeight: 480,
           }}>
             {/* #393: AVIF preferred (smallest), WebP fallback covers every
-                supported browser. PNG was deleted at conversion time so the
-                <img> src must point at WebP, not the legacy .png path. */}
+                supported browser. */}
             <picture>
               <source srcSet={`${import.meta.env.BASE_URL}img/hero-pillars.avif`} type="image/avif" />
               <source srcSet={`${import.meta.env.BASE_URL}img/hero-pillars.webp`} type="image/webp" />
@@ -346,36 +393,36 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
 
           {/* Right column — content stack. */}
           <div style={{
-        ...(undefined as any),
             display: 'flex',
             flexDirection: 'column',
             gap: 24,
             paddingBlock: 32,
           }}>
-            {/* Kicker row — SEASON • LIVE.  Tightly tracked
-                mono small-caps; sourced from active_season row. */}
+            {/* Kicker row: season (from the DB) and, only when true, LIVE. */}
             <div style={{
-        ...(undefined as any),
               display: 'flex',
+              flexWrap: 'wrap',
               gap: 16,
               fontSize: 13,
               letterSpacing: '0.18em',
               textTransform: 'uppercase',
               color: DUST,
+              minHeight: 18,
             }}>
-              <span>{seasonLabel}</span>
-              <span style={{ color: DUST_50 }}>•</span>
-              <span>{HERO_LIVE}</span>
+              <span>{seasonLabel ?? 'Intergalactic Soccer League'}</span>
+              {isLive && (
+                <>
+                  <span style={{ color: DUST_50 }}>•</span>
+                  <span style={{ color: QUANTUM }}>{HERO_LIVE}</span>
+                </>
+              )}
             </div>
 
             <hr style={{ border: 0, height: 1, background: HAIRLINE, margin: 0 }} />
 
-            {/* Display masthead — three lines deliberately broken to
-                match the design.  Tight line-height + uppercase + bold
-                weight gives the publication-header look. */}
+            {/* Display masthead — three lines deliberately broken. */}
             <h1 style={{
-        ...(undefined as any),
-              fontSize: 48,
+              fontSize: 'clamp(36px, 10vw, 48px)',
               fontWeight: 700,
               lineHeight: 1.1,
               textTransform: 'uppercase',
@@ -385,11 +432,8 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
               Soccer,<br />Charted Across<br />The Stars
             </h1>
 
-            {/* Coordinates row — RA / EPOCH / DEC reads as "we know
-                where we are".  Bullets at 50 % dust so the labels +
-                values read as one continuous data row. */}
+            {/* Coordinates row — decorative. */}
             <div style={{
-        ...(undefined as any),
               display: 'flex',
               flexWrap: 'wrap',
               gap: 16,
@@ -405,7 +449,6 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
             </div>
 
             <p style={{
-        ...(undefined as any),
               fontSize: 16,
               lineHeight: 1.6,
               margin: 0,
@@ -415,20 +458,23 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
               {HERO_BODY}
             </p>
 
-            {/* CTAs — primary dark-outline + flare-filled.  The pair
-                gives "browse vs watch" different visual weights so the
-                eye lands on the flare button first. */}
+            {/* CTAs — the flare button points at a live match only when one
+                exists; otherwise at the fixtures (in season) or the clubs
+                (pre-season). */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <PrimaryButton to="/leagues">Browse Leagues</PrimaryButton>
-              <FocusCTA to="/matches">Watch Live Match</FocusCTA>
+              {isLive ? (
+                <FocusCTA to="/matches">Watch Live Match</FocusCTA>
+              ) : phase?.phase === 'pre-season' ? (
+                <FocusCTA to="/teams">Meet The Clubs</FocusCTA>
+              ) : (
+                <FocusCTA to="/matches">See Fixtures</FocusCTA>
+              )}
             </div>
 
-            {/* Stats grid — 3 small-caps cells separated by a top
-                hairline.  Responsive: 3 cols on desktop, 2 on tablet,
-                1 on mobile. Values are live from active_season + match
-                counts; show placeholders during fetch. */}
+            {/* Stats grid. Only facts: the club and league counts are static
+                canon; the season cell reads the DB. */}
             <div className="isl-stats-grid" style={{
-        ...(undefined as any),
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               borderTop: `1px solid ${HAIRLINE}`,
@@ -436,9 +482,11 @@ function Hero({ season, liveMatchCount }: { season: any | null; liveMatchCount: 
               gap: 16,
               marginTop: 8,
             }}>
-              <HeroStat label="Active Matches" value={matchesStr} />
-              <HeroStat label="Season Year"   value={year} />
-              <HeroStat label="Build"          value="v 0.7.0" />
+              <HeroStat label="Season" value={seasonValue} />
+              {isLive
+                ? <HeroStat label="Live Now" value={String(liveMatchCount).padStart(2, '0')} />
+                : <HeroStat label="Clubs" value={String(clubCount)} />}
+              <HeroStat label="Leagues" value={String(LEAGUES.length)} />
             </div>
           </div>
         </div>

@@ -33,6 +33,7 @@
 // be undone.
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { withTimeout } from '../shared/hooks/useAsyncData';
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
 import { Button, Skeleton } from '../shared/ui';
@@ -123,7 +124,7 @@ export default function News() {
     setLoadError(null);
     setLoaded(false);
     const kindArg = filter === FILTER_ALL ? undefined : filter;
-    getRecentNarratives(db, limit, undefined, kindArg)
+    withTimeout(getRecentNarratives(db, limit, undefined, kindArg))
       .then((data) => {
         if (cancelled) return;
         setRows(data);

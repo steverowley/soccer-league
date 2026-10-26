@@ -40,6 +40,7 @@
 //     in migrations 0062–0064 (Phase 6 world-building).
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { withTimeout } from '../shared/hooks/useAsyncData';
 
 import Header from '../components/Header';
 import { COLORS, Container, Footer } from '../components/Layout';
@@ -199,7 +200,7 @@ export default function World() {
     const group = KIND_GROUPS.find((g) => g.key === activeGroup);
     const kinds = group && group.kinds.length > 0 ? [...group.kinds] : undefined;
 
-    listEntities(db, kinds, LIST_LIMIT)
+    withTimeout(listEntities(db, kinds, LIST_LIMIT))
       .then((rows) => {
         if (cancelled) return;
         setEntities(rows);

@@ -80,9 +80,10 @@ export async function getWagerLeaderboard(
     .order('total_won', { ascending: false })
     .limit(limit);
 
+  // Throw rather than return []: the page must be able to tell "nobody has
+  // won a wager yet" from "the board did not load" (#site-states).
   if (error) {
-    console.warn('[getWagerLeaderboard] failed:', error.message);
-    return [];
+    throw error;
   }
 
   // Validate row-by-row; drop the bad ones rather than failing the whole
