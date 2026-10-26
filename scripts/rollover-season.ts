@@ -116,6 +116,14 @@ const ARG_FROM_SEASON   = getArg('from-season');
 const ARG_CADENCE       = getArg('cadence-minutes');
 const ARG_FIRST_KICKOFF = getArg('first-kickoff');
 const ARG_STAGGER       = getArg('kickoff-stagger-minutes');
+/**
+ * `--first-season`: the season being rolled FROM is a placeholder with no
+ * league phase (the league is starting from scratch, e.g. after the
+ * 2026-10-26 pre-launch reset), so there are no standings to draw the
+ * Celestial Cup and Solar Shield from. Skip the old season's cup seeding
+ * instead of failing on missing league competitions.
+ */
+const FIRST_SEASON      = process.argv.includes('--first-season');
 
 const CADENCE_MS       = (ARG_CADENCE ? parseInt(ARG_CADENCE, 10) : DEFAULT_CADENCE_MINUTES) * 60_000;
 const STAGGER_MS       = (ARG_STAGGER ? parseInt(ARG_STAGGER, 10) : DEFAULT_KICKOFF_STAGGER_MINUTES) * 60_000;
@@ -282,7 +290,11 @@ async function run(): Promise<void> {
   );
 
   // Step 2: seed cup brackets for the ending season from its final standings.
-  await seedCurrentSeasonCups(currentSeason.id);
+  if (FIRST_SEASON) {
+    console.log('[rollover-season] --first-season: no prior league phase, skipping cup seeding');
+  } else {
+    await seedCurrentSeasonCups(currentSeason.id);
+  }
 
   // Steps 3–6: build the new season (idempotent — re-runs are no-ops).
   const result = await rolloverSeason(db, currentSeason.id, {
