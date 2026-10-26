@@ -91,8 +91,11 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
 
 /**
  * Anthropic API key for Architect LLM calls (pre-match omen + post-match
- * verdict).  Optional: when empty, the architect falls back to deterministic
- * templates and the post-match save only writes a match-ledger entry — no
+ * verdict).  Used ONLY when the deployment also sets ISL_NARRATIVE_MODE=llm
+ * (docs/mvp-free-tier.md, decision 6): with the default deterministic mode no
+ * model is called even when this secret is set.  When unused, the architect
+ * falls back to deterministic templates and the post-match save only writes
+ * a match-ledger entry — no
  * verdict, no player-arc updates, no relationship mutations.  Match
  * completion is never blocked on this key being present.
  */

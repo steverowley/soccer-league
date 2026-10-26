@@ -54,6 +54,8 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0';
 // drama kinds (retirement_announcement, feud_declaration) flow through the
 // dispatcher as no-ops.
 import { applyDramaConsequence } from './applyConsequence.ts';
+// Model calls are opt-in per deployment (ISL_NARRATIVE_MODE=llm); see handler().
+import { resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 
 // ── Tuning constants ────────────────────────────────────────────────────────
 
@@ -506,12 +508,17 @@ async function drainMaturedConsequences(
 async function handler(): Promise<Response> {
   const supabaseUrl = requireEnv('SUPABASE_URL');
   const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const anthropicKey = requireEnv('ANTHROPIC_API_KEY');
+  // Narrative mode gate (docs/mvp-free-tier.md decision 6): a model is only
+  // called when the deployment opts in with ISL_NARRATIVE_MODE=llm.  The
+  // default is deterministic, in which this tick still drains the matured
+  // consequence queue below (pure database work) but writes no new drama,
+  // because drama text has no corpus path yet.  The key is only required
+  // once a deployment has opted in, exactly as before.
+  const mode: NarrativeMode = resolveNarrativeMode(Deno.env.get('ISL_NARRATIVE_MODE'));
 
   const db = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const anthropic = new Anthropic({ apiKey: anthropicKey });
 
   // ── Drain matured cooloff queue FIRST (isl-hr0) ───────────────────────
   // Every tick processes ready-to-fire consequences before generating
@@ -522,6 +529,17 @@ async function handler(): Promise<Response> {
   if (drainedCount > 0) {
     console.log(`[drama-tick] drained ${drainedCount} matured consequence(s) before tick`);
   }
+
+  if (mode !== 'llm') {
+    console.log('[drama-tick] narrative mode is deterministic; no model call, no new drama this tick');
+    return new Response(
+      JSON.stringify({ emitted: 0, reason: 'narrative_mode_deterministic', drained: drainedCount }),
+      { headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  const anthropicKey = requireEnv('ANTHROPIC_API_KEY');
+  const anthropic = new Anthropic({ apiKey: anthropicKey });
 
   // Daily cap check.
   const todayCount = await dramaToday(db);

@@ -614,11 +614,19 @@ export class CosmicArchitect {
     },
   ) {
     this.apiKey      = apiKey;
-    this.client      = apiKey ? new Anthropic({ apiKey }) : null;
+    this.mode        = opts.mode ?? resolveNarrativeMode(undefined);
+    // No model client unless the deployment opted in (ISL_NARRATIVE_MODE=llm)
+    // AND supplied a key.  Every model path in this class (pre-match decree,
+    // omen, post-match verdict) goes through `this.client`, so with the default
+    // deterministic mode nothing here can reach the network, even when an
+    // ANTHROPIC_API_KEY secret is still set.  Before this gate the decree and
+    // the verdict ignored the mode and called the model whenever a key existed,
+    // which is how production kept logging "credit balance too low" (MVP free
+    // tier, docs/mvp-free-tier.md decision 6).
+    this.client      = apiKey && this.mode === 'llm' ? new Anthropic({ apiKey }) : null;
     // A match with no id still needs a stable key, or its omen would change on
     // every read; the club pairing is the best available stand-in.
     this.matchId     = opts.matchId ?? `${opts.homeTeam.shortName}-${opts.awayTeam.shortName}`;
-    this.mode        = opts.mode ?? resolveNarrativeMode(undefined);
     this.homeTeam    = opts.homeTeam;
     this.awayTeam    = opts.awayTeam;
     this.homeManager = opts.homeManager;
