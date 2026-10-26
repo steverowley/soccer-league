@@ -83,9 +83,6 @@ function makeFrames(count: number, ownerEvery = 3): Frame[] {
 
 // ── The writer (the real one) ────────────────────────────────────────────────
 
-/** Must match OFF_PITCH in matchPositions.ts and the match-worker. */
-const OFF_PITCH = -1;
-
 /**
  * Encode frames exactly as the match worker does.
  *
