@@ -25,8 +25,16 @@
 # range-checked. There is no arbitrary-SQL mode: this job holds a management
 # token and must never become a general-purpose SQL console.
 #
-# REQUIRED SECRET
-#   SUPABASE_ACCESS_TOKEN   Management API personal access token (already set).
+# FREE-TIER GUARD (docs/mvp-free-tier.md, decision 7)
+# A second, DAILY schedule trims replay files to the 800 MB Storage budget
+# (oldest first) and then runs the size check, which fails this job when the
+# database is over 350 MB or Storage is over 800 MB. A red run is the alarm:
+# GitHub emails the repo owner on a failed scheduled workflow.
+#
+# REQUIRED SECRETS
+#   SUPABASE_ACCESS_TOKEN       Management API personal access token (already set).
+#   SUPABASE_URL                Project URL, for Storage deletes (already set).
+#   SUPABASE_SERVICE_ROLE_KEY   Service role, for Storage deletes (already set).
 
 name: Database maintenance
 
@@ -35,12 +43,14 @@ on:
   # project-restricting level. Sunday 04:00 UTC, away from the matchday peak.
   schedule:
     - cron: '0 4 * * 0'
+    # Daily free-tier guard: replay retention, then the size check.
+    - cron: '30 5 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'status | migrations | apply-migration | report | prune'
+        description: 'status | migrations | apply-migration | report | prune | replay-retention | size'
         type: choice
-        options: [status, migrations, apply-migration, report, prune]
+        options: [status, migrations, apply-migration, report, prune, replay-retention, size]
         default: status
       migration_file:
         description: 'With apply-migration: filename, e.g. 0084_compact_match_positions.sql'
@@ -51,7 +61,7 @@ on:
         type: string
         default: '14'
       dry_run:
-        description: 'With prune: measure what would go, change nothing'
+        description: 'With prune or replay-retention: measure what would go, change nothing'
         type: boolean
         default: true
 
@@ -81,15 +91,30 @@ jobs:
       - name: Run maintenance
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        # The scheduled run is a prune at the default retention; a manual run
-        # does exactly what the operator selected (report + dry-run by default).
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        # The weekly scheduled run is a prune at the default retention; the
+        # daily one trims replays and then runs the size guard, which exits 1
+        # (failing the job) over the limits. A manual run does exactly what
+        # the operator selected (report + dry-run by default).
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event.schedule }}" = "30 5 * * *" ]; then
+            # The size check runs even if retention failed, and the job still
+            # fails afterwards if retention did.
+            npx tsx scripts/db-maintenance.ts replay-retention || rc=$?
+            npx tsx scripts/db-maintenance.ts size
+            exit "${rc:-0}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
             npx tsx scripts/db-maintenance.ts prune --retention-days 14
           elif [ "${{ inputs.mode }}" = "prune" ]; then
             npx tsx scripts/db-maintenance.ts prune \
               --retention-days "${{ inputs.retention_days }}" \
               ${{ inputs.dry_run && '--dry-run' || '' }}
+          elif [ "${{ inputs.mode }}" = "replay-retention" ]; then
+            npx tsx scripts/db-maintenance.ts replay-retention \
+              ${{ inputs.dry_run && '--dry-run' || '' }}
+          elif [ "${{ inputs.mode }}" = "size" ]; then
+            npx tsx scripts/db-maintenance.ts size
           elif [ "${{ inputs.mode }}" = "report" ]; then
             npx tsx scripts/db-maintenance.ts report
           elif [ "${{ inputs.mode }}" = "migrations" ]; then

@@ -39,10 +39,31 @@
 //   npx tsx scripts/db-maintenance.ts report
 //   npx tsx scripts/db-maintenance.ts prune --retention-days 14 --dry-run
 //   npx tsx scripts/db-maintenance.ts prune --retention-days 14
+//   npx tsx scripts/db-maintenance.ts replay-retention [--replay-budget-mb 800] [--dry-run]
+//   npx tsx scripts/db-maintenance.ts size
+//
+// FREE-TIER MODES (docs/mvp-free-tier.md)
+//   replay-retention  keeps the `replays` Storage bucket under 800 MB by
+//                     deleting the oldest replay files first (also part of
+//                     `prune`).
+//   size              prints the database and Storage sizes and exits 1 when
+//                     the database is over 350 MB or Storage over 800 MB, so
+//                     the daily workflow run fails visibly.
 //
 // REQUIRED ENV
 //   SUPABASE_ACCESS_TOKEN   Management API personal access token.
 //   SUPABASE_PROJECT_REF    Project ref (defaults to the production ref).
+//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+//                           Only for replay-retention when it deletes files
+//                           (Storage objects cannot be deleted with SQL).
+
+import {
+  evaluateSizeGuard,
+  planReplayRetention,
+  DB_SIZE_LIMIT_BYTES,
+  REPLAY_BUDGET_BYTES,
+  STORAGE_SIZE_LIMIT_BYTES,
+} from './lib/freeTierGuards';
 
 const PROJECT_REF = process.env['SUPABASE_PROJECT_REF'] ?? 'ddtpbipkqamuxnvupddc';
 const ACCESS_TOKEN = process.env['SUPABASE_ACCESS_TOKEN'];
@@ -667,6 +688,114 @@ async function pruneOperationalLogs(cronDays: number, dryRun: boolean): Promise<
   console.log('');
 }
 
+// ── replay retention + size guard (free tier) ───────────────────────────────
+
+/**
+ * Sizes of what the free plan meters: the database, and Storage (all buckets,
+ * plus the `replays` bucket on its own).
+ */
+async function measureFreeTier(): Promise<{ dbBytes: number; storageBytes: number; replayBytes: number; replayCount: number }> {
+  const rows = await runSql<{ db_bytes: number; storage_bytes: number; replay_bytes: number; replay_count: number }>(
+    `select
+       pg_database_size(current_database())                                   as db_bytes,
+       (select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects) as storage_bytes,
+       (select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects
+         where bucket_id = 'replays')                                         as replay_bytes,
+       (select count(*) from storage.objects where bucket_id = 'replays')    as replay_count`,
+    'free-tier-sizes',
+  );
+  const r = rows[0];
+  return {
+    dbBytes: Number(r?.db_bytes ?? 0),
+    storageBytes: Number(r?.storage_bytes ?? 0),
+    replayBytes: Number(r?.replay_bytes ?? 0),
+    replayCount: Number(r?.replay_count ?? 0),
+  };
+}
+
+/**
+ * Daily free-tier guard (docs/mvp-free-tier.md, decision 7): print the
+ * database and Storage sizes, and exit non-zero, failing the workflow
+ * visibly, when the database is over 350 MB or Storage over 800 MB.
+ */
+async function sizeGuard(): Promise<void> {
+  const s = await measureFreeTier();
+  console.log(`Database size : ${mb(s.dbBytes)} (guard ${mb(DB_SIZE_LIMIT_BYTES)}, free plan quota 500 MB)`);
+  console.log(`Storage size  : ${mb(s.storageBytes)} (guard ${mb(STORAGE_SIZE_LIMIT_BYTES)}, free plan 1 GB)`);
+  console.log(`  of which replays: ${mb(s.replayBytes)} in ${s.replayCount} file(s)`);
+  const verdict = evaluateSizeGuard(s.dbBytes, s.storageBytes);
+  if (!verdict.ok) {
+    for (const p of verdict.problems) console.error(`SIZE GUARD FAILED: ${p}`);
+    console.error('Act now: run the prune / replay-retention modes, or check what grew (report mode).');
+    process.exit(1);
+  }
+  console.log('Size guard OK.\n');
+}
+
+/**
+ * Keep the `replays` bucket under its budget by deleting the oldest replay
+ * files first (docs/mvp-free-tier.md, decision 1).
+ *
+ * Listing reads `storage.objects` through the Management API (read-only SQL).
+ * Deleting goes through the Storage API with the service-role key, because
+ * Supabase blocks deleting Storage objects with SQL (the file would be
+ * orphaned in the object store).
+ *
+ * @param budgetBytes  Keep at most this many bytes of replays.
+ * @param dryRun       List what would go, delete nothing.
+ */
+async function replayRetention(budgetBytes: number, dryRun: boolean): Promise<void> {
+  const objects = await runSql<{ name: string; bytes: number; created_at: string }>(
+    `select name,
+            coalesce((metadata->>'size')::bigint, 0) as bytes,
+            created_at
+       from storage.objects
+      where bucket_id = 'replays'
+      order by created_at`,
+    'replay-list',
+  );
+  const plan = planReplayRetention(
+    objects.map((o) => ({ name: String(o.name), bytes: Number(o.bytes), createdAt: String(o.created_at) })),
+    budgetBytes,
+  );
+  console.log(`replays bucket : ${objects.length} file(s), ${mb(plan.totalBytes)} (budget ${mb(budgetBytes)})`);
+  if (plan.remove.length === 0) {
+    console.log('Within budget: nothing to delete.\n');
+    return;
+  }
+  console.log(`oldest ${plan.remove.length} file(s) to delete, leaving ${mb(plan.keptBytes)}`);
+  if (dryRun) {
+    console.log(`[dry-run] would delete ${plan.remove.slice(0, 5).join(', ')}${plan.remove.length > 5 ? ', ...' : ''}\n`);
+    return;
+  }
+
+  const url = process.env['SUPABASE_URL'];
+  const key = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  if (!url || !key) {
+    throw new Error('replay-retention needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to delete files');
+  }
+  // Only ever delete names the worker writes: <uuid>.json.gz at the bucket root.
+  const SAFE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json\.gz$/i;
+  const names = plan.remove.filter((n) => SAFE.test(n));
+  if (names.length !== plan.remove.length) {
+    console.log(`  skipping ${plan.remove.length - names.length} object(s) not named <match uuid>.json.gz`);
+  }
+  const BATCH = 100;
+  let deleted = 0;
+  for (let i = 0; i < names.length; i += BATCH) {
+    const res = await fetch(`${url.replace(/\/$/, '')}/storage/v1/object/replays`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: names.slice(i, i + BATCH) }),
+    });
+    if (!res.ok) {
+      throw new Error(`Storage delete failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    }
+    deleted += names.slice(i, i + BATCH).length;
+  }
+  console.log(`Deleted ${deleted} replay file(s).\n`);
+}
+
 // ── entrypoint ───────────────────────────────────────────────────────────────
 
 /**
@@ -707,6 +836,14 @@ async function main(): Promise<void> {
   const cIdx = argv.indexOf('--cron-retention-days');
   const cronDays = cIdx >= 0 ? Number.parseInt(argv[cIdx + 1] ?? '', 10) : 7;
 
+  const bIdx = argv.indexOf('--replay-budget-mb');
+  const replayBudgetMb = bIdx >= 0 ? Number.parseInt(argv[bIdx + 1] ?? '', 10) : REPLAY_BUDGET_BYTES / 1024 / 1024;
+  if (!Number.isInteger(replayBudgetMb) || replayBudgetMb < 1 || replayBudgetMb > 1024) {
+    console.error(`--replay-budget-mb must be an integer in [1, 1024], got ${replayBudgetMb}`);
+    process.exit(2);
+  }
+  const replayBudgetBytes = replayBudgetMb * 1024 * 1024;
+
   switch (command) {
     case 'status':
       await status();
@@ -739,10 +876,19 @@ async function main(): Promise<void> {
       await tryReport('before');
       await prune(retentionDays, dryRun);
       await pruneOperationalLogs(cronDays, dryRun);
+      await replayRetention(replayBudgetBytes, dryRun);
       if (!dryRun) await tryReport('after');
       break;
+    case 'replay-retention':
+      await replayRetention(replayBudgetBytes, dryRun);
+      break;
+    case 'size':
+      await sizeGuard();
+      break;
     default:
-      console.error(`Unknown command '${command}'. Use: status | migrations | report | prune`);
+      console.error(
+        `Unknown command '${command}'. Use: status | migrations | report | prune | replay-retention | size`,
+      );
       process.exit(2);
   }
 }
