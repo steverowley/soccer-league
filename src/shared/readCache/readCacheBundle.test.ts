@@ -255,16 +255,51 @@ describe('read cache: cache headers', () => {
   });
 });
 
+/**
+ * The first rewrite in vercel.json applied the way Vercel applies it:
+ * `:param` segments are substituted into the destination AND every named
+ * parameter is also appended to the query. Returns null when it does not match.
+ */
+function applyVercelRewrite(url: URL): string | null {
+  const config = JSON.parse(readFileSync(fileURLToPath(new URL('../../../vercel.json', import.meta.url)), 'utf8')) as {
+    rewrites: Array<{ source: string; destination: string }>;
+  };
+  const rule = config.rewrites.find((r) => r.source.startsWith('/api/db/'));
+  if (!rule) throw new Error('vercel.json has no /api/db rewrite');
+  const names: string[] = [];
+  const pattern = new RegExp(`^${rule.source.replace(/:(\w+)/g, (_m, n: string) => { names.push(n); return '([^/]+)'; })}$`);
+  const m = pattern.exec(url.pathname);
+  if (!m) return null;
+  const values = Object.fromEntries(names.map((n, i) => [n, m[i + 1]!]));
+  const dest = new URL(rule.destination.replace(/:(\w+)/g, (_m, n: string) => values[n] ?? ''), url.origin);
+  const query = [url.search.replace(/^\?/, ''), dest.search.replace(/^\?/, ''), ...names.map((n) => `${n}=${values[n]}`)]
+    .filter((s) => s !== '')
+    .join('&');
+  return `${url.origin}${dest.pathname}${query ? `?${query}` : ''}`;
+}
+
 describe('read cache: end to end with supabase-js', () => {
-  /** Plays Vercel: applies the vercel.json rewrite, then calls the bundled function. */
+  /**
+   * Plays Vercel, faithfully: applies the REAL vercel.json rewrite and, as
+   * Vercel does in production, also appends every named route parameter to
+   * the query string. (2026-10-26: production received `resource=teams` on
+   * top of the destination's own parameter, PostgREST rejected it as a
+   * filter, and every cached read failed while a hand-written stand-in here
+   * passed.)
+   */
   const viaVercel: typeof fetch = async (input, init) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
-    const m = /^\/api\/db\/rest\/v1\/([^/]+)$/.exec(url.pathname);
-    const target = m
-      ? `${url.origin}/api/db${url.search ? `${url.search}&` : '?'}__resource=${m[1]}`
-      : url.href;
-    return handler(new Request(target, init));
+    const target = applyVercelRewrite(url);
+    return handler(new Request(target ?? url.href, init));
   };
+
+  it('the vercel.json rewrite never leaks its route parameter to PostgREST', async () => {
+    const target = applyVercelRewrite(new URL(`${SITE}/api/db/rest/v1/teams?select=id%2Cname&limit=3&order=name.desc`));
+    expect(target).not.toBeNull();
+    const res = await handler(new Request(target!));
+    expect(res.status).toBe(200);
+    expect(seen.at(-1)!.url).toBe('/rest/v1/teams?select=id%2Cname&limit=3&order=name.desc');
+  });
 
   it('the public client reads through the committed bundle: lists, single rows, counts, refusals', async () => {
     const db = createPublicReadClient(`${SITE}/api/db`, 'sb_publishable_test', 'proxy', viaVercel);

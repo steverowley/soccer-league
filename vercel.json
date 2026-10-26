@@ -10,8 +10,8 @@
   },
   "rewrites": [
     {
-      "source": "/api/db/rest/v1/:resource",
-      "destination": "/api/db?__resource=:resource"
+      "source": "/api/db/rest/v1/:__resource",
+      "destination": "/api/db?__resource=:__resource"
     },
     {
       "source": "/((?!api/).*)",
