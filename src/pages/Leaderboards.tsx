@@ -102,6 +102,7 @@ export default function Leaderboards(): JSX.Element {
       <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
+            level={1}
             pageKicker="Leaderboards"
             kicker="VII"
             label="Who's Winning"

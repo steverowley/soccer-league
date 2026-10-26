@@ -250,6 +250,7 @@ function Shell({ children, username  }: any) {
       <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
+            level={1}
             pageKicker="Bets"
             kicker="XI"
             label="Wager History"

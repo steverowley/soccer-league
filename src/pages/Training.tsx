@@ -144,6 +144,7 @@ export default function Training() {
       <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
+            level={1}
             pageKicker="Training"
             kicker="VIII"
             label="Player Development"

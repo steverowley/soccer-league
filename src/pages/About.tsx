@@ -24,6 +24,7 @@ export default function About() {
       <Header />
       <Container>
         <SectionHeader
+          level={1}
           pageKicker="ABOUT"
           kicker="I • THE PREMISE"
           title="What is the Intergalactic Soccer League?"

@@ -25,6 +25,29 @@ function replays(n: number, sizeMb: number): StoredReplay[] {
 }
 
 describe('planReplayRetention', () => {
+  it('always deletes orphans (their match no longer exists), even within budget', () => {
+    // 2026-10-26: a pipeline test match was deleted after it played, leaving
+    // its replay file behind with nothing that could ever show it.
+    const list = replays(5, 1).map((r) => (r.name === 'm0003.json.gz' ? { ...r, matchExists: false } : r));
+    const plan = planReplayRetention(list, 100 * MB);
+    expect(plan.remove).toEqual(['m0003.json.gz']);
+    expect(plan.orphans).toBe(1);
+    expect(plan.keptBytes).toBe(4 * MB);
+  });
+
+  it('counts deleted orphans toward the budget before trimming the oldest', () => {
+    const list = replays(10, 1).map((r) => (r.name === 'm0009.json.gz' ? { ...r, matchExists: false } : r));
+    const plan = planReplayRetention(list, 7.5 * MB);
+    // Orphan first (1 MB), then just enough of the oldest: 10 -> 9 -> 7.
+    expect(plan.remove).toEqual(['m0009.json.gz', 'm0000.json.gz', 'm0001.json.gz']);
+    expect(plan.orphans).toBe(1);
+    expect(plan.keptBytes).toBe(7 * MB);
+  });
+
+  it('treats a file with no matchExists flag as a live match', () => {
+    expect(planReplayRetention(replays(3, 1), 100 * MB).remove).toEqual([]);
+  });
+
   it('uses an 800 MB budget by default', () => {
     expect(REPLAY_BUDGET_BYTES).toBe(800 * MB);
   });

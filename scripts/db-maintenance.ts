@@ -745,25 +745,37 @@ async function sizeGuard(): Promise<void> {
  * @param dryRun       List what would go, delete nothing.
  */
 async function replayRetention(budgetBytes: number, dryRun: boolean): Promise<void> {
-  const objects = await runSql<{ name: string; bytes: number; created_at: string }>(
-    `select name,
-            coalesce((metadata->>'size')::bigint, 0) as bytes,
-            created_at
-       from storage.objects
-      where bucket_id = 'replays'
-      order by created_at`,
+  // match_exists: the file is named <match uuid>.json.gz; a file whose match
+  // row is gone (a deleted test match, a wiped season) is an orphan.
+  const objects = await runSql<{ name: string; bytes: number; created_at: string; match_exists: boolean }>(
+    `select o.name,
+            coalesce((o.metadata->>'size')::bigint, 0) as bytes,
+            o.created_at,
+            exists (select 1 from public.matches m
+                     where m.id::text = split_part(o.name, '.', 1)) as match_exists
+       from storage.objects o
+      where o.bucket_id = 'replays'
+      order by o.created_at`,
     'replay-list',
   );
   const plan = planReplayRetention(
-    objects.map((o) => ({ name: String(o.name), bytes: Number(o.bytes), createdAt: String(o.created_at) })),
+    objects.map((o) => ({
+      name: String(o.name),
+      bytes: Number(o.bytes),
+      createdAt: String(o.created_at),
+      matchExists: String(o.match_exists) !== 'false',
+    })),
     budgetBytes,
   );
   console.log(`replays bucket : ${objects.length} file(s), ${mb(plan.totalBytes)} (budget ${mb(budgetBytes)})`);
   if (plan.remove.length === 0) {
-    console.log('Within budget: nothing to delete.\n');
+    console.log('Within budget and no orphans: nothing to delete.\n');
     return;
   }
-  console.log(`oldest ${plan.remove.length} file(s) to delete, leaving ${mb(plan.keptBytes)}`);
+  console.log(
+    `${plan.remove.length} file(s) to delete (${plan.orphans} orphaned, ${plan.remove.length - plan.orphans} oldest), ` +
+    `leaving ${mb(plan.keptBytes)}`,
+  );
   if (dryRun) {
     console.log(`[dry-run] would delete ${plan.remove.slice(0, 5).join(', ')}${plan.remove.length > 5 ? ', ...' : ''}\n`);
     return;

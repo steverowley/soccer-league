@@ -104,6 +104,7 @@ export default function LeagueDetail() {
               block, but the kicker still has breathing room. */}
           <div style={{ marginTop: 24 }}>
             <SectionHeader
+              level={1}
               pageKicker={`Leagues / ${league.shortName}`}
               kicker={league.shortName}
               label="League Detail"

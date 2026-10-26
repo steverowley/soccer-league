@@ -93,6 +93,7 @@ export default function Seasons() {
         <Container>
           <section style={{ padding: '48px 0 24px' }}>
             <SectionHeader
+              level={1}
               pageKicker="ARCHIVE"
               kicker="0"
               label="The Cosmic Ledger"

@@ -25,6 +25,7 @@ export default function Terms() {
       <Header />
       <Container>
         <SectionHeader
+          level={1}
           pageKicker="LEGAL"
           kicker="I • TERMS"
           title="Terms of Service"

@@ -24,22 +24,31 @@ export interface StoredReplay {
   bytes: number;
   /** ISO timestamp; oldest is deleted first. */
   createdAt: string;
+  /**
+   * False when no match row exists for this file any more (a deleted test
+   * match, a wiped season).  Orphans are always deleted, whatever the budget.
+   * Omitted means the match exists.
+   */
+  matchExists?: boolean;
 }
 
 /** What retention decided. */
 export interface RetentionPlan {
-  /** Names to delete, oldest first. */
+  /** Names to delete: orphans first, then the oldest replays. */
   remove: string[];
+  /** How many of `remove` are orphans (their match no longer exists). */
+  orphans: number;
   totalBytes: number;
   /** Bytes left once `remove` is gone. */
   keptBytes: number;
 }
 
 /**
- * Pick the oldest replays to delete so the rest fit in `budgetBytes`.
+ * Pick the replays to delete: every orphan (its match no longer exists, so
+ * nothing can ever show it), then the oldest so the rest fit in `budgetBytes`.
  *
  * Oldest by `createdAt` (ties broken by name, so the plan is deterministic).
- * Nothing is deleted while the bucket is already within budget. A replay is a
+ * Apart from orphans, nothing is deleted while the bucket is within budget.
  * viewing convenience, not the record: results, events and stats stay in the
  * database, and the viewer shows a static formation for a match with no file.
  *
@@ -57,11 +66,18 @@ export function planReplayRetention(
   const remove: string[] = [];
   let kept = totalBytes;
   for (const o of oldestFirst) {
-    if (kept <= budgetBytes) break;
+    if (o.matchExists !== false) continue;
     remove.push(o.name);
     kept -= Math.max(0, o.bytes);
   }
-  return { remove, totalBytes, keptBytes: kept };
+  const orphans = remove.length;
+  for (const o of oldestFirst) {
+    if (kept <= budgetBytes) break;
+    if (o.matchExists === false) continue;
+    remove.push(o.name);
+    kept -= Math.max(0, o.bytes);
+  }
+  return { remove, orphans, totalBytes, keptBytes: kept };
 }
 
 /** Result of the daily size check. */

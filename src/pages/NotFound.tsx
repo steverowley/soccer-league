@@ -20,6 +20,7 @@ export default function NotFound() {
       <Header />
       <Container>
         <SectionHeader
+          level={1}
           pageKicker="404"
           kicker="OFF THE STAR CHARTS"
           title="This corner of the cosmos doesn't exist."

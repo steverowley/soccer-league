@@ -138,6 +138,7 @@ export default function SeasonDetail() {
             {season && (
               <div style={{ marginTop: 24 }}>
                 <SectionHeader
+                  level={1}
                   pageKicker="ARCHIVE"
                   kicker={`Year ${season.year}`}
                   label="The Cosmic Ledger"
