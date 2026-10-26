@@ -225,7 +225,9 @@ export default function TeamDetail() {
         if (cancelled) return;
         const idx = rows.findIndex((r) => r.id === teamId);
         setStanding(idx >= 0 ? (rows[idx] ?? null) : null);
-        setPosition(idx >= 0 ? idx + 1 : null);
+        // A league position needs games: before the first match every club
+        // is level on nothing, so no position is shown (pre-season).
+        setPosition(idx >= 0 && (rows[idx]?.played ?? 0) > 0 ? idx + 1 : null);
       })
       .catch((err) => {
         if (cancelled) return;

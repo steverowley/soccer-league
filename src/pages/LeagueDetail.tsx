@@ -16,7 +16,6 @@
 // surface with a backlink to /leagues.  No redirect, no router shenanigans
 // — just an honest message so the URL stays the user's URL.
 
-import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer, BackLink } from '../components/Layout';
@@ -26,7 +25,9 @@ import { getLeagueLore } from '../data/lore';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { Team } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { fetchLeagueStandings, type LeagueStandingsRow } from '../features/match';
+import { fetchLeagueStandingsResult, useSeasonPhase } from '../features/match';
+import { useAsyncData } from '../shared/hooks/useAsyncData';
+import { AsyncView, PreSeasonState } from '../shared/ui';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // Same pattern as Home / Leagues — destructure the shared COLORS frozen
@@ -66,32 +67,21 @@ export default function LeagueDetail() {
   // `rows` starts as null (pre-fetch) so we can show a loading state without
   // confusing it with an empty array (which now genuinely means "no fixtures
   // in this league yet").
-  const [rows, setRows] = useState<Array<LeagueStandingsRow & { position: number }> | null>(null);
-
-  useEffect(() => {
-    if (!league) return undefined;
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset to loading state, fire fetch, settle into rows once it resolves
-    setRows(null);
-    fetchLeagueStandings(db, league.id)
-      .then((fetched) => {
-        if (cancelled) return;
-        // Stamp 1-based position so StandingsTable's qualification /
-        // relegation pipes know which rows to highlight.
-        setRows(fetched.map((row, idx) => ({ ...row, position: idx + 1 })));
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.warn('[LeagueDetail] standings fetch failed:', err);
-        setRows([]);
-      });
-    return () => { cancelled = true; };
-    // `league` (not `league?.id`) is the canonical exhaustive-deps form
-    // — the effect body reads the full object via the `!league` guard.
-    // The two are equivalent at runtime here because `league` is derived
-    // from `leagueId` via `LEAGUES.find`, so its identity only changes
-    // when `leagueId` changes.
-  }, [db, league]);
+  // The *Result variant: a failed read is an error state, not an empty
+  // table. useAsyncData adds the 10 s timeout and the retry.
+  const standings = useAsyncData(
+    async () => {
+      const result = await fetchLeagueStandingsResult(db, league!.id);
+      if (!result.ok) throw new Error(`standings unavailable: ${String(result.reason)}`);
+      // Stamp 1-based position so StandingsTable's qualification /
+      // relegation pipes know which rows to highlight.
+      return result.rows.map((row, idx) => ({ ...row, position: idx + 1 }));
+    },
+    [db, league?.id],
+    { enabled: league != null },
+  );
+  const phase = useSeasonPhase();
+  const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
   if (!league) return <UnknownLeague leagueId={leagueId} />;
 
@@ -153,19 +143,19 @@ export default function LeagueDetail() {
             subtitle="Full league table. Top three qualify for the Celestial Cup; ranks four through six fall into the Solar Shield. Form column shows the last five results, most-recent first."
           />
           <div style={{ marginTop: 24 }}>
-            {/* Loading vs ready vs empty are three distinct states:
-                  rows === null   → fetch in flight (italic loading note)
-                  rows.length=0   → fetch returned no completed fixtures
-                  rows.length>0   → real standings
-                The legacy synchronous path collapsed all three into the
-                same render branch, which is part of how stale localStorage
-                rows used to bleed through. */}
-            {rows === null && (
-              <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
-                Tabulating cosmic results…
-              </p>
+            {/* Pre-season: no table of zeros. Otherwise the shared
+                loading / error / timeout states, then the real table. */}
+            {preSeason && phase.data ? (
+              <PreSeasonState
+                seasonName={phase.data.nextName}
+                startsAt={phase.data.startsAt}
+                detail="The table fills in once the first matchday is played."
+              />
+            ) : (
+              <AsyncView state={standings} what="The table" loading="Loading the table">
+                {(rows) => <StandingsTable rows={rows} />}
+              </AsyncView>
             )}
-            {rows !== null && <StandingsTable rows={rows} />}
           </div>
         </Container>
       </section>

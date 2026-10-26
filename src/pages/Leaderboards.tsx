@@ -24,13 +24,14 @@
 //   deliberately omit raw stake totals and percentages so the surface
 //   stays read-as-narrative rather than read-as-spreadsheet.
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { getIdolBoard } from '../features/match';
+import { getIdolBoard, useSeasonPhase } from '../features/match';
+import { useAsyncData } from '../shared/hooks/useAsyncData';
+import { AsyncView, EmptyState } from '../shared/ui';
 import { getWagerLeaderboard } from '@features/betting';
 import type { WagerLeaderboardEntry } from '@features/betting';
 
@@ -77,38 +78,17 @@ export default function Leaderboards(): JSX.Element {
   usePageTitle('Leaderboards');
   const db = useSupabase();
 
-  const [wagers, setWagers] = useState<WagerLeaderboardEntry[]>([]);
-  // Idol rows are unknown shape (Idols.tsx uses `any`); we keep that
-  // looseness because the SQL view returns dynamic columns that aren't
-  // worth narrowing at the page level.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [idols, setIdols] = useState<any[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [wagerError, setWagerError] = useState(false);
-  const [idolError, setIdolError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.allSettled([
-      getWagerLeaderboard(db, BOARD_LIMIT),
-      getIdolBoard(db, { globalLimit: BOARD_LIMIT }),
-    ]).then((results) => {
-      if (cancelled) return;
-      const [wagerResult, idolResult] = results;
-      if (wagerResult.status === 'fulfilled') {
-        setWagers(wagerResult.value);
-      } else {
-        setWagerError(true);
-      }
-      if (idolResult.status === 'fulfilled') {
-        setIdols(idolResult.value.global ?? []);
-      } else {
-        setIdolError(true);
-      }
-      setLoaded(true);
-    });
-    return () => { cancelled = true; };
-  }, [db]);
+  // Two independent reads so one board failing never blanks the other.
+  // useAsyncData adds the 10 s timeout and a retry to each.
+  const wagers = useAsyncData(() => getWagerLeaderboard(db, BOARD_LIMIT), [db]);
+  // Idol rows are loosely typed (the SQL view returns dynamic columns).
+  const idols = useAsyncData(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => getIdolBoard(db, { globalLimit: BOARD_LIMIT }).then((r) => (r.global ?? []) as any[]),
+    [db],
+  );
+  const phase = useSeasonPhase();
+  const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
   return (
     <div style={{
@@ -152,11 +132,23 @@ export default function Leaderboards(): JSX.Element {
                 title="Top Wagerers"
                 subtitle="Ordered by credits earned minus credits staked.  Volume bettors with poor returns sink below low-volume sharpshooters."
               />
-              <WagerBoardSection
-                loaded={loaded}
-                error={wagerError}
-                rows={wagers}
-              />
+              <div style={{ marginTop: 24 }}>
+                <AsyncView
+                  state={wagers}
+                  what="The wager board"
+                  loading="Counting the ledger"
+                  isEmpty={(rows) => rows.length === 0}
+                  empty={(
+                    <EmptyState centred={false} style={{ padding: '8px 0' }}>
+                      {preSeason
+                        ? 'No wagers yet. Betting opens with the first fixtures of the season.'
+                        : 'No wagers settled yet. Be the first.'}
+                    </EmptyState>
+                  )}
+                >
+                  {(rows) => <WagerBoard rows={rows} />}
+                </AsyncView>
+              </div>
             </div>
             <div>
               <SectionHeader
@@ -165,11 +157,11 @@ export default function Leaderboards(): JSX.Element {
                 title="Top Idols"
                 subtitle="Ordered by total fan attention: picks plus training clicks, blended.  The formula is yours to interpret."
               />
-              <IdolBoardSection
-                loaded={loaded}
-                error={idolError}
-                rows={idols}
-              />
+              <div style={{ marginTop: 24 }}>
+                <AsyncView state={idols} what="The idol board" loading="Listening to the cosmos">
+                  {(rows) => <IdolBoardSection rows={rows} />}
+                </AsyncView>
+              </div>
             </div>
           </div>
           {/* Mobile: stack the two boards.  900 px matches the standings
@@ -188,44 +180,6 @@ export default function Leaderboards(): JSX.Element {
 }
 
 // ── Wager board ────────────────────────────────────────────────────────────
-
-interface BoardSectionBaseProps {
-  loaded: boolean;
-  error: boolean;
-}
-
-interface WagerBoardSectionProps extends BoardSectionBaseProps {
-  rows: WagerLeaderboardEntry[];
-}
-
-/**
- * Wager board with its own loading / error / empty states so a failure
- * on one board doesn't bleed into the other.
- */
-function WagerBoardSection({ loaded, error, rows }: WagerBoardSectionProps): JSX.Element {
-  if (error) {
-    return (
-      <p style={{ color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>
-        Wager board unavailable.
-      </p>
-    );
-  }
-  if (!loaded) {
-    return (
-      <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>
-        Counting the ledger…
-      </p>
-    );
-  }
-  if (rows.length === 0) {
-    return (
-      <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>
-        No wagers settled yet.  Be the first.
-      </p>
-    );
-  }
-  return <WagerBoard rows={rows} />;
-}
 
 /** Table-of-bettors render. */
 function WagerBoard({ rows }: { rows: WagerLeaderboardEntry[] }): JSX.Element {
@@ -304,7 +258,7 @@ function WagerBoardRow({ row, rank }: { row: WagerLeaderboardEntry; rank: number
 
 // ── Idol board ─────────────────────────────────────────────────────────────
 
-interface IdolBoardSectionProps extends BoardSectionBaseProps {
+interface IdolBoardSectionProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rows: any[];
 }
@@ -313,21 +267,7 @@ interface IdolBoardSectionProps extends BoardSectionBaseProps {
  * Idol board — mirrors WagerBoardSection's empty/error states but reads
  * from the player_idol_score view via getIdolBoard.
  */
-function IdolBoardSection({ loaded, error, rows }: IdolBoardSectionProps): JSX.Element {
-  if (error) {
-    return (
-      <p style={{ color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>
-        Idol board unavailable.
-      </p>
-    );
-  }
-  if (!loaded) {
-    return (
-      <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>
-        Listening to the cosmos…
-      </p>
-    );
-  }
+function IdolBoardSection({ rows }: IdolBoardSectionProps): JSX.Element {
   if (rows.length === 0) {
     return (
       <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>

@@ -32,7 +32,8 @@ import { Card, Skeleton } from '../shared/ui';
 import { LEAGUES } from '../data/leagueData';
 import type { League } from '../data/leagueData';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { fetchLeagueStandingsResult, type LeagueStandingsRow } from '../features/match';
+import { fetchLeagueStandingsResult, useSeasonPhase, type LeagueStandingsRow } from '../features/match';
+import { withTimeout } from '../shared/hooks/useAsyncData';
 
 // ── Derived row type ─────────────────────────────────────────────────────────
 // fetchLeagueStandings returns the canonical StandingsRow shape sourced from
@@ -51,7 +52,9 @@ type PositionedStandingsRow = LeagueStandingsRow & { position: number };
 export type LeagueStandingsState =
   | { status: 'loading' }
   | { status: 'ready'; rows: PositionedStandingsRow[] }
-  | { status: 'unavailable' };
+  | { status: 'unavailable' }
+  // No season has kicked off: there is no table, so none is drawn.
+  | { status: 'pre-season' };
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
 // COLORS is the source of truth; we destructure into single-letter aliases
@@ -114,7 +117,9 @@ export default function Leagues() {
       // errors in the resolved value, not as a rejection, so the plain
       // `fetchLeagueStandings` would hand back `[]` and the card would
       // announce "Awaiting first kick-off" over a failed read.
-      fetchLeagueStandingsResult(db, league.id)
+      // withTimeout: a hung read ends as 'unavailable' after 10 s rather
+      // than a skeleton that never resolves.
+      withTimeout(fetchLeagueStandingsResult(db, league.id))
         .then((result): LeagueStandingsState =>
           result.ok
             ? { status: 'ready', rows: result.rows.map((row, idx) => ({ ...row, position: idx + 1 })) }
@@ -133,6 +138,10 @@ export default function Leagues() {
     }
     return () => { cancelled = true; };
   }, [db]);
+
+  // Pre-season: every card says so instead of ranking clubs on 0 points.
+  const phase = useSeasonPhase();
+  const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
   return (
     <div style={{
@@ -171,7 +180,9 @@ export default function Leagues() {
               <LeagueCard
                 key={league.id}
                 league={league}
-                standings={standingsByLeague[league.id] ?? { status: 'loading' }}
+                standings={preSeason
+                  ? { status: 'pre-season' }
+                  : (standingsByLeague[league.id] ?? { status: 'loading' })}
               />
             ))}
           </div>
@@ -370,6 +381,14 @@ export function LeaderStrip({ standings }: { standings: LeagueStandingsState }) 
 
   if (standings.status === 'unavailable') {
     return <UnavailableLeaderRow />;
+  }
+
+  if (standings.status === 'pre-season') {
+    return (
+      <li style={{ color: DUST_50, fontSize: 13, padding: '8px 0' }}>
+        No table yet. The first season has not kicked off.
+      </li>
+    );
   }
 
   if (standings.rows.length === 0) {

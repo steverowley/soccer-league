@@ -313,3 +313,99 @@ export async function getActiveSeason(
   }
   return data;
 }
+
+// ── Season phase (#site-states) ─────────────────────────────────────────────
+
+/** The season columns the phase derivation reads. */
+export interface SeasonPhaseRow {
+  id: string;
+  name: string;
+  is_active: boolean | null;
+  start_date: string | null;
+  started_at: string | null;
+}
+
+/**
+ * Where the league is in its calendar, as far as a fan-facing page cares.
+ *
+ *   pre-season → nothing is being played yet: no season row at all (the
+ *                state after the 2026-10-26 reset), or an active season whose
+ *                start date is still in the future.
+ *   in-season  → an active season has started.
+ *
+ * `nextName` and `startsAt` describe the coming season for the pre-season
+ * copy. `startsAt` is only ever a date read from the database.
+ */
+export interface SeasonPhase {
+  phase: 'pre-season' | 'in-season';
+  active: SeasonPhaseRow | null;
+  nextName: string;
+  startsAt: string | null;
+}
+
+/**
+ * Pure derivation of {@link SeasonPhase} from season rows (newest first).
+ *
+ * @param rows  Season rows, any order.
+ * @param now   Clock, injectable for tests.
+ */
+export function deriveSeasonPhase(rows: readonly SeasonPhaseRow[], now: Date = new Date()): SeasonPhase {
+  const active = rows.find((r) => r.is_active === true) ?? null;
+  const future = (r: SeasonPhaseRow) =>
+    r.start_date != null && !r.started_at && new Date(r.start_date).getTime() > now.getTime();
+
+  if (active && !future(active)) {
+    return { phase: 'in-season', active, nextName: active.name, startsAt: null };
+  }
+  // A season row exists but has not begun (active-and-future, or scheduled).
+  const upcoming = active ?? rows.find(future) ?? null;
+  if (upcoming) {
+    return {
+      phase: 'pre-season',
+      active,
+      nextName: shortSeasonName(upcoming.name),
+      startsAt: future(upcoming) ? upcoming.start_date : null,
+    };
+  }
+  return {
+    phase: 'pre-season',
+    active: null,
+    nextName: `Season ${rows.length + 1}`,
+    startsAt: null,
+  };
+}
+
+/** "Season 1 (2600)" → "Season 1"; other names pass through. */
+function shortSeasonName(name: string): string {
+  const m = /^(Season \d+)/.exec(name);
+  return m ? m[1]! : name;
+}
+
+/**
+ * Read the season calendar and derive the phase. Unlike getActiveSeason this
+ * THROWS on a failed request, so a page can tell "no season yet" (a real,
+ * intentional state) from "the database did not answer" (an outage).
+ */
+export async function getSeasonPhase(db: IslSupabaseClient): Promise<SeasonPhase> {
+  const { data, error } = await db
+    .from('seasons')
+    .select('id, name, is_active, start_date, started_at')
+    .order('year', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return deriveSeasonPhase((data ?? []) as SeasonPhaseRow[]);
+}
+
+/**
+ * Every season, newest first, THROWING on a failed read. listAllSeasons
+ * returns [] on error, which made an outage look like an empty archive.
+ */
+export async function getSeasonList(db: IslSupabaseClient): Promise<SeasonSummary[]> {
+  const { data, error } = await db
+    .from('seasons')
+    .select('id, name, year, status, started_at, ended_at, start_date, end_date, is_active')
+    .order('year',       { ascending: false })
+    .order('started_at', { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []) as SeasonSummary[];
+}

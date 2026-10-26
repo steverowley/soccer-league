@@ -21,13 +21,15 @@
 //   scheduled → bordered chip, no score, kickoff time visible
 //   completed → dust chip, score visible, played_at timestamp visible
 
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import type { IslSupabaseClient } from '../shared/supabase/client';
-import { getLiveMatches, getUpcomingMatches } from '../features/match';
+import { getLiveMatches, getUpcomingMatches, useSeasonPhase } from '../features/match';
+import { useAsyncData } from '../shared/hooks/useAsyncData';
+import { AsyncView, EmptyState, PreSeasonState } from '../shared/ui';
 // Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
 // shared broadcast hook so the per-row chip cost stays at one
 // Realtime channel total regardless of how many live matches render.
@@ -38,7 +40,7 @@ import { MiniPitch } from '../features/match';
 // retained for the genuine "fixture data unavailable" error surface
 // only.  Solar Flare on live cues would mis-signal "this match has
 // gone wrong"; LIVE is an attention state, not an error state.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -60,7 +62,7 @@ const SECTION_ORDER = [FILTER_LIVE, FILTER_SCHEDULED, FILTER_COMPLETED] as const
 
 // SECTION_LABELS — display title shown above each match section.
 const SECTION_LABELS: Record<string, string> = {
-  [FILTER_LIVE]:      'Live Now',
+  [FILTER_LIVE]:      'Live',
   [FILTER_SCHEDULED]: 'Upcoming',
   [FILTER_COMPLETED]: 'Completed',
 };
@@ -154,57 +156,43 @@ import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 export default function Matches() {
   usePageTitle('Matches');
-  // Pulled from the provider context so getLiveMatches / getUpcomingMatches
-  // (post-#387-slice-2) receive a properly-DI'd client; fetchCompletedMatches
-  // is still on the lib singleton until its own slice lands.
   const db = useSupabase();
   const [filter, setFilter] = useState<string>(FILTER_ALL);
 
-  const [live,      setLive]      = useState<MatchRow[]>([]);
-  const [upcoming,  setUpcoming]  = useState<MatchRow[]>([]);
-  const [completed, setCompleted] = useState<MatchRow[]>([]);
-  const [loadError, setLoadError] = useState<Error | null>(null);
-  const [loaded,    setLoaded]    = useState<boolean>(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset error state, fire parallel fetches, settle once they resolve
-    setLoadError(null);
-    Promise.all([
+  // All three lists in one read: the page is either answered or it is not.
+  // useAsyncData turns a hang into a visible timeout after 10 s (the outage
+  // of 2026-10-26 left this page on "Loading fixtures..." indefinitely).
+  const fixtures = useAsyncData(
+    () => Promise.all([
       getLiveMatches(db),
       getUpcomingMatches(db, FETCH_UPCOMING_LIMIT),
       fetchCompletedMatches(db, FETCH_COMPLETED_LIMIT),
-    ])
-      .then(([l, u, c]) => {
-        if (cancelled) return;
-        setLive(l as unknown as MatchRow[]);
-        setUpcoming(u as unknown as MatchRow[]);
-        setCompleted(c);
-        setLoaded(true);
-      })
-      .catch((err: Error) => {
-        if (cancelled) return;
-        console.warn('[Matches] fetch failed:', err);
-        setLoadError(err);
-        setLoaded(true);
-      });
-    return () => { cancelled = true; };
-    // `db` is stable across renders (SupabaseProvider memoises) but the
-    // exhaustive-deps rule still wants it listed.  Including it is a
-    // no-op for the refetch cadence but satisfies the lint.
-  }, [db]);
+    ]).then(([l, u, c]) => ({
+      live:      l as unknown as MatchRow[],
+      upcoming:  u as unknown as MatchRow[],
+      completed: c,
+    })),
+    [db],
+  );
+  const phase = useSeasonPhase();
 
-  // The {filter → matches} dispatch.  Built per render but cheap — three
-  // shallow array references swapped into a plain object.  Lets the
-  // section renderer below stay declarative.
+  const live      = fixtures.data?.live ?? [];
+  const upcoming  = fixtures.data?.upcoming ?? [];
+  const completed = fixtures.data?.completed ?? [];
+  const noFixtures = live.length + upcoming.length + completed.length === 0;
+  const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
+
+  // The {filter → matches} dispatch.
   const bySection: Record<string, MatchRow[]> = {
     [FILTER_LIVE]:      live,
     [FILTER_SCHEDULED]: upcoming,
     [FILTER_COMPLETED]: completed,
   };
 
+  // In the unfiltered view an empty Live group is dropped: a "Live Now"
+  // heading over nothing reads as a broken feed.
   const sectionsToRender: string[] = filter === FILTER_ALL
-    ? [...SECTION_ORDER]
+    ? SECTION_ORDER.filter((key) => key !== FILTER_LIVE || live.length > 0)
     : [filter];
 
   return (
@@ -228,55 +216,53 @@ export default function Matches() {
         </Container>
       </section>
 
-      {/* Section II — Status filter. */}
-      <section style={{ padding: '0 0 16px' }}>
-        <Container>
-          <StatusFilter
-            active={filter}
-            onChange={setFilter}
-            counts={{
-              [FILTER_LIVE]:      live.length,
-              [FILTER_SCHEDULED]: upcoming.length,
-              [FILTER_COMPLETED]: completed.length,
-            }}
-          />
-        </Container>
-      </section>
-
-      {/* Section III — Match list (one or many groups). */}
       <section style={{ padding: '0 0 80px' }}>
         <Container>
-          {!loaded && (
-            <p style={{
-              color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-            }}>
-              Loading fixtures…
-            </p>
-          )}
-          {loadError && (
-            <p style={{
-              color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-            }}>
-              Fixture data unavailable. The void hums.
-            </p>
-          )}
-          {loaded && !loadError && (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 48,
-              marginTop: 24,
-            }}>
-              {sectionsToRender.map((sectionKey: any) => (
-                <MatchSection
-                  key={sectionKey}
-                  label={SECTION_LABELS[sectionKey] ?? sectionKey}
-                  status={sectionKey}
-                  matches={bySection[sectionKey] ?? []}
+          <AsyncView state={fixtures} what="The fixtures" loading="Loading fixtures">
+            {() => (noFixtures && preSeason && phase.data ? (
+              <div style={{ marginTop: 8 }}>
+                <PreSeasonState
+                  seasonName={phase.data.nextName}
+                  startsAt={phase.data.startsAt}
+                  detail="The fixture list is published when the season is drawn."
                 />
-              ))}
-            </div>
-          )}
+              </div>
+            ) : noFixtures ? (
+              <EmptyState centred={false}>No fixtures yet.</EmptyState>
+            ) : (
+              <>
+                {/* Section II — Status filter. */}
+                <div style={{ padding: '0 0 16px' }}>
+                  <StatusFilter
+                    active={filter}
+                    onChange={setFilter}
+                    counts={{
+                      [FILTER_LIVE]:      live.length,
+                      [FILTER_SCHEDULED]: upcoming.length,
+                      [FILTER_COMPLETED]: completed.length,
+                    }}
+                  />
+                </div>
+
+                {/* Section III — Match list (one or many groups). */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 48,
+                  marginTop: 24,
+                }}>
+                  {sectionsToRender.map((sectionKey) => (
+                    <MatchSection
+                      key={sectionKey}
+                      label={SECTION_LABELS[sectionKey] ?? sectionKey}
+                      status={sectionKey}
+                      matches={bySection[sectionKey] ?? []}
+                    />
+                  ))}
+                </div>
+              </>
+            ))}
+          </AsyncView>
         </Container>
       </section>
 
