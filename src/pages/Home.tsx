@@ -68,6 +68,8 @@ import {
   type SeasonPhase,
   getLiveMatches,
   getUpcomingMatches,
+  useLiveScores,
+  type LiveScoreView,
 } from '../features/match';
 
 // ── Palette aliases ─────────────────────────────────────────────────────────
@@ -90,6 +92,8 @@ const DUST_70    = COLORS.dust70;
 // active-season row.  Coordinates + epoch are decorative and never
 // drive simulation.
 const HERO_LIVE     = 'LIVE NOW';
+/** Quiet refresh of the live and upcoming lists (the read cache's matches TTL). */
+const FIXTURES_REFRESH_MS = 30_000;
 const HERO_RA       = 'RA 14ʰ 04ᵐ 12ˢ';
 const HERO_EPOCH    = 'EPOCH MMXXXVII';
 const HERO_DEC      = 'DEC −27° 19′';
@@ -123,13 +127,19 @@ export default function Home() {
   // ── Live + upcoming fixtures ──────────────────────────────────────────────
   // Read even in pre-season: a scheduled Season 1 with a future start date
   // already has fixtures worth showing.
+  // Refreshed quietly every 30 s (the read cache's matches TTL) so a match
+  // that kicks off or finishes appears without a reload.
   const fixtures = useAsyncData(
     () => Promise.all([getLiveMatches(publicDb), getUpcomingMatches(publicDb, 3)])
       .then(([live, upcoming]) => ({ live, upcoming })),
     [publicDb],
+    { refreshMs: FIXTURES_REFRESH_MS },
   );
   const liveMatches = fixtures.data?.live ?? [];
   const upcomingMatches = fixtures.data?.upcoming ?? [];
+  // The published score stays empty until full time, so the live card shows
+  // the goals revealed so far, exactly as the match page does.
+  const liveScores = useLiveScores(liveMatches);
 
   // ── Featured standings ────────────────────────────────────────────────────
   // Rocky Inner is the featured league. Only fetched in season: before the
@@ -235,7 +245,11 @@ export default function Home() {
                   }}>
                     {/* A live match, else the next fixture, else a quiet
                         placeholder (#385). */}
-                    <LiveMatchPanel match={liveMatches[0] ?? null} fallbackUpcoming={upcomingMatches[0] ?? null} />
+                    <LiveMatchPanel
+                      match={liveMatches[0] ?? null}
+                      live={liveMatches[0] ? liveScores.get(liveMatches[0].id) ?? null : null}
+                      fallbackUpcoming={upcomingMatches[0] ?? null}
+                    />
                     <UpcomingPanel matches={upcomingMatches} />
                   </div>
                 )}
@@ -538,7 +552,7 @@ function HeroStat({ label, value }: { label: string; value: string }) {
  * @param props.fallbackUpcoming   Next scheduled match used when `match`
  *                                 is null. Pass null to render branch 3.
  */
-function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallbackUpcoming?: any | null }) {
+function LiveMatchPanel({ match, live, fallbackUpcoming }: { match: any | null; live: LiveScoreView | null; fallbackUpcoming?: any | null }) {
   if (!match) {
     // Branch 2: live slot empty but we know what's coming next.
     if (fallbackUpcoming) {
@@ -605,11 +619,14 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
   const awayLoc     = match.away_team?.location  ?? '';
   const homeColor   = match.home_team?.color     ?? null;
   const awayColor   = match.away_team?.color     ?? null;
-  const homeScore   = match.home_score ?? 0;
-  const awayScore   = match.away_score ?? 0;
+  // Live: goals revealed so far ("–" until known).  Never `home_score`,
+  // which stays empty until full time and read as 0-0 all match.
+  const homeScore   = live?.score ? live.score[0] : '–';
+  const awayScore   = live?.score ? live.score[1] : '–';
   const competition = match.competitions?.short_name ?? match.competitions?.name ?? 'League';
   const round       = match.round ? `Matchday ${match.round}` : '';
-  const minute      = computeRoughMatchMinute(match);
+  const minute      = live && !live.fullTime && live.minute > 0 ? live.minute : null;
+  const fullTime    = live?.fullTime ?? false;
 
   return (
     <div style={{ border: `1px solid ${HAIRLINE}`, background: ABYSS }}>
@@ -646,7 +663,7 @@ function LiveMatchPanel({ match, fallbackUpcoming }: { match: any | null; fallba
             display:      'inline-block',
           }} />
           <span>
-            Live
+            {fullTime ? 'Full time' : 'Live'}
             {minute !== null && <> <span style={{ color: DUST_50 }}>•</span> {minute}&apos;</>}
           </span>
         </Chip>
@@ -790,26 +807,6 @@ function CommentaryBlock({ speaker, role, minute, quote }: { speaker: string; ro
   );
 }
 
-/**
- * Rough current match minute from scheduled_at + wall-clock.
- *
- * 90 game minutes are revealed across 10 real-world minutes by default
- * (see season_config.match_duration_seconds).  Linear conversion:
- * gameMin = realMin × 9 → 0–90 across the 0–10 minute window.  Returns
- * null when scheduled_at is missing; caller shows just LIVE without
- * a minute in that case.
- *
- * @param {object} match  Match row with optional scheduled_at.
- * @returns {number | null}
- */
-function computeRoughMatchMinute(match: any): number | null {
-  if (!match?.scheduled_at) return null;
-  const startMs = new Date(match.scheduled_at).getTime();
-  if (Number.isNaN(startMs)) return null;
-  const realMin = Math.max(0, (Date.now() - startMs) / 60_000);
-  const gameMin = Math.min(90, Math.round(realMin * 9));
-  return gameMin > 0 ? gameMin : null;
-}
 
 // ── Upcoming sidebar ─────────────────────────────────────────────────────────
 

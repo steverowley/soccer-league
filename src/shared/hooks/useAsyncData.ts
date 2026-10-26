@@ -17,6 +17,7 @@
 // changed, retry pressed, component unmounted) are ignored.
 
 import { useCallback, useEffect, useRef, useState, type DependencyList } from 'react';
+import { useVisibleInterval } from './useVisibleInterval';
 
 /** How long a read may stay pending before the page says so. */
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -65,6 +66,14 @@ export interface UseAsyncDataOptions {
   timeoutMs?: number;
   /** When false the fetcher is not run and the state stays 'loading'. */
   enabled?: boolean;
+  /**
+   * Re-run the fetcher quietly every `refreshMs` while the data is showing and
+   * the tab is visible.  The state never goes back to 'loading': a successful
+   * refresh swaps the data in place, a failed one keeps the last good data and
+   * the next refresh retries.  For lists that change on their own (live
+   * matches kicking off and finishing).
+   */
+  refreshMs?: number;
 }
 
 interface InternalState<T> {
@@ -88,7 +97,7 @@ export function useAsyncData<T>(
   deps: DependencyList,
   options: UseAsyncDataOptions = {},
 ): AsyncData<T> {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, enabled = true } = options;
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, enabled = true, refreshMs } = options;
   const fetcherRef = useRef(fetcher);
   // Effects run in declaration order, so the data effect below always sees
   // the fetcher from the render that triggered it.
@@ -138,6 +147,27 @@ export function useAsyncData<T>(
   }, [...deps, attempt, enabled, timeoutMs]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+
+  // Quiet background refresh (see UseAsyncDataOptions.refreshMs).
+  const refreshing = useRef(false);
+  const refreshOn = enabled && refreshMs !== undefined && refreshMs > 0 && state.status === 'success';
+  useVisibleInterval(() => {
+    if (refreshing.current) return;
+    const run = runRef.current;
+    refreshing.current = true;
+    let promise: Promise<T>;
+    try {
+      promise = withTimeout(fetcherRef.current(), timeoutMs);
+    } catch (err) {
+      promise = Promise.reject(err);
+    }
+    promise
+      .then((data) => {
+        // Only into the run it was started for: a deps change or retry wins.
+        setState((prev) => (prev.run === run && prev.status === 'success' ? { ...prev, data } : prev));
+      }, () => { /* keep the last good data; the next refresh retries */ })
+      .finally(() => { refreshing.current = false; });
+  }, refreshMs ?? 0, refreshOn);
 
   return { status: state.status, data: state.data, error: state.error, retry };
 }

@@ -129,3 +129,33 @@ describe('withTimeout', () => {
     await expect(p).rejects.toBeInstanceOf(TimeoutError);
   });
 });
+
+describe('useAsyncData refreshMs (quiet background refresh)', () => {
+  it('swaps in fresh data without ever going back to loading', async () => {
+    let n = 0;
+    const { result } = renderHook(() => useAsyncData(() => Promise.resolve(++n), [], { refreshMs: 30_000 }));
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current).toMatchObject({ status: 'success', data: 1 });
+    await act(async () => { vi.advanceTimersByTime(30_000); await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current).toMatchObject({ status: 'success', data: 2 });
+  });
+
+  it('keeps the last good data when a refresh fails', async () => {
+    let n = 0;
+    const fetcher = () => (++n === 2 ? Promise.reject(new Error('blip')) : Promise.resolve(n));
+    const { result } = renderHook(() => useAsyncData(fetcher, [], { refreshMs: 30_000 }));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { vi.advanceTimersByTime(30_000); await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current).toMatchObject({ status: 'success', data: 1 });
+    await act(async () => { vi.advanceTimersByTime(30_000); await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current).toMatchObject({ status: 'success', data: 3 });
+  });
+
+  it('does not refresh without the option', async () => {
+    const fetcher = vi.fn(() => Promise.resolve(1));
+    renderHook(() => useAsyncData(fetcher, []));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { vi.advanceTimersByTime(120_000); });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
