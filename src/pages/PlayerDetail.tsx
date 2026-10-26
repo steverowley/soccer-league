@@ -228,7 +228,7 @@ export default function PlayerDetail() {
           <Container>
             <div style={{ padding: '48px 0 80px' }}>
               <ErrorState
-                what="This player"
+                what="this player"
                 timedOut={playerOutage === 'timeout'}
                 onRetry={() => {
                   setPlayerErr(null);

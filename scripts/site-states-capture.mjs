@@ -1,3 +1,4 @@
+/* global document, window */ // page-side code inside p.eval() runs in the browser
 // Site-states capture: renders each route in a real Chrome and records what a
 // fan sees when the Supabase backend answers normally, errors, or hangs.
 //

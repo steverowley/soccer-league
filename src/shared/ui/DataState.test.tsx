@@ -31,19 +31,19 @@ describe('LoadingState', () => {
 describe('ErrorState', () => {
   it('says the feed is unreachable for an error and offers a retry', () => {
     const onRetry = vi.fn();
-    wrap(<ErrorState what="The fixtures" onRetry={onRetry} />);
+    wrap(<ErrorState what="the fixtures" onRetry={onRetry} />);
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('Signal lost');
-    expect(alert.textContent).toContain('The fixtures did not load');
+    expect(alert.textContent).toContain('Could not load the fixtures');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   it('says the feed is slow for a timeout', () => {
-    wrap(<ErrorState what="The table" timedOut />);
+    wrap(<ErrorState what="the table" timedOut />);
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('No answer');
-    expect(alert.textContent).toContain('The table is taking too long');
+    expect(alert.textContent).toContain('Still waiting for the table');
     expect(alert.getAttribute('data-state')).toBe('timeout');
   });
 
@@ -84,8 +84,8 @@ describe('AsyncView', () => {
 
   it('renders the error state with the hook retry', () => {
     const retry = vi.fn();
-    wrap(<AsyncView state={state<number[]>({ status: 'error', error: new Error('x'), retry })} what="The board">{child}</AsyncView>);
-    expect(screen.getByRole('alert').textContent).toContain('The board did not load');
+    wrap(<AsyncView state={state<number[]>({ status: 'error', error: new Error('x'), retry })} what="the board">{child}</AsyncView>);
+    expect(screen.getByRole('alert').textContent).toContain('Could not load the board');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalled();
   });

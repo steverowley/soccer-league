@@ -104,7 +104,7 @@ export default function Seasons() {
           <section style={{ padding: '0 0 80px' }}>
             <AsyncView
               state={seasonsState}
-              what="The season archive"
+              what="the season archive"
               loading="Reading the ledger"
               isEmpty={(rows) => rows.length === 0}
               empty={(

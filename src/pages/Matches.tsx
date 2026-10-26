@@ -218,7 +218,7 @@ export default function Matches() {
 
       <section style={{ padding: '0 0 80px' }}>
         <Container>
-          <AsyncView state={fixtures} what="The fixtures" loading="Loading fixtures">
+          <AsyncView state={fixtures} what="the fixtures" loading="Loading fixtures">
             {() => (noFixtures && preSeason && phase.data ? (
               <div style={{ marginTop: 8 }}>
                 <PreSeasonState

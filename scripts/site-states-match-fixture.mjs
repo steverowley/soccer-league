@@ -1,3 +1,4 @@
+/* global document, window */ // page-side code inside p.eval() runs in the browser
 // Render a finished match page from a fixture served through CDP Fetch, so
 // the match page can be checked while the database holds no matches.
 // node scripts/site-states-match-fixture.mjs <baseUrl> <out.jpg> [width] [fullPage 0|1]
@@ -90,6 +91,14 @@ const info = await p.eval(() => ({
 }));
 console.log(JSON.stringify(info));
 await p.screenshot({ path: out, quality: 60, fullPage: full === '1' });
+// A second frame on the match record, where the full-time award line sits.
+await p.eval(() => {
+  const el = [...document.querySelectorAll('div')].find((n) => n.children.length === 0 && /^match record$/i.test(n.textContent.trim()));
+  el?.scrollIntoView({ block: 'start' });
+  return Boolean(el);
+});
+await sleep(400);
+await p.screenshot({ path: out.replace(/\.jpg$/, '-record.jpg'), quality: 60 });
 // Text of every feed / record row at 91 minutes (the full-time award line).
 console.log(JSON.stringify(await p.eval(() => [...document.querySelectorAll('div')]
   .filter((d) => d.children.length <= 4 && /^\s*(Player of the Match|Mvp)/i.test(d.innerText) && /91/.test(d.innerText))

@@ -68,6 +68,46 @@ errors, (c) a request hangs, (d) data is present.
 8. An unknown match id is reported as "data unavailable" because `getMatch`
    uses `.single()`, which errors on zero rows.
 
-## After
+## After (branch fix/site-states)
 
-See the "After" table appended by the fix commits below.
+Shared pieces: `useAsyncData` (`src/shared/hooks/useAsyncData.ts`: loading,
+success, error, timeout after 10 s, retry; late answers still win),
+`withTimeout` for pages that keep their own effects, and
+`LoadingState` / `ErrorState` / `PreSeasonState` / `AsyncView`
+(`src/shared/ui/DataState.tsx`). The season phase comes from
+`getSeasonPhase` / `useSeasonPhase`, which throw on a failed read so "no
+season yet" and "database down" are different states.
+
+| Page | (a) no season | (b) error | (c) hang | (d) data |
+|---|---|---|---|---|
+| `/` Home | kicker "Pre-season", "Meet the clubs" CTA, stats Season 1 soon / 32 clubs / 4 leagues, "Season 1 is coming. Kick-off soon." (or the DB date), the four leagues with their clubs, next fixtures only if some are scheduled; no live panel, no table | "Signal lost: could not load the league calendar" with Try again, clubs grid still shown (static) | "No answer" after 10 s with Try again, clubs grid still shown | live card or next fixture, real table; "Live now" only when a match is live |
+| `/matches` Fixtures | pre-season panel instead of empty status sections | error panel with Try again | "Loading fixtures" then "No answer" after 10 s | filter strip and sections; an empty Live group is hidden in the All view |
+| `/matches/:id` | n/a | error panel with Try again (page and commentary) | timeout panel after 10 s | ground from the home stadium, names wrap at 390 px, score on one line, "Player of the Match. <name>" at 91' |
+| unknown match id | "Unknown match" page (was "data unavailable") | | | |
+| `/leagues` | every card: "No table yet. The first season has not kicked off." | card "Unavailable" | card "Unavailable" after 10 s | top three |
+| `/leagues/:id` | pre-season panel in place of the zero table | error panel with Try again | timeout panel after 10 s | full table |
+| `/teams/:id` | no league position until the club has played | unchanged ("—") | unchanged ("—") | real stats |
+| `/leaderboards` | "No wagers yet. Betting opens with the first fixtures of the season." | each board its own error panel (no longer "be the first") | timeout panel per board | ranked boards |
+| `/seasons` | pre-season panel ("The archive opens once the first season is played.") | error panel (no longer "no record") | timeout panel after 10 s | season list |
+| `/players/:id` | renders (crash fixed: the view column is `training_count`) | error panel with Try again (an unknown id still says Unknown Player) | timeout panel after 10 s | profile |
+| `/news`, `/idols`, `/managers/:id`, `/entities/:id`, `/world` | unchanged | their existing error copy | their existing error copy after 10 s (was endless) | unchanged |
+
+Not changed here: `/world` still shows "Nothing found" when `listEntities`
+fails (it swallows the error), and `/teams/:id` sections stay quiet on error.
+Both are noted for a follow-up.
+
+## Backend follow-ups (not edited here)
+
+- `supabase/functions/match-worker/index.ts:904-910` appends the full-time
+  `mvp` event with `payload: { player }` and no prose. The page now renders it
+  as "Player of the Match. <name>"; the worker could add a `commentary` line
+  so the booth voices it.
+- `matches.stadium` (migration 0000) is never written by any fixture
+  generator. The page derives the ground from the home team; either populate
+  the column when fixtures are created (neutral venues, cup finals) or drop it.
+
+## Screenshots
+
+390 px, before (production b55dcff) and after (this branch), same scripted
+backend via CDP Fetch: `docs/reports/site-states/*.jpg`, produced by
+`scripts/site-states-pairs.mjs` and `scripts/site-states-match-fixture.mjs`.

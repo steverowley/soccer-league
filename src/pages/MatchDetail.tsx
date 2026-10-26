@@ -185,7 +185,7 @@ export default function MatchDetail() {
 
           {(matchState.status === 'error' || matchState.status === 'timeout') && (
             <ErrorState
-              what="This match"
+              what="this match"
               timedOut={matchState.status === 'timeout'}
               onRetry={matchState.retry}
               style={{ marginTop: 32 }}
@@ -1319,7 +1319,7 @@ export function LiveCommentary({
         {loadError != null && (
           <ErrorState
             bare
-            what="The commentary"
+            what="the commentary"
             timedOut={isTimeoutError(loadError)}
             onRetry={() => setAttempt((n) => n + 1)}
           />

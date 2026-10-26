@@ -135,7 +135,7 @@ export default function Leaderboards(): JSX.Element {
               <div style={{ marginTop: 24 }}>
                 <AsyncView
                   state={wagers}
-                  what="The wager board"
+                  what="the wager board"
                   loading="Counting the ledger"
                   isEmpty={(rows) => rows.length === 0}
                   empty={(
@@ -158,7 +158,7 @@ export default function Leaderboards(): JSX.Element {
                 subtitle="Ordered by total fan attention: picks plus training clicks, blended.  The formula is yours to interpret."
               />
               <div style={{ marginTop: 24 }}>
-                <AsyncView state={idols} what="The idol board" loading="Listening to the cosmos">
+                <AsyncView state={idols} what="the idol board" loading="Listening to the cosmos">
                   {(rows) => <IdolBoardSection rows={rows} />}
                 </AsyncView>
               </div>

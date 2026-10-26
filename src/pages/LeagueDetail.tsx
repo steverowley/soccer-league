@@ -152,7 +152,7 @@ export default function LeagueDetail() {
                 detail="The table fills in once the first matchday is played."
               />
             ) : (
-              <AsyncView state={standings} what="The table" loading="Loading the table">
+              <AsyncView state={standings} what="the table" loading="Loading the table">
                 {(rows) => <StandingsTable rows={rows} />}
               </AsyncView>
             )}

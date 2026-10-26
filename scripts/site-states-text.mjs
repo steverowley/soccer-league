@@ -1,3 +1,4 @@
+/* global document */ // page-side code inside p.eval() runs in the browser
 // Dump the visible text of a few routes (audit helper, run by hand).
 // node scripts/site-states-text.mjs <baseUrl> <width> <chars> <route> [route...]
 const { Browser, sleep } = await import('file:///C:/Users/rowle/AppData/Local/hermes/skills/creative/taste-skill/scripts/lib/cdp.mjs');

@@ -90,13 +90,13 @@ export function LoadingState({
  * happened (a fan can tell "down" from "slow") and offers a retry.
  */
 export function ErrorState({
-  what = 'This section',
+  what = 'this section',
   timedOut = false,
   onRetry,
   bare = false,
   style,
 }: FrameProps & {
-  /** What failed to load, e.g. "The fixtures". Sentence start. */
+  /** What failed to load, mid-sentence, e.g. "the fixtures". */
   what?: string | undefined;
   timedOut?: boolean | undefined;
   onRetry?: (() => void) | undefined;
@@ -106,8 +106,8 @@ export function ErrorState({
       <p style={{ ...KICKER, color: COLORS.flare }}>{timedOut ? 'No answer' : 'Signal lost'}</p>
       <p style={{ margin: 0, fontSize: 15, color: COLORS.dust, lineHeight: 1.5 }}>
         {timedOut
-          ? `${what} is taking too long to arrive. The league feed is not answering right now.`
-          : `${what} did not load. The league feed is unreachable right now.`}
+          ? `Still waiting for ${what}. The league feed is not answering right now.`
+          : `Could not load ${what}. The league feed is unreachable right now.`}
       </p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry}>
@@ -165,7 +165,7 @@ export function formatKickoffDate(iso: string | null | undefined): string | null
  * Render the right state for a useAsyncData() result.
  *
  * @param state      The hook result.
- * @param what       Subject for the error copy ("The fixtures").
+ * @param what       Object of the error copy ("the fixtures").
  * @param loading    Loading label.
  * @param isEmpty    Optional emptiness test on the data.
  * @param empty      Rendered when isEmpty(data) is true.

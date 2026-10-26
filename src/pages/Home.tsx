@@ -170,7 +170,7 @@ export default function Home() {
         <section style={{ padding: '32px 0 64px' }}>
           <Container>
             <ErrorState
-              what="The league calendar"
+              what="the league calendar"
               timedOut={phase.status === 'timeout'}
               onRetry={() => { phase.retry(); fixtures.retry(); }}
             />
@@ -226,7 +226,7 @@ export default function Home() {
               actionTo="/matches"
             />
             <div style={{ marginTop: 32 }}>
-              <AsyncView state={fixtures} what="The live feed" loading="Loading fixtures">
+              <AsyncView state={fixtures} what="the live feed" loading="Loading fixtures">
                 {() => (
                   <div className="isl-live-grid" style={{
                     display: 'grid',
@@ -259,7 +259,7 @@ export default function Home() {
               actionTo="/leagues"
             />
             <div style={{ marginTop: 24 }}>
-              <AsyncView state={standings} what="The table" loading="Loading the table">
+              <AsyncView state={standings} what="the table" loading="Loading the table">
                 {(rows) => <StandingsTable rows={rows} />}
               </AsyncView>
             </div>
