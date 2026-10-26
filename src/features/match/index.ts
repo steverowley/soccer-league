@@ -167,7 +167,8 @@ export {
 } from './logic/liveScore';
 // Live scores for the matches a page LISTS (home card, fixtures list), derived
 // the same way the match page derives its own scoreboard.
-export { useLiveScores, type LiveScoreMatch, type LiveScoreView } from './hooks/useLiveScores';
+export { useLiveScores, type LiveScoreMatch, type LiveScoreView, type RevealedGoal } from './hooks/useLiveScores';
+export { competitionLabel, roundLabel } from './logic/fixtureLabels';
 export { getGoalEventsForMatches, type GoalEventRow } from './api/matchEvents';
 export {
   getLiveMatch,

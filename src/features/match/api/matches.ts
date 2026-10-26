@@ -135,6 +135,7 @@ export async function getLiveMatches(db: PublicReadClient) {
     .select(
       `
       *,
+      competitions (id, name, type),
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
     `,
@@ -168,6 +169,7 @@ export async function getUpcomingMatches(db: PublicReadClient, limit = 6) {
     .select(
       `
       *,
+      competitions (id, name, type),
       home_team:teams!matches_home_team_id_fkey (id, name, color, location, home_ground),
       away_team:teams!matches_away_team_id_fkey (id, name, color, location, home_ground)
     `,
