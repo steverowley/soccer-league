@@ -1,0 +1,68 @@
+# Start a new season on demand (Actions tab -> Rollover season -> Run workflow).
+#
+# Runs scripts/rollover-season.ts with the service-role secret, which exists
+# only in GitHub, so operators never need the key on their own machine.
+# Creates the season row, 4 league competitions, 224 fixtures, empty cup rows
+# and focus options (all idempotent: re-running for the same year is a no-op).
+name: Rollover season
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_season:
+        description: 'UUID of the season to roll from (blank = latest enacted season)'
+        type: string
+        default: ''
+      first_kickoff:
+        description: 'First matchday kickoff, ISO timestamp in UTC (e.g. 2026-10-26T20:00:00Z)'
+        type: string
+        required: true
+      cadence_minutes:
+        description: 'Minutes between matchdays (1440 = daily, 720 = twice a day)'
+        type: string
+        default: '1440'
+      kickoff_stagger_minutes:
+        description: 'Minutes between kickoffs inside one league matchday'
+        type: string
+        default: '15'
+      first_season:
+        description: 'The source season is a placeholder with no league phase (skip its cup draw)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rollover-season
+  cancel-in-progress: false
+
+jobs:
+  rollover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Roll over
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FROM_SEASON: ${{ inputs.from_season }}
+          FIRST_KICKOFF: ${{ inputs.first_kickoff }}
+          CADENCE: ${{ inputs.cadence_minutes }}
+          STAGGER: ${{ inputs.kickoff_stagger_minutes }}
+          FIRST_SEASON: ${{ inputs.first_season }}
+        run: |
+          args=(--first-kickoff="$FIRST_KICKOFF" --cadence-minutes="$CADENCE" --kickoff-stagger-minutes="$STAGGER")
+          if [ -n "$FROM_SEASON" ]; then args+=(--from-season="$FROM_SEASON"); fi
+          if [ "$FIRST_SEASON" = "true" ]; then args+=(--first-season); fi
+          npx tsx scripts/rollover-season.ts "${args[@]}"

@@ -2021,7 +2021,7 @@ async function runDispatcherMode(): Promise<Response> {
  * reached. Resume by setting this to false in a reviewed PR once the
  * database is healthy and the backlog plan is decided.
  */
-const PIPELINE_PAUSED = true;
+const PIPELINE_PAUSED = false;
 
 Deno.serve(async (req: Request) => {
   if (!isAuthorized(req)) {
