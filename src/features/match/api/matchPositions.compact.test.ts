@@ -20,10 +20,14 @@
 //   3. SIZE — the win must not silently regrow.  The size assertion below is
 //      the regression guard: re-add per-frame ids and it fails.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getMatchPositions, type PositionSnapshot } from './matchPositions';
+import {
+  buildReplayPayload,
+  type ReplayFile,
+} from '../../../../supabase/functions/match-worker/replayFile.ts';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -77,72 +81,27 @@ function makeFrames(count: number, ownerEvery = 3): Frame[] {
   }));
 }
 
-// ── The writer, mirrored ─────────────────────────────────────────────────────
-
-/** Round to 0.1 m, exactly as the worker does before storing. */
-const r1 = (n: number) => Math.round(n * 10) / 10;
+// ── The writer (the real one) ────────────────────────────────────────────────
 
 /** Must match OFF_PITCH in matchPositions.ts and the match-worker. */
 const OFF_PITCH = -1;
 
-interface CompactSnapshot {
-  v: 2;
-  p: number[];
-  b: [number, number, number];
-}
-
 /**
- * Encode frames the way `supabase/functions/match-worker/index.ts` does.
+ * Encode frames exactly as the match worker does.
  *
- * The worker runs on Deno and its entry point cannot be imported here (it calls
- * `Deno.serve` and pulls remote ESM), so this is a deliberate mirror of that
- * code path — the same mirroring the viewer's `framesToSnapshots` has always
- * done.  The drift guard at the bottom of this file asserts the worker source
- * still writes this shape, so the mirror cannot rot unnoticed.
+ * Until replays moved to Storage this was a hand mirror of an inline block in
+ * the worker's index.ts (the Deno entry point cannot be imported here), kept
+ * honest by a source-text drift guard. The encoder now lives in its own pure
+ * module, replayFile.ts, so these tests call it directly and the mirror is
+ * gone: the rows below are the frames the worker writes into
+ * replays/<matchId>.json.gz, and the roster is the file's `roster`.
  */
 function encodeAsWorker(frames: Frame[]): {
   playerIds: string[];
-  rows: Array<{ minute: number; second: number; snapshots: CompactSnapshot }>;
+  rows: ReplayFile['frames'];
 } {
-  // Mirrors the worker: the roster is the UNION of everyone appearing in ANY
-  // frame, because the engine substitutes mid-match and the player SET changes
-  // while staying 11-a-side. Taking it from frame 0 misattributes every
-  // coordinate after the first substitution.
-  const playerIds: string[] = [];
-  const index = new Map<string, number>();
-  for (const frame of frames) {
-    for (const p of frame.players) {
-      if (!index.has(p.id)) {
-        index.set(p.id, playerIds.length);
-        playerIds.push(p.id);
-      }
-    }
-  }
-
-  const rows = frames.map((frame) => {
-    const minute = Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1));
-    const second = Math.floor(frame.tSec % 60);
-    // Fixed width over the union roster; absentees keep the OFF_PITCH sentinel.
-    const p: number[] = new Array<number>(playerIds.length * 2).fill(OFF_PITCH);
-    for (const player of frame.players) {
-      const idx = index.get(player.id);
-      if (idx === undefined) continue;
-      p[idx * 2] = r1(player.x);
-      p[idx * 2 + 1] = r1(player.y);
-    }
-    const ownerIdx = frame.ball.ownerId == null ? -1 : (index.get(frame.ball.ownerId) ?? -1);
-    return {
-      minute,
-      second,
-      snapshots: {
-        v: 2 as const,
-        p,
-        b: [r1(frame.ball.x), r1(frame.ball.y), ownerIdx] as [number, number, number],
-      },
-    };
-  });
-
-  return { playerIds, rows };
+  const file = buildReplayPayload('m1', frames);
+  return { playerIds: file.roster, rows: file.frames };
 }
 
 /** Encode frames in the LEGACY v1 shape, for the size comparison. */
@@ -212,10 +171,22 @@ function makeDb(rows: unknown[], roster: string[] | null) {
     from: vi.fn((table: string) =>
       table === 'match_position_rosters' ? rosterBuilder() : frameBuilder(),
     ),
+    storage: { from: () => ({ getPublicUrl: (p: string) => ({ data: { publicUrl: `https://storage.test/replays/${p}` } }) }) },
   };
 }
 
-/** Read frames back through the real read path. */
+// Since replays moved to Storage (docs/mvp-free-tier.md) the reader fetches
+// replays/<matchId>.json.gz first and reads these legacy tables ONLY when that
+// file 404s. These tests are about the table path, so every fetch answers 404
+// and the mock client exposes a storage stub that hands out a public URL.
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })));
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** Read frames back through the real (legacy table) read path. */
 async function readBack(rows: unknown[], roster: string[] | null): Promise<PositionSnapshot[]> {
   return getMatchPositions(makeDb(rows, roster) as any, 'm1');
 }
@@ -413,24 +384,21 @@ describe('compact v2 frames — stored size', () => {
   });
 });
 
-// ── 4. Drift guard ───────────────────────────────────────────────────────────
+// ── 4. The worker writes replays through this encoder ─────────────────────────
 
-describe('the match-worker still writes the shape these tests encode', () => {
-  it('writes the roster once and stores v2 rounded coordinates', () => {
+describe('the match-worker stores replays through replayFile.ts', () => {
+  it('uploads with uploadReplay and no longer writes the frame tables', () => {
     // vitest runs from the repo root (where vitest.config.ts lives).
     const source = readFileSync(
       resolve(process.cwd(), 'supabase/functions/match-worker/index.ts'),
       'utf8',
     );
-
-    // `encodeAsWorker` above is a hand-mirror of this code path (the Deno entry
-    // point cannot be imported into vitest). If the writer changes shape, this
-    // fails and the mirror must be re-synced.
-    expect(source).toContain("from('match_position_rosters')");
-    expect(source).toContain('v: 2,');
-    expect(source).toContain('Math.round(n * 10) / 10');
-    expect(source).toContain('b: [r1(frame.ball.x), r1(frame.ball.y), ownerIdx]');
-    // And it must NOT have gone back to spelling ids out per frame.
-    expect(source).not.toContain('hasBall: frame.ball.ownerId === p.id');
+    // The encoder these tests exercise is the one the worker calls.
+    expect(source).toContain("from './replayFile.ts'");
+    expect(source).toContain('uploadReplay(replayStorage, match.id, positionFrames)');
+    // The tables are legacy-read-only now: the worker must not write them
+    // (docs/mvp-free-tier.md, decision 1). A later migration can drop them.
+    expect(source).not.toMatch(/from\('match_positions'\)\.(insert|upsert)/);
+    expect(source).not.toMatch(/from\('match_position_rosters'\)\.(insert|upsert)/);
   });
 });

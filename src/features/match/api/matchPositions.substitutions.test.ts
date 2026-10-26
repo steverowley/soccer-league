@@ -28,13 +28,16 @@
 import { describe, it, expect } from 'vitest';
 import { getMatchPositions, type PositionSnapshot } from './matchPositions';
 import {
+  buildReplayPayload,
+  encodeReplayFile,
+} from '../../../../supabase/functions/match-worker/replayFile.ts';
+import {
   simulateSpatialMatch,
   type SpatialTeamInput,
   type SpatialPlayerInput,
 } from '../logic/spatial/simulateSpatialMatch';
 import type { Role, SimPlayerStats } from '../logic/spatial/types';
 
-const OFF_PITCH = -1;
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 const XI_ROLES: Role[] = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
@@ -81,62 +84,31 @@ interface Frame {
   ball: { x: number; y: number; ownerId: string | null };
 }
 
-/** The match-worker's encoder: union roster, fixed-width rows, sentinel gaps. */
+/** The match-worker's encoder (the real one): union roster, fixed-width rows, sentinel gaps. */
 function encodeAsWorker(frames: Frame[]) {
-  const playerIds: string[] = [];
-  const index = new Map<string, number>();
-  for (const frame of frames) {
-    for (const p of frame.players) {
-      if (!index.has(p.id)) {
-        index.set(p.id, playerIds.length);
-        playerIds.push(p.id);
-      }
-    }
-  }
-  const rows = frames.map((frame) => {
-    const p = new Array<number>(playerIds.length * 2).fill(OFF_PITCH);
-    for (const pl of frame.players) {
-      const i = index.get(pl.id)!;
-      p[i * 2] = r1(pl.x);
-      p[i * 2 + 1] = r1(pl.y);
-    }
-    const ownerIdx = frame.ball.ownerId == null ? -1 : (index.get(frame.ball.ownerId) ?? -1);
-    return {
-      minute: Math.min(120, Math.max(1, Math.floor(frame.tSec / 60) + 1)),
-      second: Math.floor(frame.tSec % 60),
-      snapshots: { v: 2 as const, p, b: [r1(frame.ball.x), r1(frame.ball.y), ownerIdx] },
-    };
-  });
-  return { playerIds, rows };
+  const file = buildReplayPayload('m1', frames);
+  return { playerIds: file.roster, rows: file.frames };
 }
 
-/** Minimal table-aware Supabase stub: frames from one table, roster from the other. */
-function makeDb(rows: unknown[], roster: string[]) {
-  return {
-    from(table: string) {
-      if (table === 'match_position_rosters') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: () => Promise.resolve({ data: { player_ids: roster }, error: null }),
-            }),
-          }),
-        };
-      }
-      return {
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              order: () => ({
-                range: (from: number, to: number) =>
-                  Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
-              }),
-            }),
-          }),
-        }),
-      };
+/**
+ * Read frames back the way production does since replays moved to Storage
+ * (docs/mvp-free-tier.md): the worker's encoder and gzip produce the file,
+ * a fake Storage serves it at its public URL, and the reader fetches,
+ * decompresses with DecompressionStream and decodes it. The legacy tables are
+ * never touched because the file exists.
+ */
+async function readViaReplayFile(frames: Frame[]): Promise<PositionSnapshot[]> {
+  const { body } = await encodeReplayFile(buildReplayPayload('m1', frames));
+  const url = 'https://storage.test/replays/m1.json.gz';
+  const db = {
+    storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: url } }) }) },
+    from: () => {
+      throw new Error('the legacy tables must not be read when the replay file exists');
     },
   } as unknown as Parameters<typeof getMatchPositions>[0];
+  const fetch = async (input: string) =>
+    input === url ? new Response(body.slice(), { status: 200 }) : new Response(null, { status: 404 });
+  return getMatchPositions(db, 'm1', { fetch });
 }
 
 describe('v2 frames survive the engine substituting players', () => {
@@ -167,11 +139,10 @@ describe('v2 frames survive the engine substituting players', () => {
   });
 
   it('decodes the correct identities AFTER the first substitution', async () => {
-    const { playerIds, rows } = encodeAsWorker(frames);
     const firstIds = new Set(frames[0]!.players.map((p) => p.id));
     const changedAt = frames.findIndex((f) => f.players.some((p) => !firstIds.has(p.id)));
 
-    const decoded = await getMatchPositions(makeDb(rows, playerIds), 'm1');
+    const decoded = await readViaReplayFile(frames);
     expect(decoded).toHaveLength(frames.length);
 
     // Check a frame well past the first change, where the old encoder was wrong.
@@ -189,8 +160,7 @@ describe('v2 frames survive the engine substituting players', () => {
   });
 
   it('never reports a player who has left the pitch', async () => {
-    const { playerIds, rows } = encodeAsWorker(frames);
-    const decoded = await getMatchPositions(makeDb(rows, playerIds), 'm1');
+    const decoded = await readViaReplayFile(frames);
 
     frames.forEach((frame, i) => {
       const expected = new Set(frame.players.map((p) => p.id));
@@ -203,8 +173,7 @@ describe('v2 frames survive the engine substituting players', () => {
   });
 
   it('keeps coordinates attached to the right player at every frame', async () => {
-    const { playerIds, rows } = encodeAsWorker(frames);
-    const decoded = await getMatchPositions(makeDb(rows, playerIds), 'm1');
+    const decoded = await readViaReplayFile(frames);
 
     // Spot-check across the whole match rather than only the start, since the
     // original bug was invisible before minute 56.
@@ -219,8 +188,7 @@ describe('v2 frames survive the engine substituting players', () => {
   });
 
   it('still identifies the ball carrier after substitutions', async () => {
-    const { playerIds, rows } = encodeAsWorker(frames);
-    const decoded = await getMatchPositions(makeDb(rows, playerIds), 'm1');
+    const decoded = await readViaReplayFile(frames);
 
     frames.forEach((frame, i) => {
       const snap = decoded[i]!.snapshots;

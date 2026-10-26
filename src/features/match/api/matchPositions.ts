@@ -1,37 +1,66 @@
 // ── features/match/api/matchPositions.ts ──────────────────────────────────────
-// Read-only access to the `match_positions` table populated by the spatial
-// engine (Phase A rebuild, match-worker cutover).
+// Read access to a match's replay frames for the 2D viewer.
+//
+// WHERE REPLAYS LIVE (docs/mvp-free-tier.md, decision 1)
+//   The match worker writes ONE gzipped file per match to Supabase Storage:
+//   `replays/<matchId>.json.gz` in the public `replays` bucket (migration
+//   0091).  It holds the per-match roster plus the compact v2 frames the worker
+//   used to write to Postgres, so this module decodes it with the same v2
+//   decoder.  The file is fetched from its public URL and decompressed in the
+//   browser with `DecompressionStream('gzip')` (Chrome 80+, Firefox 113+,
+//   Safari and iOS Safari 16.4+).
+//
+//   LEGACY FALLBACK: matches simulated before the switch have their frames in
+//   the `match_positions` + `match_position_rosters` tables.  The reader falls
+//   back to those tables ONLY when the replay file does not exist (404), so a
+//   restored backup or an old match keeps playing back.  Any other failure
+//   (network, a server error, an unsupported browser) returns [] and the viewer
+//   shows its static formation, as it always has for a match without frames.
 //
 // USAGE
 //   Call `getMatchPositions` once per match; cache the result in component
 //   state.  The spatial playback hook (`useSpatialPlayback`) consumes the
-//   returned array on every tick — it does NOT call this function itself so
+//   returned array on every tick; it does NOT call this function itself so
 //   callers control when to trigger the fetch.
 //
-// STORED FORMAT (v2 compact, migration 0084)
-//   Rows hold { v: 2, p: [x0, y0, x1, y1, …], b: [ballX, ballY, ownerIdx] }:
-//   a flat coordinate array indexed against the per-match roster in
-//   `match_position_rosters`, plus the ball and the roster index of its
-//   carrier (-1 when loose).  The v1 shape repeated all 22 36-char player
-//   UUIDs in every one of ~2 731 frames and stored a `hasBall` flag that was
-//   already derivable from `ball.ownerId`; that cost a measured 4.81 MB per
-//   match against 0.67 MB for v2, and 233 matches of it filled the database
-//   until the project was disk-restricted.  Legacy v1 rows still decode here
-//   (the `v` field makes the two unambiguous), so a restored backup or a row
-//   written by an older worker build keeps playing back.
+// STORED FRAME FORMAT (v2 compact, migration 0084)
+//   { v: 2, p: [x0, y0, x1, y1, ...], b: [ballX, ballY, ownerIdx] }:
+//   a flat coordinate array indexed against the per-match roster, plus the
+//   ball and the roster index of its carrier (-1 when loose).  The v1 shape
+//   repeated all 22 36-char player UUIDs in every one of ~2 731 frames and
+//   stored a `hasBall` flag that was already derivable from `ball.ownerId`.
+//   Legacy v1 table rows still decode here (the `v` field makes the two
+//   unambiguous).
 //
 //   Either way this module returns the SAME in-memory `PositionSnapshot`
 //   shape it always has: decoding happens at the boundary so playback,
-//   hit-testing and rendering are untouched by the format change.
+//   hit-testing and rendering are untouched by the storage change.
 //
 // VOLUME
-//   ~2 700 rows per 90-minute match (one row per 2-second snap).  A compact
-//   row is ~250 bytes, so a full-match fetch is ~0.7 MB — comfortable for a
-//   single upfront load.  The query orders by (minute, second) ascending so
-//   the returned array is already sorted for binary-search playback.
+//   ~2 800 frames per 90-minute match.  The replay file is about 0.2 MB
+//   gzipped (about 0.85 MB of JSON once decompressed), a single request.
 
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+
+// ── Replay files in Storage ──────────────────────────────────────────────────
+
+/** Storage bucket the match worker writes replays to (migration 0091). */
+export const REPLAY_BUCKET = 'replays';
+
+/** Object path of a match's replay inside {@link REPLAY_BUCKET}. */
+export function replayObjectPath(matchId: string): string {
+  return `${matchId}.json.gz`;
+}
+
+/** The fetch function the reader uses; injectable for tests. */
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+/** Optional dependencies of {@link getMatchPositions}. */
+export interface MatchPositionsDeps {
+  /** Defaults to the global `fetch`. */
+  fetch?: FetchLike;
+}
 
 // ── Zod schemas ──────────────────────────────────────────────────────────────
 
@@ -65,8 +94,8 @@ const SnapshotsV1Schema = z.object({
 });
 
 /**
- * The CURRENT (v2) compact JSONB `snapshots` shape written by the
- * match-worker: coordinates only, identities resolved through the roster.
+ * The CURRENT (v2) compact `snapshots` shape written by the match-worker:
+ * coordinates only, identities resolved through the roster.
  *
  * `p` is 2N numbers (x0, y0, x1, y1, …) in roster order.
  * `b` is [ballX, ballY, ownerIdx]; ownerIdx is -1 when the ball is loose.
@@ -81,13 +110,32 @@ const SnapshotsV2Schema = z.object({
 const RosterSchema = z.array(z.string());
 
 /**
- * A single sampled instant of the match as stored in `match_positions`.
+ * A replay file as the match worker writes it
+ * (supabase/functions/match-worker/replayFile.ts).  Frames are validated one
+ * by one below, so a single bad frame is skipped rather than failing the
+ * whole match; only the envelope is checked here.
+ */
+const ReplayFileSchema = z.object({
+  format: z.literal('isl-replay'),
+  v: z.literal(2),
+  roster: RosterSchema,
+  frames: z.array(
+    z.object({
+      minute: z.number(),
+      second: z.number(),
+      snapshots: z.unknown(),
+    }),
+  ),
+});
+
+/**
+ * A single sampled instant of the match.
  * `minute` + `second` together identify the in-game clock position.
  * Player and ball coordinates are in FIFA pitch-metre space.
  *
  * This is the DECODED shape and it is deliberately format-independent: the
- * compaction in migration 0084 changed what sits in the database, not what
- * this module hands to the viewer.
+ * compaction in migration 0084 and the move to Storage changed what is
+ * stored, not what this module hands to the viewer.
  */
 export interface PositionSnapshot {
   /** 1–120.  Extra-time snapshots sit at minute = 90. */
@@ -156,18 +204,195 @@ function decodeV2(
   return { players, ball: { x: ballX, y: ballY, ownerId: owner ?? null } };
 }
 
+/** Outcome of decoding one stored row (table row or replay-file frame). */
+type RowDecode =
+  | { kind: 'ok'; snapshot: PositionSnapshot }
+  | { kind: 'skip' }
+  | { kind: 'no-roster' };
+
+/**
+ * Decode one stored `{ minute, second, snapshots }` row, v2 or legacy v1.
+ * Shared by the replay-file path and the legacy table path so both decode
+ * identically.
+ */
+function decodeRow(
+  row: { minute: unknown; second: unknown; snapshots: unknown },
+  roster: readonly string[] | null,
+): RowDecode {
+  // Validate at the boundary so a malformed frame fails loud here rather than
+  // silently producing NaN coordinates in the renderer.
+  const compact = SnapshotsV2Schema.safeParse(row.snapshots);
+  if (compact.success) {
+    if (!roster) return { kind: 'no-roster' };
+    const decoded = decodeV2(compact.data, roster);
+    if (!decoded) {
+      console.warn('[getMatchPositions] compact frame does not match roster size, skipped');
+      return { kind: 'skip' };
+    }
+    return {
+      kind: 'ok',
+      snapshot: { minute: row.minute as number, second: row.second as number, snapshots: decoded },
+    };
+  }
+
+  // Not v2: try the legacy shape before giving up on the row.
+  const legacy = SnapshotsV1Schema.safeParse(row.snapshots);
+  if (!legacy.success) {
+    console.warn('[getMatchPositions] malformed snapshot row skipped:', legacy.error.issues[0]);
+    return { kind: 'skip' };
+  }
+  return {
+    kind: 'ok',
+    snapshot: { minute: row.minute as number, second: row.second as number, snapshots: legacy.data },
+  };
+}
+
+// ── gzip ─────────────────────────────────────────────────────────────────────
+
+/** First two bytes of every gzip stream (RFC 1952). */
+function isGzip(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+/**
+ * Decompress gzip bytes with the browser's native DecompressionStream.
+ *
+ * @throws Error with a clear message when the browser has no
+ *         DecompressionStream (Safari before 16.4, very old Chrome/Firefox).
+ */
+async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error(
+      'This browser cannot decompress match replays (DecompressionStream is missing; ' +
+        'it needs Safari or iOS 16.4+, Chrome 80+ or Firefox 113+).',
+    );
+  }
+  const source = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+  // The cast bridges a lib.dom typing quirk (Uint8Array<ArrayBufferLike> vs
+  // BufferSource) between ReadableStream and DecompressionStream.
+  const reader = source
+    .pipeThrough(new DecompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>)
+    .getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.length;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
+// ── Replay file read ─────────────────────────────────────────────────────────
+
+/** What reading the replay file produced. */
+type ReplayLoad =
+  | { kind: 'found'; rows: PositionSnapshot[] }
+  | { kind: 'missing' }
+  | { kind: 'failed' };
+
+/**
+ * Fetch, decompress and decode a match's replay file from Storage.
+ *
+ * Supabase Storage answers a missing public object with 404 (older versions
+ * with 400 and a JSON "not found" body), so both mean "no file": the caller
+ * then tries the legacy tables.
+ */
+async function loadReplayFile(
+  db: SupabaseClient,
+  matchId: string,
+  fetchFn: FetchLike,
+): Promise<ReplayLoad> {
+  let res: Response;
+  try {
+    const { data } = db.storage.from(REPLAY_BUCKET).getPublicUrl(replayObjectPath(matchId));
+    res = await fetchFn(data.publicUrl);
+  } catch (err) {
+    console.warn('[getMatchPositions] replay fetch failed:', (err as Error)?.message ?? err);
+    return { kind: 'failed' };
+  }
+
+  if (res.status === 404 || res.status === 400) return { kind: 'missing' };
+  if (!res.ok) {
+    console.warn(`[getMatchPositions] replay fetch returned HTTP ${res.status} for match`, matchId);
+    return { kind: 'failed' };
+  }
+
+  let parsedJson: unknown;
+  try {
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // A CDN or browser that already undid the gzip hands us plain JSON; accept
+    // either rather than failing on an encoding detail.
+    const jsonBytes = isGzip(bytes) ? await gunzip(bytes) : bytes;
+    parsedJson = JSON.parse(new TextDecoder().decode(jsonBytes));
+  } catch (err) {
+    console.error('[getMatchPositions] replay could not be decoded:', (err as Error)?.message ?? err);
+    return { kind: 'failed' };
+  }
+
+  const file = ReplayFileSchema.safeParse(parsedJson);
+  if (!file.success) {
+    console.warn('[getMatchPositions] replay file has an unknown shape:', file.error.issues[0]);
+    return { kind: 'failed' };
+  }
+
+  const rows: PositionSnapshot[] = [];
+  for (const frame of file.data.frames) {
+    const decoded = decodeRow(frame, file.data.roster);
+    if (decoded.kind === 'ok') rows.push(decoded.snapshot);
+  }
+  return { kind: 'found', rows };
+}
+
 // ── Query ────────────────────────────────────────────────────────────────────
 
 /**
  * Fetch all spatial position snapshots for a match, ordered by game time.
  *
- * Returns an empty array when:
- *  • the match was simulated by the legacy dice-roller (no rows in the table)
- *  • the match has compact frames but no roster row to decode them against
- *  • the Supabase query fails for any reason (logged, not thrown)
+ * Reads the replay file from Storage first; falls back to the legacy
+ * `match_positions` tables only when that file does not exist.
  *
- * The returned array is already sorted by (minute, second) ascending, making
- * it suitable for binary-search playback in `useSpatialPlayback`.
+ * Returns an empty array when:
+ *  • the match has no replay anywhere (not simulated yet, or pruned)
+ *  • the file exists but cannot be fetched or decoded (logged, not thrown)
+ *  • legacy compact rows exist but no roster row to decode them against
+ *  • the legacy table query fails for any reason (logged, not thrown)
+ *
+ * The returned array is sorted by (minute, second) ascending, making it
+ * suitable for binary-search playback in `useSpatialPlayback`.
+ *
+ * @param db       Supabase client (anon or authenticated — read is public).
+ * @param matchId  UUID of the match to load positions for.
+ * @param deps     Optional injected fetch (tests).
+ * @returns        Sorted array of position snapshots, or [] on error / not-found.
+ */
+export async function getMatchPositions(
+  db: SupabaseClient,
+  matchId: string,
+  deps: MatchPositionsDeps = {},
+): Promise<PositionSnapshot[]> {
+  const fetchFn: FetchLike = deps.fetch ?? ((input, init) => fetch(input, init));
+  const replay = await loadReplayFile(db, matchId, fetchFn);
+  if (replay.kind === 'found') return replay.rows;
+  if (replay.kind === 'failed') return [];
+  return getLegacyTablePositions(db, matchId);
+}
+
+/**
+ * Read frames from the legacy `match_positions` + `match_position_rosters`
+ * tables (matches simulated before replays moved to Storage).
  *
  * PAGINATION
  *   PostgREST caps a single response at its `max-rows` setting (1000 by default
@@ -177,12 +402,8 @@ function decodeV2(
  *   there while the clock keeps ticking.  We page through with `.range()`,
  *   advancing by the rows actually returned and stopping on the first empty
  *   page, so the whole match is loaded regardless of the server's row cap.
- *
- * @param db       Supabase client (anon or authenticated — read is public).
- * @param matchId  UUID of the match to load positions for.
- * @returns        Sorted array of position snapshots, or [] on error / not-found.
  */
-export async function getMatchPositions(
+async function getLegacyTablePositions(
   db: SupabaseClient,
   matchId: string,
 ): Promise<PositionSnapshot[]> {
@@ -213,42 +434,16 @@ export async function getMatchPositions(
     }
     if (!data || data.length === 0) break;
 
-    // Validate at the DB boundary so a malformed JSONB row fails loud here
-    // rather than silently producing NaN coordinates in the renderer.
     for (const row of data) {
-      const compact = SnapshotsV2Schema.safeParse(row.snapshots);
-      if (compact.success) {
-        if (!roster) {
-          // Undecodable: the ids live in match_position_rosters and that row
-          // is gone.  Returning [] matches the no-frames case, which the
-          // viewer already handles by falling back to a static formation.
-          console.warn('[getMatchPositions] compact frames with no roster row; match', matchId);
-          return [];
-        }
-        const decoded = decodeV2(compact.data, roster);
-        if (!decoded) {
-          console.warn('[getMatchPositions] compact frame does not match roster size, skipped');
-          continue;
-        }
-        rows.push({
-          minute: row.minute as number,
-          second: row.second as number,
-          snapshots: decoded,
-        });
-        continue;
+      const decoded = decodeRow(row, roster);
+      if (decoded.kind === 'no-roster') {
+        // Undecodable: the ids live in match_position_rosters and that row
+        // is gone.  Returning [] matches the no-frames case, which the
+        // viewer already handles by falling back to a static formation.
+        console.warn('[getMatchPositions] compact frames with no roster row; match', matchId);
+        return [];
       }
-
-      // Not v2 — try the legacy shape before giving up on the row.
-      const legacy = SnapshotsV1Schema.safeParse(row.snapshots);
-      if (!legacy.success) {
-        console.warn('[getMatchPositions] malformed snapshot row skipped:', legacy.error.issues[0]);
-        continue;
-      }
-      rows.push({
-        minute: row.minute as number,
-        second: row.second as number,
-        snapshots: legacy.data,
-      });
+      if (decoded.kind === 'ok') rows.push(decoded.snapshot);
     }
 
     from += data.length;
@@ -258,7 +453,7 @@ export async function getMatchPositions(
 }
 
 /**
- * Load the ordered player-id roster for a match's compact frames.
+ * Load the ordered player-id roster for a match's legacy compact frames.
  *
  * @param db       Supabase client.
  * @param matchId  UUID of the match.
