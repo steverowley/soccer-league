@@ -126,6 +126,7 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
       </div>
 
       <SectionHeader
+        level={1}
         pageKicker={`STEP ${step} OF ${TOTAL_STEPS}`}
         kicker={`I • WELCOME`}
         title={

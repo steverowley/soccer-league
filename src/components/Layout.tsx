@@ -62,6 +62,13 @@ interface SectionHeaderProps {
   subtitle?: string;
   actionLabel?: string;
   actionTo?: string;
+  /**
+   * Heading level of the title.  1 for the header that opens a page (every
+   * page needs exactly one h1, the page's name for screen readers and search
+   * engines); 2, the default, for section headers further down.  Looks the
+   * same either way.
+   */
+  level?: 1 | 2;
 }
 
 /**
@@ -82,7 +89,9 @@ export function SectionHeader({
   subtitle,
   actionLabel,
   actionTo,
+  level = 2,
 }: SectionHeaderProps) {
+  const Title = level === 1 ? 'h1' : 'h2';
   return (
     <header>
       {pageKicker && (
@@ -113,7 +122,7 @@ export function SectionHeader({
         {label && <span>{label}</span>}
       </div>
 
-      <h2 style={{
+      <Title style={{
         fontSize: 40,
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -122,7 +131,7 @@ export function SectionHeader({
         letterSpacing: '0.02em',
       }}>
         {title}
-      </h2>
+      </Title>
 
       {(subtitle || actionLabel) && (
         <div style={{
@@ -206,8 +215,10 @@ export function Footer() {
         <span style={{ margin: '0 12px', opacity: 0.5 }}>•</span>
         <span>v 0.7.0</span>
       </div>
-      {/* Row 2: legal links — slightly smaller, looser tracking. */}
-      <div style={{ marginTop: 12, fontSize: 10, letterSpacing: '0.14em' }}>
+      {/* Row 2: legal links.  12 px (was 10, too small to read or hit on a
+          phone); each link carries its own padding so the tap target is
+          about 44 px tall without changing how the row looks. */}
+      <div style={{ marginTop: 4, fontSize: 12, letterSpacing: '0.14em' }}>
         <FooterLink to="/about">About</FooterLink>
         <span style={{ margin: '0 10px', opacity: 0.5 }}>•</span>
         <FooterLink to="/privacy">Privacy</FooterLink>
@@ -218,13 +229,14 @@ export function Footer() {
   );
 }
 
-/** Footer-only link: inherits the small-caps treatment, gets an underline on hover. */
+/** Footer-only link: inherits the small-caps treatment; padded to a finger-sized tap target. */
 function FooterLink({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link to={to} style={{
-      color: COLORS.dust50,
+      color: COLORS.dust70,
       textDecoration: 'none',
-      borderBottom: `1px solid transparent`,
+      display: 'inline-block',
+      padding: '14px 6px',
     }}>
       {children}
     </Link>

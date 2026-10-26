@@ -54,24 +54,11 @@ export const REFS: string[] = [
   'Ref-9000', 'Magistrate Zuri', 'Judge Orion',
 ];
 
-export interface Stadium {
-  name: string;
-  planet: string;
-  capacity: string;
-}
-
-export const STADIUMS: Stadium[] = [
-  { name: 'Olympus Mons Arena',       planet: 'Mars',              capacity: '89,000' },
-  { name: 'Titan Dome',               planet: 'Titan (Saturn)',    capacity: '76,000' },
-  { name: 'Cassini Division Field',   planet: 'Saturn Rings',      capacity: '65,000' },
-  { name: 'Valles Marineris Stadium', planet: 'Mars',              capacity: '92,000' },
-  { name: 'Europa Ice Bowl',          planet: 'Europa (Jupiter)',  capacity: '58,000' },
-  { name: 'Enceladus Geysers Ground', planet: 'Enceladus (Saturn)',capacity: '45,000' },
-  { name: 'Phobos Crater Coliseum',   planet: 'Phobos (Mars)',     capacity: '38,000' },
-  { name: 'Io Volcanic Park',         planet: 'Io (Jupiter)',      capacity: '71,000' },
-  { name: 'Ganymede Glacier Stadium', planet: 'Ganymede (Jupiter)',capacity: '82,000' },
-  { name: 'Triton Nitrogen Fields',   planet: 'Triton (Neptune)',  capacity: '51,000' },
-];
+// Grounds come from each club (teams.home_ground, teams.capacity, the
+// canon figures).  A hard-coded STADIUMS list of invented grounds with
+// different capacities used to live here as a random fallback; nothing
+// read it after normalizeTeam.ts started passing the club's own ground,
+// so it was removed rather than left to contradict the canon.
 
 export const PLANET_WX: Record<string, WeatherCondition[]> = {
   'Mars':              [WX.CLEAR, WX.DUST, WX.DUST, WX.METEOR, WX.WIND, WX.HEAT],

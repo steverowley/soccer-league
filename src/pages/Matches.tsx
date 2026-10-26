@@ -223,6 +223,7 @@ export default function Matches() {
       <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
+            level={1}
             pageKicker="Fixtures"
             kicker="IV"
             label="All Matches"

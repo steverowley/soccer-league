@@ -242,6 +242,7 @@ export default function WhatIf() {
         <Container>
           <section style={{ padding: '32px 0' }}>
             <SectionHeader
+              level={1}
               pageKicker="WHAT IF"
               kicker="12"
               label="ALTERNATE TIMELINES"

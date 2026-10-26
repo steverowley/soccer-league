@@ -25,6 +25,7 @@ export default function Privacy() {
       <Header />
       <Container>
         <SectionHeader
+          level={1}
           pageKicker="LEGAL"
           kicker="I • PRIVACY"
           title="Privacy Policy"

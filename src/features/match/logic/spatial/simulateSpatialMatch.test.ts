@@ -276,6 +276,37 @@ describe('simulateSpatialMatch — substitutions', () => {
     // players stay parked on the line), so the count never drops.
     expect(r.frames[r.frames.length - 1]!.players.length).toBe(22);
   }, 180_000);
+
+  it('never sends the reserve keeper on as an outfield player', () => {
+    // Regression: when no like-for-like substitute was left, the fallback
+    // took whoever was listed first on the bench, and a reserve keeper came
+    // on up front.  This bench forces that exact case: the keeper is listed
+    // FIRST and the only outfield substitute is a defender, so every tired
+    // midfielder or forward needs the fallback.
+    const thinBench = (prefix: string): SpatialTeamInput => ({
+      ...team(prefix, 70),
+      bench: (['GK', 'DF'] as Role[]).map((role, i) => ({
+        id: `${prefix}-s${i}`, name: `${prefix} s${i}`, role, stats: stats(70),
+      })),
+    });
+    const starterRole = (id: string): Role =>
+      (['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'] as Role[])[Number(id.split('-')[1])]!;
+
+    let fallbackSubs = 0;
+    for (const seed of [5, 6, 7]) {
+      const r = simulateSpatialMatch(thinBench('H'), thinBench('A'), { ...FULL, seed });
+      for (const s of r.events.filter((e) => e.type === 'substitution')) {
+        // The reserve keeper (s0) never comes on.
+        expect(s.playerId, `seed ${seed}`).not.toMatch(/-s0$/);
+        // The defender coming on for a midfielder or forward is the fallback.
+        if (s.playerId?.endsWith('-s1') && s.otherId && starterRole(s.otherId) !== 'DF') fallbackSubs++;
+      }
+      // And he is never on the pitch in any frame.
+      expect(r.frames.some((f) => f.players.some((p) => /-s0$/.test(p.id))), `seed ${seed}`).toBe(false);
+    }
+    // The test only proves something if the fallback actually ran.
+    expect(fallbackSubs).toBeGreaterThan(0);
+  }, 420_000);
 });
 
 describe('simulateSpatialMatch — favourite/underdog separation (#589)', () => {

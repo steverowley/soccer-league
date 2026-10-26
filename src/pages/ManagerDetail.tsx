@@ -219,6 +219,7 @@ function ManagerHero({ manager }: { manager: ManagerWithContext }): JSX.Element 
         </BackLink>
         <div style={{ marginTop: 24 }}>
           <SectionHeader
+            level={1}
             pageKicker={`Managers${teamName ? ` / ${teamName}` : ''}`}
             kicker="—"
             label="Manager Detail"

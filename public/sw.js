@@ -60,8 +60,12 @@ self.addEventListener('push', (event) => {
       // Replace any existing notification with the same tag so we don't
       // stack duplicates if the user has multiple tabs.
       renotify: false,
-      icon: '/soccer-league/isl-logo.png',
-      badge: '/soccer-league/isl-logo.png',
+      // Resolved against the worker's own scope, so the icon loads both at
+      // the Vercel root and under GitHub Pages' /soccer-league/.  A fixed
+      // '/soccer-league/isl-logo.png' returned the HTML app shell on Vercel,
+      // so notifications showed no icon.
+      icon: new URL('isl-logo.png', self.registration.scope).href,
+      badge: new URL('isl-logo.png', self.registration.scope).href,
       data: { url },
     }),
   );

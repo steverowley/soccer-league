@@ -64,6 +64,7 @@ export default function ResetPassword() {
       <Header />
       <Container>
         <SectionHeader
+          level={1}
           pageKicker="ACCOUNT"
           kicker={isRecovering ? 'II • SET NEW PASSWORD' : 'I • RESET PASSWORD'}
           title={isRecovering ? 'Choose a new password' : 'Forgot your password?'}

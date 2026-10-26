@@ -401,6 +401,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <section style={{ padding: '48px 0 16px' }}>
         <Container>
           <SectionHeader
+            level={1}
             pageKicker="Account"
             kicker="IX"
             label="Sign In"
