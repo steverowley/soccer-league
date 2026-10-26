@@ -27,7 +27,15 @@ import Header from '../components/Header';
 import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import type { PublicReadClient } from '../shared/supabase/publicReadClient';
-import { getLiveMatches, getUpcomingMatches, useLiveScores, useSeasonPhase, type LiveScoreView } from '../features/match';
+import {
+  competitionLabel,
+  getLiveMatches,
+  getUpcomingMatches,
+  roundLabel,
+  useLiveScores,
+  useSeasonPhase,
+  type LiveScoreView,
+} from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { AsyncView, EmptyState, PreSeasonState } from '../shared/ui';
 // Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
@@ -275,6 +283,41 @@ export default function Matches() {
         </Container>
       </section>
 
+      {/* Fixture rows on a phone.  The desktop row is five columns
+          (when, home, score, away, meta) and is ~420 px wide at minimum, so
+          at 390 px the meta column (competition and the live minute) sat
+          off-screen and long names were clipped.  On a phone each row
+          becomes three lines:
+            when ............................ Live 37'
+            Home name      2 · 1      Away name
+            Competition • Matchday
+          The meta cell dissolves (display: contents) so its two parts can
+          take their own places.  The decorative mini pitch is hidden. */}
+      <style>{`
+        @media (max-width: 599px) {
+          .isl-match-row {
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+            grid-template-areas:
+              "when when pip"
+              "home score away"
+              "comp comp comp";
+            column-gap: 12px !important;
+            row-gap: 8px !important;
+            padding: 14px 0 !important;
+          }
+          .isl-mr-when  { grid-area: when; }
+          .isl-mr-when > div:not(.isl-mr-pitch) { display: inline; margin-right: 10px; }
+          .isl-mr-pitch { display: none; }
+          .isl-mr-home  { grid-area: home; }
+          .isl-mr-score { grid-area: score; }
+          .isl-mr-away  { grid-area: away; }
+          .isl-mr-meta  { display: contents; }
+          .isl-mr-comp  { grid-area: comp; text-align: center; color: ${DUST_50}; }
+          .isl-mr-pip   { grid-area: pip; justify-self: end; }
+          .isl-mr-pip > div { margin-top: 0 !important; }
+        }
+      `}</style>
+
       <Footer />
     </div>
   );
@@ -477,8 +520,8 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
   const isLiveRow   = status === FILTER_LIVE;
   const homeScore   = isLiveRow ? (live?.score ? live.score[0] : '–') : match.home_score ?? 0;
   const awayScore   = isLiveRow ? (live?.score ? live.score[1] : '–') : match.away_score ?? 0;
-  const competition = match.competitions?.name ?? 'League';
-  const round       = match.round ?? '';
+  const competition = competitionLabel(match.competitions?.name);
+  const round       = roundLabel(match.round);
 
   const scheduledAt = match.scheduled_at ? new Date(match.scheduled_at) : null;
   const playedAt    = match.played_at    ? new Date(match.played_at)    : null;
@@ -488,6 +531,7 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
     <li>
       <Link
         to={`/matches/${match.id}`}
+        className="isl-match-row"
         style={{
           display: 'grid',
           gridTemplateColumns: '120px 1fr auto 1fr 220px',
@@ -505,7 +549,7 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
             tiny pitch chip BELOW the timestamp so the user can scan
             multiple live matches at once and see their cursor of
             action without opening each detail page. */}
-        <div style={{
+        <div className="isl-mr-when" style={{
           fontSize: 11,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
@@ -521,7 +565,7 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
             <div style={{ color: DUST_50 }}>TBC</div>
           )}
           {status === 'live' && (
-            <div style={{ marginTop: 8 }} onClick={(e) => e.preventDefault()}>
+            <div className="isl-mr-pitch" style={{ marginTop: 8 }} onClick={(e) => e.preventDefault()}>
               {/* preventDefault stops a click on the chip from
                   triggering the outer <Link> — the chip is purely
                   decorative; the rest of the row remains the
@@ -533,20 +577,22 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
 
         {/* Home name — right-aligned so the score block reads centred
             on the row regardless of name length. */}
-        <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
+        <div className="isl-mr-home" style={{ fontSize: 14, fontWeight: 700, textAlign: 'right', overflowWrap: 'anywhere' }}>
           {homeName}
         </div>
 
         {/* Score / V separator — flare pip for live; bold score for
             completed; "V" glyph for scheduled. */}
-        <ScoreBlock status={status} home={homeScore} away={awayScore} />
+        <div className="isl-mr-score">
+          <ScoreBlock status={status} home={homeScore} away={awayScore} />
+        </div>
 
-        <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'left' }}>
+        <div className="isl-mr-away" style={{ fontSize: 14, fontWeight: 700, textAlign: 'left', overflowWrap: 'anywhere' }}>
           {awayName}
         </div>
 
         {/* Meta column — competition + round + status pip. */}
-        <div style={{
+        <div className="isl-mr-meta" style={{
           textAlign: 'right',
           fontSize: 11,
           letterSpacing: '0.14em',
@@ -554,11 +600,13 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
           color: DUST_70,
           lineHeight: 1.4,
         }}>
-          <div>
+          <div className="isl-mr-comp">
             {competition}
             {round && <> <span style={{ color: DUST_50 }}>•</span> {round}</>}
           </div>
-          <StatusPip status={status} live={live} />
+          <div className="isl-mr-pip">
+            <StatusPip status={status} live={live} />
+          </div>
         </div>
       </Link>
     </li>
@@ -622,6 +670,7 @@ function ScoreBlock({ status, home, away }: ScoreBlockProps) {
         fontSize: 18,
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
+        whiteSpace: 'nowrap',
       }}>
         {home} <span style={{ color: DUST_50 }}>·</span> {away}
       </span>

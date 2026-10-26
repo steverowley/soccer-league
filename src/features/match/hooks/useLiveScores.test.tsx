@@ -64,12 +64,16 @@ describe('useLiveScores', () => {
     const { db } = fakeDb(goals);
     const { result } = renderHook(() => useLiveScores(matches), { wrapper: wrapperFor(db) });
     await settle();
-    expect(result.current.get('m1')).toEqual({ score: [0, 0], minute: 9, fullTime: false });
+    expect(result.current.get('m1')).toEqual({ score: [0, 0], minute: 9, fullTime: false, goals: [] });
     expect(result.current.get('m2')?.score).toEqual([1, 0]);
     expect(result.current.has('m3')).toBe(false); // not kicked off: not tracked
 
     await act(async () => { vi.advanceTimersByTime(240_000); }); // minute 45
-    expect(result.current.get('m1')).toEqual({ score: [1, 1], minute: 45, fullTime: false });
+    expect(result.current.get('m1')).toMatchObject({ score: [1, 1], minute: 45, fullTime: false });
+    expect(result.current.get('m1')?.goals).toEqual([
+      { minute: 12, side: 'away', player: null },
+      { minute: 40, side: 'home', player: null },
+    ]);
   });
 
   it('reads every live match in ONE request, ids sorted so the read cache shares it', async () => {

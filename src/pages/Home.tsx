@@ -24,7 +24,7 @@
 // at that point — matches the "extract on 2nd use" rule.  PR 11 followed
 // up by extracting TeamCrest into Layout.jsx once MatchDetail duplicated it.
 // Everything that is still local to Home (Hero, LiveMatchPanel,
-// UpcomingPanel, FixtureRow, CommentaryBlock, TeamScoreBlock) has exactly
+// UpcomingPanel, FixtureRow, GoalsSoFar, TeamScoreBlock) has exactly
 // one consumer today and stays inline.
 //
 // DATA SOURCES
@@ -69,6 +69,8 @@ import {
   getLiveMatches,
   getUpcomingMatches,
   useLiveScores,
+  competitionLabel,
+  roundLabel,
   type LiveScoreView,
 } from '../features/match';
 
@@ -295,6 +297,11 @@ export default function Home() {
         }
         @media (max-width: 599px) {
           .isl-league-grid { grid-template-columns: 1fr !important; }
+          /* Live card on a phone: everything inside the card's width. */
+          .isl-live-meta { padding: 14px 16px !important; }
+          .isl-live-score-row { gap: 12px !important; padding: 24px 16px !important; }
+          .isl-live-score { font-size: 36px !important; }
+          .isl-live-team-name { font-size: 15px !important; }
         }
       `}</style>
     </div>
@@ -623,19 +630,22 @@ function LiveMatchPanel({ match, live, fallbackUpcoming }: { match: any | null; 
   // which stays empty until full time and read as 0-0 all match.
   const homeScore   = live?.score ? live.score[0] : '–';
   const awayScore   = live?.score ? live.score[1] : '–';
-  const competition = match.competitions?.short_name ?? match.competitions?.name ?? 'League';
-  const round       = match.round ? `Matchday ${match.round}` : '';
+  const competition = competitionLabel(match.competitions?.name);
+  const round       = roundLabel(match.round);
   const minute      = live && !live.fullTime && live.minute > 0 ? live.minute : null;
   const fullTime    = live?.fullTime ?? false;
 
   return (
     <div style={{ border: `1px solid ${HAIRLINE}`, background: ABYSS }}>
-      {/* Row 1 — meta + bordered LIVE chip. */}
-      <div style={{
+      {/* Row 1 — meta + bordered LIVE chip.  Wraps on a phone rather than
+          pushing the chip past the card's edge. */}
+      <div className="isl-live-meta" style={{
         ...(undefined as any),
         display: 'flex',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: 12,
         padding: '16px 24px',
         borderBottom: `1px solid ${HAIRLINE}`,
         fontSize: 11,
@@ -669,39 +679,34 @@ function LiveMatchPanel({ match, live, fallbackUpcoming }: { match: any | null; 
         </Chip>
       </div>
 
-      {/* Row 2 — three-column score row with shield placeholders. */}
-      <div style={{
+      {/* Row 2 — three-column score row with shield placeholders.
+          minmax(0, 1fr): the name columns may shrink below their longest
+          word, so a long club name wraps instead of pushing the card past
+          the screen edge (it did at 390 px). */}
+      <div className="isl-live-score-row" style={{
         ...(undefined as any),
         display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
+        gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
         alignItems: 'center',
         gap: 24,
         padding: '32px 24px',
         borderBottom: `1px solid ${HAIRLINE}`,
       }}>
         <TeamScoreBlock side="Home" name={homeName} location={homeLoc} color={homeColor} />
-        <div style={{ fontSize: 48, fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1 }}>
+        <div className="isl-live-score" style={{ fontSize: 48, fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
           {homeScore} <span style={{ color: DUST_50 }}>·</span> {awayScore}
         </div>
         <TeamScoreBlock side="Away" name={awayName} location={awayLoc} color={awayColor} />
       </div>
 
-      {/* Row 3 — commentary stack.  Placeholder copy until live
-          match_events writes land. */}
+      {/* Row 3 — goals so far, revealed on the same clock as the score
+          (this was a static "Awaiting broadcast" placeholder). */}
       <div style={{
         ...(undefined as any),
-        padding: '24px',
+        padding: '20px 24px',
         borderBottom: `1px solid ${HAIRLINE}`,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
       }}>
-        <CommentaryBlock
-          speaker="Awaiting Broadcast"
-          role="Booth Feed"
-          minute={minute}
-          quote="Transmissions resume momentarily…"
-        />
+        <GoalsSoFar live={live} homeName={homeName} awayName={awayName} />
       </div>
 
       {/* Row 4 — dust-filled CTA.
@@ -713,6 +718,43 @@ function LiveMatchPanel({ match, live, fallbackUpcoming }: { match: any | null; 
         <DustButton to={`/matches/${match.id}`}>Watch Live Match</DustButton>
       </div>
     </div>
+  );
+}
+
+/**
+ * The goals revealed so far in the featured live match: minute, scorer and
+ * club, oldest first.  "No goals yet" before the first; a quiet line while
+ * the match is still being simulated and the score is not known.
+ */
+function GoalsSoFar({ live, homeName, awayName }: { live: LiveScoreView | null; homeName: string; awayName: string }) {
+  const label = (
+    <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70, marginBottom: 10 }}>
+      Goals
+    </div>
+  );
+  if (!live || live.score === null) {
+    return <>{label}<p style={{ margin: 0, fontSize: 13, color: DUST_50 }}>Kick-off. The match is under way.</p></>;
+  }
+  if (live.goals.length === 0) {
+    return <>{label}<p style={{ margin: 0, fontSize: 13, color: DUST_50 }}>No goals yet.</p></>;
+  }
+  return (
+    <>
+      {label}
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {live.goals.map((g, i) => (
+          <li key={`${g.minute}-${i}`} style={{ display: 'grid', gridTemplateColumns: '40px minmax(0, 1fr)', gap: 8, fontSize: 13, lineHeight: 1.4 }}>
+            <span style={{ color: DUST_70, fontVariantNumeric: 'tabular-nums' }}>{g.minute}&apos;</span>
+            <span style={{ overflowWrap: 'anywhere' }}>
+              {g.player ?? 'Goal'}
+              {g.side && (
+                <span style={{ color: DUST_50 }}> · {g.side === 'home' ? homeName : awayName}</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
 
@@ -733,7 +775,7 @@ function TeamScoreBlock({ side, name, location, color  }: any) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <TeamCrest color={color} />
-      <h3 style={{
+      <h3 className="isl-live-team-name" style={{
         ...(undefined as any),
         fontSize: 20,
         fontWeight: 700,
@@ -741,6 +783,7 @@ function TeamScoreBlock({ side, name, location, color  }: any) {
         textAlign: 'center',
         margin: 0,
         lineHeight: 1.1,
+        overflowWrap: 'anywhere',
       }}>
         {name}
       </h3>
@@ -757,56 +800,6 @@ function TeamScoreBlock({ side, name, location, color  }: any) {
     </div>
   );
 }
-
-/**
- * Single commentary block inside the live panel.
- *
- * Top row: speaker name + bullet + role on the left, minute mark on
- * the right.  Bottom row: italic quote prose.
- *
- * @param {object} props
- * @param {string} props.speaker
- * @param {string} props.role
- * @param {number|null} props.minute
- * @param {string} props.quote
- */
-function CommentaryBlock({ speaker, role, minute, quote }: { speaker: string; role: string; minute: number | null; quote: string }) {
-  return (
-    <div>
-      <div style={{
-        ...(undefined as any),
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        gap: 12,
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        marginBottom: 8,
-      }}>
-        <span>
-          <span>{speaker}</span>
-          <span style={{ color: DUST_50, margin: '0 8px' }}>•</span>
-          <span style={{ color: DUST_70 }}>{role}</span>
-        </span>
-        {minute !== null && minute !== undefined && (
-          <span style={{ color: DUST_70 }}>{minute}&apos;</span>
-        )}
-      </div>
-      <p style={{
-        ...(undefined as any),
-        fontSize: 13,
-        lineHeight: 1.6,
-        fontStyle: 'italic',
-        color: DUST,
-        margin: 0,
-      }}>
-        &ldquo;{quote}&rdquo;
-      </p>
-    </div>
-  );
-}
-
 
 // ── Upcoming sidebar ─────────────────────────────────────────────────────────
 

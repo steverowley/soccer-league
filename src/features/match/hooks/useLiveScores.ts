@@ -38,6 +38,26 @@ export interface LiveScoreMatch {
  */
 export interface LiveScoreView extends Omit<LiveScoreState, 'score'> {
   score: LiveScoreState['score'] | null;
+  /** Goals revealed so far, in order (empty while the score is unknown). */
+  goals: RevealedGoal[];
+}
+
+/** One revealed goal, for a "goals so far" list. */
+export interface RevealedGoal {
+  minute: number;
+  side:   'home' | 'away' | null;
+  /** Scorer as the engine named them, when the event carries it. */
+  player: string | null;
+}
+
+/** Read side and scorer off a goal event's payload. */
+function toRevealedGoal(g: GoalEventRow): RevealedGoal {
+  const p = (typeof g.payload === 'object' && g.payload !== null ? g.payload : {}) as { side?: unknown; player?: unknown };
+  return {
+    minute: g.minute,
+    side:   p.side === 'home' || p.side === 'away' ? p.side : null,
+    player: typeof p.player === 'string' && p.player !== '' ? p.player : null,
+  };
 }
 
 /** How often the clock re-derives the minute and the revealed goals. */
@@ -100,10 +120,18 @@ export function useLiveScores(matches: readonly LiveScoreMatch[]): ReadonlyMap<s
       }
     }
     for (const m of revealing) {
-      const state = liveScoreAt(byMatch.get(m.id) ?? [], m.scheduled_at!, now, seconds);
+      const matchGoals = byMatch.get(m.id) ?? [];
+      const state = liveScoreAt(matchGoals, m.scheduled_at!, now, seconds);
       // `in_progress` means the events are not written yet: the score is unknown.
       const known = current && duration !== null && m.status !== 'in_progress';
-      out.set(m.id, { ...state, score: known ? state.score : null });
+      // Same reveal rule as the score: at or before the minute, all at full time.
+      const goalsSoFar = known
+        ? matchGoals
+            .filter((g) => state.fullTime || g.minute <= state.minute)
+            .sort((a, b) => a.minute - b.minute)
+            .map(toRevealedGoal)
+        : [];
+      out.set(m.id, { ...state, score: known ? state.score : null, goals: goalsSoFar });
     }
     return out;
   // revealing is derived from matches; key captures its identity.
