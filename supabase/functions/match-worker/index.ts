@@ -1981,9 +1981,28 @@ async function runDispatcherMode(): Promise<Response> {
  * Returns 200 even on internal error so pg_cron doesn't back off; failures are
  * logged (and per-match work reverts to 'scheduled' for retry).
  */
+/**
+ * Maintenance switch: while true the worker does NOTHING (no claims, no
+ * publishing, no wager settlement, no odds pricing) and answers 200 so pg_cron
+ * does not back off.
+ *
+ * WHY: after the 2026-10-26 retry storm (issue #712) the database came back
+ * starved, and the first tick would otherwise publish about 180 backlogged
+ * matches, settle their wagers and claim new fixtures all at once. Pausing
+ * here needs no database access, so it works while the database cannot be
+ * reached. Resume by setting this to false in a reviewed PR once the
+ * database is healthy and the backlog plan is decided.
+ */
+const PIPELINE_PAUSED = true;
+
 Deno.serve(async (req: Request) => {
   if (!isAuthorized(req)) {
     return new Response('Unauthorized', { status: 401 });
+  }
+
+  if (PIPELINE_PAUSED) {
+    console.log('[match-worker] Paused for maintenance (PIPELINE_PAUSED); no work done');
+    return new Response(JSON.stringify({ paused: true }), { status: 200 });
   }
 
   // Mode discriminator: the dispatcher self-calls with {"mode":"one"} (plus
