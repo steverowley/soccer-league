@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ISL design language: specimen</title>
+<style>
+@font-face{font-family:'Space Mono';font-weight:400;src:url('file:///C:/Users/rowle/soccer-league/public/fonts/SpaceMono-Regular.ttf')}
+@font-face{font-family:'Space Mono';font-weight:700;src:url('file:///C:/Users/rowle/soccer-league/public/fonts/SpaceMono-Bold.ttf')}
+@font-face{font-family:'Space Mono';font-weight:400;font-style:italic;src:url('file:///C:/Users/rowle/soccer-league/public/fonts/SpaceMono-Italic.ttf')}
+:root{
+  --bg:#111111;--raised:#1F1F1F;--text:#E3E0D5;--text-2:#A8A69E;--text-3:#8F8D87;
+  --line:rgba(227,224,213,.18);--line-faint:rgba(227,224,213,.10);
+  --live:#FF4F5E;--architect:#9A5CF4;--action:#FF6637;--success:#A5D6A7;
+  --s-display:56px;--s-title:40px;--s-heading:28px;--s-sub:18px;--s-score:48px;--s-body:15px;--s-small:13px;--s-label:11px;
+  --pad:24px;--gap:48px;--side:24px;
+}
+@media (max-width:599px){:root{--s-display:40px;--s-title:30px;--s-heading:22px;--s-sub:16px;--s-score:36px;--pad:16px;--gap:32px;--side:16px}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Space Mono',monospace}
+.wrap{max-width:1248px;margin:0 auto;padding:0 var(--side)}
+.label{font-size:var(--s-label);font-weight:700;text-transform:uppercase;letter-spacing:.12em;line-height:1.4}
+.t2{color:var(--text-2)}.t3{color:var(--text-3)}
+h1{font-size:var(--s-title);font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1;margin:12px 0 0}
+h2{font-size:var(--s-heading);font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.15;margin:8px 0 0}
+h3{font-size:var(--s-sub);font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.25;margin:0}
+p{font-size:var(--s-body);line-height:1.6;margin:0}
+.small{font-size:var(--s-small);line-height:1.5}
+nav.top{border-bottom:1px solid var(--line);padding:16px 0}
+nav.top .wrap{display:flex;justify-content:space-between;align-items:center}
+.back{color:var(--text-2);text-decoration:none}
+.pagehead{padding:32px 0 24px;border-bottom:1px solid var(--line)}
+.headrow{display:flex;gap:16px;align-items:center;margin-top:16px}
+.crest{width:40px;height:48px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:24px;margin-top:24px}
+.stat .v{font-size:var(--s-sub);font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+section{margin-top:var(--gap)}
+.sechead{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:24px;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{border:1px solid var(--line);padding:var(--pad)}
+.card.live{border-color:var(--live)}
+.card.arch{border-color:var(--architect);box-shadow:0 0 6px rgba(154,92,244,.5)}
+.btn{display:inline-flex;align-items:center;min-height:44px;padding:0 20px;font:700 var(--s-label)/1 'Space Mono';text-transform:uppercase;letter-spacing:.12em;text-decoration:none;border:1px solid var(--text);color:var(--text);background:none}
+.btn.primary{background:var(--action);border-color:var(--action);color:var(--bg)}
+.btn.ter{border:0;padding:0;color:var(--text)}
+.tag{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);font-size:var(--s-label);font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-2)}
+.tag.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.tag.arch{border-color:var(--architect);color:var(--architect)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--live);display:inline-block}
+.score{font-size:var(--s-score);font-weight:700;font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap}
+.match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:20px 0}
+.match h3{overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;font-size:var(--s-small);font-variant-numeric:tabular-nums}
+th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid var(--line-faint)}
+td.n,th.n{text-align:right}
+.club{display:flex;gap:8px;align-items:center;font-weight:700}
+.q{border-left:2px solid var(--line);padding-left:12px;margin-top:16px}
+.q.arch{border-color:var(--architect)}
+.q p{font-style:italic}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.sw{border:1px solid var(--line);padding:12px}.sw i{display:block;height:28px;margin-bottom:8px}
+footer{border-top:2px solid #fff;margin-top:64px;padding:24px 0;text-align:center}
+.scale div{display:flex;gap:16px;align-items:baseline;border-bottom:1px solid var(--line-faint);padding:8px 0;flex-wrap:wrap}
+.scale .k{width:110px;flex:none}
+</style></head><body>
+<nav class="top"><div class="wrap"><span class="label">ISL</span><span class="label t2">Matches · Clubs · Leagues · News</span></div></nav>
+<div class="wrap">
+  <header class="pagehead">
+    <a class="back label" href="#">◂ All clubs</a>
+    <div class="label t3" style="margin-top:16px">Leagues / Rocky Inner / Earth United</div>
+    <div class="headrow">
+      <svg class="crest" viewBox="0 0 40 48"><path d="M20 2 L38 8 V24 C38 36 30 43 20 46 C10 43 2 36 2 24 V8 Z" fill="#4169E1" stroke="#E3E0D5" stroke-opacity=".3"/></svg>
+      <div><div class="label t2">Clubs</div><h1>Earth United</h1></div>
+    </div>
+    <p class="t2" style="margin-top:16px;max-width:60ch">The oldest club in the league. Blue Marble Arena holds 95,000 and has never been quiet.</p>
+    <div class="meta">
+      <div class="stat"><div class="label t2">Position</div><div class="v">2nd</div></div>
+      <div class="stat"><div class="label t2">Points</div><div class="v">3</div></div>
+      <div class="stat"><div class="label t2">Form</div><div class="v" style="color:var(--success)">W</div></div>
+      <div class="stat"><div class="label t2">Ground</div><div class="v">95,000</div></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sechead"><div><div class="label t2">I · Now</div><h2>Live match</h2></div><a class="btn ter" href="#">All matches ▸</a></div>
+    <div class="grid">
+      <div class="card live">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="label t2">Rocky Inner League · Matchday 2</span>
+          <span class="tag" style="color:var(--text)"><span class="dot"></span>Live · 37'</span>
+        </div>
+        <div class="match">
+          <h3 style="text-align:right">Earth United</h3>
+          <div class="score">2 <span class="t3">·</span> 1</div>
+          <h3>Mars Athletic</h3>
+        </div>
+        <div class="label t2">Goals</div>
+        <p class="small" style="margin-top:8px"><span class="t3">12'</span> Priya Sharma · Earth United<br><span class="t3">30'</span> Kai Ito · Mars Athletic<br><span class="t3">36'</span> Priya Sharma · Earth United</p>
+        <div style="margin-top:20px"><a class="btn primary" href="#">Watch live</a></div>
+      </div>
+      <div class="card">
+        <div class="label t2">The booth</div>
+        <div class="q"><div class="label">Nexus-7 <span class="t3">· AI analyst · 34'</span></div><p class="small" style="margin-top:6px">Earth United press in a 4-2-4. The back line holds at halfway.</p></div>
+        <div class="q"><div class="label">Zara Bloom <span class="t3">· Colour analyst · 35'</span></div><p class="small" style="margin-top:6px">Corner, Mars Athletic. The near-post run is the one to watch.</p></div>
+        <div class="q arch"><div class="label" style="color:var(--architect)">Chaos <span class="t3">· Cosmic voice</span></div><p class="small" style="margin-top:6px">Something in the stands is counting backwards.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead"><div><div class="label t2">II · Standings</div><h2>Rocky Inner League</h2></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag on">All</span><span class="tag">Home</span><span class="tag">Away</span></div></div>
+    <table>
+      <tr><th class="label t2">#</th><th class="label t2">Club</th><th class="label t2 n">P</th><th class="label t2 n">GD</th><th class="label t2 n">Pts</th></tr>
+      <tr><td><span style="color:var(--success)">1</span></td><td><span class="club"><svg width="16" height="19" viewBox="0 0 40 48"><path d="M20 2 L38 8 V24 C38 36 30 43 20 46 C10 43 2 36 2 24 V8 Z" fill="#CC4444"/></svg>Mars Athletic</span></td><td class="n">1</td><td class="n">+2</td><td class="n">3</td></tr>
+      <tr><td><span style="color:var(--success)">2</span></td><td><span class="club"><svg width="16" height="19" viewBox="0 0 40 48"><path d="M20 2 L38 8 V24 C38 36 30 43 20 46 C10 43 2 36 2 24 V8 Z" fill="#4169E1"/></svg>Earth United</span></td><td class="n">1</td><td class="n">+2</td><td class="n">3</td></tr>
+      <tr><td class="t2">=3</td><td><span class="club"><svg width="16" height="19" viewBox="0 0 40 48"><path d="M20 2 L38 8 V24 C38 36 30 43 20 46 C10 43 2 36 2 24 V8 Z" fill="#FF6B35"/></svg>Venus Volcanic</span></td><td class="n">1</td><td class="n">0</td><td class="n">1</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="sechead"><div><div class="label t2">III · System</div><h2>Type and colour</h2></div></div>
+    <div class="scale">
+      <div><span class="label t3 k">Title 40/30</span><span style="font-size:var(--s-title);font-weight:700;text-transform:uppercase">Leagues</span></div>
+      <div><span class="label t3 k">Heading 28/22</span><span style="font-size:var(--s-heading);font-weight:700;text-transform:uppercase">Standings</span></div>
+      <div><span class="label t3 k">Sub 18/16</span><span style="font-size:var(--s-sub);font-weight:700;text-transform:uppercase">Earth United</span></div>
+      <div><span class="label t3 k">Body 15</span><span style="font-size:15px;line-height:1.6">Thirty-two clubs across four orbital leagues. One Cosmic Architect.</span></div>
+      <div><span class="label t3 k">Small 13</span><span class="small">P 1 · W 1 · D 0 · L 0 · GD +2</span></div>
+      <div><span class="label t3 k">Label 11</span><span class="label">Rocky Inner League · Matchday 2</span></div>
+    </div>
+    <div class="swatches" style="margin-top:24px">
+      <div class="sw"><i style="background:var(--text)"></i><span class="label">Text</span><div class="small t2">14.3:1</div></div>
+      <div class="sw"><i style="background:var(--text-2)"></i><span class="label">Secondary</span><div class="small t2">7.7:1</div></div>
+      <div class="sw"><i style="background:var(--text-3)"></i><span class="label">Tertiary</span><div class="small t2">5.7:1</div></div>
+      <div class="sw"><i style="background:var(--live)"></i><span class="label">Live / error</span></div>
+      <div class="sw"><i style="background:var(--architect)"></i><span class="label">Architect / focus</span></div>
+      <div class="sw"><i style="background:var(--action)"></i><span class="label">Primary action</span></div>
+      <div class="sw"><i style="background:var(--success)"></i><span class="label">Success / win</span></div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px;align-items:center">
+      <a class="btn primary" href="#">Place stake</a><a class="btn" href="#">View club</a><a class="btn ter" href="#">All matches ▸</a>
+      <span class="tag">Dispatch</span><span class="tag arch">Architect</span><span class="tag" style="color:var(--text)"><span class="dot"></span>Live · 37'</span><span class="tag" style="border-color:var(--success);color:var(--success)">Won</span>
+    </div>
+  </section>
+</div>
+<footer><span class="label t2">Intergalactic Soccer League · About · Privacy · Terms</span></footer>
+</body></html>
