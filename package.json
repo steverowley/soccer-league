@@ -20,6 +20,7 @@
     "generate-seed": "tsx scripts/generate-seed.ts",
     "bench:engine": "tsx scripts/bench-engine.ts",
     "fingerprint:engine": "tsx scripts/engine-fingerprint.ts --check",
+    "design:baseline": "tsx scripts/design-baseline.ts",
     "build:api": "node scripts/build-api.mjs"
   },
   "dependencies": {
