@@ -76,3 +76,14 @@ export {
   AsyncView,
   formatKickoffDate,
 } from './DataState';
+
+// ── Design language components (docs/design-language.md, section 6) ──────
+export { PageShell } from './PageShell';
+export { PageHeader } from './PageHeader';
+export { SectionHeader, toRoman } from './SectionHeader';
+export { Tag, type TagTone } from './Tag';
+export { LiveBadge } from './LiveBadge';
+export { BackLink } from './BackLink';
+export { Breadcrumbs, type Crumb } from './Breadcrumbs';
+export { Crest, type CrestSize } from './Crest';
+export { StatBlock, type StatTone } from './StatBlock';

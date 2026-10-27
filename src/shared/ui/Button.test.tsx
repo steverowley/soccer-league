@@ -1,13 +1,13 @@
 // ── shared/ui/Button.test.tsx ─────────────────────────────────────────────
-// Behavioural coverage for the polymorphic Button primitive: it renders the
-// right element per props (Link / anchor / button), carries variant colours,
-// appends the tertiary arrow, lights its glow on hover, and respects disabled.
+// Behavioural coverage for the polymorphic Button: it renders the right
+// element per props (Link / anchor / button), carries the design-language
+// variant tokens, appends the tertiary marker, lights its glow on hover, and
+// respects disabled.
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Button } from './Button';
-import { COLORS } from '../../components/Layout';
 
 /** Render inside a router so <Link> has the context it needs. */
 function renderInRouter(ui: React.ReactNode) {
@@ -41,37 +41,61 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it('applies the Astro-orange fill for the active variant', () => {
+  it('fills the primary variant with the action colour and abyss text', () => {
     renderInRouter(
-      <Button variant="active" onClick={() => {}}>
+      <Button variant="primary" onClick={() => {}}>
         Place Wager
       </Button>,
     );
     const el = screen.getByRole('button', { name: 'Place Wager' });
-    // jsdom normalises the hex to rgb.
-    expect(el.style.background).toContain('255, 102, 55');
-    expect(el.style.color).toContain('17, 17, 17'); // abyss text
+    expect(el.style.background).toBe('var(--isl-action)');
+    expect(el.style.color).toBe('var(--isl-bg)');
   });
 
-  it('appends the ► glyph for the tertiary variant', () => {
+  it('keeps the legacy `active` name as an alias of primary', () => {
     renderInRouter(
-      <Button variant="tertiary" to="/matches">
-        View all matches
+      <Button variant="active" onClick={() => {}}>
+        Old call site
       </Button>,
     );
-    expect(screen.getByText('►')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Old call site' }).style.background).toBe('var(--isl-action)');
+  });
+
+  it('defaults to the secondary hairline outline', () => {
+    renderInRouter(<Button onClick={() => {}}>View league</Button>);
+    const el = screen.getByRole('button', { name: 'View league' });
+    expect(el.style.background).toBe('transparent');
+    expect(el.style.borderColor).toBe('var(--isl-text)');
+    expect(el.style.borderWidth).toBe('1px');
+  });
+
+  it('uses the label type and a 44 px touch target', () => {
+    renderInRouter(<Button onClick={() => {}}>Tap</Button>);
+    const el = screen.getByRole('button', { name: 'Tap' });
+    expect(el.style.fontSize).toBe('var(--isl-size-label)');
+    expect(el.style.letterSpacing).toBe('var(--isl-tracking-label)');
+    expect(el.style.minHeight).toBe('44px');
+  });
+
+  it('appends the ▸ marker for the tertiary variant', () => {
+    renderInRouter(
+      <Button variant="tertiary" to="/matches">
+        All matches
+      </Button>,
+    );
+    expect(screen.getByText('\u25B8')).toBeInTheDocument();
   });
 
   it('lights the hover glow on mouse enter and drops it on leave', () => {
     renderInRouter(
-      <Button variant="active" onClick={() => {}}>
+      <Button variant="primary" onClick={() => {}}>
         Hover me
       </Button>,
     );
     const el = screen.getByRole('button', { name: 'Hover me' });
     expect(el.style.boxShadow).toBe('');
     fireEvent.mouseEnter(el);
-    expect(el.style.boxShadow).toContain('255, 102, 55');
+    expect(el.style.boxShadow).toBe('var(--isl-glow-action)');
     fireEvent.mouseLeave(el);
     expect(el.style.boxShadow).toBe('');
   });
@@ -87,17 +111,5 @@ describe('Button', () => {
     expect(el.style.opacity).toBe('0.45');
     fireEvent.mouseEnter(el);
     expect(el.style.boxShadow).toBe('');
-  });
-
-  it('uses the dust fill + abyss text for the secondary variant', () => {
-    renderInRouter(
-      <Button variant="secondary" onClick={() => {}}>
-        View league
-      </Button>,
-    );
-    const el = screen.getByRole('button', { name: 'View league' });
-    expect(el.style.background.toLowerCase()).toContain('227, 224, 213');
-    // Sanity: the token still resolves to the documented dust hex.
-    expect(COLORS.dust).toBe('#E3E0D5');
   });
 });

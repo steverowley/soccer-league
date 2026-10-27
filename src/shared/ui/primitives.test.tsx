@@ -1,69 +1,69 @@
 // ── shared/ui/primitives.test.tsx ─────────────────────────────────────────
-// Smoke tests for the Kicker / Pip / StatPair / KeyValue primitives
-// landed in slice 3a of #378.  Locks down the public surface so
-// subsequent migrations can consume a stable API.
+// Smoke tests for the Kicker / Pip / StatPair / KeyValue primitives (#378),
+// now on the design tokens: label type, secondary tone, caller colours.
 
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Kicker, Pip, StatPair, KeyValue } from './index';
+import { color } from '../design';
 
 describe('Kicker', () => {
-  it('renders children inside an uppercase mono span', () => {
+  it('renders children in the label type and secondary tone', () => {
     const { getByText, container } = render(<Kicker>Live</Kicker>);
     expect(getByText('Live')).toBeTruthy();
     const root = container.firstChild as HTMLElement;
     expect(root.tagName).toBe('SPAN');
     expect(root.style.textTransform).toBe('uppercase');
-    expect(root.style.fontSize).toBe('11px');
-    expect(root.style.letterSpacing).toBe('0.14em');
+    expect(root.style.fontSize).toBe('var(--isl-size-label)');
+    expect(root.style.letterSpacing).toBe('var(--isl-tracking-label)');
+    expect(root.style.color).toBe('var(--isl-text-secondary)');
   });
 
-  it('applies a custom colour token via the color prop', () => {
-    const { container } = render(<Kicker color="#9A5CF4">Now</Kicker>);
-    const root = container.firstChild as HTMLElement;
-    expect(root.style.color.toLowerCase()).toMatch(/#9a5cf4|rgb\(154, 92, 244\)/);
+  it('applies a colour token via the color prop', () => {
+    const { container } = render(<Kicker color={color.architect}>Now</Kicker>);
+    expect((container.firstChild as HTMLElement).style.color).toBe('var(--isl-architect)');
   });
 });
 
 describe('Pip', () => {
   it('renders a circular inline span with the requested fill', () => {
-    const { container } = render(<Pip color="#9A5CF4" />);
+    const { container } = render(<Pip color={color.success} />);
     const root = container.firstChild as HTMLElement;
     expect(root.tagName).toBe('SPAN');
     expect(root.style.display).toBe('inline-block');
     expect(root.style.borderRadius).toBe('50%');
     expect(root.style.width).toBe('8px');
     expect(root.style.height).toBe('8px');
-    expect(root.style.background.toLowerCase()).toMatch(/#9a5cf4|rgb\(154, 92, 244\)/);
+    expect(root.style.background).toBe('var(--isl-success)');
   });
 
-  it('respects custom size + border tokens', () => {
-    const { container } = render(<Pip color="#FF4F5E" size={12} border="#2E2A24" />);
+  it('respects custom size and border tokens', () => {
+    const { container } = render(<Pip color={color.live} size={12} border={color.line} />);
     const root = container.firstChild as HTMLElement;
     expect(root.style.width).toBe('12px');
     expect(root.style.height).toBe('12px');
-    expect(root.style.border.toLowerCase()).toMatch(/1px solid/);
+    expect(root.style.borderWidth).toBe('1px');
+    expect(root.style.borderColor).toBe('var(--isl-line)');
   });
 });
 
 describe('StatPair', () => {
   it('renders the label above the value', () => {
     const { getByText } = render(<StatPair label="GOALS" value={42} />);
-    expect(getByText('GOALS')).toBeTruthy();
-    expect(getByText('42')).toBeTruthy();
+    expect(getByText('GOALS').style.fontSize).toBe('var(--isl-size-label)');
+    expect(getByText('42').style.fontSize).toBe('var(--isl-size-small)');
   });
 
-  it('applies a value colour override for status emphasis', () => {
+  it('applies a value colour token for status emphasis', () => {
     const { getByText } = render(
-      <StatPair label="STATUS" value="LIVE" valueColor="#9A5CF4" />,
+      <StatPair label="STATUS" value="WON" valueColor={color.success} />,
     );
-    const value = getByText('LIVE') as HTMLElement;
-    expect(value.style.color.toLowerCase()).toMatch(/#9a5cf4|rgb\(154, 92, 244\)/);
+    expect((getByText('WON') as HTMLElement).style.color).toBe('var(--isl-success)');
   });
 });
 
 describe('KeyValue', () => {
-  it('renders label + value in a horizontal flex row', () => {
+  it('renders label and value in a horizontal flex row', () => {
     const { getByText, container } = render(
       <KeyValue label="Stadium" value="Memorial Arena" />,
     );
@@ -74,7 +74,7 @@ describe('KeyValue', () => {
     expect(root.style.alignItems).toBe('baseline');
   });
 
-  it('accepts a ReactNode value (chip / pip / etc.)', () => {
+  it('accepts a ReactNode value', () => {
     const { getByTestId } = render(
       <KeyValue label="Status" value={<span data-testid="value-node">Live</span>} />,
     );

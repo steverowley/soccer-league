@@ -7,7 +7,8 @@
 // Static on purpose: rendering every page needs a router, a database stub and
 // auth, while the rule is about the source.  A page passes when it renders an
 // <h1> itself, opens with <SectionHeader level={1}>, or uses a hero component
-// that renders the h1 (listed below).
+// that renders the h1 (listed below). PageHeader (shared/ui, the design
+// language's one page header) always renders the page's h1.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 const PAGES_DIR = join(process.cwd(), 'src', 'pages');
 
 /** Components that render the page's h1 themselves. */
-const H1_HEROES = ['<AdminPageHero'];
+const H1_HEROES = ['<AdminPageHero', '<PageHeader'];
 
 const pages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('.tsx') && !f.includes('.test.'));
 
