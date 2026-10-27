@@ -1,24 +1,4 @@
 {
-  "src/components/ErrorBoundary.tsx": {
-    "fontSize": 4,
-    "letterSpacing": 2
-  },
-  "src/components/Header.tsx": {
-    "colour": 5,
-    "dust": 7,
-    "fontSize": 6,
-    "letterSpacing": 6
-  },
-  "src/components/Layout.tsx": {
-    "colour": 8,
-    "dust": 6,
-    "fontSize": 11,
-    "letterSpacing": 10
-  },
-  "src/components/RouteErrorBoundary.tsx": {
-    "fontSize": 4,
-    "letterSpacing": 2
-  },
   "src/constants.ts": {
     "colour": 5
   },
@@ -68,61 +48,7 @@
     "colour": 12,
     "dust": 2
   },
-  "src/features/notifications/ui/NotificationSettings.tsx": {
-    "fontSize": 7,
-    "letterSpacing": 3
-  },
-  "src/pages/About.tsx": {
-    "fontSize": 2,
-    "letterSpacing": 1
-  },
-  "src/pages/Login.tsx": {
-    "fontSize": 13,
-    "letterSpacing": 6
-  },
-  "src/pages/NotFound.tsx": {
-    "fontSize": 1
-  },
-  "src/pages/Privacy.tsx": {
-    "fontSize": 2,
-    "letterSpacing": 1
-  },
-  "src/pages/Profile.tsx": {
-    "fontSize": 15,
-    "letterSpacing": 10,
-    "colour": 1
-  },
-  "src/pages/ResetPassword.tsx": {
-    "fontSize": 7,
-    "letterSpacing": 3
-  },
-  "src/pages/Terms.tsx": {
-    "fontSize": 2,
-    "letterSpacing": 1
-  },
-  "src/pages/Training.tsx": {
-    "fontSize": 16,
-    "letterSpacing": 10
-  },
-  "src/pages/Voting.tsx": {
-    "fontSize": 29,
-    "letterSpacing": 8,
-    "colour": 1,
-    "dust": 1
-  },
-  "src/pages/Wagers.tsx": {
-    "fontSize": 11,
-    "letterSpacing": 5
-  },
-  "src/pages/Welcome.tsx": {
-    "fontSize": 15,
-    "letterSpacing": 2
-  },
   "src/pages/WhatIf.tsx": {
     "fontSize": 3
-  },
-  "src/shared/ui/Toast.tsx": {
-    "colour": 1,
-    "fontSize": 2
   }
 }

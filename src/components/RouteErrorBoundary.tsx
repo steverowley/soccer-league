@@ -2,32 +2,27 @@
 // Per-route React error boundary added in #383.
 //
 // WHY THIS EXISTS ALONGSIDE THE APP-LEVEL ErrorBoundary
-// ─────────────────────────────────────────────────────
-// The app already wraps everything in a top-level `ErrorBoundary` that
-// renders a full-page "Transmission Error" view when ANY child throws.
-// That outer boundary is correct for failures inside providers / listeners
-// / the router itself — but for a render error inside a single page
-// component it's overkill: blanking the whole screen (including Header +
-// Footer + the cross-feature listeners that may be doing useful work) is
-// disproportionate to "the /idols page tried to read a missing field".
+//   The top-level ErrorBoundary is right for failures inside providers,
+//   listeners or the router itself. For a render error inside one page it
+//   is overkill: main.tsx wraps the route tree in this boundary (keyed on
+//   the pathname, so it resets on navigation), and a page that throws is
+//   replaced by this screen while the session, the listeners and Sentry
+//   keep running.
 //
-// This boundary wraps each <Route> element so a single page's render
-// error only blanks that page's content area. The Header, AccountMenu,
-// in-flight bus listeners, Sentry, and the user's session all keep
-// running; the user can still navigate elsewhere via the global nav.
+// FAILURE SCREEN
+//   On the design language since group 5a (docs/design-language.md), with
+//   no raw style values. Every page renders its own PageShell, so when a
+//   page throws, its header and footer go with it: this screen therefore
+//   renders a full PageShell (site header and footer back, so the fan can
+//   navigate away) with the shared PageHeader as its one h1 and an
+//   EmptyState with a single secondary action, Reload.
 //
-// FAILURE UX
-// ──────────
-// • Inline panel inside the page's main content area (not full-page).
-// • Brief in-voice message + "Reload" button that calls
-//   window.location.reload() — same recovery affordance as the outer
-//   ErrorBoundary.
-// • Sentry forwarding tagged `source: 'react-error-boundary-route'` so
-//   dashboards can split per-route catches apart from app-level catches.
+// Sentry forwarding is tagged `source: 'react-error-boundary-route'` so
+// dashboards can split per-route catches from app-level ones.
 
 import { Component, type ReactNode, type ErrorInfo } from 'react';
-import { COLORS } from './Layout';
 import { captureException } from '../shared/observability/sentry';
+import { Button, EmptyState, PageHeader, PageShell } from '../shared/ui';
 
 interface Props {
   children: ReactNode;
@@ -39,13 +34,9 @@ interface State {
 }
 
 /**
- * Per-route error boundary. Wrap each `<Route>` element with this
- * component so a render failure on one page leaves the rest of the
- * application (Header, listeners, navigation) functional.
- *
- * Renders an inline error panel on catch — never a full-page takeover.
- * Recovery is `window.location.reload()`; users can also use the
- * standard nav to leave the broken route.
+ * Per-route error boundary. Wrap the route tree with this component so a
+ * render failure on one page leaves the session, listeners and navigation
+ * working. Recovery is `window.location.reload()`, or the site nav.
  */
 export default class RouteErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -73,65 +64,21 @@ export default class RouteErrorBoundary extends Component<Props, State> {
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            // Sits inside the page content area — Header + Footer keep rendering.
-            // padding/margin chosen to match the rest of the page layout so
-            // the panel doesn't look orphaned at the top of the viewport.
-            padding: 48,
-            margin: '32px auto',
-            maxWidth: 480,
-            border: `1px solid ${COLORS.hairline}`,
-            color: COLORS.dust,
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ fontSize: 24, marginBottom: 12 }}>⚠</div>
-          <h2
-            style={{
-              fontSize: 13,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              fontWeight: 700,
-              margin: '0 0 8px',
-            }}
+        <PageShell>
+          <PageHeader
+            eyebrow="Error"
+            title="This page misfired"
+            subtitle="The rest of the broadcast feed is unaffected. Reload this view to retry, or use the navigation above to head elsewhere."
+          />
+          <EmptyState
+            centred={false}
+            kicker="Signal lost"
+            hint={<Button variant="secondary" onClick={() => window.location.reload()}>Reload</Button>}
+            style={{ paddingLeft: 0, paddingRight: 0 }}
           >
-            This page misfired
-          </h2>
-          <p
-            style={{
-              fontSize: 12,
-              color: COLORS.dust50,
-              lineHeight: 1.7,
-              margin: '0 0 16px',
-            }}
-          >
-            The rest of the broadcast feed is unaffected. Reload this view to retry, or use the
-            navigation above to head elsewhere.
-            {this.state.message && (
-              <>
-                <br />
-                <span style={{ opacity: 0.6 }}>{this.state.message}</span>
-              </>
-            )}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              padding: '8px 20px',
-              border: `1px solid ${COLORS.dust}`,
-              background: 'transparent',
-              color: COLORS.dust,
-              fontFamily: 'inherit',
-              fontSize: 11,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-            }}
-          >
-            Reload
-          </button>
-        </div>
+            {this.state.message || 'No further detail was recorded.'}
+          </EmptyState>
+        </PageShell>
       );
     }
     return this.props.children;

@@ -1,17 +1,15 @@
 // ── Terms.tsx ───────────────────────────────────────────────────────────────
-// `/terms` route — terms of service required for public launch. Defines
+// `/terms` route: terms of service required for public launch. Defines
 // acceptable use, account termination, intellectual property, and
 // no-warranty. Plain-English first pass; a lawyer review is a follow-up.
 //
-// PATTERN: shares the inline Article/H2/P/A helpers with About.tsx and
-// Privacy.tsx. Promote to src/shared/ui/ on the fourth consumer.
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values: the shared Prose pieces (src/shared/ui/Prose.tsx), one
+// prose style for About, Privacy and Terms. Body type at the reading
+// measure, sections numbered from I with SectionHeader (the h2s).
 
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell } from '../shared/ui';
+import { PageHeader, PageShell, Paragraph, Prose, ProseSection, TextLink } from '../shared/ui';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
-
-const { dust: DUST } = COLORS;
-const DUST_70 = COLORS.dust70;
 
 /** Date the current terms text was last reviewed. Update when material text changes. */
 const LAST_UPDATED = '2026-05-22';
@@ -26,120 +24,91 @@ export default function Terms() {
         subtitle={`Last updated: ${LAST_UPDATED}. The plain-English version: have fun, don't impersonate or abuse other users, don't try to break the site, and understand that this is an experiment that can change without notice.`}
       />
 
-      <Article>
-        <H2>What this is</H2>
-        <P>
-          The Intergalactic Soccer League (&quot;ISL&quot;, the &quot;Service&quot;) is
-          a free browser game with simulated matches, in-game credits, and collective
-          voting. By creating an account or using the Service, you agree to these
-          terms.
-        </P>
+      <Prose>
+        <ProseSection index="I" title="What this is">
+          <Paragraph>
+            The Intergalactic Soccer League (&quot;ISL&quot;, the &quot;Service&quot;) is
+            a free browser game with simulated matches, in-game credits, and collective
+            voting. By creating an account or using the Service, you agree to these
+            terms.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Eligibility</H2>
-        <P>
-          You must be at least 18 years old to use the Service. The game contains
-          simulated betting; we don&apos;t want to normalise gambling for minors even
-          though no real money is involved. Sign-up requires self-attestation.
-        </P>
+        <ProseSection index="II" title="Eligibility">
+          <Paragraph>
+            You must be at least 18 years old to use the Service. The game contains
+            simulated betting; we don&apos;t want to normalise gambling for minors even
+            though no real money is involved. Sign-up requires self-attestation.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Account</H2>
-        <P>
-          You&apos;re responsible for keeping your password safe and for everything that
-          happens on your account. Pick a username that isn&apos;t impersonation, isn&apos;t
-          a slur, and isn&apos;t a reserved word (admin, architect, cosmic, etc.).
-        </P>
+        <ProseSection index="III" title="Account">
+          <Paragraph>
+            You&apos;re responsible for keeping your password safe and for everything that
+            happens on your account. Pick a username that isn&apos;t impersonation, isn&apos;t
+            a slur, and isn&apos;t a reserved word (admin, architect, cosmic, etc.).
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Acceptable use</H2>
-        <P>
-          Don&apos;t try to abuse, harass, or impersonate other users. Don&apos;t try to
-          exploit bugs to manipulate balances, bets, votes, or leaderboards. Don&apos;t
-          scrape the Service, automate gameplay, or run multiple accounts to
-          inflate fan-support boosts or vote weight.
-        </P>
+        <ProseSection index="IV" title="Acceptable use">
+          <Paragraph>
+            Don&apos;t try to abuse, harass, or impersonate other users. Don&apos;t try to
+            exploit bugs to manipulate balances, bets, votes, or leaderboards. Don&apos;t
+            scrape the Service, automate gameplay, or run multiple accounts to
+            inflate fan-support boosts or vote weight.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>In-game credits</H2>
-        <P>
-          Intergalactic Credits have no real-world value. They cannot be purchased,
-          withdrawn, exchanged for currency, or transferred to other users. Account
-          balances may be reset, devalued, or wiped at any time as part of a
-          season, an Architect intervention, or a system migration.
-        </P>
+        <ProseSection index="V" title="In-game credits">
+          <Paragraph>
+            Intergalactic Credits have no real-world value. They cannot be purchased,
+            withdrawn, exchanged for currency, or transferred to other users. Account
+            balances may be reset, devalued, or wiped at any time as part of a
+            season, an Architect intervention, or a system migration.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Content and intellectual property</H2>
-        <P>
-          The Service code is open source under the licence in the repository.
-          Generated narrative content (commentary, journalist takes, Architect
-          whispers) is produced by AI models against the project&apos;s prompts; we
-          don&apos;t claim author copyright on individual generations. Club names,
-          crests, and editorial copy are part of the project&apos;s design system.
-        </P>
+        <ProseSection index="VI" title="Content and intellectual property">
+          <Paragraph>
+            The Service code is open source under the licence in the repository.
+            Generated narrative content (commentary, journalist takes, Architect
+            whispers) is produced by AI models against the project&apos;s prompts; we
+            don&apos;t claim author copyright on individual generations. Club names,
+            crests, and editorial copy are part of the project&apos;s design system.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Termination</H2>
-        <P>
-          You can delete your account at any time from the profile page. We may
-          suspend or terminate accounts that violate these terms.
-        </P>
+        <ProseSection index="VII" title="Termination">
+          <Paragraph>
+            You can delete your account at any time from the profile page. We may
+            suspend or terminate accounts that violate these terms.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>No warranty</H2>
-        <P>
-          The Service is provided &quot;as is&quot; without warranty of any kind.
-          We do our best, but the Service may break, change, or disappear without
-          notice. It&apos;s an experiment.
-        </P>
+        <ProseSection index="VIII" title="No warranty">
+          <Paragraph>
+            The Service is provided &quot;as is&quot; without warranty of any kind.
+            We do our best, but the Service may break, change, or disappear without
+            notice. It&apos;s an experiment.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Changes to these terms</H2>
-        <P>
-          We may update these terms; material changes will be announced in the
-          Galaxy Dispatch feed at least 7 days before they take effect.
-        </P>
+        <ProseSection index="IX" title="Changes to these terms">
+          <Paragraph>
+            We may update these terms; material changes will be announced in the
+            Galaxy Dispatch feed at least 7 days before they take effect.
+          </Paragraph>
+        </ProseSection>
 
-        <H2>Contact</H2>
-        <P>
-          Questions: open an issue at{' '}
-          <A href="https://github.com/steverowley/soccer-league/issues">
-            github.com/steverowley/soccer-league/issues
-          </A>.
-        </P>
-      </Article>
+        <ProseSection index="X" title="Contact">
+          <Paragraph>
+            Questions: open an issue at{' '}
+            <TextLink newTab href="https://github.com/steverowley/soccer-league/issues">
+              github.com/steverowley/soccer-league/issues
+            </TextLink>.
+          </Paragraph>
+        </ProseSection>
+      </Prose>
     </PageShell>
-  );
-}
-
-// ── Local presentational helpers ────────────────────────────────────────────
-// Mirrored from About.tsx / Privacy.tsx. Three legal pages share these.
-
-function Article({ children }: { children: React.ReactNode }) {
-  return (
-    <article style={{
-      maxWidth: 720, margin: '32px auto 96px', fontSize: 15, lineHeight: 1.7,
-      color: DUST_70,
-    }}>
-      {children}
-    </article>
-  );
-}
-
-function H2({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 style={{
-      marginTop: 40, marginBottom: 12, fontSize: 13, letterSpacing: '0.18em',
-      textTransform: 'uppercase', color: DUST,
-    }}>
-      {children}
-    </h2>
-  );
-}
-
-function P({ children }: { children: React.ReactNode }) {
-  return <p style={{ margin: '0 0 16px' }}>{children}</p>;
-}
-
-function A({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" style={{
-      color: DUST, textDecoration: 'underline', textDecorationColor: COLORS.dust50,
-    }}>
-      {children}
-    </a>
   );
 }

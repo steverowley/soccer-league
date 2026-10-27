@@ -1,37 +1,50 @@
 // ── Welcome.tsx ─────────────────────────────────────────────────────────────
-// `/welcome` route — the post-signup onboarding wizard.
+// `/welcome` route: the post-signup onboarding wizard.
 //
 // PURPOSE
-//   The vision pillar is "fan-driven collective agency" — every feature
-//   should feed into the shared social experiment. Picking a favourite
-//   club and player is the identity hook that makes every subsequent
-//   match, narrative, and vote feel personal. Pre-#368, signup dumped
-//   users at `/` with no follow-up; the identity hook was unenforced and
-//   most users never set their allegiance.
+//   The vision pillar is "fan-driven collective agency": every feature
+//   should feed into the shared social experiment. Picking a favourite club
+//   and player is the identity hook that makes every later match, narrative
+//   and vote feel personal. Pre-#368, signup dumped users at `/` with no
+//   follow-up; the identity hook was unenforced and most users never set
+//   their allegiance.
 //
 // FLOW
-//   Three steps, local state (no per-step routes — back/forward feels
-//   wrong for a linear wizard).
-//     1. Pick favourite club — 32-team grid filtered by league chip
-//     2. Pick favourite player — roster of the selected club
-//     3. Place starter bet — deep-link to the next upcoming match for
-//        the selected club, with a one-sentence pitch
+//   Three steps, local state (no per-step routes: back/forward feels wrong
+//   for a linear wizard).
+//     1. Pick favourite club: the 32-club grid filtered by league Tags
+//     2. Pick favourite player: roster of the selected club
+//     3. Place starter bet: the next upcoming match for the selected club,
+//        with the WagerWidget inline
 //
-//   Each step has a "Skip for now" affordance so users who want to
-//   explore first aren't trapped. The wizard reads + writes
-//   profiles.{favourite_team_id, favourite_player_id} via the existing
-//   updateProfile API.
+//   Each step has a tertiary "Skip" action so users who want to explore
+//   first aren't trapped. The wizard reads and writes
+//   profiles.{favourite_team_id, favourite_player_id} via updateProfile.
 //
 // REDIRECT LOGIC
 //   AuthProvider/Login.tsx sends authenticated users with
-//   favourite_team_id === null here on first authenticated visit.
-//   Existing users who already picked allegiance are unaffected and go
-//   to /profile or wherever they were heading.
+//   favourite_team_id === null here on first authenticated visit. Existing
+//   users who already picked allegiance are unaffected.
+//
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values: league filters are toggle Tags (selected = Lunar Dust
+// fill; they were purple), club and player choices are hairline cards with
+// the club Crest, loading uses LoadingState, and skips are tertiary
+// Buttons. Step 3's one primary action is the WagerWidget's own.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell, StatBlock } from '../shared/ui';
+import {
+  Button,
+  Card,
+  Crest,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  StatBlock,
+  Tag,
+} from '../shared/ui';
+import { color, glow, glyph, hairline, layout, numeric, space, tone, type } from '../shared/design';
 import WagerWidget from '../components/WagerWidget';
 import { useAuth } from '../features/auth';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
@@ -40,14 +53,22 @@ import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { getPlayersForTeam, getUpcomingMatches } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
-const { dust: DUST, quantum: QUANTUM } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50 = COLORS.dust50;
-const DUST_70 = COLORS.dust70;
-
 /** Total wizard steps. Bumped here when adding new ones (e.g. notifications). */
 const TOTAL_STEPS = 3;
 
+/** A roster row as the player step reads it. */
+interface RosterPlayer {
+  id: string;
+  name: string;
+  position: string;
+  jersey_number?: number;
+}
+
+/**
+ * Onboarding wizard route.
+ *
+ * @returns The wizard, a loading state, or a redirect.
+ */
 export default function Welcome() {
   usePageTitle('Welcome');
   const { user, profile, loading, refreshProfile } = useAuth();
@@ -55,11 +76,11 @@ export default function Welcome() {
 
   // ── Hard gates ────────────────────────────────────────────────────────
   // Anonymous users land at /login. Already-onboarded users (favourite
-  // team set) don't need the wizard — send them to /.
+  // team set) don't need the wizard: send them to /.
   if (loading)
     return (
       <Shell title="Loading the wizard">
-        <LoadingLine />
+        <LoadingState label="Loading the wizard" />
       </Shell>
     );
   if (!user) return <Navigate to="/login" replace />;
@@ -99,14 +120,11 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
       }
       meta={
         <>
-          {/* Step progress, which used to be the eyebrow ("STEP 1 OF 3"):
-              eyebrows name the section, never a number. */}
+          {/* Step progress (eyebrows name the section, never a number). */}
           <StatBlock label="Step" value={`${step} of ${TOTAL_STEPS}`} />
-          {/* Credit-grant moment (#571): make the opening 200-credit stake a
-              visible beat during onboarding; previously the bankroll stayed
-              invisible until a fan found /profile. It sits in the header's
-              meta row on all three steps, so the stake (and what's left after
-              a starter bet) stays in view. */}
+          {/* Credit-grant moment (#571): the opening 200-credit stake stays
+              in view on all three steps, so the stake (and what's left after
+              a starter bet) is visible from the start. */}
           <StatBlock label="Intergalactic Credits: your opening stake" value={credits.toLocaleString()} />
         </>
       }
@@ -165,46 +183,35 @@ function PickClubStep({
     <>
       <StepImage src="/img/step-02-pick-club" alt="Pick your club" />
 
-      {/* League chips */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '24px 0' }}>
+      {/* League filter: toggle Tags, 44 px targets. */}
+      <div role="group" aria-label="League" style={{ display: 'flex', gap: space[8], flexWrap: 'wrap' }}>
         {LEAGUES.map((l) => (
-          <button key={l.id} onClick={() => setLeagueId(l.id)} style={chipStyle(l.id === leagueId)}>
+          <Tag
+            key={l.id}
+            selected={l.id === leagueId}
+            onClick={() => setLeagueId(l.id)}
+            style={{ minHeight: 44, paddingLeft: space[12], paddingRight: space[12] }}
+          >
             {l.shortName}
-          </button>
+          </Tag>
         ))}
       </div>
 
-      {/* Team grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 12,
-        }}
-      >
+      <div style={GRID}>
         {teams.map((team) => (
-          <button
+          <PickCard
             key={team.id}
             onClick={() => pick(team.id)}
             disabled={busy !== null}
-            style={{
-              background: 'transparent',
-              border: `1px solid ${HAIRLINE}`,
-              color: DUST,
-              padding: 16,
-              textAlign: 'left',
-              fontFamily: 'inherit',
-              fontSize: 14,
-              cursor: busy === null ? 'pointer' : 'wait',
-              opacity: busy && busy !== team.id ? 0.5 : 1,
-            }}
+            dimmed={busy !== null && busy !== team.id}
           >
-            <div style={{ fontWeight: 700 }}>{team.name}</div>
-            <div style={{ fontSize: 12, color: DUST_50, marginTop: 4 }}>{team.location}</div>
-            {busy === team.id && (
-              <div style={{ fontSize: 11, color: QUANTUM, marginTop: 6 }}>SAVING…</div>
-            )}
-          </button>
+            <span style={{ display: 'flex', alignItems: 'center', gap: space[12] }}>
+              <Crest color={team.color} size={24} />
+              <span style={{ ...type.subheading, overflowWrap: 'anywhere' }}>{team.name}</span>
+            </span>
+            <span style={{ ...type.small, ...tone.secondary }}>{team.location}</span>
+            {busy === team.id && <span style={{ ...type.label, ...tone.secondary }}>Saving{'\u2026'}</span>}
+          </PickCard>
         ))}
       </div>
 
@@ -226,10 +233,7 @@ function PickPlayerStep({
 }) {
   const db = useSupabase();
   const { user } = useAuth();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [players, setPlayers] = useState<
-    Array<{ id: string; name: string; position: string; jersey_number?: number }>
-  >([]);
+  const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -238,9 +242,7 @@ function PickPlayerStep({
     (getPlayersForTeam(db as any, teamId) as Promise<unknown>)
       .then((rows) => {
         if (cancelled) return;
-        setPlayers(
-          rows as Array<{ id: string; name: string; position: string; jersey_number?: number }>,
-        );
+        setPlayers(rows as RosterPlayer[]);
       })
       .catch((err) => console.warn('[Welcome] player fetch failed:', err));
     return () => {
@@ -261,40 +263,21 @@ function PickPlayerStep({
       <StepImage src="/img/step-01-sign-on" alt="Pick your player" />
 
       {players.length === 0 ? (
-        <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: '24px 0' }}>
-          Loading your club&apos;s roster…
-        </p>
+        <LoadingState label="Loading your club's roster" />
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 12,
-            marginTop: 24,
-          }}
-        >
+        <div style={GRID}>
           {players.map((p) => (
-            <button
+            <PickCard
               key={p.id}
               onClick={() => pick(p.id)}
               disabled={busy !== null}
-              style={{
-                background: 'transparent',
-                border: `1px solid ${HAIRLINE}`,
-                color: DUST,
-                padding: 16,
-                textAlign: 'left',
-                fontFamily: 'inherit',
-                fontSize: 14,
-                cursor: busy === null ? 'pointer' : 'wait',
-                opacity: busy && busy !== p.id ? 0.5 : 1,
-              }}
+              dimmed={busy !== null && busy !== p.id}
             >
-              <div style={{ fontWeight: 700 }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: DUST_50, marginTop: 4 }}>
-                #{p.jersey_number ?? '—'} · {p.position}
-              </div>
-            </button>
+              <span style={{ ...type.subheading, overflowWrap: 'anywhere' }}>{p.name}</span>
+              <span style={{ ...type.small, ...tone.secondary, ...numeric }}>
+                #{p.jersey_number ?? '\u2014'} {glyph.middot} {p.position}
+              </span>
+            </PickCard>
           ))}
         </div>
       )}
@@ -340,63 +323,49 @@ function StarterBetStep({
     };
   }, [publicDb, teamId]);
 
-  // Suppress unused-var warning for playerId — captured here for analytics
-  // when the post-bet narrative wires through in a follow-up.
+  // playerId is captured for analytics when the post-bet narrative wires
+  // through in a follow-up.
   void playerId;
 
   return (
     <>
       <StepImage src="/img/step-03-watch-bet" alt="Watch and bet" />
 
-      {loading && (
-        <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
-          <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
-            Finding your next match…
-          </p>
-        </div>
-      )}
+      {loading && <LoadingState label="Finding your next match" />}
 
       {!loading && !nextMatch && (
-        <div style={{ marginTop: 24, padding: 24, border: `1px solid ${HAIRLINE}` }}>
-          <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+        <Card>
+          <p style={{ ...type.body, ...tone.secondary, margin: 0 }}>
             No fixtures yet for your club. Browse the schedule and place a bet whenever you&apos;re
             ready. Your 200 credits are sitting safe in your account.
           </p>
-        </div>
+        </Card>
       )}
 
       {!loading && nextMatch && (
-        <div style={{ marginTop: 24 }}>
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: DUST_50,
-              marginBottom: 8,
-            }}
-          >
-            Your next match
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-            {nextMatch.home_team?.name ?? 'Home'} vs {nextMatch.away_team?.name ?? 'Away'}
-          </div>
-          <div style={{ fontSize: 12, color: DUST_50, marginBottom: 16 }}>
-            {nextMatch.scheduled_at
-              ? new Date(nextMatch.scheduled_at).toLocaleString()
-              : 'Scheduled soon'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+          <div>
+            <div style={{ ...type.label, ...tone.secondary }}>Your next match</div>
+            <div style={{ ...type.subheading, marginTop: space[8], overflowWrap: 'anywhere' }}>
+              {nextMatch.home_team?.name ?? 'Home'} v {nextMatch.away_team?.name ?? 'Away'}
+            </div>
+            <div style={{ ...type.small, ...tone.secondary, ...numeric, marginTop: space[4] }}>
+              {nextMatch.scheduled_at
+                ? new Date(nextMatch.scheduled_at).toLocaleString()
+                : 'Scheduled soon'}
+            </div>
           </div>
 
-          {/* Inline starter bet — place a real wager without leaving the wizard
-              (#571). WagerWidget owns its own odds fetch + placement, and the
-              signed-in onboarding user lands straight in its picker branch, so
-              the funnel no longer dead-ends on a link to the full match page. */}
+          {/* Inline starter bet: place a real wager without leaving the
+              wizard (#571). WagerWidget owns its odds fetch and placement,
+              and the signed-in onboarding user lands straight in its picker,
+              so the funnel no longer dead-ends on a link. */}
           <WagerWidget match={nextMatch} />
 
-          {/* Economy note (#571): credits fund BOTH wagers and the end-of-season
-              focus vote — the one line that ties the two halves of the game
-              together for a first-time fan. */}
-          <p style={{ fontSize: 12, lineHeight: 1.6, color: DUST_50, margin: '16px 0 0' }}>
+          {/* Economy note (#571): credits fund BOTH wagers and the
+              end-of-season focus vote, the one line that ties the two
+              halves of the game together for a first-time fan. */}
+          <p style={{ ...type.small, ...tone.secondary, margin: 0, maxWidth: layout.measure }}>
             Your credits ride on every wager, and at season&rsquo;s end you&rsquo;ll pool
             what&rsquo;s left with other fans to vote on your club&rsquo;s future.
           </p>
@@ -410,10 +379,17 @@ function StarterBetStep({
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 
+/** Auto-fitting grid for the club and player choices. */
+const GRID = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(min(220px, 100%), 1fr))',
+  gap: space[12],
+} as const;
+
 /**
- * Page frame for every state of the wizard: PageShell + the shared
- * PageHeader (eyebrow "Welcome"), so the loading state and each step
- * render exactly one h1.
+ * Page frame for every state of the wizard: PageShell and the shared
+ * PageHeader (eyebrow "Welcome"), so the loading state and each step render
+ * exactly one h1. The step body is one column of blocks 24 px apart.
  *
  * @param title     The step's title (the page's h1).
  * @param subtitle  The step's one-line pitch.
@@ -428,8 +404,8 @@ function Shell({
 }: {
   title: string;
   subtitle?: string;
-  meta?: React.ReactNode;
-  children: React.ReactNode;
+  meta?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <PageShell>
@@ -439,82 +415,98 @@ function Shell({
         {...(subtitle ? { subtitle } : {})}
         {...(meta ? { meta } : {})}
       />
-      <section>{children}</section>
+      <section aria-label="Onboarding" style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+        {children}
+      </section>
     </PageShell>
   );
 }
 
-function LoadingLine() {
+/**
+ * One choice in the club or player grid: a hairline card that is a button.
+ * Hover and focus light the outline glow; while another choice is saving,
+ * the rest dim.
+ *
+ * @param onClick   Choose this option.
+ * @param disabled  A save is in flight.
+ * @param dimmed    Another option is the one being saved.
+ * @param children  The card's lines.
+ */
+function PickCard({
+  onClick,
+  disabled,
+  dimmed,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  dimmed: boolean;
+  children: ReactNode;
+}) {
+  const [lit, setLit] = useState(false);
   return (
-    <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24 }}>
-      Loading the wizard…
-    </p>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setLit(true)}
+      onMouseLeave={() => setLit(false)}
+      onFocus={() => setLit(true)}
+      onBlur={() => setLit(false)}
+      style={{
+        ...hairline(color.line),
+        background: 'transparent',
+        color: color.text,
+        padding: space[16],
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: space[8],
+        textAlign: 'left',
+        fontFamily: 'inherit',
+        cursor: disabled ? 'wait' : 'pointer',
+        opacity: dimmed ? 0.5 : 1,
+        boxShadow: lit && !disabled ? glow.outline : 'none',
+        transition: 'box-shadow 0.15s ease',
+        minWidth: 0,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
 /**
- * Step illustration with AVIF + WebP <picture> sources (#393).
+ * Step illustration with AVIF and WebP <picture> sources (#393).
  *
  * The caller passes a base path WITHOUT extension (e.g.
- * "/img/step-01-sign-on"); the component derives `${base}.avif` for
- * modern browsers and `${base}.webp` for the rest.  PNG fallback is
- * intentionally omitted — every browser the app targets supports
- * WebP, and dropping the PNG is what makes the 20MB → 3MB asset
- * reduction stick.
+ * "/img/step-01-sign-on"); the component derives `${base}.avif` for modern
+ * browsers and `${base}.webp` for the rest. PNG fallback is intentionally
+ * omitted: every browser the app targets supports WebP, and dropping the
+ * PNG is what makes the 20 MB to 3 MB asset reduction stick.
  *
  * @param src  Base path under /img/ without extension.
  * @param alt  Accessible image description.
  */
 function StepImage({ src, alt }: { src: string; alt: string }) {
-  const imgStyle: React.CSSProperties = {
-    display: 'block',
-    width: '100%',
-    maxWidth: 480,
-    marginTop: 24,
-    border: `1px solid ${HAIRLINE}`,
-  };
   return (
     <picture>
       <source srcSet={`${src}.avif`} type="image/avif" />
       <source srcSet={`${src}.webp`} type="image/webp" />
-      <img src={`${src}.webp`} alt={alt} style={imgStyle} />
+      <img
+        src={`${src}.webp`}
+        alt={alt}
+        style={{ display: 'block', width: '100%', maxWidth: 480, ...hairline(color.line) }}
+      />
     </picture>
   );
 }
 
+/** The step's way out: a tertiary Button. */
 function SkipFooter({ onSkip, label }: { onSkip: () => void; label: string }) {
   return (
-    <p style={{ marginTop: 32, fontSize: 12 }}>
-      <button
-        onClick={onSkip}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: DUST_50,
-          textDecoration: 'underline',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          fontSize: 'inherit',
-          padding: 0,
-        }}
-      >
-        {label}
-      </button>
-    </p>
+    <div style={{ marginTop: space[8] }}>
+      <Button variant="tertiary" onClick={onSkip}>{label}</Button>
+    </div>
   );
-}
-
-/** Style for the league filter chips. Highlight active with Quantum fill. */
-function chipStyle(active: boolean): React.CSSProperties {
-  return {
-    background: active ? QUANTUM : 'transparent',
-    color: DUST,
-    border: `1px solid ${active ? QUANTUM : HAIRLINE}`,
-    padding: '6px 12px',
-    fontSize: 11,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  };
 }

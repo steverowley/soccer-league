@@ -1,46 +1,59 @@
-// ── Wagers.jsx ──────────────────────────────────────────────────────────────
-// Bet history page — `/wagers` route, rebuilt in PR 9.
+// ── Wagers.tsx ──────────────────────────────────────────────────────────────
+// Bet history page: the `/wagers` route.
 //
 // Layout:
 //   PageShell (site header, main column, footer)
-//   PageHeader:             eyebrow "Wagers", title, intro prose
-//   Summary card:           credit balance + wager counts (open/won/lost/void)
-//                              + net P&L numeric
-//   I.   Wager list:        table grouped under filter chips (All / Open /
-//                              Won / Lost / Void)
+//   PageHeader:      eyebrow "Wagers", the fan's ledger as the h1, and a
+//                    meta row of StatBlocks (credits, open, settled, net)
+//   I. Ledger        status filter Tags (All / Open / Won / Lost / Void)
+//                    above a DataTable of every wager
+//
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values (scripts/designTokens.test.ts):
+//   - Numbers (stakes, odds, credits, net) are tabular.
+//   - A win and a positive net are green (`success`); a loss is plain, NEVER
+//     red (red means live or an error). Status is a Tag: success for won,
+//     neutral for open, lost and void.
+//   - The credit balance is the default tone (it was purple).
+//   - Club names in the table carry their Crest (the DataTable rule).
+//   - Loading, error and empty use the shared states; the empty ledger has
+//     the view's one primary action (Browse matches).
 //
 // Data sources:
-//   - useAuth()                            — user + profile (credits + balance)
-//   - getUserWagers(db, userId, limit=200) — full history (client-side filter)
-//   - inline batch fetch for match meta    — join home/away team names + score
+//   - useAuth(): user and profile (credit balance)
+//   - getUserWagers(db, userId, limit=200): full history (filtered here)
+//   - one batched `matches` read for the team names and scores
 //
-// Anonymous visitors redirect to /login.  Empty wager history renders a
-// flavour-text placeholder pointing readers at /matches.
+// Anonymous visitors redirect to /login.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { COLORS, SectionHeader, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { EmptyState, PageHeader, PageShell } from '../shared/ui';
+import {
+  Button,
+  Crest,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  SectionHeader,
+  StatBlock,
+  Tag,
+  dataCell,
+  dataHead,
+  toRoman,
+} from '../shared/ui';
+import { color, numeric, space, tone } from '../shared/design';
 import { useAuth } from '../features/auth';
-import { getUserWagers, netCreditChange } from '../features/betting';
-
-// ── Local aliases for terser inline styles ──────────────────────────────────
-// Three semantic accents on this page:
-//   QUANTUM    — focus colour for the credit balance numeric (the
-//                user's headline number, NOT an error state).
-//   FLARE      — error / loss colour: negative net P&L, "Lost" filter
-//                chip, "Lost" status pip, per-row net cell when red.
-//   TERRA_NOVA — confirmation green: positive net P&L (you ended up
-//                ahead of the bookie), per-row net cell when in profit.
-const { dust: DUST, flare: FLARE, quantum: QUANTUM, terraNova: TERRA_NOVA } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
+import { getUserWagers, netCreditChange, type Wager } from '../features/betting';
+import { TEAMS_BY_LEAGUE } from '../data/leagueData';
+import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 // ── Filter sentinels ───────────────────────────────────────────────────────
-// FILTER_* — chip ids for the status filter strip.  String literals keep
-// state diffing trivial; the canonical ordering is set by FILTER_ORDER.
+// FILTER_*: ids for the status filter Tags. String literals keep state
+// diffing trivial; the canonical order is FILTER_ORDER.
 const FILTER_ALL  = 'all';
 const FILTER_OPEN = 'open';
 const FILTER_WON  = 'won';
@@ -48,35 +61,60 @@ const FILTER_LOST = 'lost';
 const FILTER_VOID = 'void';
 const FILTER_ORDER = [FILTER_ALL, FILTER_OPEN, FILTER_WON, FILTER_LOST, FILTER_VOID];
 
-// FETCH_LIMIT — how many wagers to pull on mount.  200 spans roughly a
-// full active-bettor season; pagination is a follow-up when the cap is
+// FETCH_LIMIT: how many wagers to pull on mount. 200 spans roughly a full
+// active-bettor season; pagination is a follow-up when the cap is
 // frequently saturated.
 const FETCH_LIMIT = 200;
+
+/** Club colour by club id, for the Crest beside each name in the table. */
+const CLUB_COLOR: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const teams of Object.values(TEAMS_BY_LEAGUE)) {
+    for (const t of teams) map[t.id] = t.color;
+  }
+  return map;
+})();
+
+/** The match fields the ledger reads (one batched read). */
+interface LedgerMatch {
+  id: string;
+  status: string;
+  home_score: number | null;
+  away_score: number | null;
+  home_team: { id: string; name: string } | null;
+  away_team: { id: string; name: string } | null;
+}
+
+/** Per-status counts for the filter Tags and the header figures. */
+interface StatusCounts {
+  open: number;
+  won: number;
+  lost: number;
+  void: number;
+}
 
 /**
  * User-facing wager history page.
  *
- * Fetches the user's wagers + the match metadata for every distinct
- * match_id in one round trip each.  Joins client-side so the page can
- * render team names + scores without a per-row query.  The filter chip
- * strip operates over the in-memory list — no re-fetch on chip change.
+ * Fetches the user's wagers and the match metadata for every distinct
+ * match_id in one round trip each, joined client-side so the page renders
+ * team names and scores without a per-row query. The filter Tags work over
+ * the in-memory list: no re-fetch on a filter change.
  *
- * @returns {JSX.Element}
+ * @returns The page.
  */
-import { usePageTitle } from '../shared/hooks/usePageTitle';
-
 export default function Wagers() {
   usePageTitle('Your Wagers');
   const db = useSupabase();
   const { user, profile, loading } = useAuth();
 
-  const [wagers, setWagers] = useState<any[]>([]);
-  const [matchMap, setMatchMap] = useState<Record<string, any>>({});
+  const [wagers, setWagers] = useState<Wager[]>([]);
+  const [matchMap, setMatchMap] = useState<Record<string, LedgerMatch>>({});
   const [loaded,    setLoaded]    = useState<boolean>(false);
-  const [loadError, setLoadError] = useState<any>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [filter,    setFilter]    = useState(FILTER_ALL);
 
-  // Fetch wager history + match metadata once the user is known.
+  // Fetch wager history and match metadata once the user is known.
   useEffect(() => {
     if (!user) return undefined;
     let cancelled = false;
@@ -90,10 +128,10 @@ export default function Wagers() {
         if (cancelled) return;
         setWagers(ws);
 
-        // Distinct match ids across the wager set — fed to a single
-        // .in() query so we only round-trip once even when the user
-        // has bet on dozens of matches.
-        const matchIds = Array.from(new Set(ws.map((w: any) => w.match_id)));
+        // Distinct match ids across the wager set, fed to a single .in()
+        // query so we round-trip once even when the user has bet on dozens
+        // of matches.
+        const matchIds = Array.from(new Set(ws.map((w) => w.match_id)));
         if (matchIds.length === 0) {
           setMatchMap({});
           setLoaded(true);
@@ -113,8 +151,8 @@ export default function Wagers() {
           console.warn('[Wagers] match meta fetch failed:', error.message);
           setMatchMap({});
         } else {
-          const map: Record<string, any> = {};
-          for (const m of data ?? []) map[m.id] = m;
+          const map: Record<string, LedgerMatch> = {};
+          for (const m of (data ?? []) as unknown as LedgerMatch[]) map[m.id] = m;
           setMatchMap(map);
         }
         setLoaded(true);
@@ -129,9 +167,9 @@ export default function Wagers() {
     return () => { cancelled = true; };
   }, [db, user]);
 
-  // Per-status counts driven by the in-memory wager list.  Memoised
-  // because the chip strip and the summary card both read them.
-  const counts = useMemo(() => {
+  // Per-status counts over the in-memory list (the Tags and the header
+  // figures both read them).
+  const counts = useMemo<StatusCounts>(() => {
     const c = { open: 0, won: 0, lost: 0, void: 0 };
     for (const w of wagers) {
       if (w.status === 'open') c.open += 1;
@@ -142,14 +180,13 @@ export default function Wagers() {
     return c;
   }, [wagers]);
 
-  // Net P&L across all settled wagers.  Uses the shared
-  // netCreditChange helper so the math matches what the settlement
-  // listener writes server-side.
+  // Net across all settled wagers. Uses the shared netCreditChange helper so
+  // the maths matches what the settlement listener writes server-side.
   const netPnl = useMemo(() => {
     let total = 0;
     for (const w of wagers) {
       if (w.status === 'won' || w.status === 'lost' || w.status === 'void') {
-        total += netCreditChange(w.status, w.stake, w.payout);
+        total += netCreditChange(w.status, w.stake, w.payout ?? 0);
       }
     }
     return total;
@@ -160,17 +197,12 @@ export default function Wagers() {
     return wagers.filter((w) => w.status === filter);
   }, [wagers, filter]);
 
-  // Render-time guards — same loading-before-redirect ordering as
-  // Profile to avoid a flash of the wager UI during auth restore.
+  // Render-time guards: loading before redirect, as on Profile, to avoid a
+  // flash of the ledger during auth restore.
   if (loading) {
     return (
       <Shell>
-        <p style={{
-        ...(undefined as any),
-          color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-        }}>
-          Restoring your session…
-        </p>
+        <LoadingState label="Restoring your session" />
       </Shell>
     );
   }
@@ -178,159 +210,103 @@ export default function Wagers() {
     return <Navigate to="/login" replace />;
   }
 
-  return (
-    <Shell username={profile?.username}>
-      <SummaryCard credits={profile?.credits ?? 0} counts={counts} netPnl={netPnl} />
+  const settled = counts.won + counts.lost + counts.void;
+  let n = 0;
 
-      <div style={{ marginTop: 48 }}>
+  return (
+    <Shell
+      username={profile?.username ?? undefined}
+      meta={
+        <>
+          <StatBlock label="Credits" value={(profile?.credits ?? 0).toLocaleString()} />
+          <StatBlock label="Open wagers" value={counts.open.toLocaleString()} />
+          <StatBlock label="Settled" value={settled.toLocaleString()} />
+          <StatBlock label="Net P&L" value={signed(netPnl)} valueTone={netPnl > 0 ? 'success' : 'default'} />
+        </>
+      }
+    >
+      <section>
         <SectionHeader
-          kicker="I"
-          label="The Ledger"
-          title="Every Bet Ever"
-          subtitle="Newest at the top.  Open wagers settle automatically when the match completes. No action required."
+          index={toRoman(++n)}
+          label="Ledger"
+          title="Every bet ever"
+          subtitle="Newest at the top. Open wagers settle automatically when the match completes. No action required."
         />
 
-        <div style={{ marginTop: 24 }}>
-          <FilterStrip active={filter} onChange={setFilter} counts={counts} totalCount={wagers.length} />
-        </div>
+        <FilterStrip active={filter} onChange={setFilter} counts={counts} totalCount={wagers.length} />
 
-        {loadError && (
-          <p style={{
-        ...(undefined as any),
-            color: FLARE, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-          }}>
-            Wager history unavailable. The bookie&rsquo;s ledger is locked.
-          </p>
-        )}
-        {!loadError && !loaded && (
-          <p style={{
-        ...(undefined as any),
-            color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-          }}>
-            Counting your stakes…
-          </p>
-        )}
-        {!loadError && loaded && wagers.length === 0 && (
-          <EmptyHistory />
-        )}
-        {!loadError && loaded && wagers.length > 0 && visibleWagers.length === 0 && (
-          <div style={{ marginTop: 24 }}>
-            <EmptyState centred={false}>
-              No wagers in this filter. Try a different status chip.
+        <div style={{ marginTop: space[24] }}>
+          {loadError != null && <ErrorState what="your wager history" />}
+          {loadError == null && !loaded && <LoadingState label="Counting your stakes" />}
+          {loadError == null && loaded && wagers.length === 0 && (
+            <EmptyState
+              centred={false}
+              kicker="No wagers placed"
+              hint={<Button variant="primary" to="/matches">Browse matches</Button>}
+              style={{ paddingLeft: 0, paddingRight: 0 }}
+            >
+              The ledger is empty. Pick a scheduled match and stake at least 10 credits to open
+              your first wager.
             </EmptyState>
-          </div>
-        )}
-        {!loadError && loaded && visibleWagers.length > 0 && (
-          <WagersTable wagers={visibleWagers} matchMap={matchMap} />
-        )}
-      </div>
+          )}
+          {loadError == null && loaded && wagers.length > 0 && visibleWagers.length === 0 && (
+            <EmptyState centred={false} style={{ paddingLeft: 0, paddingRight: 0 }}>
+              No wagers with this status. Try another filter.
+            </EmptyState>
+          )}
+          {loadError == null && loaded && visibleWagers.length > 0 && (
+            <WagersTable wagers={visibleWagers} matchMap={matchMap} />
+          )}
+        </div>
+      </section>
     </Shell>
   );
 }
 
 /**
- * Page shell shared between the loading + authenticated render
- * branches: PageShell + the shared PageHeader, so the two branches
- * can't drift on the header and each renders exactly one h1.
+ * Page shell shared between the loading and authenticated branches:
+ * PageShell and the shared PageHeader, so the two branches can't drift on
+ * the header and each renders exactly one h1.
  *
- * @param {{ children: React.ReactNode, username?: string }} props
+ * @param children  The page sections.
+ * @param username  Optional username for the title.
+ * @param meta      Optional StatBlocks under the subtitle.
  */
-function Shell({ children, username  }: any) {
+function Shell({ children, username, meta }: { children: React.ReactNode; username?: string | undefined; meta?: React.ReactNode }) {
   return (
     <PageShell>
       <PageHeader
         eyebrow="Wagers"
         title={username ? `${username}'s Ledger` : 'The Ledger'}
-        subtitle="Every wager you&rsquo;ve placed across every season.  Settlement is automatic; payouts hit your credit balance the moment a match completes."
+        subtitle="Every wager you've placed across every season. Settlement is automatic; payouts hit your credit balance the moment a match completes."
+        {...(meta ? { meta } : {})}
       />
-      <section>{children}</section>
+      {children}
     </PageShell>
   );
 }
 
 /**
- * Account summary strip.  Four cells: credit balance (flare-coloured
- * because it's the most attention-grabbing number), open wagers, net
- * P&L (flare when negative, dust when positive), settled total.
+ * Format a credit change with an explicit plus sign when positive.
  *
- * @param {object} props
- * @param {number} props.credits
- * @param {{ open: number, won: number, lost: number, void: number }} props.counts
- * @param {number} props.netPnl
+ * @param value  The credit change.
+ * @returns      "+155", "0" or "-20".
  */
-function SummaryCard({ credits, counts, netPnl  }: any) {
-  const settled = counts.won + counts.lost + counts.void;
-  // Net P&L tri-state colour: flare when red, terra-nova when green,
-  // dust when zero (neutral, not yet settled).
-  const pnlColor = netPnl < 0 ? FLARE : netPnl > 0 ? TERRA_NOVA : DUST;
-  const pnlLabel = netPnl > 0 ? `+${netPnl.toLocaleString()}` : netPnl.toLocaleString();
-
-  return (
-    <div style={{
-        ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      marginTop: 24,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-      gap: 24,
-    }}>
-      <SummaryCell label="Credits" value={credits.toLocaleString()} accent={QUANTUM} />
-      <SummaryCell label="Open Wagers" value={counts.open.toLocaleString()} />
-      <SummaryCell label="Settled" value={settled.toLocaleString()} />
-      <SummaryCell label="Net P&amp;L" value={pnlLabel} accent={pnlColor} />
-    </div>
-  );
+function signed(value: number): string {
+  return value > 0 ? `+${value.toLocaleString()}` : value.toLocaleString();
 }
 
 /**
- * Single cell in the SummaryCard grid.  Stacks a small-caps label
- * above a bold numeric value; optional `accent` paints the value in
- * that hue.
+ * Status filter: five toggle Tags (All and the four statuses), each with
+ * its current count so the reader sees totals before choosing. Neutral
+ * tones: the selected Tag is the Lunar Dust fill.
  *
- * @param {object} props
- * @param {string} props.label
- * @param {string} props.value
- * @param {string} [props.accent]
+ * @param active      The selected filter id.
+ * @param onChange    Select a filter.
+ * @param counts      Per-status counts.
+ * @param totalCount  All wagers.
  */
-function SummaryCell({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <div>
-      <div style={{
-        ...(undefined as any),
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-        marginBottom: 8,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        ...(undefined as any),
-        fontSize: 22,
-        fontWeight: 700,
-        color: accent ?? DUST,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Status filter chip strip.  Five chips: ALL + the four wager
- * statuses.  Each carries its current count in parens so the reader
- * sees totals before clicking.
- *
- * @param {object} props
- * @param {string} props.active
- * @param {(next: string) => void} props.onChange
- * @param {{ open: number, won: number, lost: number, void: number }} props.counts
- * @param {number} props.totalCount
- */
-function FilterStrip({ active, onChange, counts, totalCount }: { active: string; onChange: (next: string) => void; counts: any; totalCount: number }) {
+function FilterStrip({ active, onChange, counts, totalCount }: { active: string; onChange: (next: string) => void; counts: StatusCounts; totalCount: number }) {
   const labelFor = (key: string) => {
     switch (key) {
       case FILTER_ALL:  return `All (${totalCount})`;
@@ -341,253 +317,122 @@ function FilterStrip({ active, onChange, counts, totalCount }: { active: string;
       default:          return key;
     }
   };
-  // Win / loss / void carry hue accents so the active chip cue matches
-  // the row colouring in the table below.
-  const accentFor = (key: string) => {
-    if (key === FILTER_WON)  return DUST;
-    if (key === FILTER_LOST) return FLARE;
-    if (key === FILTER_VOID) return DUST_50;
-    return undefined;
-  };
 
   return (
-    <div style={{
-        ...(undefined as any),
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 8,
-      paddingBottom: 16,
-      borderBottom: `1px solid ${HAIRLINE}`,
-    }}>
-      {FILTER_ORDER.map((key: string) => (
-        <button
+    <div role="group" aria-label="Filter by status" style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+      {FILTER_ORDER.map((key) => (
+        <Tag
           key={key}
-          type="button"
+          selected={active === key}
           onClick={() => onChange(key)}
-          style={{
-        ...(undefined as any),
-            background: active === key ? COLORS.dustFaint : 'transparent',
-            border: `1px solid ${HAIRLINE}`,
-            color: accentFor(key) ?? DUST,
-            padding: '8px 14px',
-            fontFamily: 'inherit',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-          }}
+          style={{ ...numeric, minHeight: 44, paddingLeft: space[12], paddingRight: space[12] }}
         >
           {labelFor(key)}
-        </button>
+        </Tag>
       ))}
     </div>
   );
 }
 
 /**
- * Empty-history placeholder.  Renders a single flavour line + a
- * primary CTA pointing to /matches so the reader has somewhere to
- * go.  Same pattern other empty-state cards use across the app.
+ * The ledger table: Match / Side / Stake / Odds / Status / Net, one row per
+ * wager. Scrolls inside its own box on a phone.
  *
- * @returns {JSX.Element}
+ * @param wagers    The filtered wagers.
+ * @param matchMap  Match metadata by id.
  */
-function EmptyHistory() {
+function WagersTable({ wagers, matchMap }: { wagers: Wager[]; matchMap: Record<string, LedgerMatch> }) {
   return (
-    <div style={{
-        ...(undefined as any),
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      marginTop: 24,
-      maxWidth: 560,
-    }}>
-      <h3 style={{
-        ...(undefined as any),
-        fontSize: 22, fontWeight: 700, textTransform: 'uppercase',
-        margin: 0, letterSpacing: '0.01em',
-      }}>
-        No Wagers Placed
-      </h3>
-      <p style={{
-        ...(undefined as any),
-        fontSize: 14, lineHeight: 1.7, color: DUST_70, margin: '16px 0 24px',
-      }}>
-        The ledger is empty.  Pick a scheduled match and stake at least 10
-        credits to open your first wager.
-      </p>
-      <PrimaryButton to="/matches">Browse Matches</PrimaryButton>
-    </div>
+    <DataTable caption="Your wagers" minWidth={640}>
+      <thead>
+        <tr>
+          <th style={dataHead()}>Match</th>
+          <th style={dataHead()}>Side</th>
+          <th style={dataHead('right')}>Stake</th>
+          <th style={dataHead('right')}>Odds</th>
+          <th style={dataHead()}>Status</th>
+          <th style={dataHead('right')}>Net</th>
+        </tr>
+      </thead>
+      <tbody>
+        {wagers.map((w) => (
+          <WagerRow key={w.id} wager={w} match={matchMap[w.match_id] ?? null} />
+        ))}
+      </tbody>
+    </DataTable>
   );
 }
 
 /**
- * Wagers table — one row per wager.  Columns: Match / Side / Stake /
- * Odds / Status / Net.  Net is the credit change settled to the
- * user; flare when the row lost, dust when it won, em-dash for open
- * rows.
+ * One ledger row: the fixture (crests, names, score once played), the side
+ * backed, stake, the locked-in odds, a status Tag and the settled credit
+ * change. The match links to its page once the metadata resolved; a bare
+ * id otherwise (rare but defensive).
  *
- * @param {object} props
- * @param {Array<object>} props.wagers
- * @param {Record<string, object>} props.matchMap
+ * @param wager  The wager.
+ * @param match  Its match metadata, or null.
  */
-function WagersTable({ wagers, matchMap }: { wagers: any[]; matchMap: Record<string, any> }) {
-  return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, overflowX: 'auto', marginTop: 24 }}>
-      <table style={{
-        ...(undefined as any),
-        width: '100%',
-        borderCollapse: 'collapse',
-        fontSize: 13,
-        color: DUST,
-      }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-            <th style={wagerTh}>Match</th>
-            <th style={wagerTh}>Side</th>
-            <th style={{ ...wagerTh, textAlign: 'right' }}>Stake</th>
-            <th style={{ ...wagerTh, textAlign: 'right' }}>Odds</th>
-            <th style={wagerTh}>Status</th>
-            <th style={{ ...wagerTh, textAlign: 'right' }}>Net</th>
-          </tr>
-        </thead>
-        <tbody>
-          {wagers.map((w: any) => (
-            <WagerRow key={w.id} wager={w} match={matchMap[w.match_id] ?? null} />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * Single row in the wagers table.  Renders the home v away string,
- * the side bet on, stake, locked-in odds, status chip, and the net
- * credit change.  The match link goes to /matches/:matchId when the
- * row is hydrated; falls back to a span when match metadata didn't
- * resolve (rare but defensive).
- *
- * @param {object} props
- * @param {object} props.wager
- * @param {object | null} props.match
- */
-function WagerRow({ wager, match }: { wager: any; match: any | null }) {
-  const homeName = match?.home_team?.name ?? '?';
-  const awayName = match?.away_team?.name ?? '?';
+function WagerRow({ wager, match }: { wager: Wager; match: LedgerMatch | null }) {
+  const home = match?.home_team ?? null;
+  const away = match?.away_team ?? null;
   const scoreLabel = match && match.status === 'completed'
-    ? `${match.home_score ?? 0} – ${match.away_score ?? 0}`
+    ? `${match.home_score ?? 0}\u2013${match.away_score ?? 0}`
     : null;
-
-  const sideLabel = sideLabelFor(wager.team_choice);
-  const statusColour = statusColourFor(wager.status);
 
   const net = wager.status === 'won' || wager.status === 'lost' || wager.status === 'void'
-    ? netCreditChange(wager.status, wager.stake, wager.payout)
+    ? netCreditChange(wager.status, wager.stake, wager.payout ?? 0)
     : null;
 
   return (
-    <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-      <td style={wagerTd}>
+    <tr>
+      <td style={dataCell()}>
         {match ? (
-          <Link to={`/matches/${match.id}`} style={{
-        ...(undefined as any),
-            color: DUST, textDecoration: 'none',
-          }}>
-            <span style={{ fontWeight: 700 }}>{homeName}</span>
-            <span style={{ color: DUST_50, margin: '0 6px' }}>v</span>
-            <span style={{ fontWeight: 700 }}>{awayName}</span>
-            {scoreLabel && (
-              <span style={{ color: DUST_70, marginLeft: 8 }}>{scoreLabel}</span>
-            )}
+          <Link
+            to={`/matches/${match.id}`}
+            style={{ color: color.text, textDecoration: 'none', display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}
+          >
+            <Crest color={home ? CLUB_COLOR[home.id] : null} size={16} />
+            <span style={{ fontWeight: 700 }}>{home?.name ?? '?'}</span>
+            <span style={tone.tertiary}>v</span>
+            <Crest color={away ? CLUB_COLOR[away.id] : null} size={16} />
+            <span style={{ fontWeight: 700 }}>{away?.name ?? '?'}</span>
+            {scoreLabel && <span style={tone.secondary}>{scoreLabel}</span>}
           </Link>
         ) : (
-          <span style={{ color: DUST_50 }}>Match {wager.match_id.slice(0, 8)}…</span>
+          <span style={tone.tertiary}>Match {wager.match_id.slice(0, 8)}{'\u2026'}</span>
         )}
       </td>
-      <td style={wagerTd}>{sideLabel}</td>
-      <td style={{ ...wagerTd, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        {wager.stake.toLocaleString()}
+      <td style={dataCell()}>{sideLabelFor(wager.team_choice)}</td>
+      <td style={dataCell('right')}>{wager.stake.toLocaleString()}</td>
+      <td style={{ ...dataCell('right'), ...tone.secondary }}>{Number(wager.odds_snapshot).toFixed(2)}</td>
+      <td style={dataCell()}>
+        <Tag tone={wager.status === 'won' ? 'success' : 'default'}>{wager.status}</Tag>
       </td>
-      <td style={{ ...wagerTd, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: DUST_70 }}>
-        {Number(wager.odds_snapshot).toFixed(2)}
-      </td>
-      <td style={wagerTd}>
-        <span style={{
-        ...(undefined as any),
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '3px 8px',
-          border: `1px solid ${statusColour}`,
-          color: statusColour,
-          fontSize: 10,
+      <td
+        style={{
+          ...dataCell('right'),
           fontWeight: 700,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-        }}>
-          {wager.status}
-        </span>
-      </td>
-      <td style={{
-        ...(undefined as any),
-        ...wagerTd,
-        textAlign: 'right',
-        fontWeight: 700,
-        fontVariantNumeric: 'tabular-nums',
-        // Mirror the summary card's tri-state: null = unsettled (dust
-        // 50 %), red loss = flare, profit = terra-nova green, zero =
-        // dust neutral (rare but possible for a void with stake = 0).
-        color: net === null ? DUST_50
-              : net < 0    ? FLARE
-              : net > 0    ? TERRA_NOVA
-              : DUST,
-      }}>
-        {net === null
-          ? '—'
-          : net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
+          // Profit is green; a loss or zero is plain text; an open wager
+          // has no figure yet (tertiary dash).
+          color: net === null ? color.textTertiary : net > 0 ? color.success : color.text,
+        }}
+      >
+        {net === null ? '\u2014' : signed(net)}
       </td>
     </tr>
   );
 }
 
-const wagerTd: React.CSSProperties = { textAlign: 'left', padding: '12px 16px' };
-const wagerTh: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '12px 16px',
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.14em',
-  color: DUST_70,
-};
-
 /**
- * Display label for the wager's team_choice enum.  Home / Draw / Away
- * — same vocabulary the WagerWidget uses on MatchDetail so the
- * ledger reads consistent with the placement surface.
+ * Display label for the wager's team_choice: Home win / Draw / Away win,
+ * the same vocabulary the WagerWidget uses on the match page.
  *
- * @param {string} choice
- * @returns {string}
+ * @param choice  The team_choice value.
+ * @returns       The label.
  */
 function sideLabelFor(choice: string) {
-  if (choice === 'home') return 'Home Win';
+  if (choice === 'home') return 'Home win';
   if (choice === 'draw') return 'Draw';
-  if (choice === 'away') return 'Away Win';
+  if (choice === 'away') return 'Away win';
   return choice;
-}
-
-/**
- * Border / text colour for the per-row status chip.
- *
- *   open → dust hairline   (no result yet)
- *   won  → dust            (positive outcome reads neutral, not loud)
- *   lost → flare           (the chip glows red — the bookie won)
- *   void → dust-50         (faded — neither side claimed the stake)
- *
- * @param {string} status
- * @returns {string}
- */
-function statusColourFor(status: string) {
-  if (status === 'lost') return FLARE;
-  if (status === 'void') return DUST_50;
-  return DUST;
 }

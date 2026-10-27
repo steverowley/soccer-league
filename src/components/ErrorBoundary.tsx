@@ -1,6 +1,27 @@
+// ── ErrorBoundary.tsx ───────────────────────────────────────────────────────
+// The app-level React error boundary: the last line of defence for a render
+// error in a provider, a listener or the router itself (main.tsx mounts it
+// outside everything). Page render errors are caught first, per route, by
+// RouteErrorBoundary, which keeps the site chrome.
+//
+// FAILURE SCREEN
+//   On the design language since group 5a (docs/design-language.md), with
+//   no raw style values. It sits OUTSIDE the router and the auth provider,
+//   so it cannot render PageShell (the site header needs both); it draws
+//   the same page column itself: the shared PageHeader (the screen's one
+//   h1) and an EmptyState with a single secondary action, Reload. The
+//   error message is shown de-emphasised for bug reports; the in-world
+//   copy above it is what the fan reads.
+//
+// Sentry forwarding is tagged `source: 'react-error-boundary'` so
+// dashboards can split these catches from the per-route ones.
+
 import { Component, type ReactNode, type ErrorInfo } from 'react';
-import { C } from '../constants';
 import { captureException } from '../shared/observability/sentry';
+import { color, layout } from '../shared/design';
+import { Button } from '../shared/ui/Button';
+import { EmptyState } from '../shared/ui/EmptyState';
+import { PageHeader } from '../shared/ui/PageHeader';
 
 interface Props {
   children: ReactNode;
@@ -11,6 +32,10 @@ interface State {
   message: string;
 }
 
+/**
+ * App-level error boundary. Renders a full-page failure screen on catch;
+ * recovery is a page reload.
+ */
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -37,64 +62,30 @@ export default class ErrorBoundary extends Component<Props, State> {
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            minHeight: '100vh',
-            backgroundColor: C.abyss,
-            color: C.dust,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            padding: '32px',
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ fontSize: '32px' }}>⚠</div>
-          <h1
+        <div style={{ minHeight: '100vh', background: color.bg, color: color.text }}>
+          <main
             style={{
-              fontSize: '16px',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              margin: 0,
+              maxWidth: layout.container,
+              margin: '0 auto',
+              paddingLeft: layout.gutter,
+              paddingRight: layout.gutter,
+              boxSizing: 'border-box',
             }}
           >
-            Transmission Error
-          </h1>
-          <p
-            style={{
-              fontSize: '12px',
-              opacity: 0.6,
-              maxWidth: '480px',
-              lineHeight: 1.7,
-              margin: 0,
-            }}
-          >
-            An unexpected error disrupted the ISL broadcast feed.
-            {this.state.message && (
-              <>
-                <br />
-                <span style={{ opacity: 0.45 }}>{this.state.message}</span>
-              </>
-            )}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: '8px',
-              padding: '8px 24px',
-              border: `1px solid ${C.dust}`,
-              backgroundColor: 'transparent',
-              color: C.dust,
-              fontSize: '12px',
-              letterSpacing: '0.08em',
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-            }}
-          >
-            Reload
-          </button>
+            <PageHeader
+              eyebrow="Error"
+              title="Transmission error"
+              subtitle="An unexpected error disrupted the ISL broadcast feed. Reload to reconnect."
+            />
+            <EmptyState
+              centred={false}
+              kicker="Signal lost"
+              hint={<Button variant="secondary" onClick={() => window.location.reload()}>Reload</Button>}
+              style={{ paddingLeft: 0, paddingRight: 0 }}
+            >
+              {this.state.message || 'No further detail was recorded.'}
+            </EmptyState>
+          </main>
         </div>
       );
     }
