@@ -12,7 +12,7 @@
 // result cannot be checked by clicking.
 
 import { describe, expect, it } from 'vitest';
-import { eventVoice, eventHeading, cosmicAccent } from './MatchDetail';
+import { eventVoice, eventHeading, cosmicVoice } from './MatchDetail';
 import type { MatchEventRow } from '../features/match';
 
 function row(payload: Record<string, unknown>, type = 'goal'): MatchEventRow {
@@ -34,10 +34,12 @@ describe('eventVoice', () => {
     expect(eventVoice(row({ voice: 'zara' }))?.name).toBe('Zara Bloom');
   });
 
-  it('gives each voice a distinct accent colour', () => {
-    const colours = ['vox', 'nexus', 'zara'].map((v) => eventVoice(row({ voice: v }))?.color);
-    expect(new Set(colours).size).toBe(3);
-    for (const c of colours) expect(c).toMatch(/^#[0-9A-Fa-f]{6}$/);
+  it('tells the voices apart by name and role, not colour (design language)', () => {
+    const voices = ['vox', 'nexus', 'zara'].map((v) => eventVoice(row({ voice: v })));
+    expect(new Set(voices.map((v) => v?.name)).size).toBe(3);
+    expect(voices.map((v) => v?.role)).toEqual(['Play-by-play', 'AI analyst', 'Colour analyst']);
+    // The retired accent colours (#FFD700 gold, #4FC3F7 cyan) are gone.
+    for (const v of voices) expect(v).not.toHaveProperty('color');
   });
 
   it('returns null for an unvoiced event', () => {
@@ -76,31 +78,29 @@ describe('eventHeading', () => {
   });
 });
 
-describe('cosmicAccent', () => {
-  it('tints Balance and Chaos distinctly', () => {
-    const b = cosmicAccent(row({ voice: 'balance' }, 'cosmic_voice'));
-    const c = cosmicAccent(row({ voice: 'chaos' }, 'cosmic_voice'));
-    expect(b).toMatch(/^#[0-9A-Fa-f]{6}$/);
-    expect(c).toMatch(/^#[0-9A-Fa-f]{6}$/);
-    expect(b).not.toBe(c);
+describe('cosmicVoice', () => {
+  // Balance and Chaos share the Architect tone (spec section 4), so their
+  // bylines are what tell them apart, as in the spec's specimen
+  // ("Chaos · Cosmic voice").
+  it('bylines Balance and Chaos by name, as cosmic voices', () => {
+    expect(cosmicVoice(row({ voice: 'balance' }, 'cosmic_voice'))).toEqual({ name: 'Balance', role: 'Cosmic voice' });
+    expect(cosmicVoice(row({ voice: 'chaos' }, 'cosmic_voice'))).toEqual({ name: 'Chaos', role: 'Cosmic voice' });
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('Balance');
+    expect(eventHeading(row({ voice: 'chaos' }, 'cosmic_voice'))).toBe('Chaos');
   });
 
   it('only applies to cosmic_voice rows', () => {
     // A commentator voice must not be mistaken for a cosmic one.
-    expect(cosmicAccent(row({ voice: 'vox' }, 'goal'))).toBeNull();
-    expect(cosmicAccent(row({ voice: 'balance' }, 'goal'))).toBeNull();
-  });
-
-  it('leaves the cosmic voices uncredited', () => {
-    // The design keeps them unnamed: a byline would explain the mechanic.
-    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('—');
-    expect(eventHeading(row({ voice: 'chaos' }, 'cosmic_voice'))).toBe('—');
-    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).not.toMatch(/balance|chaos/i);
+    expect(cosmicVoice(row({ voice: 'vox' }, 'goal'))).toBeNull();
+    expect(cosmicVoice(row({ voice: 'balance' }, 'goal'))).toBeNull();
+    expect(cosmicVoice(row({ voice: 'vox' }, 'cosmic_voice'))).toBeNull();
+    expect(cosmicVoice({ ...row({}, 'cosmic_voice'), payload: null } as unknown as MatchEventRow)).toBeNull();
   });
 
   it('does not let a cosmic row borrow a commentator name', () => {
     expect(eventVoice(row({ voice: 'vox' }, 'cosmic_voice'))?.name).toBe('Captain Vox');
-    // ...but the row renderer prefers the cosmic accent, so the heading wins:
-    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('—');
+    // ...but the cosmic byline wins in the heading:
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('Balance');
   });
 });
+
