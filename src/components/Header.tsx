@@ -18,8 +18,9 @@
 //   - Signed in, the account control is a hairline button with the credit
 //     balance (tabular, default tone) and the username; it opens a menu on
 //     the raised surface (Profile, Wagers, Admin for admins, Sign out).
-//   - Below 768 px the cluster collapses into a drawer whose rows keep the
-//     44 px touch target.
+//   - Below 1024 px the cluster collapses into a drawer whose rows keep the
+//     44 px touch target. (At 768 px the nine labels plus the account
+//     control wrapped onto two rows; the drawer starts at 1024.)
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -174,11 +175,11 @@ export default function Header() {
       )}
 
       <style>{`
-        @media (max-width: 767px) {
+        @media (max-width: 1023px) {
           .isl-desktop-cluster { display: none !important; }
           .isl-mobile-menu-btn { display: inline-flex !important; }
         }
-        @media (min-width: 768px) {
+        @media (min-width: 1024px) {
           .isl-mobile-menu-btn { display: none !important; }
         }
       `}</style>
