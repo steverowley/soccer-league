@@ -26,10 +26,10 @@ import { Link } from 'react-router-dom';
 import { color, glow, glyph, hairline, type } from '../design';
 
 /**
- * Button variants. `active` is the pre-design-language name of `primary`,
- * kept so older call sites compile; new code says `primary`.
+ * Button variants. (The pre-design-language alias `active` for `primary`
+ * was removed once no call site used it.)
  */
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'active';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
 
 interface VariantStyle {
   /** Resting visual treatment. */
@@ -46,7 +46,6 @@ const PRIMARY: VariantStyle = {
 // Per-variant resting styles and hover glow.
 const VARIANTS: Record<ButtonVariant, VariantStyle> = {
   primary: PRIMARY,
-  active: PRIMARY,
   secondary: {
     rest: { background: 'transparent', color: color.text, ...hairline(color.text) },
     glow: glow.outline,

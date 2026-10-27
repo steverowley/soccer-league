@@ -7,15 +7,13 @@
 //   - ToastProvider / useToast / ToastViewport — global toast surface (#383)
 //   - Skeleton / RouteSuspenseFallback         — loading placeholders (#383)
 //   - Card                                     — canonical content card (#378)
-//   - Chip                                     — bordered small-caps pill (#378)
 //   - EmptyState                               — "nothing here" surface (#378)
-//   - Kicker                                   — uppercase mono label (#378)
-//   - Pip                                      — filled-circle indicator (#378)
-//   - StatPair                                 — label-above-value cell (#378)
-//   - KeyValue                                 — horizontal label : value (#378)
+//   - SectionPanel, Button, data states        (#378)
+//   - The design language components below (docs/design-language.md).
 //
-// Design-primitive consolidation (#378) will land further additions here
-// (Panel, SectionPanel, …) as features migrate off inline styles.
+// Chip, Kicker, Pip, StatPair and KeyValue (#378) were deleted with the
+// design system's last group: Tag, the `label` type preset, StatBlock and
+// FactRows replace them, and nothing rendered them any more.
 
 export {
   ToastProvider,
@@ -36,29 +34,8 @@ export {
 } from './Card';
 
 export {
-  Chip,
-  type ChipTone,
-} from './Chip';
-
-export {
   EmptyState,
 } from './EmptyState';
-
-export {
-  Kicker,
-} from './Kicker';
-
-export {
-  Pip,
-} from './Pip';
-
-export {
-  StatPair,
-} from './StatPair';
-
-export {
-  KeyValue,
-} from './KeyValue';
 
 export {
   SectionPanel,

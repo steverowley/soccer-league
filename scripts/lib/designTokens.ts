@@ -18,13 +18,21 @@
 //                  their own (and not again as a colour) because they are the
 //                  contrast failures the text tones replace.
 //
+// One precise exception, not an exempt file: a colour function opened at the
+// end of a template chunk, so its first argument is an interpolation
+// (`rgb(${r},${g},${b})`), is a colour COMPUTED from channels (the match
+// viewer's cel shading lightens and darkens token values). It is arithmetic,
+// not a value choice, so it is not counted; any literal channel still is.
+//
 // Not scanned: test files, type declarations, the token files themselves
-// (src/shared/design/), the generated database types and the club colours
-// in src/data/leagueData.ts (club colour is data, not chrome).
+// (src/shared/design/, where every value is declared once), the generated
+// database types, and src/data/leagueData.ts, whose hex values are each
+// club's colour: data about the club (rendered by Crest and the kits on the
+// pitch), not a styling choice. Data colours reach the interface as props.
 //
 // Known blind spot: a literal hidden behind a constant (`const SIZE = 13;
-// ... fontSize: SIZE`) is not counted. The ratchet still catches the common
-// case, and review catches the rest.
+// ... fontSize: SIZE`) is not counted. Review catches those; a numeric
+// constant is also unlikely now that the type presets are the only sizes.
 
 import ts from 'typescript';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -201,31 +209,23 @@ export function countByFile(hits: RawHit[]): Record<string, RawCounts> {
   return Object.fromEntries(Object.keys(out).sort().map((f) => [f, out[f]!]));
 }
 
-/** Sum of every kind in a counts record. */
-export function total(c: RawCounts | undefined): number {
-  return RAW_KINDS.reduce((n, k) => n + (c?.[k] ?? 0), 0);
-}
-
-/** A file whose count rose above the baseline (or appeared with any). */
-export interface Regression {
-  file: string;
-  kind: RawKind;
-  baseline: number;
-  now: number;
-}
-
-/** Files and kinds that exceed the baseline. */
-export function regressions(
-  baseline: Record<string, RawCounts>,
-  current: Record<string, RawCounts>,
-): Regression[] {
-  const out: Regression[] = [];
-  for (const [file, counts] of Object.entries(current)) {
-    for (const kind of RAW_KINDS) {
-      const now = counts[kind] ?? 0;
-      const was = baseline[file]?.[kind] ?? 0;
-      if (now > was) out.push({ file, kind, baseline: was, now });
-    }
-  }
-  return out;
+/**
+ * The guard's verdict: a readable report of every raw value, or null when
+ * there are none. The guard is a hard zero (the ratchet baseline that let
+ * unmigrated pages keep their counts was deleted when the last group
+ * landed), so ANY hit is a failure.
+ *
+ * @param hits  Raw values found (by `findRawValues` or `scanSource`).
+ * @returns     A multi-line report naming file, line, kind and source, or
+ *              null when `hits` is empty.
+ */
+export function violationReport(hits: readonly RawHit[]): string | null {
+  if (hits.length === 0) return null;
+  const lines = hits.map((h) => `  ${h.file}:${h.line}  [${h.kind}]  ${h.text}`);
+  return [
+    `${hits.length} raw style value(s) in src/. Use the tokens in src/shared/design`,
+    '(type.*, tone.*, color.*, tracking.*; canvasColor for a <canvas>) and the',
+    'components in src/shared/ui instead. docs/design-language.md, section 8.',
+    ...lines,
+  ].join('\n');
 }
