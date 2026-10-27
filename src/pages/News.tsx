@@ -3,15 +3,14 @@
 // design system's `Dispatch.html` worked screen ("Dispatches from the void").
 //
 // Layout (matches the prototype):
-//   Header (global)
-//   `.isl-head` eyebrow breadcrumb + 56px title + lede
+//   PageShell (site header, main column, footer)
+//   PageHeader: eyebrow "News", title, lede
 //   `.wire` two-column grid (1fr / 360px):
 //     LEFT  — lead dispatch card (halftone image + tags + headline + byline),
 //             filter chips, then a bordered grid-row feed (Dispatch time /
 //             headline / category), with Load More
 //     RIGHT — sticky rail: "Overheard in the booth" (a live pundit take) +
 //             "Standing notice" (the brand's permanence lore)
-//   Footer (shared)
 //
 // Data source:
 //   - getRecentNarratives(db, limit, source?, kind?)  from features/entities
@@ -34,9 +33,8 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
-import Header from '../components/Header';
-import { COLORS, Container, Footer } from '../components/Layout';
-import { Button, Skeleton } from '../shared/ui';
+import { COLORS } from '../components/Layout';
+import { Button, PageHeader, PageShell, Skeleton } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   getRecentNarratives,
@@ -90,10 +88,6 @@ const FILTER_ALL = 'all';
 // MAX_FEED_ROWS so the page never explodes).
 const PAGE_SIZE = 20;
 const MAX_FEED_ROWS = 200;
-
-// Eyebrow breadcrumb — decorative cosmic-calendar flavour, matching the
-// prototype (and the app's existing decorative date glyphs on Home).
-const EYEBROW = ['Galaxy Dispatch', 'The league wire', 'Season cycle 014'];
 
 // Static fallback booth quote used when no pundit take is in the loaded feed.
 const FALLBACK_QUOTE = {
@@ -188,27 +182,16 @@ export default function News() {
   const activeKindLabel = filter === FILTER_ALL ? null : (KIND_BY_KEY[filter]?.label ?? prettifyKind(filter));
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
+    <PageShell>
+      {/* Page head: the shared PageHeader. The eyebrow names the section
+          (it used to carry a hard-coded "Season cycle 014"). */}
+      <PageHeader
+        eyebrow="News"
+        title="Dispatches from the Void"
+        subtitle="The official record, filed as it happens. No correction is ever issued: the wire is presumed accurate the moment it is written."
+      />
 
-      <Container>
-        {/* Page head — eyebrow breadcrumb + display title + lede. */}
-        <header style={{ padding: '48px 0 8px' }}>
-          <div style={eyebrowStyle}>
-            {EYEBROW.map((part, i) => (
-              <span key={part} style={{ display: 'contents' }}>
-                {i > 0 && <span style={{ color: DUST_50 }}>•</span>}
-                <span>{part}</span>
-              </span>
-            ))}
-          </div>
-          <h1 style={titleStyle}>Dispatches from the Void</h1>
-          <p style={ledeStyle}>
-            The official record, filed as it happens. No correction is ever issued: the wire is
-            presumed accurate the moment it is written.
-          </p>
-        </header>
-
+      <div>
         {/* Two-column wire. */}
         <div className="isl-wire" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 24, alignItems: 'start', padding: '24px 0 64px' }}>
           {/* LEFT — lead + filters + feed.
@@ -306,9 +289,7 @@ export default function News() {
             </RailPanel>
           </aside>
         </div>
-      </Container>
-
-      <Footer />
+      </div>
 
       {/* The wire collapses to a single column on tablet/mobile; the rail drops
           below the feed and stops sticking. */}
@@ -318,36 +299,11 @@ export default function News() {
           .isl-rail { position: static !important; }
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
 
-// ── Page-head text styles (the prototype's `.isl-head`) ──────────────────────
-const eyebrowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  flexWrap: 'wrap',
-  color: DUST,
-};
-const titleStyle: CSSProperties = {
-  fontSize: 56,
-  fontWeight: 700,
-  lineHeight: 1,
-  textTransform: 'uppercase',
-  margin: '20px 0 0',
-};
-const ledeStyle: CSSProperties = {
-  fontSize: 16,
-  lineHeight: 1.6,
-  maxWidth: 760,
-  margin: '20px 0 0',
-  color: DUST,
-};
+// ── Text styles ──────────────────────────────────────────────────────────────
 const mutedNote: CSSProperties = {
   color: DUST_50,
   fontStyle: 'italic',

@@ -12,8 +12,8 @@
 //   - the prototype's pledge rail (stepper + CTA)  → real data + lore panels
 //
 // Layout (matches the prototype top → bottom):
-//   Header (global)
-//   I.   Page head        — `.isl-head` eyebrow breadcrumb + 56px title + lede
+//   PageShell (site header, main column, footer)
+//   I.   PageHeader          eyebrow, title and lede (shared/ui)
 //   II.  Two-column grid (1fr / 360px):
 //          LEFT  — the idol board: header row + idol rows on the grid
 //                    rank / player (name + position • club) / idol score /
@@ -23,7 +23,6 @@
 //          RIGHT — side rail: an "On the rise" panel surfacing the page's
 //                    existing top-of-board names, then a static "The risk"
 //                    lore panel.
-//   Footer (shared)
 //
 // Data sources (UNCHANGED from the previous build):
 //   - getIdolBoard(db, { globalLimit: GLOBAL_LIMIT })  — global leaderboard
@@ -37,8 +36,8 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
 import { Link } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, Footer } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell, StatBlock } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
@@ -146,31 +145,19 @@ export default function Idols() {
   const topScore = topRow ? scoreOf(topRow) : 0;
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
+    <PageShell>
+      {/* Page head: the shared PageHeader; the watched count that used to
+          ride in the eyebrow is its meta row once the board has loaded. */}
+      <PageHeader
+        eyebrow="Idols"
+        title="The Idol Board"
+        subtitle="Players ranked by total fan attention: a blend of who the cosmos claims as its favourites and who it spends its time on. The board does not explain itself. The why is yours to interpret."
+        {...(loaded && !loadError && board.length > 0
+          ? { meta: <StatBlock label="Watched" value={board.length} /> }
+          : {})}
+      />
 
-      <Container>
-        {/* Section I — page head (eyebrow breadcrumb + display title + lede). */}
-        <header style={{ padding: '48px 0 8px' }}>
-          <div style={eyebrowStyle}>
-            <span>Idols</span>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>The idol board</span>
-            {loaded && !loadError && board.length > 0 && (
-              <>
-                <span style={{ color: DUST_50 }}>•</span>
-                <span>{board.length} watched</span>
-              </>
-            )}
-          </div>
-          <h1 style={titleStyle}>The Idol Board</h1>
-          <p style={ledeStyle}>
-            Players ranked by total fan attention: a blend of who the cosmos claims as its
-            favourites and who it spends its time on. The board does not explain itself. The why is
-            yours to interpret.
-          </p>
-        </header>
-
+      <div>
         {/* Section II — two-column board + rail. */}
         <div
           className="isl-idols-layout"
@@ -212,9 +199,7 @@ export default function Idols() {
             </RailPanel>
           </aside>
         </div>
-      </Container>
-
-      <Footer />
+      </div>
 
       {/* The board + rail collapse to a single column below ~900px; the rail
           drops beneath the board. */}
@@ -223,36 +208,11 @@ export default function Idols() {
           .isl-idols-layout { grid-template-columns: 1fr !important; }
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
 
-// ── Page-head text styles (the prototype's `.isl-head`) ──────────────────────
-const eyebrowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  flexWrap: 'wrap',
-  color: DUST,
-};
-const titleStyle: CSSProperties = {
-  fontSize: 56,
-  fontWeight: 700,
-  lineHeight: 1,
-  textTransform: 'uppercase',
-  margin: '20px 0 0',
-};
-const ledeStyle: CSSProperties = {
-  fontSize: 16,
-  lineHeight: 1.6,
-  maxWidth: 760,
-  margin: '20px 0 0',
-  color: DUST,
-};
+// ── Text styles ──────────────────────────────────────────────────────────────
 const mutedNote: CSSProperties = {
   color: DUST_50,
   fontStyle: 'italic',

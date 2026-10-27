@@ -10,8 +10,8 @@
 //   atlas, not a stat sheet.
 //
 // LAYOUT (matches the prototype top → bottom)
-//   Header (global)
-//   I.   Page head     — `.isl-head` eyebrow breadcrumb + 56px title + lede
+//   PageShell (site header, main column, footer)
+//   I.   PageHeader       eyebrow, title and lede (shared/ui)
 //   II.  Toolbar       — entity search box + the KIND_GROUPS clickable legend
 //                        chips (active = Lunar-Dust fill, each carries its
 //                        kindColor swatch)
@@ -20,7 +20,6 @@
 //                  KindBadge + "View full profile ▸") over <RelationshipGraph>.
 //          RIGHT — dossier/picker rail: the filterable entity list (the
 //                  selection driver) + the selected entity's brief dossier.
-//   Footer (global)
 //
 // DATA STRATEGY
 //   On mount and on every filter-group change, `listEntities` fires a single
@@ -42,9 +41,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
 
-import Header from '../components/Header';
-import { COLORS, Container, Footer } from '../components/Layout';
-import { Button } from '../shared/ui';
+import { COLORS } from '../components/Layout';
+import { Button, PageHeader, PageShell } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { listEntities, RelationshipGraph, kindColor } from '../features/entities';
@@ -143,10 +141,6 @@ const KIND_GROUPS: ReadonlyArray<{
  */
 const LIST_LIMIT = 200;
 
-// Eyebrow breadcrumb — decorative cosmic-calendar flavour, matching the
-// prototype (and the app's existing decorative date glyphs on the other pages).
-const EYEBROW = ['World', 'The web of influence', 'Season cycle 014'];
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 /**
@@ -237,28 +231,16 @@ export default function World() {
     : null;
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
+    <PageShell>
+      {/* Page head: the shared PageHeader. The eyebrow names the section
+          (it used to carry a hard-coded "Season cycle 014"). */}
+      <PageHeader
+        eyebrow="World"
+        title="Everything Is Connected"
+        subtitle="Clubs, players, officials, the booth, the betting syndicate, and the unseen hand that moves them all. Search the galaxy or pick a tier below, then select an entity to trace its web of relationships."
+      />
 
-      <Container>
-        {/* ── Section I: Page head (eyebrow breadcrumb + display title + lede). */}
-        <header style={{ padding: '48px 0 8px' }}>
-          <div style={eyebrowStyle}>
-            {EYEBROW.map((part, i) => (
-              <span key={part} style={{ display: 'contents' }}>
-                {i > 0 && <span style={{ color: DUST_50 }}>•</span>}
-                <span>{part}</span>
-              </span>
-            ))}
-          </div>
-          <h1 style={titleStyle}>Everything Is Connected</h1>
-          <p style={ledeStyle}>
-            Clubs, players, officials, the booth, the betting syndicate, and the unseen hand
-            that moves them all. Search the galaxy or pick a tier below, then select an entity
-            to trace its web of relationships.
-          </p>
-        </header>
-
+      <div>
         {/* ── Section II: Toolbar — search box + clickable legend chips. */}
         <div
           style={{
@@ -426,9 +408,7 @@ export default function World() {
             </div>
           </aside>
         </div>
-      </Container>
-
-      <Footer />
+      </div>
 
       {/* The shell collapses to a single column on tablet/mobile; the rail drops
           below the graph and stops sticking. */}
@@ -438,36 +418,9 @@ export default function World() {
           .isl-rail { position: static !important; }
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
-
-// ── Page-head text styles (the prototype's `.isl-head`) ──────────────────────
-const eyebrowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  flexWrap: 'wrap',
-  color: DUST,
-};
-const titleStyle: CSSProperties = {
-  fontSize: 56,
-  fontWeight: 700,
-  lineHeight: 1,
-  textTransform: 'uppercase',
-  margin: '20px 0 0',
-};
-const ledeStyle: CSSProperties = {
-  fontSize: 16,
-  lineHeight: 1.6,
-  maxWidth: 760,
-  margin: '20px 0 0',
-  color: DUST,
-};
 
 // ── Graph-panel header (selected entity name + KindBadge + profile link). ────
 const graphHeaderStyle: CSSProperties = {
