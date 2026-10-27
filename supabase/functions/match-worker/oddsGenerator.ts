@@ -210,10 +210,7 @@ export async function ensureOddsForUpcoming(supabase: any): Promise<OddsGenerati
   const horizonISO = new Date(Date.now() + ODDS_HORIZON_HOURS * 3_600_000).toISOString();
 
   // Pull every scheduled match strictly inside the [now, now+horizon] window.
-  // We don't pre-filter to "missing odds" because PostgREST left-joins are
-  // awkward; instead we check existence per-match (a tiny SELECT each) which
-  // keeps the SQL straightforward and is still fast at 16 matches/day × 3
-  // days = ~48 rows.
+  // Existing odds are then looked up in ONE query (see below), not per match.
   //
   // The `.gte(scheduled_at, nowISO)` lower bound is essential: without it,
   // any stale `status='scheduled'` rows from the past (delayed/backlogged
@@ -238,18 +235,30 @@ export async function ensureOddsForUpcoming(supabase: any): Promise<OddsGenerati
   let priced = 0;
   let skipped = 0;
 
+  // Which of these matches are already priced?  ONE query for the whole
+  // horizon.  This used to be a SELECT per match, about 90 every two-minute
+  // tick in a 32-club season, and it was the largest steady load on the
+  // free-tier database.  If the lookup fails we price nothing this tick
+  // rather than fall back to per-match queries.
+  const ids = (upcoming as Array<{ id: string }>).map((m) => m.id);
+  const { data: pricedRows, error: pricedErr } = await supabase
+    .from('match_odds')
+    .select('match_id')
+    .in('match_id', ids);
+  if (pricedErr) {
+    console.warn(`[ensureOddsForUpcoming] odds lookup failed: ${pricedErr.message}`);
+    return { considered: upcoming.length, priced: 0, skipped: upcoming.length };
+  }
+  const alreadyPriced = new Set(
+    ((pricedRows ?? []) as Array<{ match_id: string }>).map((r) => r.match_id),
+  );
+
   for (const match of upcoming) {
     try {
       // Skip matches that already have an odds row.  Re-pricing on every
-      // cron tick would overwhelm the DB with no real benefit — once is
-      // plenty.  A future "refresh" path can DELETE+recompute on roster
-      // changes.
-      const { data: existing } = await supabase
-        .from('match_odds')
-        .select('match_id')
-        .eq('match_id', match.id)
-        .maybeSingle();
-      if (existing) { skipped += 1; continue; }
+      // cron tick would load the DB with no real benefit; once is plenty.
+      // A future "refresh" path can DELETE and recompute on roster changes.
+      if (alreadyPriced.has(match.id)) { skipped += 1; continue; }
 
       // Fetch both rosters in parallel — minimal columns for the rating
       // average + starter filter.
