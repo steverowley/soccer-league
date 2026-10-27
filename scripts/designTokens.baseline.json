@@ -114,11 +114,6 @@
   "src/pages/NotFound.tsx": {
     "fontSize": 1
   },
-  "src/pages/PlayerDetail.tsx": {
-    "colour": 2,
-    "fontSize": 8,
-    "letterSpacing": 4
-  },
   "src/pages/Privacy.tsx": {
     "fontSize": 2,
     "letterSpacing": 1

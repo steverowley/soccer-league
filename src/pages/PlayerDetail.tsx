@@ -15,13 +15,16 @@
 //           Exposing engine inputs breaks the Blaseball-inspired hidden-
 //           mechanics pillar.
 //
-// LAYOUT
+// LAYOUT (on the design language since the group 3 migration,
+// docs/design-language.md: SectionHeaders, Card / StatBlock / Tag, the
+// DataTable styles, no raw style values, no purple: purple is the
+// Architect's colour and keyboard focus, never a player page's labels)
 //   PageShell (site header, main column, footer)
 //   PageHeader: back link and crumbs to the club, club Crest, eyebrow
 //        "Players", the name as the uppercase h1, and a StatBlock meta row
 //        (position, number, age, club, origin, archetype, status)
 //   I.   Dossier            (only when an authored profile exists)
-//   II.  Season Stats       outcome stats from match_player_stats aggregate
+//   II.  Season statistics  outcome stats from match_player_stats aggregate
 //   III. Idol Standing      global rank + popularity data from player_idol_score
 //   IV.  Recent Matches     last N appearances with opponent + W/D/L + line
 //   V.   Narrative Mentions narratives referencing this player's entity_id
@@ -35,11 +38,30 @@
 //   without blocking the hero.  Unknown playerId → error state (no redirect,
 //   URL stays, inline error surface — same pattern as TeamDetail).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { withTimeout, isTimeoutError } from '../shared/hooks/useAsyncData';
-import { Crest, ErrorState, PageHeader, PageShell, StatBlock, toRoman } from '../shared/ui';
+import {
+  Card,
+  Crest,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  FactGrid,
+  FactRows,
+  FormPip,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  SectionHeader,
+  StatBlock,
+  Tag,
+  dataCell,
+  dataHead,
+  toRoman,
+} from '../shared/ui';
+import { color, numeric, space, tone, type } from '../shared/design';
+import { ordinal } from '../shared/utils/rankLabels';
 import { useParams, Link } from 'react-router-dom';
-import { COLORS } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getPlayer, getPlayerIdolRank } from '../features/match';
 import {
@@ -50,18 +72,6 @@ import {
 } from '../features/match';
 import { RelationshipGraph, getEntityProfile } from '../features/entities';
 import { TEAMS_BY_LEAGUE } from '../data/leagueData';
-
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const {
-  dust:      DUST,
-  quantum:   QUANTUM,
-  flare:     FLARE,
-  terraNova: TERRA,
-  hairline:  HAIRLINE,
-  phobosAsh: PHOBOS,
-} = COLORS;
-const DUST_50 = COLORS.dust50;
-const DUST_70 = COLORS.dust70;
 
 // ── Club colours ──────────────────────────────────────────────────────────────
 // getPlayer's team join carries only id and name, so the crest takes the club
@@ -278,126 +288,80 @@ export default function PlayerDetail() {
           (one h1 in every state) and the meta row is omitted. */}
       <PlayerHeader player={playerDone ? player : null} />
 
-      <div>
-        {/* ── Dossier ──────────────────────────────────────────────────
-            Authored narrative profile from entities.meta.profile (bio,
-            appearance, personality, allegiances, achievements). Hidden
-            entirely when the player has no authored profile yet. Its
-            divider sits after it: the PageHeader's bottom hairline already
-            separates the first section from the header. */}
-        {profile && (
-          <>
-            <section aria-labelledby="dossier-heading">
-                <div style={{ padding: '40px 0' }}>
-                  <SectionLabel id="dossier-heading" kicker={nextIndex()} title="Dossier" />
-                  <PlayerDossier profile={profile} />
-                </div>
-            </section>
-            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
-          </>
+      {/* ── Dossier ──────────────────────────────────────────────────
+          Authored narrative profile from entities.meta.profile (bio,
+          appearance, personality, allegiances, achievements). Hidden
+          entirely when the player has no authored profile yet. */}
+      {profile && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Profile" title="Dossier" />
+          <PlayerDossier profile={profile} />
+        </section>
+      )}
+
+      {/* ── Season statistics ─────────────────────────────────────────── */}
+      <section>
+        <SectionHeader index={nextIndex()} label="Season" title="Season statistics" />
+        {!playerDone ? (
+          <LoadingState label="Loading season statistics" />
+        ) : player ? (
+          <StatsGrid stats={player.seasonStats} />
+        ) : null}
+      </section>
+
+      {/* ── Idol standing ──────────────────────────────────────────────── */}
+      <section>
+        <SectionHeader index={nextIndex()} label="Idols" title="Idol standing" />
+        {!idolDone ? (
+          <LoadingState label="Loading idol standing" />
+        ) : idol ? (
+          <IdolPanel idol={idol} />
+        ) : (
+          <EmptyState centred={false}>Not yet ranked in the cosmos.</EmptyState>
         )}
+      </section>
 
-        {/* ── Season Stats ─────────────────────────────────────────────── */}
-                <section aria-labelledby="stats-heading">
-            <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="stats-heading" kicker={nextIndex()} title="Season Statistics" />
-
-              {!playerDone ? (
-                <Skeleton height={100} />
-              ) : player ? (
-                <StatsGrid stats={player.seasonStats} />
-              ) : null}
-            </div>
-        </section>
-
-        <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
-
-        {/* ── Idol Standing ────────────────────────────────────────── */}
-        <section aria-labelledby="idol-heading">
-            <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="idol-heading" kicker={nextIndex()} title="Idol Standing" />
-
-              {!idolDone ? (
-                <Skeleton height={80} />
-              ) : idol ? (
-                <IdolPanel idol={idol} />
-              ) : (
-                <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
-                  Not yet ranked in the cosmos.
-                </p>
-              )}
-            </div>
-        </section>
-
-        <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
-
-        {/* ── Recent Matches ─────────────────────────────────────────
-            Sourced from `match_lineups` (one row per starter) with a
-            LEFT JOIN to `match_player_stats` for the contribution
-            columns — see getPlayerRecentMatches in playerStats.ts.
-            A defender with 30 clean sheets shows 30 rows; the
-            contribution columns just read as zeros for quiet shifts
-            (isl-pfm). */}
-        <section aria-labelledby="matches-heading">
-            <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="matches-heading" kicker={nextIndex()} title="Recent Matches" />
-
-              {!matchesDone ? (
-                <Skeleton height={120} />
-              ) : recentMatches.length > 0 ? (
-                <RecentMatchesTable rows={recentMatches} />
-              ) : (
-                <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
-                  No recorded appearances yet.
-                </p>
-              )}
-            </div>
-        </section>
-
-        <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
-
-        {/* ── Narrative Mentions ───────────────────────────────────── */}
-        <section aria-labelledby="narratives-heading">
-            <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="narratives-heading" kicker={nextIndex()} title="Narrative Mentions" />
-
-              {!narrativesDone ? (
-                <Skeleton height={100} />
-              ) : narratives.length > 0 ? (
-                <NarrativeList rows={narratives} />
-              ) : (
-                <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
-                  The cosmos has not yet whispered their name.
-                </p>
-              )}
-            </div>
-        </section>
-
-        {/* ── Web of Influence (issue isl-uwq) ─────────────────────
-            Drop-in <RelationshipGraph> hub showing the player's
-            connections to managers, rivals, mentors, journalists, etc.
-            Hidden when the player row has no entity_id link (legacy
-            seeds before migration 0002 added the FK).  Section sits
-            between Narrative Mentions and the footer so the read flow
-            ends on the broader web of connections rather than the
-            narrower per-mention feed above. */}
-        {player?.entity_id && (
-          <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+      {/* ── Recent matches ─────────────────────────────────────────────
+          Sourced from `match_lineups` (one row per starter) with a LEFT
+          JOIN to `match_player_stats` for the contribution columns (see
+          getPlayerRecentMatches in playerStats.ts). A defender with 30
+          clean sheets shows 30 rows; the contribution columns just read
+          as zeros for quiet shifts (isl-pfm). */}
+      <section>
+        <SectionHeader index={nextIndex()} label="Appearances" title="Recent matches" />
+        {!matchesDone ? (
+          <LoadingState label="Loading recent matches" />
+        ) : recentMatches.length > 0 ? (
+          <RecentMatchesTable rows={recentMatches} />
+        ) : (
+          <EmptyState centred={false}>No recorded appearances yet.</EmptyState>
         )}
-        {player?.entity_id && (
-          <section aria-labelledby="connections-heading">
-              <div style={{ padding: '40px 0 80px' }}>
-                <SectionLabel id="connections-heading" kicker={nextIndex()} title="Web of Influence" />
-                <RelationshipGraph entityId={player.entity_id} />
-              </div>
-          </section>
-        )}
+      </section>
 
-        {/* Maintain the previous bottom padding when there's no
-            relationship-graph section so the footer doesn't kiss the
-            narratives feed. */}
-        {!player?.entity_id && <div style={{ padding: '0 0 40px' }} />}
-      </div>
+      {/* ── Narrative mentions ─────────────────────────────────────────── */}
+      <section>
+        <SectionHeader index={nextIndex()} label="In the press" title="Narrative mentions" />
+        {!narrativesDone ? (
+          <LoadingState label="Loading narrative mentions" />
+        ) : narratives.length > 0 ? (
+          <NarrativeList rows={narratives} />
+        ) : (
+          <EmptyState centred={false}>The cosmos has not yet whispered their name.</EmptyState>
+        )}
+      </section>
+
+      {/* ── Web of influence (issue isl-uwq) ──────────────────────────
+          Drop-in <RelationshipGraph> hub showing the player's connections
+          to managers, rivals, mentors, journalists, etc. Hidden when the
+          player row has no entity_id link (legacy seeds before migration
+          0002 added the FK). Last, so the read ends on the broader web
+          rather than the narrower per-mention feed above. */}
+      {player?.entity_id && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Connections" title="Web of influence" />
+          <RelationshipGraph entityId={player.entity_id} />
+        </section>
+      )}
     </PageShell>
   );
 }
@@ -406,12 +370,15 @@ export default function PlayerDetail() {
 
 /**
  * Dossier block: renders the authored narrative profile (entities.meta.profile)
- * for a player — a lead bio paragraph, a grid of identity facts, and the
- * achievements list. Defensive against missing/mistyped fields since the
- * profile arrives as an untyped JSON bag; any empty field is simply omitted.
+ * for a player: a lead bio paragraph, a FactGrid of identity facts, and the
+ * achievements as FactRows. Defensive against missing/mistyped fields since
+ * the profile arrives as an untyped JSON bag; any empty field is omitted.
  *
- * Note: deliberately surfaces NO raw stat numbers — only the narrative,
+ * Note: deliberately surfaces NO raw stat numbers, only the narrative,
  * world-as-real fields, per the project's hidden-mechanics non-goal.
+ *
+ * @param profile  The untyped profile bag.
+ * @returns        The dossier body.
  */
 function PlayerDossier({ profile }: { profile: Record<string, unknown> }) {
   const str = (k: string): string => (typeof profile[k] === 'string' ? (profile[k] as string) : '');
@@ -427,45 +394,18 @@ function PlayerDossier({ profile }: { profile: Record<string, unknown> }) {
       ['Gender', str('gender')],
       ['Appearance', str('appearance')],
       ['Personality', str('personality')],
-      ['Political Leaning', str('political_leaning')],
+      ['Political leaning', str('political_leaning')],
       ['Culture', str('culture')],
       ['Fitness', str('injuries')],
     ] as Array<[string, string]>
   ).filter(([, v]) => v.length > 0);
 
   return (
-    <div>
-      {bio && (
-        <p style={{ ...VALUE_STYLE, color: DUST_50, lineHeight: 1.7, maxWidth: 760, marginBottom: 28 }}>
-          {bio}
-        </p>
-      )}
-      {facts.length > 0 && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 24,
-            marginBottom: achievements.length > 0 ? 28 : 0,
-          }}
-        >
-          {facts.map(([label, value]) => (
-            <div key={label}>
-              <p style={{ ...LABEL_STYLE, color: QUANTUM, marginBottom: 6 }}>{label}</p>
-              <p style={{ ...VALUE_STYLE, color: DUST_50, margin: 0 }}>{value}</p>
-            </div>
-          ))}
-        </div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+      {bio && <p style={{ ...type.body, ...tone.primary, margin: 0, maxWidth: '70ch' }}>{bio}</p>}
+      {facts.length > 0 && <FactGrid facts={facts} minColumn={180} />}
       {achievements.length > 0 && (
-        <div>
-          <p style={{ ...LABEL_STYLE, color: QUANTUM, marginBottom: 8 }}>Achievements</p>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {achievements.map((a) => (
-              <li key={a} style={{ ...VALUE_STYLE, color: DUST_50, marginBottom: 4 }}>{a}</li>
-            ))}
-          </ul>
-        </div>
+        <FactRows label="Achievements" items={achievements.map((a) => ({ key: a, content: a }))} />
       )}
     </div>
   );
@@ -513,9 +453,14 @@ function PlayerHeader({ player }: { player: PlayerWithStats | null }) {
             />
           )}
           {player.nationality && <StatBlock label="Origin" value={player.nationality} />}
-          {player.personality && <StatBlock label="Archetype" value={player.personality} />}
-          {!player.is_active && <StatBlock label="Status" value="Inactive" valueTone="live" />}
-          {player.is_active && player.starter && <StatBlock label="Status" value="Starter" valueTone="success" />}
+          {/* Archetypes are stored lower case ("balanced"); shown as words. */}
+          {player.personality && (
+            <StatBlock label="Archetype" value={player.personality.charAt(0).toUpperCase() + player.personality.slice(1)} />
+          )}
+          {/* Neutral: inactive is a status, not an error, and starting is
+              not an outcome (red and green keep their meanings). */}
+          {!player.is_active && <StatBlock label="Status" value="Inactive" />}
+          {player.is_active && player.starter && <StatBlock label="Status" value="Starter" />}
         </>
       }
     />
@@ -523,257 +468,208 @@ function PlayerHeader({ player }: { player: PlayerWithStats | null }) {
 }
 
 /**
- * Six-cell stats grid: goals, assists, minutes, matches, yellow cards, red
- * cards.  Average rating occupies its own cell when non-null.
+ * Season statistics as StatBlocks in one hairline Card: goals, assists,
+ * matches, minutes, yellow and red cards, and the average rating when there
+ * is one. The card counts carry a drawn card glyph beside the label (the
+ * yellow-card token and the live red); the figures stay in the text tone.
  *
  * WHY THESE STATS
  *   These are outcome stats (what happened in matches), not engine inputs
- *   (the hidden skill attributes).  Showing outcomes keeps the Blaseball-
- *   style hidden-mechanics contract intact — fans can see "scored 12 goals"
+ *   (the hidden skill attributes). Showing outcomes keeps the Blaseball-
+ *   style hidden-mechanics contract intact: fans can see "scored 12 goals"
  *   without seeing "attacking = 88".
+ *
+ * @param stats  The season aggregate.
+ * @returns      The card.
  */
 function StatsGrid({ stats }: { stats: SeasonStats }) {
-  const cells: Array<{ label: string; value: string; accent?: string }> = [
-    { label: 'Goals',         value: String(stats.goals)                              },
-    { label: 'Assists',       value: String(stats.assists)                            },
-    { label: 'Matches',       value: String(stats.matches_played)                     },
-    { label: 'Minutes',       value: stats.minutes_played.toLocaleString('en-GB')     },
-    { label: 'Yellow Cards',  value: String(stats.yellow_cards), accent: '#F5C518'    },
-    { label: 'Red Cards',     value: String(stats.red_cards),    accent: FLARE        },
+  const cells: Array<{ label: ReactNode; key: string; value: string }> = [
+    { key: 'goals',   label: 'Goals',   value: String(stats.goals) },
+    { key: 'assists', label: 'Assists', value: String(stats.assists) },
+    { key: 'matches', label: 'Matches', value: String(stats.matches_played) },
+    { key: 'minutes', label: 'Minutes', value: stats.minutes_played.toLocaleString('en-GB') },
+    { key: 'yellow',  label: <><CardGlyph kind="yellow" /> Yellow cards</>, value: String(stats.yellow_cards) },
+    { key: 'red',     label: <><CardGlyph kind="red" /> Red cards</>,       value: String(stats.red_cards) },
     ...(stats.avg_rating != null
-      ? [{ label: 'Avg Rating', value: stats.avg_rating.toFixed(1), accent: TERRA }]
+      ? [{ key: 'rating', label: 'Avg rating', value: stats.avg_rating.toFixed(1) }]
       : []),
   ];
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-      gap: 1,
-      background: HAIRLINE,
-    }}>
-      {cells.map(({ label, value, accent }) => (
-        <div
-          key={label}
-          style={{
-            background: PHOBOS,
-            padding: '20px 18px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
-          }}
-        >
-          <p style={{ ...LABEL_STYLE, margin: 0 }}>{label}</p>
-          <p style={{
-            fontSize: 22,
-            fontWeight: 700,
-            color: accent ?? DUST,
-            margin: 0,
-            fontVariantNumeric: 'tabular-nums',
-          }}>
-            {value}
-          </p>
-        </div>
-      ))}
-    </div>
+    <Card>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: space[24] }}>
+        {cells.map((c) => (
+          <StatBlock key={c.key} label={c.label} value={c.value} />
+        ))}
+      </div>
+    </Card>
   );
 }
 
 /**
- * Idol standing panel: global rank, team rank, fan favourites, and 14-day
- * training activity.  These numbers are the universe's measure of a player's
- * cultural weight — distinct from their on-pitch stats.
+ * Idol standing as StatBlocks in one hairline Card: global and club rank
+ * (as ordinals), fan favourites and 14-day training activity. These numbers
+ * are the universe's measure of a player's cultural weight, distinct from
+ * their on-pitch stats.
  *
  * WHY TRAINING COUNT IS 14D
- *   Training log clicks decay — only the last 14 days feed into the idol
+ *   Training log clicks decay: only the last 14 days feed into the idol
  *   score so recently-hot players rank higher than all-time stalwarts who
- *   no one trains anymore.  The panel shows `training_count_14d` so the
- *   label matches the actual window.
+ *   no one trains anymore. The label says the window.
+ *
+ * @param idol  The player's idol rank row.
+ * @returns     The card.
  */
 function IdolPanel({ idol }: { idol: IdolRank }) {
   const cells = [
-    { label: 'Global Rank',       value: `#${idol.global_rank}`                      },
-    { label: 'Club Rank',         value: `#${idol.team_rank}`                        },
-    { label: 'Fan Favourites',    value: idol.favourite_count.toLocaleString('en-GB') },
-    { label: 'Training (14 days)',value: idol.training_count.toLocaleString('en-GB') },
+    { label: 'Global rank',        value: ordinal(idol.global_rank) },
+    { label: 'Club rank',          value: ordinal(idol.team_rank) },
+    { label: 'Fan favourites',     value: idol.favourite_count.toLocaleString('en-GB') },
+    { label: 'Training (14 days)', value: idol.training_count.toLocaleString('en-GB') },
     ...(idol.idol_score != null
-      ? [{ label: 'Idol Score', value: idol.idol_score.toLocaleString('en-GB') }]
+      ? [{ label: 'Idol score', value: idol.idol_score.toLocaleString('en-GB') }]
       : []),
   ];
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-      gap: 1,
-      background: HAIRLINE,
-    }}>
-      {cells.map(({ label, value }) => (
-        <div
-          key={label}
-          style={{
-            background: PHOBOS,
-            padding: '20px 18px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
-          }}
-        >
-          <p style={{ ...LABEL_STYLE, margin: 0 }}>{label}</p>
-          <p style={{
-            fontSize: 22,
-            fontWeight: 700,
-            color: QUANTUM,
-            margin: 0,
-            fontVariantNumeric: 'tabular-nums',
-          }}>
-            {value}
-          </p>
-        </div>
-      ))}
-    </div>
+    <Card>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: space[24] }}>
+        {cells.map(({ label, value }) => (
+          <StatBlock key={label} label={label} value={value} />
+        ))}
+      </div>
+    </Card>
   );
 }
 
 /**
- * Recent Matches table — one row per appearance, newest first.
+ * Recent matches in the DataTable styles: one row per appearance, newest
+ * first, scrolling inside its own box on a phone.
  *
- * Each row links the opponent name to `/matches/:matchId` so a reader
- * can jump from the player profile straight into the match detail.  We
- * deliberately keep the rendered columns tight (Date · Opponent · Result
- * · G · A · Min · ⭐) so the table reads as a quick activity log rather
- * than a stats dump — the season aggregate up in II already covers the
- * "totals" surface.
+ * Each row links the opponent name to `/matches/:matchId` so a reader can
+ * jump from the player profile straight into the match. The columns stay
+ * tight (Date, Opponent, Result, G, A, Min, Rating, Cards) so the table
+ * reads as an activity log; the season aggregate above covers the totals.
  *
- * VISUAL TREATMENT FOR RESULT
- *   W → Terra Nova green, L → Flare red, D → Dust grey.  Mirrors the
- *   convention used by the StandingsTable and the MatchCard chips so
- *   colour semantics stay consistent across the app.
+ * RESULT: the shared FormPip tile, W in the success colour, D and L
+ * neutral (red means live or went wrong, never a loss).
+ *
+ * @param rows  The appearances.
+ * @returns     The table.
  */
 function RecentMatchesTable({ rows }: { rows: PlayerRecentMatch[] }) {
   return (
-    <div style={{ border: `1px solid ${HAIRLINE}` }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-            <th style={th(120)}>Date</th>
-            <th style={th()}>Opponent</th>
-            <th style={{ ...th(60),  textAlign: 'center' }}>Res.</th>
-            <th style={{ ...th(48),  textAlign: 'right'  }}>G</th>
-            <th style={{ ...th(48),  textAlign: 'right'  }}>A</th>
-            <th style={{ ...th(64),  textAlign: 'right'  }}>Min</th>
-            <th style={{ ...th(72),  textAlign: 'right'  }}>Rating</th>
-            <th style={{ ...th(56),  textAlign: 'right'  }}>Cards</th>
+    <DataTable caption="Recent matches" minWidth={560}>
+      <thead>
+        <tr>
+          <th scope="col" style={dataHead('left', 96)}>Date</th>
+          <th scope="col" style={dataHead()}>Opponent</th>
+          <th scope="col" style={dataHead('center', 64)}>Result</th>
+          <th scope="col" style={dataHead('right', 48)}>G</th>
+          <th scope="col" style={dataHead('right', 48)}>A</th>
+          <th scope="col" style={dataHead('right', 56)}>Min</th>
+          <th scope="col" style={dataHead('right', 72)}>Rating</th>
+          <th scope="col" style={dataHead('right', 64)}>Cards</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.matchId}>
+            <td style={{ ...dataCell(), ...tone.secondary, whiteSpace: 'nowrap' }}>{formatDate(r.date)}</td>
+            <td style={{ ...dataCell(), fontWeight: 700 }}>
+              {/* The opponent links to the match, so the row doubles as an
+                  "open the match" affordance. "vs" / "@" encodes home or
+                  away without a separate column. */}
+              <Link
+                to={`/matches/${r.matchId}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: space[8], color: color.text, textDecoration: 'none' }}
+              >
+                <span style={{ ...tone.tertiary, fontWeight: 400 }}>{r.isHome ? 'vs' : '@'}</span>
+                {r.opponent && <Crest color={TEAM_COLOR.get(r.opponent.id) ?? null} size={16} />}
+                {r.opponent?.name ?? '\u2014'}
+              </Link>
+            </td>
+            <td style={dataCell('center')}>
+              <FormPip result={r.result} />
+            </td>
+            <td style={dataCell('right')}>{r.goals}</td>
+            <td style={dataCell('right')}>{r.assists}</td>
+            <td style={{ ...dataCell('right'), ...tone.secondary }}>{r.minutes}</td>
+            <td style={{ ...dataCell('right'), ...(r.rating != null ? tone.primary : tone.tertiary) }}>
+              {r.rating != null ? r.rating.toFixed(1) : '\u2014'}
+            </td>
+            <td style={dataCell('right')}>
+              <CardsCell yellow={r.yellowCards} red={r.redCards} />
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.matchId} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-              <td style={{ ...td, color: DUST_70 }}>{formatDate(r.date)}</td>
-              <td style={td}>
-                {/* Opponent name links straight to the match detail page so
-                    the row doubles as a "open the match" affordance. */}
-                <Link
-                  to={`/matches/${r.matchId}`}
-                  style={{ color: DUST, textDecoration: 'none' }}
-                >
-                  {/* The vs / @ prefix encodes home/away without a separate
-                      column — fewer columns, same information density. */}
-                  <span style={{ color: DUST_50, marginRight: 6 }}>
-                    {r.isHome ? 'vs' : '@'}
-                  </span>
-                  {r.opponent?.name ?? '—'}
-                </Link>
-              </td>
-              <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>
-                <ResultPill result={r.result} />
-              </td>
-              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {r.goals}
-              </td>
-              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {r.assists}
-              </td>
-              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: DUST_70 }}>
-                {r.minutes}
-              </td>
-              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.rating != null ? TERRA : DUST_50 }}>
-                {r.rating != null ? r.rating.toFixed(1) : '—'}
-              </td>
-              <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                <CardsCell yellow={r.yellowCards} red={r.redCards} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }
 
 /**
- * Coloured one-letter pill encoding the result of a single appearance.
- * Renders an em-dash for `null` (a row joined to an unsimulated match).
+ * Yellow and red cards for one match.
  *
- * COLOUR MAP
- *   W → Terra Nova (#5DE0A6) — the canonical "win" hue in the design system
- *   D → Dust 70%               — neutral grey, no opinion
- *   L → Flare (#FF4F5E)        — the canonical "loss" hue
- */
-function ResultPill({ result }: { result: 'W' | 'D' | 'L' | null }) {
-  if (result == null) return <span style={{ color: DUST_50 }}>—</span>;
-  const color = result === 'W' ? TERRA : result === 'L' ? FLARE : DUST_70;
-  return (
-    <span style={{
-      color,
-      fontWeight: 700,
-      letterSpacing: '0.04em',
-    }}>
-      {result}
-    </span>
-  );
-}
-
-/**
- * Single-cell representation of yellow + red cards for a match.
+ * A dash when the player took no cards (the common case), so the column
+ * does not churn the eye with a wall of zeros. Otherwise a drawn card glyph
+ * for each colour, with a count prefix above one (rare: a second yellow
+ * converts to red).
  *
- * Renders "—" when the player took no cards (the common case) so the
- * column doesn't churn the eye with a wall of zeros.  Otherwise emits
- * up to two coloured glyphs: a 🟨 (yellow, #F5C518) for each yellow,
- * and a 🟥 (red, FLARE) when the player saw red.  Numbers above 1
- * (rare — a second yellow always converts to red) print as `Nx`.
+ * @param yellow  Yellow cards in the match.
+ * @param red     Red cards in the match.
+ * @returns       The cell content.
  */
 function CardsCell({ yellow, red }: { yellow: number; red: number }) {
   if (yellow === 0 && red === 0) {
-    return <span style={{ color: DUST_50 }}>—</span>;
+    return <span style={tone.tertiary}>{'\u2014'}</span>;
   }
+  const parts: string[] = [];
+  if (yellow > 0) parts.push(`${yellow} yellow`);
+  if (red > 0) parts.push(`${red} red`);
   return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'baseline' }}>
-      {yellow > 0 && (
-        <span style={{ color: '#F5C518' }}>
-          {yellow > 1 ? `${yellow}×` : ''}■
-        </span>
-      )}
-      {red > 0 && (
-        <span style={{ color: FLARE }}>
-          {red > 1 ? `${red}×` : ''}■
-        </span>
-      )}
+    <span
+      aria-label={parts.join(', ')}
+      style={{ ...numeric, display: 'inline-flex', gap: space[8], alignItems: 'center', justifyContent: 'flex-end' }}
+    >
+      {yellow > 0 && <span>{yellow > 1 ? `${yellow}\u00D7 ` : ''}<CardGlyph kind="yellow" /></span>}
+      {red > 0 && <span>{red > 1 ? `${red}\u00D7 ` : ''}<CardGlyph kind="red" /></span>}
     </span>
   );
 }
 
 /**
- * Narrative Mentions list — one card per narrative, newest first.
+ * A drawn referee's card: a small upright rectangle in the yellow-card
+ * token or the live red (spec section 4). Drawn rather than a text glyph,
+ * which some platforms render as an emoji square.
  *
- * Each card carries the narrative kind (small-caps), a relative
- * timestamp, and the summary text.  Pundit takes render in italics
- * inside quote marks to match the News page treatment so the same
- * narrative reads identically in both surfaces.
+ * @param kind  'yellow' or 'red'.
+ * @returns     A decorative span (the text beside it names the card).
+ */
+function CardGlyph({ kind }: { kind: 'yellow' | 'red' }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: 'inline-block',
+        width: space[8],
+        height: space[12],
+        verticalAlign: 'middle',
+        background: kind === 'yellow' ? color.cardYellow : color.live,
+      }}
+    />
+  );
+}
+
+/**
+ * Narrative mentions, newest first, one Card each.
+ *
+ * @param rows  The mentions.
+ * @returns     The list.
  */
 function NarrativeList({ rows }: { rows: NarrativeMention[] }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
       {rows.map((n) => (
         <NarrativeCard key={n.id} narrative={n} />
       ))}
@@ -782,48 +678,33 @@ function NarrativeList({ rows }: { rows: NarrativeMention[] }) {
 }
 
 /**
- * Single narrative card — kind + relative time header above the summary.
- *
- * Pundit takes (kind === 'pundit_takes') get the italic + curly-quote
- * treatment, mirroring the News page so the cosmetics don't drift
- * between surfaces.
+ * One narrative: the kind as a neutral Tag and a relative time above the
+ * summary. Pundit takes (kind === 'pundit_takes') are italic inside curly
+ * quotes, as on the News page, so the same narrative reads the same in
+ * both places.
  *
  * @param narrative  Validated NarrativeMention row.
+ * @returns          The card.
  */
 function NarrativeCard({ narrative }: { narrative: NarrativeMention }) {
   const isPundit = narrative.kind === 'pundit_takes';
   return (
-    <article style={{
-      border:     `1px solid ${HAIRLINE}`,
-      background: PHOBOS,
-      padding:    16,
-    }}>
-      <header style={{
-        display:        'flex',
-        justifyContent: 'space-between',
-        alignItems:     'baseline',
-        marginBottom:   10,
-        gap:            12,
-      }}>
-        <span style={{ ...LABEL_STYLE, color: QUANTUM }}>
-          {prettifyKind(narrative.kind)}
-        </span>
-        <span style={{ ...LABEL_STYLE, color: DUST_50, fontWeight: 400 }}>
-          {formatRelativeTime(narrative.created_at)}
-        </span>
-      </header>
-      <p style={{
-        fontSize:   14,
-        lineHeight: 1.6,
-        color:      DUST,
-        fontStyle:  isPundit ? 'italic' : 'normal',
-        margin:     0,
-      }}>
-        {isPundit ? `“${narrative.summary}”` : narrative.summary}
-      </p>
-    </article>
+    <Card>
+      <article style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+        <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: space[12] }}>
+          <Tag>{prettifyKind(narrative.kind)}</Tag>
+          <span style={{ ...type.label, ...tone.tertiary }}>
+            {formatRelativeTime(narrative.created_at)}
+          </span>
+        </header>
+        <p style={{ ...type.body, ...tone.primary, fontStyle: isPundit ? 'italic' : 'normal', margin: 0, maxWidth: '70ch' }}>
+          {isPundit ? `\u201C${narrative.summary}\u201D` : narrative.summary}
+        </p>
+      </article>
+    </Card>
   );
 }
+
 
 // ── Sub-section formatting helpers ────────────────────────────────────────────
 
@@ -886,95 +767,3 @@ function prettifyKind(key: string): string {
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
-// ── Recent Matches table style tokens ─────────────────────────────────────────
-// Mirrors the squadTd / squadTh pattern from TeamDetail.tsx so the two
-// detail pages share visual rhythm.
-
-/** Body cell — base style applied via spread; per-cell overrides handle alignment. */
-const td: React.CSSProperties = {
-  textAlign: 'left',
-  padding:   '12px 14px',
-  color:     DUST,
-};
-
-/** Header cell factory — width is optional to let the Opponent column flex. */
-const th = (width?: number | string): React.CSSProperties => ({
-  textAlign:     'left',
-  padding:       '12px 14px',
-  fontSize:      11,
-  fontWeight:    700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.14em',
-  color:         DUST_70,
-  width,
-});
-
-// ── Primitive components ──────────────────────────────────────────────────────
-
-/**
- * Section label with a roman-numeral kicker above the title.
- * Matches the editorial-header style used on the admin dashboard and
- * other detail pages in the ISL design system.
- */
-function SectionLabel({ id, kicker, title }: {
-  id:     string;
-  kicker: string;
-  title:  string;
-}) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <p style={{ ...LABEL_STYLE, color: DUST_50, marginBottom: 6 }}>{kicker}</p>
-      <h2
-        id={id}
-        style={{
-          fontSize: 18,
-          fontWeight: 700,
-          color: DUST,
-          margin: 0,
-          letterSpacing: '-0.01em',
-        }}
-      >
-        {title}
-      </h2>
-    </div>
-  );
-}
-
-/**
- * Generic panel skeleton — a flat rectangle in Phobos Ash matching the
- * admin dashboard's Skeleton component convention.
- *
- * @param height  Pixel height of the placeholder block.
- */
-function Skeleton({ height }: { height: number }) {
-  return (
-    <div style={{
-      height,
-      background: PHOBOS,
-      border: `1px solid ${HAIRLINE}`,
-      opacity: 0.6,
-    }} />
-  );
-}
-
-// ── Shared style constants ────────────────────────────────────────────────────
-// Extracted here (rather than repeated inline) so JSX bodies stay readable.
-// These mirror the tokens used in the Admin and MatchDetail pages.
-
-/** Uppercase mono label used for field names, kickers, and table headers. */
-const LABEL_STYLE: React.CSSProperties = {
-  fontSize:      11,
-  fontWeight:    700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.14em',
-  color:         DUST_50,
-};
-
-/** Value display — slightly larger mono for data values. */
-const VALUE_STYLE: React.CSSProperties = {
-  fontSize:   13,
-  fontWeight: 400,
-  color:      DUST,
-};
-
