@@ -48,3 +48,32 @@ export interface StandingsTieFields {
 export function standingsTieKey(row: StandingsTieFields): string {
   return `${row.points ?? 0}|${row.gd ?? 0}|${row.gf ?? 0}`;
 }
+
+/**
+ * English ordinal for a place: 1 -> "1st", 12 -> "12th", 22 -> "22nd".
+ * Roman numerals are reserved for section indexes (spec section 7), so a
+ * league place reads as an ordinal.
+ *
+ * @param n  A 1-based place.
+ * @returns  The ordinal.
+ */
+export function ordinal(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  const suffix = ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
+/**
+ * A rank label from rankLabels() as a place in prose: a tie keeps its
+ * "=N" form (so two clubs never both read "2nd"), anything else becomes
+ * an ordinal.
+ *
+ * @param label  "3" or "=3".
+ * @returns      "3rd" or "=3".
+ */
+export function placeLabel(label: string): string {
+  if (label.startsWith('=')) return label;
+  const n = Number(label);
+  return Number.isFinite(n) && n > 0 ? ordinal(n) : label;
+}

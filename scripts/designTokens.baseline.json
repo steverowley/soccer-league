@@ -145,11 +145,6 @@
     "letterSpacing": 13,
     "dust": 2
   },
-  "src/pages/Teams.tsx": {
-    "fontSize": 12,
-    "letterSpacing": 4,
-    "dust": 3
-  },
   "src/pages/Terms.tsx": {
     "fontSize": 2,
     "letterSpacing": 1

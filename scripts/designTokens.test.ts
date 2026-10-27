@@ -59,6 +59,11 @@ const MIGRATED = [
   'src/pages/MatchDetail.tsx',
   'src/components/TeachingStrip.tsx',
   'src/components/WagerWidget.tsx',
+  // Group 3: clubs and people, and the shared pieces they introduced.
+  'src/pages/Teams.tsx',
+  'src/shared/ui/FormStrip.tsx',
+  'src/shared/ui/DataTable.tsx',
+  'src/shared/ui/FactList.tsx',
 ];
 
 const root = process.cwd();
