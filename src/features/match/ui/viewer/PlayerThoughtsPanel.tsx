@@ -45,8 +45,14 @@ const STAT_FIELDS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'technical', label: 'Technical' },
 ];
 
-/** Small uppercase heading inside the panel: the label type, secondary tone. */
-const HEADING: CSSProperties = { ...type.label, ...tone.secondary, margin: 0, marginBottom: space[8] };
+/**
+ * Small uppercase heading inside the panel: the label type, secondary tone.
+ * A function so the preset spread is not a top-level side effect (which
+ * would keep this module in the entry bundle via the match barrel).
+ */
+function heading(): CSSProperties {
+  return { ...type.label, ...tone.secondary, margin: 0, marginBottom: space[8] };
+}
 
 /** What we resolve for a selected player. */
 interface PlayerInspect {
@@ -170,7 +176,7 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
       </div>
 
       {/* Engine stats (admin) */}
-      <h3 style={HEADING}>Engine stats <span style={tone.tertiary}>· admin view</span></h3>
+      <h3 style={heading()}>Engine stats <span style={tone.tertiary}>· admin view</span></h3>
       <div style={{ marginBottom: space[16] }}>
         {STAT_FIELDS.map((s) => (
           <StatBar key={s.key} label={s.label} value={data.stats[s.key] ?? null} />
@@ -183,7 +189,7 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
       </div>
 
       {/* Thoughts */}
-      <h3 style={HEADING}>Thoughts</h3>
+      <h3 style={heading()}>Thoughts</h3>
       {data.persona?.voice_paragraph ? (
         <p style={{ ...type.small, ...tone.secondary, fontStyle: 'italic', margin: 0, marginBottom: space[12] }}>
           {data.persona.voice_paragraph}

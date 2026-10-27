@@ -38,12 +38,14 @@ interface TeamOption {
   name: string;
 }
 
-/** Club picker: the shared input style, sized to its content. */
-const selectStyle: CSSProperties = {
-  ...inputStyle,
-  width: 'auto',
-  flex: '1 1 160px',
-};
+/**
+ * Club picker: the shared input style, sized to its content. A function
+ * (not a module-level object) so spreading the imported preset is not a
+ * top-level side effect that keeps this module in the entry bundle.
+ */
+function selectStyle(): CSSProperties {
+  return { ...inputStyle, width: 'auto', flex: '1 1 160px' };
+}
 
 /**
  * Always-available admin demo of the match viewer, playing a real (or synthetic
@@ -156,7 +158,7 @@ export function MatchViewerDemo() {
           <select
             value={homeId}
             onChange={(e) => setHomeId(e.target.value)}
-            style={selectStyle}
+            style={selectStyle()}
             aria-label="Home club"
           >
             {teams.map((t) => (
@@ -167,7 +169,7 @@ export function MatchViewerDemo() {
           <select
             value={awayId}
             onChange={(e) => setAwayId(e.target.value)}
-            style={selectStyle}
+            style={selectStyle()}
             aria-label="Away club"
           >
             {teams.map((t) => (
