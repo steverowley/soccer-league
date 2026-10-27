@@ -93,8 +93,8 @@ describe('Toast', () => {
     fireEvent.click(screen.getByText('push success'));
     fireEvent.click(screen.getByText('push error'));
     fireEvent.click(screen.getByText('push info'));
-    const byKind = Object.fromEntries(
-      screen.getAllByRole('status').map((s) => [s.getAttribute('data-kind'), s as HTMLElement]),
+    const byKind: Record<string, HTMLElement> = Object.fromEntries(
+      screen.getAllByRole('status').map((s) => [s.getAttribute('data-kind') ?? '', s as HTMLElement]),
     );
     expect(byKind.success!.style.borderColor).toBe('var(--isl-success)');
     expect(byKind.error!.style.borderColor).toBe('var(--isl-live)');
