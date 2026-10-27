@@ -27,13 +27,14 @@
 //   - taboos / lexicon arrays.  Persona-internal voice-coherence levers.
 //
 // LAYOUT
-//   Header (global)
-//   I.   Hero          — display name, kind, voice paragraph.
+//   PageShell (site header, main column, footer)
+//   PageHeader:        back link "Home", eyebrow naming the kind in proper
+//                      case (kindEyebrow), the display name as the h1.
+//   I.   Voice         the voice paragraph.
 //   II.  Core Quotes   — pinned anchor lines (read-only).
 //   III. Goals         — in-character ambitions, plain prose.
 //   IV.  Recent Voice  — entity_snippets timeline, newest first, max 25.
 //   V.   Recent Beats  — entity_memories timeline, newest first, max 15.
-//   Footer (global)
 //
 // DATA STRATEGY
 //   Single mount-time fetch fires three parallel queries (persona,
@@ -46,8 +47,8 @@ import { useEffect, useState } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
 import { useParams } from 'react-router-dom';
 
-import Header from '../components/Header';
-import { COLORS, Container, BackLink, Footer } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   getPersona,
@@ -185,6 +186,56 @@ function snippetStyle(snippet: SnippetRow, now: Date): React.CSSProperties {
   return ageDays > EXPIRED_DAYS ? { opacity: 0.55 } : {};
 }
 
+// ── Kind eyebrow ───────────────────────────────────────────────────────────
+
+/**
+ * The PageHeader eyebrow for each entity kind: the section of the world the
+ * character belongs to, plural and in proper case ("Pundits", not
+ * "pundit"). The DB column is free TEXT, so unknown kinds fall back to a
+ * readable plural built from the raw value.
+ */
+const KIND_EYEBROW: Record<string, string> = {
+  player: 'Players',
+  manager: 'Managers',
+  referee: 'Referees',
+  pundit: 'Pundits',
+  commentator: 'Commentators',
+  journalist: 'Journalists',
+  media_company: 'Media companies',
+  association: 'Associations',
+  planet: 'Planets',
+  colony: 'Colonies',
+  political_body: 'Political bodies',
+  bookie: 'Bookies',
+  team: 'Teams',
+  political_party: 'Political parties',
+  politician: 'Politicians',
+  officials_association: 'Officials associations',
+  managing_staff: 'Managing staff',
+  social_media: 'Social media',
+  sports_writer: 'Sports writers',
+  stadium: 'Stadiums',
+  training_facility: 'Training facilities',
+  cosmic_voice: 'Cosmic voices',
+};
+
+/**
+ * Eyebrow text for an entity kind.
+ *
+ * @param kind  The entity's `kind`, or undefined while it loads.
+ * @returns     The plural section name; "World" while the kind is unknown.
+ */
+function kindEyebrow(kind: string | null | undefined): string {
+  if (!kind) return 'World';
+  const known = KIND_EYEBROW[kind];
+  if (known) return known;
+  const words = kind.replace(/_/g, ' ').trim();
+  const plural = /(s|x|ch|sh)$/.test(words) ? `${words}es`
+    : /[^aeiou]y$/.test(words) ? `${words.slice(0, -1)}ies`
+    : `${words}s`;
+  return plural.charAt(0).toUpperCase() + plural.slice(1);
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 /**
@@ -256,39 +307,32 @@ export default function EntityDetail() {
 
   if (headerError) {
     return (
-      <div style={{ background: COLORS.abyss, minHeight: '100vh', color: COLORS.dust }}>
-        <Header />
-        <main>
-          <Container>
-            <section style={{ padding: '32px 0' }}>
-              <BackLink to="/">← Home</BackLink>
-              <h1 style={{ color: COLORS.dust }}>Unknown entity</h1>
-              <p>No entity matches that id.</p>
-            </section>
-          </Container>
-        </main>
-        <Footer />
-      </div>
+      <PageShell>
+        <PageHeader
+          eyebrow="World"
+          title="Unknown entity"
+          back={{ to: '/', label: 'Home' }}
+          subtitle="No entity matches that id."
+        />
+      </PageShell>
     );
   }
 
   const goals = (persona?.goals as unknown[] | undefined) ?? [];
 
   return (
-    <div style={{ background: COLORS.abyss, minHeight: '100vh', color: COLORS.dust }}>
-      <Header />
-      <main>
-        <Container>
-          <section style={{ padding: '32px 0' }}>
-            <BackLink to="/">← Home</BackLink>
+    <PageShell>
+      {/* ── Page header ─────────────────────────────────────────────────
+          The shared PageHeader: the eyebrow names the kind of character
+          in proper case ("Pundits", "Stadiums"), the name is the h1. */}
+      <PageHeader
+        eyebrow={kindEyebrow(header?.kind)}
+        title={header?.display_name ?? header?.name ?? 'Loading'}
+        back={{ to: '/', label: 'Home' }}
+      />
 
-            {/* ── I. Hero ─────────────────────────────────────────────── */}
-            <h1 style={{ color: COLORS.dust, marginBottom: 4 }}>
-              {header?.display_name ?? header?.name ?? 'Loading...'}
-            </h1>
-            <div style={{ color: COLORS.dust50, fontSize: 14, marginBottom: 24 }}>
-              {header?.kind ?? '...'}
-            </div>
+      <div>
+            {/* ── I. Voice ────────────────────────────────────────────── */}
             {persona?.voice_paragraph ? (
               <p style={{ lineHeight: 1.6, marginBottom: 24 }}>{persona.voice_paragraph}</p>
             ) : (
@@ -379,10 +423,7 @@ export default function EntityDetail() {
                 <RelationshipGraph entityId={entityId} />
               </section>
             )}
-          </section>
-        </Container>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </PageShell>
   );
 }

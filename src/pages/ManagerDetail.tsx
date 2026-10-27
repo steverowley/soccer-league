@@ -17,13 +17,13 @@
 //           treated like real life", so raw inputs stay hidden.
 //
 // LAYOUT
-//   Header (global)
-//   I.  Hero          — name + chip row + back-link to /teams or /teams/:id
-//   II. Tactical Bio  — tactical philosophy prose
-//   III. Lore Traits  — narrative-coloured entity_traits rendered as a
+//   PageShell (site header, main column, footer)
+//   PageHeader:       back link to the club, crumbs, club Crest, eyebrow
+//                     "Managers", the name as the h1, StatBlock meta row
+//   I.  Tactical Bio  — tactical philosophy prose
+//   II. Lore Traits   — narrative-coloured entity_traits rendered as a
 //                       dust-faint list (omitted entirely when the manager
 //                       has no narrative traits)
-//   Footer (shared)
 //
 // FETCH MODEL
 //   Single `getManager(db, managerId)` call — manager + team join + entity +
@@ -34,15 +34,14 @@ import { useEffect, useState } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
 import { Link, useParams } from 'react-router-dom';
 
-import Header from '../components/Header';
-import { COLORS, Container, BackLink, SectionHeader, Footer } from '../components/Layout';
+import { COLORS, SectionHeader } from '../components/Layout';
+import { Crest, PageHeader, PageShell, StatBlock } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getManager, type ManagerWithContext } from '../features/match';
 import { RelationshipGraph } from '../features/entities';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE, hairline: HAIRLINE } = COLORS;
-const DUST_50 = COLORS.dust50;
+const { dust: DUST, hairline: HAIRLINE } = COLORS;
 const DUST_70 = COLORS.dust70;
 
 // ── Tuning constants ───────────────────────────────────────────────────────
@@ -138,128 +137,84 @@ export default function ManagerDetail(): JSX.Element {
 
   // ── Unknown manager surface ────────────────────────────────────────────
   // Only render this once the fetch has settled to avoid the
-  // "Unknown Manager" flash while loading.
+  // "Unknown Manager" flash while loading. Every state opens with the
+  // shared PageHeader, so each renders exactly one h1.
   if (done && (error || !manager)) {
     return (
-      <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-        <Header />
-        <Container>
-          <div style={{ padding: '80px 0', textAlign: 'center' }}>
-            <p style={{
-              color: FLARE,
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-              fontSize: 11,
-              marginBottom: 12,
-            }}>
-              Unknown Manager
-            </p>
-            <p style={{ color: DUST_70, fontSize: 13, marginBottom: 24 }}>
-              No manager exists at that path. The cosmos may not have appointed one yet.
-            </p>
-            <BackLink to="/teams">All Clubs</BackLink>
-          </div>
-        </Container>
-        <Footer />
-      </div>
+      <PageShell>
+        <PageHeader
+          eyebrow="Managers"
+          title="Unknown Manager"
+          back={{ to: '/teams', label: 'All clubs' }}
+          subtitle="No manager exists at that path. The cosmos may not have appointed one yet."
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-      {/* Loading state — render minimal scaffold so the page doesn't blank. */}
-      {!done && (
-        <Container>
-          <div style={{ padding: '80px 0', textAlign: 'center', color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
-            Loading manager…
-          </div>
-        </Container>
-      )}
+    <PageShell>
+      {/* Loading state: the header says so, so the page never blanks. */}
+      {!done && <PageHeader eyebrow="Managers" title="Loading manager" />}
       {done && manager && (
         <>
-          <ManagerHero manager={manager} />
-          <TacticalBio manager={manager} />
-          <LoreTraits manager={manager} />
-          {/* Web of Influence (issue isl-uwq).  Drops in the relationship-
-              graph widget when the manager has an entity row (older
-              seeds may have entity_id = NULL).  The widget owns its
-              own loading/empty/error surfaces. */}
-          {manager.entity_id && <ManagerConnections entityId={manager.entity_id} />}
+          <ManagerHeader manager={manager} />
+          <div>
+            <TacticalBio manager={manager} />
+            <LoreTraits manager={manager} />
+            {/* Web of Influence (issue isl-uwq).  Drops in the relationship-
+                graph widget when the manager has an entity row (older
+                seeds may have entity_id = NULL).  The widget owns its
+                own loading/empty/error surfaces. */}
+            {manager.entity_id && <ManagerConnections entityId={manager.entity_id} />}
+          </div>
         </>
       )}
-      <Footer />
-    </div>
+    </PageShell>
   );
 }
 
-// ── Hero ───────────────────────────────────────────────────────────────────
+// ── Page header ────────────────────────────────────────────────────────────
 
 /**
- * Hero block.  Carries the back-link, kicker row (team name → /teams/:id
- * when present, otherwise the page kicker only), manager display name,
- * and a meta row with nationality + current club.
+ * The page header for a manager: the shared PageHeader with a back link to
+ * the club (or all clubs when unattached), crumbs, the club crest, the
+ * name as the uppercase h1, and nationality plus current club (or
+ * "Currently unattached") as a StatBlock meta row. It replaced the old
+ * hero section with its 2 px club-colour top border.
  *
- * The team's brand colour appears as a 2 px top hairline on the section
- * so the page picks up the club's identity without overpowering the
- * dust-on-abyss canvas — same pattern as TeamDetail.
+ * @param manager  The loaded manager with its team join.
+ * @returns        A PageHeader.
  */
-function ManagerHero({ manager }: { manager: ManagerWithContext }): JSX.Element {
-  const accent = manager.teams?.color ?? DUST;
+function ManagerHeader({ manager }: { manager: ManagerWithContext }): JSX.Element {
   const teamName = manager.teams?.name ?? null;
   const teamId = manager.teams?.id ?? null;
+  const club = teamName && teamId ? { id: teamId, name: teamName } : null;
   return (
-    <section style={{
-      padding: '48px 16px 24px',
-      borderTop: `2px solid ${accent}`,
-    }}>
-      <Container>
-        <BackLink to={teamId ? `/teams/${teamId}` : '/teams'}>
-          {teamName ? `Back to ${teamName}` : 'All Clubs'}
-        </BackLink>
-        <div style={{ marginTop: 24 }}>
-          <SectionHeader
-            level={1}
-            pageKicker={`Managers${teamName ? ` / ${teamName}` : ''}`}
-            kicker="—"
-            label="Manager Detail"
-            title={manager.name}
-          />
-        </div>
-        <div style={{ marginTop: 24, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          {manager.nationality && (
-            <MetaItem label="Nationality" value={manager.nationality} />
-          )}
-          {teamName && teamId && (
-            <MetaItem
-              label="Current Club"
-              value={<Link to={`/teams/${teamId}`} style={{ color: DUST, textDecoration: 'none' }}>{teamName}</Link>}
+    <PageHeader
+      eyebrow="Managers"
+      title={manager.name}
+      back={club ? { to: `/teams/${club.id}`, label: club.name } : { to: '/teams', label: 'All clubs' }}
+      {...(club ? {
+        crumbs: [{ label: 'Teams', to: '/teams' }, { label: club.name, to: `/teams/${club.id}` }, { label: manager.name }],
+        crest: <Crest color={manager.teams?.color} size={64} />,
+      } : {})}
+      meta={
+        <>
+          {manager.nationality && <StatBlock label="Nationality" value={manager.nationality} />}
+          {club && (
+            <StatBlock
+              label="Current club"
+              value={<Link to={`/teams/${club.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{club.name}</Link>}
             />
           )}
-          {!teamName && (
-            // Drama-tier manager_resignation can leave a manager detached.
-            // Surface the state plainly rather than hiding it — fans
-            // following the storyline should see the cosmos's verdict.
-            <MetaItem label="Status" value="Currently unattached" />
-          )}
-        </div>
-      </Container>
-    </section>
-  );
-}
-
-/** Inline meta pair used in the hero meta row. */
-function MetaItem({ label, value }: { label: string; value: React.ReactNode }): JSX.Element {
-  return (
-    <div>
-      <div style={{
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-      }}>{label}</div>
-      <div style={{ fontSize: 14, color: DUST, marginTop: 4 }}>{value}</div>
-    </div>
+          {/* Drama-tier manager_resignation can leave a manager detached.
+              Surface the state plainly rather than hiding it: fans
+              following the storyline should see the cosmos's verdict. */}
+          {!teamName && <StatBlock label="Status" value="Currently unattached" />}
+        </>
+      }
+    />
   );
 }
 
@@ -275,7 +230,6 @@ function TacticalBio({ manager }: { manager: ManagerWithContext }): JSX.Element 
   if (!styleLabel) return null;
   return (
     <section style={{ padding: '24px 0' }}>
-      <Container>
         <SectionHeader
           kicker="I"
           label="The Dugout"
@@ -291,7 +245,6 @@ function TacticalBio({ manager }: { manager: ManagerWithContext }): JSX.Element 
         }}>
           {styleLabel}
         </p>
-      </Container>
     </section>
   );
 }
@@ -309,7 +262,6 @@ function TacticalBio({ manager }: { manager: ManagerWithContext }): JSX.Element 
 function ManagerConnections({ entityId }: { entityId: string }): JSX.Element {
   return (
     <section style={{ padding: '24px 0' }}>
-      <Container>
         <SectionHeader
           kicker="III"
           label="Connections"
@@ -318,7 +270,6 @@ function ManagerConnections({ entityId }: { entityId: string }): JSX.Element {
         <div style={{ marginTop: 16 }}>
           <RelationshipGraph entityId={entityId} />
         </div>
-      </Container>
     </section>
   );
 }
@@ -343,7 +294,6 @@ function LoreTraits({ manager }: { manager: ManagerWithContext }): JSX.Element |
   if (rows.length === 0) return null;
   return (
     <section style={{ padding: '24px 0 80px' }}>
-      <Container>
         <SectionHeader
           kicker="II"
           label="Lore"
@@ -361,7 +311,6 @@ function LoreTraits({ manager }: { manager: ManagerWithContext }): JSX.Element |
             <ResolvedTraitRow key={row.key} label={row.label} value={row.value} />
           ))}
         </dl>
-      </Container>
     </section>
   );
 }
