@@ -63,6 +63,7 @@ const MIGRATED = [
   'src/pages/Teams.tsx',
   'src/pages/TeamDetail.tsx',
   'src/pages/PlayerDetail.tsx',
+  'src/pages/ManagerDetail.tsx',
   'src/shared/ui/FormStrip.tsx',
   'src/shared/ui/DataTable.tsx',
   'src/shared/ui/FactList.tsx',

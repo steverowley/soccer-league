@@ -101,10 +101,6 @@
     "fontSize": 13,
     "letterSpacing": 6
   },
-  "src/pages/ManagerDetail.tsx": {
-    "fontSize": 3,
-    "letterSpacing": 1
-  },
   "src/pages/News.tsx": {
     "colour": 8,
     "fontSize": 17,
