@@ -297,7 +297,7 @@ export default function MatchDetail() {
           reveal would let a spectator scroll past the paced commentary and
           read the result off the table, defeating the whole point of
           withholding the score.  They appear at full time. */}
-      {!isRevealing(status) && status !== 'cancelled' && (
+      {status === 'completed' && (
         <section>
           <SectionHeader
             index="II"

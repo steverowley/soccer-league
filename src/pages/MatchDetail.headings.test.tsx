@@ -138,6 +138,8 @@ describe('MatchDetail renders exactly one h1 in every state', () => {
     expect(screen.getByText('Rocky Inner League')).toBeInTheDocument();
     expect(screen.getByText('Terra Dome')).toBeInTheDocument();
     expect(document.querySelector('[data-live-dot]')).toBeNull();
+    // Stats appear at full time only: no empty stats section before kickoff.
+    expect(screen.queryByText('Player performance')).toBeNull();
   });
 
   it('full time', async () => {
