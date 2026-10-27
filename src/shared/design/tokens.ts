@@ -67,6 +67,19 @@ export const glow = {
 
 // ── Text tones ──────────────────────────────────────────────────────────────
 
+/**
+ * A 1 px box in a token colour, written as longhands. WHY longhands: the
+ * `border` shorthand with a `var()` inside is dropped by jsdom's CSS parser,
+ * so a component styled `border: '1px solid var(--isl-line)'` renders fine in
+ * a browser but shows no border in tests. Longhands survive both.
+ *
+ * @param borderColor  A `color.*` token. Defaults to the structural line.
+ * @returns            Style fragment to spread into a style object.
+ */
+export function hairline(borderColor: string = color.line): CSSProperties {
+  return { borderWidth: 1, borderStyle: 'solid', borderColor };
+}
+
 /** The three text tones as style fragments, for spreading into a style. */
 export const tone = {
   primary:   { color: color.text },

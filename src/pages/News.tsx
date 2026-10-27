@@ -278,7 +278,7 @@ export default function News() {
 
                 {canLoadMore && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
-                    <Button variant="primary" onClick={() => setLimit((p) => Math.min(p * 2, MAX_FEED_ROWS))}>
+                    <Button variant="secondary" onClick={() => setLimit((p) => Math.min(p * 2, MAX_FEED_ROWS))}>
                       Load More
                     </Button>
                   </div>

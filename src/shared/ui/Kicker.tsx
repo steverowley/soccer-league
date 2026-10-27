@@ -1,91 +1,46 @@
 // ── shared/ui/Kicker.tsx ──────────────────────────────────────────────────
-// Uppercase mono kicker label primitive (#378 slice 3a).
+// Uppercase label primitive (#378), now on the design tokens.
 //
-// WHY
-// ───
-// Every page in the app duplicates the same kicker pattern — a tiny
-// uppercase mono line above a header ("LIVE MATCH", "UPCOMING",
-// "SEASON 1"). The inline-style fingerprint is identical across
-// 30+ usages: 11px Space Mono, 700 weight, 0.14em letter-spacing,
-// uppercase, dust-50 colour. This primitive consolidates them.
-//
-// SCOPE
-// ─────
-// Render-only — no semantic role beyond a styled `<span>`. Pages that
-// need a Kicker that's a heading (h2/h3) keep using their own elements
-// and the styling layer separately; this is the standalone label case.
+// WHY: every page duplicated a tiny uppercase line above a header ("LIVE
+// MATCH", "UPCOMING"), each with its own size (9 to 13 px), tracking (0.12
+// to 0.18em) and a faded dust tone that failed contrast (dust50 is 4.28:1).
+// A Kicker is the `label` type (11 px, 0.12em) in the secondary tone
+// (7.7:1). Render-only: wrap it in a heading element when it needs weight.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { COLORS } from '../../components/Layout';
-
-// ── Defaults ──────────────────────────────────────────────────────────────
-
-/**
- * Default font size (px). 11 matches the long-standing Layout `LABEL_STYLE`
- * cadence and the admin primitives — small enough to read as secondary
- * metadata above a heading without competing with it.
- */
-const DEFAULT_FONT_SIZE = 11;
-
-/**
- * Default letter-spacing — the kerning that turns ordinary mono caps into
- * a recognisable "kicker" label. 0.14em matches the existing inline
- * fingerprint across the codebase.
- */
-const DEFAULT_LETTER_SPACING = '0.14em';
-
-// ── Public types ──────────────────────────────────────────────────────────
+import { color as tokenColor, type } from '../design';
 
 interface KickerProps {
-  /** Kicker text — rendered verbatim; the primitive applies `uppercase`. */
+  /** Kicker text: rendered verbatim; the primitive applies `uppercase`. */
   children: ReactNode;
   /**
-   * Optional colour override. Defaults to `COLORS.dust50` — the secondary
-   * dust tone used for metadata labels. Pass a brand token (e.g.
-   * `COLORS.quantum`) to signal a live / focused state.
+   * Text colour. Defaults to the secondary tone. Pass a `color.*` token
+   * (e.g. `color.architect` for Architect content), never a raw value.
    */
   color?: string;
-  /** Optional style overrides for one-off margins / cursor / etc. */
+  /** Optional layout overrides (margins). */
   style?: CSSProperties;
   /** Optional className for legacy CSS targeting. */
   className?: string;
 }
 
-// ── Kicker ────────────────────────────────────────────────────────────────
-
 /**
- * Uppercase mono label rendered as a `<span>`. Consumers wrap it in a
- * heading element if they need semantic weight (h2/h3) — the primitive
- * is intentionally tag-agnostic so it works in flex rows, table cells,
- * card chrome, etc.
+ * Uppercase label rendered as a `<span>`.
  *
  * Examples:
- *   <Kicker>Live Match</Kicker>
- *   <Kicker color={COLORS.quantum}>Now</Kicker>
+ *   <Kicker>Live match</Kicker>
+ *   <Kicker color={color.architect}>Decree</Kicker>
  *
- * @param children   Label text.
- * @param color      Optional text colour override.
- * @param style      Optional CSS overrides for one-off margins / cursor.
- * @param className  Optional className for legacy CSS targeting.
+ * @returns A span in the label type.
  */
 export function Kicker({
   children,
-  color = COLORS.dust50,
+  color = tokenColor.textSecondary,
   style,
   className,
 }: KickerProps) {
   return (
-    <span
-      className={className}
-      style={{
-        fontSize:       DEFAULT_FONT_SIZE,
-        fontWeight:     700,
-        textTransform:  'uppercase',
-        letterSpacing:  DEFAULT_LETTER_SPACING,
-        color,
-        ...style,
-      }}
-    >
+    <span className={className} style={{ ...type.label, color, ...style }}>
       {children}
     </span>
   );

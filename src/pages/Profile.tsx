@@ -403,11 +403,11 @@ export default function Profile() {
           }}
         >
           {isAdmin && (
-            <Button variant="active" onClick={() => navigate('/admin')}>
+            <Button variant="primary" onClick={() => navigate('/admin')}>
               Admin Dashboard
             </Button>
           )}
-          <Button variant="primary" onClick={onSignOut}>
+          <Button variant="secondary" onClick={onSignOut}>
             Sign Out
           </Button>
           <PrimaryButton to="/">Back To Home</PrimaryButton>

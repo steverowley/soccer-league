@@ -1,115 +1,49 @@
 // ── shared/ui/KeyValue.tsx ────────────────────────────────────────────────
-// Horizontal label : value primitive (#378 slice 3a).
+// Horizontal "label  value" row (#378 slice 3a), now on the design tokens.
 //
-// WHY
-// ───
-// Inline horizontal pairs ("Stadium: Memorial Arena", "Capacity: 42000")
-// repeat across team / player / match metadata blocks. Each call site
-// re-inlines the same flex-row + colon-or-fixed-width-label dance. This
-// primitive enforces the canonical alignment.
-//
-// SCOPE
-// ─────
-// Single-line by default — caller-supplied wrapping happens via the
-// outer container if needed. StatPair handles the stacked variant.
+// WHY: inline pairs ("Stadium  Memorial Arena") repeat across team, player
+// and match metadata. The label is the `label` type in the secondary tone,
+// the value the `small` type; both share a baseline. The stacked form is
+// StatBlock (or StatPair in dense grids).
 
 import type { CSSProperties, ReactNode } from 'react';
-import { COLORS } from '../../components/Layout';
-
-// ── Defaults ──────────────────────────────────────────────────────────────
-
-/**
- * Default label font size (px). 12 sits between the Kicker baseline
- * (11) and the value cadence (13) — large enough to scan in a metadata
- * block but visually subordinate to the value text.
- */
-const DEFAULT_LABEL_FONT_SIZE = 12;
-
-/**
- * Default value font size (px). 13 matches StatPair / VALUE_STYLE so
- * inline metadata rows align with stacked stat cards on the same page.
- */
-const DEFAULT_VALUE_FONT_SIZE = 13;
-
-/**
- * Default px gap between label and value. 8 matches the spacing the
- * inline patterns in MatchDetail / PlayerDetail use today.
- */
-const DEFAULT_GAP = 8;
-
-// ── Public types ──────────────────────────────────────────────────────────
+import { color, space, tone, type } from '../design';
 
 interface KeyValueProps {
-  /** Label rendered on the left (uppercase mono treatment). */
+  /** Label on the left (uppercase). */
   label: string;
-  /** Value content on the right — string, number, or arbitrary node. */
+  /** Value on the right: string, number or any node. */
   value: ReactNode;
-  /**
-   * Optional value colour override. Defaults to `COLORS.dust`. Use a
-   * brand token (quantum / terraNova / flare) when the value carries
-   * status meaning.
-   */
+  /** Value colour: a `color.*` token. Defaults to the primary text tone. */
   valueColor?: string;
-  /** Optional style overrides for margin / width / etc. */
+  /** Optional layout overrides. */
   style?: CSSProperties;
   /** Optional className for legacy CSS targeting. */
   className?: string;
 }
 
-// ── KeyValue ──────────────────────────────────────────────────────────────
-
 /**
- * Horizontal label : value row. Use for compact metadata blocks where
- * each line carries one labelled value (stadium info, manager
- * profile, season header pills).
+ * Horizontal label and value on one baseline.
  *
  * Examples:
  *   <KeyValue label="Stadium" value="Memorial Arena" />
- *   <KeyValue label="Status"  value="Live" valueColor={COLORS.quantum} />
  *
- * @param label       Label text (rendered uppercase).
- * @param value       Value content.
- * @param valueColor  Optional value colour override.
- * @param style       Optional CSS overrides.
- * @param className   Optional className for legacy CSS targeting.
+ * @returns A flex row.
  */
 export function KeyValue({
   label,
   value,
-  valueColor = COLORS.dust,
+  valueColor = color.text,
   style,
   className,
 }: KeyValueProps) {
   return (
     <div
       className={className}
-      style={{
-        display:    'flex',
-        alignItems: 'baseline',
-        gap:        DEFAULT_GAP,
-        ...style,
-      }}
+      style={{ display: 'flex', alignItems: 'baseline', gap: space[8], ...style }}
     >
-      <span
-        style={{
-          fontSize:      DEFAULT_LABEL_FONT_SIZE,
-          fontWeight:    700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.12em',
-          color:         COLORS.dust50,
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize:   DEFAULT_VALUE_FONT_SIZE,
-          fontWeight: 400,
-          color:      valueColor,
-        }}
-      >
-        {value}
-      </span>
+      <span style={{ ...type.label, ...tone.secondary }}>{label}</span>
+      <span style={{ ...type.small, color: valueColor }}>{value}</span>
     </div>
   );
 }

@@ -13,5 +13,6 @@ export {
   type,
   numeric,
   glyph,
+  hairline,
   type Space,
 } from './tokens';

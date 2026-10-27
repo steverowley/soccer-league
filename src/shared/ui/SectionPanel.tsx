@@ -1,63 +1,44 @@
 // ── shared/ui/SectionPanel.tsx ────────────────────────────────────────────
-// Bordered panel with a header strip — #378 slice 2.
+// Card with a header strip (#378 slice 2), now on the design tokens.
 //
-// WHY
-// ───
-// Distinct from <Card> (a plain bordered container): several surfaces repeat
-// the same chrome of a hairline-bordered, flex-column panel whose first row is
-// an uppercase mono header (a left title + an optional right-aligned meta),
-// underlined by a hairline, with the body beneath. Home's UpcomingPanel,
-// MatchDetail's side panels, and PlayerDetail's stat panels all hand-roll this.
-// This primitive owns the container + header chrome; the caller supplies the
-// body (and any footer — e.g. a bottom-pinned CTA via `marginTop: auto`, which
-// works because the panel is flex-column).
-//
-// The styles below are lifted verbatim from Home's UpcomingPanel so existing
-// call-sites migrate pixel-for-pixel.
+// WHY: distinct from <Card> (a plain box): several surfaces repeat a
+// hairline-bordered, flex-column panel whose first row is an uppercase
+// label (a title on the left, optional meta on the right) over a hairline,
+// with the body beneath. This owns the box and the strip; the caller owns
+// the body and any footer (a bottom-pinned button via `marginTop: 'auto'`
+// works because the panel is a flex column).
 
 import type { CSSProperties, ReactNode } from 'react';
-import { COLORS } from '../../components/Layout';
-
-/** Default container padding (px) — matches Card / the existing panels. */
-const DEFAULT_PADDING = 24;
+import { color, hairline, layout, space, tone, type } from '../design';
 
 interface SectionPanelProps {
-  /** Left side of the header strip (rendered inside the uppercase mono row). */
+  /** Left side of the header strip. */
   title: ReactNode;
-  /**
-   * Optional right-aligned header meta (e.g. "Next 48h"). Rendered in the
-   * secondary dust-70 tone. Omit for a title-only header.
-   */
+  /** Optional right-aligned meta (e.g. "Next 48h"), secondary tone. */
   meta?: ReactNode;
-  /** Panel body — list, prose, a bottom-pinned footer, etc. */
+  /** Panel body: a list, prose, a bottom-pinned footer. */
   children: ReactNode;
-  /** Container padding in px. Default 24. */
+  /** Padding in px. Omit for the card token (24, 16 on a phone). */
   padding?: number;
-  /** One-off container style overrides (avoid where possible). */
+  /** One-off layout overrides. */
   style?: CSSProperties;
-  /** Optional className for legacy CSS targeting / responsive hooks. */
+  /** Optional className for responsive hooks. */
   className?: string;
 }
 
 /**
- * Hairline-bordered, flex-column panel with an uppercase mono header strip.
+ * Hairline panel with an uppercase header strip.
  *
- * Examples:
- *   <SectionPanel title="Upcoming Fixtures" meta="Next 48h">…list…</SectionPanel>
- *   <SectionPanel title="Match Facts">…body…</SectionPanel>
+ * Example:
+ *   <SectionPanel title="Upcoming fixtures" meta="Next 48h">...list...</SectionPanel>
  *
- * @param title      Left header content.
- * @param meta       Optional right-aligned header meta (dust-70).
- * @param children   Panel body.
- * @param padding    Container padding in px. Default 24.
- * @param style      One-off container overrides.
- * @param className  Optional className.
+ * @returns A flex-column div.
  */
 export function SectionPanel({
   title,
   meta,
   children,
-  padding = DEFAULT_PADDING,
+  padding,
   style,
   className,
 }: SectionPanelProps) {
@@ -65,8 +46,8 @@ export function SectionPanel({
     <div
       className={className}
       style={{
-        border:        `1px solid ${COLORS.hairline}`,
-        padding,
+        ...hairline(color.line),
+        padding:       padding ?? layout.cardPad,
         display:       'flex',
         flexDirection: 'column',
         ...style,
@@ -74,19 +55,18 @@ export function SectionPanel({
     >
       <header
         style={{
+          ...type.label,
           display:        'flex',
           justifyContent: 'space-between',
           alignItems:     'baseline',
-          paddingBottom:  12,
-          borderBottom:   `1px solid ${COLORS.hairline}`,
-          marginBottom:   16,
-          fontSize:       11,
-          letterSpacing:  '0.14em',
-          textTransform:  'uppercase',
+          gap:            space[12],
+          paddingBottom:  space[12],
+          borderBottom:   `1px solid ${color.line}`,
+          marginBottom:   space[16],
         }}
       >
         <span>{title}</span>
-        {meta != null && <span style={{ color: COLORS.dust70 }}>{meta}</span>}
+        {meta != null && <span style={tone.secondary}>{meta}</span>}
       </header>
       {children}
     </div>

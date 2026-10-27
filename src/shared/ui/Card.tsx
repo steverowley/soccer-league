@@ -1,94 +1,54 @@
 // ── shared/ui/Card.tsx ────────────────────────────────────────────────────
-// First content-primitive lifted into the shared UI layer for #378.
+// The hairline box (docs/design-language.md, sections 5 and 6).
 //
-// WHY
-// ───
-// The repo has dozens of ad-hoc card containers — `<div style={{ border:
-// `1px solid ${HAIRLINE}`, background: ABYSS, ... }}>` repeated with
-// minor differences across Home, MatchDetail, PlayerDetail, etc. Each
-// copy is a chance for the design system to drift one pixel at a time.
+// WHY: the review (#723) counted 19 <Card>s against about 131 hand-built
+// `<div style={{ border: '1px solid ...' }}>` boxes, each a chance for the
+// look to drift one pixel at a time. This is the one box: 1 px `line`
+// border, no fill, no radius, padding 24 (16 on a phone, via the
+// --isl-pad-card token). No layout opinions: children decide whether they
+// are a column, a grid or prose.
 //
-// `<Card>` is the canonical container: hairline-bordered, abyss-filled,
-// padding-configurable. No layout opinions — children decide whether
-// they're a single column, a grid, or arbitrary content.
+// Tones carry meaning, never decoration:
+//   default   → structural hairline (almost every card)
+//   architect → purple border and resting glow: Architect content only
+//   live      → red border: a match happening now
 //
-// SCOPE
-// ─────
-// Intentionally tiny. The first slice of #378 ships the primitive plus
-// one or two migration call-sites; later PRs will expand consumption
-// across Home, MatchDetail, PlayerDetail without touching the primitive
-// again. The acceptance criterion "2 pages migrated, zero behavioural
-// regression" is split across follow-up PRs per the user's stated
-// "one slice per PR" preference.
-//
-// NOT A REACT.MEMO
-// ───────────────
-// `<Card>` re-renders cheaply (one div). Wrapping in React.memo would
-// add prop-comparison overhead with no real-world payoff at the volumes
-// this app renders (≤ 20 cards visible on any page).
+// NOT A REACT.MEMO: one div, cheap to re-render.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { COLORS } from '../../components/Layout';
-
-// ── Defaults ──────────────────────────────────────────────────────────────
-
-/**
- * Default padding inside a `<Card>` when the caller doesn't specify one.
- * 24 px matches the cadence used by MatchCard / StandingsTable / the
- * editorial cards on Home, so an un-customised Card visually matches
- * the existing surface.
- */
-const DEFAULT_PADDING = 24;
+import { color, glow, hairline, layout } from '../design';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
-/**
- * Tone of the card border. The design system's tokens cover three
- * meaningful surface variants:
- *   hairline → default neutral border (most cards)
- *   quantum  → focus / live indicator (current match, primary CTA wrapper)
- *   flare    → error / danger (the GDPR Danger Zone wrapper, etc.)
- * Adding new tones means adding a token mapping below — no consumer
- * touches inline colour literals.
- */
-export type CardTone = 'hairline' | 'quantum' | 'flare';
+/** What the card's border says. See the file header. */
+export type CardTone = 'default' | 'architect' | 'live';
 
-/**
- * Map a CardTone to its border colour. Centralised so a future palette
- * shift (e.g. hairline becoming lighter on dark mode) updates every
- * card surface in one diff.
- */
-const TONE_BORDER: Record<CardTone, string> = {
-  hairline: COLORS.hairline,
-  quantum:  COLORS.quantum,
-  flare:    COLORS.flare,
+const TONE: Record<CardTone, CSSProperties> = {
+  default:   hairline(color.line),
+  architect: { ...hairline(color.architect), boxShadow: glow.architect },
+  live:      hairline(color.live),
 };
 
 interface CardProps {
   /** Card body. */
   children: ReactNode;
   /**
-   * Internal padding. Pass `0` to draw an edge-to-edge card; pass a
-   * number to override the default (24 px). Defaults to DEFAULT_PADDING.
+   * Internal padding in px. Omit for the token default (24, 16 on a
+   * phone); pass `0` for an edge-to-edge card whose rows carry their own
+   * padding.
    */
   padding?: number;
-  /** Border tone — see CardTone for the three options. Defaults to 'hairline'. */
+  /** Border tone. Defaults to 'default'. */
   tone?: CardTone;
-  /**
-   * Optional style merge for one-off overrides during migration.
-   * Anything passed here takes precedence over the primitive's own
-   * styles. Use sparingly — the goal of #378 is to drive these to
-   * zero over time.
-   */
+  /** One-off layout overrides (flex, min-height). Never colours or type. */
   style?: CSSProperties;
-  /** Optional className for legacy CSS targeting. */
+  /** Optional className for responsive hooks. */
   className?: string;
   /**
-   * When set, the whole card becomes a react-router <Link> to this path — the
-   * click target for a surface like a league / team / idol card. The link
-   * defaults to dust text with no underline (overridable via `style`). Omit
-   * for a non-interactive <div>.
+   * When set, the whole card becomes a react-router <Link> to this path:
+   * the click target for a league, club or match card. Text keeps the
+   * default tone with no underline.
    */
   to?: string;
   /** Accessible label, primarily useful when the card renders as a link. */
@@ -98,43 +58,32 @@ interface CardProps {
 // ── Card ──────────────────────────────────────────────────────────────────
 
 /**
- * Hairline-bordered, abyss-filled container — the canonical card
- * surface for #378. Consumers compose layout inside children; this
- * primitive only owns the chrome.
+ * Hairline-bordered container.
  *
  * Examples:
  *   <Card>Just text in a card.</Card>
- *   <Card padding={32} tone="quantum">Featured!</Card>
- *   <Card padding={0}><FullBleedImage /></Card>
+ *   <Card tone="live">...a live match...</Card>
+ *   <Card padding={0}><Rows /></Card>
  *
- * @param children   Body content.
- * @param padding    Internal padding in pixels. Default 24.
- * @param tone       Border tone token. Default 'hairline'.
- * @param style      One-off CSS overrides (avoid where possible).
- * @param className  Optional className for legacy CSS targeting.
+ * @returns A div, or a router link when `to` is set.
  */
 export function Card({
   children,
-  padding = DEFAULT_PADDING,
-  tone = 'hairline',
+  padding,
+  tone = 'default',
   style,
   className,
   to,
   'aria-label': ariaLabel,
 }: CardProps) {
-  // Border + abyss fill + padding are the primitive's own; a caller's `style`
-  // merges on top (flex layout, an accent border-top, a fixed height, …).
   const composed: CSSProperties = {
-    border:     `1px solid ${TONE_BORDER[tone]}`,
-    background: COLORS.abyss,
-    padding,
-    // Link form: dust text, no underline — the whole card reads as a clickable
-    // surface, not a hyperlink. Both are overridable via `style`.
-    ...(to != null ? { color: COLORS.dust, textDecoration: 'none' } : null),
+    ...TONE[tone],
+    background: 'transparent',
+    padding: padding ?? layout.cardPad,
+    ...(to != null ? { color: color.text, textDecoration: 'none', display: 'block' } : null),
     ...style,
   };
 
-  // A `to` turns the whole card into a router link; otherwise a plain div.
   if (to != null) {
     return (
       <Link to={to} aria-label={ariaLabel} className={className} style={composed}>

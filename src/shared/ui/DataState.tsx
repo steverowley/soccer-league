@@ -14,13 +14,13 @@
 // never an invented date.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { COLORS } from '../../components/Layout';
+import { color, hairline, tone, type } from '../design';
 import { Button } from './Button';
 import { EmptyState } from './EmptyState';
 import type { AsyncData } from '../hooks/useAsyncData';
 
 const PANEL: CSSProperties = {
-  border: `1px solid ${COLORS.hairline}`,
+  ...hairline(color.line),
   padding: '28px 24px',
   display: 'flex',
   flexDirection: 'column',
@@ -29,10 +29,7 @@ const PANEL: CSSProperties = {
 };
 
 const KICKER: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
+  ...type.label,
   margin: 0,
 };
 
@@ -63,8 +60,8 @@ export function LoadingState({
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        color: COLORS.dust50,
-        fontSize: 13,
+        ...tone.secondary,
+        ...type.small,
         ...style,
       }}
     >
@@ -72,7 +69,7 @@ export function LoadingState({
         aria-hidden="true"
         className="isl-pulse"
         style={{
-          width: 6, height: 6, borderRadius: '50%', background: COLORS.dust50, flex: 'none',
+          width: 6, height: 6, borderRadius: '50%', background: color.textSecondary, flex: 'none',
         }}
       />
       <span>{label}</span>
@@ -102,9 +99,9 @@ export function ErrorState({
   onRetry?: (() => void) | undefined;
 }) {
   return (
-    <div role="alert" data-state={timedOut ? 'timeout' : 'error'} style={{ ...PANEL, ...(bare ? { border: 0, padding: '16px 0' } : null), ...style }}>
-      <p style={{ ...KICKER, color: COLORS.flare }}>{timedOut ? 'No answer' : 'Signal lost'}</p>
-      <p style={{ margin: 0, fontSize: 15, color: COLORS.dust, lineHeight: 1.5 }}>
+    <div role="alert" data-state={timedOut ? 'timeout' : 'error'} style={{ ...PANEL, ...(bare ? { borderWidth: 0, padding: '16px 0' } : null), ...style }}>
+      <p style={{ ...KICKER, color: color.live }}>{timedOut ? 'No answer' : 'Signal lost'}</p>
+      <p style={{ ...type.body, ...tone.primary, margin: 0 }}>
         {timedOut
           ? `Still waiting for ${what}. The league feed is not answering right now.`
           : `Could not load ${what}. The league feed is unreachable right now.`}
@@ -140,12 +137,12 @@ export function PreSeasonState({
 }) {
   const date = formatKickoffDate(startsAt);
   return (
-    <div data-state="pre-season" style={{ ...PANEL, ...(bare ? { border: 0, padding: 0 } : null), ...style }}>
-      <p style={{ ...KICKER, color: COLORS.quantum }}>Pre-season</p>
-      <p style={{ margin: 0, fontSize: 22, fontWeight: 700, textTransform: 'uppercase', lineHeight: 1.15 }}>
+    <div data-state="pre-season" style={{ ...PANEL, ...(bare ? { borderWidth: 0, padding: 0 } : null), ...style }}>
+      <p style={{ ...KICKER, ...tone.secondary }}>Pre-season</p>
+      <p style={{ ...type.subheading, margin: 0 }}>
         {seasonName} is coming
       </p>
-      <p style={{ margin: 0, fontSize: 15, color: COLORS.dust70, lineHeight: 1.5 }}>
+      <p style={{ ...type.body, ...tone.secondary, margin: 0 }}>
         {date ? `Kick-off on ${date}.` : 'Kick-off soon.'}
         {detail ? <> {detail}</> : null}
       </p>

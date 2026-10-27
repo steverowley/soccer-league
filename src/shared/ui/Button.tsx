@@ -1,17 +1,16 @@
 // ── shared/ui/Button.tsx ──────────────────────────────────────────────────
-// The canonical button, modelled directly on the Figma design system's
-// "Buttons" section. Four variants, each with a hover glow:
+// The one button (docs/design-language.md, section 6). Three variants:
 //
-//   primary   → Galactic Abyss fill, 1px Lunar Dust border, dust text.
-//               The quiet default (e.g. "View league").
-//   secondary → Lunar Dust fill, abyss text. A medium-weight light button.
-//   active    → Astro Explorer (#FF6637) fill, abyss text. THE loud call to
-//               action (Sign Up, Log In, Place Wager, Watch Live).
-//   tertiary  → text-only with a trailing ► glyph, no box. Link-style action
-//               ("View all matches ►").
+//   primary   → Astro Explorer (action) fill, abyss text. THE thing to do on
+//               this view: at most one per view (Sign up, Watch live, Place
+//               stake).
+//   secondary → hairline outline, dust text. Every other boxed action.
+//   tertiary  → text only with a trailing ▸ marker, no box. Link-style
+//               actions ("All matches ▸").
 //
-// Quantum Purple is deliberately NOT a button fill: per the design system it
-// is the *focus* colour (focus rings, live indicators), not an action colour.
+// All three use the uppercase `label` type and are at least 44 px tall so
+// they are a finger-sized target on a phone. Purple is never a button fill:
+// it means the Architect and keyboard focus.
 //
 // Polymorphic: pass `to` for an in-app router link, `href` for an external
 // anchor, or neither (with `onClick`/`type`) for a plain <button>. The visual
@@ -24,69 +23,72 @@
 
 import { useState, type CSSProperties, type ReactNode, type MouseEventHandler } from 'react';
 import { Link } from 'react-router-dom';
-import { COLORS } from '../../components/Layout';
+import { color, glow, glyph, hairline, type } from '../design';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'active' | 'tertiary';
+/**
+ * Button variants. `active` is the pre-design-language name of `primary`,
+ * kept so older call sites compile; new code says `primary`.
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'active';
 
 interface VariantStyle {
   /** Resting visual treatment. */
   rest: CSSProperties;
-  /** box-shadow applied on hover/focus (the design's "glow"). */
+  /** box-shadow (or text-shadow for tertiary) applied on hover/focus. */
   glow: string;
 }
 
-// Per-variant resting styles + hover glow, lifted from the Figma spec.
+const PRIMARY: VariantStyle = {
+  rest: { background: color.action, color: color.bg, ...hairline(color.action) },
+  glow: glow.action,
+};
+
+// Per-variant resting styles and hover glow.
 const VARIANTS: Record<ButtonVariant, VariantStyle> = {
-  primary: {
-    rest: { background: COLORS.abyss, color: COLORS.dust, borderColor: COLORS.dust },
-    glow: '0 0 18px rgba(227, 224, 213, 0.28)',
-  },
+  primary: PRIMARY,
+  active: PRIMARY,
   secondary: {
-    rest: { background: COLORS.dust, color: COLORS.abyss, borderColor: COLORS.dust },
-    glow: '0 0 18px rgba(227, 224, 213, 0.40)',
-  },
-  active: {
-    rest: { background: COLORS.astro, color: COLORS.abyss, borderColor: COLORS.astro },
-    glow: '0 0 20px rgba(255, 102, 55, 0.55)',
+    rest: { background: 'transparent', color: color.text, ...hairline(color.text) },
+    glow: glow.outline,
   },
   tertiary: {
     rest: {
       background: 'transparent',
-      color: COLORS.dust,
-      borderColor: 'transparent',
-      padding: 0,
+      color: color.text,
+      ...hairline('transparent'),
+      paddingLeft: 0,
+      paddingRight: 0,
     },
-    glow: '0 0 0 transparent', // tertiary glows via text-shadow instead (see below)
+    glow: glow.text,
   },
 };
 
 const BASE: CSSProperties = {
+  ...type.label,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   gap: 8,
   fontFamily: 'inherit',
-  fontSize: 13,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.12em',
   textDecoration: 'none',
   whiteSpace: 'nowrap',
-  padding: '14px 24px',
+  paddingTop: 0,
+  paddingBottom: 0,
+  paddingLeft: 24,
+  paddingRight: 24,
   minHeight: 44,
-  border: '1px solid transparent',
   cursor: 'pointer',
   transition: 'box-shadow 0.15s ease, text-shadow 0.15s ease',
 };
 
 interface ButtonProps {
-  /** Visual variant. Defaults to 'primary'. */
+  /** Visual variant. Defaults to 'secondary' (the quiet, repeatable one). */
   variant?: ButtonVariant;
-  /** In-app router destination — renders a react-router <Link>. */
+  /** In-app router destination: renders a react-router <Link>. */
   to?: string;
-  /** External destination — renders an <a> (use `to` for in-app routes). */
+  /** External destination: renders an <a> (use `to` for in-app routes). */
   href?: string;
-  /** Click handler — renders a <button> when neither `to` nor `href` is set. */
+  /** Click handler: renders a <button> when neither `to` nor `href` is set. */
   onClick?: MouseEventHandler;
   /** <button> type when rendered as a button. Defaults to 'button'. */
   type?: 'button' | 'submit' | 'reset';
@@ -96,28 +98,30 @@ interface ButtonProps {
   target?: string;
   /** Accessible label override. */
   'aria-label'?: string;
-  /** One-off style overrides (used sparingly during migration). */
+  /** One-off layout overrides (margins, alignment). Never colours or type. */
   style?: CSSProperties;
-  /** Optional className for legacy CSS targeting / responsive hooks. */
+  /** Optional className for responsive hooks. */
   className?: string;
   /** Button label. */
   children: ReactNode;
 }
 
 /**
- * Canonical ISL button. See the file header for the four variants.
+ * Canonical ISL button. See the file header for the three variants.
  *
  * Examples:
- *   <Button variant="active" to="/login">Sign Up</Button>
- *   <Button variant="secondary" onClick={save}>Save</Button>
- *   <Button variant="tertiary" to="/matches">View all matches</Button>
+ *   <Button variant="primary" to="/login">Sign up</Button>
+ *   <Button onClick={save}>Save</Button>
+ *   <Button variant="tertiary" to="/matches">All matches</Button>
+ *
+ * @returns A router link, anchor or button carrying the variant's styles.
  */
 export function Button({
-  variant = 'primary',
+  variant = 'secondary',
   to,
   href,
   onClick,
-  type = 'button',
+  type: buttonType = 'button',
   disabled = false,
   target,
   'aria-label': ariaLabel,
@@ -135,7 +139,7 @@ export function Button({
     ...v.rest,
     ...(disabled ? { opacity: 0.45, cursor: 'not-allowed' } : null),
     // Tertiary glows the text; the boxed variants glow their outline.
-    ...(lit && isTertiary ? { textShadow: '0 0 10px rgba(227, 224, 213, 0.75)' } : null),
+    ...(lit && isTertiary ? { textShadow: v.glow } : null),
     ...(lit && !isTertiary ? { boxShadow: v.glow } : null),
     ...style,
   };
@@ -150,7 +154,7 @@ export function Button({
   const content = (
     <>
       {children}
-      {isTertiary && <span aria-hidden="true">►</span>}
+      {isTertiary && <span aria-hidden="true">{glyph.forward}</span>}
     </>
   );
 
@@ -180,7 +184,7 @@ export function Button({
 
   return (
     <button
-      type={type}
+      type={buttonType}
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
