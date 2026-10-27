@@ -1,35 +1,40 @@
 // ── features/admin/ui/TestingPanel.tsx ───────────────────────────────────────
-// "Testing & Data Controls" tab — three independent sub-sections, each
+// "Testing & Data Controls" tab: three independent sub-sections, each
 // self-contained so a failure in one does not affect the others.
 //
 // SECTIONS
-//   1. Danger zone           — admin_reset_season() RPC wipes transient data and
-//                              reschedules every match starting 5 min from now.
-//   2. Narrative injector    — INSERT one row into `narratives` with
-//                              source='admin'.  Surfaces in the Galaxy Dispatch
-//                              feed seconds later.
-//   3. Add Player            — INSERT one row into `players`.  Stat columns are
-//                              seeded from `overall_rating` so the match engine
-//                              has a consistent starting point.
+//   1. Danger zone           admin_reset_season() RPC wipes transient data and
+//                            reschedules every match starting 5 min from now.
+//   2. Narrative injector    INSERT one row into `narratives` with
+//                            source='admin'.  Surfaces in the Galaxy Dispatch
+//                            feed seconds later.
+//   3. Add Player            INSERT one row into `players`.  Stat columns are
+//                            seeded from `overall_rating` so the match engine
+//                            has a consistent starting point.
 //
 // WHY ONE FILE
-//   All three are "poke the data" operations targeted at the same audience —
+//   All three are "poke the data" operations targeted at the same audience:
 //   a single maintainer running end-to-end tests.  Keeping them together
 //   avoids nav sprawl and makes it clear this is dev-tooling, not production.
+//
+// LOOK (docs/design-language.md)
+//   Three SectionPanels (hairline boxes), shared Field / CheckField forms on
+//   the one input style, secondary Buttons. No orange on this view: none of
+//   the three is THE thing to do here, and an orange Reset beside two forms
+//   would invite the wrong click. The danger zone was a red box with red
+//   text; red now means live or went wrong, so the panel is titled "Danger
+//   zone" and its copy ends "Irreversible."
 
 import { useEffect, useState } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import { space, tone, type } from '../../../shared/design';
+import {
+  Button, CheckField, Field, SectionHeader, SectionPanel,
+  inputStyle, useToast,
+} from '../../../shared/ui';
 import {
   resetSeasonResults, injectNarrative, addPlayer, getTeamList,
 } from '../api/admin';
-import {
-  DUST, DUST_50, DUST_FAINT, HAIRLINE, PHOBOS, ASTRO, ABYSS, FLARE,
-  LABEL_STYLE, VALUE_STYLE,
-  adminSelectStyle, adminInputStyle,
-  PanelHeader, AdminButton, ActionToast,
-  useAutoDismissToast,
-  type Toast,
-} from './primitives';
 
 // ── Tunable constants ────────────────────────────────────────────────────────
 
@@ -37,7 +42,7 @@ import {
  * Default overall rating when an admin opens the Add Player form.
  *
  * 75 sits in the middle of the seeded league's 65–90 band (see migration
- * 0009_seed_league_fixtures.sql) — a competent senior squad player without
+ * 0009_seed_league_fixtures.sql): a competent senior squad player without
  * pushing into superstar territory.  Picked so a one-click batch add of test
  * players produces realistic stat distributions.
  */
@@ -48,7 +53,7 @@ const DEFAULT_OVERALL_RATING = '75';
  *
  * Midfielders are the most common addition during tests because they touch
  * the broadest cross-section of match-engine events (passing, shooting,
- * tackling) — useful when verifying a stat-touching code change.
+ * tackling): useful when verifying a stat-touching code change.
  */
 const DEFAULT_POSITION = 'MF';
 
@@ -56,9 +61,9 @@ const DEFAULT_POSITION = 'MF';
 
 /**
  * Testing & Data Controls panel.  Renders the three sub-sections vertically
- * in the order: danger zone → narrative injector → add player.  All three
- * share a single toast slot because admin actions on this surface are
- * intentionally serial — only one button fires at a time.
+ * in the order: danger zone → narrative injector → add player.  Outcomes go
+ * to the site's toast; admin actions on this surface are serial (only one
+ * button fires at a time).
  *
  * @param db  Supabase client supplied by the parent.  All three operations
  *            require admin / service-role privileges on their target tables.
@@ -66,11 +71,7 @@ const DEFAULT_POSITION = 'MF';
 export function TestingPanel({ db }: { db: IslSupabaseClient }) {
   // ── Section 1 state: danger zone ──────────────────────────────────────────
   const [resetBusy, setResetBusy] = useState(false);
-  /**
-   * Shared toast for all three sub-sections.  See file header for the
-   * "actions are serial" rationale that justifies a single slot.
-   */
-  const [toast, setToast] = useState<Toast | null>(null);
+  const toast = useToast();
 
   // ── Section 2 state: narrative injector ───────────────────────────────────
   /** Default kind matches the Architect's most-frequent emission. */
@@ -88,33 +89,28 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
   const [playerJersey, setPlayerJersey]   = useState('');
   const [playerBusy, setPlayerBusy]       = useState(false);
 
-  // Fetch team list once on mount — populates the team selector.  If the
+  // Fetch team list once on mount: populates the team selector.  If the
   // request fails the list stays empty; the form submit button stays
   // disabled because `playerTeam` is empty, so we degrade gracefully.
   useEffect(() => {
     getTeamList(db).then(setTeams);
   }, [db]);
 
-  useAutoDismissToast(toast, setToast);
-
   // ── Handler: reset season ────────────────────────────────────────────────
   /**
    * Calls the `admin_reset_season` SQL function.  The RPC wipes all
    * transient data (events, wagers, narratives, logs) and reschedules every
    * match starting 5 min from now, preserving relative spacing.  The toast
-   * surfaces the rescheduled match count so the admin can confirm the RPC
+   * reports the rescheduled match count so the admin can confirm the RPC
    * actually touched rows rather than silently no-oping.
    */
   const onReset = async () => {
     setResetBusy(true);
     try {
       const result = await resetSeasonResults(db);
-      setToast({
-        kind: 'success',
-        message: `Reset complete. ${result.matchesReset} matches rescheduled from now.`,
-      });
+      toast.success(`Reset complete. ${result.matchesReset} matches rescheduled from now.`);
     } catch (err) {
-      setToast({ kind: 'error', message: `Reset failed: ${String(err)}` });
+      toast.error(`Reset failed: ${String(err)}`);
     } finally {
       setResetBusy(false);
     }
@@ -133,9 +129,9 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
     try {
       await injectNarrative(db, narrativeKind, narrativeBody.trim());
       setNarrativeBody('');
-      setToast({ kind: 'success', message: 'Narrative posted to Galaxy Dispatch.' });
+      toast.success('Narrative posted to Galaxy Dispatch.');
     } catch (err) {
-      setToast({ kind: 'error', message: `Inject failed: ${String(err)}` });
+      toast.error(`Inject failed: ${String(err)}`);
     } finally {
       setNarrativeBusy(false);
     }
@@ -144,7 +140,7 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
   // ── Handler: add player ──────────────────────────────────────────────────
   /**
    * Submits the add-player form.  On success clears only the Name, Jersey,
-   * and Starter fields — Team / Position / Rating persist so the admin can
+   * and Starter fields: Team / Position / Rating persist so the admin can
    * batch-add several players to the same team without re-selecting.
    */
   const onAddPlayer = async (e: React.FormEvent) => {
@@ -163,48 +159,50 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
       setPlayerName('');
       setPlayerJersey('');
       setPlayerStarter(false);
-      setToast({ kind: 'success', message: `${playerName.trim()} added to roster.` });
+      toast.success(`${playerName.trim()} added to roster.`);
     } catch (err) {
-      setToast({ kind: 'error', message: `Add player failed: ${String(err)}` });
+      toast.error(`Add player failed: ${String(err)}`);
     } finally {
       setPlayerBusy(false);
     }
   };
 
+  const narrativeBlocked = narrativeBusy || !narrativeBody.trim();
+  const playerBlocked = playerBusy || !playerTeam || !playerName.trim();
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <section aria-labelledby="testing-heading">
-      <PanelHeader id="testing-heading" title="Testing &amp; Data Controls" />
+      <SectionHeader index="I" label="Testing" title={<span id="testing-heading">Testing and data controls</span>} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
 
         {/* 1. Danger zone ─────────────────────────────────────────────────── */}
-        {/* Red border signals destructive action; explicit description of what
-            is deleted prevents accidental use. */}
-        <div style={{ background: PHOBOS, border: `1px solid ${FLARE}`, padding: 24 }}>
-          <p style={{ ...LABEL_STYLE, color: FLARE, marginBottom: 8 }}>Danger Zone</p>
-          <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Reset All Season Results</p>
-          <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 16 }}>
+        {/* The explicit description of what is deleted prevents accidental use. */}
+        <SectionPanel title="Danger zone" meta="Irreversible">
+          <h3 style={{ ...type.label, ...tone.primary, margin: 0 }}>Reset all season results</h3>
+          <p style={{ ...type.small, ...tone.secondary, marginTop: space[8], marginBottom: space[16], maxWidth: '70ch' }}>
             Wipes match events, scores, wagers, narratives, architect logs, training logs,
             and focus votes. Reschedules all matches starting 5 minutes from now,
             preserving their relative spacing. Resets season to &apos;active&apos;. Irreversible.
           </p>
-          <AdminButton onClick={onReset} busy={resetBusy} variant="danger">
-            Reset Season Results
-          </AdminButton>
-        </div>
+          <div>
+            <Button onClick={onReset} disabled={resetBusy}>
+              {resetBusy ? '…' : 'Reset season results'}
+            </Button>
+          </div>
+        </SectionPanel>
 
         {/* 2. Narrative injector ──────────────────────────────────────────── */}
-        <div style={{ background: PHOBOS, border: `1px solid ${HAIRLINE}`, padding: 24 }}>
-          <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Inject Galaxy Dispatch Narrative</p>
-          <form onSubmit={onInjectNarrative} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Kind</p>
+        <SectionPanel title="Inject Galaxy Dispatch narrative">
+          <form onSubmit={onInjectNarrative} style={{ display: 'flex', flexDirection: 'column', gap: space[16], maxWidth: 560 }}>
+            <Field id="admin-narrative-kind" label="Kind">
               {/* Five kinds mirror the Architect's narrative taxonomy. */}
               <select
+                id="admin-narrative-kind"
                 value={narrativeKind}
                 onChange={e => setNarrativeKind(e.target.value)}
-                style={adminSelectStyle}
+                style={inputStyle}
               >
                 <option value="architect_whisper">Architect Whisper</option>
                 <option value="cosmic_disturbance">Cosmic Disturbance</option>
@@ -212,60 +210,47 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
                 <option value="journalist_report">Journalist Report</option>
                 <option value="bookie_update">Bookie Update</option>
               </select>
-            </div>
-            <div>
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Summary</p>
+            </Field>
+            <Field id="admin-narrative-body" label="Summary">
               <textarea
+                id="admin-narrative-body"
                 value={narrativeBody}
                 onChange={e => setNarrativeBody(e.target.value)}
                 rows={3}
                 placeholder="The cosmos stirs…"
-                style={{ ...adminSelectStyle, resize: 'vertical', width: '100%', maxWidth: 560, boxSizing: 'border-box' }}
+                style={{ ...inputStyle, resize: 'vertical' }}
               />
-            </div>
+            </Field>
             <div>
-              {/* Plain <button type="submit"> here so Enter inside the textarea
-                  also submits.  AdminButton hardcodes type="button" to prevent
-                  accidental submission elsewhere — this is the one place we
-                  want native submit behaviour. */}
-              <button
-                type="submit"
-                disabled={narrativeBusy || !narrativeBody.trim()}
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  textTransform: 'uppercase' as const,
-                  letterSpacing: '0.12em',
-                  color: narrativeBusy || !narrativeBody.trim() ? DUST : ABYSS,
-                  background: narrativeBusy || !narrativeBody.trim() ? DUST_FAINT : ASTRO,
-                  border: `1px solid ${narrativeBusy || !narrativeBody.trim() ? HAIRLINE : ASTRO}`,
-                  padding: '10px 18px',
-                  cursor: narrativeBusy || !narrativeBody.trim() ? 'not-allowed' : 'pointer',
-                  opacity: narrativeBusy || !narrativeBody.trim() ? 0.6 : 1,
-                  transition: 'opacity 0.12s ease',
-                }}
-              >
-                {narrativeBusy ? '…' : 'Post Narrative'}
-              </button>
+              {/* type="submit" so Enter inside the form also submits: the one
+                  place on the admin console native submit is wanted. */}
+              <Button type="submit" disabled={narrativeBlocked}>
+                {narrativeBusy ? '…' : 'Post narrative'}
+              </Button>
             </div>
           </form>
-        </div>
+        </SectionPanel>
 
         {/* 3. Add player ──────────────────────────────────────────────────── */}
-        <div style={{ background: PHOBOS, border: `1px solid ${HAIRLINE}`, padding: 24 }}>
-          <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Add Player to Roster</p>
+        <SectionPanel title="Add player to roster">
           <form
             onSubmit={onAddPlayer}
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', maxWidth: 640 }}
+            style={{
+              display: 'grid',
+              // Two columns from about 400 px, one on a narrow phone.
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+              gap: `${space[16]}px ${space[24]}px`,
+              maxWidth: 640,
+            }}
           >
-            {/* Team selector — spans full width so the long team+league labels
+            {/* Team selector spans full width so the long team+league labels
                 don't get truncated in a half-width column. */}
-            <div style={{ gridColumn: '1 / -1' }}>
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Team</p>
+            <Field id="admin-player-team" label="Team" style={{ gridColumn: '1 / -1' }}>
               <select
+                id="admin-player-team"
                 value={playerTeam}
                 onChange={e => setPlayerTeam(e.target.value)}
-                style={adminSelectStyle}
+                style={inputStyle}
                 required
               >
                 <option value="">Select team</option>
@@ -273,92 +258,69 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
                   <option key={t.id} value={t.id}>{t.name} ({t.league})</option>
                 ))}
               </select>
-            </div>
-            {/* Name spans full width — long player names deserve space. */}
-            <div style={{ gridColumn: '1 / -1' }}>
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Name</p>
+            </Field>
+            {/* Name spans full width: long player names deserve space. */}
+            <Field id="admin-player-name" label="Name" style={{ gridColumn: '1 / -1' }}>
               <input
+                id="admin-player-name"
                 type="text"
                 value={playerName}
                 onChange={e => setPlayerName(e.target.value)}
                 required
                 placeholder="Nova Hashimoto"
-                style={adminInputStyle}
+                style={inputStyle}
               />
-            </div>
-            <div>
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Position</p>
-              <select value={playerPos} onChange={e => setPlayerPos(e.target.value)} style={adminSelectStyle}>
+            </Field>
+            <Field id="admin-player-position" label="Position">
+              <select id="admin-player-position" value={playerPos} onChange={e => setPlayerPos(e.target.value)} style={inputStyle}>
                 <option value="GK">GK</option>
                 <option value="DF">DF</option>
                 <option value="MF">MF</option>
                 <option value="FW">FW</option>
               </select>
-            </div>
-            <div>
-              {/* 65–90 band mirrors the seeding range used in
-                  0009_seed_league_fixtures.sql — picked so admin-created
-                  players don't tower over the seeded squad. */}
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Overall Rating (65–90)</p>
+            </Field>
+            {/* 65–90 band mirrors the seeding range used in
+                0009_seed_league_fixtures.sql: picked so admin-created
+                players don't tower over the seeded squad. */}
+            <Field id="admin-player-rating" label="Overall rating (65–90)">
               <input
+                id="admin-player-rating"
                 type="number"
                 min={65}
                 max={90}
                 value={playerRating}
                 onChange={e => setPlayerRating(e.target.value)}
-                style={adminInputStyle}
+                style={inputStyle}
               />
-            </div>
-            <div>
-              {/* 1–99 covers the full FIFA-style jersey number range. */}
-              <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>Jersey Number</p>
+            </Field>
+            {/* 1–99 covers the full FIFA-style jersey number range. */}
+            <Field id="admin-player-jersey" label="Jersey number">
               <input
+                id="admin-player-jersey"
                 type="number"
                 min={1}
                 max={99}
                 value={playerJersey}
                 onChange={e => setPlayerJersey(e.target.value)}
                 placeholder="—"
-                style={adminInputStyle}
+                style={inputStyle}
               />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 22 }}>
-              <input
-                type="checkbox"
-                id="starter-check"
-                checked={playerStarter}
-                onChange={e => setPlayerStarter(e.target.checked)}
-              />
-              <label htmlFor="starter-check" style={{ ...LABEL_STYLE }}>Starter</label>
+            </Field>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <CheckField id="starter-check" checked={playerStarter} onChange={setPlayerStarter}>
+                Starter
+              </CheckField>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              {/* Same plain <button type="submit"> rationale as the narrative form. */}
-              <button
-                type="submit"
-                disabled={playerBusy || !playerTeam || !playerName.trim()}
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  textTransform: 'uppercase' as const,
-                  letterSpacing: '0.12em',
-                  color: playerBusy || !playerTeam || !playerName.trim() ? DUST : ABYSS,
-                  background: playerBusy || !playerTeam || !playerName.trim() ? DUST_FAINT : ASTRO,
-                  border: `1px solid ${playerBusy || !playerTeam || !playerName.trim() ? HAIRLINE : ASTRO}`,
-                  padding: '10px 18px',
-                  cursor: playerBusy || !playerTeam || !playerName.trim() ? 'not-allowed' : 'pointer',
-                  opacity: playerBusy || !playerTeam || !playerName.trim() ? 0.6 : 1,
-                  transition: 'opacity 0.12s ease',
-                }}
-              >
-                {playerBusy ? '…' : 'Add Player'}
-              </button>
+              {/* Same type="submit" rationale as the narrative form. */}
+              <Button type="submit" disabled={playerBlocked}>
+                {playerBusy ? '…' : 'Add player'}
+              </Button>
             </div>
           </form>
-        </div>
+        </SectionPanel>
 
       </div>
-
-      {toast && <ActionToast toast={toast} />}
     </section>
   );
 }

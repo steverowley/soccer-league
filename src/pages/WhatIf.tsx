@@ -31,11 +31,19 @@
 //   non-admins.  The actual security boundary is the RLS policy on
 //   `shadow_match_results` (service-role only), so even a compromised
 //   client can't read the data.  Client-side gate is dev-convenience.
+//
+// LOOK (docs/design-language.md)
+//   PageHeader, then one numbered section holding the shared DataTable:
+//   one row per fixture with its outcome counts and scorelines. Loading
+//   and empty states are the shared LoadingState and EmptyState. No raw
+//   style values (scripts/designTokens.test.ts).
 
 import { useEffect, useState } from 'react';
 
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell } from '../shared/ui';
+import { space, tone } from '../shared/design';
+import {
+  DataTable, EmptyState, LoadingState, PageHeader, PageShell, SectionHeader, dataCell, dataHead,
+} from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 
@@ -237,55 +245,52 @@ export default function WhatIf() {
         subtitle="The Architect council watches outcomes that didn't happen. Each row below summarises five alternate-reality runs of an upcoming fixture. The canonical timeline lives elsewhere."
       />
 
-      <section style={{ padding: '8px 0 48px' }}>
+      <section aria-labelledby="what-if-heading" style={{ paddingBottom: space[48] }}>
+        <SectionHeader index="I" label="Upcoming" title={<span id="what-if-heading">Alternate timelines</span>} />
         {loading ? (
-          <p style={{ color: COLORS.dust50 }}>Loading shadow distributions…</p>
+          <LoadingState label="Loading shadow distributions…" />
         ) : matches.length === 0 ? (
-          <p style={{ color: COLORS.dust50 }}>
+          <EmptyState centred={false}>
             No shadow data yet: the shadow-match-worker hasn&rsquo;t run, or no
             upcoming matches are inside the worker&rsquo;s horizon.
-          </p>
+          </EmptyState>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {matches.map((m) => {
-              const dist = distributions.get(m.id);
-              if (!dist) return null;
-              const totalLabel = `(${dist.totalShadows} timelines)`;
-              return (
-                <li
-                  key={m.id}
-                  style={{
-                    borderTop: `1px solid ${COLORS.hairline}`,
-                    padding: '16px 0',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <strong>{m.home_team_id} vs {m.away_team_id}</strong>
-                    <span style={{ color: COLORS.dust50, fontSize: 13 }}>
+          <DataTable caption="Shadow outcomes per upcoming fixture" minWidth={720}>
+            <thead>
+              <tr>
+                <th scope="col" style={dataHead()}>Fixture</th>
+                <th scope="col" style={dataHead()}>Kickoff</th>
+                <th scope="col" style={dataHead('right')}>Home</th>
+                <th scope="col" style={dataHead('right')}>Draw</th>
+                <th scope="col" style={dataHead('right')}>Away</th>
+                <th scope="col" style={dataHead()}>Scorelines</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matches.map((m) => {
+                const dist = distributions.get(m.id);
+                if (!dist) return null;
+                const totalLabel = `(${dist.totalShadows} timelines)`;
+                return (
+                  <tr key={m.id}>
+                    <td style={{ ...dataCell(), fontWeight: 700 }}>
+                      {m.home_team_id} vs {m.away_team_id}
+                    </td>
+                    <td style={{ ...dataCell(), ...tone.secondary, whiteSpace: 'nowrap' }}>
                       {formatKickoff(m.scheduled_at)}
-                    </span>
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <span style={{ marginRight: 16 }}>
-                      home: <strong>{dist.homeCount}</strong>
-                    </span>
-                    <span style={{ marginRight: 16 }}>
-                      draw: <strong>{dist.drawCount}</strong>
-                    </span>
-                    <span style={{ marginRight: 16 }}>
-                      away: <strong>{dist.awayCount}</strong>
-                    </span>
-                    <span style={{ color: COLORS.dust50, fontSize: 13 }}>
-                      {totalLabel}
-                    </span>
-                  </div>
-                  <div style={{ color: COLORS.dust70, fontSize: 13 }}>
-                    Scorelines: {dist.scoreLines.join(' · ')}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                    </td>
+                    <td style={dataCell('right')}>{dist.homeCount}</td>
+                    <td style={dataCell('right')}>{dist.drawCount}</td>
+                    <td style={dataCell('right')}>{dist.awayCount}</td>
+                    <td style={{ ...dataCell(), ...tone.secondary }}>
+                      {dist.scoreLines.join(' · ')}{' '}
+                      <span style={tone.tertiary}>{totalLabel}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
         )}
       </section>
     </PageShell>

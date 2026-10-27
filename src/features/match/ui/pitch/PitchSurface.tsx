@@ -17,7 +17,7 @@
 //   markup stays readable in PR diffs.
 //
 // STROKE
-//   `COLORS.hairline` for every line — same opacity-modulated dust
+//   `color.line` (the design token) for every line: same opacity-modulated dust
 //   token used by the rest of the editorial chrome.  The pitch reads
 //   as "etched into" the page rather than overlaying it, matching
 //   the StandingsTable / MatchCard treatment.
@@ -27,7 +27,7 @@
 //   for night/day match treatments, but the spec for 2/6 keeps it
 //   static; the parameterisation will be additive when needed.
 
-import { COLORS } from '../../../../components/Layout';
+import { color } from '../../../../shared/design';
 
 /**
  * Pitch viewport width in SVG user units.  Drives the `viewBox` and
@@ -118,7 +118,7 @@ export function PitchSurface() {
         y={0}
         width={PITCH_VIEWBOX_WIDTH}
         height={PITCH_VIEWBOX_HEIGHT}
-        fill={COLORS.phobosAsh}
+        fill={color.surfaceRaised}
       />
 
       {/* ── Outer touchlines ──────────────────────────────────────────── */}
@@ -128,7 +128,7 @@ export function PitchSurface() {
         width={PITCH_VIEWBOX_WIDTH  - STROKE_WIDTH}
         height={PITCH_VIEWBOX_HEIGHT - STROKE_WIDTH}
         fill="none"
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
 
@@ -138,7 +138,7 @@ export function PitchSurface() {
         y1={0}
         x2={cx}
         y2={PITCH_VIEWBOX_HEIGHT}
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
 
@@ -148,10 +148,10 @@ export function PitchSurface() {
         cy={cy}
         r={CENTRE_CIRCLE_R}
         fill="none"
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
-      <circle cx={cx} cy={cy} r={0.6} fill={COLORS.hairline} />
+      <circle cx={cx} cy={cy} r={0.6} fill={color.line} />
 
       {/* ── Home (left) penalty box ────────────────────────────────────── */}
       <rect
@@ -160,7 +160,7 @@ export function PitchSurface() {
         width={PEN_BOX_DEPTH}
         height={PEN_BOX_WIDTH}
         fill="none"
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
       {/* Home six-yard box */}
@@ -170,11 +170,11 @@ export function PitchSurface() {
         width={SIX_YARD_DEPTH}
         height={SIX_YARD_WIDTH}
         fill="none"
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
       {/* Home penalty spot */}
-      <circle cx={PEN_SPOT_OFFSET} cy={cy} r={0.6} fill={COLORS.hairline} />
+      <circle cx={PEN_SPOT_OFFSET} cy={cy} r={0.6} fill={color.line} />
 
       {/* ── Away (right) penalty box ───────────────────────────────────── */}
       <rect
@@ -183,7 +183,7 @@ export function PitchSurface() {
         width={PEN_BOX_DEPTH}
         height={PEN_BOX_WIDTH}
         fill="none"
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
       {/* Away six-yard box */}
@@ -193,7 +193,7 @@ export function PitchSurface() {
         width={SIX_YARD_DEPTH}
         height={SIX_YARD_WIDTH}
         fill="none"
-        stroke={COLORS.hairline}
+        stroke={color.line}
         strokeWidth={STROKE_WIDTH}
       />
       {/* Away penalty spot */}
@@ -201,7 +201,7 @@ export function PitchSurface() {
         cx={PITCH_VIEWBOX_WIDTH - PEN_SPOT_OFFSET}
         cy={cy}
         r={0.6}
-        fill={COLORS.hairline}
+        fill={color.line}
       />
     </svg>
   );

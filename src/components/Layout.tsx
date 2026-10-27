@@ -1,45 +1,23 @@
 // ── Layout.tsx ──────────────────────────────────────────────────────────────
-// Site chrome shared by every page: the content Container and the Footer,
-// plus the legacy `COLORS` map kept for the pages not yet migrated.
+// Site chrome shared by every page: the content Container and the Footer.
 //
 // Exports:
 //   - Container   max-width content wrapper on the layout tokens
 //   - Footer      site-wide footer (2 px rule, badge, legal links)
-//   - COLORS      DEPRECATED palette for the unmigrated group 5b files
 //
 // On the design language since group 5a (docs/design-language.md), with no
 // raw style values (scripts/designTokens.test.ts). The old page primitives
 // that used to live here (SectionHeader, PrimaryButton, FocusCTA, DustButton,
 // TeamCrest, BackLink) are gone: their last users moved to src/shared/ui
-// (SectionHeader, Button, Crest, BackLink). New code never imports from this
-// file except Container and Footer, which PageShell renders.
+// (SectionHeader, Button, Crest, BackLink). The deprecated `COLORS` palette
+// went with the design system's last group, when its final importers (the
+// admin panels, What if, the match viewer and the mini pitch) moved to the
+// `color` tokens. Nothing imports from this file except PageShell (Footer)
+// and the route fallback skeleton (Container).
 
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { color, glyph, layout, space, tone, type } from '../shared/design';
-
-/**
- * DEPRECATED legacy palette, kept only for the files group 5b has not
- * migrated yet (Admin, What if, the admin panels, the match viewer and the
- * two mini-pitch SVGs). Every entry now points at a design token, so those
- * files already render the spec's colours (the retired 50% and 70% dust map
- * to the tertiary and secondary text tones that pass AA). Delete it when the
- * last importer moves to `color.*` from src/shared/design.
- */
-export const COLORS = Object.freeze({
-  dust:       color.text,
-  abyss:      color.bg,
-  phobosAsh:  color.surfaceRaised,
-  quantum:    color.architect,
-  flare:      color.live,
-  terraNova:  color.success,
-  astro:      color.action,
-  white:      color.ruleStrong,
-  hairline:   color.line,
-  dust50:     color.textTertiary,
-  dust70:     color.textSecondary,
-  dustFaint:  color.lineFaint,
-});
 
 /**
  * Fixed-max-width content container: centres children at the design

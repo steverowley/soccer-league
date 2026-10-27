@@ -1,142 +1,86 @@
 // ── scripts/designTokens.test.ts ─────────────────────────────────────────────
 // Design language guard (docs/design-language.md, section 8): no raw font
-// sizes, colours, Lunar Dust opacities or letter spacings in src/. Pages use
-// the tokens in src/shared/design and the components in src/shared/ui.
+// sizes, colours, Lunar Dust opacities or letter spacings anywhere in src/.
+// Pages use the tokens in src/shared/design and the components in
+// src/shared/ui; a <canvas> uses the canvas palette (`canvasColor`).
 //
-// It is a RATCHET while pages migrate group by group: the committed
-// baseline (scripts/designTokens.baseline.json) records each unmigrated
-// file's current counts. The test fails when
-//   - any file's count of any kind rises above its baseline entry,
-//   - a file not in the baseline has any raw value (every new file and every
-//     migrated page must be at zero),
-//   - a migrated page (MIGRATED below) is in the baseline at all, or
-//   - the baseline still lists a file that is now clean or gone (so the
-//     ratchet only ever tightens: regenerate it).
-// After migrating a page, regenerate the baseline (it only moves down):
-//   npm run design:baseline
-// The guard ends at zero when the last group lands.
+// A HARD ZERO. While pages migrated group by group this test was a ratchet
+// against a per-file baseline (scripts/designTokens.baseline.json, lowered
+// by `npm run design:baseline`). The last group (5b) took every file to
+// zero, so the baseline, its script and the per-page MIGRATED list were
+// deleted: any raw value in any scanned file now fails, new file or old.
+//
+// What is scanned and why the few exclusions exist (test files, the token
+// files, generated database types, the club colours in leagueData.ts) is
+// documented in scripts/lib/designTokens.ts, next to the rules.
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  SKIP_DIRS,
+  SKIP_PATHS,
   countByFile,
   findRawValues,
-  regressions,
   scanSource,
-  total,
-  type RawCounts,
+  violationReport,
+  type RawHit,
 } from './lib/designTokens';
 
-/** Pages (and their private components) moved onto the tokens: must stay at zero. */
-const MIGRATED = [
-  'src/pages/Home.tsx',
-  'src/pages/Matches.tsx',
-  'src/pages/Leagues.tsx',
-  'src/pages/LeagueDetail.tsx',
-  'src/components/StandingsTable.tsx',
-  'src/shared/ui/PageShell.tsx',
-  'src/shared/ui/PageHeader.tsx',
-  'src/shared/ui/SectionHeader.tsx',
-  'src/shared/ui/Card.tsx',
-  'src/shared/ui/Button.tsx',
-  'src/shared/ui/Tag.tsx',
-  'src/shared/ui/LiveBadge.tsx',
-  'src/shared/ui/BackLink.tsx',
-  'src/shared/ui/Breadcrumbs.tsx',
-  'src/shared/ui/Crest.tsx',
-  'src/shared/ui/StatBlock.tsx',
-  'src/shared/ui/Chip.tsx',
-  'src/shared/ui/Kicker.tsx',
-  'src/shared/ui/SectionPanel.tsx',
-  'src/shared/ui/EmptyState.tsx',
-  'src/shared/ui/DataState.tsx',
-  'src/shared/ui/Skeleton.tsx',
-  'src/shared/ui/StatPair.tsx',
-  'src/shared/ui/KeyValue.tsx',
-  'src/shared/ui/Pip.tsx',
-  // Group 2: the match page and the components only it (or it first) renders.
-  'src/pages/MatchDetail.tsx',
-  'src/components/TeachingStrip.tsx',
-  'src/components/WagerWidget.tsx',
-  // Group 3: clubs and people, and the shared pieces they introduced.
-  'src/pages/Teams.tsx',
-  'src/pages/TeamDetail.tsx',
-  'src/pages/PlayerDetail.tsx',
-  'src/pages/ManagerDetail.tsx',
-  'src/pages/EntityDetail.tsx',
-  'src/shared/ui/FormStrip.tsx',
-  'src/shared/ui/DataTable.tsx',
-  'src/shared/ui/FactList.tsx',
-  // Group 4: content pages, and the shared pieces they render.
-  'src/pages/News.tsx',
-  'src/pages/Idols.tsx',
-  'src/pages/Leaderboards.tsx',
-  'src/pages/World.tsx',
-  'src/pages/Seasons.tsx',
-  'src/pages/SeasonDetail.tsx',
-  'src/components/LoreHistory.tsx',
-  'src/features/entities/ui/relationshipGraph/RelationshipGraph.tsx',
-  'src/features/entities/ui/relationshipGraph/KindGlyph.tsx',
-  'src/features/entities/ui/relationshipGraph/kindColor.ts',
-  // Group 5a: account and static pages, the site chrome, the error screens,
-  // toasts, notification settings, and the shared form and prose pieces.
-  'src/pages/Login.tsx',
-  'src/pages/Welcome.tsx',
-  'src/pages/ResetPassword.tsx',
-  'src/pages/Profile.tsx',
-  'src/pages/Training.tsx',
-  'src/pages/Wagers.tsx',
-  'src/pages/Voting.tsx',
-  'src/pages/About.tsx',
-  'src/pages/Privacy.tsx',
-  'src/pages/Terms.tsx',
-  'src/pages/NotFound.tsx',
-  'src/components/Header.tsx',
-  'src/components/Layout.tsx',
-  'src/components/ErrorBoundary.tsx',
-  'src/components/RouteErrorBoundary.tsx',
-  'src/shared/ui/Toast.tsx',
-  'src/shared/ui/Field.tsx',
-  'src/shared/ui/Prose.tsx',
-  'src/features/notifications/ui/NotificationSettings.tsx',
-];
-
 const root = process.cwd();
-const baselinePath = join(root, 'scripts', 'designTokens.baseline.json');
-const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as Record<string, RawCounts>;
-const hits = findRawValues(root);
-const current = countByFile(hits);
 
-function describeHits(file: string): string {
-  return hits
-    .filter((h) => h.file === file)
-    .map((h) => `  ${h.file}:${h.line}  [${h.kind}]  ${h.text}`)
-    .join('\n');
+/**
+ * The guard itself, as a function so it can be run against a fixture: it
+ * throws with the report when there is any raw value.
+ *
+ * @param hits  Raw values found.
+ */
+function assertNoRawValues(hits: readonly RawHit[]): void {
+  const report = violationReport(hits);
+  if (report != null) throw new Error(report);
 }
 
-describe('design tokens guard', () => {
-  it('no file has more raw style values than its baseline (new files: none)', () => {
-    const up = regressions(baseline, current);
-    const report = up
-      .map((r) => `${r.file} ${r.kind}: ${r.baseline} -> ${r.now}\n${describeHits(r.file)}`)
-      .join('\n');
-    expect(up, `\nRaw style values above the baseline. Use src/shared/design tokens:\n${report}\n`).toEqual([]);
+describe('design tokens guard (hard zero)', () => {
+  it('src/ has no raw font sizes, colours, dust opacities or letter spacings', () => {
+    const hits = findRawValues(root);
+    expect(countByFile(hits), violationReport(hits) ?? '').toEqual({});
+    expect(() => assertNoRawValues(hits)).not.toThrow();
   });
 
-  it('migrated pages and the shared components are at zero and absent from the baseline', () => {
-    for (const file of MIGRATED) {
-      expect(existsSync(join(root, file)), `${file} is listed as migrated but does not exist`).toBe(true);
-      expect(baseline[file], `${file} must not be in the baseline`).toBeUndefined();
-      expect(total(current[file]), `${file} has raw values:\n${describeHits(file)}`).toBe(0);
-    }
+  it('the ratchet is gone: no baseline file and no baseline script', () => {
+    expect(existsSync(join(root, 'scripts', 'designTokens.baseline.json'))).toBe(false);
+    expect(existsSync(join(root, 'scripts', 'design-baseline.ts'))).toBe(false);
   });
 
-  it('the baseline is tight: no entry for a file that is now cleaner or gone', () => {
-    const stale = Object.entries(baseline)
-      .filter(([file, counts]) => total(current[file]) < total(counts))
-      .map(([file, counts]) => `${file}: ${total(counts)} -> ${total(current[file])}`);
-    expect(stale, `\nThe baseline can shrink. Run: npm run design:baseline\n${stale.join('\n')}\n`).toEqual([]);
+  it('excludes only the token files, generated types and the club colour data', () => {
+    expect(SKIP_DIRS).toEqual(['src/shared/design/']);
+    expect([...SKIP_PATHS].sort()).toEqual(['src/data/leagueData.ts', 'src/types/database.ts']);
+    for (const p of [...SKIP_DIRS, ...SKIP_PATHS]) expect(existsSync(join(root, p)), `${p} is excluded but missing`).toBe(true);
+  });
+});
+
+describe('the guard fails on a new raw value (fixture)', () => {
+  // A component someone might add tomorrow: one raw colour, one raw size.
+  const fixture = [
+    `import { type } from '../shared/design';`,
+    `export function Promo() {`,
+    `  return <p style={{ ...type.body, fontSize: 14, color: '#FF0000' }}>Buy now</p>;`,
+    `}`,
+  ].join('\n');
+  const hits: RawHit[] = scanSource('src/pages/Promo.tsx', fixture).map((h) => ({ file: 'src/pages/Promo.tsx', ...h }));
+
+  it('finds the raw colour and the raw font size', () => {
+    expect(hits.map((h) => h.kind).sort()).toEqual(['colour', 'fontSize']);
+    expect(hits.every((h) => h.line === 3)).toBe(true);
+  });
+
+  it('the hard-zero assertion throws and names the file and line', () => {
+    expect(() => assertNoRawValues(hits)).toThrow(/src\/pages\/Promo\.tsx:3 {2}\[(colour|fontSize)\]/);
+  });
+
+  it('the same component on tokens passes', () => {
+    const clean = fixture.replace('fontSize: 14, color: \'#FF0000\'', 'color: color.action');
+    expect(() => assertNoRawValues(scanSource('src/pages/Promo.tsx', clean).map((h) => ({ file: 'x', ...h })))).not.toThrow();
   });
 });
 
@@ -153,6 +97,9 @@ describe('the scanner itself', () => {
     `export const css = \`.x { font-size: 36px !important; letter-spacing: 0.1em; color: #fff; }\`;`,
     `export const ok = \`.y { font-size: var(--isl-size-score); }\`;`,
     `export const Svg = () => <text fontSize={12} fill="#4169E1">x</text>;`,
+    `export const shade = (r: number, g: number, b: number) => \`rgb(\${r},\${g},\${b})\`;`,
+    `export const fade = (a: number) => \`rgba(227, 224, 213, \${a})\`;`,
+    `export const mixed = (r: number) => \`rgb(10,10,10) rgb(\${r},0,0)\`;`,
   ].join('\n');
   const found = scanSource('probe.tsx', src);
   const by = (line: number) => found.filter((h) => h.line === line).map((h) => h.kind).sort();
@@ -169,5 +116,14 @@ describe('the scanner itself', () => {
     expect(by(1)).toEqual([]);
     expect(by(4)).toEqual([]);
     expect(by(8)).toEqual([]);
+  });
+
+  it('counts a colour computed from interpolated channels as computed, not raw', () => {
+    expect(by(10)).toEqual([]);
+  });
+
+  it('still flags a literal channel next to an interpolation', () => {
+    expect(by(11)).toEqual(['dust']);
+    expect(by(12)).toEqual(['colour']);
   });
 });

@@ -8,11 +8,17 @@
 // here is for the maintainer, never a player-facing surface.
 //
 // COST: all data is pre-stored and public-read (getPlayer + entity persona /
-// snippets) — no LLM call at click-time.
+// snippets): no LLM call at click-time.
+//
+// LOOK (docs/design-language.md): a shared SectionPanel (hairline, no fill),
+// type presets and text tones only. The stat bars fill in the default text
+// tone on a hairline track (they were purple: purple is kept for the
+// Architect and focus), square, as every bar in the system is.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { COLORS } from '../../../../components/Layout';
+import { color, numeric, space, tone, type } from '../../../../shared/design';
+import { SectionPanel } from '../../../../shared/ui';
 import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 import {
   getPersona,
@@ -38,6 +44,15 @@ const STAT_FIELDS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'athletic', label: 'Athletic' },
   { key: 'technical', label: 'Technical' },
 ];
+
+/**
+ * Small uppercase heading inside the panel: the label type, secondary tone.
+ * A function so the preset spread is not a top-level side effect (which
+ * would keep this module in the entry bundle via the match barrel).
+ */
+function heading(): CSSProperties {
+  return { ...type.label, ...tone.secondary, margin: 0, marginBottom: space[8] };
+}
 
 /** What we resolve for a selected player. */
 interface PlayerInspect {
@@ -87,7 +102,7 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
       try {
         const player = await getPlayer(publicDb, playerId);
         const entityId = strOrNull((player as Record<string, unknown>).entity_id);
-        // Persona + snippets are optional — a player may have no entity yet.
+        // Persona + snippets are optional: a player may have no entity yet.
         const [persona, snippets] = entityId
           ? await Promise.all([
               getPersona(publicDb, entityId).catch(() => null),
@@ -123,7 +138,7 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
   if (!playerId) {
     return (
       <Shell>
-        <p style={{ color: COLORS.dust50, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+        <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
           Click a player on the pitch to inspect their stats and thoughts.
         </p>
       </Shell>
@@ -132,7 +147,7 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
   if (loading || !data) {
     return (
       <Shell>
-        <p style={{ color: COLORS.dust50, fontSize: 13, margin: 0 }}>
+        <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
           {loading ? 'Loading…' : 'No data.'}
         </p>
       </Shell>
@@ -148,96 +163,80 @@ export function PlayerThoughtsPanel({ playerId }: { playerId: string | null }) {
   return (
     <Shell>
       {/* Identity */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.dust }}>{data.name}</div>
-        <div style={{ fontSize: 12, color: COLORS.dust50, marginTop: 2 }}>
+      <div style={{ marginBottom: space[16] }}>
+        <div style={{ ...type.subheading, overflowWrap: 'anywhere' }}>{data.name}</div>
+        <div style={{ ...type.small, ...tone.secondary, marginTop: space[4] }}>
           {[positionLabel, data.age != null ? `age ${data.age}` : null, data.nationality]
             .filter(Boolean)
             .join(' · ')}
         </div>
         {data.personality && (
-          <div style={{ fontSize: 12, color: COLORS.quantum, marginTop: 4 }}>{data.personality}</div>
+          <div style={{ ...type.small, ...tone.primary, marginTop: space[4] }}>{data.personality}</div>
         )}
       </div>
 
       {/* Engine stats (admin) */}
-      <SectionLabel>Engine stats <span style={{ color: COLORS.dust50 }}>· admin view</span></SectionLabel>
-      <div style={{ marginBottom: 14 }}>
+      <h3 style={heading()}>Engine stats <span style={tone.tertiary}>· admin view</span></h3>
+      <div style={{ marginBottom: space[16] }}>
         {STAT_FIELDS.map((s) => (
           <StatBar key={s.key} label={s.label} value={data.stats[s.key] ?? null} />
         ))}
         {data.overall != null && (
-          <div style={{ fontSize: 11, color: COLORS.dust50, marginTop: 6 }}>
+          <div style={{ ...type.small, ...tone.secondary, marginTop: space[8] }}>
             Overall rating {data.overall}
           </div>
         )}
       </div>
 
       {/* Thoughts */}
-      <SectionLabel>Thoughts</SectionLabel>
+      <h3 style={heading()}>Thoughts</h3>
       {data.persona?.voice_paragraph ? (
-        <p style={{ fontSize: 13, color: COLORS.dust70, fontStyle: 'italic', lineHeight: 1.6, margin: '0 0 10px' }}>
+        <p style={{ ...type.small, ...tone.secondary, fontStyle: 'italic', margin: 0, marginBottom: space[12] }}>
           {data.persona.voice_paragraph}
         </p>
       ) : null}
       {coreQuotes.map((q, i) => (
-        <p key={`q${i}`} style={{ fontSize: 13, color: COLORS.dust, margin: '0 0 8px', paddingLeft: 10, borderLeft: `2px solid ${COLORS.hairline}` }}>
+        <p
+          key={`q${i}`}
+          style={{
+            ...type.small,
+            ...tone.primary,
+            margin: 0,
+            marginBottom: space[8],
+            paddingLeft: space[12],
+            borderLeft: `1px solid ${color.line}`,
+          }}
+        >
           “{q}”
         </p>
       ))}
       {recentSnippets.length > 0 ? (
-        <ul style={{ listStyle: 'none', padding: 0, margin: '6px 0 0' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginTop: space[8] }}>
           {recentSnippets.map((s) => (
-            <li key={s.id} style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: COLORS.dust50 }}>
+            <li key={s.id} style={{ marginBottom: space[8] }}>
+              <div style={{ ...type.label, ...tone.tertiary }}>
                 {s.kind}{s.mood ? ` · ${s.mood}` : ''}
               </div>
-              <div style={{ fontSize: 13, color: COLORS.dust70, lineHeight: 1.5 }}>{s.text}</div>
+              <div style={{ ...type.small, ...tone.secondary }}>{s.text}</div>
             </li>
           ))}
         </ul>
       ) : (
         !data.persona?.voice_paragraph &&
         coreQuotes.length === 0 && (
-          <p style={{ fontSize: 13, color: COLORS.dust50, margin: 0 }}>No recorded thoughts yet.</p>
+          <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>No recorded thoughts yet.</p>
         )
       )}
     </Shell>
   );
 }
 
-/** Bordered container matching the viewer's chrome. */
+/** The panel frame: the shared hairline SectionPanel, filling its column. */
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div
-      style={{
-        border: `1px solid ${COLORS.hairline}`,
-        background: COLORS.phobosAsh,
-        padding: 14,
-        boxSizing: 'border-box',
-        height: '100%',
-        overflowY: 'auto',
-      }}
-    >
+    <SectionPanel title="Player" padding={space[16]} style={{ height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
       {children}
-    </div>
-  );
-}
-
-/** Small uppercase section heading. */
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 10,
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        color: COLORS.dust50,
-        marginBottom: 8,
-      }}
-    >
-      {children}
-    </div>
+    </SectionPanel>
   );
 }
 
@@ -245,12 +244,12 @@ function SectionLabel({ children }: { children: ReactNode }) {
 function StatBar({ label, value }: { label: string; value: number | null }) {
   const pct = value != null ? Math.max(0, Math.min(100, (value / 99) * 100)) : 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-      <div style={{ width: 70, fontSize: 11, color: COLORS.dust70 }}>{label}</div>
-      <div style={{ flex: 1, height: 6, background: COLORS.hairline, borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: COLORS.quantum }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: space[8], marginBottom: space[4] }}>
+      <div style={{ ...type.small, ...tone.secondary, width: 88, flex: 'none' }}>{label}</div>
+      <div style={{ flex: 1, height: 6, background: color.line, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color.text }} />
       </div>
-      <div style={{ width: 22, fontSize: 11, color: COLORS.dust, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ ...type.small, ...numeric, ...tone.primary, width: 24, textAlign: 'right', flex: 'none' }}>
         {value ?? '—'}
       </div>
     </div>

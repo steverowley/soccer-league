@@ -29,6 +29,7 @@ import {
   type AdminTab,
 } from '@features/admin';
 import { MatchViewerDemo } from '../features/match';
+import { layout, space } from '../shared/design';
 import { PageHeader, PageShell } from '../shared/ui';
 
 // ── Root page ─────────────────────────────────────────────────────────────────
@@ -82,10 +83,11 @@ export default function Admin() {
           {/* ── Body panel (switched on tab) ───────────────────────────────
               Only the active panel renders: unmounted tabs lose state on
               switch, which is intentional: a stale fixture filter or
-              in-flight toast shouldn't survive context switches between
+              in-flight edit shouldn't survive context switches between
               unrelated panels.  Each panel re-fetches on mount, so first
-              paint of a tab is always a fresh view. */}
-          <div style={{ padding: '32px 0 80px' }}>
+              paint of a tab is always a fresh view. The section gap token
+              spaces the panel from the tab strip (48 px, 32 on a phone). */}
+          <div style={{ paddingTop: layout.sectionGap, paddingBottom: space[64] }}>
             {activeTab === 'overview' && <OverviewPanel db={db} />}
             {activeTab === 'season' && <SeasonControlsPanel db={db} />}
             {activeTab === 'fixtures' && <FixtureBrowser db={db} />}

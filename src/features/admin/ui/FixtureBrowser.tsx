@@ -1,12 +1,12 @@
 // ── features/admin/ui/FixtureBrowser.tsx ─────────────────────────────────────
-// Paginated fixture table with a status-filter chip strip and a per-row
-// "Complete" affordance for the manual match-completion path.
+// Fixture table with a status-filter tag strip and a per-row "Complete"
+// affordance for the manual match-completion path.
 //
 // WHY SERVER-SIDE FILTER
 //   The season can hold 200+ matches; fetching all and filtering client-side
 //   would push a large payload on an admin-only surface that loads
 //   infrequently.  We re-fetch with the corresponding status filter when a
-//   chip is clicked so the response stays small.
+//   tag is clicked so the response stays small.
 //
 // WHY MANUAL COMPLETION LIVES HERE
 //   Each `scheduled` row exposes a "Complete" button that opens an inline
@@ -17,26 +17,30 @@
 //   downstream effects.  Keeping this UI inside the row keeps the causal
 //   chain ("this scheduled match → those two numbers → settle wagers")
 //   visually obvious.
+//
+// LOOK (docs/design-language.md)
+//   Filters are shared Tags (selected = Lunar Dust fill), the table is the
+//   shared DataTable, live rows carry the shared LiveBadge (red means
+//   live), "Complete…" is a secondary Button (it repeats on every row, so
+//   it is never primary), and the inline editor's Save is the view's one
+//   primary action: only one row can be in edit mode at a time.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import type { IslSupabaseClient } from '@shared/supabase/client';
-import { LiveBadge } from '@shared/ui';
+import { space, tone, type } from '../../../shared/design';
+import {
+  Button, DataTable, EmptyState, LiveBadge, SectionHeader, Skeleton, Tag, TextLink,
+  dataCell, dataHead, inputStyle, useToast,
+} from '../../../shared/ui';
 import {
   getAdminFixtures, completeMatchManually,
   type AdminFixture,
 } from '../api/admin';
-import {
-  DUST, DUST_50, DUST_70, DUST_FAINT, HAIRLINE, QUANTUM, FLARE, ABYSS,
-  LABEL_STYLE, VALUE_STYLE,
-  PanelHeader, FilterChip, Skeleton, ActionToast, AdminButton,
-  fmtDatetime, useAutoDismissToast,
-  type Toast,
-} from './primitives';
+import { fmtDatetime } from './format';
 
 // ── Fixture status filter sentinels ──────────────────────────────────────────
 // String literals fed directly to the Supabase `eq('status', filter)` call
-// without a mapping step — keep these in sync with the `matches.status` enum.
+// without a mapping step: keep these in sync with the `matches.status` enum.
 
 /** Show all match statuses in the fixture browser (no filter). */
 const FIXTURE_ALL       = 'all';
@@ -48,7 +52,7 @@ const FIXTURE_LIVE      = 'in_progress';
 const FIXTURE_DONE      = 'completed';
 
 /**
- * Ordered chip descriptors driving the filter strip.  The visual order is
+ * Ordered tag descriptors driving the filter strip.  The visual order is
  * the same order an admin walks through a typical match lifecycle:
  * scheduled → live → completed, with "All" first as the default.
  */
@@ -59,18 +63,21 @@ const FIXTURE_FILTERS = [
   { id: FIXTURE_DONE,      label: 'Completed' },
 ] as const;
 
+/** Column headings, in order. */
+const HEADINGS = ['Status', 'Round', 'Home', 'Away', 'Score', 'Scheduled', 'Actions'] as const;
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 /**
- * Fixture browser panel.  Renders a chip strip + a table of matches; clicking
- * a chip refetches with the corresponding status filter.  Scheduled rows
+ * Fixture browser panel.  Renders a tag strip + a table of matches; clicking
+ * a tag refetches with the corresponding status filter.  Scheduled rows
  * expose a "Complete" affordance that triggers `completeMatchManually`.
  *
  * State scope:
  *   - `fixtures`/`loading`/`filter` drive the table render.
  *   - `editingId` tracks the row currently in inline-edit mode (only one row
- *     can be edited at a time — opening a second row collapses the first).
- *   - `toast` surfaces success/error from the manual-completion call.
+ *     can be edited at a time: opening a second row collapses the first).
+ *   - Outcomes of the manual-completion call go to the site's toast.
  *
  * @param db  Supabase client supplied by the parent.
  */
@@ -79,7 +86,7 @@ export function FixtureBrowser({ db }: { db: IslSupabaseClient }) {
   const [loading, setLoading]   = useState(true);
   const [filter, setFilter]     = useState<string>(FIXTURE_ALL);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [toast, setToast]       = useState<Toast | null>(null);
+  const toast = useToast();
 
   /**
    * Re-fetch the visible fixtures from Supabase.  Wrapped in `useCallback`
@@ -92,97 +99,87 @@ export function FixtureBrowser({ db }: { db: IslSupabaseClient }) {
       .finally(() => setLoading(false));
   }, [db]);
 
-  // Initial load — defaults to "All" so the admin sees the full table on first
+  // Initial load: defaults to "All" so the admin sees the full table on first
   // open and chooses a narrower filter only if needed.
   // setState is called through fetchFixtures (async), not synchronously.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchFixtures(FIXTURE_ALL); }, [fetchFixtures]);
 
-  useAutoDismissToast(toast, setToast);
-
   /**
-   * Switch the active filter chip and immediately refetch.  Also closes any
-   * open row editor — the row being edited might disappear from the new
+   * Switch the active filter tag and immediately refetch.  Also closes any
+   * open row editor: the row being edited might disappear from the new
    * filtered view, so keeping the editor open would be misleading.
    */
-  const onChipClick = (id: string) => {
+  const onTagClick = (id: string) => {
     setFilter(id);
     setEditingId(null);
     fetchFixtures(id);
   };
 
   /**
-   * Called by a row-level editor on successful manual completion.  Surfaces
-   * a success toast, closes the editor, and re-fetches so the row's status
+   * Called by a row-level editor on successful manual completion.  Shows a
+   * success toast, closes the editor, and re-fetches so the row's status
    * column transitions from "scheduled" to "completed" without a manual
    * reload.
    */
   const onCompletionSuccess = (matchId: string, homeScore: number, awayScore: number) => {
-    setToast({
-      kind: 'success',
-      message: `Match ${matchId} completed ${homeScore}–${awayScore}. Bus event emitted.`,
-    });
+    toast.success(`Match ${matchId} completed ${homeScore}–${awayScore}. Bus event emitted.`);
     setEditingId(null);
     fetchFixtures(filter);
   };
 
   /** Called by a row-level editor when the underlying API throws. */
   const onCompletionError = (msg: string) => {
-    setToast({ kind: 'error', message: `Complete failed: ${msg}` });
+    toast.error(`Complete failed: ${msg}`);
   };
 
   return (
     <section aria-labelledby="fixture-heading">
-      <PanelHeader id="fixture-heading" title="Fixture Browser" />
+      <SectionHeader index="I" label="Fixtures" title={<span id="fixture-heading">Fixture browser</span>} />
 
       {/* Filter strip ────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div role="group" aria-label="Filter by status" style={{ display: 'flex', gap: space[8], marginBottom: space[24], flexWrap: 'wrap' }}>
         {FIXTURE_FILTERS.map(({ id, label }) => (
-          <FilterChip
+          <Tag
             key={id}
-            active={filter === id}
-            onClick={() => onChipClick(id)}
+            selected={filter === id}
+            onClick={() => onTagClick(id)}
+            style={{ minHeight: 44 }}
           >
             {label}
-          </FilterChip>
+          </Tag>
         ))}
       </div>
 
       {loading ? (
         <Skeleton height={200} />
       ) : fixtures.length === 0 ? (
-        <p style={{ ...VALUE_STYLE, color: DUST_50 }}>No matches found.</p>
+        <EmptyState centred={false}>No matches found.</EmptyState>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                {['Status', 'Round', 'Home', 'Away', 'Score', 'Scheduled', 'Actions'].map((h) => (
-                  <th key={h} style={{ ...LABEL_STYLE, padding: '8px 12px', textAlign: 'left' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {fixtures.map((fix) => (
-                <FixtureRow
-                  key={fix.id}
-                  db={db}
-                  fixture={fix}
-                  editing={editingId === fix.id}
-                  onEditOpen={() => setEditingId(fix.id)}
-                  onEditCancel={() => setEditingId(null)}
-                  onSuccess={onCompletionSuccess}
-                  onError={onCompletionError}
-                />
+        <DataTable caption="Fixtures" minWidth={760}>
+          <thead>
+            <tr>
+              {HEADINGS.map((h) => (
+                <th key={h} scope="col" style={dataHead()}>{h}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </tr>
+          </thead>
+          <tbody>
+            {fixtures.map((fix) => (
+              <FixtureRow
+                key={fix.id}
+                db={db}
+                fixture={fix}
+                editing={editingId === fix.id}
+                onEditOpen={() => setEditingId(fix.id)}
+                onEditCancel={() => setEditingId(null)}
+                onSuccess={onCompletionSuccess}
+                onError={onCompletionError}
+              />
+            ))}
+          </tbody>
+        </DataTable>
       )}
-
-      {toast && <ActionToast toast={toast} />}
     </section>
   );
 }
@@ -191,15 +188,14 @@ export function FixtureBrowser({ db }: { db: IslSupabaseClient }) {
 
 /**
  * A single fixture row.  When `editing` is true and the row is `scheduled`,
- * the Score and Actions cells become inline number inputs and a Save/Cancel
- * pair.  Otherwise renders the read-only row with a per-status status chip
- * and a link to the public match detail page.
+ * the Score cell becomes the inline editor (two number inputs, Save and
+ * Cancel).  Otherwise renders the read-only row with the status and a link
+ * to the public match page.
  *
- * Status chip colour follows the same semantic mapping used on Matches.tsx:
- *   - live / in_progress → the shared red-dot LiveBadge (red means live,
- *     docs/design-language.md; this was a purple chip)
- *   - scheduled   → hairline-bordered ghost on transparent (pending)
- *   - completed   → DUST_50 (historical, low urgency)
+ * Status follows the same rule as the rest of the site:
+ *   - live / in_progress → the shared red-dot LiveBadge (red means live)
+ *   - scheduled   → label type, secondary tone (pending)
+ *   - completed   → label type, tertiary tone (historical, low urgency)
  */
 function FixtureRow({
   db, fixture: f, editing, onEditOpen, onEditCancel, onSuccess, onError,
@@ -213,39 +209,29 @@ function FixtureRow({
   onError:      (msg: string) => void;
 }) {
   const isLive = f.status === 'in_progress' || f.status === 'live';
-  const statusColor = f.status === 'completed' ? DUST_50 : DUST_70;
+  const statusTone = f.status === 'completed' ? tone.tertiary : tone.secondary;
 
   const score =
     f.home_score != null && f.away_score != null
       ? `${f.home_score} – ${f.away_score}`
       : '—';
 
-  /** Whether this row can be manually completed — scheduled rows only. */
+  /** Whether this row can be manually completed: scheduled rows only. */
   const isCompletable = f.status === 'scheduled';
 
   return (
-    <tr style={{ borderBottom: `1px solid ${DUST_FAINT}` }}>
-      <td style={{ padding: '10px 12px' }}>
+    <tr>
+      <td style={dataCell()}>
         {isLive ? (
           <LiveBadge />
         ) : (
-          <span style={{ ...LABEL_STYLE, color: statusColor }}>{f.status}</span>
+          <span style={{ ...type.label, ...statusTone }}>{f.status}</span>
         )}
       </td>
-      <td style={{ ...VALUE_STYLE, padding: '10px 12px', fontSize: 12 }}>
-        {f.round ?? '—'}
-      </td>
-      <td style={{ ...VALUE_STYLE, padding: '10px 12px', fontSize: 12 }}>
-        {f.home_team}
-      </td>
-      <td style={{ ...VALUE_STYLE, padding: '10px 12px', fontSize: 12 }}>
-        {f.away_team}
-      </td>
-      <td style={{
-        ...VALUE_STYLE, padding: '10px 12px', fontSize: 12,
-        fontVariantNumeric: 'tabular-nums',
-        color: f.home_score != null ? DUST : DUST_50,
-      }}>
+      <td style={{ ...dataCell(), whiteSpace: 'nowrap' }}>{f.round ?? '—'}</td>
+      <td style={dataCell()}>{f.home_team}</td>
+      <td style={dataCell()}>{f.away_team}</td>
+      <td style={{ ...dataCell(), ...(f.home_score != null ? tone.primary : tone.tertiary) }}>
         {editing ? (
           <CompletionEditor
             db={db}
@@ -256,35 +242,16 @@ function FixtureRow({
           />
         ) : score}
       </td>
-      <td style={{
-        ...VALUE_STYLE, padding: '10px 12px', fontSize: 11,
-        color: DUST_50, fontVariantNumeric: 'tabular-nums',
-      }}>
+      <td style={{ ...dataCell(), ...tone.secondary, whiteSpace: 'nowrap' }}>
         {f.scheduled_at ? fmtDatetime(f.scheduled_at) : '—'}
       </td>
-      <td style={{ padding: '10px 12px', display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Link
-          to={`/matches/${f.id}`}
-          style={{ ...LABEL_STYLE, color: QUANTUM, textDecoration: 'none' }}
-        >
-          View ↗
-        </Link>
-        {isCompletable && !editing && (
-          <button
-            type="button"
-            onClick={onEditOpen}
-            style={{
-              ...LABEL_STYLE,
-              background: 'transparent',
-              border: `1px solid ${HAIRLINE}`,
-              color: DUST,
-              padding: '4px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            Complete…
-          </button>
-        )}
+      <td style={{ ...dataCell(), whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', gap: space[12], alignItems: 'center' }}>
+          <TextLink to={`/matches/${f.id}`}>View ↗</TextLink>
+          {isCompletable && !editing && (
+            <Button onClick={onEditOpen}>Complete…</Button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -325,7 +292,7 @@ function CompletionEditor({
   const [busy, setBusy] = useState(false);
 
   /**
-   * Submit handler — parses both score strings to integers, fires the API,
+   * Submit handler: parses both score strings to integers, fires the API,
    * and routes the outcome to the parent via the onSuccess / onError
    * callbacks.  Wrapped in try/finally so the busy flag is always cleared,
    * even if a sync exception slips through before the await.
@@ -344,9 +311,12 @@ function CompletionEditor({
     }
   };
 
+  /** Score inputs: the shared input style, narrowed to two digits. */
+  const scoreInput = { ...inputStyle, width: 64, paddingLeft: space[8], paddingRight: space[8] };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: space[8], alignItems: 'center' }}>
       <input
         type="number"
         min={0}
@@ -354,13 +324,9 @@ function CompletionEditor({
         value={home}
         onChange={(e) => setHome(e.target.value)}
         aria-label="Home score"
-        style={{
-          width: 48, padding: '4px 6px', background: ABYSS,
-          border: `1px solid ${HAIRLINE}`, color: DUST,
-          fontSize: 12,
-        }}
+        style={scoreInput}
       />
-      <span style={{ color: DUST_50 }}>–</span>
+      <span style={tone.tertiary}>–</span>
       <input
         type="number"
         min={0}
@@ -368,24 +334,10 @@ function CompletionEditor({
         value={away}
         onChange={(e) => setAway(e.target.value)}
         aria-label="Away score"
-        style={{
-          width: 48, padding: '4px 6px', background: ABYSS,
-          border: `1px solid ${HAIRLINE}`, color: DUST,
-          fontSize: 12,
-        }}
+        style={scoreInput}
       />
-      <AdminButton onClick={onSave} busy={busy} variant="primary">Save</AdminButton>
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={busy}
-        style={{
-          ...LABEL_STYLE, color: FLARE, background: 'transparent',
-          border: 'none', padding: '4px 6px', cursor: busy ? 'not-allowed' : 'pointer',
-        }}
-      >
-        Cancel
-      </button>
+      <Button variant="primary" onClick={onSave} disabled={busy}>{busy ? '…' : 'Save'}</Button>
+      <Button onClick={onCancel} disabled={busy}>Cancel</Button>
     </div>
   );
 }

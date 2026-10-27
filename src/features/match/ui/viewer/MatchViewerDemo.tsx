@@ -3,13 +3,18 @@
 //
 // Pick two clubs; their full rosters + manager formations are fetched and run
 // through the actual spatial engine client-side (the same engine the match-worker
-// uses), so the demo is representative of a real match — real players, real
+// uses), so the demo is representative of a real match: real players, real
 // stats-driven behaviour, real tactics and kit colours.  Falls back to a
 // synthetic match when no team data is available.  Mounted behind the admin gate.
+//
+// LOOK (docs/design-language.md): the shared SectionHeader, the one form
+// input style for the club pickers, and Kick off as the view's one primary
+// Button (it was a purple fill; purple is kept for the Architect and focus).
 
 import { useEffect, useState, type CSSProperties } from 'react';
 
-import { COLORS } from '../../../../components/Layout';
+import { color, hairline, space, tone, type } from '../../../../shared/design';
+import { Button, SectionHeader, inputStyle } from '../../../../shared/ui';
 import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 import { getTeams, getTeam } from '../../api/teams';
 import {
@@ -23,7 +28,7 @@ import { PlayerThoughtsPanel } from './PlayerThoughtsPanel';
 
 /**
  * Real seconds to replay the full 90-minute match before looping.  720s ≈ 7.5×
- * real-time (a 12-minute loop) — a relaxed, watchable jog.  Larger = slower.
+ * real-time (a 12-minute loop): a relaxed, watchable jog.  Larger = slower.
  */
 const DEMO_DURATION_SECONDS = 720;
 
@@ -31,6 +36,15 @@ const DEMO_DURATION_SECONDS = 720;
 interface TeamOption {
   id: string;
   name: string;
+}
+
+/**
+ * Club picker: the shared input style, sized to its content. A function
+ * (not a module-level object) so spreading the imported preset is not a
+ * top-level side effect that keeps this module in the entry bundle.
+ */
+function selectStyle(): CSSProperties {
+  return { ...inputStyle, width: 'auto', flex: '1 1 160px' };
 }
 
 /**
@@ -126,72 +140,51 @@ export function MatchViewerDemo() {
     return () => clearInterval(id);
   }, []);
 
-  const selectStyle: CSSProperties = {
-    font: 'inherit',
-    fontSize: 13,
-    color: COLORS.dust,
-    background: COLORS.phobosAsh,
-    border: `1px solid ${COLORS.hairline}`,
-    padding: '6px 8px',
-    borderRadius: 2,
-  };
+  const strong = { ...tone.primary, fontWeight: 700 } as const;
 
   return (
-    <div style={{ maxWidth: 1040 }}>
-      <p style={{ margin: '0 0 12px', color: COLORS.dust70, fontSize: 13, lineHeight: 1.6 }}>
-        A full match <strong style={{ color: COLORS.dust }}>simulated live</strong> by the real engine:
+    <section aria-labelledby="viewer-heading">
+      <SectionHeader index="I" label="Viewer" title={<span id="viewer-heading">Match viewer</span>} />
+
+      <p style={{ ...type.small, ...tone.secondary, margin: 0, marginBottom: space[16], maxWidth: '70ch' }}>
+        A full match <strong style={strong}>simulated live</strong> by the real engine:
         real rosters, stats, tactics and kits. Pick two clubs, then use the{' '}
-        <strong style={{ color: COLORS.dust }}>Pitch / Ball</strong> buttons on the pitch to switch camera.
+        <strong style={strong}>Pitch / Ball</strong> buttons on the pitch to switch camera.
       </p>
 
       {/* Matchup picker */}
       {teams.length >= 2 && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: space[8], alignItems: 'center', flexWrap: 'wrap', marginBottom: space[16] }}>
           <select
             value={homeId}
             onChange={(e) => setHomeId(e.target.value)}
-            style={selectStyle}
+            style={selectStyle()}
             aria-label="Home club"
           >
             {teams.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
-          <span style={{ color: COLORS.dust50, fontSize: 12 }}>vs</span>
+          <span style={{ ...type.label, ...tone.tertiary }}>vs</span>
           <select
             value={awayId}
             onChange={(e) => setAwayId(e.target.value)}
-            style={selectStyle}
+            style={selectStyle()}
             aria-label="Away club"
           >
             {teams.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => setSeed((s) => s + 1)}
-            disabled={loading}
-            style={{
-              font: 'inherit',
-              fontSize: 12,
-              color: '#fff',
-              background: COLORS.quantum,
-              border: `1px solid ${COLORS.quantum}`,
-              padding: '6px 12px',
-              borderRadius: 2,
-              cursor: loading ? 'default' : 'pointer',
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
+          <Button variant="primary" onClick={() => setSeed((s) => s + 1)} disabled={loading}>
             {loading ? 'Simulating…' : 'Kick off'}
-          </button>
+          </Button>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: space[16], alignItems: 'stretch', flexWrap: 'wrap' }}>
         {/* Pitch */}
-        <div style={{ flex: '2 1 460px', minWidth: 300 }}>
+        <div style={{ flex: '2 1 460px', minWidth: 0 }}>
           {match ? (
             <MatchViewer
               frames={match.frames}
@@ -215,10 +208,10 @@ export function MatchViewerDemo() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: COLORS.dust50,
-                fontSize: 13,
-                border: `1px solid ${COLORS.hairline}`,
-                background: COLORS.abyss,
+                ...type.small,
+                ...tone.secondary,
+                ...hairline(color.line),
+                background: color.bg,
               }}
             >
               Simulating match…
@@ -227,10 +220,10 @@ export function MatchViewerDemo() {
         </div>
 
         {/* Inspect panel */}
-        <div style={{ flex: '1 1 240px', minWidth: 240 }}>
+        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
           <PlayerThoughtsPanel playerId={selectedPlayerId} />
         </div>
       </div>
-    </div>
+    </section>
   );
 }

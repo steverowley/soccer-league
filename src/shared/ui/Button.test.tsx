@@ -52,15 +52,6 @@ describe('Button', () => {
     expect(el.style.color).toBe('var(--isl-bg)');
   });
 
-  it('keeps the legacy `active` name as an alias of primary', () => {
-    renderInRouter(
-      <Button variant="active" onClick={() => {}}>
-        Old call site
-      </Button>,
-    );
-    expect(screen.getByRole('button', { name: 'Old call site' }).style.background).toBe('var(--isl-action)');
-  });
-
   it('defaults to the secondary hairline outline', () => {
     renderInRouter(<Button onClick={() => {}}>View league</Button>);
     const el = screen.getByRole('button', { name: 'View league' });

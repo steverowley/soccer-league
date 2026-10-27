@@ -69,6 +69,29 @@
   --isl-pad-card: 24px;     /* card padding */
   --isl-gap-section: 48px;  /* between sections on a page */
   --isl-measure: 70ch;      /* max reading width of prose */
+
+  /* ── Canvas palette: the match viewer's pitch and figures ──────────────
+   * A <canvas> cannot read a CSS variable, so the viewer draws with the
+   * literal values from `canvasColor` in tokens.ts. They are declared here
+   * as well so this file stays the one place every colour is documented;
+   * src/shared/design/tokens.test.ts fails if the two ever disagree. The
+   * figures also use --isl-text (phosphor body, ball), --isl-bg (outline,
+   * eyes, the keeper's hollow shirt) and --isl-architect (the focus halo).
+   * Canvas only: never use these in page chrome. */
+  --isl-pitch-surround: #0d0f0d;              /* the viewport behind the pitch */
+  --isl-pitch-grass-a: #131613;               /* darker mowing stripe */
+  --isl-pitch-grass-b: #171b17;               /* lighter mowing stripe */
+  --isl-pitch-line: rgba(227,224,213,0.26);   /* pitch markings */
+  --isl-pitch-goal-line: rgba(227,224,213,0.5); /* goal frames */
+  --isl-pitch-figure-dim: #9C9A90;            /* legs, shorts, antenna stems */
+  --isl-pitch-kit-home: #C9603F;              /* home shirt when a club has no colour */
+  --isl-pitch-kit-away: #4E7E8C;              /* away shirt when a club has no colour */
+  --isl-pitch-shadow: rgba(0,0,0,0.38);       /* ground shadows */
+  --isl-pitch-ball-shade: rgba(0,0,0,0.25);   /* the ball's shaded side */
+  --isl-pitch-hair-short: #C6C3B8;            /* phosphor hair shades (terrans) */
+  --isl-pitch-hair-flat: #AEAB9F;
+  --isl-pitch-hair-spiky: #94917F;
+  --isl-pitch-hair-long: #BBB8AC;
 }
 
 /* Phone (< 600 px): the one place phone values live. */

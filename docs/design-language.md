@@ -82,6 +82,14 @@ News categories are neutral tags, except Architect-related ones (`architect`).
 `#FFD700`, `#4FC3F7`, `#64748B`, `#F59E0B`, `#5DE0A6` and any other value not
 in this table are retired.
 
+**Canvas palette.** The match viewer draws on a `<canvas>`, which cannot read
+CSS variables, so it uses `canvasColor` from `tokens.ts`: literal values for
+`text`, `bg` and `architect` (the figures, outlines and focus halo) plus the
+pitch's own surround, mowing stripes, markings, shadows, fallback kits and
+phosphor hair shades. Each is declared once more in `tokens.css`
+(`--isl-pitch-*`) and a test holds the two equal. Canvas only: never page
+chrome.
+
 ## 5. Space, shape, layout
 
 - Spacing steps: 4, 8, 12, 16, 24, 32, 48, 64 px. Nothing else.
@@ -95,10 +103,13 @@ in this table are retired.
 
 ## 6. Components (all in `src/shared/ui`)
 
-One implementation each. `components/Layout.tsx` duplicates
-(`PrimaryButton`, `DustButton`, `FocusCTA`, `COLORS`) and page-local copies
-(`FilterChip`, `Card`, `SectionLabel`, `Divider`, `RailPanel`, `HeroStat`,
-`ResultPill`, `StatusChip`, ...) are deleted once nothing uses them.
+One implementation each. The old duplicates are deleted: the
+`components/Layout.tsx` set (`PrimaryButton`, `DustButton`, `FocusCTA`,
+`COLORS`), page-local copies (`FilterChip`, `Card`, `SectionLabel`,
+`Divider`, `RailPanel`, `HeroStat`, `ResultPill`, `StatusChip`, ...), the
+admin console's own primitives (`PanelHeader`, `StatCell`, `AdminButton`,
+`ActionToast`) and the early shared `Chip`, `Kicker`, `Pip`, `StatPair` and
+`KeyValue`.
 
 - **PageShell**: header, `main`, footer; footer sits at the bottom of short pages.
 - **PageHeader**: the one page header. Props: `eyebrow` (the section of the
@@ -146,8 +157,17 @@ One implementation each. `components/Layout.tsx` duplicates
   for inline styles. Imported once in `main.tsx`.
 - `scripts/designTokens.test.ts` scans `src/` (not tests or the token files)
   for raw font sizes, colour literals, Lunar Dust opacities and letter
-  spacings. It starts as a ratchet: a per-file baseline that may only shrink,
-  and is zero for every migrated page. It ends at zero.
+  spacings. It is a hard zero: any raw value in any scanned file fails the
+  suite. (It began as a ratchet against a per-file baseline while pages
+  migrated group by group; the last group took every file to zero and the
+  baseline and its script were deleted.) The only exclusions are the token
+  files, generated database types and the club colours in
+  `src/data/leagueData.ts` (data, not styling); a colour computed from
+  interpolated channels (`rgb(${r},${g},${b})`) is arithmetic, not a raw
+  value. A fixture in the test proves a new raw colour or size fails it.
+- `src/shared/design/tokens.test.ts` holds `tokens.ts` to `tokens.css`:
+  every `var()` the presets use is declared, and every canvas palette value
+  equals its custom property.
 - `src/pages/pageHeadings.test.ts` checks every page renders exactly one
   PageHeader (one h1), at runtime for pages with branches (MatchDetail).
 
@@ -161,4 +181,5 @@ Each group is one PR with before and after screenshots at 390 and 1440 px.
 4. Content: News, Idols, Leaderboards, World, Seasons, Season.
 5. Account and static: Voting, Training, Wagers, Profile, Login, Welcome,
    Reset password, About, Privacy, Terms, Not found, Admin, What if. Then
-   delete the old duplicates and take the guard to zero.
+   delete the old duplicates and take the guard to zero. (Done: 5a and 5b;
+   the guard is a hard zero.)

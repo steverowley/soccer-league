@@ -1,29 +1,20 @@
 // ── constants.ts ──────────────────────────────────────────────────────────────
-// All static game data: colours and player personality keys.
+// Static game data: the model id and player personality keys.
 //
 // Nothing here is calculated at runtime — it is purely look-up data.
 // Every object is frozen (`as const`) so TypeScript infers narrow literal
 // types, enabling exhaustive switch checking on personality values
 // elsewhere in the codebase.
+//
+// No colours: the old `C` palette that lived here had no remaining users
+// and was deleted with the design system's last group. Interface colours
+// are the tokens in src/shared/design (docs/design-language.md).
 
 // ── AI model identifier ───────────────────────────────────────────────────────
 // Single source of truth for the Claude model used by all AI commentary and
 // Architect systems.  Update here to roll the entire app to a new model version
 // without hunting for individual call sites in gameEngine and MatchComponents.
 export const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-
-// ── UI Colour palette ─────────────────────────────────────────────────────────
-// Used by components to keep the dark sci-fi aesthetic consistent.
-// Prefer the CSS design tokens in tokens.css for stylesheets; use these
-// constants only in inline styles or canvas/SVG rendering where CSS variables
-// cannot be used.
-export const C = {
-  abyss:  '#111111', // deepest background
-  ash:    '#1F1F1F', // card / panel background
-  dust:   '#E3E0D5', // primary text
-  purple: '#9A5CF4', // accent / Saturn Rings FC brand colour
-  red:    '#FF6B6B', // danger, red cards
-} as const;
 
 // ── Player personality keys ───────────────────────────────────────────────────
 // Each player is assigned exactly one personality at agent-creation time

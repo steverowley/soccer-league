@@ -18,7 +18,10 @@
 //   species) can pass hints that override the random draw — same input, same
 //   sprite, forever.
 //
-// PURE LOGIC — no React, no canvas, no Supabase.  Fully unit-testable.
+// PURE LOGIC: no React, no canvas, no Supabase.  Fully unit-testable.  The
+// only import is the canvas palette (plain string constants).
+
+import { canvasColor } from '../../../../shared/design';
 
 // ── Species ───────────────────────────────────────────────────────────────────
 
@@ -81,13 +84,16 @@ const HAIR_STYLE_BAG: readonly HairStyle[] = [
 
 /**
  * Phosphor-tone hair shades per style — the variety axis kept IN palette (dust
- * greys, never the old rainbow dyes), per the brand's monochrome rule.
+ * greys, never the old rainbow dyes), per the brand's monochrome rule. The
+ * values are the canvas palette's hair tones (`canvasColor` in
+ * src/shared/design/tokens.ts, mirrored in tokens.css): the sprite renderer
+ * paints them on a <canvas>, which cannot read CSS variables.
  */
 export const HAIR_TONE: Readonly<Record<Exclude<HairStyle, 'bald'>, string>> = {
-  short: '#C6C3B8',
-  flat:  '#AEAB9F',
-  spiky: '#94917F',
-  long:  '#BBB8AC',
+  short: canvasColor.hairShort,
+  flat:  canvasColor.hairFlat,
+  spiky: canvasColor.hairSpiky,
+  long:  canvasColor.hairLong,
 };
 
 /** Body build — drives torso width (and reads as a diverse crowd of body types). */

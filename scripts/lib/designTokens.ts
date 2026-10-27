@@ -18,13 +18,21 @@
 //                  their own (and not again as a colour) because they are the
 //                  contrast failures the text tones replace.
 //
+// One precise exception, not an exempt file: a colour function opened at the
+// end of a template chunk, so its first argument is an interpolation
+// (`rgb(${r},${g},${b})`), is a colour COMPUTED from channels (the match
+// viewer's cel shading lightens and darkens token values). It is arithmetic,
+// not a value choice, so it is not counted; any literal channel still is.
+//
 // Not scanned: test files, type declarations, the token files themselves
-// (src/shared/design/), the generated database types and the club colours
-// in src/data/leagueData.ts (club colour is data, not chrome).
+// (src/shared/design/, where every value is declared once), the generated
+// database types, and src/data/leagueData.ts, whose hex values are each
+// club's colour: data about the club (rendered by Crest and the kits on the
+// pitch), not a styling choice. Data colours reach the interface as props.
 //
 // Known blind spot: a literal hidden behind a constant (`const SIZE = 13;
-// ... fontSize: SIZE`) is not counted. The ratchet still catches the common
-// case, and review catches the rest.
+// ... fontSize: SIZE`) is not counted. Review catches those; a numeric
+// constant is also unlikely now that the type presets are the only sizes.
 
 import ts from 'typescript';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -56,6 +64,8 @@ const TOKEN_REF = /^\s*var\(--isl-[a-z0-9-]+\)\s*$/;
 const NEUTRAL = /^\s*(inherit|initial|unset|normal|0)\s*$/;
 const HEX = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![0-9a-zA-Z_-])/g;
 const FUNC_COLOUR = /\b(?:rgba?|hsla?)\(/gi;
+/** A colour function whose first argument is the substitution that follows. */
+const COMPUTED_COLOUR = /\b(?:rgba?|hsla?)\(\s*$/i;
 const DUST = /rgba?\(\s*227\s*,\s*224\s*,\s*213/gi;
 const CSS_FONT_SIZE = /font-size\s*:\s*([^;}"'`]+)/gi;
 const CSS_LETTER_SPACING = /letter-spacing\s*:\s*([^;}"'`]+)/gi;
@@ -150,7 +160,13 @@ export function scanSource(fileName: string, source: string): Omit<RawHit, 'file
     else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) text = node.text;
     if (text !== null && !ts.isImportDeclaration(node.parent) && !ts.isExportDeclaration(node.parent)) {
       const dust = (text.match(DUST) ?? []).length;
-      const funcs = (text.match(FUNC_COLOUR) ?? []).length - dust;
+      // A colour function opened at the end of a template chunk, so its first
+      // argument is an interpolation (`rgb(${r},${g},${b})`), builds a colour
+      // from computed channels (the match viewer's cel shading). That is
+      // arithmetic on a token, not a raw value choice, so it is not counted.
+      // A literal channel anywhere in the chunk (`rgba(227, ${a})`) still is.
+      const computed = (ts.isTemplateHead(node) || ts.isTemplateMiddle(node)) && COMPUTED_COLOUR.test(text) ? 1 : 0;
+      const funcs = (text.match(FUNC_COLOUR) ?? []).length - dust - computed;
       const hex = (text.match(HEX) ?? []).length;
       if (dust > 0) push(node, 'dust', dust);
       if (funcs + hex > 0) push(node, 'colour', funcs + hex);
@@ -193,31 +209,23 @@ export function countByFile(hits: RawHit[]): Record<string, RawCounts> {
   return Object.fromEntries(Object.keys(out).sort().map((f) => [f, out[f]!]));
 }
 
-/** Sum of every kind in a counts record. */
-export function total(c: RawCounts | undefined): number {
-  return RAW_KINDS.reduce((n, k) => n + (c?.[k] ?? 0), 0);
-}
-
-/** A file whose count rose above the baseline (or appeared with any). */
-export interface Regression {
-  file: string;
-  kind: RawKind;
-  baseline: number;
-  now: number;
-}
-
-/** Files and kinds that exceed the baseline. */
-export function regressions(
-  baseline: Record<string, RawCounts>,
-  current: Record<string, RawCounts>,
-): Regression[] {
-  const out: Regression[] = [];
-  for (const [file, counts] of Object.entries(current)) {
-    for (const kind of RAW_KINDS) {
-      const now = counts[kind] ?? 0;
-      const was = baseline[file]?.[kind] ?? 0;
-      if (now > was) out.push({ file, kind, baseline: was, now });
-    }
-  }
-  return out;
+/**
+ * The guard's verdict: a readable report of every raw value, or null when
+ * there are none. The guard is a hard zero (the ratchet baseline that let
+ * unmigrated pages keep their counts was deleted when the last group
+ * landed), so ANY hit is a failure.
+ *
+ * @param hits  Raw values found (by `findRawValues` or `scanSource`).
+ * @returns     A multi-line report naming file, line, kind and source, or
+ *              null when `hits` is empty.
+ */
+export function violationReport(hits: readonly RawHit[]): string | null {
+  if (hits.length === 0) return null;
+  const lines = hits.map((h) => `  ${h.file}:${h.line}  [${h.kind}]  ${h.text}`);
+  return [
+    `${hits.length} raw style value(s) in src/. Use the tokens in src/shared/design`,
+    '(type.*, tone.*, color.*, tracking.*; canvasColor for a <canvas>) and the',
+    'components in src/shared/ui instead. docs/design-language.md, section 8.',
+    ...lines,
+  ].join('\n');
 }
