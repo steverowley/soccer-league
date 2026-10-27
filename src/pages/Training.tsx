@@ -253,7 +253,7 @@ function RosterPicker({
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 100%), 1fr))',
         gap: space[8],
       }}
     >

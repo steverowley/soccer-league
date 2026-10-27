@@ -412,9 +412,9 @@ function WagerRow({ wager, match }: { wager: Wager; match: LedgerMatch | null })
         style={{
           ...dataCell('right'),
           fontWeight: 700,
-          // Profit is green; a loss or zero is plain text; an open wager
-          // has no figure yet (tertiary dash).
-          color: net === null ? color.textTertiary : net > 0 ? color.success : color.text,
+          // A win's payout is green; a loss, a void refund or zero is plain
+          // text; an open wager has no figure yet (tertiary dash).
+          color: net === null ? color.textTertiary : wager.status === 'won' && net > 0 ? color.success : color.text,
         }}
       >
         {net === null ? '\u2014' : signed(net)}

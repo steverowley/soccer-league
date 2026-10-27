@@ -489,12 +489,15 @@ function PickCard({
  * @param alt  Accessible image description.
  */
 function StepImage({ src, alt }: { src: string; alt: string }) {
+  // Resolve against the build's base path (root on Vercel, /soccer-league/
+  // elsewhere), as the header badge does; a bare "/img/..." 404s off-root.
+  const base = `${import.meta.env.BASE_URL}${src.replace(/^\//, '')}`;
   return (
     <picture>
-      <source srcSet={`${src}.avif`} type="image/avif" />
-      <source srcSet={`${src}.webp`} type="image/webp" />
+      <source srcSet={`${base}.avif`} type="image/avif" />
+      <source srcSet={`${base}.webp`} type="image/webp" />
       <img
-        src={`${src}.webp`}
+        src={`${base}.webp`}
         alt={alt}
         style={{ display: 'block', width: '100%', maxWidth: 480, ...hairline(color.line) }}
       />
