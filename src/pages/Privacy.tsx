@@ -77,7 +77,7 @@ export default function Privacy() {
           </Paragraph>
           <Paragraph>
             <strong>Deletion:</strong> the &quot;Delete Account&quot; control on your
-            profile page (forthcoming) wipes your auth row, anonymises any historical
+            profile page wipes your auth row, anonymises any historical
             wagers/votes (so league history stays consistent), and removes you from
             public leaderboards within minutes.
           </Paragraph>
