@@ -3,11 +3,12 @@
 // (issue isl-aaj).
 //
 // WHAT IS SHOWN
-//   I.   Hero        — season name + year + status + date range.
-//   II.  Lifecycle   — narrative summary of started_at / ended_at /
+//   PageHeader      back link, crumbs, eyebrow "Seasons", the season name as
+//                   the h1, its status as the subtitle and the year as meta.
+//   I.   Lifecycle   — narrative summary of started_at / ended_at /
 //                       election window timestamps so a fan can trace
 //                       the season's shape on the cosmic clock.
-//   III. Notable Narratives — last N rows from `narratives` whose
+//   II.  Notable Narratives — last N rows from `narratives` whose
 //                       created_at falls inside the season window.
 //                       Hidden when there are no narratives to show.
 //
@@ -26,19 +27,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import Header from '../components/Header';
-import {
-  COLORS,
-  Container,
-  Footer,
-  BackLink,
-  SectionHeader,
-} from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell, StatBlock } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonSummary, type SeasonSummary } from '../features/match';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
-const { abyss: ABYSS, dust: DUST, flare: FLARE, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
+const { dust: DUST, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
 const DUST_50 = COLORS.dust50;
 
 /**
@@ -82,111 +77,71 @@ export default function SeasonDetail() {
   }, [publicDb, seasonId]);
 
   // ── Not found ─────────────────────────────────────────────────────────
+  // Every state opens with the shared PageHeader, so each renders exactly
+  // one h1: not found, loading, and the season itself.
   if (loaded && !season) {
     return (
-      <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-        <Header />
-        <main>
-          <Container>
-            <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{
-                fontSize:      11,
-                fontWeight:    700,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color:         FLARE,
-                marginBottom:  12,
-              }}>
-                Unknown Season
-              </p>
-              <p style={{ color: DUST_50, fontSize: 13, marginBottom: 24 }}>
-                No season found for this id.
-              </p>
-              <Link
-                to="/seasons"
-                style={{
-                  fontSize:      11,
-                  fontWeight:    700,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color:         COLORS.quantum,
-                  textDecoration:'none',
-                }}
-              >
-                Back to Archive
-              </Link>
-            </div>
-          </Container>
-        </main>
-        <Footer />
-      </div>
+      <PageShell>
+        <PageHeader
+          eyebrow="Seasons"
+          title="Unknown Season"
+          back={{ to: '/seasons', label: 'All seasons' }}
+          subtitle="No season found for this id."
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-      <main>
-        <section style={{ padding: '48px 0 24px' }}>
-          <Container>
-            <BackLink to="/seasons">All Seasons</BackLink>
-            {!loaded && (
-              <p style={{ marginTop: 32, color: DUST_50, fontStyle: 'italic', fontSize: 13 }}>
-                Loading season…
-              </p>
-            )}
-            {season && (
-              <div style={{ marginTop: 24 }}>
-                <SectionHeader
-                  level={1}
-                  pageKicker="ARCHIVE"
-                  kicker={`Year ${season.year}`}
-                  label="The Cosmic Ledger"
-                  title={season.name}
-                  subtitle={`Status: ${season.status.replace(/_/g, ' ')}.`}
-                />
-              </div>
-            )}
-          </Container>
+    <PageShell>
+      {season ? (
+        <PageHeader
+          eyebrow="Seasons"
+          title={season.name}
+          back={{ to: '/seasons', label: 'All seasons' }}
+          crumbs={[{ label: 'Seasons', to: '/seasons' }, { label: season.name }]}
+          subtitle={`Status: ${season.status.replace(/_/g, ' ')}.`}
+          meta={<StatBlock label="Year" value={season.year} />}
+        />
+      ) : (
+        <PageHeader
+          eyebrow="Seasons"
+          title="Loading season"
+          back={{ to: '/seasons', label: 'All seasons' }}
+        />
+      )}
+
+      {/* Lifecycle timestamps */}
+      {season && (
+        <section>
+          <div style={{
+            display:    'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap:        1,
+            background: HAIRLINE,
+            border:     `1px solid ${HAIRLINE}`,
+          }}>
+            <Cell label="Scheduled start" value={formatStamp(season.start_date)} />
+            <Cell label="Scheduled end"   value={formatStamp(season.end_date)} />
+            <Cell label="Actually started" value={formatStamp(season.started_at)} />
+            <Cell label="Actually ended"   value={formatStamp(season.ended_at)} />
+          </div>
         </section>
+      )}
 
-        {/* Lifecycle timestamps */}
-        {season && (
-          <section style={{ padding: '0 0 48px' }}>
-            <Container>
-              <div style={{
-                display:    'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                gap:        1,
-                background: HAIRLINE,
-                border:     `1px solid ${HAIRLINE}`,
-              }}>
-                <Cell label="Scheduled start" value={formatStamp(season.start_date)} />
-                <Cell label="Scheduled end"   value={formatStamp(season.end_date)} />
-                <Cell label="Actually started" value={formatStamp(season.started_at)} />
-                <Cell label="Actually ended"   value={formatStamp(season.ended_at)} />
-              </div>
-            </Container>
-          </section>
-        )}
-
-        {/* Footer pointer back to the archive index */}
-        {season && (
-          <section style={{ padding: '0 0 80px' }}>
-            <Container>
-              <p style={{ color: DUST_50, fontSize: 12 }}>
-                Want a different season?{' '}
-                <Link to="/seasons" style={{ color: COLORS.quantum, textDecoration: 'underline' }}>
-                  Return to the archive
-                </Link>
-                .
-              </p>
-            </Container>
-          </section>
-        )}
-      </main>
-      <Footer />
-    </div>
+      {/* Footer pointer back to the archive index */}
+      {season && (
+        <section>
+          <p style={{ color: DUST_50, fontSize: 12 }}>
+            Want a different season?{' '}
+            <Link to="/seasons" style={{ color: COLORS.quantum, textDecoration: 'underline' }}>
+              Return to the archive
+            </Link>
+            .
+          </p>
+        </section>
+      )}
+    </PageShell>
   );
 }
 

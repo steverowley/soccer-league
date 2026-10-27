@@ -2,13 +2,12 @@
 // Bet history page — `/wagers` route, rebuilt in PR 9.
 //
 // Layout:
-//   Header (global)
-//   I.   Page hero          — kicker "Bets" + title + intro prose
-//   II.  Summary card       — credit balance + wager counts (open/won/lost/void)
+//   PageShell (site header, main column, footer)
+//   PageHeader:             eyebrow "Wagers", title, intro prose
+//   Summary card       — credit balance + wager counts (open/won/lost/void)
 //                              + net P&L numeric
-//   III. Wager list         — table grouped under filter chips (All / Open /
+//   I.   Wager list         — table grouped under filter chips (All / Open /
 //                              Won / Lost / Void)
-//   Footer (shared)
 //
 // Data sources:
 //   - useAuth()                            — user + profile (credits + balance)
@@ -20,10 +19,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
+import { COLORS, SectionHeader, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { EmptyState } from '../shared/ui';
+import { EmptyState, PageHeader, PageShell } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { getUserWagers, netCreditChange } from '../features/betting';
 
@@ -35,7 +33,7 @@ import { getUserWagers, netCreditChange } from '../features/betting';
 //                chip, "Lost" status pip, per-row net cell when red.
 //   TERRA_NOVA — confirmation green: positive net P&L (you ended up
 //                ahead of the bookie), per-row net cell when in profit.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, terraNova: TERRA_NOVA } = COLORS;
+const { dust: DUST, flare: FLARE, quantum: QUANTUM, terraNova: TERRA_NOVA } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -186,7 +184,7 @@ export default function Wagers() {
 
       <div style={{ marginTop: 48 }}>
         <SectionHeader
-          kicker="II"
+          kicker="I"
           label="The Ledger"
           title="Every Bet Ever"
           subtitle="Newest at the top.  Open wagers settle automatically when the match completes. No action required."
@@ -232,40 +230,21 @@ export default function Wagers() {
 
 /**
  * Page shell shared between the loading + authenticated render
- * branches.  Splits hero from body so the two render branches can't
- * drift on padding / Header / Footer.
+ * branches: PageShell + the shared PageHeader, so the two branches
+ * can't drift on the header and each renders exactly one h1.
  *
  * @param {{ children: React.ReactNode, username?: string }} props
  */
 function Shell({ children, username  }: any) {
   return (
-    <div style={{
-        ...(undefined as any),
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
-      <Header />
-
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Bets"
-            kicker="XI"
-            label="Wager History"
-            title={username ? `${username}'s Ledger` : 'The Ledger'}
-            subtitle="Every wager you&rsquo;ve placed across every season.  Settlement is automatic; payouts hit your credit balance the moment a match completes."
-          />
-        </Container>
-      </section>
-
-      <section style={{ padding: '0 0 80px' }}>
-        <Container>{children}</Container>
-      </section>
-
-      <Footer />
-    </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Wagers"
+        title={username ? `${username}'s Ledger` : 'The Ledger'}
+        subtitle="Every wager you&rsquo;ve placed across every season.  Settlement is automatic; payouts hit your credit balance the moment a match completes."
+      />
+      <section>{children}</section>
+    </PageShell>
   );
 }
 

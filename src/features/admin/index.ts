@@ -58,7 +58,7 @@ export type {
 // into the full dashboard.  Re-exported here so callers can import from
 // `@features/admin` without reaching into the deep `ui/<file>` paths.
 //
-// The shell pieces (hero, tab strip, tab parsing) are exported alongside the
+// The shell pieces (tab strip, tab parsing) are exported alongside the
 // panels because `pages/Admin.tsx` needs all of them to assemble the route.
 // Omitting them was why that page reached past this barrel with a relative
 // `../features/admin/ui` import, which bypassed the boundary CLAUDE.md
@@ -70,7 +70,6 @@ export {
   FixtureBrowser,
   TestingPanel,
   ArchitectInterventionLog,
-  AdminPageHero,
   AdminTabStrip,
   DEFAULT_ADMIN_TAB,
   parseAdminTab,
