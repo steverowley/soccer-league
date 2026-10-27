@@ -53,13 +53,18 @@ import { rngFor } from './grammar.ts';
 import type {
   EntityRow,
   FocusEnactedRow,
-  InterventionRow,
   MatchRow,
   NarrativeDraft,
   NarrativeRow,
   PoliticianRow,
   SocialMediaRow,
 } from './types.ts';
+import {
+  cosmicDisturbanceText,
+  pickUnannounced,
+  proclamationOf,
+  type DisturbanceSource,
+} from './cosmicDisturbance.ts';
 import { llmArchitectWhisper, llmEntityNarrative, llmFocusReaction, llmMediaBuzz, llmPoliticalDecree } from './llmVoices.ts';
 import { preferLlm, resolveNarrativeMode, type NarrativeMode } from './narrativeMode.ts';
 import {
@@ -520,9 +525,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .gte('created_at', todayStart)
         .eq('source', 'scheduled'),
 
-      // Recent Architect interventions for the "cosmic disturbance" kind.
+      // Recent in-match Architect interventions for the "cosmic disturbance"
+      // kind (see cosmicDisturbance.ts for the rules).
       db.from('architect_interventions')
-        .select('field, reason, created_at')
+        .select('id, target_id, created_at, new_value, meta')
+        .eq('meta->>kind', 'in_match_interference')
         .order('created_at', { ascending: false })
         .limit(COSMIC_DISTURBANCES_LIMIT),
 
@@ -546,7 +553,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const focuses       = (focusEnactedRows.data ?? []) as FocusEnactedRow[];
     const priorNarr     = (priorNarratives.data ?? [])  as NarrativeRow[];
     const todayNarr     = (todayNarrativeRows.data ?? []) as Array<{ entities_involved: string[] }>;
-    const interventions = (interventionRows.data ?? []) as InterventionRow[];
+    const interventions = (interventionRows.data ?? []) as DisturbanceSource[];
     const politicians   = (politicianRows.data ?? [])   as PoliticianRow[];
     const socialPlatforms = (socialMediaRows.data ?? []) as SocialMediaRow[];
 
@@ -713,17 +720,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ── Cosmic disturbance (0–1 per tick) ────────────────────────────────
-    // Surface a redacted summary of the most recent intervention so fans
-    // can sense the Architect's hand without seeing raw mutation data.
+    // Announce the newest in-match intervention that has not been announced
+    // yet, in the Architect's own words.  The intervention id goes into
+    // `composed_from` so the next tick does not announce it again.
     if (interventions.length > 0) {
-      const latestIntervention = interventions[0]!;
-      const disturbanceSummary = buildCosmicDisturbance(latestIntervention);
-      if (disturbanceSummary) {
+      const { data: announcedRows } = await db.from('narratives')
+        .select('composed_from')
+        .eq('kind', 'cosmic_disturbance')
+        .overlaps('composed_from', interventions.map((i) => i.id));
+      const announced = new Set(
+        ((announcedRows ?? []) as Array<{ composed_from: string[] | null }>)
+          .flatMap((r) => r.composed_from ?? []),
+      );
+      const pick = pickUnannounced(interventions, announced);
+      const proclamation = pick ? proclamationOf(pick) : null;
+      if (pick && proclamation) {
+        const { data: fixtureRow } = pick.target_id
+          ? await db.from('matches')
+              .select('home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)')
+              .eq('id', pick.target_id)
+              .maybeSingle()
+          : { data: null };
+        const fixture = fixtureRow as { home_team?: { name?: string } | null; away_team?: { name?: string } | null } | null;
+        const disturbanceSummary = cosmicDisturbanceText(proclamation, {
+          home: fixture?.home_team?.name ?? null,
+          away: fixture?.away_team?.name ?? null,
+        });
         const { error, data } = await db.from('narratives').insert({
           kind:               'cosmic_disturbance',
           summary:            disturbanceSummary,
           entities_involved:  [],
           source:             'scheduled',
+          composed_from:      [pick.id],
         }).select();
         if (error) {
           console.warn('[galaxy-tick] cosmic disturbance insert failed:', error.message);
@@ -1290,21 +1318,6 @@ function generatePoliticalDecree(politician: PoliticianRow, tickKey: string): st
  */
 function generateMediaBuzz(platform: SocialMediaRow, tickKey: string): string {
   return mediaBuzz(`${platform.id}:${platform.meta.format}:${tickKey}`);
-}
-
-/**
- * Build a "cosmic disturbance" narrative from a recent Architect intervention.
- * Surfaces the intent (`reason`) but not the raw mutation data, so fans can
- * feel the Architect's hand without seeing the underlying stats change.
- *
- * Returns null if the intervention lacks a readable reason.
- */
-function buildCosmicDisturbance(intervention: InterventionRow): string | null {
-  if (!intervention.reason?.trim()) return null;
-  // The `reason` field is a human-readable explanation of why the Architect
-  // acted. We surface it as-is — it's already written to be in-world safe.
-  const date = intervention.created_at.slice(0, 10);
-  return `The Architect stirred on ${date}. ${intervention.reason}`;
 }
 
 /** Small helper: consistent JSON responses. */

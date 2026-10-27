@@ -32,11 +32,6 @@ export interface NarrativeRow {
   created_at: string;
 }
 
-export interface InterventionRow {
-  field: string;
-  reason: string;
-  created_at: string;
-}
 
 /**
  * A politician entity row fetched for decree generation.
