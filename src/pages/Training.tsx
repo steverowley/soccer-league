@@ -2,13 +2,12 @@
 // Training clicker page — `/training` route, rebuilt in PR 7.
 //
 // Layout:
-//   Header (global)
-//   I.   Page hero          — kicker "Training" + title + intro prose
-//   II.  Auth / team guard  — anonymous / no-team CTAs short-circuit
-//   III. Roster picker      — radio strip listing the user's club's players
-//   IV.  Clicker widget     — XP bar + click button + cooldown countdown +
+//   PageShell (site header, main column, footer)
+//   PageHeader:             eyebrow "Training", title, intro prose
+//   Auth / team guard:      anonymous / no-team CTAs short-circuit
+//   I.   Roster picker      radio strip listing the user's club's players
+//   Clicker widget:         XP bar + click button + cooldown countdown +
 //                              session-cap state for the selected player
-//   Footer (shared)
 //
 // Data sources:
 //   - getPlayersForTeam(db, teamId)        — roster for the picker
@@ -24,8 +23,8 @@
 //     the precise formula.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
+import { COLORS, SectionHeader, PrimaryButton } from '../components/Layout';
+import { PageHeader, PageShell } from '../shared/ui';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import {
@@ -130,33 +129,16 @@ export default function Training() {
   );
 
   return (
-    <div
-      style={{
-        ...(undefined as any),
-        background: ABYSS,
-        color: DUST,
-        minHeight: '100vh',
-      }}
-    >
-      <Header />
+    <PageShell>
+      {/* Page header. */}
+      <PageHeader
+        eyebrow="Training"
+        title="Train Your Idols"
+        subtitle="Each click adds XP to the player you&rsquo;ve picked.  Cross enough XP and a stat bumps: small enough that no single fan can singlehandedly elevate a player, large enough that a community can."
+      />
 
-      {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Training"
-            kicker="VIII"
-            label="Player Development"
-            title="Train Your Idols"
-            subtitle="Each click adds XP to the player you&rsquo;ve picked.  Cross enough XP and a stat bumps: small enough that no single fan can singlehandedly elevate a player, large enough that a community can."
-          />
-        </Container>
-      </section>
-
-      {/* Section II — Auth / team guard. */}
+      {/* Auth / team guard, then the roster picker and clicker. */}
       <section style={{ padding: '0 0 48px' }}>
-        <Container>
           {!user && <SignInCta />}
           {user && !teamId && <PickTeamCta />}
 
@@ -211,11 +193,8 @@ export default function Training() {
               )}
             </div>
           )}
-        </Container>
       </section>
-
-      <Footer />
-    </div>
+    </PageShell>
   );
 }
 

@@ -2,12 +2,11 @@
 // User profile page — `/profile` route, rebuilt in PR 8.
 //
 // Layout:
-//   Header (global)
-//   I.   Page hero               — kicker "Profile" + title + greeting
+//   PageShell (site header, main column, footer)
+//   PageHeader:                  eyebrow "Profile", title + greeting
 //   II.  Account summary         — username + email + credit balance card
 //   III. Allegiance form         — favourite club + favourite player picker
 //   IV.  Sign-out section        — single button
-//   Footer (shared)
 //
 // Data sources:
 //   - useAuth() → user + profile + signOut + refreshProfile
@@ -20,10 +19,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer, PrimaryButton } from '../components/Layout';
+import { COLORS, SectionHeader, PrimaryButton } from '../components/Layout';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
-import { Button, useToast } from '../shared/ui';
+import { Button, PageHeader, PageShell, useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { updateProfile } from '@features/auth';
 import { getTeams, getPlayersForTeam } from '../features/match';
@@ -278,7 +276,7 @@ export default function Profile() {
 
       <div style={{ marginTop: 48 }}>
         <SectionHeader
-          kicker="II"
+          kicker="I"
           label="Allegiance"
           title="Pick Your Side"
           subtitle="Your favourite club determines what you can vote on and which roster appears in the training facility.  Optional favourite player nudges the Architect's narrative attention."
@@ -379,7 +377,7 @@ export default function Profile() {
           etc.) by rendering an advisory line instead of controls. */}
       <div style={{ marginTop: 48 }}>
         <SectionHeader
-          kicker="III"
+          kicker="II"
           label="Signals"
           title="Match-Start Alerts"
           subtitle="Opt in to receive a push notification 1 minute before kick-off.  We will ask your browser for permission once you click Enable."
@@ -389,7 +387,7 @@ export default function Profile() {
 
       <div style={{ marginTop: 48 }}>
         <SectionHeader
-          kicker="IV"
+          kicker="III"
           label="Controls"
           title={isAdmin ? 'Administration & Exit' : 'Step Back Into The Void'}
         />
@@ -460,7 +458,7 @@ function DangerZone({ username, onOpen }: { username: string | null; onOpen: () 
   return (
     <div style={{ marginTop: 64 }}>
       <SectionHeader
-        kicker="VI"
+        kicker="IV"
         label="Danger Zone"
         title="Permanent Erasure"
         subtitle="Delete your account and anonymise your wager & vote history. This cannot be undone: your username, allegiance, and credit balance are gone immediately; leaderboard rows survive as anonymous entries."
@@ -670,45 +668,24 @@ function DeleteAccountModal({
 }
 
 /**
- * Page shell — shared chrome between the loading state and the
- * authenticated state.  Extracted so a future redesign of the hero
- * propagates to both branches in one place.
+ * Page shell: PageShell + the shared PageHeader, common to the loading
+ * state and the authenticated state, so each renders exactly one h1 and
+ * a change to the header propagates to both branches in one place.
  *
  * @param {object} props
  * @param {React.ReactNode} props.children
- * @param {string} [props.username]  Optional username to splice into the hero subtitle.
+ * @param {string} [props.username]  Optional username to splice into the title.
  */
 function Shell({ children, username }: { children: React.ReactNode; username?: string }) {
   return (
-    <div
-      style={{
-        ...(undefined as any),
-        background: ABYSS,
-        color: DUST,
-        minHeight: '100vh',
-      }}
-    >
-      <Header />
-
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Profile"
-            kicker="X"
-            label="Your Account"
-            title={username ? `Cosmos, ${username}` : 'Your Account'}
-            subtitle="Your username, your credit balance, your allegiance.  All of it is editable here; nothing is final."
-          />
-        </Container>
-      </section>
-
-      <section style={{ padding: '0 0 80px' }}>
-        <Container>{children}</Container>
-      </section>
-
-      <Footer />
-    </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Profile"
+        title={username ? `Cosmos, ${username}` : 'Your Account'}
+        subtitle="Your username, your credit balance, your allegiance.  All of it is editable here; nothing is final."
+      />
+      <section>{children}</section>
+    </PageShell>
   );
 }
 

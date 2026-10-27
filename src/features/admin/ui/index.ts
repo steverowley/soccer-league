@@ -21,7 +21,6 @@ export { TestingPanel }                 from './TestingPanel';
 export { ArchitectInterventionLog }     from './ArchitectInterventionLog';
 
 // ── Shell pieces (consumed by pages/Admin.tsx) ───────────────────────────────
-export { AdminPageHero }                from './AdminPageHero';
 export {
   AdminTabStrip,
   ADMIN_TABS,

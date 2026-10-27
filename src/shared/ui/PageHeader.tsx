@@ -11,8 +11,13 @@
 // Layout, top to bottom (matches docs/design-language-specimen.html):
 //   back link                  "◂ All leagues"
 //   breadcrumbs                "Leagues / Rocky Inner"
-//   [crest]  eyebrow           "Leagues"  (the section of the site, never a number)
-//            title (h1)        40 px, 30 on a phone
+//   crest                      club, player and manager pages only
+//   eyebrow                    "Leagues"  (the section of the site, never a number)
+//   title (h1)                 40 px, 30 on a phone
+//
+// The crest sits ABOVE the eyebrow, not beside the title, so every page's
+// title starts on the same left edge (owner: "page title formats all over
+// the place"; a crest beside the title pushed club titles 80 px right).
 //   subtitle                   body prose, secondary tone
 //   meta                       a row of StatBlocks or Tags
 //   actions                    buttons
@@ -34,7 +39,7 @@ interface PageHeaderProps {
   back?: { to: string; label: string };
   /** Breadcrumb trail for detail pages. */
   crumbs?: Crumb[];
-  /** A <Crest> beside the title, for club pages. */
+  /** A <Crest> above the eyebrow, for club, player and manager pages. */
   crest?: ReactNode;
   /** A row of StatBlocks or Tags under the subtitle. */
   meta?: ReactNode;
@@ -79,29 +84,22 @@ export function PageHeader({
         </div>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: space[16],
-          marginTop: hasTop ? space[16] : 0,
-          minWidth: 0,
-        }}
-      >
-        {crest}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ ...type.label, ...tone.secondary }}>{eyebrow}</div>
-          <h1
-            style={{
-              ...type.title,
-              margin: 0,
-              marginTop: space[12],
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {title}
-          </h1>
-        </div>
+      {crest != null && (
+        <div style={{ marginTop: hasTop ? space[16] : 0, lineHeight: 0 }}>{crest}</div>
+      )}
+
+      <div style={{ marginTop: crest != null ? space[16] : hasTop ? space[16] : 0, minWidth: 0 }}>
+        <div style={{ ...type.label, ...tone.secondary }}>{eyebrow}</div>
+        <h1
+          style={{
+            ...type.title,
+            margin: 0,
+            marginTop: space[12],
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {title}
+        </h1>
       </div>
 
       {subtitle != null && (

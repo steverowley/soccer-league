@@ -19,13 +19,13 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell } from '../shared/ui';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM } = COLORS;
+const { dust: DUST, flare: FLARE, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -60,27 +60,21 @@ export default function ResetPassword() {
   }, [db]);
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-      <Container>
-        <SectionHeader
-          level={1}
-          pageKicker="ACCOUNT"
-          kicker={isRecovering ? 'II • SET NEW PASSWORD' : 'I • RESET PASSWORD'}
-          title={isRecovering ? 'Choose a new password' : 'Forgot your password?'}
-          subtitle={
-            isRecovering
-              ? 'Enter a new password for your account. You will be signed in immediately after.'
-              : "Enter the email you signed up with. We'll send a link you can click to set a new password."
-          }
-        />
-        {isRecovering
-          ? <UpdatePasswordForm onSuccess={() => navigate('/profile', { replace: true })} />
-          : <RequestResetForm requestReset={requestPasswordReset} />
+    <PageShell>
+      <PageHeader
+        eyebrow="Account"
+        title={isRecovering ? 'Choose a new password' : 'Forgot your password?'}
+        subtitle={
+          isRecovering
+            ? 'Enter a new password for your account. You will be signed in immediately after.'
+            : "Enter the email you signed up with. We'll send a link you can click to set a new password."
         }
-      </Container>
-      <Footer />
-    </div>
+      />
+      {isRecovering
+        ? <UpdatePasswordForm onSuccess={() => navigate('/profile', { replace: true })} />
+        : <RequestResetForm requestReset={requestPasswordReset} />
+      }
+    </PageShell>
   );
 }
 

@@ -18,20 +18,14 @@
 //   thin shell and lets the test surface for the gate evolve independently.
 
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import Header from '../../../components/Header';
-import { Container, Footer } from '../../../components/Layout';
 import { useAuth } from '../../auth';
-import {
-  DUST_50, FLARE, QUANTUM,
-  LABEL_STYLE, VALUE_STYLE,
-} from './primitives';
+import { PageHeader, PageShell } from '../../../shared/ui';
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 /**
  * Render `children` when the active user is an admin; otherwise render an
- * "Authenticating…" placeholder while the session token is loading, or an
+ * "Authenticating" page header while the session token is loading, or an
  * "Access Denied" surface for non-admin / anonymous visitors.
  *
  * The denial copy intentionally reveals nothing about the gating mechanism —
@@ -50,46 +44,30 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
   // ── Branch 1: auth still resolving ─────────────────────────────────────────
   // Render a minimal placeholder rather than the denial surface so a
   // legitimate admin does not see a "wrong" frame for the ~1 frame their
-  // session token takes to hydrate.
+  // session token takes to hydrate. Like every state, it opens with the
+  // shared PageHeader, so it renders exactly one h1.
   if (authLoading) {
     return (
-      <>
-        <Header />
-        <main>
-          <Container>
-            <p style={{ ...VALUE_STYLE, padding: '80px 0', textAlign: 'center', color: DUST_50 }}>
-              Authenticating…
-            </p>
-          </Container>
-        </main>
-        <Footer />
-      </>
+      <PageShell>
+        <PageHeader eyebrow="Admin" title="Authenticating" />
+      </PageShell>
     );
   }
 
   // ── Branch 2: not an admin (anon or signed-in non-admin) ──────────────────
   // Treat anonymous (profile === null) and non-admin signed-in users
-  // identically — same copy, same CTA — to avoid leaking whether any
+  // identically (same copy, same way home) to avoid leaking whether any
   // particular UID is an admin.
   if (profile?.is_admin !== true) {
     return (
-      <>
-        <Header />
-        <main>
-          <Container>
-            <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{ ...LABEL_STYLE, color: FLARE, marginBottom: 12 }}>Access Denied</p>
-              <p style={{ ...VALUE_STYLE, color: DUST_50, marginBottom: 24 }}>
-                This surface is restricted to league administrators.
-              </p>
-              <Link to="/" style={{ ...LABEL_STYLE, color: QUANTUM, textDecoration: 'none' }}>
-                Return Home
-              </Link>
-            </div>
-          </Container>
-        </main>
-        <Footer />
-      </>
+      <PageShell>
+        <PageHeader
+          eyebrow="Admin"
+          title="Access Denied"
+          back={{ to: '/', label: 'Return home' }}
+          subtitle="This surface is restricted to league administrators."
+        />
+      </PageShell>
     );
   }
 

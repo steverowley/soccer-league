@@ -2,10 +2,9 @@
 // Auth gateway — `/login` route, rebuilt in PR 8.
 //
 // Layout:
-//   Header (global)
-//   I.   Page hero            — kicker "Account" + title + intro prose
-//   II.  Card with mode toggle — Log In / Sign Up tabs above a single form
-//   Footer (shared)
+//   PageShell (site header, main column, footer)
+//   PageHeader: eyebrow "Account", title, intro prose
+//   Card with mode toggle: Log In / Sign Up tabs above a single form
 //
 // Combined form (rather than two routes) because Log In and Sign Up
 // share 80 % of the same fields and the toggle reads better than
@@ -18,8 +17,8 @@
 
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell } from '../shared/ui';
 import { useAuth } from '../features/auth';
 
 // ── Local aliases for terser inline styles ──────────────────────────────────
@@ -385,38 +384,20 @@ export default function Login() {
 }
 
 /**
- * Page shell — shared chrome between the loading state and the form
- * state.  Extracted so the two render branches can't drift on padding,
- * Header, Footer, or hero copy.
+ * Page shell: PageShell + the shared PageHeader, common to the loading,
+ * check-your-inbox and form states.  Extracted so the render branches
+ * can't drift on the header copy, and each renders exactly one h1.
  */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
-      <Header />
-
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Account"
-            kicker="IX"
-            label="Sign In"
-            title="Step Into The Void"
-            subtitle="Claim a username, pick a club, place bets, vote on focuses, train players.  Every account starts with 200 Intergalactic Credits."
-          />
-        </Container>
-      </section>
-
-      <section style={{ padding: '0 0 80px' }}>
-        <Container>{children}</Container>
-      </section>
-
-      <Footer />
-    </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Account"
+        title="Step Into The Void"
+        subtitle="Claim a username, pick a club, place bets, vote on focuses, train players.  Every account starts with 200 Intergalactic Credits."
+      />
+      <section>{children}</section>
+    </PageShell>
   );
 }
 

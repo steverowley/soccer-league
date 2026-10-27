@@ -30,8 +30,8 @@
 
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell, StatBlock } from '../shared/ui';
 import WagerWidget from '../components/WagerWidget';
 import { useAuth } from '../features/auth';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
@@ -40,7 +40,7 @@ import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { getPlayersForTeam, getUpcomingMatches } from '../features/match';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
-const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
+const { dust: DUST, quantum: QUANTUM } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50 = COLORS.dust50;
 const DUST_70 = COLORS.dust70;
@@ -58,7 +58,7 @@ export default function Welcome() {
   // team set) don't need the wizard — send them to /.
   if (loading)
     return (
-      <Shell>
+      <Shell title="Loading the wizard">
         <LoadingLine />
       </Shell>
     );
@@ -88,59 +88,29 @@ function WelcomeWizard({ onDone }: { onDone: () => void }) {
   const credits = profile?.credits ?? 200;
 
   return (
-    <Shell>
-      {/* Credit-grant moment (#571): make the opening 200-credit stake a visible
-          beat during onboarding — previously the bankroll stayed invisible until
-          a fan found /profile. Persists across all three steps so the stake (and
-          what's left after a starter bet) stays in view. */}
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'baseline',
-          gap: 10,
-          border: `1px solid ${QUANTUM}`,
-          padding: '8px 14px',
-          marginBottom: 24,
-        }}
-      >
-        <strong
-          style={{
-            fontSize: 16,
-            fontWeight: 700,
-            color: QUANTUM,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {credits.toLocaleString()}
-        </strong>
-        <span
-          style={{
-            fontSize: 11,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: DUST_70,
-          }}
-        >
-          Intergalactic Credits: your opening stake from the cosmos
-        </span>
-      </div>
-
-      <SectionHeader
-        level={1}
-        pageKicker={`STEP ${step} OF ${TOTAL_STEPS}`}
-        kicker={`I • WELCOME`}
-        title={
-          step === 1 ? 'Pick your club' : step === 2 ? 'Pick your player' : 'Place your first bet'
-        }
-        subtitle={
-          step === 1
-            ? 'Every fan supports one of 32 clubs across four orbital leagues. Pick the one you want to follow. You can change later.'
-            : step === 2
-              ? 'Your favourite player. The cosmos pays attention to who you watch.'
-              : 'You have 200 Intergalactic Credits. The next match for your club kicks off soon. Drop a stake to claim your seat.'
-        }
-      />
-
+    <Shell
+      title={step === 1 ? 'Pick your club' : step === 2 ? 'Pick your player' : 'Place your first bet'}
+      subtitle={
+        step === 1
+          ? 'Every fan supports one of 32 clubs across four orbital leagues. Pick the one you want to follow. You can change later.'
+          : step === 2
+            ? 'Your favourite player. The cosmos pays attention to who you watch.'
+            : 'You have 200 Intergalactic Credits. The next match for your club kicks off soon. Drop a stake to claim your seat.'
+      }
+      meta={
+        <>
+          {/* Step progress, which used to be the eyebrow ("STEP 1 OF 3"):
+              eyebrows name the section, never a number. */}
+          <StatBlock label="Step" value={`${step} of ${TOTAL_STEPS}`} />
+          {/* Credit-grant moment (#571): make the opening 200-credit stake a
+              visible beat during onboarding; previously the bankroll stayed
+              invisible until a fan found /profile. It sits in the header's
+              meta row on all three steps, so the stake (and what's left after
+              a starter bet) stays in view. */}
+          <StatBlock label="Intergalactic Credits: your opening stake" value={credits.toLocaleString()} />
+        </>
+      }
+    >
       {step === 1 && (
         <PickClubStep
           onPick={(teamId) => {
@@ -440,13 +410,37 @@ function StarterBetStep({
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 
-function Shell({ children }: { children: React.ReactNode }) {
+/**
+ * Page frame for every state of the wizard: PageShell + the shared
+ * PageHeader (eyebrow "Welcome"), so the loading state and each step
+ * render exactly one h1.
+ *
+ * @param title     The step's title (the page's h1).
+ * @param subtitle  The step's one-line pitch.
+ * @param meta      Optional StatBlocks under the subtitle.
+ * @param children  The step body.
+ */
+function Shell({
+  title,
+  subtitle,
+  meta,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  meta?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-      <Container>{children}</Container>
-      <Footer />
-    </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Welcome"
+        title={title}
+        {...(subtitle ? { subtitle } : {})}
+        {...(meta ? { meta } : {})}
+      />
+      <section>{children}</section>
+    </PageShell>
   );
 }
 

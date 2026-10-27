@@ -10,7 +10,7 @@
 //   the archive detail page (`/seasons/:seasonId`).
 //
 // LAYOUT
-//   Header (global) → SectionHeader intro → list of season cards.
+//   PageShell → PageHeader (eyebrow "Seasons") → list of season cards.
 //   Cards render the season name + year + date range + status chip.
 //
 // STATUS CHIPS
@@ -26,20 +26,14 @@
 
 import { Link } from 'react-router-dom';
 
-import Header from '../components/Header';
-import {
-  COLORS,
-  Container,
-  Footer,
-  SectionHeader,
-} from '../components/Layout';
+import { COLORS } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonList, type SeasonSummary } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
-import { AsyncView, PreSeasonState } from '../shared/ui';
+import { AsyncView, PageHeader, PageShell, PreSeasonState } from '../shared/ui';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
-const { abyss: ABYSS, dust: DUST, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
+const { dust: DUST, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
 const DUST_50 = COLORS.dust50;
 const DUST_70 = COLORS.dust70;
 
@@ -87,102 +81,91 @@ export default function Seasons() {
   const seasonsState = useAsyncData(() => getSeasonList(publicDb), [publicDb]);
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-      <main>
-        <Container>
-          <section style={{ padding: '48px 0 24px' }}>
-            <SectionHeader
-              level={1}
-              pageKicker="ARCHIVE"
-              kicker="0"
-              label="The Cosmic Ledger"
-              title="Seasonal Archive"
-              subtitle="Every season the league has run.  Click a year to inspect its final state: standings, brackets, election results."
-            />
-          </section>
+    <PageShell>
+      <PageHeader
+        eyebrow="Seasons"
+        title="Seasonal Archive"
+        subtitle="Every season the league has run.  Click a year to inspect its final state: standings, brackets, election results."
+      />
 
-          <section style={{ padding: '0 0 80px' }}>
-            <AsyncView
-              state={seasonsState}
-              what="the season archive"
-              loading="Reading the ledger"
-              isEmpty={(rows) => rows.length === 0}
-              empty={(
-                <PreSeasonState detail="The archive opens once the first season is played." />
-              )}
-            >
-              {(seasons) => (
-              <ul style={{
-                listStyle:     'none',
-                padding:       0,
-                margin:        0,
-                display:       'grid',
-                gap:           1,
-                background:    HAIRLINE,
-                border:        `1px solid ${HAIRLINE}`,
-              }}>
-                {seasons.map((s) => (
-                  <li key={s.id} style={{ background: PHOBOS }}>
-                    <Link
-                      to={`/seasons/${s.id}`}
-                      style={{
-                        display:        'flex',
-                        justifyContent: 'space-between',
-                        alignItems:     'baseline',
-                        gap:            16,
-                        padding:        '20px 24px',
-                        textDecoration: 'none',
-                        color:          DUST,
-                      }}
-                    >
-                      <div>
-                        <div style={{
-                          fontSize:      11,
-                          fontWeight:    700,
-                          letterSpacing: '0.14em',
-                          textTransform: 'uppercase',
-                          color:         DUST_50,
-                          marginBottom:  4,
-                        }}>
-                          Year {s.year}
-                        </div>
-                        <div style={{
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color:      DUST,
-                        }}>
-                          {s.name}
-                        </div>
-                        <div style={{
-                          fontSize: 12,
-                          color:    DUST_70,
-                          marginTop: 6,
-                          fontVariantNumeric: 'tabular-nums',
-                        }}>
-                          {formatRange(s)}
-                        </div>
-                      </div>
-                      <span style={{
-                        fontSize:      10,
-                        fontWeight:    700,
-                        letterSpacing: '0.18em',
-                        textTransform: 'uppercase',
-                        color:         statusColor(s.status),
-                        whiteSpace:    'nowrap',
-                      }}>
-                        {s.status.replace(/_/g, ' ')}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              )}
-            </AsyncView>
-          </section>
-        </Container>
-      </main>
-      <Footer />
-    </div>
+      <section style={{ padding: '0 0 80px' }}>
+        <AsyncView
+          state={seasonsState}
+          what="the season archive"
+          loading="Reading the ledger"
+          isEmpty={(rows) => rows.length === 0}
+          empty={(
+            <PreSeasonState detail="The archive opens once the first season is played." />
+          )}
+        >
+          {(seasons) => (
+          <ul style={{
+            listStyle:     'none',
+            padding:       0,
+            margin:        0,
+            display:       'grid',
+            gap:           1,
+            background:    HAIRLINE,
+            border:        `1px solid ${HAIRLINE}`,
+          }}>
+            {seasons.map((s) => (
+              <li key={s.id} style={{ background: PHOBOS }}>
+                <Link
+                  to={`/seasons/${s.id}`}
+                  style={{
+                    display:        'flex',
+                    justifyContent: 'space-between',
+                    alignItems:     'baseline',
+                    gap:            16,
+                    padding:        '20px 24px',
+                    textDecoration: 'none',
+                    color:          DUST,
+                  }}
+                >
+                  <div>
+                    <div style={{
+                      fontSize:      11,
+                      fontWeight:    700,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      color:         DUST_50,
+                      marginBottom:  4,
+                    }}>
+                      Year {s.year}
+                    </div>
+                    <div style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color:      DUST,
+                    }}>
+                      {s.name}
+                    </div>
+                    <div style={{
+                      fontSize: 12,
+                      color:    DUST_70,
+                      marginTop: 6,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {formatRange(s)}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize:      10,
+                    fontWeight:    700,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color:         statusColor(s.status),
+                    whiteSpace:    'nowrap',
+                  }}>
+                    {s.status.replace(/_/g, ' ')}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          )}
+        </AsyncView>
+      </section>
+    </PageShell>
   );
 }

@@ -4,7 +4,7 @@
 // its own data fetching, mutation handlers, and toast state — this file is
 // responsible only for:
 //   - the auth gate (delegated to `AdminAccessGate`)
-//   - the static page hero (delegated to `AdminPageHero`)
+//   - the page header (the shared PageHeader, inside PageShell)
 //   - the URL-synced tab strip (presentational chips in `AdminTabStrip`)
 //   - routing the active tab to its panel
 //
@@ -15,12 +15,9 @@
 //   with HTTP 403.
 
 import { useSearchParams } from 'react-router-dom';
-import Header from '../components/Header';
-import { Container, Footer } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
   AdminAccessGate,
-  AdminPageHero,
   AdminTabStrip,
   DEFAULT_ADMIN_TAB,
   parseAdminTab,
@@ -32,6 +29,7 @@ import {
   type AdminTab,
 } from '@features/admin';
 import { MatchViewerDemo } from '../features/match';
+import { PageHeader, PageShell } from '../shared/ui';
 
 // ── Root page ─────────────────────────────────────────────────────────────────
 
@@ -72,19 +70,22 @@ export default function Admin() {
 
   return (
     <AdminAccessGate>
-      <Header />
-      <main>
-        <AdminPageHero />
-        <AdminTabStrip active={activeTab} onSelect={onTabSelect} />
+      <PageShell>
+        <PageHeader
+          eyebrow="Admin"
+          title="League Control Room"
+          subtitle="Season controls, fixture browser, and Architect intervention log. Changes here affect the live database directly."
+        />
+        <div>
+          <AdminTabStrip active={activeTab} onSelect={onTabSelect} />
 
-        {/* ── Body panel (switched on tab) ───────────────────────────────
-            Only the active panel renders — unmounted tabs lose state on
-            switch, which is intentional: a stale fixture filter or
-            in-flight toast shouldn't survive context switches between
-            unrelated panels.  Each panel re-fetches on mount, so first
-            paint of a tab is always a fresh view. */}
-        <Container>
-          <div style={{ padding: '32px 16px 80px' }}>
+          {/* ── Body panel (switched on tab) ───────────────────────────────
+              Only the active panel renders: unmounted tabs lose state on
+              switch, which is intentional: a stale fixture filter or
+              in-flight toast shouldn't survive context switches between
+              unrelated panels.  Each panel re-fetches on mount, so first
+              paint of a tab is always a fresh view. */}
+          <div style={{ padding: '32px 0 80px' }}>
             {activeTab === 'overview' && <OverviewPanel db={db} />}
             {activeTab === 'season' && <SeasonControlsPanel db={db} />}
             {activeTab === 'fixtures' && <FixtureBrowser db={db} />}
@@ -92,9 +93,8 @@ export default function Admin() {
             {activeTab === 'architect' && <ArchitectInterventionLog db={db} />}
             {activeTab === 'viewer' && <MatchViewerDemo />}
           </div>
-        </Container>
-      </main>
-      <Footer />
+        </div>
+      </PageShell>
     </AdminAccessGate>
   );
 }

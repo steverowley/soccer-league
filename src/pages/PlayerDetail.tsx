@@ -16,13 +16,17 @@
 //           mechanics pillar.
 //
 // LAYOUT
-//   Header (global)
-//   I.   Hero               — player identity (name, team, position, bio)
-//   II.  Season Stats       — outcome stats from match_player_stats aggregate
-//   III. Idol Standing      — global rank + popularity data from player_idol_score
-//   IV.  Recent Matches     — last N appearances with opponent + W/D/L + line
-//   V.   Narrative Mentions — narratives referencing this player's entity_id
-//   Footer (global)
+//   PageShell (site header, main column, footer)
+//   PageHeader: back link and crumbs to the club, club Crest, eyebrow
+//        "Players", the name as the uppercase h1, and a StatBlock meta row
+//        (position, number, age, club, origin, archetype, status)
+//   I.   Dossier            (only when an authored profile exists)
+//   II.  Season Stats       outcome stats from match_player_stats aggregate
+//   III. Idol Standing      global rank + popularity data from player_idol_score
+//   IV.  Recent Matches     last N appearances with opponent + W/D/L + line
+//   V.   Narrative Mentions narratives referencing this player's entity_id
+//   VI.  Web of Influence   (only when the player has an entity row)
+//   Section numbers are counted at render, so they always start at I.
 //
 // DATA STRATEGY
 //   Four fetches fire in parallel on mount: `getPlayer`, `getPlayerIdolRank`,
@@ -33,10 +37,9 @@
 
 import { useEffect, useState } from 'react';
 import { withTimeout, isTimeoutError } from '../shared/hooks/useAsyncData';
-import { ErrorState } from '../shared/ui';
+import { Crest, ErrorState, PageHeader, PageShell, StatBlock, toRoman } from '../shared/ui';
 import { useParams, Link } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, BackLink, Footer } from '../components/Layout';
+import { COLORS } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getPlayer, getPlayerIdolRank } from '../features/match';
 import {
@@ -46,6 +49,7 @@ import {
   type NarrativeMention,
 } from '../features/match';
 import { RelationshipGraph, getEntityProfile } from '../features/entities';
+import { TEAMS_BY_LEAGUE } from '../data/leagueData';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const {
@@ -58,6 +62,13 @@ const {
 } = COLORS;
 const DUST_50 = COLORS.dust50;
 const DUST_70 = COLORS.dust70;
+
+// ── Club colours ──────────────────────────────────────────────────────────────
+// getPlayer's team join carries only id and name, so the crest takes the club
+// colour from the static canon (club colour is data, keyed by team id).
+const TEAM_COLOR: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
+);
 
 // ── Position display map ──────────────────────────────────────────────────────
 // Maps the two-letter engine abbreviation stored in the DB to the full
@@ -219,112 +230,77 @@ export default function PlayerDetail() {
 
   // ── Unknown player ────────────────────────────────────────────────────────
   // Only show the error surface once the player fetch has settled (to avoid
-  // a flash of "Unknown Player" while the fetch is in flight).
+  // a flash of "Unknown Player" while the fetch is in flight). Every state
+  // opens with the shared PageHeader, so each renders exactly one h1.
   if (playerDone && playerOutage) {
     return (
-      <>
-        <Header />
-        <main>
-          <Container>
-            <div style={{ padding: '48px 0 80px' }}>
-              <ErrorState
-                what="this player"
-                timedOut={playerOutage === 'timeout'}
-                onRetry={() => {
-                  setPlayerErr(null);
-                  setPlayerOutage(null);
-                  setPlayerDone(false);
-                  setAttempt((n) => n + 1);
-                }}
-              />
-            </div>
-          </Container>
-        </main>
-        <Footer />
-      </>
+      <PageShell>
+        <PageHeader eyebrow="Players" title="Player unavailable" />
+        <ErrorState
+          what="this player"
+          timedOut={playerOutage === 'timeout'}
+          onRetry={() => {
+            setPlayerErr(null);
+            setPlayerOutage(null);
+            setPlayerDone(false);
+            setAttempt((n) => n + 1);
+          }}
+        />
+      </PageShell>
     );
   }
 
   if (playerDone && (playerErr || !player)) {
     return (
-      <>
-        <Header />
-        <main>
-          <Container>
-            <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{ ...LABEL_STYLE, color: FLARE, marginBottom: 12 }}>
-                Unknown Player
-              </p>
-              <p style={{ ...VALUE_STYLE, color: DUST_50, marginBottom: 24 }}>
-                No player found for this ID.
-              </p>
-              <Link to="/idols" style={{ ...LABEL_STYLE, color: QUANTUM, textDecoration: 'none' }}>
-                View Idol Rankings
-              </Link>
-            </div>
-          </Container>
-        </main>
-        <Footer />
-      </>
+      <PageShell>
+        <PageHeader
+          eyebrow="Players"
+          title="Unknown Player"
+          back={{ to: '/idols', label: 'Idol rankings' }}
+          subtitle="No player found for this ID."
+        />
+      </PageShell>
     );
   }
 
-  // Brand accent: team colour drives the hero border strip (same as TeamDetail).
-  // Falls back to QUANTUM when the team row has no colour set.
-  const teamColor = (player?.teams as { color?: string | null } | null)?.color ?? QUANTUM;
+  // In-page sections are numbered I, II, III in page order; the Dossier
+  // only renders when an authored profile exists, so the numbers are
+  // counted rather than fixed.
+  let sectionNo = 0;
+  const nextIndex = (): string => toRoman(++sectionNo);
 
   return (
-    <>
-      <Header />
-      <main>
-        {/* ── I. Hero ──────────────────────────────────────────────────── */}
-        <section
-          aria-labelledby="player-name"
-          style={{ borderTop: `2px solid ${teamColor}` }}
-        >
-          <Container>
-            <div style={{ padding: '48px 0 40px' }}>
-              {/* Back to team page if we know the team */}
-              {player?.teams?.id && (
-                <BackLink to={`/teams/${player.teams.id}`}>
-                  {player.teams.name ?? 'Team'}
-                </BackLink>
-              )}
+    <PageShell>
+      {/* ── Page header ─────────────────────────────────────────────────
+          The shared PageHeader: back to the club, crumbs, the club crest,
+          the name as the uppercase h1 and the identity facts as a
+          StatBlock meta row. While the player row loads the title says so
+          (one h1 in every state) and the meta row is omitted. */}
+      <PlayerHeader player={playerDone ? player : null} />
 
-              {!playerDone ? (
-                <HeroSkeleton />
-              ) : player ? (
-                <PlayerHero player={player} />
-              ) : null}
-            </div>
-          </Container>
-        </section>
-
-        {/* ── II. Dossier ──────────────────────────────────────────────
+      <div>
+        {/* ── Dossier ──────────────────────────────────────────────────
             Authored narrative profile from entities.meta.profile (bio,
             appearance, personality, allegiances, achievements). Hidden
-            entirely when the player has no authored profile yet. */}
+            entirely when the player has no authored profile yet. Its
+            divider sits after it: the PageHeader's bottom hairline already
+            separates the first section from the header. */}
         {profile && (
           <>
-            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
             <section aria-labelledby="dossier-heading">
-              <Container>
                 <div style={{ padding: '40px 0' }}>
-                  <SectionLabel id="dossier-heading" kicker="II" title="Dossier" />
+                  <SectionLabel id="dossier-heading" kicker={nextIndex()} title="Dossier" />
                   <PlayerDossier profile={profile} />
                 </div>
-              </Container>
             </section>
+            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
           </>
         )}
 
-        <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
-
-        {/* ── III. Season Stats ────────────────────────────────────────── */}
-        <section aria-labelledby="stats-heading">
-          <Container>
+        {/* ── Season Stats ─────────────────────────────────────────────── */}
+                <section aria-labelledby="stats-heading">
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="stats-heading" kicker="III" title="Season Statistics" />
+              <SectionLabel id="stats-heading" kicker={nextIndex()} title="Season Statistics" />
 
               {!playerDone ? (
                 <Skeleton height={100} />
@@ -332,16 +308,14 @@ export default function PlayerDetail() {
                 <StatsGrid stats={player.seasonStats} />
               ) : null}
             </div>
-          </Container>
         </section>
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── IV. Idol Standing ────────────────────────────────────────── */}
+        {/* ── Idol Standing ────────────────────────────────────────── */}
         <section aria-labelledby="idol-heading">
-          <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="idol-heading" kicker="IV" title="Idol Standing" />
+              <SectionLabel id="idol-heading" kicker={nextIndex()} title="Idol Standing" />
 
               {!idolDone ? (
                 <Skeleton height={80} />
@@ -353,12 +327,11 @@ export default function PlayerDetail() {
                 </p>
               )}
             </div>
-          </Container>
         </section>
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── V. Recent Matches ─────────────────────────────────────────
+        {/* ── Recent Matches ─────────────────────────────────────────
             Sourced from `match_lineups` (one row per starter) with a
             LEFT JOIN to `match_player_stats` for the contribution
             columns — see getPlayerRecentMatches in playerStats.ts.
@@ -366,9 +339,8 @@ export default function PlayerDetail() {
             contribution columns just read as zeros for quiet shifts
             (isl-pfm). */}
         <section aria-labelledby="matches-heading">
-          <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="matches-heading" kicker="V" title="Recent Matches" />
+              <SectionLabel id="matches-heading" kicker={nextIndex()} title="Recent Matches" />
 
               {!matchesDone ? (
                 <Skeleton height={120} />
@@ -380,16 +352,14 @@ export default function PlayerDetail() {
                 </p>
               )}
             </div>
-          </Container>
         </section>
 
         <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
 
-        {/* ── VI. Narrative Mentions ───────────────────────────────────── */}
+        {/* ── Narrative Mentions ───────────────────────────────────── */}
         <section aria-labelledby="narratives-heading">
-          <Container>
             <div style={{ padding: '40px 0' }}>
-              <SectionLabel id="narratives-heading" kicker="VI" title="Narrative Mentions" />
+              <SectionLabel id="narratives-heading" kicker={nextIndex()} title="Narrative Mentions" />
 
               {!narrativesDone ? (
                 <Skeleton height={100} />
@@ -401,10 +371,9 @@ export default function PlayerDetail() {
                 </p>
               )}
             </div>
-          </Container>
         </section>
 
-        {/* ── VII. Web of Influence (issue isl-uwq) ─────────────────────
+        {/* ── Web of Influence (issue isl-uwq) ─────────────────────
             Drop-in <RelationshipGraph> hub showing the player's
             connections to managers, rivals, mentors, journalists, etc.
             Hidden when the player row has no entity_id link (legacy
@@ -417,12 +386,10 @@ export default function PlayerDetail() {
         )}
         {player?.entity_id && (
           <section aria-labelledby="connections-heading">
-            <Container>
               <div style={{ padding: '40px 0 80px' }}>
-                <SectionLabel id="connections-heading" kicker="VII" title="Web of Influence" />
+                <SectionLabel id="connections-heading" kicker={nextIndex()} title="Web of Influence" />
                 <RelationshipGraph entityId={player.entity_id} />
               </div>
-            </Container>
           </section>
         )}
 
@@ -430,9 +397,8 @@ export default function PlayerDetail() {
             relationship-graph section so the footer doesn't kiss the
             narratives feed. */}
         {!player?.entity_id && <div style={{ padding: '0 0 40px' }} />}
-      </main>
-      <Footer />
-    </>
+      </div>
+    </PageShell>
   );
 }
 
@@ -506,97 +472,53 @@ function PlayerDossier({ profile }: { profile: Record<string, unknown> }) {
 }
 
 /**
- * Hero block: player name, jersey number pill, team, position, and the
- * identity meta row (nationality · age · personality archetype).
+ * The page header for a player: the shared PageHeader with the name as the
+ * uppercase h1, a back link and crumbs to the club, the club crest, and the
+ * identity facts (position, number, age, club, origin, archetype, status)
+ * as a StatBlock meta row.
  *
- * Inline status badge for players who have been incinerated or are inactive
- * so the fan sees the historical context without any raw stat exposure.
+ * WHY one component for both states: the page renders exactly one h1 in
+ * every state. While the player row loads, the title reads "Loading player"
+ * and the club-dependent parts (back link, crumbs, crest, meta) are
+ * omitted rather than guessed.
+ *
+ * @param player  The loaded player, or null while the fetch is in flight.
+ * @returns       A PageHeader.
  */
-function PlayerHero({ player }: { player: PlayerWithStats }) {
+function PlayerHeader({ player }: { player: PlayerWithStats | null }) {
+  if (!player) return <PageHeader eyebrow="Players" title="Loading player" />;
+
   const posLabel = player.position ? (POSITION_LABEL[player.position] ?? player.position) : null;
-  const teamName = player.teams?.name ?? null;
+  const club = player.teams?.id ? player.teams : null;
+  const clubName = club?.name ?? null;
 
   return (
-    <div>
-      {/* Jersey number + position pill */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        {player.jersey_number != null && (
-          <span style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: DUST_50,
-            border: `1px solid ${HAIRLINE}`,
-            padding: '4px 10px',
-            letterSpacing: '0.1em',
-          }}>
-            #{player.jersey_number}
-          </span>
-        )}
-        {posLabel && (
-          <span style={{ ...LABEL_STYLE, color: DUST_70 }}>{posLabel}</span>
-        )}
-        {!player.is_active && (
-          <span style={{ ...LABEL_STYLE, color: FLARE }}>Inactive</span>
-        )}
-        {player.starter && (
-          <span style={{ ...LABEL_STYLE, color: TERRA }}>Starter</span>
-        )}
-      </div>
-
-      {/* Player name — headline */}
-      <h1
-        id="player-name"
-        style={{
-          fontSize: 36,
-          fontWeight: 700,
-          color: DUST,
-          margin: '0 0 8px',
-          letterSpacing: '-0.01em',
-          lineHeight: 1.15,
-        }}
-      >
-        {player.name}
-      </h1>
-
-      {/* Team link */}
-      {teamName && player.teams?.id && (
-        <Link
-          to={`/teams/${player.teams.id}`}
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: QUANTUM,
-            textDecoration: 'none',
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {teamName}
-        </Link>
-      )}
-
-      {/* Identity meta row: nationality · age · personality */}
-      {(player.nationality || player.age != null || player.personality) && (
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '6px 18px',
-          marginTop: 18,
-          paddingTop: 18,
-          borderTop: `1px solid ${HAIRLINE}`,
-        }}>
-          {player.nationality && (
-            <MetaItem label="Origin" value={player.nationality} />
+    <PageHeader
+      eyebrow="Players"
+      title={player.name}
+      {...(club ? {
+        back: { to: `/teams/${club.id}`, label: clubName ?? 'Team' },
+        crumbs: [{ label: 'Teams', to: '/teams' }, { label: clubName ?? 'Team', to: `/teams/${club.id}` }, { label: player.name }],
+        crest: <Crest color={club.color ?? TEAM_COLOR.get(club.id)} size={64} />,
+      } : {})}
+      meta={
+        <>
+          {posLabel && <StatBlock label="Position" value={posLabel} />}
+          {player.jersey_number != null && <StatBlock label="Number" value={`#${player.jersey_number}`} />}
+          {player.age != null && <StatBlock label="Age" value={player.age} />}
+          {club && clubName && (
+            <StatBlock
+              label="Club"
+              value={<Link to={`/teams/${club.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{clubName}</Link>}
+            />
           )}
-          {player.age != null && (
-            <MetaItem label="Age" value={String(player.age)} />
-          )}
-          {player.personality && (
-            <MetaItem label="Archetype" value={player.personality} />
-          )}
-        </div>
-      )}
-    </div>
+          {player.nationality && <StatBlock label="Origin" value={player.nationality} />}
+          {player.personality && <StatBlock label="Archetype" value={player.personality} />}
+          {!player.is_active && <StatBlock label="Status" value="Inactive" valueTone="live" />}
+          {player.is_active && player.starter && <StatBlock label="Status" value="Starter" valueTone="success" />}
+        </>
+      }
+    />
   );
 }
 
@@ -1015,33 +937,6 @@ function SectionLabel({ id, kicker, title }: {
       >
         {title}
       </h2>
-    </div>
-  );
-}
-
-/**
- * Single meta field — label above, value below.  Used in the identity row
- * for nationality, age, and personality archetype.
- */
-function MetaItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p style={{ ...LABEL_STYLE, margin: '0 0 3px' }}>{label}</p>
-      <p style={{ ...VALUE_STYLE, margin: 0 }}>{value}</p>
-    </div>
-  );
-}
-
-/**
- * Hero loading skeleton shown while the player fetch is in flight.
- * Two blocks approximate the name headline + meta row to avoid layout
- * shift when the data arrives.
- */
-function HeroSkeleton() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ width: 280, height: 40, background: PHOBOS, opacity: 0.6 }} />
-      <div style={{ width: 160, height: 18, background: PHOBOS, opacity: 0.4 }} />
     </div>
   );
 }

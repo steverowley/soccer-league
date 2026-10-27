@@ -11,7 +11,6 @@
 //   - Horizontal scroll on narrow viewports (single-row preserved on mobile).
 
 import type { CSSProperties } from 'react';
-import { Container } from '../../../components/Layout';
 import {
   ABYSS, HAIRLINE, DUST, DUST_70, DUST_FAINT, QUANTUM,
 } from './primitives';
@@ -102,36 +101,34 @@ export function AdminTabStrip({
 }) {
   return (
     <div style={{ borderBottom: `1px solid ${HAIRLINE}`, background: ABYSS }}>
-      <Container>
-        <nav
-          aria-label="Admin sections"
-          style={{
-            display: 'flex',
-            gap: 4,
-            overflowX: 'auto',
-            // Hide the scrollbar on the horizontal scroll affordance — the
-            // tabs are short labels so users won't scroll often, and the
-            // scrollbar reads as visual noise underneath the active chip.
-            scrollbarWidth: 'none',
-          }}
-          className="isl-admin-tabstrip"
-        >
-          {ADMIN_TABS.map((t) => {
-            const isActive = t.id === active;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => onSelect(t.id)}
-                aria-current={isActive ? 'page' : undefined}
-                style={tabStyle(isActive)}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </nav>
-      </Container>
+      <nav
+        aria-label="Admin sections"
+        style={{
+          display: 'flex',
+          gap: 4,
+          overflowX: 'auto',
+          // Hide the scrollbar on the horizontal scroll affordance: the
+          // tabs are short labels so users won't scroll often, and the
+          // scrollbar reads as visual noise underneath the active chip.
+          scrollbarWidth: 'none',
+        }}
+        className="isl-admin-tabstrip"
+      >
+        {ADMIN_TABS.map((t) => {
+          const isActive = t.id === active;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSelect(t.id)}
+              aria-current={isActive ? 'page' : undefined}
+              style={tabStyle(isActive)}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </nav>
       <style>{`.isl-admin-tabstrip::-webkit-scrollbar { display: none; }`}</style>
     </div>
   );

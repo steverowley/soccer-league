@@ -3,9 +3,9 @@
 // design system's `Voting.html` worked screen ("Decide the future").
 //
 // Layout (matches the prototype top → bottom):
-//   Header (global)
-//   I.   Page head            — `.isl-head` eyebrow breadcrumb + 56px title +
-//                                lede + red permanence warning banner
+//   PageShell (site header, main column, footer)
+//   I.   PageHeader:          eyebrow "Voting", title, lede, the fan's club
+//                             as meta, and the red permanence warning banner
 //   II.  Auth / team guard    — anonymous / no-team CTAs short-circuit the
 //                                rest of the page (rendered in place of the ballot)
 //   III. Two-column grid      — LEFT = ballot (one decree card per tier, each
@@ -15,7 +15,6 @@
 //                                Balance / Committed / Remaining)
 //   IV.  Cosmos Decided panel — last-season enactment results (when present);
 //                                renders in place of the ballot, within the shell
-//   Footer (shared)
 //
 // Data sources (unchanged):
 //   - getActiveSeason(db)               — season scope for everything
@@ -38,10 +37,9 @@
 //     "probability of winning" is exposed — the reader infers.
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import Header from '../components/Header';
-import { COLORS, Container, Footer, PrimaryButton } from '../components/Layout';
+import { COLORS, PrimaryButton } from '../components/Layout';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
-import { useToast } from '../shared/ui';
+import { PageHeader, PageShell, StatBlock, useToast } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { canAffordVote, MIN_BET } from '../features/auth';
 import {
@@ -304,36 +302,30 @@ export default function Voting() {
   const teamName = teamId ? (TEAM_NAME_BY_ID[teamId] ?? null) : null;
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-
-      <Container>
-        {/* Section I — page head: eyebrow breadcrumb + display title + lede +
-            the red permanence warning banner. */}
-        <header style={{ padding: '48px 0 8px' }}>
-          <div style={eyebrowStyle}>
-            <span>Voting</span>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>Season cycle</span>
-            {teamName && (
-              <>
-                <span style={{ color: DUST_50 }}>•</span>
-                <span>{teamName}</span>
-              </>
-            )}
-          </div>
-          <h1 style={titleStyle}>Decide the Future</h1>
-          <p style={ledeStyle}>
+    <PageShell>
+      {/* Page head: the shared PageHeader; the fan's club, which used to
+          ride in the eyebrow, is its meta row. */}
+      <PageHeader
+        eyebrow="Voting"
+        title="Decide the Future"
+        subtitle={
+          <>
             At season&rsquo;s end, fans pool credits to enact two focuses per club: one
             major, one minor. Commit Intergalactic Credits behind the outcomes you want;
             the cosmos enacts whichever option has the most credits behind it.
-          </p>
-          <span style={warnStyle}>
+          </>
+        }
+        {...(teamName ? { meta: <StatBlock label="Your club" value={teamName} /> } : {})}
+        actions={
+          // The red permanence warning stays in the header, under the lede.
+          <span style={{ ...warnStyle, marginTop: 0 }}>
             <span aria-hidden="true" style={warnDotStyle} />
             Outcomes are permanent. Affiliation cannot be undone.
           </span>
-        </header>
+        }
+      />
 
+      <div>
         <div style={{ padding: '32px 0 96px' }}>
           {/* Section II — auth / team guard. Short-circuits the ballot. */}
           {!user && <SignInCta />}
@@ -440,9 +432,7 @@ export default function Voting() {
             </div>
           )}
         </div>
-      </Container>
-
-      <Footer />
+      </div>
 
       {/* Below ~900px the grid collapses to one column; the rail drops below the
           ballot and stops sticking. */}
@@ -453,11 +443,11 @@ export default function Voting() {
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
 
-// ── Page-head text styles (the prototype's `.isl-head`) ──────────────────────
+// ── Text styles (the prototype's `.isl-head`, still used by the Cosmos panel) ─
 const eyebrowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -468,13 +458,6 @@ const eyebrowStyle: CSSProperties = {
   textTransform: 'uppercase',
   flexWrap: 'wrap',
   color: DUST,
-};
-const titleStyle: CSSProperties = {
-  fontSize: 56,
-  fontWeight: 700,
-  lineHeight: 1,
-  textTransform: 'uppercase',
-  margin: '20px 0 0',
 };
 const ledeStyle: CSSProperties = {
   fontSize: 16,

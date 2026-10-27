@@ -4,11 +4,13 @@
 // fixtures, decrees").
 //
 // Layout (matches the prototype top → bottom):
-//   Header (global)
-//   I.   Eyebrow head    — breadcrumb (Teams link • league • location) + BackLink
-//   II.  Club hero       — 160px monogram crest / name + meta row / honours
-//                          (League position only — Titles/Seasons omitted, no
-//                          such data exists on the teams table)
+//   PageShell (site header, main column, footer)
+//   I-II. PageHeader:    back link "All clubs", crumbs "Teams / league / club",
+//                        the club Crest, eyebrow "Teams", the name as the h1,
+//                        location as the subtitle, and a StatBlock meta row
+//                        (league position, points, league titles, ground,
+//                        capacity, manager, supporters). It replaced the old
+//                        boxed ClubHero card and its monogram circle.
 //   III. 6-cell stat strip — Played / Won / Drawn / Lost / Goal diff / Points,
 //                          all from fetchLeagueStandings for this club's league
 //   IV.  Two-column shell (1fr / 380px):
@@ -36,8 +38,9 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, Footer, BackLink } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { tone } from '../shared/design';
+import { Crest, PageHeader, PageShell, StatBlock } from '../shared/ui';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
@@ -139,21 +142,15 @@ function gdLabel(gd: number): string {
   return '0';
 }
 
-/** Roman-numeral league position for the honours block (matches the prototype). */
-function toRoman(n: number): string {
-  if (n <= 0) return '—';
-  const table: Array<[number, string]> = [
-    [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
-  ];
-  let out = '';
-  let rem = n;
-  for (const [value, sym] of table) {
-    while (rem >= value) {
-      out += sym;
-      rem -= value;
-    }
-  }
-  return out;
+/**
+ * English ordinal for the header's league position: 1 → "1st", 12 → "12th",
+ * 22 → "22nd". (Roman numerals are reserved for in-page section indexes.)
+ */
+function ordinal(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  const suffix = ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
 }
 
 /** Look up a static team record across every league; null if unregistered. */
@@ -276,35 +273,41 @@ export default function TeamDetail() {
   const managers = liveTeam?.managers ?? [];
   const manager  = managers[0];
 
+  // The header's meta row: live league position and points from standings,
+  // all-time titles from the canon, then the ground, its capacity, the
+  // manager and the club's supporters. Position needs games played (see the
+  // standings effect), so pre-season shows a dash placeholder.
+  const titles = getClubLore(staticTeam.id)?.titles.length ?? null;
+
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-
-      <Container>
-        {/* I — Eyebrow head: breadcrumb + backlink. */}
-        <header style={{ padding: '48px 0 0' }}>
-          <BackLink to="/teams">All Clubs</BackLink>
-          <div style={{ ...eyebrowStyle, marginTop: 20 }}>
-            <Link to="/teams" style={{ color: DUST, textDecoration: 'none' }}>Teams</Link>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>{league?.name ?? staticTeam.leagueId}</span>
-            {staticTeam.location && (
-              <>
-                <span style={{ color: DUST_50 }}>•</span>
-                <span>{staticTeam.location}</span>
-              </>
+    <PageShell>
+      <PageHeader
+        eyebrow="Teams"
+        title={staticTeam.name}
+        back={{ to: '/teams', label: 'All clubs' }}
+        crumbs={[
+          { label: 'Teams', to: '/teams' },
+          { label: league?.name ?? staticTeam.leagueId, to: `/leagues/${staticTeam.leagueId}` },
+          { label: staticTeam.name },
+        ]}
+        crest={<Crest color={staticTeam.color} size={64} />}
+        subtitle={staticTeam.location || undefined}
+        meta={
+          <>
+            <StatBlock label="League position" value={position != null ? ordinal(position) : '—'} />
+            <StatBlock label="Points" value={standing ? standing.points : '—'} />
+            {titles != null && <StatBlock label="League titles" value={titles} />}
+            <StatBlock label="Ground" value={staticTeam.homeGround} />
+            {staticTeam.capacity && <StatBlock label="Capacity" value={staticTeam.capacity} />}
+            {manager?.name && <StatBlock label="Manager" value={manager.name} />}
+            {supporterCount > 0 && (
+              <StatBlock label="Supporters" value={supporterCount} valueTone="success" />
             )}
-          </div>
-        </header>
+          </>
+        }
+      />
 
-        {/* II — Club hero. */}
-        <ClubHero
-          team={staticTeam}
-          managerName={manager?.name}
-          position={position}
-          supporterCount={supporterCount}
-        />
-
+      <div>
         {/* III — 6-cell stat strip. */}
         <StatStrip standing={standing} />
 
@@ -346,22 +349,19 @@ export default function TeamDetail() {
             <DecreesCard />
           </aside>
         </div>
-      </Container>
+      </div>
 
       {/* ── Preserved richer sections, rehomed below the shell ── */}
 
       {/* History & honours: the canon, exported from the world bible. Static,
           so it renders even when the live database is unreachable. */}
-      <section style={{ padding: '0 16px 64px' }}>
-        <Container>
+      <section>
           <SectionLabel kicker="Before the ISL" title="History & Honours" />
           <ClubHistory clubId={staticTeam.id} />
-        </Container>
       </section>
 
       {/* Manager. */}
-      <section style={{ padding: '0 16px 64px' }}>
-        <Container>
+      <section>
           <SectionLabel kicker="Dugout" title="Manager" />
           {loadError != null ? (
             <p style={mutedNote(FLARE)}>Manager data unavailable.</p>
@@ -370,32 +370,25 @@ export default function TeamDetail() {
           ) : (
             <ManagerCard manager={manager} />
           )}
-        </Container>
       </section>
 
       {/* Club Dossier — authored narrative profile. Hidden when none exists. */}
       {profile && (
-        <section style={{ padding: '0 16px 64px' }}>
-          <Container>
+        <section>
             <SectionLabel kicker="The Story" title="Club Dossier" />
             <ClubDossier profile={profile} />
-          </Container>
         </section>
       )}
 
       {/* Web of Influence — relationship graph seeded from the shadow entity. */}
       {liveTeam?.entity_id && (
-        <section style={{ padding: '0 16px 80px' }}>
-          <Container>
+        <section>
             <SectionLabel kicker="Connections" title="Web of Influence" />
             <div style={{ marginTop: 24 }}>
               <RelationshipGraph entityId={liveTeam.entity_id} />
             </div>
-          </Container>
         </section>
       )}
-
-      <Footer />
 
       {/* The two-column shell collapses to one column on tablet/mobile; the rail
           drops below the squad and stops sticking. */}
@@ -404,32 +397,17 @@ export default function TeamDetail() {
           .isl-club-cols { grid-template-columns: 1fr !important; }
           .isl-club-rail { position: static !important; }
         }
-        /* Phones: stack the hero (crest, name, honours) and fold the six-cell
-           stat strip into two rows of three, so nothing runs past its box. */
+        /* Phones: fold the six-cell stat strip into two rows of three, so
+           nothing runs past its box. */
         @media (max-width: 699px) {
-          .isl-club-hero { grid-template-columns: 1fr !important; gap: 20px !important; padding: 24px !important; }
-          .isl-club-hero > [aria-hidden="true"] { width: 88px !important; height: 88px !important; font-size: 32px !important; }
-          .isl-club-hero h1 { font-size: 32px !important; overflow-wrap: anywhere; }
-          .isl-club-honours > div { text-align: left !important; }
           .isl-club-strip { grid-template-columns: repeat(3, 1fr) !important; }
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
 
-// ── Page-head + section text styles ──────────────────────────────────────────
-const eyebrowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  flexWrap: 'wrap',
-  color: DUST,
-};
+// ── Section text styles ──────────────────────────────────────────────────────
 const sectHStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -452,116 +430,6 @@ const sectHLinkStyle: CSSProperties = {
 /** Italic muted note used for the squad/manager loading + error states. */
 function mutedNote(color: string): CSSProperties {
   return { color, fontStyle: 'italic', fontSize: 13, marginTop: 8 };
-}
-
-// ── Club hero ─────────────────────────────────────────────────────────────────
-
-interface ClubHeroProps {
-  team: StaticTeam;
-  managerName?: string | undefined;
-  position: number | null;
-  supporterCount: number;
-}
-
-/**
- * Club hero: 160px monogram crest, 48px uppercase name + meta row, and an
- * honours block. League position is live (from standings); league titles come
- * from the canon (the pre-ISL record in src/data/lore.ts), so they show even
- * when the database is unreachable.
- */
-function ClubHero({ team, managerName, position, supporterCount }: ClubHeroProps) {
-  const accent = team.color || DUST;
-  const titles = getClubLore(team.id)?.titles.length ?? null;
-  const meta: ReactNode[] = [];
-  meta.push(<span key="ground">Home • {team.homeGround}</span>);
-  if (team.capacity) meta.push(<span key="cap">{team.capacity} souls</span>);
-  if (managerName)   meta.push(<span key="mgr">{managerName}</span>);
-  if (supporterCount > 0) {
-    meta.push(
-      <span key="fans" style={{ color: TERRA }}>
-        {supporterCount} {supporterCount === 1 ? 'fan' : 'fans'}
-      </span>,
-    );
-  }
-
-  return (
-    <div
-      className="isl-club-hero"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '160px 1fr auto',
-        gap: 40,
-        alignItems: 'center',
-        border: `1px solid ${HAIRLINE}`,
-        padding: 40,
-        marginTop: 24,
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          width: 160,
-          height: 160,
-          borderRadius: '50%',
-          background: PHOBOS,
-          border: `1px solid ${accent}`,
-          display: 'grid',
-          placeItems: 'center',
-          fontWeight: 700,
-          fontSize: 56,
-          color: DUST,
-        }}
-      >
-        {monogram(team.name)}
-      </div>
-
-      <div>
-        <h1 style={{ fontWeight: 700, fontSize: 48, lineHeight: 1, margin: 0, textTransform: 'uppercase' }}>
-          {team.name}
-        </h1>
-        <div
-          style={{
-            display: 'flex',
-            gap: 14,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            fontWeight: 700,
-            fontSize: 14,
-            textTransform: 'uppercase',
-            marginTop: 16,
-            color: DUST_70,
-          }}
-        >
-          {meta.map((node, i) => (
-            <span key={i} style={{ display: 'contents' }}>
-              {i > 0 && <span style={{ color: DUST_50 }}>•</span>}
-              {node}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Honours: live league position, plus all-time titles from the canon. */}
-      <div className="isl-club-honours" style={{ display: 'flex', gap: 32 }}>
-        {titles != null && (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 32 }}>{titles}</div>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 6, color: DUST_70 }}>
-              League titles
-            </div>
-          </div>
-        )}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: 32 }}>
-            {position != null ? toRoman(position) : '—'}
-          </div>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 6, color: DUST_70 }}>
-            League position
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Stat strip ──────────────────────────────────────────────────────────────
@@ -1043,26 +911,21 @@ function formatKickoff(iso: string | null): string | null {
  */
 function UnknownClub({ teamId }: { teamId?: string | undefined }) {
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
-      <section style={{ padding: '120px 32px' }}>
-        <Container>
-          <BackLink to="/teams">All Clubs</BackLink>
-          <h1 style={{ fontSize: 32, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: 24 }}>
-            Unknown Club
-          </h1>
-          <p style={{ fontSize: 14, lineHeight: 1.7, color: DUST_70, marginTop: 16, maxWidth: '52ch' }}>
+    <PageShell>
+      <PageHeader
+        eyebrow="Teams"
+        title="Unknown Club"
+        back={{ to: '/teams', label: 'All clubs' }}
+        subtitle={
+          <>
             No club registered under{' '}
-            <code style={{ color: DUST, fontFamily: 'inherit', background: COLORS.dustFaint, padding: '2px 6px', border: `1px solid ${HAIRLINE}` }}>
-              {teamId ?? '—'}
-            </code>
+            <code style={{ fontFamily: 'inherit', ...tone.primary }}>{teamId ?? '—'}</code>
             . Try the{' '}
-            <Link to="/teams" style={{ color: DUST }}>full directory</Link>{' '}
+            <Link to="/teams" style={tone.primary}>full directory</Link>{' '}
             to find the side you were after.
-          </p>
-        </Container>
-      </section>
-      <Footer />
-    </div>
+          </>
+        }
+      />
+    </PageShell>
   );
 }

@@ -34,8 +34,8 @@
 
 import { useEffect, useState } from 'react';
 
-import Header from '../components/Header';
-import { COLORS, Container, Footer, SectionHeader } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell } from '../shared/ui';
 import { useAuth } from '../features/auth';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 
@@ -218,93 +218,76 @@ export default function WhatIf() {
   // ── Access denied surface (mirrors Admin.tsx) ──────────────────────────
   if (denyAccess) {
     return (
-      <div style={{ background: COLORS.abyss, minHeight: '100vh', color: COLORS.dust }}>
-        <Header />
-        <main>
-          <Container>
-            <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{ color: COLORS.flare, marginBottom: 12, fontWeight: 600 }}>
-                Access Denied
-              </p>
-              <p>This area is reserved for the council.</p>
-            </div>
-          </Container>
-        </main>
-        <Footer />
-      </div>
+      <PageShell>
+        <PageHeader
+          eyebrow="Admin"
+          title="Access Denied"
+          back={{ to: '/', label: 'Return home' }}
+          subtitle="This area is reserved for the council."
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div style={{ background: COLORS.abyss, minHeight: '100vh', color: COLORS.dust }}>
-      <Header />
-      <main>
-        <Container>
-          <section style={{ padding: '32px 0' }}>
-            <SectionHeader
-              level={1}
-              pageKicker="WHAT IF"
-              kicker="12"
-              label="ALTERNATE TIMELINES"
-              title="Shadow distributions for upcoming matches"
-              subtitle="The Architect council watches outcomes that didn't happen. Each row below summarises five alternate-reality runs of an upcoming fixture. The canonical timeline lives elsewhere."
-            />
-          </section>
+    <PageShell>
+      <PageHeader
+        eyebrow="Admin"
+        title="Shadow distributions for upcoming matches"
+        subtitle="The Architect council watches outcomes that didn't happen. Each row below summarises five alternate-reality runs of an upcoming fixture. The canonical timeline lives elsewhere."
+      />
 
-          <section style={{ padding: '8px 0 48px' }}>
-            {loading ? (
-              <p style={{ color: COLORS.dust50 }}>Loading shadow distributions…</p>
-            ) : matches.length === 0 ? (
-              <p style={{ color: COLORS.dust50 }}>
-                No shadow data yet: the shadow-match-worker hasn&rsquo;t run, or no
-                upcoming matches are inside the worker&rsquo;s horizon.
-              </p>
-            ) : (
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {matches.map((m) => {
-                  const dist = distributions.get(m.id);
-                  if (!dist) return null;
-                  const totalLabel = `(${dist.totalShadows} timelines)`;
-                  return (
-                    <li
-                      key={m.id}
-                      style={{
-                        borderTop: `1px solid ${COLORS.hairline}`,
-                        padding: '16px 0',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <strong>{m.home_team_id} vs {m.away_team_id}</strong>
-                        <span style={{ color: COLORS.dust50, fontSize: 13 }}>
-                          {formatKickoff(m.scheduled_at)}
-                        </span>
-                      </div>
-                      <div style={{ marginBottom: 8 }}>
-                        <span style={{ marginRight: 16 }}>
-                          home: <strong>{dist.homeCount}</strong>
-                        </span>
-                        <span style={{ marginRight: 16 }}>
-                          draw: <strong>{dist.drawCount}</strong>
-                        </span>
-                        <span style={{ marginRight: 16 }}>
-                          away: <strong>{dist.awayCount}</strong>
-                        </span>
-                        <span style={{ color: COLORS.dust50, fontSize: 13 }}>
-                          {totalLabel}
-                        </span>
-                      </div>
-                      <div style={{ color: COLORS.dust70, fontSize: 13 }}>
-                        Scorelines: {dist.scoreLines.join(' · ')}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </Container>
-      </main>
-      <Footer />
-    </div>
+      <section style={{ padding: '8px 0 48px' }}>
+        {loading ? (
+          <p style={{ color: COLORS.dust50 }}>Loading shadow distributions…</p>
+        ) : matches.length === 0 ? (
+          <p style={{ color: COLORS.dust50 }}>
+            No shadow data yet: the shadow-match-worker hasn&rsquo;t run, or no
+            upcoming matches are inside the worker&rsquo;s horizon.
+          </p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {matches.map((m) => {
+              const dist = distributions.get(m.id);
+              if (!dist) return null;
+              const totalLabel = `(${dist.totalShadows} timelines)`;
+              return (
+                <li
+                  key={m.id}
+                  style={{
+                    borderTop: `1px solid ${COLORS.hairline}`,
+                    padding: '16px 0',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <strong>{m.home_team_id} vs {m.away_team_id}</strong>
+                    <span style={{ color: COLORS.dust50, fontSize: 13 }}>
+                      {formatKickoff(m.scheduled_at)}
+                    </span>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ marginRight: 16 }}>
+                      home: <strong>{dist.homeCount}</strong>
+                    </span>
+                    <span style={{ marginRight: 16 }}>
+                      draw: <strong>{dist.drawCount}</strong>
+                    </span>
+                    <span style={{ marginRight: 16 }}>
+                      away: <strong>{dist.awayCount}</strong>
+                    </span>
+                    <span style={{ color: COLORS.dust50, fontSize: 13 }}>
+                      {totalLabel}
+                    </span>
+                  </div>
+                  <div style={{ color: COLORS.dust70, fontSize: 13 }}>
+                    Scorelines: {dist.scoreLines.join(' · ')}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </PageShell>
   );
 }
