@@ -54,3 +54,5 @@ Desktop and phone columns are this branch; the last column is main before the ch
 | what-if (signed in) | 1 | 40px uppercase ls=0.8px x=120 y=163 | 30px uppercase ls=0.6px x=16 y=163 | n/a |
 
 Index pages share y=163 (desktop and phone). Detail pages sit lower by the back link and crumbs. On the club, player and manager pages the crest sits beside the title as the spec and specimen show, so their h1 starts 80 px right of the shared edge (64 px crest + 16 px gap); the crest itself starts on the shared edge (x=120 desktop, 16 phone).
+
+Screenshots are kept out of git (they added about 19 MB across the design-system PRs). They are shown in the PR conversation and regenerated with the capture scripts when needed.
