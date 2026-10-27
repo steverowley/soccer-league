@@ -85,6 +85,9 @@ function tabStyle(isActive: boolean): CSSProperties {
     fontFamily: 'inherit',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
+    // Keep each tab its natural width: the strip scrolls sideways on a
+    // phone rather than squeezing the labels into each other.
+    flex: 'none',
   };
 }
 

@@ -228,7 +228,7 @@ function FixtureRow({
           <span style={{ ...type.label, ...statusTone }}>{f.status}</span>
         )}
       </td>
-      <td style={dataCell()}>{f.round ?? '—'}</td>
+      <td style={{ ...dataCell(), whiteSpace: 'nowrap' }}>{f.round ?? '—'}</td>
       <td style={dataCell()}>{f.home_team}</td>
       <td style={dataCell()}>{f.away_team}</td>
       <td style={{ ...dataCell(), ...(f.home_score != null ? tone.primary : tone.tertiary) }}>
@@ -245,7 +245,7 @@ function FixtureRow({
       <td style={{ ...dataCell(), ...tone.secondary, whiteSpace: 'nowrap' }}>
         {f.scheduled_at ? fmtDatetime(f.scheduled_at) : '—'}
       </td>
-      <td style={dataCell()}>
+      <td style={{ ...dataCell(), whiteSpace: 'nowrap' }}>
         <div style={{ display: 'flex', gap: space[12], alignItems: 'center' }}>
           <TextLink to={`/matches/${f.id}`}>View ↗</TextLink>
           {isCompletable && !editing && (
