@@ -1,46 +1,66 @@
 // ── TeamDetail.tsx ────────────────────────────────────────────────────────────
-// Single-club dossier — `/teams/:teamId` route. Rebuilt to match the design
-// system's `Club.html` worked screen ("club dossier — honours, squad table,
-// fixtures, decrees").
+// Club page, /teams/:teamId: honours, squad, fixtures, decrees. On the design
+// language since the group 3 migration (docs/design-language.md): PageShell +
+// PageHeader, numbered SectionHeaders, Card / StatBlock / Tag / Button, the
+// DataTable styles, and no raw style values (scripts/designTokens.test.ts).
 //
-// Layout (matches the prototype top → bottom):
-//   PageShell (site header, main column, footer)
-//   I-II. PageHeader:    back link "All clubs", crumbs "Teams / league / club",
-//                        the club Crest, eyebrow "Teams", the name as the h1,
-//                        location as the subtitle, and a StatBlock meta row
-//                        (league position, points, league titles, ground,
-//                        capacity, manager, supporters). It replaced the old
-//                        boxed ClubHero card and its monogram circle.
-//   III. 6-cell stat strip — Played / Won / Drawn / Lost / Goal diff / Points,
-//                          all from fetchLeagueStandings for this club's league
-//   IV.  Two-column shell (1fr / 380px):
-//          LEFT  — Squad table (#/Player(+tag)/Position/arrow; rows link to the
-//                  player page). Apps/Goals columns are dropped — the players
-//                  table carries no appearance/goal stats to fill them.
-//          RIGHT — Next fixture card (next scheduled match involving this team,
-//                  or omitted), Form card (last-5 from standings), and a
-//                  "Go to voting" decrees link card.
-//   Below — the preserved richer sections, rehomed under the new shell:
-//          Manager card, Club Dossier (history/culture/facts/honours),
-//          Web of Influence relationship graph.
-//   Footer (shared)
+// Layout:
+//   PageHeader   back link "All clubs", crumbs "Teams / league / club", the
+//                club Crest, eyebrow "Teams", the name as the h1, location as
+//                the subtitle, and a StatBlock meta row (league place,
+//                points, league titles, ground, capacity, manager, supporters)
+//   I.   Season       Played / Won / Drawn / Lost / Goal diff / Points
+//   II.  Squad        the squad table (# / Player / Position; names link to
+//                     the player page) beside a rail of Cards: next fixture
+//                     (when one is scheduled), form, active decrees
+//   III. History      History & honours: the canon from the world bible
+//   IV.  Dugout       the manager
+//   V.   The story    the authored club dossier (only when one exists)
+//   VI.  Connections  Web of influence (only when the club has an entity)
+//   Section numbers are counted at render, so they never skip.
 //
-// Data sources (all existing fetches preserved, one ADDED):
-//   - Static team meta from TEAMS_BY_LEAGUE / LEAGUES (hero hydration + 404).
-//   - getTeam(db, teamId)               — live squad + manager rows.
-//   - getTeamSupporterCount(db, teamId) — supporter count (fan tag).
-//   - getEntityProfile(db, entityId)    — authored club profile (dossier).
-//   - fetchLeagueStandings(db, leagueId) — ADDED: stat strip / form / position.
-//   - getUpcomingMatches(db, …)         — ADDED: next-fixture lookup.
+// Data sources (one read each):
+//   - Static team meta from TEAMS_BY_LEAGUE / LEAGUES (header + 404).
+//   - getTeam(db, teamId)                live squad + manager rows.
+//   - getTeamSupporterCount(db, teamId)  supporter count.
+//   - getEntityProfile(db, entityId)     authored club profile (dossier).
+//   - fetchLeagueStandings(db, leagueId) season record, form and place.
+//   - getUpcomingMatches(db, 50)         the next fixture involving the club.
 //
-// 404 case: teamId not in any league → renders an "Unknown Club" surface
-// with a backlink to /teams.
+// The static team record is memoised on teamId. It used to be rebuilt on
+// every render and sat in two effects' dependency lists, so each settled read
+// re-ran both effects: the page re-requested the team and the supporter count
+// in a tight loop (about 4,900 times in a ten-second capture) and the
+// standings read was cancelled before it could land, which is why the season
+// record and the league place always showed dashes.
+//
+// 404 case: teamId not in any league renders an "Unknown club" page with a
+// back link to /teams.
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { COLORS } from '../components/Layout';
-import { tone } from '../shared/design';
-import { Crest, PageHeader, PageShell, StatBlock } from '../shared/ui';
+import { color, glyph, space, tone, type } from '../shared/design';
+import {
+  Button,
+  Card,
+  Crest,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  FactGrid,
+  FactRows,
+  FormStrip,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  SectionHeader,
+  StatBlock,
+  Tag,
+  dataCell,
+  dataHead,
+  toRoman,
+  type FormResult,
+} from '../shared/ui';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
@@ -54,13 +74,7 @@ import { RelationshipGraph, getEntityProfile } from '../features/entities';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { ClubHistory } from '../components/LoreHistory';
 import { getClubLore } from '../data/lore';
-
-// ── Local aliases for terser inline styles ──────────────────────────────────
-const { dust: DUST, abyss: ABYSS, phobosAsh: PHOBOS, terraNova: TERRA } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
-const FLARE    = COLORS.flare;
+import { placeLabel, rankLabels, standingsTieKey } from '../shared/utils/rankLabels';
 
 // ── Squad ordering constants ────────────────────────────────────────────────
 // Canonical order of the four position groups (GK reads back-to-front), used to
@@ -70,7 +84,7 @@ const POSITION_RANK: Record<string, number> = Object.fromEntries(
   POSITION_ORDER.map((p, i) => [p, i]),
 );
 
-// Display names for the four position groups — full words rather than
+// Display names for the four position groups: full words rather than
 // abbreviations so the table reads as a roster, not a stats dump.
 const POSITION_LABELS: Record<string, string> = {
   GK: 'Goalkeeper',
@@ -79,10 +93,17 @@ const POSITION_LABELS: Record<string, string> = {
   FW: 'Forward',
 };
 
+/** Club colour by team id, for the next-fixture crests (club colour is data). */
+const TEAM_COLOR: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
+);
+
+const DASH = '\u2014';
+
 // ── Live-row shapes ─────────────────────────────────────────────────────────
 // The joined team row arrives wide + untyped (getTeam uses a `*` select); we
 // narrow only the fields the page actually renders. Everything optional, since
-// the row paints before — and degrades gracefully without — the live fetch.
+// the page paints before (and degrades gracefully without) the live fetch.
 interface LivePlayer {
   id: string;
   name: string;
@@ -102,7 +123,7 @@ interface LiveTeam {
   managers?: LiveManager[];
 }
 
-// A trimmed upcoming-match row — the slice the next-fixture card reads.
+// A trimmed upcoming-match row: the slice the next-fixture card reads.
 interface UpcomingMatch {
   id: string;
   scheduled_at: string | null;
@@ -126,34 +147,24 @@ interface StaticTeam {
 }
 
 /**
- * Two-letter club monogram for the crest fallback — first letters of the first
- * two "significant" words (pure abbreviations like FC/SC are skipped). Matches
- * the prototype's monogram crest, e.g. "Earth United FC" → "EU".
+ * Goal difference with a leading "+" when positive and a real minus sign
+ * when negative.
+ *
+ * @param gd  Goal difference.
+ * @returns   "+2", "\u22121" or "0".
  */
-function monogram(name: string): string {
-  const words = name.split(/\s+/).filter((w) => !/^(FC|SC|AFC)$/i.test(w));
-  return ((words[0]?.[0] ?? '') + (words[1]?.[0] ?? '')).toUpperCase() || '?';
-}
-
-/** Goal difference with a leading "+" when positive, a real minus when negative. */
 function gdLabel(gd: number): string {
   if (gd > 0) return `+${gd}`;
-  if (gd < 0) return `−${Math.abs(gd)}`;
+  if (gd < 0) return `\u2212${Math.abs(gd)}`;
   return '0';
 }
 
 /**
- * English ordinal for the header's league position: 1 → "1st", 12 → "12th",
- * 22 → "22nd". (Roman numerals are reserved for in-page section indexes.)
+ * Look up a static team record across every league.
+ *
+ * @param teamId  The route's club id.
+ * @returns       The record with its league id, or null if unregistered.
  */
-function ordinal(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  const suffix = ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
-  return `${n}${suffix}`;
-}
-
-/** Look up a static team record across every league; null if unregistered. */
 function findStaticTeam(teamId: string | undefined): StaticTeam | null {
   if (!teamId) return null;
   for (const [leagueId, teams] of Object.entries(TEAMS_BY_LEAGUE)) {
@@ -164,31 +175,36 @@ function findStaticTeam(teamId: string | undefined): StaticTeam | null {
 }
 
 /**
- * Club dossier page.
+ * Club page.
  *
- * Hydrates immediately from the static team meta (so the hero paints on first
- * render) and supplements with the live squad + manager, standings, next
- * fixture, supporter count, and authored profile once each fetch settles.
- * Unknown `teamId` short-circuits to the UnknownClub surface.
+ * Paints the header immediately from the static team meta and fills in the
+ * live squad, manager, standings, next fixture, supporter count and
+ * authored profile as each read settles. An unknown `teamId` renders the
+ * UnknownClub page.
+ *
+ * @returns The page.
  */
 export default function TeamDetail() {
   const { teamId } = useParams();
   const publicDb = usePublicReadClient();
-  const staticTeam = findStaticTeam(teamId);
+  // Memoised: a fresh object per render would re-run every effect below.
+  const staticTeam = useMemo(() => findStaticTeam(teamId), [teamId]);
   usePageTitle(staticTeam?.name ?? 'Club');
 
   // Live row from Supabase: includes the `players` and `managers` collections
   // via getTeam's relational select. Null while loading or on error.
   const [liveTeam, setLiveTeam]   = useState<LiveTeam | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
+  // Bumped by the squad's "Try again" to re-run the team read.
+  const [attempt, setAttempt]     = useState(0);
   // Supporter count from team_supporter_count_v. 0 = no supporters or error.
   const [supporterCount, setSupporterCount] = useState<number>(0);
   // Authored club profile from entities.meta.profile (history, kits, honours).
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
-  // This club's row from its league standings — drives the stat strip, the
-  // honours position, and the Form card. Null until the fetch resolves.
+  // This club's standings row and its place label ("2", "=2"): the season
+  // record, the header place and the form card. Null until the read lands.
   const [standing, setStanding] = useState<LeagueStandingsRow | null>(null);
-  const [position, setPosition] = useState<number | null>(null);
+  const [rank, setRank] = useState<string | null>(null);
   // The next scheduled match involving this club, or null when none upcoming.
   const [nextMatch, setNextMatch] = useState<UpcomingMatch | null>(null);
 
@@ -209,11 +225,11 @@ export default function TeamDetail() {
       if (!cancelled) setSupporterCount(n);
     });
     return () => { cancelled = true; };
-  }, [publicDb, teamId, staticTeam]);
+  }, [publicDb, teamId, staticTeam, attempt]);
 
-  // ── Standings for the stat strip / form / position ─────────────────────────
-  // One query for this club's league. Rows arrive pre-sorted, so the row index
-  // of this club + 1 is its league position.
+  // ── Standings for the season record / form / place ─────────────────────────
+  // One query for this club's league. Rows arrive pre-sorted, so rankLabels()
+  // gives each row its place, with genuine ties as "=N".
   useEffect(() => {
     if (!staticTeam || !teamId) return undefined;
     let cancelled = false;
@@ -221,10 +237,11 @@ export default function TeamDetail() {
       .then((rows) => {
         if (cancelled) return;
         const idx = rows.findIndex((r) => r.id === teamId);
-        setStanding(idx >= 0 ? (rows[idx] ?? null) : null);
-        // A league position needs games: before the first match every club
-        // is level on nothing, so no position is shown (pre-season).
-        setPosition(idx >= 0 && (rows[idx]?.played ?? 0) > 0 ? idx + 1 : null);
+        const row = idx >= 0 ? (rows[idx] ?? null) : null;
+        setStanding(row);
+        // A league place needs games: before the first match every club is
+        // level on nothing, so no place is shown (pre-season).
+        setRank(row && row.played > 0 ? (rankLabels(rows, standingsTieKey)[idx] ?? null) : null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -273,11 +290,16 @@ export default function TeamDetail() {
   const managers = liveTeam?.managers ?? [];
   const manager  = managers[0];
 
-  // The header's meta row: live league position and points from standings,
+  // The header's meta row: live league place and points from standings,
   // all-time titles from the canon, then the ground, its capacity, the
-  // manager and the club's supporters. Position needs games played (see the
-  // standings effect), so pre-season shows a dash placeholder.
+  // manager and the club's supporters. The place needs games played (see
+  // the standings effect), so pre-season shows a dash.
   const titles = getClubLore(staticTeam.id)?.titles.length ?? null;
+
+  // In-page sections are numbered I, II, III in page order; two of them are
+  // conditional, so the numbers are counted rather than fixed.
+  let sectionNo = 0;
+  const nextIndex = (): string => toRoman(++sectionNo);
 
   return (
     <PageShell>
@@ -294,8 +316,8 @@ export default function TeamDetail() {
         subtitle={staticTeam.location || undefined}
         meta={
           <>
-            <StatBlock label="League position" value={position != null ? ordinal(position) : '—'} />
-            <StatBlock label="Points" value={standing ? standing.points : '—'} />
+            <StatBlock label="League position" value={rank != null ? placeLabel(rank) : DASH} />
+            <StatBlock label="Points" value={standing ? standing.points : DASH} />
             {titles != null && <StatBlock label="League titles" value={titles} />}
             <StatBlock label="Ground" value={staticTeam.homeGround} />
             {staticTeam.capacity && <StatBlock label="Capacity" value={staticTeam.capacity} />}
@@ -307,181 +329,145 @@ export default function TeamDetail() {
         }
       />
 
-      <div>
-        {/* III — 6-cell stat strip. */}
-        <StatStrip standing={standing} />
+      <section>
+        <SectionHeader index={nextIndex()} label="Season" title="The record" />
+        <SeasonRecord standing={standing} />
+      </section>
 
-        {/* IV — Two-column shell. */}
+      <section>
+        <SectionHeader
+          index={nextIndex()}
+          label="Squad"
+          title="The squad"
+          action={<Button variant="tertiary" to="/world">Trace the web in World</Button>}
+        />
         <div
           className="isl-club-cols"
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 380px',
-            gap: 24,
+            gridTemplateColumns: 'minmax(0, 1fr) 360px',
+            gap: space[24],
             alignItems: 'start',
-            padding: '24px 0 64px',
           }}
         >
-          {/* LEFT — Squad. */}
-          <div>
-            <div style={sectHStyle}>
-              <span>Squad</span>
-              <Link to="/world" style={sectHLinkStyle}>Trace the web in World ▸</Link>
-            </div>
+          <div style={{ minWidth: 0 }}>
             {loadError != null ? (
-              <p style={mutedNote(FLARE)}>
-                Squad data unavailable. The void has consumed the team sheet.
-              </p>
+              <ErrorState what="the squad" onRetry={() => setAttempt((n) => n + 1)} />
+            ) : liveTeam == null ? (
+              <LoadingState label="Loading the squad" />
             ) : players.length === 0 ? (
-              <p style={mutedNote(DUST_50)}>Loading squad…</p>
+              <EmptyState centred={false}>No players are registered to this club yet.</EmptyState>
             ) : (
               <SquadTable players={players} />
             )}
           </div>
 
-          {/* RIGHT — rail. */}
           <aside
+            aria-label="Fixtures and form"
             className="isl-club-rail"
-            style={{ display: 'flex', flexDirection: 'column', gap: 24, position: 'sticky', top: 24 }}
+            style={{ display: 'flex', flexDirection: 'column', gap: space[16], position: 'sticky', top: space[24] }}
           >
-            {nextMatch && <NextFixtureCard match={nextMatch} teamId={staticTeam.id} />}
-            <FormCard standing={standing} />
+            {nextMatch && <NextFixtureCard match={nextMatch} />}
+            <FormCard form={standing?.form ?? []} />
             <DecreesCard />
           </aside>
         </div>
-      </div>
-
-      {/* ── Preserved richer sections, rehomed below the shell ── */}
+      </section>
 
       {/* History & honours: the canon, exported from the world bible. Static,
           so it renders even when the live database is unreachable. */}
       <section>
-          <SectionLabel kicker="Before the ISL" title="History & Honours" />
-          <ClubHistory clubId={staticTeam.id} />
+        <SectionHeader index={nextIndex()} label="Before the ISL" title="History & honours" />
+        <ClubHistory clubId={staticTeam.id} />
       </section>
 
-      {/* Manager. */}
       <section>
-          <SectionLabel kicker="Dugout" title="Manager" />
-          {loadError != null ? (
-            <p style={mutedNote(FLARE)}>Manager data unavailable.</p>
-          ) : !manager ? (
-            <p style={mutedNote(DUST_50)}>No manager appointed.</p>
-          ) : (
-            <ManagerCard manager={manager} />
-          )}
+        <SectionHeader index={nextIndex()} label="Dugout" title="Manager" />
+        {loadError != null ? (
+          <ErrorState what="the manager" onRetry={() => setAttempt((n) => n + 1)} />
+        ) : liveTeam == null ? (
+          <LoadingState label="Loading the manager" />
+        ) : !manager ? (
+          <EmptyState centred={false}>No manager appointed.</EmptyState>
+        ) : (
+          <ManagerCard manager={manager} />
+        )}
       </section>
 
-      {/* Club Dossier — authored narrative profile. Hidden when none exists. */}
+      {/* Club dossier: the authored narrative profile. Hidden when none exists. */}
       {profile && (
         <section>
-            <SectionLabel kicker="The Story" title="Club Dossier" />
-            <ClubDossier profile={profile} />
+          <SectionHeader index={nextIndex()} label="The story" title="Club dossier" />
+          <ClubDossier profile={profile} />
         </section>
       )}
 
-      {/* Web of Influence — relationship graph seeded from the shadow entity. */}
+      {/* Web of influence: relationship graph seeded from the club's entity. */}
       {liveTeam?.entity_id && (
         <section>
-            <SectionLabel kicker="Connections" title="Web of Influence" />
-            <div style={{ marginTop: 24 }}>
-              <RelationshipGraph entityId={liveTeam.entity_id} />
-            </div>
+          <SectionHeader index={nextIndex()} label="Connections" title="Web of influence" />
+          <RelationshipGraph entityId={liveTeam.entity_id} />
         </section>
       )}
 
-      {/* The two-column shell collapses to one column on tablet/mobile; the rail
-          drops below the squad and stops sticking. */}
+      {/* The two-column shell collapses to one column under 900 px; the rail
+          drops below the squad and stops sticking. On a phone the season
+          record folds into rows of three. */}
       <style>{`
         @media (max-width: 899px) {
-          .isl-club-cols { grid-template-columns: 1fr !important; }
+          .isl-club-cols { grid-template-columns: minmax(0, 1fr) !important; }
           .isl-club-rail { position: static !important; }
         }
-        /* Phones: fold the six-cell stat strip into two rows of three, so
-           nothing runs past its box. */
         @media (max-width: 699px) {
-          .isl-club-strip { grid-template-columns: repeat(3, 1fr) !important; }
+          .isl-club-record { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
         }
       `}</style>
     </PageShell>
   );
 }
 
-// ── Section text styles ──────────────────────────────────────────────────────
-const sectHStyle: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'baseline',
-  fontSize: 16,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.03em',
-  margin: '0 0 16px',
-};
-const sectHLinkStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.03em',
-  color: DUST,
-  textDecoration: 'none',
-};
-
-/** Italic muted note used for the squad/manager loading + error states. */
-function mutedNote(color: string): CSSProperties {
-  return { color, fontStyle: 'italic', fontSize: 13, marginTop: 8 };
-}
-
-// ── Stat strip ──────────────────────────────────────────────────────────────
+// ── I. Season record ─────────────────────────────────────────────────────────
 
 /**
- * 6-cell stat strip — Played / Won / Drawn / Lost / Goal diff / Points, gridded
- * with hairline gutters. Won + Points read Terra-Nova when positive (the
- * prototype's `.up`). All values come from this club's standings row; before it
- * resolves every cell shows an em-dash so the strip never shifts size.
+ * The season record: six StatBlocks in one hairline Card. Every value comes
+ * from this club's standings row; before it lands each one is a dash so
+ * the card never changes size.
+ *
+ * @param standing  The club's standings row, or null.
+ * @returns         The card.
  */
-function StatStrip({ standing }: { standing: LeagueStandingsRow | null }) {
-  const dash = (v: number | undefined) => (standing ? String(v) : '—');
-  const cells: Array<{ k: string; v: string; up?: boolean }> = [
-    { k: 'Played',    v: dash(standing?.played) },
-    { k: 'Won',       v: dash(standing?.wins),  up: (standing?.wins ?? 0) > 0 },
-    { k: 'Drawn',     v: dash(standing?.draws) },
-    { k: 'Lost',      v: dash(standing?.loses) },
-    { k: 'Goal diff', v: standing ? gdLabel(standing.gd) : '—' },
-    { k: 'Points',    v: dash(standing?.points), up: (standing?.points ?? 0) > 0 },
+function SeasonRecord({ standing }: { standing: LeagueStandingsRow | null }) {
+  const cells: Array<[string, string]> = [
+    ['Played',    standing ? String(standing.played) : DASH],
+    ['Won',       standing ? String(standing.wins)   : DASH],
+    ['Drawn',     standing ? String(standing.draws)  : DASH],
+    ['Lost',      standing ? String(standing.loses)  : DASH],
+    ['Goal diff', standing ? gdLabel(standing.gd)    : DASH],
+    ['Points',    standing ? String(standing.points) : DASH],
   ];
   return (
-    <div
-      className="isl-club-strip"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(6, 1fr)',
-        gap: 1,
-        background: HAIRLINE,
-        border: `1px solid ${HAIRLINE}`,
-        marginTop: 1,
-      }}
-    >
-      {cells.map((c) => (
-        <div key={c.k} style={{ background: ABYSS, padding: 24, textAlign: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: 28, color: c.up && standing ? TERRA : DUST }}>{c.v}</div>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 8, color: DUST_70 }}>
-            {c.k}
-          </div>
-        </div>
-      ))}
-    </div>
+    <Card>
+      <div
+        className="isl-club-record"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: space[24] }}
+      >
+        {cells.map(([label, value]) => (
+          <StatBlock key={label} label={label} value={value} />
+        ))}
+      </div>
+    </Card>
   );
 }
 
-// ── Squad table ───────────────────────────────────────────────────────────────
+// ── II. Squad table ──────────────────────────────────────────────────────────
 
 /**
- * Squad table — the prototype's bordered roster. A head row over player rows on
- * `40px / 1fr / 130px / 24px` (the prototype's Apps + Goals columns are dropped:
- * the players table carries no appearance or goal stats to fill them). Players
- * are sorted by position group (GK → DF → MF → FW), starters before subs, then
- * jersey number. Each row links to the player detail page.
+ * The squad in the DataTable styles: # / Player / Position. Players are
+ * sorted by position group (GK, DF, MF, FW), starters before substitutes,
+ * then by shirt number. Each name links to the player page.
+ *
+ * @param players  The club's players.
+ * @returns        The table.
  */
 function SquadTable({ players }: { players: LivePlayer[] }) {
   const sorted = [...players].sort((a, b) => {
@@ -493,185 +479,103 @@ function SquadTable({ players }: { players: LivePlayer[] }) {
   });
 
   return (
-    <div style={{ border: `1px solid ${HAIRLINE}` }}>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '40px 1fr 130px 24px',
-          gap: 16,
-          padding: '16px 24px',
-          borderBottom: `1px solid ${HAIRLINE}`,
-          fontSize: 11,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          color: DUST_70,
-        }}
-      >
-        <span>#</span>
-        <span>Player</span>
-        <span>Position</span>
-        <span />
-      </div>
-      {sorted.map((p) => (
-        <PlayerRow key={p.id} player={p} />
-      ))}
-    </div>
+    <DataTable caption="Squad">
+      <thead>
+        <tr>
+          <th scope="col" style={dataHead('right', 48)}>#</th>
+          <th scope="col" style={dataHead()}>Player</th>
+          <th scope="col" style={dataHead()}>Position</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((p) => (
+          <tr key={p.id}>
+            <td style={{ ...dataCell('right'), ...tone.secondary }}>{p.jersey_number ?? DASH}</td>
+            <td style={{ ...dataCell(), fontWeight: 700 }}>
+              <Link to={`/players/${p.id}`} style={{ color: color.text, textDecoration: 'none' }}>
+                {p.name}
+              </Link>
+            </td>
+            <td style={{ ...dataCell(), ...tone.secondary }}>
+              {p.position ? (POSITION_LABELS[p.position] ?? p.position) : DASH}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }
 
-/** Single squad row — jersey number, name (+ Captain tag for starters with a
- * known position label), position, and a trailing arrow. Links to the player. */
-function PlayerRow({ player }: { player: LivePlayer }) {
-  const [hovered, setHovered] = useState(false);
-  const posLabel = player.position ? (POSITION_LABELS[player.position] ?? player.position) : '—';
-  return (
-    <Link
-      to={`/players/${player.id}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setHovered(true)}
-      onBlur={() => setHovered(false)}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '40px 1fr 130px 24px',
-        gap: 16,
-        alignItems: 'center',
-        padding: '16px 24px',
-        borderBottom: `1px solid ${HAIRLINE}`,
-        background: hovered ? PHOBOS : 'transparent',
-        color: DUST,
-        textDecoration: 'none',
-        transition: 'background 0.12s linear',
-      }}
-    >
-      <span style={{ fontWeight: 700, fontSize: 15, color: DUST_70, fontVariantNumeric: 'tabular-nums' }}>
-        {String(player.jersey_number ?? 0).padStart(2, '0')}
-      </span>
-      <span style={{ fontWeight: 700, fontSize: 16 }}>{player.name}</span>
-      <span style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.03em', color: DUST_70 }}>
-        {posLabel}
-      </span>
-      <span style={{ color: DUST_50, display: 'flex', justifyContent: 'flex-end' }} aria-hidden="true">▸</span>
-    </Link>
-  );
-}
+// ── II. Rail cards ───────────────────────────────────────────────────────────
 
-// ── Side rail cards ─────────────────────────────────────────────────────────
-
-/** A bordered rail card: optional uppercase heading over its content. */
-function Card({ children }: { children: ReactNode }) {
-  return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, padding: 28, display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {children}
-    </div>
-  );
+/** A rail card's title: subheading type, the card's h3. */
+function RailTitle({ children }: { children: string }) {
+  return <h3 style={{ ...type.subheading, margin: 0 }}>{children}</h3>;
 }
 
 /**
- * Next-fixture card — monogram-v-monogram, the matchup line, a when/where line
- * (round / kickoff / stadium, omitting any piece that's missing), and a
- * "Watch & stake" CTA to the match. Rendered only when a fixture exists.
+ * Next fixture: both clubs with their crests, a when/where line (round,
+ * kickoff, stadium; any missing piece is dropped) and a secondary button to
+ * the match. Rendered only when a fixture exists. Secondary, not primary:
+ * the club page has no single primary action.
+ *
+ * @param match  The upcoming match row.
+ * @returns      The card.
  */
-function NextFixtureCard({ match, teamId }: { match: UpcomingMatch; teamId: string }) {
-  const home = match.home_team;
-  const away = match.away_team;
-  const detail = [
-    match.round ?? null,
-    formatKickoff(match.scheduled_at),
-    match.stadium ?? null,
-  ].filter((x): x is string => Boolean(x));
-  const isHome = home?.id === teamId;
+function NextFixtureCard({ match }: { match: UpcomingMatch }) {
+  const detail = [match.round ?? null, formatKickoff(match.scheduled_at), match.stadium ?? null]
+    .filter((x): x is string => Boolean(x));
+  const side = (club: { id: string; name: string } | null) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: space[12], minWidth: 0 }}>
+      <Crest color={club ? TEAM_COLOR.get(club.id) ?? null : null} size={24} />
+      <span style={{ ...type.small, fontWeight: 700, overflowWrap: 'anywhere' }}>{club?.name ?? DASH}</span>
+    </div>
+  );
 
   return (
-    <Card>
-      <div style={{ ...sectHStyle, margin: 0 }}>
-        <span>Next fixture</span>
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+      <RailTitle>Next fixture</RailTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space[8] }}>
+        {side(match.home_team)}
+        <span style={{ ...type.label, ...tone.tertiary }}>v</span>
+        {side(match.away_team)}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <MiniCrest name={home?.name ?? '—'} dim={!isHome} />
-          <span style={{ fontWeight: 700, fontSize: 14 }}>v</span>
-          <MiniCrest name={away?.name ?? '—'} dim={isHome} />
-        </div>
-        <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'uppercase' }}>
-          {(home?.name ?? '—')} v {(away?.name ?? '—')}
-        </div>
-        {detail.length > 0 && (
-          <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', color: DUST_70 }}>
-            {detail.join(' • ')}
-          </div>
-        )}
-        <Link
-          to={`/matches/${match.id}`}
-          style={{
-            width: '100%',
-            textAlign: 'center',
-            boxSizing: 'border-box',
-            fontSize: 13,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-            color: ABYSS,
-            background: COLORS.astro,
-            border: `1px solid ${COLORS.astro}`,
-            padding: '14px 20px',
-            textDecoration: 'none',
-            minHeight: 44,
-          }}
-        >
-          Watch &amp; stake
-        </Link>
-      </div>
+      {detail.length > 0 && (
+        <div style={{ ...type.label, ...tone.secondary }}>{detail.join(` ${glyph.middot} `)}</div>
+      )}
+      <Button to={`/matches/${match.id}`} style={{ width: '100%', boxSizing: 'border-box' }}>
+        Watch &amp; stake
+      </Button>
     </Card>
   );
 }
 
-/** 48px monogram crest used inside the next-fixture card. */
-function MiniCrest({ name, dim }: { name: string; dim: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        width: 48,
-        height: 48,
-        borderRadius: '50%',
-        background: PHOBOS,
-        border: `1px solid ${HAIRLINE}`,
-        display: 'grid',
-        placeItems: 'center',
-        fontWeight: 700,
-        fontSize: 14,
-        color: DUST,
-        opacity: dim ? 0.6 : 1,
-      }}
-    >
-      {monogram(name)}
-    </span>
-  );
-}
-
 /**
- * Form card — the W/D/L strip from this club's last-5 standings form, plus a
- * short prose summary. Hidden values degrade to a single dash so the card never
- * collapses; the prose is derived from the real tally, not invented.
+ * Form: the last five results as tiles (W success, D and L neutral) and a
+ * one-line tally derived from them, never invented.
+ *
+ * @param form  Results, most recent first.
+ * @returns     The card.
  */
-function FormCard({ standing }: { standing: LeagueStandingsRow | null }) {
-  const form = standing?.form ?? [];
+function FormCard({ form }: { form: FormResult[] }) {
   return (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ ...sectHStyle, margin: 0 }}><span>Form</span></div>
-        <FormStrip form={form} />
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[12] }}>
+        <RailTitle>Form</RailTitle>
+        <FormStrip form={form} slots={5} />
       </div>
-      <div style={{ fontSize: 14, lineHeight: 1.5, color: DUST_70 }}>
-        {formProse(form)}
-      </div>
+      <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>{formProse(form)}</p>
     </Card>
   );
 }
 
-/** Build a truthful one-liner from the last-5 results, or a quiet fallback. */
-function formProse(form: Array<'W' | 'D' | 'L'>): string {
+/**
+ * A truthful one-liner from the last-5 results.
+ *
+ * @param form  Results, most recent first.
+ * @returns     "Last 2 matches: 1 won, 1 drawn." or the no-games line.
+ */
+function formProse(form: FormResult[]): string {
   if (form.length === 0) {
     return 'No matches played yet this cycle. The record is a blank slate.';
   }
@@ -687,114 +591,83 @@ function formProse(form: Array<'W' | 'D' | 'L'>): string {
 }
 
 /**
- * Active-decrees card. Open focus options for a club need a season id and a
- * dedicated query, so rather than fabricate decrees this links straight to the
- * voting surface where the live focuses are surfaced.
+ * Active decrees. Open focus options for a club need a season id and a
+ * dedicated query, so rather than fabricate decrees this links straight to
+ * the voting page where the live focuses are shown.
+ *
+ * @returns The card.
  */
 function DecreesCard() {
   return (
-    <Card>
-      <div style={{ ...sectHStyle, margin: 0 }}><span>Active decrees</span></div>
-      <p style={{ fontSize: 13, lineHeight: 1.6, color: DUST_70, margin: 0 }}>
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+      <RailTitle>Active decrees</RailTitle>
+      <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
         End-of-season focuses are pooled and enacted by this club&rsquo;s fans. Cast your
         credits when voting opens.
       </p>
-      <Link
-        to="/voting"
-        style={{
-          width: '100%',
-          textAlign: 'center',
-          boxSizing: 'border-box',
-          fontSize: 13,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.12em',
-          color: DUST,
-          background: ABYSS,
-          border: `1px solid ${DUST}`,
-          padding: '14px 20px',
-          textDecoration: 'none',
-          minHeight: 44,
-        }}
-      >
+      <Button variant="tertiary" to="/voting" style={{ alignSelf: 'flex-start' }}>
         Go to voting
-      </Link>
+      </Button>
     </Card>
   );
 }
 
+// ── IV. Manager ──────────────────────────────────────────────────────────────
+
 /**
- * Last-5 form strip: a row of 24px bordered W/D/L cells, most-recent first.
- * Draws read muted; losses take the Solar-Flare border + text. An empty form
- * renders a single muted dash so the row never collapses.
+ * The manager as a Card: the name (subheading, linking to the manager page
+ * when there is one), nationality, and the tactical philosophy as a Tag
+ * (underscores prettified so the raw key never leaks).
+ *
+ * @param manager  The club's manager row.
+ * @returns        The card.
  */
-function FormStrip({ form }: { form: Array<'W' | 'D' | 'L'> }) {
-  if (form.length === 0) {
-    return <span style={{ color: DUST_50, fontSize: 12, fontWeight: 700 }}>—</span>;
-  }
+function ManagerCard({ manager }: { manager: LiveManager }) {
+  const styleLabel = manager.style ? humanise(manager.style) : null;
   return (
-    <span style={{ display: 'inline-flex', gap: 4 }}>
-      {form.map((r, i) => {
-        const isDraw = r === 'D';
-        const isLoss = r === 'L';
-        return (
-          <span
-            key={i}
-            style={{
-              width: 24,
-              height: 24,
-              display: 'grid',
-              placeItems: 'center',
-              fontWeight: 700,
-              fontSize: 12,
-              border: `1px solid ${isLoss ? FLARE : isDraw ? 'rgba(227,224,213,0.45)' : HAIRLINE}`,
-              color: isLoss ? FLARE : isDraw ? 'rgba(227,224,213,0.82)' : DUST,
-            }}
-          >
-            {r}
-          </span>
-        );
-      })}
-    </span>
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: space[12], maxWidth: 480 }}>
+      <h3 style={{ ...type.subheading, margin: 0 }}>
+        {manager.id ? (
+          <Link to={`/managers/${manager.id}`} style={{ color: color.text, textDecoration: 'none' }}>
+            {manager.name}
+          </Link>
+        ) : (
+          manager.name
+        )}
+      </h3>
+      {manager.nationality && (
+        <div style={{ ...type.label, ...tone.secondary }}>{manager.nationality}</div>
+      )}
+      {styleLabel && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>
+          <span style={{ ...type.label, ...tone.secondary }}>Philosophy</span>
+          <Tag>{styleLabel}</Tag>
+        </div>
+      )}
+      {manager.id && (
+        <Button variant="tertiary" to={`/managers/${manager.id}`} style={{ alignSelf: 'flex-start' }}>
+          Manager profile
+        </Button>
+      )}
+    </Card>
   );
 }
 
-// ── Below-shell preserved sections ──────────────────────────────────────────
-
-/** Small section label (uppercase kicker + title) used for the rehomed blocks. */
-function SectionLabel({ kicker, title }: { kicker: string; title: string }) {
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: DUST_70 }}>
-        {kicker}
-      </div>
-      <h2 style={{ fontSize: 28, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.1, margin: '12px 0 0' }}>
-        {title}
-      </h2>
-      <hr style={{ border: 0, height: 1, background: HAIRLINE, margin: '20px 0 0' }} />
-    </div>
-  );
-}
+// ── V. Club dossier ──────────────────────────────────────────────────────────
 
 /**
- * Club Dossier block — the authored narrative profile (entities.meta.profile):
- * the history + culture prose, a grid of identity facts, and the honours lists.
- * Defensive against missing/mistyped fields since the profile arrives untyped;
- * empty fields are omitted.
+ * The authored club profile (entities.meta.profile): the history and
+ * culture prose, a FactGrid of identity facts and the achievements as
+ * FactRows. Defensive against missing or mistyped
+ * fields since the profile arrives untyped; empty fields are omitted.
+ *
+ * @param profile  The untyped profile bag.
+ * @returns        The dossier body.
  */
 function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
   const str = (k: string): string => (typeof profile[k] === 'string' ? (profile[k] as string) : '');
   const list = (k: string): string[] =>
     Array.isArray(profile[k]) ? (profile[k] as unknown[]).filter((x): x is string => typeof x === 'string') : [];
-
-  const labelStyle: CSSProperties = {
-    fontSize: 11,
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase',
-    color: DUST_70,
-    margin: '0 0 6px',
-  };
-  const bodyStyle: CSSProperties = { fontSize: 14, lineHeight: 1.7, color: DUST_50, margin: 0 };
 
   const history = str('history');
   const culture = str('club_culture');
@@ -805,94 +678,51 @@ function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
       ['Allegiance', str('political_leaning')],
       ['Following', str('number_of_fans')],
       ['Badge', str('badge')],
-      ['Home Kit', str('home_kit')],
-      ['Away Kit', str('away_kit')],
-      ['Third Kit', str('third_kit')],
+      ['Home kit', str('home_kit')],
+      ['Away kit', str('away_kit')],
+      ['Third kit', str('third_kit')],
     ] as Array<[string, string]>
   ).filter(([, v]) => v.length > 0);
   // Honours and legends are deliberately NOT read from the profile: the
-  // canon (History & Honours, above) owns those facts, and the hand-written
+  // canon (History & honours, above) owns those facts, and the hand-written
   // profile lists predate it and contradict it (e.g. Celestial Cups Earth
   // United never won). The profile keeps what it is good at: style prose.
   const achievements = list('achievements');
 
-  const renderList = (label: string, items: string[]) =>
-    items.length > 0 ? (
-      <div style={{ marginTop: 24 }}>
-        <p style={labelStyle}>{label}</p>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {items.map((i) => (
-            <li key={i} style={{ ...bodyStyle, marginBottom: 4 }}>{i}</li>
-          ))}
-        </ul>
-      </div>
-    ) : null;
-
   return (
-    <div style={{ marginTop: 24 }}>
-      {history && <p style={{ ...bodyStyle, maxWidth: 760, marginBottom: culture ? 20 : 0 }}>{history}</p>}
-      {culture && <p style={{ ...bodyStyle, maxWidth: 760, fontStyle: 'italic', color: DUST_70 }}>{culture}</p>}
-      {facts.length > 0 && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: 24,
-            marginTop: 28,
-          }}
-        >
-          {facts.map(([label, value]) => (
-            <div key={label}>
-              <p style={labelStyle}>{label}</p>
-              <p style={bodyStyle}>{value}</p>
-            </div>
-          ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+      {(history || culture) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: space[16], maxWidth: '70ch' }}>
+          {history && <p style={{ ...type.body, ...tone.primary, margin: 0 }}>{history}</p>}
+          {culture && <p style={{ ...type.body, ...tone.secondary, fontStyle: 'italic', margin: 0 }}>{culture}</p>}
         </div>
       )}
-      {renderList('Achievements', achievements)}
+      {facts.length > 0 && <FactGrid facts={facts} />}
+      {achievements.length > 0 && (
+        <FactRows label="Achievements" items={achievements.map((a) => ({ key: a, content: a }))} />
+      )}
     </div>
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 /**
- * Single-manager card. Bold name (links to /managers/:id when present),
- * nationality small-caps, italic tactical-style descriptor (underscores
- * prettified, words titlecased so the raw key never leaks).
+ * A raw key ("possession_based") as words in title case.
+ *
+ * @param raw  The key.
+ * @returns    "Possession Based".
  */
-function ManagerCard({ manager }: { manager: LiveManager }) {
-  const styleLabel = manager.style
-    ? manager.style.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    : null;
-
-  return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, padding: 24, marginTop: 24, maxWidth: 480 }}>
-      <h3 style={{ fontSize: 22, fontWeight: 700, textTransform: 'uppercase', lineHeight: 1.2, margin: 0, letterSpacing: '0.01em' }}>
-        {manager.id ? (
-          <Link to={`/managers/${manager.id}`} style={{ color: DUST, textDecoration: 'none' }}>
-            {manager.name}
-          </Link>
-        ) : (
-          manager.name
-        )}
-      </h3>
-      {manager.nationality && (
-        <div style={{ marginTop: 8, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70 }}>
-          {manager.nationality}
-        </div>
-      )}
-      {styleLabel && (
-        <p style={{ marginTop: 16, fontSize: 13, fontStyle: 'italic', color: DUST }}>
-          Tactical philosophy: {styleLabel}
-        </p>
-      )}
-    </div>
-  );
+function humanise(raw: string): string {
+  return raw.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
 /**
- * Format a kickoff ISO timestamp into a tight day/time label, e.g.
- * "Tue 19:00". Returns null on a missing/invalid timestamp so the caller can
- * drop the piece rather than render an em-dash.
+ * A kickoff ISO timestamp as a tight day/time label, e.g. "Tue 19:00".
+ *
+ * @param iso  The kickoff, or null.
+ * @returns    The label, or null on a missing/invalid timestamp so the
+ *             caller drops the piece rather than render a dash.
  */
 function formatKickoff(iso: string | null): string | null {
   if (!iso) return null;
@@ -906,8 +736,11 @@ function formatKickoff(iso: string | null): string | null {
 }
 
 /**
- * Unknown-club fallback surface. Minimal central message with a backlink, no
- * router redirect — mirrors LeagueDetail's UnknownLeague.
+ * The page for a `:teamId` that matches no club: says so and links back.
+ * No router redirect, so the URL stays the reader's URL (mirrors
+ * LeagueDetail's UnknownLeague).
+ *
+ * @returns The page.
  */
 function UnknownClub({ teamId }: { teamId?: string | undefined }) {
   return (
@@ -919,7 +752,7 @@ function UnknownClub({ teamId }: { teamId?: string | undefined }) {
         subtitle={
           <>
             No club registered under{' '}
-            <code style={{ fontFamily: 'inherit', ...tone.primary }}>{teamId ?? '—'}</code>
+            <code style={{ fontFamily: 'inherit', ...tone.primary }}>{teamId ?? DASH}</code>
             . Try the{' '}
             <Link to="/teams" style={tone.primary}>full directory</Link>{' '}
             to find the side you were after.

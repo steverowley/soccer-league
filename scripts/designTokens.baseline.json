@@ -85,9 +85,6 @@
     "fontSize": 2,
     "letterSpacing": 1
   },
-  "src/pages/EntityDetail.tsx": {
-    "fontSize": 6
-  },
   "src/pages/Idols.tsx": {
     "fontSize": 12,
     "letterSpacing": 4,
@@ -101,10 +98,6 @@
     "fontSize": 13,
     "letterSpacing": 6
   },
-  "src/pages/ManagerDetail.tsx": {
-    "fontSize": 3,
-    "letterSpacing": 1
-  },
   "src/pages/News.tsx": {
     "colour": 8,
     "fontSize": 17,
@@ -113,11 +106,6 @@
   },
   "src/pages/NotFound.tsx": {
     "fontSize": 1
-  },
-  "src/pages/PlayerDetail.tsx": {
-    "colour": 2,
-    "fontSize": 8,
-    "letterSpacing": 4
   },
   "src/pages/Privacy.tsx": {
     "fontSize": 2,
@@ -139,16 +127,6 @@
   "src/pages/Seasons.tsx": {
     "fontSize": 4,
     "letterSpacing": 2
-  },
-  "src/pages/TeamDetail.tsx": {
-    "fontSize": 26,
-    "letterSpacing": 13,
-    "dust": 2
-  },
-  "src/pages/Teams.tsx": {
-    "fontSize": 12,
-    "letterSpacing": 4,
-    "dust": 3
   },
   "src/pages/Terms.tsx": {
     "fontSize": 2,

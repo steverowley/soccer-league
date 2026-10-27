@@ -8,7 +8,8 @@
 //   - rank labels, with ties shown as "=N" (shared/utils/rankLabels)
 //   - the qualification cue: the top three ranks in the success colour
 //     (they qualify for the Celestial Cup)
-//   - the crest beside each club and the five-tile Form strip
+//   - the crest beside each club and the five-tile Form strip (shared
+//     FormStrip in src/shared/ui)
 //
 // Colour by meaning: red is live or error only, so losses, the bottom of the
 // table and the L column are no longer red; a loss tile is tertiary, a win
@@ -17,8 +18,8 @@
 import { memo, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { TEAMS_BY_LEAGUE } from '../data/leagueData';
-import { color, hairline, numeric, space, tone, type } from '../shared/design';
-import { Crest } from '../shared/ui';
+import { color, numeric, space, type } from '../shared/design';
+import { Crest, FormStrip, type FormResult } from '../shared/ui';
 import { rankLabels, standingsTieKey } from '../shared/utils/rankLabels';
 
 // ── Sortable columns (#400) ────────────────────────────────────────────────
@@ -38,11 +39,6 @@ const QUALIFICATION_COUNT = 3;
 
 /** Recent-result tiles per row (the standings read caps form at five). */
 const FORM_PIP_COUNT = 5;
-/** Form tile edge in px. */
-const FORM_PIP_SIZE = 24;
-
-type FormResult = 'W' | 'D' | 'L';
-
 /** Club colour by team id, for the crest (club colour is data). */
 const TEAM_COLOR: ReadonlyMap<string, string> = new Map(
   Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
@@ -266,7 +262,7 @@ function StandingsRowComponent({ row, rank, qualifies }: { row: StandingsRowData
       <td style={cellRight}>{row.loses  ?? 0}</td>
       <td style={cellRight}>{formatGd(row.gd)}</td>
       <td style={cellLeft}>
-        <FormStrip form={row.form} />
+        <FormStrip form={row.form} slots={FORM_PIP_COUNT} />
       </td>
       <td style={{ ...cellRight, fontWeight: 700 }}>{row.points ?? 0}</td>
     </tr>
@@ -281,50 +277,6 @@ function formatGd(gd: number | null | undefined): string {
   if (gd === null || gd === undefined) return '\u2014';
   if (gd === 0) return '0';
   return gd > 0 ? `+${gd}` : `${gd}`;
-}
-
-/**
- * FORM_PIP_COUNT result tiles, most recent first; missing results are a
- * faint "—" so the column width is the same on every row.
- */
-function FormStrip({ form }: { form?: FormResult[] | undefined }) {
-  const items = [];
-  for (let i = 0; i < FORM_PIP_COUNT; i++) {
-    const result = Array.isArray(form) ? form[i] : undefined;
-    items.push(<FormPip key={i} result={result} />);
-  }
-  return <span style={{ display: 'inline-flex', gap: space[4] }}>{items}</span>;
-}
-
-/**
- * One form tile:
- *   W → success border and letter (a good outcome)
- *   D → line border, secondary letter
- *   L → line border, tertiary letter (never red: red means live or error)
- *   none → faint border, tertiary "—"
- */
-function FormPip({ result }: { result?: FormResult | undefined }) {
-  const look: CSSProperties =
-    result === 'W' ? { ...hairline(color.success), color: color.success } :
-    result === 'D' ? { ...hairline(color.line), ...tone.secondary } :
-    result === 'L' ? { ...hairline(color.line), ...tone.tertiary } :
-                     { ...hairline(color.lineFaint), ...tone.tertiary };
-  return (
-    <span
-      style={{
-        ...type.label,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width:  FORM_PIP_SIZE,
-        height: FORM_PIP_SIZE,
-        lineHeight: 1,
-        ...look,
-      }}
-    >
-      {result ?? '\u2014'}
-    </span>
-  );
 }
 
 // Memoised: a standings fetch for one league does not re-render tables
