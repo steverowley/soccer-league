@@ -1,58 +1,60 @@
 // ── pages/SeasonDetail.tsx ──────────────────────────────────────────────────
-// `/seasons/:seasonId` route — final-state archive for a single season
+// `/seasons/:seasonId` route: the final-state archive for a single season
 // (issue isl-aaj).
 //
 // WHAT IS SHOWN
-//   PageHeader      back link, crumbs, eyebrow "Seasons", the season name as
-//                   the h1, its status as the subtitle and the year as meta.
-//   I.   Lifecycle: narrative summary of started_at / ended_at /
-//                       election window timestamps so a fan can trace
-//                       the season's shape on the cosmic clock.
-//   II.  Notable Narratives: last N rows from `narratives` whose
-//                       created_at falls inside the season window.
-//                       Hidden when there are no narratives to show.
+//   PageHeader   back link, crumbs, eyebrow "Seasons", the season name as the
+//                h1, its status as the subtitle and the year as meta.
+//   I. Lifecycle one hairline Card (no fill) of label-over-value facts: the
+//                scheduled start and end, and when the season actually
+//                started and ended, so a fan can trace its shape on the
+//                cosmic clock.
+//   Then a tertiary "Return to the archive" link.
 //
 // DELIBERATE OMISSIONS (v1)
-//   • Final standings tables and cup brackets — these would require
-//     either (a) a backfill of historical standings into a new view
-//     or (b) wiring the existing /leagues + /cup pages to accept a
-//     `?seasonId=…` query param.  Both are good follow-ups; this v1
-//     focuses on getting the discovery path live (entries + detail
-//     skeleton) so users can find archived seasons at all.
+//   Final standings tables and cup brackets: these would need either a
+//   backfill of historical standings into a new view or the /leagues and
+//   /cup pages accepting a `?seasonId=` parameter. Both are good follow-ups;
+//   this v1 makes archived seasons findable at all.
 //
-// EMPTY / 404
-//   When the season id doesn't resolve we render the standard
-//   "Unknown Season" inline surface (same pattern as TeamDetail).
+// On the design language since the group 4 migration (docs/design-language.md),
+// with no raw style values (scripts/designTokens.test.ts). The grey filled
+// panel the design review flagged (#723) is now a hairline Card, and the
+// archive link is no longer purple (purple is for Architect content).
+//
+// STATES
+//   Loading, not found ("Unknown Season", which is also what a failed read
+//   resolves to, since getSeasonSummary returns null on error) and the season
+//   itself: each opens with the shared PageHeader, so each renders one h1.
 
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell, StatBlock } from '../shared/ui';
+import { space } from '../shared/design';
+import { Button, Card, FactGrid, PageHeader, PageShell, SectionHeader, StatBlock, toRoman } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonSummary, type SeasonSummary } from '../features/match';
 
-// ── Design tokens ──────────────────────────────────────────────────────────
-const { dust: DUST, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
-const DUST_50 = COLORS.dust50;
-
 /**
- * Format an ISO timestamp as a short "12 Apr 2026" label.  Returns
- * "—" for null / invalid input so the cell never collapses to
- * whitespace.
+ * Format an ISO timestamp as a short "12 Apr 2026" label. Returns a lone
+ * dash for null or invalid input so the fact never collapses to whitespace.
+ *
+ * @param iso  ISO timestamp or date, or null.
+ * @returns    The locale date, or a dash.
  */
 function formatStamp(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return '\u2014';
   const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return '—';
+  if (Number.isNaN(t.getTime())) return '\u2014';
   return t.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 /**
- * `/seasons/:seasonId` route component.  Fetches the single season
- * row on mount and renders the three documented sections.  Unknown
- * id renders an "Unknown Season" surface that preserves the URL
- * (same pattern as TeamDetail / PlayerDetail).
+ * `/seasons/:seasonId` route component. Fetches the single season row on
+ * mount. An unknown id renders an "Unknown Season" header that preserves the
+ * URL (same pattern as TeamDetail / PlayerDetail).
+ *
+ * @returns The page.
  */
 export default function SeasonDetail() {
   const { seasonId } = useParams<{ seasonId: string }>();
@@ -60,8 +62,8 @@ export default function SeasonDetail() {
 
   // `seasonId === undefined` is treated as "loaded with no season" so we
   // can render the not-found surface immediately without a setState
-  // call inside the effect.  Otherwise we initialise loaded=false and
-  // let the async fetch flip it.
+  // call inside the effect. Otherwise we initialise loaded=false and let
+  // the async fetch flip it.
   const [season, setSeason] = useState<SeasonSummary | null>(null);
   const [loaded, setLoaded] = useState(() => !seasonId);
 
@@ -92,6 +94,9 @@ export default function SeasonDetail() {
     );
   }
 
+  // Sections are numbered in page order, from I (spec section 7).
+  let n = 0;
+
   return (
     <PageShell>
       {season ? (
@@ -111,67 +116,27 @@ export default function SeasonDetail() {
         />
       )}
 
-      {/* Lifecycle timestamps */}
       {season && (
         <section>
-          <div style={{
-            display:    'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-            gap:        1,
-            background: HAIRLINE,
-            border:     `1px solid ${HAIRLINE}`,
-          }}>
-            <Cell label="Scheduled start" value={formatStamp(season.start_date)} />
-            <Cell label="Scheduled end"   value={formatStamp(season.end_date)} />
-            <Cell label="Actually started" value={formatStamp(season.started_at)} />
-            <Cell label="Actually ended"   value={formatStamp(season.ended_at)} />
+          <SectionHeader index={toRoman(++n)} label="Lifecycle" title="The season's calendar" />
+          <Card>
+            <FactGrid
+              minColumn={180}
+              facts={[
+                ['Scheduled start', formatStamp(season.start_date)],
+                ['Scheduled end', formatStamp(season.end_date)],
+                ['Actually started', formatStamp(season.started_at)],
+                ['Actually ended', formatStamp(season.ended_at)],
+              ]}
+            />
+          </Card>
+          <div style={{ marginTop: space[24] }}>
+            <Button variant="tertiary" to="/seasons">
+              Return to the archive
+            </Button>
           </div>
         </section>
       )}
-
-      {/* Footer pointer back to the archive index */}
-      {season && (
-        <section>
-          <p style={{ color: DUST_50, fontSize: 12 }}>
-            Want a different season?{' '}
-            <Link to="/seasons" style={{ color: COLORS.quantum, textDecoration: 'underline' }}>
-              Return to the archive
-            </Link>
-            .
-          </p>
-        </section>
-      )}
     </PageShell>
-  );
-}
-
-/**
- * One cell in the lifecycle grid.  Label above the value with a thin
- * hairline below — matches the visual rhythm of the rest of the
- * archive's data cells.
- */
-function Cell({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ background: PHOBOS, padding: '20px 18px' }}>
-      <p style={{
-        fontSize:      11,
-        fontWeight:    700,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color:         DUST_50,
-        margin:        '0 0 6px',
-      }}>
-        {label}
-      </p>
-      <p style={{
-        fontSize:   16,
-        fontWeight: 700,
-        color:      DUST,
-        margin:     0,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
-        {value}
-      </p>
-    </div>
   );
 }
