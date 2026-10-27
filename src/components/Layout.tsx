@@ -23,6 +23,7 @@
 
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { layout } from '../shared/design';
 
 // ── Palette tokens ──────────────────────────────────────────────────────────
 export const COLORS = Object.freeze({
@@ -43,12 +44,16 @@ export const COLORS = Object.freeze({
 });
 
 /**
- * Fixed-max-width content container — centres children at 1248 px with
- * 16 px left/right padding for consistent text spacing and page alignment.
+ * Fixed-max-width content container: centres children at the design
+ * language's container width with its gutter (`--isl-container` and
+ * `--isl-gutter` from src/shared/design/tokens.css: 1248 px, padding 24 px,
+ * 16 px on a phone). WHY the tokens: PageShell uses the same two, so a page
+ * still on this legacy wrapper and a migrated page share one left edge
+ * (the old fixed 16 px gutter sat 8 px left of every migrated page).
  */
 export function Container({ children }: { children: ReactNode }) {
   return (
-    <div style={{ maxWidth: 1248, margin: '0 auto', width: '100%', paddingLeft: 16, paddingRight: 16, boxSizing: 'border-box' }}>
+    <div style={{ maxWidth: layout.container, margin: '0 auto', width: '100%', paddingLeft: layout.gutter, paddingRight: layout.gutter, boxSizing: 'border-box' }}>
       {children}
     </div>
   );

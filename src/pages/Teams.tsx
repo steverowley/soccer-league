@@ -3,8 +3,9 @@
 // `Teams.html` worked screen (the "roster of worlds" club directory).
 //
 // Layout (matches the prototype top → bottom):
-//   Header (global)
-//   I.   Page head        — `.isl-head` eyebrow breadcrumb + 56px title + lede
+//   PageShell (site header, main column, footer)
+//   I.   PageHeader:      eyebrow "Teams", title, lede; club and league
+//                          counts as its StatBlock meta row
 //   II.  Filter row       — league chips (active = dust fill) + right-aligned
 //                            club count
 //   III. Card grid        — 3-col grid of club cards, each:
@@ -27,8 +28,8 @@
 // directory stays truthful to the live season.
 
 import { useEffect, useState, type CSSProperties } from 'react';
-import Header from '../components/Header';
-import { COLORS, Container, Footer } from '../components/Layout';
+import { COLORS } from '../components/Layout';
+import { PageHeader, PageShell, StatBlock } from '../shared/ui';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { Team, League } from '../data/leagueData';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
@@ -159,26 +160,23 @@ export default function Teams() {
     filter === FILTER_ALL ? ALL_TEAMS : ALL_TEAMS.filter((t) => t.leagueId === filter);
 
   return (
-    <div style={{ background: ABYSS, color: DUST, minHeight: '100vh' }}>
-      <Header />
+    <PageShell>
+      {/* Page head: the shared PageHeader; the club and league counts that
+          used to ride in the eyebrow are its meta row (eyebrows name the
+          section of the site, never a number). */}
+      <PageHeader
+        eyebrow="Teams"
+        title="The Roster of Worlds"
+        subtitle="Every club chartered to the league, from the terrestrial inner planets to the scattered dark of the Kuiper Belt. Affiliation is permanent. Choose carefully."
+        meta={
+          <>
+            <StatBlock label="Clubs" value={ALL_TEAMS.length} />
+            <StatBlock label="Leagues" value={LEAGUES.length} />
+          </>
+        }
+      />
 
-      <Container>
-        {/* Section I — page head (eyebrow breadcrumb + display title + lede). */}
-        <header style={{ padding: '48px 0 8px' }}>
-          <div style={eyebrowStyle}>
-            <span>Teams</span>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>{ALL_TEAMS.length} clubs</span>
-            <span style={{ color: DUST_50 }}>•</span>
-            <span>{LEAGUES.length} orbital leagues</span>
-          </div>
-          <h1 style={titleStyle}>The Roster of Worlds</h1>
-          <p style={ledeStyle}>
-            Every club chartered to the league, from the terrestrial inner planets to the
-            scattered dark of the Kuiper Belt. Affiliation is permanent. Choose carefully.
-          </p>
-        </header>
-
+      <div>
         {/* Section II — league filter chips + right-aligned club count. */}
         <div
           style={{
@@ -239,9 +237,7 @@ export default function Teams() {
             </div>
           )}
         </section>
-      </Container>
-
-      <Footer />
+      </div>
 
       {/* 3 → 2 → 1 collapse so every card stays at least ~240px wide. */}
       <style>{`
@@ -252,36 +248,9 @@ export default function Teams() {
           .isl-teams-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
-
-// ── Page-head text styles (the prototype's `.isl-head`) ──────────────────────
-const eyebrowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  flexWrap: 'wrap',
-  color: DUST,
-};
-const titleStyle: CSSProperties = {
-  fontSize: 56,
-  fontWeight: 700,
-  lineHeight: 1,
-  textTransform: 'uppercase',
-  margin: '20px 0 0',
-};
-const ledeStyle: CSSProperties = {
-  fontSize: 16,
-  lineHeight: 1.6,
-  maxWidth: 760,
-  margin: '20px 0 0',
-  color: DUST,
-};
 
 interface FilterChipProps {
   label: string;
