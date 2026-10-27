@@ -15,10 +15,6 @@
     "fontSize": 11,
     "letterSpacing": 10
   },
-  "src/components/LoreHistory.tsx": {
-    "fontSize": 9,
-    "letterSpacing": 2
-  },
   "src/components/RouteErrorBoundary.tsx": {
     "fontSize": 4,
     "letterSpacing": 2
@@ -54,11 +50,6 @@
   "src/features/architect/logic/CosmicArchitect.ts": {
     "colour": 1
   },
-  "src/features/entities/ui/relationshipGraph/RelationshipGraph.tsx": {
-    "fontSize": 9,
-    "letterSpacing": 7,
-    "colour": 1
-  },
   "src/features/match/logic/viewer/appearance.ts": {
     "colour": 4
   },
@@ -85,24 +76,9 @@
     "fontSize": 2,
     "letterSpacing": 1
   },
-  "src/pages/Idols.tsx": {
-    "fontSize": 12,
-    "letterSpacing": 4,
-    "dust": 1
-  },
-  "src/pages/Leaderboards.tsx": {
-    "fontSize": 4,
-    "letterSpacing": 1
-  },
   "src/pages/Login.tsx": {
     "fontSize": 13,
     "letterSpacing": 6
-  },
-  "src/pages/News.tsx": {
-    "colour": 8,
-    "fontSize": 17,
-    "letterSpacing": 8,
-    "dust": 1
   },
   "src/pages/NotFound.tsx": {
     "fontSize": 1
@@ -119,14 +95,6 @@
   "src/pages/ResetPassword.tsx": {
     "fontSize": 7,
     "letterSpacing": 3
-  },
-  "src/pages/SeasonDetail.tsx": {
-    "fontSize": 3,
-    "letterSpacing": 1
-  },
-  "src/pages/Seasons.tsx": {
-    "fontSize": 4,
-    "letterSpacing": 2
   },
   "src/pages/Terms.tsx": {
     "fontSize": 2,
@@ -152,11 +120,6 @@
   },
   "src/pages/WhatIf.tsx": {
     "fontSize": 3
-  },
-  "src/pages/World.tsx": {
-    "fontSize": 14,
-    "letterSpacing": 6,
-    "dust": 1
   },
   "src/shared/ui/Toast.tsx": {
     "colour": 1,
