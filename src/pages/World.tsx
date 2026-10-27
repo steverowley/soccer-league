@@ -1,79 +1,83 @@
 // ── World.tsx ─────────────────────────────────────────────────────────────────
-// Galaxy Atlas — the world browser page at `/world`. Rebuilt to match the
-// design system's `World.html` worked screen ("Everything is connected").
+// Galaxy Atlas: the world browser page at `/world` ("Everything is connected").
+// On the design language since the group 4 migration (docs/design-language.md),
+// with no raw style values (scripts/designTokens.test.ts).
 //
 // PURPOSE
 //   Every entity in the ISL exists in a relationship graph: politicians
-//   sympathise with clubs, journalists are employed by media companies, stadium
-//   owners are entangled in rivalry networks.  The World page makes that web
-//   visible to fans without exposing mechanical numbers — it's a narrative
-//   atlas, not a stat sheet.
+//   sympathise with clubs, journalists are employed by media companies,
+//   stadium owners are entangled in rivalry networks. The World page makes
+//   that web visible to fans without exposing mechanical numbers: it's a
+//   narrative atlas, not a stat sheet.
 //
-// LAYOUT (matches the prototype top → bottom)
+// LAYOUT (top to bottom)
 //   PageShell (site header, main column, footer)
-//   I.   PageHeader       eyebrow, title and lede (shared/ui)
-//   II.  Toolbar       — entity search box + the KIND_GROUPS clickable legend
-//                        chips (active = Lunar-Dust fill, each carries its
-//                        kindColor swatch)
-//   III. Two-column `1fr 360px` shell:
-//          LEFT  — the graph, made prominent: a header (selected entity name +
-//                  KindBadge + "View full profile ▸") over <RelationshipGraph>.
-//          RIGHT — dossier/picker rail: the filterable entity list (the
-//                  selection driver) + the selected entity's brief dossier.
+//   PageHeader     eyebrow, title and lede (shared/ui)
+//   Toolbar        the entity search box (a raised input) and one toggle Tag
+//                  per KIND_GROUPS entry, each with its tier glyph (selected =
+//                  Lunar Dust fill)
+//   Two-column `1fr 360px` shell (one column below 900 px):
+//     LEFT:  the graph, made prominent: a header (selected entity name, its
+//            kind as a Tag, "View full profile") over <RelationshipGraph>
+//     RIGHT: the picker rail (a Card listing the filtered entities, the
+//            selection driver) and the selected entity's brief dossier Card
+//
+// Colour by meaning: entity tiers are told apart by glyph, not colour (see
+// features/entities kindColor.ts), so the only accent on the page is purple
+// on the cosmic voices, which are Architect content. The old orange, red,
+// green and purple kind dots and badges are gone.
 //
 // DATA STRATEGY
 //   On mount and on every filter-group change, `listEntities` fires a single
 //   Supabase query capped at LIST_LIMIT rows, server-side filtered by kind so
 //   large groups (players: 704) don't slow down smaller groups. The list (and
 //   the case-insensitive search box over it) drives `selectedId`, which feeds
-//   <RelationshipGraph entityId={selectedId} /> — it re-fetches its ego-graph
+//   <RelationshipGraph entityId={selectedId} />: it re-fetches its ego-graph
 //   per selection, so no extra fetch is needed here. To keep the atlas always
 //   showing a web, `selectedId` defaults to the first fetched entity (and
 //   re-defaults on every group change).
 //
 // DESIGN PILLARS IN USE
-//   • Hidden mechanics: entity rows show name + kind only.  No stats.
-//   • Emergent storytelling: the graph is how fans discover feuds, alliances,
+//   - Hidden mechanics: entity rows show name + kind only. No stats.
+//   - Emergent storytelling: the graph is how fans discover feuds, alliances,
 //     and media networks without being told explicitly.
-//   • Architect levers: the graph surfaces relationships the Architect seeded
-//     in migrations 0062–0064 (Phase 6 world-building).
+//   - Architect levers: the graph surfaces relationships the Architect seeded
+//     in migrations 0062 to 0064 (Phase 6 world-building).
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
 
-import { COLORS } from '../components/Layout';
-import { Button, PageHeader, PageShell } from '../shared/ui';
+import { color, glyph, hairline, space, tone, type } from '../shared/design';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  Tag,
+} from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
-import { listEntities, RelationshipGraph, kindColor } from '../features/entities';
+import { listEntities, RelationshipGraph, KindGlyph, kindTier } from '../features/entities';
 import type { Entity } from '../features/entities';
 
-// ── Local colour aliases ──────────────────────────────────────────────────────
-// One-letter aliases keep the JSX below readable without verbose COLORS.x
-// lookups on every inline style.
-const DUST     = COLORS.dust;
-const ABYSS    = COLORS.abyss;
-const PHOBOS   = COLORS.phobosAsh;
-const FLARE    = COLORS.flare;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
-
 // ── Entity kind groups ────────────────────────────────────────────────────────
-// Groups are the unit of filtering the user sees — a chip per group, not a
-// chip per kind.  Players are their own group (not the default) because there
-// are 704 of them and they are better browsed via /teams/:id and /players/:id.
+// Groups are the unit of filtering the user sees: a Tag per group, not per
+// kind. Players are their own group (not the default) because there are 704
+// of them and they are better browsed via /teams/:id and /players/:id.
 //
-// ORDER matters: the chip row renders in this order from left to right.
-// The most narrative-rich groups (world-building entities) lead so a new
-// visitor lands on the interesting content immediately.
+// ORDER matters: the Tag row renders in this order from left to right. The
+// most narrative-rich groups (world-building entities) lead so a new visitor
+// lands on the interesting content immediately.
 const KIND_GROUPS: ReadonlyArray<{
   key: string;
   label: string;
-  /** Kinds included in this group.  Empty array = no filter (all kinds). */
+  /** Kinds included in this group. Empty array = no filter (all kinds). */
   kinds: readonly string[];
 }> = [
-  // ── World — the default view.  Narratively rich, manageable list size.
+  // World: the default view. Narratively rich, manageable list size.
   // Excludes players (704) and teams (32+) which have dedicated browse surfaces.
   {
     key:   'world',
@@ -86,44 +90,44 @@ const KIND_GROUPS: ReadonlyArray<{
       'bookie',
     ],
   },
-  // ── Officials — referees + governance bodies.
+  // Officials: referees + governance bodies.
   {
     key:   'officials',
     label: 'Officials',
     kinds: ['referee', 'association', 'officials_association'],
   },
-  // ── Media — everyone who broadcasts or writes.
+  // Media: everyone who broadcasts or writes.
   {
     key:   'media',
     label: 'Media',
     kinds: ['journalist', 'sports_writer', 'pundit', 'commentator', 'media_company', 'social_media', 'bookie'],
   },
-  // ── Politics — parties, politicians, legacy political_body kinds.
+  // Politics: parties, politicians, legacy political_body kinds.
   {
     key:   'politics',
     label: 'Politics',
     kinds: ['politician', 'political_party', 'political_body'],
   },
-  // ── Venues — every named physical location in the galaxy.
+  // Venues: every named physical location in the galaxy.
   {
     key:   'venues',
     label: 'Venues',
     kinds: ['planet', 'colony', 'stadium', 'training_facility'],
   },
-  // ── Clubs & Staff — teams + their managing staff.  Players separate below.
+  // Clubs & Staff: teams + their managing staff. Players separate below.
   {
     key:   'clubs',
     label: 'Clubs & Staff',
     kinds: ['team', 'manager', 'managing_staff'],
   },
-  // ── Players — all 704 players.  Listed last because each has their own
+  // Players: all 704 players. Listed last because each has their own
   // /players/:id page; the graph view is the main value-add here.
   {
     key:   'players',
     label: 'Players',
     kinds: ['player'],
   },
-  // ── All — every entity kind up to LIST_LIMIT.  Useful for admin browsing.
+  // All: every entity kind up to LIST_LIMIT. Useful for admin browsing.
   {
     key:   'all',
     label: 'All',
@@ -134,33 +138,47 @@ const KIND_GROUPS: ReadonlyArray<{
 // ── Query constants ───────────────────────────────────────────────────────────
 
 /**
- * Maximum entities to fetch per group.  Caps Claude API + PostgREST response
- * sizes — the "Players" group has 704 rows but showing 200 with a note is
- * better than a slow or blown-out list.  Bump if future phases add many more
- * non-player entities.
+ * Maximum entities to fetch per group. Caps PostgREST response sizes: the
+ * "Players" group has 704 rows, but showing 200 with a note is better than a
+ * slow or blown-out list. Bump if future phases add many more non-player
+ * entities.
  */
 const LIST_LIMIT = 200;
+
+/** Height of the graph box, so a placeholder occupies the graph's space. */
+const GRAPH_HEIGHT = 460;
+
+/**
+ * A kind for display: snake_case to words.
+ *
+ * @param kind  An entity kind.
+ * @returns     "media company".
+ */
+function kindLabel(kind: string): string {
+  return kind.replace(/_/g, ' ');
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 /**
- * Galaxy Atlas — world browser page.
+ * Galaxy Atlas: the world browser page.
  *
  * Two-column shell: the relationship graph on the LEFT (prominent), and a
- * dossier/picker rail on the RIGHT — a search box + the filterable entity list
- * that drives selection, then the selected entity's brief dossier. Both share
- * the kind-group legend chips in the toolbar above.
+ * picker rail on the RIGHT: the filterable entity list that drives
+ * selection, then the selected entity's brief dossier. Both share the group
+ * filter Tags in the toolbar above.
  *
  * Selecting an entity replaces `selectedId`, which the graph and dossier both
- * read; the "View full profile" link routes to `/entities/:id` (the
- * voice-corpus detail page) so fans can dive deeper.
+ * read; "View full profile" routes to `/entities/:id` so fans can dive deeper.
+ *
+ * @returns The page.
  */
 export default function World() {
   usePageTitle('Galaxy Atlas');
   const publicDb = usePublicReadClient();
 
   // ── Filter state ───────────────────────────────────────────────────────────
-  // Default to 'world' — the most narratively interesting group.
+  // Default to 'world': the most narratively interesting group.
   const [activeGroup, setActiveGroup] = useState<string>('world');
 
   // ── Search state ───────────────────────────────────────────────────────────
@@ -171,18 +189,20 @@ export default function World() {
   const [entities,  setEntities]  = useState<Entity[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by the error state's retry to re-run the fetch effect.
+  const [attempt,   setAttempt]   = useState(0);
 
   // ── Graph selection state ──────────────────────────────────────────────────
-  // selectedId drives <RelationshipGraph> and the dossier.  Defaulted to the
-  // first fetched entity (set in the fetch `.then`) so the atlas always shows a
-  // web; re-defaulted on every group change.
+  // selectedId drives <RelationshipGraph> and the dossier. Defaulted to the
+  // first fetched entity (set in the fetch `.then`) so the atlas always shows
+  // a web; re-defaulted on every group change.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // ── Fetch entities on group change ─────────────────────────────────────────
-  // Each filter-group change fires a new query.  The `cancelled` flag prevents
+  // Each filter-group change fires a new query. The `cancelled` flag prevents
   // a slow previous fetch from overwriting the result of a faster later fetch
-  // (e.g. user switches "All" → "Politics" before "All" resolves).  The first
-  // returned row becomes the default selection so the graph is never empty.
+  // (e.g. "All" then "Politics" before "All" resolves). The first returned
+  // row becomes the default selection so the graph is never empty.
   useEffect(() => {
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset loading/error/selection/search before the fetch fires, then settle into rows once it resolves
@@ -210,10 +230,10 @@ export default function World() {
       });
 
     return () => { cancelled = true; };
-  }, [publicDb, activeGroup]);
+  }, [publicDb, activeGroup, attempt]);
 
   // ── Derived: search-filtered list ──────────────────────────────────────────
-  // Case-insensitive match over the entity's display name / name.  Memoised so
+  // Case-insensitive match over the entity's display name / name. Memoised so
   // the (potentially 200-row) filter doesn't re-run on unrelated re-renders.
   const visibleEntities = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -225,100 +245,95 @@ export default function World() {
 
   // ── Derived: selected entity meta ─────────────────────────────────────────
   // Needed to render the graph-panel header + dossier (name, kind) without an
-  // extra fetch.  `entities` is already in memory after the list fetch.
+  // extra fetch. `entities` is already in memory after the list fetch.
   const selectedEntity = selectedId
     ? entities.find((e) => e.id === selectedId) ?? null
     : null;
 
+  const tagStyle: CSSProperties = { minHeight: 44, paddingLeft: space[12], paddingRight: space[12] };
+
   return (
     <PageShell>
-      {/* Page head: the shared PageHeader. The eyebrow names the section
-          (it used to carry a hard-coded "Season cycle 014"). */}
+      {/* Page head: the shared PageHeader. The eyebrow names the section. */}
       <PageHeader
         eyebrow="World"
         title="Everything Is Connected"
         subtitle="Clubs, players, officials, the booth, the betting syndicate, and the unseen hand that moves them all. Search the galaxy or pick a tier below, then select an entity to trace its web of relationships."
       />
 
-      <div>
-        {/* ── Section II: Toolbar — search box + clickable legend chips. */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 12,
-            flexWrap: 'wrap',
-            padding: '16px 0 8px',
-          }}
-        >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+        {/* ── Toolbar: search box + group filter Tags. */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[12], flexWrap: 'wrap' }}>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search entities…"
+            placeholder="Search entities"
             autoComplete="off"
             spellCheck={false}
             aria-label="Search entities by name"
             style={{
+              ...type.body,
+              ...tone.primary,
               width: 360,
               maxWidth: '100%',
+              minHeight: 44,
               fontFamily: 'inherit',
-              fontSize: 14,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              color: DUST,
-              background: ABYSS,
-              border: `1px solid ${HAIRLINE}`,
-              padding: '14px 18px',
-              outline: 'none',
+              background: color.surfaceRaised,
+              ...hairline(color.line),
+              paddingTop: space[8],
+              paddingBottom: space[8],
+              paddingLeft: space[16],
+              paddingRight: space[16],
               boxSizing: 'border-box',
             }}
           />
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            {KIND_GROUPS.map((group) => (
-              <LegendChip
-                key={group.key}
-                label={group.label}
-                swatch={group.kinds.length > 0 ? kindColor(group.kinds[0]!) : null}
-                active={activeGroup === group.key}
-                onClick={() => setActiveGroup(group.key)}
-              />
-            ))}
+          <div role="group" aria-label="Filter entities by tier" style={{ display: 'flex', gap: space[8], flexWrap: 'wrap', alignItems: 'center' }}>
+            {KIND_GROUPS.map((group) => {
+              const active = activeGroup === group.key;
+              const first = group.kinds[0];
+              return (
+                <Tag key={group.key} selected={active} onClick={() => setActiveGroup(group.key)} style={tagStyle}>
+                  {first != null && (
+                    <KindGlyph tier={kindTier(first)} size={10} {...(active ? { fill: color.bg } : {})} />
+                  )}
+                  {group.label}
+                </Tag>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── Section III: Two-column shell — graph (left) + dossier rail (right). */}
+        {/* ── Two-column shell: graph (left) + picker rail (right). */}
         <div
           className="isl-atlas"
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 360px',
-            gap: 24,
+            gridTemplateColumns: 'minmax(0, 1fr) 360px',
+            gap: space[24],
             alignItems: 'start',
-            padding: '16px 0 64px',
           }}
         >
-          {/* LEFT — the graph, made prominent. */}
-          <div style={{ minWidth: 0 }}>
+          {/* LEFT: the graph, made prominent. */}
+          <section aria-label="Relationship graph" style={{ minWidth: 0 }}>
             <div style={graphHeaderStyle}>
               {selectedEntity ? (
                 <>
-                  <span style={{ fontWeight: 700, fontSize: 20, lineHeight: 1.1 }}>
+                  <h2 style={{ ...type.subheading, margin: 0, overflowWrap: 'anywhere' }}>
                     {selectedEntity.display_name ?? selectedEntity.name}
-                  </span>
-                  <KindBadge kind={selectedEntity.kind} />
+                  </h2>
+                  <Tag tone={kindTier(selectedEntity.kind) === 'cosmic' ? 'architect' : 'default'}>
+                    {kindLabel(selectedEntity.kind)}
+                  </Tag>
                   <span style={{ marginLeft: 'auto' }}>
                     <Button variant="tertiary" to={`/entities/${selectedId}`}>
-                      View full profile ▸
+                      View full profile
                     </Button>
                   </span>
                 </>
               ) : (
-                <span style={{ fontWeight: 700, fontSize: 20, color: DUST_70 }}>
-                  Galaxy Atlas
-                </span>
+                <h2 style={{ ...type.subheading, ...tone.secondary, margin: 0 }}>Galaxy Atlas</h2>
               )}
             </div>
 
@@ -333,27 +348,28 @@ export default function World() {
                 loading={loading}
                 error={loadError}
                 empty={!loading && !loadError && entities.length === 0}
+                onRetry={() => setAttempt((n) => n + 1)}
               />
             )}
-          </div>
+          </section>
 
-          {/* RIGHT — dossier / picker rail. */}
+          {/* RIGHT: picker rail. */}
           <aside
-            className="isl-rail"
-            style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 24 }}
+            className="isl-atlas-rail"
+            style={{ display: 'flex', flexDirection: 'column', gap: space[16], position: 'sticky', top: space[24] }}
           >
-            {/* The filterable entity list — the selection driver. */}
-            <div style={{ border: `1px solid ${HAIRLINE}` }}>
+            {/* The filterable entity list: the selection driver. */}
+            <Card padding={0}>
               <div style={railHeaderStyle}>
-                <span>Entities</span>
-                <span style={{ color: DUST_70 }}>{visibleEntities.length}</span>
+                <h2 style={{ ...type.label, ...tone.secondary, margin: 0 }}>Entities</h2>
+                <span style={{ ...type.label, ...tone.primary }}>{visibleEntities.length}</span>
               </div>
 
               <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-                {loading && <RailNote text="Scanning the galaxy…" />}
+                {loading && <RailNote text="Scanning the galaxy" />}
 
                 {!loading && loadError && (
-                  <RailNote text="The atlas is unavailable. The cosmos is unresponsive." color={FLARE} />
+                  <RailNote text="The atlas is unavailable. The cosmos is unresponsive." />
                 )}
 
                 {!loading && !loadError && entities.length === 0 && (
@@ -361,7 +377,7 @@ export default function World() {
                 )}
 
                 {!loading && !loadError && entities.length > 0 && visibleEntities.length === 0 && (
-                  <RailNote text={`No entity matches “${search.trim()}”.`} />
+                  <RailNote text={`No entity matches \u201C${search.trim()}\u201D.`} />
                 )}
 
                 {!loading && !loadError && visibleEntities.length > 0 && (
@@ -375,9 +391,9 @@ export default function World() {
                       />
                     ))}
 
-                    {/* Truncation notice — shown when the unfiltered results hit
-                        the cap. Alerts users that more entities exist but
-                        weren't fetched (relevant for "Players" and "All"). */}
+                    {/* Truncation notice: shown when the unfiltered results
+                        hit the cap, so users know more entities exist
+                        (relevant for "Players" and "All"). */}
                     {entities.length === LIST_LIMIT && search.trim() === '' && (
                       <li style={truncationNoticeStyle}>
                         Showing first {LIST_LIMIT}. Refine with a filter above.
@@ -386,144 +402,93 @@ export default function World() {
                   </ul>
                 )}
               </div>
-            </div>
+            </Card>
 
             {/* The selected entity's brief dossier. */}
-            <div style={{ border: `1px solid ${HAIRLINE}`, padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: space[8] }}>
               {selectedEntity ? (
                 <>
-                  <span style={dossierKindStyle}>{selectedEntity.kind.replace(/_/g, ' ')}</span>
-                  <span style={{ fontWeight: 700, fontSize: 22, lineHeight: 1.1 }}>
+                  <span style={{ ...type.label, ...tone.secondary, display: 'inline-flex', alignItems: 'center', gap: space[8] }}>
+                    <KindGlyph kind={selectedEntity.kind} size={10} />
+                    {kindLabel(selectedEntity.kind)}
+                  </span>
+                  <span style={{ ...type.subheading, overflowWrap: 'anywhere' }}>
                     {selectedEntity.display_name ?? selectedEntity.name}
                   </span>
                   <Button variant="tertiary" to={`/entities/${selectedId}`}>
-                    View full profile ▸
+                    View full profile
                   </Button>
                 </>
               ) : (
-                <p style={{ fontSize: 13, lineHeight: 1.6, color: DUST_50, margin: 0, fontStyle: 'italic' }}>
+                <p style={{ ...type.small, ...tone.secondary, margin: 0, fontStyle: 'italic' }}>
                   Select an entity from the list to open its dossier and trace its web.
                 </p>
               )}
-            </div>
+            </Card>
           </aside>
         </div>
       </div>
 
-      {/* The shell collapses to a single column on tablet/mobile; the rail drops
-          below the graph and stops sticking. */}
+      {/* The shell collapses to a single column on tablet/phone; the rail
+          drops below the graph and stops sticking. */}
       <style>{`
         @media (max-width: 899px) {
-          .isl-atlas { grid-template-columns: 1fr !important; }
-          .isl-rail { position: static !important; }
+          .isl-atlas { grid-template-columns: minmax(0, 1fr) !important; }
+          .isl-atlas-rail { position: static !important; }
         }
       `}</style>
     </PageShell>
   );
 }
 
-// ── Graph-panel header (selected entity name + KindBadge + profile link). ────
+// ── Graph-panel header (selected entity name + kind Tag + profile link). ────
 const graphHeaderStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 12,
+  gap: space[12],
   flexWrap: 'wrap',
-  marginBottom: 16,
+  marginBottom: space[16],
   minHeight: 44,
 };
 
-// ── Rail panel chrome ────────────────────────────────────────────────────────
+// ── Rail chrome ──────────────────────────────────────────────────────────────
 const railHeaderStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'baseline',
-  padding: '14px 16px',
-  borderBottom: `1px solid ${HAIRLINE}`,
-  fontWeight: 700,
-  fontSize: 13,
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-};
-const dossierKindStyle: CSSProperties = {
-  fontWeight: 700,
-  fontSize: 12,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: DUST_70,
+  paddingTop: space[12],
+  paddingBottom: space[12],
+  paddingLeft: space[16],
+  paddingRight: space[16],
+  borderBottom: `1px solid ${color.line}`,
 };
 const truncationNoticeStyle: CSSProperties = {
-  padding: '8px 16px',
-  color: DUST_50,
-  fontSize: 11,
+  ...type.small,
+  ...tone.tertiary,
+  paddingTop: space[8],
+  paddingBottom: space[8],
+  paddingLeft: space[16],
+  paddingRight: space[16],
   fontStyle: 'italic',
-  borderTop: `1px solid ${HAIRLINE}`,
 };
-
-// ── LegendChip ────────────────────────────────────────────────────────────────
-
-interface LegendChipProps {
-  label: string;
-  /** Tier colour swatch (the group's representative kindColor), or null for "All". */
-  swatch: string | null;
-  active: boolean;
-  onClick: () => void;
-}
-
-/**
- * A clickable kind-group legend chip. Bordered hairline by default; the active
- * chip flips to a Lunar-Dust fill with Abyss text (the prototype's `.lg-chip.on`),
- * and hover lights the design's light glow. An optional swatch ties the chip to
- * its tier colour.
- */
-function LegendChip({ label, swatch, active, onClick }: LegendChipProps) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setHovered(true)}
-      onBlur={() => setHovered(false)}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        background: active ? DUST : 'transparent',
-        border: `1px solid ${active ? DUST : HAIRLINE}`,
-        color: active ? ABYSS : DUST,
-        padding: '9px 14px',
-        fontFamily: 'inherit',
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: '0.04em',
-        textTransform: 'uppercase',
-        cursor: 'pointer',
-        boxShadow: hovered && !active ? '0 0 18px 2px rgba(227, 224, 213, 0.45)' : 'none',
-        transition: 'box-shadow 0.12s linear',
-      }}
-    >
-      {swatch && (
-        <span
-          aria-hidden="true"
-          style={{ width: 10, height: 10, borderRadius: '50%', background: active ? ABYSS : swatch, display: 'inline-block', flexShrink: 0 }}
-        />
-      )}
-      {label}
-    </button>
-  );
-}
 
 // ── RailNote ──────────────────────────────────────────────────────────────────
 
-/** A muted, italic status line shown inside the entity-list rail. */
-function RailNote({ text, color }: { text: string; color?: string }) {
+/**
+ * A secondary, italic status line inside the entity-list rail.
+ *
+ * @returns A paragraph.
+ */
+function RailNote({ text }: { text: string }) {
   return (
     <p
       style={{
-        padding: '20px 16px',
-        color: color ?? DUST_50,
-        fontSize: 12,
+        ...type.small,
+        ...tone.secondary,
+        paddingTop: space[16],
+        paddingBottom: space[16],
+        paddingLeft: space[16],
+        paddingRight: space[16],
         fontStyle: 'italic',
         margin: 0,
       }}
@@ -536,45 +501,49 @@ function RailNote({ text, color }: { text: string; color?: string }) {
 // ── GraphPlaceholder ──────────────────────────────────────────────────────────
 
 /**
- * Placeholder shown in the graph column when there is no selectable entity —
- * i.e. while the list loads, on a load error, or when the filter is empty.
- * Once `selectedId` defaults to the first fetched entity, the graph renders
- * instead and this never appears for a populated list.
+ * Placeholder shown in the graph column when there is no selectable entity:
+ * while the list loads (LoadingState), on a load error (the shared
+ * ErrorState with a retry), or when the filter is empty (EmptyState). Once
+ * `selectedId` defaults to the first fetched entity, the graph renders
+ * instead and this never appears for a populated list. A hairline box the
+ * graph's height, so the page does not jump when the graph arrives.
+ *
+ * @returns The placeholder.
  */
 function GraphPlaceholder({
   loading,
   error,
   empty,
+  onRetry,
 }: {
   loading: boolean;
   error: string | null;
   empty: boolean;
+  onRetry: () => void;
 }) {
-  const text = loading
-    ? 'Scanning the galaxy…'
-    : error
-      ? 'The atlas is unavailable. The cosmos is unresponsive.'
-      : empty
-        ? 'Nothing found for this filter.'
-        : 'Select an entity from the list to explore its relationship web.';
   return (
     <div
       style={{
-        border: `1px dashed ${HAIRLINE}`,
-        background: ABYSS,
-        minHeight: 460,
+        ...hairline(color.line),
+        minHeight: GRAPH_HEIGHT,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '40px 24px',
-        color: error ? FLARE : DUST_50,
-        fontSize: 12,
-        fontStyle: 'italic',
-        textAlign: 'center',
+        padding: space[24],
         boxSizing: 'border-box',
       }}
     >
-      {text}
+      {loading ? (
+        <LoadingState label="Scanning the galaxy" />
+      ) : error ? (
+        <ErrorState what="the atlas" bare onRetry={onRetry} />
+      ) : (
+        <EmptyState>
+          {empty
+            ? 'Nothing found for this filter.'
+            : 'Select an entity from the list to explore its relationship web.'}
+        </EmptyState>
+      )}
     </div>
   );
 }
@@ -582,16 +551,15 @@ function GraphPlaceholder({
 // ── EntityRow ─────────────────────────────────────────────────────────────────
 
 /**
- * Single row in the entity-list rail.
- *
- * Renders the entity's display name (or name), a coloured kind dot, and a muted
- * kind label.  Selected rows get a subtle Phobos-Ash background + Astro-Explorer
- * left edge so the active selection stays visible while the graph refreshes.
+ * Single row in the entity-list rail: the tier glyph, the entity's display
+ * name (or name) and its kind in label type. The selected row is bold in the
+ * primary tone with a forward marker, so the selection stays visible while
+ * the graph refreshes.
  *
  * @param entity     The entity to render.
- * @param isSelected Whether this row is the currently-selected entity.
- * @param onClick    Callback to fire when the row is activated (click or
- *                   keyboard Enter/Space).
+ * @param isSelected Whether this row is the currently selected entity.
+ * @param onClick    Fires when the row is activated (click, Enter or Space).
+ * @returns          An <li> acting as a toggle button.
  */
 function EntityRow({
   entity,
@@ -602,8 +570,6 @@ function EntityRow({
   isSelected: boolean;
   onClick:    () => void;
 }) {
-  const dotColor = kindColor(entity.kind);
-
   return (
     <li
       role="button"
@@ -619,30 +585,27 @@ function EntityRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '10px 14px',
+        gap: space[12],
+        minHeight: 44,
+        paddingTop: space[8],
+        paddingBottom: space[8],
+        paddingLeft: space[16],
+        paddingRight: space[16],
         cursor: 'pointer',
-        background: isSelected ? PHOBOS : 'transparent',
-        boxShadow: isSelected ? `inset 2px 0 0 ${COLORS.astro}` : 'none',
-        borderBottom: `1px solid ${HAIRLINE}`,
-        transition: 'background 0.1s',
+        borderBottom: `1px solid ${color.lineFaint}`,
       }}
     >
-      {/* Kind colour dot — a small visual cue that groups rows by tier. */}
-      <span
-        aria-hidden="true"
-        style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: dotColor }}
-      />
+      <KindGlyph kind={entity.kind} size={10} />
 
       <span style={{ flex: 1, minWidth: 0 }}>
-        {/* Display name — truncated with ellipsis so long names don't break
-            the fixed-width list column. */}
+        {/* Display name: truncated with an ellipsis so long names don't
+            break the fixed-width list column. */}
         <span
           style={{
+            ...type.small,
             display: 'block',
-            fontSize: 13,
             fontWeight: isSelected ? 700 : 400,
-            color: isSelected ? DUST : DUST_70,
+            color: isSelected ? color.text : color.textSecondary,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -650,51 +613,14 @@ function EntityRow({
         >
           {entity.display_name ?? entity.name}
         </span>
-        {/* Kind label — muted, lowercase, terse */}
-        <span
-          style={{
-            display: 'block',
-            fontSize: 10,
-            color: DUST_50,
-            marginTop: 1,
-            letterSpacing: '0.03em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {entity.kind.replace(/_/g, ' ')}
+        <span style={{ ...type.label, ...tone.tertiary, display: 'block' }}>
+          {kindLabel(entity.kind)}
         </span>
       </span>
+
+      {isSelected && (
+        <span aria-hidden="true" style={{ ...type.label, ...tone.primary }}>{glyph.forward}</span>
+      )}
     </li>
-  );
-}
-
-// ── KindBadge ─────────────────────────────────────────────────────────────────
-
-/**
- * Inline chip showing an entity's kind in its tier colour.
- *
- * Rendered in the graph-panel header so the selected entity's tier is
- * immediately legible without requiring the user to refer back to the list.
- *
- * @param kind  The `EntityKind` string.
- */
-function KindBadge({ kind }: { kind: string }) {
-  const color = kindColor(kind);
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        border: `1px solid ${color}`,
-        borderRadius: 3,
-        fontSize: 10,
-        color,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {kind.replace(/_/g, ' ')}
-    </span>
   );
 }
