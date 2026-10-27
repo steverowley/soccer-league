@@ -107,7 +107,7 @@ export function AdminTabStrip({
           display: 'flex',
           gap: 4,
           overflowX: 'auto',
-          // Hide the scrollbar on the horizontal scroll affordance — the
+          // Hide the scrollbar on the horizontal scroll affordance: the
           // tabs are short labels so users won't scroll often, and the
           // scrollbar reads as visual noise underneath the active chip.
           scrollbarWidth: 'none',

@@ -49,6 +49,7 @@ import {
   type NarrativeMention,
 } from '../features/match';
 import { RelationshipGraph, getEntityProfile } from '../features/entities';
+import { TEAMS_BY_LEAGUE } from '../data/leagueData';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const {
@@ -61,6 +62,13 @@ const {
 } = COLORS;
 const DUST_50 = COLORS.dust50;
 const DUST_70 = COLORS.dust70;
+
+// ── Club colours ──────────────────────────────────────────────────────────────
+// getPlayer's team join carries only id and name, so the crest takes the club
+// colour from the static canon (club colour is data, keyed by team id).
+const TEAM_COLOR: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
+);
 
 // ── Position display map ──────────────────────────────────────────────────────
 // Maps the two-letter engine abbreviation stored in the DB to the full
@@ -491,7 +499,7 @@ function PlayerHeader({ player }: { player: PlayerWithStats | null }) {
       {...(club ? {
         back: { to: `/teams/${club.id}`, label: clubName ?? 'Team' },
         crumbs: [{ label: 'Teams', to: '/teams' }, { label: clubName ?? 'Team', to: `/teams/${club.id}` }, { label: player.name }],
-        crest: <Crest color={club.color} size={64} />,
+        crest: <Crest color={club.color ?? TEAM_COLOR.get(club.id)} size={64} />,
       } : {})}
       meta={
         <>

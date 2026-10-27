@@ -4,9 +4,9 @@
 // Layout:
 //   PageShell (site header, main column, footer)
 //   PageHeader:             eyebrow "Wagers", title, intro prose
-//   Summary card       — credit balance + wager counts (open/won/lost/void)
+//   Summary card:           credit balance + wager counts (open/won/lost/void)
 //                              + net P&L numeric
-//   I.   Wager list         — table grouped under filter chips (All / Open /
+//   I.   Wager list:        table grouped under filter chips (All / Open /
 //                              Won / Lost / Void)
 //
 // Data sources:

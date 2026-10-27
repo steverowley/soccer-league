@@ -20,8 +20,8 @@
 //   PageShell (site header, main column, footer)
 //   PageHeader:       back link to the club, crumbs, club Crest, eyebrow
 //                     "Managers", the name as the h1, StatBlock meta row
-//   I.  Tactical Bio  — tactical philosophy prose
-//   II. Lore Traits   — narrative-coloured entity_traits rendered as a
+//   I.  Tactical Bio: tactical philosophy prose
+//   II. Lore Traits: narrative-coloured entity_traits rendered as a
 //                       dust-faint list (omitted entirely when the manager
 //                       has no narrative traits)
 //

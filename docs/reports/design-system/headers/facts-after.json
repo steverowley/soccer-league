@@ -1,0 +1,1028 @@
+{
+ "d": {
+  "home": {
+   "path": "/",
+   "h1": [
+    {
+     "text": "Soccer,Charted AcrossThe Stars",
+     "size": "56px",
+     "transform": "uppercase",
+     "ls": "1.12px",
+     "x": 744,
+     "y": 253
+    }
+   ],
+   "url": "/soccer-league/"
+  },
+  "leagues": {
+   "path": "/leagues",
+   "h1": [
+    {
+     "text": "Four leagues, thirty-two clubs",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/leagues"
+  },
+  "league": {
+   "path": "/leagues/rocky-inner",
+   "h1": [
+    {
+     "text": "Rocky Inner League",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 247
+    }
+   ],
+   "url": "/soccer-league/leagues/rocky-inner"
+  },
+  "matches": {
+   "path": "/matches",
+   "h1": [
+    {
+     "text": "The schedule, live and recorded",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/matches"
+  },
+  "teams": {
+   "path": "/teams",
+   "h1": [
+    {
+     "text": "The Roster of Worlds",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/teams"
+  },
+  "team": {
+   "path": "/teams/earth-united",
+   "h1": [
+    {
+     "text": "Earth United FC",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 200,
+     "y": 248
+    }
+   ],
+   "url": "/soccer-league/teams/earth-united"
+  },
+  "player": {
+   "path": "/players/14bc8bc6-68ca-4549-988f-333300a5fcc0",
+   "h1": [
+    {
+     "text": "Marco Delgado",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 200,
+     "y": 248
+    }
+   ],
+   "url": "/soccer-league/players/14bc8bc6-68ca-4549-988f-333300a5fcc0"
+  },
+  "manager": {
+   "path": "/managers/4e09e73f-f198-4c42-bb20-b7ebd419e6b7",
+   "h1": [
+    {
+     "text": "Priya Okafor",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 200,
+     "y": 248
+    }
+   ],
+   "url": "/soccer-league/managers/4e09e73f-f198-4c42-bb20-b7ebd419e6b7"
+  },
+  "entity-pundit": {
+   "path": "/entities/f83eb41c-9ddc-4b73-8383-e6b0c2196ccd",
+   "h1": [
+    {
+     "text": "Void Nakamura",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/entities/f83eb41c-9ddc-4b73-8383-e6b0c2196ccd"
+  },
+  "entity-stadium": {
+   "path": "/entities/80000000-0000-0000-0000-000000000002",
+   "h1": [
+    {
+     "text": "Blue Marble Arena",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/entities/80000000-0000-0000-0000-000000000002"
+  },
+  "news": {
+   "path": "/news",
+   "h1": [
+    {
+     "text": "Dispatches from the Void",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/news"
+  },
+  "idols": {
+   "path": "/idols",
+   "h1": [
+    {
+     "text": "The Idol Board",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/idols"
+  },
+  "leaderboards": {
+   "path": "/leaderboards",
+   "h1": [
+    {
+     "text": "The Boards",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/leaderboards"
+  },
+  "seasons": {
+   "path": "/seasons",
+   "h1": [
+    {
+     "text": "Seasonal Archive",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/seasons"
+  },
+  "season": {
+   "path": "/seasons/823e7bbb-499c-4376-8f20-ca55cba96111",
+   "h1": [
+    {
+     "text": "Season 1 (2600)",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 247
+    }
+   ],
+   "url": "/soccer-league/seasons/823e7bbb-499c-4376-8f20-ca55cba96111"
+  },
+  "world": {
+   "path": "/world",
+   "h1": [
+    {
+     "text": "Everything Is Connected",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/world"
+  },
+  "voting": {
+   "path": "/voting",
+   "h1": [
+    {
+     "text": "Decide the Future",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/voting"
+  },
+  "training": {
+   "path": "/training",
+   "h1": [
+    {
+     "text": "Train Your Idols",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/training"
+  },
+  "wagers": {
+   "path": "/wagers",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "profile": {
+   "path": "/profile",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "login": {
+   "path": "/login",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "welcome": {
+   "path": "/welcome",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "reset-password": {
+   "path": "/reset-password",
+   "h1": [
+    {
+     "text": "Forgot your password?",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/reset-password"
+  },
+  "about": {
+   "path": "/about",
+   "h1": [
+    {
+     "text": "What is the Intergalactic Soccer League?",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/about"
+  },
+  "privacy": {
+   "path": "/privacy",
+   "h1": [
+    {
+     "text": "Privacy Policy",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/privacy"
+  },
+  "terms": {
+   "path": "/terms",
+   "h1": [
+    {
+     "text": "Terms of Service",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/terms"
+  },
+  "admin": {
+   "path": "/admin",
+   "h1": [
+    {
+     "text": "Access Denied",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/admin"
+  },
+  "what-if": {
+   "path": "/admin/what-if",
+   "h1": [
+    {
+     "text": "Access Denied",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/admin/what-if"
+  },
+  "not-found": {
+   "path": "/nope",
+   "h1": [
+    {
+     "text": "This corner of the cosmos doesn't exist.",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/nope"
+  },
+  "training (signed in)": {
+   "path": "/training",
+   "h1": [
+    {
+     "text": "Train Your Idols",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/training"
+  },
+  "wagers (signed in)": {
+   "path": "/wagers",
+   "h1": [
+    {
+     "text": "Stargazer's Ledger",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/wagers"
+  },
+  "profile (signed in)": {
+   "path": "/profile",
+   "h1": [
+    {
+     "text": "Cosmos, Stargazer",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/profile"
+  },
+  "voting (signed in)": {
+   "path": "/voting",
+   "h1": [
+    {
+     "text": "Decide the Future",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/voting"
+  },
+  "welcome (signed in)": {
+   "path": "/welcome",
+   "h1": [
+    {
+     "text": "Pick your club",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/welcome"
+  },
+  "admin (signed in)": {
+   "path": "/admin",
+   "h1": [
+    {
+     "text": "League Control Room",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/admin"
+  },
+  "what-if (signed in)": {
+   "path": "/admin/what-if",
+   "h1": [
+    {
+     "text": "Shadow distributions for upcoming matche",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 120,
+     "y": 163,
+     "headerX": 120
+    }
+   ],
+   "url": "/soccer-league/admin/what-if"
+  }
+ },
+ "m": {
+  "home": {
+   "path": "/",
+   "h1": [
+    {
+     "text": "Soccer,Charted AcrossThe Stars",
+     "size": "40px",
+     "transform": "uppercase",
+     "ls": "0.8px",
+     "x": 16,
+     "y": 664
+    }
+   ],
+   "url": "/soccer-league/"
+  },
+  "leagues": {
+   "path": "/leagues",
+   "h1": [
+    {
+     "text": "Four leagues, thirty-two clubs",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/leagues"
+  },
+  "league": {
+   "path": "/leagues/rocky-inner",
+   "h1": [
+    {
+     "text": "Rocky Inner League",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 247
+    }
+   ],
+   "url": "/soccer-league/leagues/rocky-inner"
+  },
+  "matches": {
+   "path": "/matches",
+   "h1": [
+    {
+     "text": "The schedule, live and recorded",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/matches"
+  },
+  "teams": {
+   "path": "/teams",
+   "h1": [
+    {
+     "text": "The Roster of Worlds",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/teams"
+  },
+  "team": {
+   "path": "/teams/earth-united",
+   "h1": [
+    {
+     "text": "Earth United FC",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 96,
+     "y": 247
+    }
+   ],
+   "url": "/soccer-league/teams/earth-united"
+  },
+  "player": {
+   "path": "/players/14bc8bc6-68ca-4549-988f-333300a5fcc0",
+   "h1": [
+    {
+     "text": "Marco Delgado",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 96,
+     "y": 253
+    }
+   ],
+   "url": "/soccer-league/players/14bc8bc6-68ca-4549-988f-333300a5fcc0"
+  },
+  "manager": {
+   "path": "/managers/4e09e73f-f198-4c42-bb20-b7ebd419e6b7",
+   "h1": [
+    {
+     "text": "Priya Okafor",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 96,
+     "y": 253
+    }
+   ],
+   "url": "/soccer-league/managers/4e09e73f-f198-4c42-bb20-b7ebd419e6b7"
+  },
+  "entity-pundit": {
+   "path": "/entities/f83eb41c-9ddc-4b73-8383-e6b0c2196ccd",
+   "h1": [
+    {
+     "text": "Void Nakamura",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/entities/f83eb41c-9ddc-4b73-8383-e6b0c2196ccd"
+  },
+  "entity-stadium": {
+   "path": "/entities/80000000-0000-0000-0000-000000000002",
+   "h1": [
+    {
+     "text": "Blue Marble Arena",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/entities/80000000-0000-0000-0000-000000000002"
+  },
+  "news": {
+   "path": "/news",
+   "h1": [
+    {
+     "text": "Dispatches from the Void",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/news"
+  },
+  "idols": {
+   "path": "/idols",
+   "h1": [
+    {
+     "text": "The Idol Board",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/idols"
+  },
+  "leaderboards": {
+   "path": "/leaderboards",
+   "h1": [
+    {
+     "text": "The Boards",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/leaderboards"
+  },
+  "seasons": {
+   "path": "/seasons",
+   "h1": [
+    {
+     "text": "Seasonal Archive",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/seasons"
+  },
+  "season": {
+   "path": "/seasons/823e7bbb-499c-4376-8f20-ca55cba96111",
+   "h1": [
+    {
+     "text": "Season 1 (2600)",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 247
+    }
+   ],
+   "url": "/soccer-league/seasons/823e7bbb-499c-4376-8f20-ca55cba96111"
+  },
+  "world": {
+   "path": "/world",
+   "h1": [
+    {
+     "text": "Everything Is Connected",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/world"
+  },
+  "voting": {
+   "path": "/voting",
+   "h1": [
+    {
+     "text": "Decide the Future",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/voting"
+  },
+  "training": {
+   "path": "/training",
+   "h1": [
+    {
+     "text": "Train Your Idols",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/training"
+  },
+  "wagers": {
+   "path": "/wagers",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "profile": {
+   "path": "/profile",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "login": {
+   "path": "/login",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "welcome": {
+   "path": "/welcome",
+   "h1": [
+    {
+     "text": "Step Into The Void",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/login"
+  },
+  "reset-password": {
+   "path": "/reset-password",
+   "h1": [
+    {
+     "text": "Forgot your password?",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/reset-password"
+  },
+  "about": {
+   "path": "/about",
+   "h1": [
+    {
+     "text": "What is the Intergalactic Soccer League?",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/about"
+  },
+  "privacy": {
+   "path": "/privacy",
+   "h1": [
+    {
+     "text": "Privacy Policy",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/privacy"
+  },
+  "terms": {
+   "path": "/terms",
+   "h1": [
+    {
+     "text": "Terms of Service",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/terms"
+  },
+  "admin": {
+   "path": "/admin",
+   "h1": [
+    {
+     "text": "Access Denied",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/admin"
+  },
+  "what-if": {
+   "path": "/admin/what-if",
+   "h1": [
+    {
+     "text": "Access Denied",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 223
+    }
+   ],
+   "url": "/soccer-league/admin/what-if"
+  },
+  "not-found": {
+   "path": "/nope",
+   "h1": [
+    {
+     "text": "This corner of the cosmos doesn't exist.",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163
+    }
+   ],
+   "url": "/soccer-league/nope"
+  },
+  "training (signed in)": {
+   "path": "/training",
+   "h1": [
+    {
+     "text": "Train Your Idols",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/training"
+  },
+  "wagers (signed in)": {
+   "path": "/wagers",
+   "h1": [
+    {
+     "text": "Stargazer's Ledger",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/wagers"
+  },
+  "profile (signed in)": {
+   "path": "/profile",
+   "h1": [
+    {
+     "text": "Cosmos, Stargazer",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/profile"
+  },
+  "voting (signed in)": {
+   "path": "/voting",
+   "h1": [
+    {
+     "text": "Decide the Future",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/voting"
+  },
+  "welcome (signed in)": {
+   "path": "/welcome",
+   "h1": [
+    {
+     "text": "Pick your club",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/welcome"
+  },
+  "admin (signed in)": {
+   "path": "/admin",
+   "h1": [
+    {
+     "text": "League Control Room",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/admin"
+  },
+  "what-if (signed in)": {
+   "path": "/admin/what-if",
+   "h1": [
+    {
+     "text": "Shadow distributions for upcoming matche",
+     "size": "30px",
+     "transform": "uppercase",
+     "ls": "0.6px",
+     "x": 16,
+     "y": 163,
+     "headerX": 16
+    }
+   ],
+   "url": "/soccer-league/admin/what-if"
+  }
+ }
+}

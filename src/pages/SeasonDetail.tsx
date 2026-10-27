@@ -5,10 +5,10 @@
 // WHAT IS SHOWN
 //   PageHeader      back link, crumbs, eyebrow "Seasons", the season name as
 //                   the h1, its status as the subtitle and the year as meta.
-//   I.   Lifecycle   — narrative summary of started_at / ended_at /
+//   I.   Lifecycle: narrative summary of started_at / ended_at /
 //                       election window timestamps so a fan can trace
 //                       the season's shape on the cosmic clock.
-//   II.  Notable Narratives — last N rows from `narratives` whose
+//   II.  Notable Narratives: last N rows from `narratives` whose
 //                       created_at falls inside the season window.
 //                       Hidden when there are no narratives to show.
 //
