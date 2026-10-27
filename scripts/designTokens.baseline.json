@@ -140,11 +140,6 @@
     "fontSize": 4,
     "letterSpacing": 2
   },
-  "src/pages/TeamDetail.tsx": {
-    "fontSize": 26,
-    "letterSpacing": 13,
-    "dust": 2
-  },
   "src/pages/Terms.tsx": {
     "fontSize": 2,
     "letterSpacing": 1

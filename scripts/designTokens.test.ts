@@ -61,6 +61,7 @@ const MIGRATED = [
   'src/components/WagerWidget.tsx',
   // Group 3: clubs and people, and the shared pieces they introduced.
   'src/pages/Teams.tsx',
+  'src/pages/TeamDetail.tsx',
   'src/shared/ui/FormStrip.tsx',
   'src/shared/ui/DataTable.tsx',
   'src/shared/ui/FactList.tsx',
