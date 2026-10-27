@@ -68,6 +68,17 @@ const MIGRATED = [
   'src/shared/ui/FormStrip.tsx',
   'src/shared/ui/DataTable.tsx',
   'src/shared/ui/FactList.tsx',
+  // Group 4: content pages, and the shared pieces they render.
+  'src/pages/News.tsx',
+  'src/pages/Idols.tsx',
+  'src/pages/Leaderboards.tsx',
+  'src/pages/World.tsx',
+  'src/pages/Seasons.tsx',
+  'src/pages/SeasonDetail.tsx',
+  'src/components/LoreHistory.tsx',
+  'src/features/entities/ui/relationshipGraph/RelationshipGraph.tsx',
+  'src/features/entities/ui/relationshipGraph/KindGlyph.tsx',
+  'src/features/entities/ui/relationshipGraph/kindColor.ts',
 ];
 
 const root = process.cwd();

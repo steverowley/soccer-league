@@ -1,78 +1,62 @@
 // ── pages/Seasons.tsx ───────────────────────────────────────────────────────
-// `/seasons` route — seasonal archive index (issue isl-aaj).
+// `/seasons` route: the seasonal archive index (issue isl-aaj).
 //
 // WHY THIS PAGE EXISTS
 //   The `seasons` table accumulates one row per league season but the
-//   broader UI only shows the active one.  Past seasons have rich
-//   lore (winners, election results, notable narratives) hidden behind
-//   no entry point.  This page surfaces every season in reverse-
-//   chronological order so a fan can pick a year and click through to
-//   the archive detail page (`/seasons/:seasonId`).
+//   broader UI only shows the active one. Past seasons have rich lore
+//   (winners, election results, notable narratives) hidden behind no entry
+//   point. This page lists every season in reverse-chronological order so a
+//   fan can pick a year and click through to the archive detail page
+//   (`/seasons/:seasonId`).
 //
 // LAYOUT
-//   PageShell → PageHeader (eyebrow "Seasons") → list of season cards.
-//   Cards render the season name + year + date range + status chip.
+//   PageShell -> PageHeader (eyebrow "Seasons") -> one hairline Card per
+//   season (no fill), linking to its page: "Year N" label, the season name
+//   (subheading), the date range, and the status as a neutral Tag.
 //
-// STATUS CHIPS
-//   • `active`    → QUANTUM (the live season).
-//   • `voting`    → ASTRO   (election in progress).
-//   • `voting_locked` / `enacting` / completed → DUST 70 (neutral).
+// On the design language since the group 4 migration (docs/design-language.md),
+// with no raw style values (scripts/designTokens.test.ts). Status is a
+// neutral Tag for every value: a running season is not a live match (red is
+// for live and errors) and an election is not Architect content (purple).
 //
-// EMPTY STATE
-//   Surface a single dust-faint line.  We don't show a 404 because the
-//   seasons table is bootstrapped to one row at install time; an empty
-//   list means the DB connection is degraded, which the global error
-//   surfaces handle elsewhere.
+// STATES
+//   AsyncView: loading, error with retry, and pre-season (an empty table means
+//   no season has been played, since getSeasonList throws on a failed read).
 
-import { Link } from 'react-router-dom';
-
-import { COLORS } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonList, type SeasonSummary } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
-import { AsyncView, PageHeader, PageShell, PreSeasonState } from '../shared/ui';
-
-// ── Design tokens ──────────────────────────────────────────────────────────
-const { dust: DUST, hairline: HAIRLINE, phobosAsh: PHOBOS } = COLORS;
-const DUST_50 = COLORS.dust50;
-const DUST_70 = COLORS.dust70;
+import { glyph, numeric, space, tone, type } from '../shared/design';
+import { AsyncView, Card, PageHeader, PageShell, PreSeasonState, Tag } from '../shared/ui';
 
 /**
- * Map a `seasons.status` value to a chip-colour token.  Free-text on
- * the DB side; we default to dust-70 so a new status (added by a
- * future migration) doesn't render blank.
- */
-function statusColor(status: string): string {
-  switch (status) {
-    case 'active':       return COLORS.quantum;
-    case 'voting':       return COLORS.astro;
-    default:             return DUST_70;
-  }
-}
-
-/**
- * Format a date range for the card subtitle.  Both endpoints may be
- * null on legacy rows — we fall back to `started_at`/`ended_at`
- * timestamps before giving up and rendering "—".
+ * Format a date range for the card. Both endpoints may be null on legacy
+ * rows: we fall back to the `started_at` / `ended_at` timestamps before
+ * giving up and rendering a lone dash.
+ *
+ * @param s  The season row.
+ * @returns  "12 Apr 2026 -> 30 Apr 2026", "... -> present", or a dash.
  */
 function formatRange(s: SeasonSummary): string {
   const start = s.start_date ?? s.started_at;
   const end   = s.end_date   ?? s.ended_at;
-  if (!start && !end) return '—';
+  if (!start && !end) return '\u2014';
   const fmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, {
     year:  'numeric',
     month: 'short',
     day:   'numeric',
   });
-  if (!end) return `${fmt(start!)} → present`;
+  if (!end) return `${fmt(start!)} \u2192 present`;
   if (!start) return fmt(end);
-  return `${fmt(start)} → ${fmt(end)}`;
+  return `${fmt(start)} \u2192 ${fmt(end)}`;
 }
 
 /**
- * `/seasons` route component.  Fetches every row from the seasons
- * table on mount and renders one card per row in reverse-chronological
- * order.  Each card links to `/seasons/:id` for the detail view.
+ * `/seasons` route component. Fetches every row from the seasons table on
+ * mount and renders one card per row in reverse-chronological order. Each
+ * card links to `/seasons/:id` for the detail view.
+ *
+ * @returns The page.
  */
 export default function Seasons() {
   const publicDb = usePublicReadClient();
@@ -85,10 +69,10 @@ export default function Seasons() {
       <PageHeader
         eyebrow="Seasons"
         title="Seasonal Archive"
-        subtitle="Every season the league has run.  Click a year to inspect its final state: standings, brackets, election results."
+        subtitle="Every season the league has run. Choose one to inspect its final state: standings, brackets, election results."
       />
 
-      <section style={{ padding: '0 0 80px' }}>
+      <section aria-label="Seasons">
         <AsyncView
           state={seasonsState}
           what="the season archive"
@@ -99,70 +83,30 @@ export default function Seasons() {
           )}
         >
           {(seasons) => (
-          <ul style={{
-            listStyle:     'none',
-            padding:       0,
-            margin:        0,
-            display:       'grid',
-            gap:           1,
-            background:    HAIRLINE,
-            border:        `1px solid ${HAIRLINE}`,
-          }}>
-            {seasons.map((s) => (
-              <li key={s.id} style={{ background: PHOBOS }}>
-                <Link
-                  to={`/seasons/${s.id}`}
-                  style={{
-                    display:        'flex',
-                    justifyContent: 'space-between',
-                    alignItems:     'baseline',
-                    gap:            16,
-                    padding:        '20px 24px',
-                    textDecoration: 'none',
-                    color:          DUST,
-                  }}
-                >
-                  <div>
-                    <div style={{
-                      fontSize:      11,
-                      fontWeight:    700,
-                      letterSpacing: '0.14em',
-                      textTransform: 'uppercase',
-                      color:         DUST_50,
-                      marginBottom:  4,
-                    }}>
-                      Year {s.year}
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: space[12] }}>
+              {seasons.map((s) => (
+                <li key={s.id}>
+                  <Card
+                    to={`/seasons/${s.id}`}
+                    style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: space[16] }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...type.label, ...tone.secondary }}>Year {s.year}</div>
+                      <h2 style={{ ...type.subheading, margin: 0, marginTop: space[4], overflowWrap: 'anywhere' }}>{s.name}</h2>
+                      <div style={{ ...type.small, ...tone.secondary, ...numeric, marginTop: space[4] }}>
+                        {formatRange(s)}
+                      </div>
                     </div>
-                    <div style={{
-                      fontSize: 18,
-                      fontWeight: 700,
-                      color:      DUST,
-                    }}>
-                      {s.name}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: space[16] }}>
+                      <Tag>{s.status.replace(/_/g, ' ')}</Tag>
+                      <span style={{ ...type.label, ...tone.primary }} aria-hidden="true">
+                        Open <span>{glyph.forward}</span>
+                      </span>
                     </div>
-                    <div style={{
-                      fontSize: 12,
-                      color:    DUST_70,
-                      marginTop: 6,
-                      fontVariantNumeric: 'tabular-nums',
-                    }}>
-                      {formatRange(s)}
-                    </div>
-                  </div>
-                  <span style={{
-                    fontSize:      10,
-                    fontWeight:    700,
-                    letterSpacing: '0.18em',
-                    textTransform: 'uppercase',
-                    color:         statusColor(s.status),
-                    whiteSpace:    'nowrap',
-                  }}>
-                    {s.status.replace(/_/g, ' ')}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  </Card>
+                </li>
+              ))}
+            </ul>
           )}
         </AsyncView>
       </section>

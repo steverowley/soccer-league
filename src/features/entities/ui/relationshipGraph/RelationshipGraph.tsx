@@ -42,6 +42,13 @@
 //   For the default subgraph budget (~157-node worst case at maxHops=2,
 //   maxNeighbours=12) the simulation settles in well under the 1.5 s
 //   acceptance budget per isl-mcs's forceConfig.
+//
+// DESIGN LANGUAGE (group 4 migration, docs/design-language.md)
+//   No raw style values (scripts/designTokens.test.ts). Hairline box with no
+//   fill; text in `label` and `small` type (11 px is the floor). Colour keeps
+//   its one meaning: entity tiers are told apart by glyph (kindColor.ts), the
+//   sign of a tie by line pattern, so the only accent is purple on the
+//   cosmic voices (Architect content) and red only on the failed-load text.
 
 import {
   type CSSProperties,
@@ -94,7 +101,8 @@ const TOOLTIP_META_KEYS: readonly string[] = [
 ];
 import { useNavigate } from 'react-router-dom';
 
-import { COLORS } from '../../../../components/Layout';
+import { TEAMS_BY_LEAGUE } from '../../../../data/leagueData';
+import { color, hairline, space, tone, type } from '../../../../shared/design';
 import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 
 import { getEntitiesByIds, getEntity, getEntityNeighbourhood } from '../../api/relationships';
@@ -103,7 +111,8 @@ import { extractSubgraph } from '../../logic/subgraph';
 import type { Entity, EntityRelationship } from '../../types';
 
 import { entityRoute } from './entityRoute';
-import { kindColor } from './kindColor';
+import { KIND_TIER_LABEL, kindColor, kindShape } from './kindColor';
+import { GlyphShape, KindGlyph } from './KindGlyph';
 import { useReducedMotion } from './useReducedMotion';
 import {
   useForceLayout,
@@ -151,32 +160,58 @@ const DIM_OPACITY = 0.35;
 
 // ── Legend data ──────────────────────────────────────────────────────────────
 // Defined at module scope so they're shared across renders without
-// re-allocation.  COLORS is safe to reference here because ES module imports
-// are hoisted to the top of the module regardless of source position.
+// re-allocation.
 
 /**
- * Edge-colour legend entries (link strength tiers).
- * dust50 stands in for `hairline` in the legend swatch — hairline is 18%
- * opacity, which is near-invisible as a 2 px colour sample on abyss.
+ * How an edge is drawn, by the sign of its strength. Colour carries no
+ * meaning here (red is reserved for live and errors, green for good
+ * outcomes), so the sign is told by the line pattern: an alliance is a
+ * solid line, a rivalry a dashed one, an indifferent tie a faint dotted one.
+ * Stroke width still encodes magnitude.
  */
+const EDGE_STYLE = {
+  allied:  { stroke: color.text, dash: undefined },
+  neutral: { stroke: color.textTertiary, dash: '1 4' },
+  rival:   { stroke: color.text, dash: '6 4' },
+} as const;
+
+/** Edge legend entries, in reading order. */
 const EDGE_LEGEND = [
-  { color: COLORS.terraNova, label: 'Allied' },
-  { color: COLORS.dust50, label: 'Neutral' },
-  { color: COLORS.flare, label: 'Rival' },
+  { key: 'allied', label: 'Allied' },
+  { key: 'neutral', label: 'Neutral' },
+  { key: 'rival', label: 'Rival' },
 ] as const;
 
 /**
- * Node-colour legend entries (entity kind tiers, one entry per visual tier).
- * Labels are intentionally concise — the tooltip reveals the exact kind on hover.
+ * Which edge style a strength takes: above +5 allied, below -5 rival,
+ * anything between neutral (the same thresholds the tooltip uses).
+ *
+ * @param strength  Relationship strength, -100 to 100.
+ * @returns         A key of EDGE_STYLE.
  */
-const NODE_LEGEND = [
-  { color: COLORS.dust, label: 'Player' },
-  { color: COLORS.astro, label: 'Manager / Team' },
-  { color: COLORS.quantum, label: 'Media' },
-  { color: COLORS.terraNova, label: 'Governance' },
-  { color: COLORS.flare, label: 'Disruption' },
-  { color: COLORS.dust70, label: 'Place' },
-] as const;
+function edgeTone(strength: number): keyof typeof EDGE_STYLE {
+  if (strength > 5) return 'allied';
+  if (strength < -5) return 'rival';
+  return 'neutral';
+}
+
+/** Club colour by team id, for a club node's shield (club colour is data). */
+const TEAM_COLOR: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
+);
+
+/**
+ * The club colour for a club's shadow entity, read from its `meta.team_id`
+ * slug (the same key entityRoute uses).
+ *
+ * @param entity  A hydrated entity, or undefined while it loads.
+ * @returns       The club colour, or null for anything that is not a club.
+ */
+function clubColorOf(entity: Entity | null | undefined): string | null {
+  if (!entity || entity.kind !== 'team') return null;
+  const meta = entity.meta as { team_id?: unknown } | null | undefined;
+  return meta && typeof meta.team_id === 'string' ? (TEAM_COLOR.get(meta.team_id) ?? null) : null;
+}
 
 /**
  * Visually-hidden style for the aria-live announcement (sr-only pattern).
@@ -466,15 +501,15 @@ export function RelationshipGraph({
     position: 'relative',
     width: '100%',
     height,
-    background: COLORS.abyss,
-    border: `1px solid ${COLORS.hairline}`,
+    background: 'transparent',
+    ...hairline(color.line),
     boxSizing: 'border-box',
   };
 
   if (error) {
     return (
       <div ref={wrapperRef} className={className} style={wrapperStyle}>
-        <Centered text="GRAPH UNAVAILABLE" />
+        <Centered text="GRAPH UNAVAILABLE" failed />
       </div>
     );
   }
@@ -618,6 +653,7 @@ export function RelationshipGraph({
               isSecondHop={node.id !== seed.id && !seedAdjacency.has(node.id)}
               focusId={focusId}
               relationshipToSeed={seedAdjacency.get(node.id) ?? null}
+              clubColor={clubColorOf(nodeMap.get(node.id))}
               onHoverChange={setFocusId}
               onActivate={handleNodeClick}
               onKeyDown={handleNodeKey}
@@ -641,6 +677,7 @@ export function RelationshipGraph({
             containerHeight={height}
             relationshipToSeed={seedAdjacency.get(focusId!) ?? null}
             seedName={seedName}
+            clubColor={clubColorOf(hoveredEntity)}
           />
         )}
       </div>
@@ -691,7 +728,7 @@ function EdgeLine({
   const strength = typeof edge.strength === 'number' ? edge.strength : 0;
   const magnitude = Math.min(Math.abs(strength) / 100, 1);
   const baseWidth = EDGE_STROKE_MIN + magnitude * (EDGE_STROKE_MAX - EDGE_STROKE_MIN);
-  const stroke = strength > 5 ? COLORS.terraNova : strength < -5 ? COLORS.flare : COLORS.hairline;
+  const look = EDGE_STYLE[edgeTone(strength)];
 
   // A spoke touches the seed (first layer); everything else is the outer web.
   const isSpoke = s.id === seedId || t.id === seedId;
@@ -712,7 +749,8 @@ function EdgeLine({
       y1={s.y}
       x2={t.x}
       y2={t.y}
-      stroke={stroke}
+      style={{ stroke: look.stroke }}
+      strokeDasharray={look.dash}
       strokeWidth={strokeWidth}
       opacity={opacity}
       // Pointer-events off so hover targets stay on the node circles —
@@ -737,6 +775,7 @@ function NodeMark({
   isSecondHop,
   focusId,
   relationshipToSeed,
+  clubColor,
   onHoverChange,
   onActivate,
   onKeyDown,
@@ -759,6 +798,8 @@ function NodeMark({
    * the seed itself and for second-hop satellites.
    */
   relationshipToSeed: { kind: string; strength: number } | null;
+  /** The club colour, when this node is a club's shadow entity. */
+  clubColor: string | null;
   onHoverChange: (id: string | null) => void;
   onActivate: (ev: MouseEvent<SVGGElement>, id: string) => void;
   onKeyDown: (ev: KeyboardEvent<SVGGElement>, id: string) => void;
@@ -791,7 +832,10 @@ function NodeMark({
         : 1;
 
   const radius = isSeed ? SEED_RADIUS : isSecondHop ? SECOND_HOP_RADIUS : NODE_RADIUS;
-  const fill = isSeed ? COLORS.dust : kindColor(kindStr);
+  // The seed is always a text-tone circle; every other node takes its tier's
+  // glyph and tone, and a club its own colour on the shield.
+  const shape = isSeed ? 'circle' : kindShape(kindStr);
+  const fill = isSeed ? color.text : (clubColor ?? kindColor(kindStr));
 
   // Show the label for the seed always; non-seed only on hover/focus
   // so the canvas doesn't drown in text at default zoom.
@@ -812,28 +856,25 @@ function NodeMark({
       onClick={(ev) => onActivate(ev, node.id)}
       onKeyDown={(ev) => onKeyDown(ev, node.id)}
     >
-      {/* Ring for the seed node — a 1.5 px quantum outline at 1.4× radius. */}
-      {isSeed && <circle r={radius + 4} fill="none" stroke={COLORS.quantum} strokeWidth={1.5} />}
-      <circle r={radius} fill={fill} />
+      {/* Ring for the seed node: a 1.5 px text-tone outline 4 px out. */}
+      {isSeed && <circle r={radius + 4} style={{ fill: 'none', stroke: color.text, strokeWidth: 1.5 }} />}
+      <GlyphShape shape={shape} r={radius} fill={fill} />
 
       {showLabel && (
         <text
           x={0}
-          y={radius + 14}
+          y={radius + 18}
           textAnchor="middle"
           style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
+            ...type.label,
             fontVariantNumeric: 'tabular-nums',
-            fill: COLORS.dust,
+            fill: color.text,
             // Stop the label from intercepting hover on adjacent nodes.
             pointerEvents: 'none',
-            // Faint shadow so the label reads against dust-coloured
-            // edges crossing behind it.
+            // A canvas-coloured halo so the label reads against edges
+            // crossing behind it.
             paintOrder: 'stroke',
-            stroke: COLORS.abyss,
+            stroke: color.bg,
             strokeWidth: 3,
           }}
         >
@@ -847,21 +888,24 @@ function NodeMark({
 // ── Tooltip helpers ──────────────────────────────────────────────────────────
 
 /**
- * Format a relationship strength value as a signed string with a colour hint.
- * Returns e.g. "+55" (terraNova) for positive, "−45" (flare) for negative,
- * "0" (dust50) for neutral.  The Architect uses strength to encode how
- * tightly two entities are bound; showing the raw number lets curious users
- * read the lore tension at a glance.
+ * Format a relationship strength value as a signed string: "+55" for a
+ * positive tie, "\u221245" (a real minus) for a negative one, "0" for
+ * neutral. The Architect uses strength to encode how tightly two entities
+ * are bound; the line pattern in the graph already says the sign, so the
+ * number is shown in the default text tone (no red, no green).
+ *
+ * @param strength  Relationship strength, -100 to 100.
+ * @returns         The signed label.
  */
-function formatStrength(strength: number): { label: string; color: string } {
-  if (strength > 5) return { label: `+${strength}`, color: COLORS.terraNova };
-  if (strength < -5) return { label: `−${Math.abs(strength)}`, color: COLORS.flare };
-  return { label: String(strength), color: COLORS.dust50 };
+function formatStrength(strength: number): string {
+  if (strength > 5) return `+${strength}`;
+  if (strength < -5) return `\u2212${Math.abs(strength)}`;
+  return String(strength);
 }
 
 /**
  * Humanise a snake_case relationship kind for display in the tooltip.
- * e.g. "affiliated_with" → "affiliated with", "family_of" → "family of".
+ * e.g. "affiliated_with" -> "affiliated with", "family_of" -> "family of".
  * Keeps labels legible without a large lookup table.
  */
 function humaniseKind(kind: string): string {
@@ -870,44 +914,41 @@ function humaniseKind(kind: string): string {
 
 /**
  * Floating detail panel that appears when the user hovers or focuses a node
- * in the relationship graph.  Mirrors the "Node Details" pattern from the
- * Mirofish reference but uses the ISL retro-minimalist design language
- * (Space Mono, COLORS tokens, hairline borders).
+ * in the relationship graph. On the design language: a raised surface (it
+ * floats, like a menu), one hairline, no shadow, `label` and `small` type.
  *
  * POSITIONING LOGIC
  * -----------------
  * The panel defaults to the right of the node with a small upward offset.
  * Three guards prevent it from escaping the wrapper:
- *   • Horizontal flip  — if right edge exceeds container width, place left.
- *   • Left-edge clamp  — after a flip, Math.max(MARGIN, x) so a narrow
- *                        container (< ~260 px) never pushes the panel off
- *                        the left edge.
- *   • Vertical clamp   — pin to top/bottom margin if the panel would clip.
- * SVG node coordinates equal CSS pixel offsets within the `position: relative`
- * wrapper, so no coordinate-space conversion is needed.
+ *   - Horizontal flip: if the right edge exceeds the container width, place
+ *     it left of the node.
+ *   - Left-edge clamp: after a flip, Math.max(MARGIN, x) so a narrow
+ *     container (under about 260 px) never pushes the panel off the left.
+ *   - Vertical clamp: pin to the top or bottom margin if it would clip.
+ * SVG node coordinates equal CSS pixel offsets within the `position:
+ * relative` wrapper, so no coordinate-space conversion is needed.
  *
  * CONTENT STRATEGY
  * ----------------
- * 1. Kind badge — colour-coded dot + kind label (same palette as the node).
- * 2. Display name — the entity's human-readable name in larger type.
- * 3. Relationship row — direct-hop kind + signed strength, or "indirect"
- *    indicator for second-hop nodes.  Absent for the seed node (suppressed
- *    upstream by the caller's `focusId !== seed.id` guard).
- * 4. Meta key-value rows — up to 3 priority fields from TOOLTIP_META_KEYS
- *    (role, homeworld, employer, etc.).  Kind-agnostic: only present keys
- *    are shown, so the panel is compact for sparse entities.
- * 5. Description excerpt — truncated at TOOLTIP_DESC_MAX chars with an
- *    ellipsis; rendered in italics to visually distinguish prose from data.
+ * 1. Kind: the tier glyph and the kind label.
+ * 2. Display name.
+ * 3. Relationship row: the direct-hop kind and signed strength, or
+ *    "indirect connection" for second-hop nodes.
+ * 4. Meta rows: up to 3 priority fields from TOOLTIP_META_KEYS (role,
+ *    homeworld, employer, ...); only present keys are shown.
+ * 5. Description excerpt, truncated at TOOLTIP_DESC_MAX characters, italic.
  *
- * @param entity            - Hydrated entity row for the hovered node.
- * @param nodeX             - Node centre x in SVG / container-relative px.
- * @param nodeY             - Node centre y in SVG / container-relative px.
- * @param nodeRadius        - Circle radius (px) — used to offset the gap.
- * @param containerWidth    - Wrapper pixel width for horizontal flip logic.
- * @param containerHeight   - Wrapper pixel height for vertical clamp logic.
- * @param relationshipToSeed - Direct edge from seed to this node, or null
- *                            if the node is a second-hop satellite.
- * @param seedName          - Display name of the seed for the "→ SEED" label.
+ * @param entity             Hydrated entity row for the hovered node.
+ * @param nodeX              Node centre x in SVG / container-relative px.
+ * @param nodeY              Node centre y in SVG / container-relative px.
+ * @param nodeRadius         Glyph radius (px), used to offset the gap.
+ * @param containerWidth     Wrapper pixel width for horizontal flip logic.
+ * @param containerHeight    Wrapper pixel height for vertical clamp logic.
+ * @param relationshipToSeed Direct edge from seed to this node, or null for
+ *                           a second-hop satellite.
+ * @param seedName           Display name of the seed for the arrow label.
+ * @param clubColor          The club colour when the node is a club.
  */
 function NodeTooltip({
   entity,
@@ -918,6 +959,7 @@ function NodeTooltip({
   containerHeight,
   relationshipToSeed,
   seedName,
+  clubColor,
 }: {
   entity: Entity;
   nodeX: number;
@@ -927,20 +969,16 @@ function NodeTooltip({
   containerHeight: number;
   relationshipToSeed: { kind: string; strength: number } | null;
   seedName: string;
+  clubColor: string | null;
 }) {
   // ── Position calculation ────────────────────────────────────────────
   // Default: place the tooltip TOOLTIP_GAP px to the right of the node
-  // edge, slightly above centre so the node circle aligns near the panel
-  // header rather than disappearing behind the middle of the panel.
+  // edge, slightly above centre so the node aligns near the panel header.
   let x = nodeX + nodeRadius + TOOLTIP_GAP;
   let y = nodeY - 32; // -32 aligns the panel header near the node centre
 
-  // Horizontal flip + left-edge clamp.
-  // If the right edge overflows the container, place the panel LEFT of the
-  // node.  Then clamp to MARGIN so a narrow container (e.g. 300 px, node at
-  // x=150) doesn't produce a negative x that hides the panel off-screen.
-  // Example: 300 px wide, nodeX=150 → unguarded = 150−8−14−228 = −100;
-  //          clamped → MARGIN (8 px).
+  // Horizontal flip + left-edge clamp. Example: 300 px wide, nodeX = 150
+  // gives 150 - 8 - 14 - 228 = -100 unguarded; clamped to MARGIN (8 px).
   const MARGIN = 8;
   if (x + TOOLTIP_WIDTH > containerWidth - MARGIN) {
     x = Math.max(MARGIN, nodeX - nodeRadius - TOOLTIP_GAP - TOOLTIP_WIDTH);
@@ -951,9 +989,8 @@ function NodeTooltip({
   }
 
   // ── Meta field extraction ───────────────────────────────────────────
-  // Pull up to 3 of the priority keys from entity.meta in the order
-  // defined by TOOLTIP_META_KEYS.  Skip nullish values so we never
-  // render an empty row.
+  // Up to 3 of the priority keys from entity.meta, in TOOLTIP_META_KEYS
+  // order; nullish values are skipped so no row is ever empty.
   const meta = (entity.meta ?? {}) as Record<string, unknown>;
   const metaRows: Array<{ key: string; value: string }> = [];
   for (const key of TOOLTIP_META_KEYS) {
@@ -964,158 +1001,100 @@ function NodeTooltip({
     }
   }
 
-  // Description excerpt — omit from TOOLTIP_META_KEYS list; shown below
-  // a divider in italic prose style to distinguish it from structured data.
+  // Description excerpt: shown below a divider in italic prose.
   const rawDesc = typeof meta['description'] === 'string' ? meta['description'] : '';
   const desc =
     rawDesc.length > TOOLTIP_DESC_MAX
-      ? rawDesc.slice(0, TOOLTIP_DESC_MAX).trimEnd() + '…'
+      ? rawDesc.slice(0, TOOLTIP_DESC_MAX).trimEnd() + '\u2026'
       : rawDesc;
 
-  // ── Kind badge colour ───────────────────────────────────────────────
   const kindStr = entity.kind ?? 'unknown';
-  const dotColor = kindColor(kindStr);
-
-  // ── Strength badge (only for direct edges) ──────────────────────────
-  const rel = relationshipToSeed
-    ? { ...relationshipToSeed, ...formatStrength(relationshipToSeed.strength) }
-    : null;
 
   // ── Shared style fragments ──────────────────────────────────────────
-  const monoBase: CSSProperties = {
-    letterSpacing: '0.04em',
-  };
-  const labelStyle: CSSProperties = {
-    ...monoBase,
-    fontSize: 9,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.12em',
-    color: COLORS.dust50,
-  };
-  const hairline: CSSProperties = {
-    borderBottom: `1px solid ${COLORS.hairline}`,
-    margin: '6px 0',
+  const labelStyle: CSSProperties = { ...type.label, ...tone.secondary };
+  const divider: CSSProperties = {
+    borderBottom: `1px solid ${color.line}`,
+    marginTop: space[8],
+    marginBottom: space[8],
   };
 
   return (
     <div
       // `pointer-events: none` so the tooltip itself never swallows the
-      // mouse-leave event that would hide it — hover stays on the SVG node.
+      // mouse-leave event that would hide it: hover stays on the SVG node.
       style={{
         position: 'absolute',
         left: x,
         top: y,
         width: TOOLTIP_WIDTH,
-        background: COLORS.phobosAsh,
-        border: `1px solid ${COLORS.hairline}`,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.55)',
-        padding: '10px 12px',
+        background: color.surfaceRaised,
+        ...hairline(color.line),
+        padding: space[12],
         boxSizing: 'border-box',
         pointerEvents: 'none',
         zIndex: 10,
-        // Prevent the panel from causing layout jitter as the simulation
-        // moves nodes — `will-change` tells the compositor to composite
-        // this layer independently.
+        // Composite this layer on its own so the panel does not jitter as
+        // the simulation moves nodes.
         willChange: 'left, top',
       }}
       role="tooltip"
       aria-hidden="true"
     >
-      {/* ── Kind badge ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-        <span
-          style={{
-            display: 'inline-block',
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: dotColor,
-            flexShrink: 0,
-          }}
-        />
+      {/* ── Kind ───────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[8], marginBottom: space[4] }}>
+        <KindGlyph kind={kindStr} size={8} clubColor={clubColor} />
         <span style={labelStyle}>{kindStr.replace(/_/g, ' ')}</span>
       </div>
 
       {/* ── Display name ───────────────────────────────────────────── */}
       <div
         style={{
-          ...monoBase,
-          fontSize: 12,
+          ...type.small,
+          ...tone.primary,
           fontWeight: 700,
-          color: COLORS.dust,
-          lineHeight: 1.3,
-          marginBottom: 6,
-          // Wrap long names rather than truncating — the tooltip is wide
-          // enough to hold two lines for even the longest entity names.
+          // Wrap long names rather than truncating: the panel holds two
+          // lines for even the longest entity names.
           wordBreak: 'break-word',
         }}
       >
         {entity.display_name ?? entity.name}
       </div>
 
-      <div style={hairline} />
+      <div style={divider} />
 
       {/* ── Relationship to seed ────────────────────────────────────── */}
-      {rel ? (
-        <div style={{ marginBottom: 6 }}>
-          {/* Arrow + seed name label */}
-          <div style={{ ...labelStyle, marginBottom: 2 }}>
-            {'→ '}
+      {relationshipToSeed ? (
+        <div>
+          <div style={{ ...labelStyle, ...tone.tertiary, marginBottom: space[4] }}>
+            {'\u2192 '}
             {seedName}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* Relationship kind */}
-            <span
-              style={{
-                ...monoBase,
-                fontSize: 10,
-                fontWeight: 700,
-                color: COLORS.dust70,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              {humaniseKind(rel.kind)}
-            </span>
-            {/* Strength badge */}
-            <span
-              style={{
-                ...monoBase,
-                fontSize: 10,
-                fontWeight: 700,
-                color: rel.color,
-              }}
-            >
-              {rel.label}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: space[8] }}>
+            <span style={labelStyle}>{humaniseKind(relationshipToSeed.kind)}</span>
+            <span style={{ ...type.small, ...tone.primary, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              {formatStrength(relationshipToSeed.strength)}
             </span>
           </div>
         </div>
       ) : (
-        // Second-hop node — no direct edge to the seed.  Show a subtle
-        // "indirect" label so the user knows why there's no strength score.
-        <div style={{ ...labelStyle, marginBottom: 6, color: COLORS.dust50 }}>
-          indirect connection
-        </div>
+        // Second-hop node: no direct edge to the seed, so no strength.
+        <div style={{ ...labelStyle, ...tone.tertiary }}>Indirect connection</div>
       )}
 
       {/* ── Meta key-value rows ─────────────────────────────────────── */}
       {metaRows.length > 0 && (
         <>
-          <div style={hairline} />
-          <div
-            style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: desc ? 6 : 0 }}
-          >
+          <div style={divider} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: space[4] }}>
             {metaRows.map(({ key, value }) => (
-              <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
-                <span style={{ ...labelStyle, flexShrink: 0, minWidth: 56 }}>
+              <div key={key} style={{ display: 'flex', gap: space[8], alignItems: 'baseline' }}>
+                <span style={{ ...labelStyle, flexShrink: 0, minWidth: 64 }}>
                   {key.replace(/_/g, ' ')}
                 </span>
                 <span
                   style={{
-                    ...monoBase,
-                    fontSize: 10,
-                    color: COLORS.dust70,
+                    ...type.small,
+                    ...tone.primary,
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
                     textOverflow: 'ellipsis',
@@ -1132,18 +1111,8 @@ function NodeTooltip({
       {/* ── Description excerpt ─────────────────────────────────────── */}
       {desc && (
         <>
-          <div style={hairline} />
-          <div
-            style={{
-              ...monoBase,
-              fontSize: 10,
-              fontStyle: 'italic',
-              color: COLORS.dust50,
-              lineHeight: 1.5,
-            }}
-          >
-            {desc}
-          </div>
+          <div style={divider} />
+          <div style={{ ...type.small, ...tone.secondary, fontStyle: 'italic' }}>{desc}</div>
         </>
       )}
     </div>
@@ -1151,26 +1120,27 @@ function NodeTooltip({
 }
 
 /**
- * Centered status text used by the loading / empty / error branches.
+ * Centred status text used by the loading / empty / error branches.
  *
- * `pulse=true` adds a quantum-coloured cursor block next to the label
- * for the loading branch so the surface doesn't read as inert.
+ * `pulse` adds a blinking cursor block beside the label for the loading
+ * branch so the surface does not read as inert; `failed` paints the text in
+ * the live colour, which means "went wrong" (spec section 4).
  */
-function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
+function Centered({ text, pulse, failed }: { text: string; pulse?: boolean; failed?: boolean }) {
   return (
     <div
+      role={failed ? 'alert' : undefined}
       style={{
+        ...type.label,
         position: 'absolute',
         inset: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: COLORS.dust50,
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: '0.18em',
-        textTransform: 'uppercase',
-        gap: 10,
+        color: failed ? color.live : color.textSecondary,
+        gap: space[8],
+        padding: space[16],
+        textAlign: 'center',
       }}
     >
       <span>{text}</span>
@@ -1180,8 +1150,8 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
           style={{
             display: 'inline-block',
             width: 8,
-            height: 14,
-            background: COLORS.quantum,
+            height: 12,
+            background: color.textSecondary,
             animation: 'isl-graph-pulse 1.2s steps(2) infinite',
           }}
         />
@@ -1191,6 +1161,9 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
           0%, 50%   { opacity: 1; }
           50.01%, 100% { opacity: 0; }
         }
+        @media (prefers-reduced-motion: reduce) {
+          [style*="isl-graph-pulse"] { animation: none !important; }
+        }
       `}</style>
     </div>
   );
@@ -1199,116 +1172,97 @@ function Centered({ text, pulse }: { text: string; pulse?: boolean }) {
 // ── Legend ───────────────────────────────────────────────────────────────────
 
 /**
- * Compact colour-key rendered below the relationship graph SVG.
+ * Key rendered below the relationship graph, in `label` type (11 px, the
+ * floor) and the secondary tone.
  *
- * Three row groups:
- *   1. LINKS — edge strength tiers: allied (teal) / neutral (dim) / rival (red).
- *      Stroke weight also encodes magnitude, but colour encodes the sign — this
- *      legend surfaces the sign mapping so the graph is readable at a glance.
- *   2. NODES — entity kind tiers: Player, Manager/Team, Media, Governance,
- *      Disruption, Place.  Intentionally coarse — the hover tooltip reveals the
- *      exact kind.  One entry per visual tier rather than one per `kind` value
- *      keeps the legend scannable (6 rows vs 20+).
- *   3. WEB — the two layers: a full-size dot = a direct tie (first hop), a
- *      smaller faint dot = a 2nd-degree tie (friend-of-a-friend).  Explains the
- *      deliberate size/opacity recession applied to the outer ring.
+ * Three rows:
+ *   1. LINKS: the sign of a tie, by line pattern (allied solid, neutral
+ *      dotted, rival dashed). Stroke weight encodes magnitude.
+ *   2. NODES: the entity tiers, by glyph (see kindColor.ts). Only the cosmic
+ *      voices are purple; a club is its own shield. Coarse on purpose: the
+ *      hover panel names the exact kind.
+ *   3. WEB: the two layers: a full-size glyph is a direct tie (first hop), a
+ *      smaller faint one a 2nd-degree tie (friend of a friend).
  *
- * Shares the border treatment (left/right/bottom hairline on abyss) with the
- * SVG box above so the two render as a single integrated panel.
+ * Shares the hairline with the graph box above (no top border) so the two
+ * read as one panel.
  */
 function GraphLegend() {
-  const swatchBase: CSSProperties = {
-    display: 'block',
-    flexShrink: 0,
-  };
   const rowStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '6px 12px',
+    columnGap: space[12],
+    rowGap: space[8],
   };
   const entryStyle: CSSProperties = {
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'center',
-    gap: 5,
+    gap: space[8],
   };
-  const sectionLabel: CSSProperties = {
-    color: COLORS.dust70,
-    marginRight: 4,
-    letterSpacing: '0.14em',
-  };
+  const sectionLabel: CSSProperties = { ...tone.tertiary, marginRight: space[4] };
 
   return (
     <div
       style={{
+        ...type.label,
+        ...tone.secondary,
         display: 'flex',
-        flexWrap: 'wrap',
-        gap: '6px 28px',
-        padding: '8px 12px',
-        borderLeft: `1px solid ${COLORS.hairline}`,
-        borderRight: `1px solid ${COLORS.hairline}`,
-        borderBottom: `1px solid ${COLORS.hairline}`,
-        background: COLORS.abyss,
-        fontSize: 9,
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
-        color: COLORS.dust50,
+        flexDirection: 'column',
+        gap: space[8],
+        paddingTop: space[12],
+        paddingBottom: space[12],
+        paddingLeft: space[12],
+        paddingRight: space[12],
+        borderLeft: `1px solid ${color.line}`,
+        borderRight: `1px solid ${color.line}`,
+        borderBottom: `1px solid ${color.line}`,
         userSelect: 'none',
       }}
     >
-      {/* Edge (link) colour tier */}
+      {/* Edge (link) sign, by line pattern. */}
       <div style={rowStyle}>
         <span style={sectionLabel}>Links</span>
-        {EDGE_LEGEND.map(({ color, label }) => (
-          <span key={label} style={entryStyle}>
-            <span
-              style={{ ...swatchBase, width: 18, height: 2, background: color, borderRadius: 1 }}
-            />
+        {EDGE_LEGEND.map(({ key, label }) => (
+          <span key={key} style={entryStyle}>
+            <svg width={24} height={4} aria-hidden="true" style={{ display: 'block', flex: 'none' }}>
+              <line
+                x1={0}
+                y1={2}
+                x2={24}
+                y2={2}
+                style={{ stroke: EDGE_STYLE[key].stroke }}
+                strokeDasharray={EDGE_STYLE[key].dash}
+                strokeWidth={2}
+              />
+            </svg>
             {label}
           </span>
         ))}
       </div>
 
-      {/* Node (entity kind) colour tier */}
+      {/* Node (entity tier) glyphs. */}
       <div style={rowStyle}>
         <span style={sectionLabel}>Nodes</span>
-        {NODE_LEGEND.map(({ color, label }) => (
-          <span key={label} style={entryStyle}>
-            <span
-              style={{ ...swatchBase, width: 8, height: 8, borderRadius: '50%', background: color }}
-            />
+        {KIND_TIER_LABEL.map(([tier, label]) => (
+          <span key={tier} style={entryStyle}>
+            <KindGlyph tier={tier} size={10} />
             {label}
           </span>
         ))}
       </div>
 
-      {/* Web (layer) tier — mirrors the size/opacity recession on the canvas:
-          a full dot is a direct tie, a smaller faint dot is a 2nd-degree tie. */}
+      {/* Web (layer): mirrors the size/opacity recession on the canvas. */}
       <div style={rowStyle}>
         <span style={sectionLabel}>Web</span>
         <span style={entryStyle}>
-          <span
-            style={{
-              ...swatchBase,
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: COLORS.dust70,
-            }}
-          />
+          <KindGlyph tier="other" size={10} fill={color.textSecondary} />
           Direct
         </span>
-        <span style={entryStyle}>
-          <span
-            style={{
-              ...swatchBase,
-              width: 5,
-              height: 5,
-              borderRadius: '50%',
-              background: COLORS.dust70,
-              opacity: SECOND_HOP_OPACITY,
-            }}
-          />
+        <span style={{ ...entryStyle, opacity: 1 }}>
+          <span style={{ display: 'inline-flex', opacity: SECOND_HOP_OPACITY }}>
+            <KindGlyph tier="other" size={6} fill={color.textSecondary} />
+          </span>
           2nd degree
         </span>
       </div>

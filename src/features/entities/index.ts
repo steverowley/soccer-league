@@ -230,6 +230,8 @@ export type {
 // activation routes through `entityRoute()` to /entities/:id.
 export { RelationshipGraph } from './ui/relationshipGraph/RelationshipGraph';
 export type { RelationshipGraphProps } from './ui/relationshipGraph/RelationshipGraph';
-export { kindColor }       from './ui/relationshipGraph/kindColor';
+export { kindColor, kindShape, kindTier, KIND_TIER_LABEL } from './ui/relationshipGraph/kindColor';
+export type { KindShape, KindTier } from './ui/relationshipGraph/kindColor';
+export { KindGlyph }       from './ui/relationshipGraph/KindGlyph';
 export { entityRoute }     from './ui/relationshipGraph/entityRoute';
 export { useReducedMotion } from './ui/relationshipGraph/useReducedMotion';

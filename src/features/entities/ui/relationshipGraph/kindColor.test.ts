@@ -1,72 +1,76 @@
 // ── kindColor.test.ts ──────────────────────────────────────────────────────
-// Unit tests for the entity-kind → palette colour mapping.
+// Unit tests for the entity-kind -> tier, glyph and token-colour mapping.
 //
-// These tests pin the documented map so a future palette tweak that
-// renames a token (or a kind addition with the wrong fallback) gets
-// caught in CI rather than landing as a colour drift in production.
+// These pin the documented map (see kindColor.ts) and the design-language
+// rule behind it: an entity kind is never drawn in red (live or error),
+// orange (the primary action) or green (a good outcome), and purple belongs
+// to the cosmic voices alone.
 
 import { describe, it, expect } from 'vitest';
 
-import { COLORS } from '../../../../components/Layout';
-import { kindColor } from './kindColor';
+import { color } from '../../../../shared/design';
+import { kindColor, kindShape, kindTier, KIND_TIER_LABEL } from './kindColor';
+
+describe('kindTier', () => {
+  it('groups every known kind into its tier', () => {
+    expect(kindTier('player')).toBe('player');
+    expect(kindTier('team')).toBe('club');
+    for (const k of ['manager', 'managing_staff']) expect(kindTier(k)).toBe('staff');
+    for (const k of ['pundit', 'commentator', 'journalist', 'sports_writer', 'media_company', 'social_media']) {
+      expect(kindTier(k)).toBe('media');
+    }
+    for (const k of ['referee', 'association', 'officials_association']) expect(kindTier(k)).toBe('officials');
+    for (const k of ['politician', 'political_party', 'political_body', 'bookie']) expect(kindTier(k)).toBe('politics');
+    for (const k of ['planet', 'colony', 'stadium', 'training_facility']) expect(kindTier(k)).toBe('place');
+    expect(kindTier('cosmic_voice')).toBe('cosmic');
+  });
+
+  it('falls back to other for unknown or future kinds', () => {
+    expect(kindTier('cyborg_overlord')).toBe('other');
+    expect(kindTier('')).toBe('other');
+  });
+});
+
+describe('kindShape', () => {
+  it('draws each tier with its own glyph', () => {
+    expect(kindShape('player')).toBe('circle');
+    expect(kindShape('team')).toBe('shield');
+    expect(kindShape('manager')).toBe('square');
+    expect(kindShape('pundit')).toBe('diamond');
+    expect(kindShape('referee')).toBe('triangle');
+    expect(kindShape('bookie')).toBe('triangleDown');
+    expect(kindShape('stadium')).toBe('ring');
+  });
+});
 
 describe('kindColor', () => {
-  // ── People mappings ───────────────────────────────────────────────────
-  it('returns DUST for the canonical player kind', () => {
-    expect(kindColor('player')).toBe(COLORS.dust);
+  it('uses only the text tones, plus architect for the cosmic voices', () => {
+    expect(kindColor('player')).toBe(color.text);
+    expect(kindColor('manager')).toBe(color.text);
+    expect(kindColor('pundit')).toBe(color.textSecondary);
+    expect(kindColor('politician')).toBe(color.textSecondary);
+    expect(kindColor('planet')).toBe(color.textTertiary);
+    expect(kindColor('cosmic_voice')).toBe(color.architect);
+    expect(kindColor('')).toBe(color.textTertiary);
   });
 
-  it('returns ASTRO for club-adjacent people (warm orange tier)', () => {
-    expect(kindColor('manager')).toBe(COLORS.astro);
-    expect(kindColor('managing_staff')).toBe(COLORS.astro);
-    expect(kindColor('journalist')).toBe(COLORS.astro);
-    expect(kindColor('sports_writer')).toBe(COLORS.astro);
+  it('never draws a kind in live red, action orange or success green', () => {
+    const kinds = [
+      'player', 'team', 'manager', 'managing_staff', 'pundit', 'commentator', 'journalist',
+      'sports_writer', 'media_company', 'social_media', 'referee', 'association',
+      'officials_association', 'politician', 'political_party', 'political_body', 'bookie',
+      'planet', 'colony', 'stadium', 'training_facility', 'cosmic_voice', 'unknown',
+    ];
+    for (const k of kinds) {
+      expect([color.live, color.action, color.success]).not.toContain(kindColor(k));
+    }
   });
 
-  it('returns QUANTUM for the commentary and media family', () => {
-    expect(kindColor('pundit')).toBe(COLORS.quantum);
-    expect(kindColor('commentator')).toBe(COLORS.quantum);
-    expect(kindColor('media_company')).toBe(COLORS.quantum);
-    expect(kindColor('social_media')).toBe(COLORS.quantum);
-  });
-
-  it('returns TERRA NOVA for officiating + governance (positive authority)', () => {
-    expect(kindColor('referee')).toBe(COLORS.terraNova);
-    expect(kindColor('association')).toBe(COLORS.terraNova);
-    expect(kindColor('officials_association')).toBe(COLORS.terraNova);
-  });
-
-  it('returns FLARE for risk/disruption kinds (bookies + political tier)', () => {
-    expect(kindColor('bookie')).toBe(COLORS.flare);
-    expect(kindColor('political_body')).toBe(COLORS.flare);
-    expect(kindColor('political_party')).toBe(COLORS.flare);
-    expect(kindColor('politician')).toBe(COLORS.flare);
-  });
-
-  // ── Team (isl-3ov) ───────────────────────────────────────────────────
-  // Clubs use the astro hue to read as their own identity tier —
-  // distinct from quantum (commentary) and flare (risk).
-  it('returns ASTRO for the team kind (shadow team entities)', () => {
-    expect(kindColor('team')).toBe(COLORS.astro);
-  });
-
-  // ── Places and venues ────────────────────────────────────────────────
-  // Stadiums share DUST 70 with planets (both are physical locations that
-  // frame activity without themselves acting).  Training facilities and
-  // colonies sit at the quietest DUST 50 tier.
-  it('returns muted DUST tints for places and venues', () => {
-    expect(kindColor('planet')).toBe(COLORS.dust70);
-    expect(kindColor('stadium')).toBe(COLORS.dust70);
-    expect(kindColor('colony')).toBe(COLORS.dust50);
-    expect(kindColor('training_facility')).toBe(COLORS.dust50);
-  });
-
-  // ── Fallback ──────────────────────────────────────────────────────────
-  // Any kind not in the explicit map renders in the muted DUST 70 default so
-  // a future migration that adds a kind never throws or renders invisibly.
-  it('falls back to DUST 70 for unknown / future kinds', () => {
-    expect(kindColor('cyborg_overlord')).toBe(COLORS.dust70);
-    expect(kindColor('hive_mind')).toBe(COLORS.dust70);
-    expect(kindColor('')).toBe(COLORS.dust70);
+  it('keeps purple for the cosmic voices alone', () => {
+    const purple = KIND_TIER_LABEL.filter(([tier]) => tier !== 'cosmic').map(([tier]) => tier);
+    for (const tier of purple) {
+      const sample = { player: 'player', club: 'team', staff: 'manager', media: 'pundit', officials: 'referee', politics: 'bookie', place: 'planet', cosmic: 'cosmic_voice', other: 'x' }[tier];
+      expect(kindColor(sample)).not.toBe(color.architect);
+    }
   });
 });
