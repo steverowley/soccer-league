@@ -17,7 +17,7 @@
 //   markup stays readable in PR diffs.
 //
 // STROKE
-//   `color.line` (the design token) for every line — same opacity-modulated dust
+//   `color.line` (the design token) for every line: same opacity-modulated dust
 //   token used by the rest of the editorial chrome.  The pitch reads
 //   as "etched into" the page rather than overlaying it, matching
 //   the StandingsTable / MatchCard treatment.

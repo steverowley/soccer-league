@@ -18,7 +18,7 @@
 //   species) can pass hints that override the random draw — same input, same
 //   sprite, forever.
 //
-// PURE LOGIC — no React, no canvas, no Supabase.  Fully unit-testable.  The
+// PURE LOGIC: no React, no canvas, no Supabase.  Fully unit-testable.  The
 // only import is the canvas palette (plain string constants).
 
 import { canvasColor } from '../../../../shared/design';
