@@ -30,6 +30,8 @@ import {
 
 /** Pages (and their private components) moved onto the tokens: must stay at zero. */
 const MIGRATED = [
+  'src/pages/Home.tsx',
+  'src/pages/Matches.tsx',
   'src/pages/Leagues.tsx',
   'src/pages/LeagueDetail.tsx',
   'src/components/StandingsTable.tsx',

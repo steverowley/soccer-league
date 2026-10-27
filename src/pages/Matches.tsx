@@ -1,30 +1,27 @@
 // ── Matches.tsx ─────────────────────────────────────────────────────────────
-// Matches index page — `/matches` route, rebuilt in PR 5.
+// Matches index, /matches. On the design language since the group 1
+// migration (docs/design-language.md): PageShell + PageHeader, Tag filters,
+// red LiveBadge for live rows, and no raw style values
+// (scripts/designTokens.test.ts).
 //
 // Layout:
-//   Header (global)
-//   I.   Page hero       — kicker "Fixtures" + title + intro prose
-//   II.  Status filter   — All / Live / Scheduled / Completed chips
-//   III. Match list      — three sections (LIVE, SCHEDULED, COMPLETED)
-//                          or one filtered section when a chip is active
-//   Footer (shared)
+//   PageHeader     eyebrow "Matches", title, intro
+//   status filter  All / Live / Scheduled / Completed tags with counts
+//   sections       Live, Upcoming, Completed (numbered I, II, III in the
+//                  order they render), or the one the filter picked
 //
-// Data sources:
-//   - getLiveMatches()               — in_progress matches
-//   - getUpcomingMatches(50)         — scheduled matches (next 50)
-//   - inline query for completed     — last 50 completed across all comps
+// Data sources (one read, refreshed quietly every 30 s):
+//   - getLiveMatches()            matches in play (status live)
+//   - getUpcomingMatches(50)      the next scheduled matches
+//   - fetchCompletedMatches(50)   the latest results, below
 //
-// Each list entry is a `MatchRow` with team names, score (live + completed),
-// competition + round meta, scheduled time, and a status chip.  Status
-// determines a few small visual cues:
-//   live      → glowing flare dot in the chip, score visible
-//   scheduled → bordered chip, no score, kickoff time visible
-//   completed → dust chip, score visible, played_at timestamp visible
+// Each row is a link to the match page: when, home, score, away, and the
+// competition with a status cue (LiveBadge, "Full time" or "Scheduled").
+// Live rows never read `home_score` (it stays empty until full time); they
+// show the goals revealed so far from useLiveScores.
 
 import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import type { PublicReadClient } from '../shared/supabase/publicReadClient';
 import {
@@ -37,56 +34,48 @@ import {
   type LiveScoreView,
 } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
-import { AsyncView, EmptyState, PreSeasonState } from '../shared/ui';
-// Mini-pitch chip for live-match rows (isl-a8i).  Subscribes via the
-// shared broadcast hook so the per-row chip cost stays at one
-// Realtime channel total regardless of how many live matches render.
+import { usePageTitle } from '../shared/hooks/usePageTitle';
+import { color, glyph, layout, numeric, size, space, tone, type } from '../shared/design';
+import {
+  AsyncView,
+  Crest,
+  EmptyState,
+  LiveBadge,
+  PageHeader,
+  PageShell,
+  PreSeasonState,
+  SectionHeader,
+  Tag,
+  toRoman,
+} from '../shared/ui';
+// Mini-pitch for live rows (isl-a8i): one shared poll for every row.
 import { MiniPitch } from '../features/match';
 
-// ── Local aliases for terser inline styles ──────────────────────────────────
-// QUANTUM (focus) drives LIVE indicators across this page; FLARE is
-// retained for the genuine "fixture data unavailable" error surface
-// only.  Solar Flare on live cues would mis-signal "this match has
-// gone wrong"; LIVE is an attention state, not an error state.
-const { dust: DUST, abyss: ABYSS, quantum: QUANTUM } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
-
-// ── Filter sentinels + ordering ─────────────────────────────────────────────
-// FILTER_* — string ids consumed by the chip strip's `active` state.  String
-// literals (not Symbol / enum) so they sit alongside one another in React
-// state and the filter dispatch reads as a plain switch.
+// ── Filters and section order ───────────────────────────────────────────────
 const FILTER_ALL       = 'all';
 const FILTER_LIVE      = 'live';
-/** Quiet refresh of all three lists (the read cache's matches TTL). */
-const FIXTURES_REFRESH_MS = 30_000;
 const FILTER_SCHEDULED = 'scheduled';
 const FILTER_COMPLETED = 'completed';
 
-// SECTION_ORDER — the canonical render order of the three status groups
-// when no filter is active.  Live first (most newsworthy), then Scheduled
-// (what's coming), then Completed (what happened).  Mirrors the order
-// readers expect from a sports masthead.
+/** Quiet refresh of all three lists (the read cache's matches TTL). */
+const FIXTURES_REFRESH_MS = 30_000;
+
+/** Unfiltered order: live first (most newsworthy), then upcoming, then results. */
 const SECTION_ORDER = [FILTER_LIVE, FILTER_SCHEDULED, FILTER_COMPLETED] as const;
 
-// SECTION_LABELS — display title shown above each match section.
-const SECTION_LABELS: Record<string, string> = {
+/** Section titles. */
+const SECTION_TITLES: Record<string, string> = {
   [FILTER_LIVE]:      'Live',
   [FILTER_SCHEDULED]: 'Upcoming',
   [FILTER_COMPLETED]: 'Completed',
 };
 
-// FETCH_UPCOMING_LIMIT — how many scheduled matches to pull on mount.  50
-// is enough to span the next several matchdays without overwhelming the
-// page; pagination is a follow-up.
+/** Scheduled matches read on mount: several matchdays ahead. */
 const FETCH_UPCOMING_LIMIT = 50;
-
-// FETCH_COMPLETED_LIMIT — same idea but for the completed feed.  50 keeps
-// the page rendering in one frame and matches the upcoming cap.
+/** Completed matches read on mount: the latest results. */
 const FETCH_COMPLETED_LIMIT = 50;
 
-// ── Local match shape (only fields accessed by this page) ───────────────────
+// ── Local match shape (only fields this page reads) ─────────────────────────
 interface MatchTeam {
   id: string;
   name: string;
@@ -113,26 +102,17 @@ interface MatchRow {
 }
 
 /**
- * Fetch the most recently completed matches across every competition.
+ * The most recently completed matches across every competition.
  *
- * `status = 'completed'` now means full time has genuinely passed: the worker
+ * `status = 'completed'` means full time has genuinely passed: the worker
  * parks a simulated match at `live` and only publishes `completed` once its
- * real-time reveal window closes (migration 0081).  So a plain status filter is
- * enough, and a match can never appear in both Live and Completed at once.
+ * real-time reveal window closes (migration 0081), so a match can never be
+ * in Live and Completed at once.
  *
- * This previously had to subtract a hardcoded 600-second pacing window from
- * `scheduled_at`, because the worker marked matches `completed` seconds after
- * kickoff while the viewer was still revealing them.
- *
- * Inlined here rather than under `features/match/api/` because the
- * Matches index is the only consumer today. When a second consumer
- * appears (TeamDetail's "recent results" strip?) this will be lifted
- * into the shared API layer.
- *
- * @param db    Injected Supabase client (via `useSupabase()`).
- * @param limit Maximum row count (default FETCH_COMPLETED_LIMIT).
- * @returns     Completed match rows ordered by `played_at` DESC.
- * @throws      Re-throws the Supabase error if the query fails.
+ * @param db    The public read client.
+ * @param limit Maximum rows (default FETCH_COMPLETED_LIMIT).
+ * @returns     Completed rows, newest first.
+ * @throws      The read error, so the page shows its error state.
  */
 async function fetchCompletedMatches(
   db: PublicReadClient,
@@ -154,24 +134,18 @@ async function fetchCompletedMatches(
 }
 
 /**
- * Matches index page.
+ * Matches index page. One read for all three lists (the page is either
+ * answered or it is not); useAsyncData turns a hang into a visible timeout
+ * after 10 s and refreshes quietly so matches move from upcoming to live to
+ * full time without a reload.
  *
- * Fires all three fetches in parallel on mount; renders three sections
- * stacked vertically when no filter is active, or just one when the
- * reader narrows by status.  Loading state is a single italic line
- * (the page doesn't block) — partial loads paint the available
- * sections immediately so the masthead never looks blank.
+ * @returns The page.
  */
-import { usePageTitle } from '../shared/hooks/usePageTitle';
-
 export default function Matches() {
   usePageTitle('Matches');
   const publicDb = usePublicReadClient();
   const [filter, setFilter] = useState<string>(FILTER_ALL);
 
-  // All three lists in one read: the page is either answered or it is not.
-  // useAsyncData turns a hang into a visible timeout after 10 s (the outage
-  // of 2026-10-26 left this page on "Loading fixtures..." indefinitely).
   const fixtures = useAsyncData(
     () => Promise.all([
       getLiveMatches(publicDb),
@@ -183,117 +157,81 @@ export default function Matches() {
       completed: c,
     })),
     [publicDb],
-    // Refreshed quietly so matches move from upcoming to live to full time
-    // without a reload.
     { refreshMs: FIXTURES_REFRESH_MS },
   );
   const phase = useSeasonPhase();
 
   const live      = fixtures.data?.live ?? [];
-  // Live rows show the goals revealed so far, exactly as the match page does:
-  // the published score stays empty until full time.
+  // Live rows show the goals revealed so far, exactly as the match page does.
   const liveScores = useLiveScores(live);
   const upcoming  = fixtures.data?.upcoming ?? [];
   const completed = fixtures.data?.completed ?? [];
   const noFixtures = live.length + upcoming.length + completed.length === 0;
   const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
-  // The {filter → matches} dispatch.
   const bySection: Record<string, MatchRow[]> = {
     [FILTER_LIVE]:      live,
     [FILTER_SCHEDULED]: upcoming,
     [FILTER_COMPLETED]: completed,
   };
 
-  // In the unfiltered view an empty Live group is dropped: a "Live Now"
-  // heading over nothing reads as a broken feed.
+  // Unfiltered, an empty Live group is dropped: a "Live" heading over
+  // nothing reads as a broken feed.
   const sectionsToRender: string[] = filter === FILTER_ALL
     ? SECTION_ORDER.filter((key) => key !== FILTER_LIVE || live.length > 0)
     : [filter];
 
   return (
-    <div style={{
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
-      <Header />
+    <PageShell>
+      <PageHeader
+        eyebrow="Matches"
+        title="The schedule, live and recorded"
+        subtitle="Every fixture across every competition. Filter by status, or scan the full feed. Tap any row for the match page."
+      />
 
-      {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Fixtures"
-            kicker="IV"
-            label="All Matches"
-            title="The Schedule, Live and Recorded"
-            subtitle="Every fixture across every competition. Filter by status, or scan the full feed. Tap any row for the full match page."
+      <AsyncView state={fixtures} what="the fixtures" loading="Loading fixtures">
+        {() => (noFixtures && preSeason && phase.data ? (
+          <PreSeasonState
+            seasonName={phase.data.nextName}
+            startsAt={phase.data.startsAt}
+            detail="The fixture list is published when the season is drawn."
           />
-        </Container>
-      </section>
-
-      <section style={{ padding: '0 0 80px' }}>
-        <Container>
-          <AsyncView state={fixtures} what="the fixtures" loading="Loading fixtures">
-            {() => (noFixtures && preSeason && phase.data ? (
-              <div style={{ marginTop: 8 }}>
-                <PreSeasonState
-                  seasonName={phase.data.nextName}
-                  startsAt={phase.data.startsAt}
-                  detail="The fixture list is published when the season is drawn."
-                />
-              </div>
-            ) : noFixtures ? (
-              <EmptyState centred={false}>No fixtures yet.</EmptyState>
-            ) : (
-              <>
-                {/* Section II — Status filter. */}
-                <div style={{ padding: '0 0 16px' }}>
-                  <StatusFilter
-                    active={filter}
-                    onChange={setFilter}
-                    counts={{
-                      [FILTER_LIVE]:      live.length,
-                      [FILTER_SCHEDULED]: upcoming.length,
-                      [FILTER_COMPLETED]: completed.length,
-                    }}
-                  />
-                </div>
-
-                {/* Section III — Match list (one or many groups). */}
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 48,
-                  marginTop: 24,
-                }}>
-                  {sectionsToRender.map((sectionKey) => (
-                    <MatchSection
-                      key={sectionKey}
-                      label={SECTION_LABELS[sectionKey] ?? sectionKey}
-                      status={sectionKey}
-                      matches={bySection[sectionKey] ?? []}
-                      liveScores={liveScores}
-                    />
-                  ))}
-                </div>
-              </>
+        ) : noFixtures ? (
+          <EmptyState centred={false}>No fixtures yet. They appear here once the season is drawn.</EmptyState>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: layout.sectionGap }}>
+            <StatusFilter
+              active={filter}
+              onChange={setFilter}
+              counts={{
+                [FILTER_LIVE]:      live.length,
+                [FILTER_SCHEDULED]: upcoming.length,
+                [FILTER_COMPLETED]: completed.length,
+              }}
+            />
+            {sectionsToRender.map((sectionKey, i) => (
+              <MatchSection
+                key={sectionKey}
+                index={toRoman(i + 1)}
+                title={SECTION_TITLES[sectionKey] ?? sectionKey}
+                status={sectionKey}
+                matches={bySection[sectionKey] ?? []}
+                liveScores={liveScores}
+              />
             ))}
-          </AsyncView>
-        </Container>
-      </section>
+          </div>
+        ))}
+      </AsyncView>
 
-      {/* Fixture rows on a phone.  The desktop row is five columns
-          (when, home, score, away, meta) and is ~420 px wide at minimum, so
-          at 390 px the meta column (competition and the live minute) sat
-          off-screen and long names were clipped.  On a phone each row
+      {/* Fixture rows on a phone (PR #720). The desktop row is five columns
+          (when, home, score, away, meta) and about 420 px wide at minimum,
+          so at 390 px the meta column sat off-screen. On a phone each row
           becomes three lines:
-            when ............................ Live 37'
+            when ............................ Live · 37'
             Home name      2 · 1      Away name
-            Competition • Matchday
-          The meta cell dissolves (display: contents) so its two parts can
-          take their own places.  The decorative mini pitch is hidden. */}
+            Competition · Matchday
+          The meta cell dissolves (display: contents) so its two parts take
+          their own places. The decorative mini pitch is hidden. */}
       <style>{`
         @media (max-width: 599px) {
           .isl-match-row {
@@ -304,23 +242,21 @@ export default function Matches() {
               "comp comp comp";
             column-gap: 12px !important;
             row-gap: 8px !important;
-            padding: 14px 0 !important;
+            padding: 16px 0 !important;
           }
           .isl-mr-when  { grid-area: when; }
-          .isl-mr-when > div:not(.isl-mr-pitch) { display: inline; margin-right: 10px; }
+          .isl-mr-when > div:not(.isl-mr-pitch) { display: inline; margin-right: 8px; }
           .isl-mr-pitch { display: none; }
           .isl-mr-home  { grid-area: home; }
           .isl-mr-score { grid-area: score; }
           .isl-mr-away  { grid-area: away; }
           .isl-mr-meta  { display: contents; }
-          .isl-mr-comp  { grid-area: comp; text-align: center; color: ${DUST_50}; }
+          .isl-mr-comp  { grid-area: comp; text-align: center !important; }
           .isl-mr-pip   { grid-area: pip; justify-self: end; }
-          .isl-mr-pip > div { margin-top: 0 !important; }
+          .isl-mr-pip > * { margin-top: 0 !important; }
         }
       `}</style>
-
-      <Footer />
-    </div>
+    </PageShell>
   );
 }
 
@@ -333,107 +269,44 @@ interface StatusFilterProps {
 }
 
 /**
- * Status filter chip strip — four chips: ALL + LIVE + SCHEDULED +
- * COMPLETED.  Each chip carries its current count in parens so the
- * reader sees the totals before choosing.
+ * The status filter: four toggle Tags, each with its count so the reader
+ * sees the totals before choosing. The chosen one is the selected (dust
+ * filled) Tag; `aria-pressed` carries the state for screen readers.
  */
 function StatusFilter({ active, onChange, counts }: StatusFilterProps) {
   const totalCount =
     (counts[FILTER_LIVE] ?? 0) +
     (counts[FILTER_SCHEDULED] ?? 0) +
     (counts[FILTER_COMPLETED] ?? 0);
+  const options: Array<[string, string]> = [
+    [FILTER_ALL,       `All (${totalCount})`],
+    [FILTER_LIVE,      `Live (${counts[FILTER_LIVE] ?? 0})`],
+    [FILTER_SCHEDULED, `Scheduled (${counts[FILTER_SCHEDULED] ?? 0})`],
+    [FILTER_COMPLETED, `Completed (${counts[FILTER_COMPLETED] ?? 0})`],
+  ];
 
   return (
-    <div style={{
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 8,
-      paddingBottom: 16,
-      borderBottom: `1px solid ${HAIRLINE}`,
-    }}>
-      <FilterChip
-        label={`All (${totalCount})`}
-        active={active === FILTER_ALL}
-        onClick={() => onChange(FILTER_ALL)}
-      />
-      <FilterChip
-        label={`Live (${counts[FILTER_LIVE] ?? 0})`}
-        active={active === FILTER_LIVE}
-        accent={QUANTUM}
-        onClick={() => onChange(FILTER_LIVE)}
-      />
-      <FilterChip
-        label={`Scheduled (${counts[FILTER_SCHEDULED] ?? 0})`}
-        active={active === FILTER_SCHEDULED}
-        onClick={() => onChange(FILTER_SCHEDULED)}
-      />
-      <FilterChip
-        label={`Completed (${counts[FILTER_COMPLETED] ?? 0})`}
-        active={active === FILTER_COMPLETED}
-        onClick={() => onChange(FILTER_COMPLETED)}
-      />
+    <div role="group" aria-label="Filter matches by status" style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+      {options.map(([key, label]) => (
+        <Tag
+          key={key}
+          selected={active === key}
+          onClick={() => onChange(key)}
+          style={{ minHeight: 44, paddingLeft: space[12], paddingRight: space[12] }}
+        >
+          {label}
+        </Tag>
+      ))}
     </div>
-  );
-}
-
-// ── FilterChip ───────────────────────────────────────────────────────────────
-
-interface FilterChipProps {
-  label: string;
-  active: boolean;
-  accent?: string;
-  onClick: () => void;
-}
-
-/**
- * Single chip in the status filter.  Dust tint when active; an optional
- * `accent` colour paints a 4 px dot before the label (the LIVE chip
- * uses this to drop a flare dot regardless of active state — same cue
- * as the LIVE pip on a live match card).
- */
-function FilterChip({ label, active, accent, onClick }: FilterChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        background: active ? COLORS.dustFaint : 'transparent',
-        border: `1px solid ${HAIRLINE}`,
-        color: DUST,
-        padding: '8px 14px',
-        fontFamily: 'inherit',
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        cursor: 'pointer',
-      }}
-    >
-      {accent && (
-        <span
-          aria-hidden="true"
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: accent,
-            boxShadow: `0 0 6px ${accent}`,
-            display: 'inline-block',
-          }}
-        />
-      )}
-      {label}
-    </button>
   );
 }
 
 // ── MatchSection ─────────────────────────────────────────────────────────────
 
 interface MatchSectionProps {
-  label: string;
+  /** Roman numeral: the section's place on the page. */
+  index: string;
+  title: string;
   status: string;
   matches: MatchRow[];
   /** Live score per match id (live rows only), from useLiveScores. */
@@ -441,52 +314,30 @@ interface MatchSectionProps {
 }
 
 /**
- * Section of matches grouped by status.  Renders an editorial header
- * band (label + match count) followed by a stacked list of MatchRow
- * children.  Empty groups render an italic placeholder so the section
- * still appears in the layout (signals "we checked, there's nothing").
+ * One status group: a numbered SectionHeader with the match count, then the
+ * rows. An empty group says so, so a filtered view never looks broken.
  */
-function MatchSection({ label, status, matches, liveScores }: MatchSectionProps) {
+function MatchSection({ index, title, status, matches, liveScores }: MatchSectionProps) {
+  const count = `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}`;
   return (
-    <div>
-      <header style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        paddingBottom: 12,
-        borderBottom: `1px solid ${HAIRLINE}`,
-        marginBottom: 16,
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-      }}>
-        <span>{label}</span>
-        <span style={{ color: DUST_70 }}>{matches.length}</span>
-      </header>
-
+    <section>
+      <SectionHeader index={index} label={count} title={title} />
       {matches.length === 0 ? (
-        <p style={{
-          color: DUST_50, fontSize: 13, fontStyle: 'italic', margin: 0,
-        }}>
+        <p style={{ ...type.small, ...tone.secondary, fontStyle: 'italic', margin: 0 }}>
           {emptyMessageFor(status)}
         </p>
       ) : (
-        <ul style={{
-          listStyle: 'none', padding: 0, margin: 0,
-          display: 'flex', flexDirection: 'column',
-        }}>
-          {matches.map((m: any) => (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column' }}>
+          {matches.map((m) => (
             <MatchRowItem key={m.id} match={m} status={status} live={liveScores.get(m.id) ?? null} />
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
-/**
- * Editorial placeholder copy for empty sections.
- */
+/** Copy for an empty group. */
 function emptyMessageFor(status: string): string {
   if (status === FILTER_LIVE)      return 'No match in progress. The void is silent.';
   if (status === FILTER_SCHEDULED) return 'No fixtures scheduled.';
@@ -499,25 +350,23 @@ function emptyMessageFor(status: string): string {
 interface MatchRowItemProps {
   match: MatchRow;
   status: string;
-  /** Live rows: goals revealed so far and the minute.  Null otherwise. */
+  /** Live rows: goals revealed so far and the minute. Null otherwise. */
   live: LiveScoreView | null;
 }
 
 /**
- * Single match row in any of the three sections.
+ * One match row, a link to the match page. Desktop: five columns (when,
+ * home, score, away, competition and status); phone: the three-line layout
+ * in the page's stylesheet.
  *
- * Five-column grid: kickoff time/day cell, home team name (right-aligned),
- * score block (or "v" when scheduled), away team name (left-aligned),
- * competition + status meta.
+ * Memoised: the page re-renders on every quiet refresh, and an unchanged
+ * row need not.
  */
-// Memoised: the Matches page re-renders when any section's data arrives
-// (live / upcoming / completed fetch in parallel); memo means an upcoming
-// fetch completing does not re-render the already-painted live match rows.
 const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRowItemProps) {
   const homeName    = match.home_team?.name ?? '?';
   const awayName    = match.away_team?.name ?? '?';
   // A live row never reads home_score: it stays empty until full time and
-  // read as 0-0 all match.  It shows the goals revealed so far ("–" until known).
+  // read as 0-0 all match. It shows the goals revealed so far ("–" until known).
   const isLiveRow   = status === FILTER_LIVE;
   const homeScore   = isLiveRow ? (live?.score ? live.score[0] : '–') : match.home_score ?? 0;
   const awayScore   = isLiveRow ? (live?.score ? live.score[1] : '–') : match.away_score ?? 0;
@@ -528,6 +377,8 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
   const playedAt    = match.played_at    ? new Date(match.played_at)    : null;
   const ts          = playedAt ?? scheduledAt;
 
+  const name = { ...type.subheading, overflowWrap: 'anywhere' } as const;
+
   return (
     <li>
       <Link
@@ -535,78 +386,59 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
         className="isl-match-row"
         style={{
           display: 'grid',
-          gridTemplateColumns: '120px 1fr auto 1fr 220px',
+          gridTemplateColumns: '120px minmax(0, 1fr) auto minmax(0, 1fr) 220px',
           alignItems: 'center',
-          gap: 16,
-          padding: '18px 0',
-          borderBottom: `1px solid ${HAIRLINE}`,
-          color: DUST,
+          gap: space[16],
+          paddingTop: space[16],
+          paddingBottom: space[16],
+          borderBottom: `1px solid ${color.line}`,
+          color: color.text,
           textDecoration: 'none',
         }}
       >
-        {/* Day + time cell.  Day on top, time below — keeps the row
-            height compact while still giving the reader a glance-
-            readable timestamp.  For live rows (isl-a8i) we render a
-            tiny pitch chip BELOW the timestamp so the user can scan
-            multiple live matches at once and see their cursor of
-            action without opening each detail page. */}
-        <div className="isl-mr-when" style={{
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST_70,
-          lineHeight: 1.4,
-        }}>
+        {/* When: day over time. Live rows add the mini pitch below. */}
+        <div className="isl-mr-when" style={{ ...type.label, ...tone.secondary, ...numeric }}>
           {ts ? (
             <>
               <div>{ts.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
               <div>{ts.toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>
             </>
           ) : (
-            <div style={{ color: DUST_50 }}>TBC</div>
+            <div>TBC</div>
           )}
-          {status === 'live' && (
-            <div className="isl-mr-pitch" style={{ marginTop: 8 }} onClick={(e) => e.preventDefault()}>
-              {/* preventDefault stops a click on the chip from
-                  triggering the outer <Link> — the chip is purely
-                  decorative; the rest of the row remains the
-                  navigation target. */}
+          {status === FILTER_LIVE && (
+            // preventDefault: a click on the decorative pitch must not
+            // trigger the row link; the rest of the row still navigates.
+            <div className="isl-mr-pitch" style={{ marginTop: space[8] }} onClick={(e) => e.preventDefault()}>
               <MiniPitch matchId={match.id} widthPx={100} />
             </div>
           )}
         </div>
 
-        {/* Home name — right-aligned so the score block reads centred
-            on the row regardless of name length. */}
-        <div className="isl-mr-home" style={{ fontSize: 14, fontWeight: 700, textAlign: 'right', overflowWrap: 'anywhere' }}>
-          {homeName}
+        {/* Home: right-aligned, crest beside the score, so the score
+            reads centred whatever the name length. */}
+        <div className="isl-mr-home" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: space[8], textAlign: 'right', minWidth: 0 }}>
+          <span style={name}>{homeName}</span>
+          <Crest color={match.home_team?.color ?? null} size={16} />
         </div>
 
-        {/* Score / V separator — flare pip for live; bold score for
-            completed; "V" glyph for scheduled. */}
         <div className="isl-mr-score">
           <ScoreBlock status={status} home={homeScore} away={awayScore} />
         </div>
 
-        <div className="isl-mr-away" style={{ fontSize: 14, fontWeight: 700, textAlign: 'left', overflowWrap: 'anywhere' }}>
-          {awayName}
+        <div className="isl-mr-away" style={{ display: 'flex', alignItems: 'center', gap: space[8], minWidth: 0 }}>
+          <Crest color={match.away_team?.color ?? null} size={16} />
+          <span style={name}>{awayName}</span>
         </div>
 
-        {/* Meta column — competition + round + status pip. */}
-        <div className="isl-mr-meta" style={{
-          textAlign: 'right',
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST_70,
-          lineHeight: 1.4,
-        }}>
+        {/* Competition and round, then the status cue. */}
+        <div className="isl-mr-meta" style={{ ...type.label, ...tone.secondary, textAlign: 'right' }}>
           <div className="isl-mr-comp">
             {competition}
-            {round && <> <span style={{ color: DUST_50 }}>•</span> {round}</>}
+            {round && <> {glyph.middot} {round}</>}
           </div>
           <div className="isl-mr-pip">
-            <StatusPip status={status} live={live} />
+            <StatusCue status={status} live={live} />
           </div>
         </div>
       </Link>
@@ -624,122 +456,39 @@ interface ScoreBlockProps {
 }
 
 /**
- * Centred score block.  Three render branches keyed by status:
- *   live      → bold score with flare-pip prefix
- *   completed → bold score (FT-style)
- *   scheduled → faded "v" glyph
+ * The centre of the row: the score (live and completed) or "v" for a match
+ * still to come. Live is shown by the row's LiveBadge, not by the score.
  */
 function ScoreBlock({ status, home, away }: ScoreBlockProps) {
+  const box = { minWidth: 56, textAlign: 'center' } as const;
   if (status === FILTER_SCHEDULED) {
-    return (
-      <div style={{
-        fontSize: 14,
-        color: DUST_50,
-        textAlign: 'center',
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        minWidth: 56,
-      }}>
-        v
-      </div>
-    );
+    return <div style={{ ...type.label, ...tone.tertiary, ...box }}>v</div>;
   }
-
   return (
-    <div style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      minWidth: 56,
-    }}>
-      {status === FILTER_LIVE && (
-        <span
-          aria-hidden="true"
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: QUANTUM,
-            boxShadow: `0 0 6px ${QUANTUM}`,
-            display: 'inline-block',
-          }}
-        />
-      )}
-      <span style={{
-        fontSize: 18,
-        fontWeight: 700,
-        fontVariantNumeric: 'tabular-nums',
-        whiteSpace: 'nowrap',
-      }}>
-        {home} <span style={{ color: DUST_50 }}>·</span> {away}
-      </span>
+    <div style={{ ...numeric, ...box, fontSize: size.subheading, fontWeight: 700, lineHeight: 1.25, whiteSpace: 'nowrap' }}>
+      {home} <span style={tone.tertiary}>{glyph.middot}</span> {away}
     </div>
   );
 }
 
-// ── StatusPip ────────────────────────────────────────────────────────────────
-
-interface StatusPipProps {
-  status: string;
-  /** Live rows: adds the minute ("Live 37'"), or "Full time" once revealed. */
-  live?: LiveScoreView | null;
-}
+// ── StatusCue ────────────────────────────────────────────────────────────────
 
 /**
- * Status pip — small text chip beneath the competition row.
- *   live      → bordered flare "LIVE"
- *   completed → dust "FT"
- *   scheduled → faint "Scheduled"
+ * The row's status: the red-dot LiveBadge ("Live · 37'", then "Full time")
+ * for live rows, "Full time" for results, "Scheduled" for fixtures.
  */
-function StatusPip({ status, live }: StatusPipProps) {
+function StatusCue({ status, live }: { status: string; live: LiveScoreView | null }) {
   if (status === FILTER_LIVE) {
-    const label = live?.fullTime
-      ? 'Full time'
-      : live && live.minute > 0 ? `Live ${live.minute}'` : 'Live';
     return (
-      <div style={{
-        marginTop: 4,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '2px 8px',
-        border: `1px solid ${QUANTUM}`,
-        color: QUANTUM,
-        fontSize: 10,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        fontWeight: 700,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
-        {label}
-      </div>
+      <LiveBadge
+        minute={live && live.minute > 0 ? live.minute : null}
+        fullTime={live?.fullTime ?? false}
+        style={{ marginTop: space[4] }}
+      />
     );
   }
   if (status === FILTER_COMPLETED) {
-    return (
-      <div style={{
-        marginTop: 4,
-        color: DUST_70,
-        fontSize: 10,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        fontWeight: 700,
-      }}>
-        Full Time
-      </div>
-    );
+    return <div style={{ ...type.label, ...tone.secondary, marginTop: space[4] }}>Full time</div>;
   }
-  return (
-    <div style={{
-      marginTop: 4,
-      color: DUST_50,
-      fontSize: 10,
-      letterSpacing: '0.14em',
-      textTransform: 'uppercase',
-    }}>
-      Scheduled
-    </div>
-  );
+  return <div style={{ ...type.label, ...tone.tertiary, marginTop: space[4] }}>Scheduled</div>;
 }

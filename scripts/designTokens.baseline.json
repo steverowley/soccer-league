@@ -102,11 +102,6 @@
   "src/pages/EntityDetail.tsx": {
     "fontSize": 7
   },
-  "src/pages/Home.tsx": {
-    "fontSize": 25,
-    "letterSpacing": 11,
-    "colour": 1
-  },
   "src/pages/Idols.tsx": {
     "fontSize": 15,
     "letterSpacing": 5,
@@ -129,10 +124,6 @@
     "fontSize": 31,
     "letterSpacing": 15,
     "colour": 7
-  },
-  "src/pages/Matches.tsx": {
-    "fontSize": 12,
-    "letterSpacing": 8
   },
   "src/pages/News.tsx": {
     "colour": 8,
