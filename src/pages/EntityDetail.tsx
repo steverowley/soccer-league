@@ -10,12 +10,13 @@
 //   bookie's mood, and admins use it to spot a drift problem early.
 //
 // WHAT IS SHOWN
-//   - Header (identity: display_name + entity kind).
+//   - Header (identity: display_name + entity kind, properly cased).
 //   - Voice paragraph + core quotes (the persona anchor).
 //   - Current goals (in-character motivations).
 //   - Recent snippets timeline (the voice library, newest first).
-//   - Recent memories timeline (structured facts, text-only — payload is
-//     summarised, NOT exposed as a JSON blob).
+//   - Recent memories timeline (structured facts, text-only: payload is
+//     summarised, NOT exposed as a JSON blob; club ids become club names).
+//   - Direct connections as a small table, then the relationship graph.
 //
 // EXPLICITLY OMITTED
 //   - personality_vec (Big-Five floats).  Same reason PlayerDetail hides
@@ -26,36 +27,65 @@
 //   - consumed_count on memories.  Internal accounting.
 //   - taboos / lexicon arrays.  Persona-internal voice-coherence levers.
 //
-// LAYOUT
+// LAYOUT (on the design language since the group 3 migration,
+// docs/design-language.md: numbered SectionHeaders, FactRows instead of
+// bullet lists, Tags, the DataTable styles, no raw style values)
 //   PageShell (site header, main column, footer)
-//   PageHeader:        back link "Home", eyebrow naming the kind in proper
-//                      case (kindEyebrow), the display name as the h1.
-//   I.   Voice         the voice paragraph.
-//   II.  Core Quotes   — pinned anchor lines (read-only).
-//   III. Goals         — in-character ambitions, plain prose.
-//   IV.  Recent Voice  — entity_snippets timeline, newest first, max 25.
-//   V.   Recent Beats  — entity_memories timeline, newest first, max 15.
+//   PageHeader:  back link "Home", eyebrow naming the kind in proper case
+//                (kindEyebrow), the display name as the h1, the kind
+//                (singular, proper case) as a StatBlock.
+//   then, each only when it has something to show, numbered in order:
+//     Voice        the voice paragraph
+//     Canon        pinned core quotes
+//     Wants        in-character ambitions, plain prose
+//     Library      entity_snippets, newest first, max 25 (kind as a Tag)
+//     Memory       entity_memories, newest first, max 15
+//     Connections  direct relationships as a small table, then the graph
+//   Empty sections are hidden (spec section 6), never "(no memories yet)".
 //
 // DATA STRATEGY
-//   Single mount-time fetch fires three parallel queries (persona,
-//   snippets, memories).  Each section renders independently as data
-//   resolves; an empty result shows a sensible "nothing yet" line
-//   rather than a blank panel.  Errors are logged via console.warn
-//   only — the page itself never blocks on a single failed query.
+//   The header read first (it decides "unknown entity"), then four reads in
+//   parallel: persona, snippets, memories and the direct relationships,
+//   whose other ends are hydrated with one getEntitiesByIds read. The
+//   relationship reads are the same URLs the graph's first hop requests,
+//   so the read cache answers the repeat. Failures degrade to a hidden
+//   section and a console.warn; the page never blocks on one query.
 
 import { useEffect, useState } from 'react';
 import { withTimeout } from '../shared/hooks/useAsyncData';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell } from '../shared/ui';
+import { color, space, tone, type } from '../shared/design';
+import {
+  Crest,
+  DataTable,
+  EmptyState,
+  FactRows,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  SectionHeader,
+  StatBlock,
+  Tag,
+  dataCell,
+  dataHead,
+  toRoman,
+} from '../shared/ui';
+import { TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   getPersona,
   listMemoriesForEntity,
   listSnippetsForEntity,
 } from '../features/agents';
-import { RelationshipGraph } from '../features/entities';
+import {
+  RelationshipGraph,
+  entityRoute,
+  getEntitiesByIds,
+  getEntityRelationships,
+  type Entity,
+  type EntityRelationship,
+} from '../features/entities';
 import type {
   MemoryRow,
   PersonaRow,
@@ -88,7 +118,7 @@ interface EntityHeaderRow {
  * @returns     Prose string (never null/undefined).
  */
 function describeGoal(goal: unknown): string {
-  if (!goal || typeof goal !== 'object') return 'a private ambition';
+  if (!goal || typeof goal !== 'object') return 'a private ambition.';
   const g = goal as { kind?: unknown; target?: unknown };
   const kind = typeof g.kind === 'string' ? g.kind : '';
   switch (kind) {
@@ -137,8 +167,9 @@ function describeMemory(memory: MemoryRow): string {
   const payload = memory.payload as Record<string, unknown> | null;
   switch (memory.fact_kind) {
     case 'match_result': {
-      const home = (payload?.homeTeamId ?? 'home') as string;
-      const away = (payload?.awayTeamId ?? 'away') as string;
+      // The payload carries club ids (machine keys); prose names the club.
+      const home = clubName(payload?.homeTeamId, 'the home side');
+      const away = clubName(payload?.awayTeamId, 'the visitors');
       const homeScore = payload?.homeScore;
       const awayScore = payload?.awayScore;
       // No numbers: convert to qualitative outcome.
@@ -163,27 +194,66 @@ function describeMemory(memory: MemoryRow): string {
   }
 }
 
+/** Club name by team id, for memory prose (club ids are machine keys). */
+const CLUB_NAME: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.name]),
+);
+
+/** Club colour by team id, for the crest beside a club (club colour is data). */
+const CLUB_COLOR: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
+);
+
+/**
+ * A club id from a memory payload as the club's name.
+ *
+ * @param id        The payload value (expected: a team id).
+ * @param fallback  Words to use when it is missing or unknown.
+ * @returns         The club name, or the fallback.
+ */
+function clubName(id: unknown, fallback: string): string {
+  return typeof id === 'string' ? (CLUB_NAME.get(id) ?? fallback) : fallback;
+}
+
+/**
+ * Capitalise the first letter of a phrase ("to be quoted." -> "To be quoted.").
+ *
+ * @param text  The phrase.
+ * @returns     The phrase with an upper-case first letter.
+ */
+function capitalise(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * A snake_case key as sentence-case words ("pundit_take" -> "Pundit take").
+ *
+ * @param key  The key.
+ * @returns    The words.
+ */
+function words(key: string): string {
+  return capitalise(key.replace(/_/g, ' ').trim());
+}
+
 // ── Voice quote rendering ──────────────────────────────────────────────────
 // Snippets are inserted as `text`; we display them verbatim with kind +
-// mood as a small lead-in.  Snippets older than EXPIRED_DAYS are dimmed
-// to communicate that the line may have aged out of active rotation.
+// mood as a small lead-in. Snippets older than EXPIRED_DAYS drop to the
+// secondary tone: the line may have aged out of active rotation.
 
 /** Days after which a snippet is rendered with a "aged" muted style. */
 const EXPIRED_DAYS = 45;
 
 /**
- * Compute the wrapper style for a snippet card — vivid when fresh,
- * dimmed when aged so the timeline communicates rotation visually.
+ * Whether a snippet has aged out of active rotation.
  *
  * @param snippet  Snippet to consider.
  * @param now      Reference wall clock.
- * @returns        Inline-style fragment for the row.
+ * @returns        True when older than EXPIRED_DAYS.
  */
-function snippetStyle(snippet: SnippetRow, now: Date): React.CSSProperties {
+function isAged(snippet: SnippetRow, now: Date): boolean {
   const created = Date.parse(snippet.created_at);
-  if (!Number.isFinite(created)) return {};
-  const ageDays = (now.getTime() - created) / 86_400_000;
-  return ageDays > EXPIRED_DAYS ? { opacity: 0.55 } : {};
+  if (!Number.isFinite(created)) return false;
+  return (now.getTime() - created) / 86_400_000 > EXPIRED_DAYS;
 }
 
 // ── Kind eyebrow ───────────────────────────────────────────────────────────
@@ -220,6 +290,17 @@ const KIND_EYEBROW: Record<string, string> = {
 };
 
 /**
+ * The kind in the singular, proper case ("Pundit", "Media company"), for
+ * the header meta and the connections table.
+ *
+ * @param kind  The entity's `kind`.
+ * @returns     Sentence-case words.
+ */
+function kindLabel(kind: string): string {
+  return words(kind);
+}
+
+/**
  * Eyebrow text for an entity kind.
  *
  * @param kind  The entity's `kind`, or undefined while it loads.
@@ -239,10 +320,11 @@ function kindEyebrow(kind: string | null | undefined): string {
 // ── Component ──────────────────────────────────────────────────────────────
 
 /**
- * Page component.  Reads `:entityId` from the URL, fetches persona +
- * snippets + memories + entity-header in parallel, and renders the
- * five documented sections.  Renders an inline "Unknown entity"
- * message if the id doesn't exist — same pattern as TeamDetail.
+ * Page component. Reads `:entityId` from the URL, fetches the entity
+ * header, then persona + snippets + memories + direct relationships in
+ * parallel, and renders the documented sections that have something to
+ * show. Renders an "Unknown entity" page if the id doesn't exist, same
+ * pattern as TeamDetail.
  *
  * @returns React element for the route.
  */
@@ -257,12 +339,16 @@ export default function EntityDetail() {
   const [persona, setPersona] = useState<PersonaRow | null>(null);
   const [snippets, setSnippets] = useState<SnippetRow[]>([]);
   const [memories, setMemories] = useState<MemoryRow[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  // True once the body reads have settled, so "nothing to show" is only
+  // decided after they have answered.
+  const [bodyDone, setBodyDone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       if (!entityId) return;
-      // Header — distinguish "not found" from "load error" so the page
+      // Header: distinguish "not found" from "load error" so the page
       // can render an explicit message rather than silently spinning.
       // Time-boxed: a hung read lands in the error branch after 10 s.
       const headerQ = await withTimeout(Promise.resolve(publicDb
@@ -281,13 +367,16 @@ export default function EntityDetail() {
         setHeader(headerQ.data);
       }
 
-      // Other queries are best-effort — failures degrade silently
-      // because the page is informative even when one section is empty.
-      const [p, s, m] = await Promise.all([
+      // Other queries are best-effort: failures degrade to a hidden
+      // section because the page is informative even when one is empty.
+      const [p, s, m, edges] = await Promise.all([
         getPersona(publicDb, entityId),
         listSnippetsForEntity(publicDb, entityId),
         listMemoriesForEntity(publicDb, entityId, 15),
+        getEntityRelationships(publicDb, entityId),
       ]);
+      const otherIds = edges.map((e) => (e.from_id === entityId ? e.to_id : e.from_id));
+      const others = otherIds.length > 0 ? await getEntitiesByIds(publicDb, otherIds) : [];
       if (cancelled) return;
       setPersona(p);
       // Show newest 25 snippets across all kinds.
@@ -296,8 +385,14 @@ export default function EntityDetail() {
       );
       setSnippets(sortedSnippets.slice(0, 25));
       setMemories(m);
+      setConnections(toConnections(entityId, edges, others));
+      setBodyDone(true);
     }
-    load();
+    load().catch((err: unknown) => {
+      if (cancelled) return;
+      console.warn('[EntityDetail] body fetch failed:', err);
+      setBodyDone(true);
+    });
     return () => {
       cancelled = true;
     };
@@ -319,111 +414,246 @@ export default function EntityDetail() {
   }
 
   const goals = (persona?.goals as unknown[] | undefined) ?? [];
+  const quotes = persona?.core_quotes ?? [];
+  const voice = persona?.voice_paragraph?.trim() ?? '';
+  const name = header?.display_name ?? header?.name ?? '';
+  const hasBody = voice !== '' || quotes.length > 0 || goals.length > 0 || snippets.length > 0 || memories.length > 0;
+
+  // Sections are numbered in page order; every one is conditional, so the
+  // numbers are counted rather than fixed.
+  let sectionNo = 0;
+  const nextIndex = (): string => toRoman(++sectionNo);
 
   return (
     <PageShell>
       {/* ── Page header ─────────────────────────────────────────────────
           The shared PageHeader: the eyebrow names the kind of character
-          in proper case ("Pundits", "Stadiums"), the name is the h1. */}
+          in proper case ("Pundits", "Stadiums"), the name is the h1 and
+          the kind, singular, is the meta row. */}
       <PageHeader
         eyebrow={kindEyebrow(header?.kind)}
-        title={header?.display_name ?? header?.name ?? 'Loading'}
+        title={header ? name : 'Loading'}
         back={{ to: '/', label: 'Home' }}
+        {...(header ? { meta: <StatBlock label="Kind" value={kindLabel(header.kind)} /> } : {})}
       />
 
-      <div>
-            {/* ── I. Voice ────────────────────────────────────────────── */}
-            {persona?.voice_paragraph ? (
-              <p style={{ lineHeight: 1.6, marginBottom: 24 }}>{persona.voice_paragraph}</p>
-            ) : (
-              <p style={{ color: COLORS.dust50 }}>(no voice paragraph yet)</p>
-            )}
+      {!bodyDone && <LoadingState label="Loading the voice library" />}
 
-            {/* ── II. Core Quotes ─────────────────────────────────────── */}
-            {persona && persona.core_quotes.length > 0 && (
-              <section style={{ margin: '24px 0' }}>
-                <h2 style={{ color: COLORS.dust, fontSize: 16, marginBottom: 12 }}>Canon</h2>
-                <ul style={{ paddingLeft: 16 }}>
-                  {persona.core_quotes.map((q, i) => (
-                    <li key={i} style={{ lineHeight: 1.6, marginBottom: 6 }}>
-                      &ldquo;{q}&rdquo;
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+      {bodyDone && voice !== '' && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Voice" title="How they speak" />
+          <p style={{ ...type.body, ...tone.primary, margin: 0, maxWidth: '70ch' }}>{voice}</p>
+        </section>
+      )}
 
-            {/* ── III. Goals ──────────────────────────────────────────── */}
-            {goals.length > 0 && (
-              <section style={{ margin: '24px 0' }}>
-                <h2 style={{ color: COLORS.dust, fontSize: 16, marginBottom: 12 }}>Wants</h2>
-                <ul style={{ paddingLeft: 16 }}>
-                  {goals.map((g, i) => (
-                    <li key={i} style={{ lineHeight: 1.6, marginBottom: 4 }}>
-                      {describeGoal(g)}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+      {bodyDone && quotes.length > 0 && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Canon" title="Core quotes" />
+          <FactRows
+            size="body"
+            items={quotes.map((q, i) => ({ key: `${i}`, content: <>&ldquo;{q}&rdquo;</>, style: { fontStyle: 'italic' } }))}
+          />
+        </section>
+      )}
 
-            {/* ── IV. Recent Voice ────────────────────────────────────── */}
-            <section style={{ margin: '24px 0' }}>
-              <h2 style={{ color: COLORS.dust, fontSize: 16, marginBottom: 12 }}>Recent voice</h2>
-              {snippets.length === 0 ? (
-                <p style={{ color: COLORS.dust50 }}>(no snippets in the library yet)</p>
-              ) : (
-                <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
-                  {snippets.map((s) => (
-                    <li
-                      key={s.id}
-                      style={{
-                        borderLeft: `2px solid ${COLORS.dust50}`,
-                        paddingLeft: 12,
-                        marginBottom: 12,
-                        ...snippetStyle(s, now),
-                      }}
-                    >
-                      <div style={{ fontSize: 12, color: COLORS.dust50, marginBottom: 4 }}>
-                        {s.kind}{s.mood ? ` · ${s.mood}` : ''}
-                      </div>
-                      <div style={{ lineHeight: 1.5 }}>{s.text}</div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+      {bodyDone && goals.length > 0 && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Wants" title="What they want" />
+          <FactRows items={goals.map((g, i) => ({ key: `${i}`, content: capitalise(describeGoal(g)) }))} />
+        </section>
+      )}
 
-            {/* ── V. Recent Beats ─────────────────────────────────────── */}
-            <section style={{ margin: '24px 0' }}>
-              <h2 style={{ color: COLORS.dust, fontSize: 16, marginBottom: 12 }}>Recent beats</h2>
-              {memories.length === 0 ? (
-                <p style={{ color: COLORS.dust50 }}>(no memories yet)</p>
-              ) : (
-                <ul style={{ paddingLeft: 16 }}>
-                  {memories.map((m) => (
-                    <li key={m.id} style={{ lineHeight: 1.6, marginBottom: 4 }}>
-                      {describeMemory(m)}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+      {bodyDone && snippets.length > 0 && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Library" title="Recent voice" />
+          <FactRows
+            items={snippets.map((s) => ({
+              key: s.id,
+              content: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: space[8] }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>
+                    <Tag>{words(s.kind)}</Tag>
+                    {s.mood && <span style={{ ...type.label, ...tone.tertiary }}>{words(s.mood)}</span>}
+                  </div>
+                  <span style={{ ...type.body, ...(isAged(s, now) ? tone.secondary : tone.primary) }}>{s.text}</span>
+                </div>
+              ),
+            }))}
+          />
+        </section>
+      )}
 
-            {/* ── VI. Web of Influence ────────────────────────────────────
-                Drop-in relationship-graph widget (issue isl-uwq).  Renders
-                this entity's directly-connected web — pundits quoted by
-                journalists, referees in feuds with managers, etc.  The
-                component handles its own loading / empty / error states
-                and routes click-throughs to /entities/:id, so the next
-                entity is a single click away. */}
-            {entityId && (
-              <section style={{ margin: '24px 0' }}>
-                <h2 style={{ color: COLORS.dust, fontSize: 16, marginBottom: 12 }}>Web of influence</h2>
-                <RelationshipGraph entityId={entityId} />
-              </section>
-            )}
-      </div>
+      {bodyDone && memories.length > 0 && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Memory" title="Recent beats" />
+          <FactRows items={memories.map((m) => ({ key: m.id, content: `${name} ${describeMemory(m)}` }))} />
+        </section>
+      )}
+
+      {bodyDone && !hasBody && connections.length === 0 && (
+        <EmptyState centred={false}>
+          Nothing on the record yet. Lines and memories appear here as {name || 'this character'} is
+          quoted in matches and the news.
+        </EmptyState>
+      )}
+
+      {/* ── Connections ──────────────────────────────────────────────────
+          The direct relationships as a small table (readable on a phone
+          and to a screen reader), then the drop-in relationship graph
+          (issue isl-uwq) for the wider two-hop web. The graph handles its
+          own loading / empty / error states and routes click-throughs to
+          /entities/:id, so the next entity is a single click away. */}
+      {entityId && bodyDone && (
+        <section>
+          <SectionHeader index={nextIndex()} label="Connections" title="Web of influence" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+            {connections.length > 0 && <ConnectionsTable rows={connections} />}
+            <RelationshipGraph entityId={entityId} />
+          </div>
+        </section>
+      )}
     </PageShell>
+  );
+}
+
+// ── Connections ────────────────────────────────────────────────────────────
+
+/** One direct relationship, read from this entity's side. */
+export interface Connection {
+  key: string;
+  /** "Friend", "Admires", "Admired by". */
+  relation: string;
+  /** The entity at the other end, when it could be hydrated. */
+  other: Entity | null;
+  otherId: string;
+  strength: number;
+}
+
+/**
+ * Relationship kinds in words, from this entity's side: [outgoing,
+ * incoming]. Symmetric kinds read the same both ways. Kinds are free text
+ * in the schema, so an unknown one falls back to its own words.
+ */
+const RELATION_WORDS: Record<string, readonly [string, string]> = {
+  friend_of: ['Friend', 'Friend'],
+  colleague_of: ['Colleague', 'Colleague'],
+  family_of: ['Family', 'Family'],
+  rival: ['Rival', 'Rival'],
+  feuds_with: ['Feud', 'Feud'],
+  affiliated_with: ['Affiliated', 'Affiliated'],
+  sympathises_with: ['Sympathises with', 'Sympathises with'],
+  admires: ['Admires', 'Admired by'],
+  scorns: ['Scorns', 'Scorned by'],
+  mentors: ['Mentors', 'Mentored by'],
+  employed_by: ['Employed by', 'Employs'],
+  staff_of: ['Staff of', 'Staff'],
+  plays_for: ['Plays for', 'Player'],
+  manages: ['Manages', 'Managed by'],
+  covers: ['Covers', 'Covered by'],
+  home_of: ['Home of', 'Home ground'],
+  member_of: ['Member of', 'Member'],
+  leads: ['Leads', 'Led by'],
+  based_in: ['Based in', 'Based here'],
+};
+
+/**
+ * Turn this entity's edges into table rows, strongest first.
+ *
+ * @param selfId  This entity's id.
+ * @param edges   Its relationships, both directions.
+ * @param others  The hydrated entities at the other ends.
+ * @returns       One row per edge.
+ */
+export function toConnections(selfId: string, edges: EntityRelationship[], others: Entity[]): Connection[] {
+  const byId = new Map(others.map((e) => [e.id, e]));
+  // A symmetric kind (friend, colleague, family) is often stored in both
+  // directions; it is one relationship, so it gets one row.
+  const seen = new Set<string>();
+  return edges
+    .map((e) => {
+      const outgoing = e.from_id === selfId;
+      const otherId = outgoing ? e.to_id : e.from_id;
+      const pair = RELATION_WORDS[e.kind];
+      return {
+        key: `${e.from_id}|${e.to_id}|${e.kind}`,
+        relation: pair ? pair[outgoing ? 0 : 1] : words(e.kind),
+        other: byId.get(otherId) ?? null,
+        otherId,
+        strength: e.strength,
+      };
+    })
+    .sort((a, b) => Math.abs(b.strength) - Math.abs(a.strength))
+    .filter((c) => {
+      const k = `${c.otherId}|${c.relation}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+}
+
+/**
+ * The club id of a team entity (its shadow row carries it in meta.team_id).
+ *
+ * @param e  An entity.
+ * @returns  The team id, or null for anything that is not a club.
+ */
+function clubIdOf(e: Entity): string | null {
+  const id = (e.meta as { team_id?: unknown } | null)?.team_id;
+  return e.kind === 'team' && typeof id === 'string' ? id : null;
+}
+
+/**
+ * The name to show for an entity. A club's shadow row has its three-letter
+ * code as the display name (a machine key), so a club is named from the
+ * canon instead.
+ *
+ * @param e  An entity.
+ * @returns  The display name.
+ */
+function entityName(e: Entity): string {
+  const club = clubIdOf(e);
+  if (club) return CLUB_NAME.get(club) ?? e.name;
+  return e.display_name ?? e.name;
+}
+
+/**
+ * The direct relationships in the DataTable styles: relationship, name
+ * (linking to its page), and kind.
+ *
+ * @param rows  The connections.
+ * @returns     The table.
+ */
+function ConnectionsTable({ rows }: { rows: Connection[] }) {
+  return (
+    <DataTable caption="Direct connections">
+      <thead>
+        <tr>
+          <th scope="col" style={dataHead()}>Relationship</th>
+          <th scope="col" style={dataHead()}>Name</th>
+          <th scope="col" style={dataHead()}>Kind</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key}>
+            <td style={{ ...dataCell(), ...tone.secondary }}>{r.relation}</td>
+            <td style={{ ...dataCell(), fontWeight: 700 }}>
+              {r.other ? (
+                <Link
+                  to={entityRoute(r.other)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: space[8], color: color.text, textDecoration: 'none' }}
+                >
+                  {clubIdOf(r.other) && <Crest color={CLUB_COLOR.get(clubIdOf(r.other) ?? '') ?? null} size={16} />}
+                  {entityName(r.other)}
+                </Link>
+              ) : (
+                <span style={tone.tertiary}>Unknown</span>
+              )}
+            </td>
+            <td style={{ ...dataCell(), ...tone.secondary }}>{r.other ? kindLabel(r.other.kind) : '\u2014'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }

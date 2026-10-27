@@ -85,9 +85,6 @@
     "fontSize": 2,
     "letterSpacing": 1
   },
-  "src/pages/EntityDetail.tsx": {
-    "fontSize": 6
-  },
   "src/pages/Idols.tsx": {
     "fontSize": 12,
     "letterSpacing": 4,
