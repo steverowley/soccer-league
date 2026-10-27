@@ -102,3 +102,37 @@ describe('StandingsTable sort (#400)', () => {
     expect(ptsHeader.getAttribute('aria-sort')).toBe('none');
   });
 });
+
+describe('StandingsTable design language', () => {
+  it('shows tied ranks as "=N" and keeps them when sorted by another column', () => {
+    const rows = [
+      row({ id: 'a', position: 1, team: 'Alpha', points: 3, gd: 2, gf: 3, wins: 1 }),
+      row({ id: 'b', position: 2, team: 'Beta',  points: 3, gd: 2, gf: 3, wins: 1 }),
+      row({ id: 'c', position: 3, team: 'Gamma', points: 1, gd: 0, gf: 1, wins: 0 }),
+    ];
+    const { container, getByText } = renderTable(rows);
+    const ranks = () => Array.from(container.querySelectorAll('tbody tr td:first-child')).map((td) => td.textContent);
+    expect(ranks()).toEqual(['=1', '=1', '3']);
+    fireEvent.click(getByText('W').closest('th')!);
+    fireEvent.click(getByText('W').closest('th')!);
+    expect(bodyOrder(container)[0]).toBe('Gamma');
+    expect(ranks()[0]).toBe('3');
+  });
+
+  it('draws a 16 px crest in the club colour beside each club', () => {
+    const { container } = renderTable([row({ id: 'earth-united', position: 1, team: 'Earth United' })]);
+    const crest = container.querySelector('tbody svg[data-crest-size="16"]');
+    expect(crest).toBeTruthy();
+    expect(crest!.querySelector('polygon')!.getAttribute('fill')).not.toBe('var(--isl-line)');
+  });
+
+  it('never paints a rank or a loss red (red means live or error)', () => {
+    const rows = Array.from({ length: 8 }, (_, i) =>
+      row({ id: `t${i}`, position: i + 1, team: `Team ${i}`, points: 10 - i, loses: 5, form: ['L', 'L'] }),
+    );
+    const { container } = renderTable(rows);
+    const reds = Array.from(container.querySelectorAll<HTMLElement>('tbody *'))
+      .filter((el) => el.style.color === 'var(--isl-live)' || el.style.borderColor === 'var(--isl-live)');
+    expect(reds).toEqual([]);
+  });
+});

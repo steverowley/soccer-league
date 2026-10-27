@@ -23,11 +23,6 @@
     "fontSize": 4,
     "letterSpacing": 2
   },
-  "src/components/StandingsTable.tsx": {
-    "fontSize": 3,
-    "letterSpacing": 1,
-    "dust": 2
-  },
   "src/components/TeachingStrip.tsx": {
     "fontSize": 3,
     "letterSpacing": 2
@@ -120,14 +115,6 @@
   "src/pages/Leaderboards.tsx": {
     "fontSize": 4,
     "letterSpacing": 1
-  },
-  "src/pages/LeagueDetail.tsx": {
-    "fontSize": 6,
-    "letterSpacing": 2
-  },
-  "src/pages/Leagues.tsx": {
-    "fontSize": 10,
-    "letterSpacing": 4
   },
   "src/pages/Login.tsx": {
     "fontSize": 13,

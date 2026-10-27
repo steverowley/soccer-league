@@ -1,124 +1,95 @@
 // ── Leagues.tsx ─────────────────────────────────────────────────────────────
-// Leagues index page — second page rebuilt after the 2026-05 nuke (PR 3).
+// Leagues index, /leagues. On the design language since the group 1
+// migration (docs/design-language.md): PageShell + PageHeader, one card per
+// league, and no raw style values (scripts/designTokens.test.ts).
 //
 // Layout:
-//   Header (global)
-//   I.   Page hero      — kicker "Tables" + display title + intro prose
-//   II.  League grid    — one card per LEAGUES entry (4 cards, 2 × 2 ≥ 900 px)
-//   Footer (shared)
-//
-// Each card shows the league shortName badge, full name, the leading
-// editorial paragraph (truncated), the top-3 club names with their
-// position pipes, and a "View Full Table ►" dust link.
+//   PageHeader    eyebrow "Leagues", title, how the leagues and cups work
+//   league grid   one card per LEAGUES entry (2 x 2 from 900 px, 1 column
+//                 below): short-name tag, name, excerpt, the current top
+//                 three, "View full table ▸"
 //
 // Data sources:
-//   - LEAGUES                     from src/data/leagueData
-//   - fetchLeagueStandings (top-3) from src/features/match
+//   - LEAGUES                          src/data/leagueData (static canon)
+//   - fetchLeagueStandingsResult       one read per league, in parallel
 //
 // LOAD SIGNALLING
 // ───────────────
-// Each card's leader strip has three distinct states — loading, unavailable,
-// and "no fixtures played yet" — and says which one it is. They used to share
-// the pre-season placeholder, so a slow standings fetch told the reader
-// "Awaiting first kick-off" about a league that had already played 14 rounds.
-//
-// PALETTE: mirrors Home — three brand tokens (dust / abyss / flare).
-// The page uses only the shared COLORS object — no new hex literals.
+// Each card's leader strip has distinct states (loading, unavailable,
+// pre-season, played nothing yet, ready) and says which one it is. They
+// used to share the pre-season placeholder, so a slow standings read told
+// the reader "Awaiting first kick-off" about a league 14 rounds deep.
 
 import { useEffect, useState } from 'react';
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
-import { Card, Skeleton } from '../shared/ui';
-import { LEAGUES } from '../data/leagueData';
+import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
 import type { League } from '../data/leagueData';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { fetchLeagueStandingsResult, useSeasonPhase, type LeagueStandingsRow } from '../features/match';
 import { withTimeout } from '../shared/hooks/useAsyncData';
+import { color, glyph, numeric, space, tone, type } from '../shared/design';
+import { Card, Crest, PageHeader, PageShell, Skeleton, Tag } from '../shared/ui';
+import { rankLabels, standingsTieKey } from '../shared/utils/rankLabels';
+import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 // ── Derived row type ─────────────────────────────────────────────────────────
-// fetchLeagueStandings returns the canonical StandingsRow shape sourced from
-// Supabase.  Stamping a 1-based position on each row keeps the rendered
-// leader strip identical to the previous synchronous path.
+// The standings read returns the canonical row; the page stamps a 1-based
+// position on each so the strip ranks the same way as the full table.
 type PositionedStandingsRow = LeagueStandingsRow & { position: number };
 
 // ── Per-card load state ──────────────────────────────────────────────────────
-// One league card's knowledge of its own table. The three variants are the
-// three things the strip can honestly say:
-//   loading     — the fetch is in flight; we know nothing yet.
-//   ready       — the fetch came back; `rows` may legitimately be empty, which
-//                 means the league has played no fixtures yet.
-//   unavailable — the fetch rejected; we still know nothing, and must not
-//                 imply the season hasn't started.
+// What one league card honestly knows about its own table:
+//   loading     the read is in flight; we know nothing yet.
+//   ready       the read came back; `rows` may be empty, which means the
+//               league has played no fixtures yet.
+//   unavailable the read failed; we still know nothing, and must not imply
+//               the season has not started.
+//   pre-season  no season has kicked off: there is no table to draw.
 export type LeagueStandingsState =
   | { status: 'loading' }
   | { status: 'ready'; rows: PositionedStandingsRow[] }
   | { status: 'unavailable' }
-  // No season has kicked off: there is no table, so none is drawn.
   | { status: 'pre-season' };
 
-// ── Local aliases for terser inline styles ──────────────────────────────────
-// COLORS is the source of truth; we destructure into single-letter aliases
-// so the JSX below reads close to the design spec rather than verbose
-// COLORS.dust70 lookups on every line.
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
-
-// ── Card display constants ──────────────────────────────────────────────────
-// CARD_TOP_N — number of leading clubs surfaced in each league card.  3
-// matches the ISL competition structure (top 3 per league qualify for
-// the Celestial Cup), so the card's mini-list reads as "the chase pack".
+/** Leading clubs shown per card: the top three qualify for the Celestial Cup. */
 const CARD_TOP_N = 3;
 
-// CARD_DESCRIPTION_MAX_CHARS — soft cap for the editorial paragraph
-// excerpt drawn inside each card.  Long descriptions break the card
-// rhythm; 320 chars ≈ 4 lines at 13 px / 1.6 line-height inside the
-// card's max-width.  Truncation appends an ellipsis at the nearest
-// word boundary so the cut never lands mid-word.
+/**
+ * Soft cap for the card's description excerpt, cut at a word boundary so the
+ * cards keep one rhythm (about four lines of body text).
+ */
 const CARD_DESCRIPTION_MAX_CHARS = 320;
+
+/** Club colour by team id, for the leader crests (club colour is data). */
+const TEAM_COLOR: ReadonlyMap<string, string> = new Map(
+  Object.values(TEAMS_BY_LEAGUE).flat().map((t) => [t.id, t.color]),
+);
 
 /**
  * Leagues index page.
  *
- * Renders a 2 × 2 grid of league cards.  Standings for every league are
- * fetched in parallel from Supabase via `fetchLeagueStandings` on mount,
- * then the top CARD_TOP_N rows of each league are passed down to its
- * card.  Each card settles independently — a slow league doesn't hold up
- * the other three — and shows skeleton rows until its own fetch lands.
+ * Fires the four standings reads in parallel and commits each as it lands,
+ * so one slow league never holds up the other three; each card shows
+ * skeleton rows until its own read settles.
  *
- * The previous synchronous path (computeStandings + buildStandingsRows
- * reading from localStorage) silently surfaced stale data on any browser
- * that hadn't watched matches recently — the Supabase-backed worker
- * never writes to that cache.  This page now mirrors LeagueDetail's
- * async fetch so all standings surfaces share one source of truth.
+ * @returns The page.
  */
-import { usePageTitle } from '../shared/hooks/usePageTitle';
-
 export default function Leagues() {
   usePageTitle('Leagues');
   const publicDb = usePublicReadClient();
 
-  // ── Per-league top-N standings state ──────────────────────────────────────
-  // Keyed by league id so each card looks up its own state without
-  // re-scanning the array.  Every league starts at `loading` and moves to
-  // `ready` or `unavailable` on its own — see LeagueStandingsState.
+  // Keyed by league id; every league starts at `loading` and moves to
+  // `ready` or `unavailable` on its own.
   const [standingsByLeague, setStandingsByLeague] = useState<
     Record<string, LeagueStandingsState>
   >(() => Object.fromEntries(LEAGUES.map((l) => [l.id, { status: 'loading' } as LeagueStandingsState])));
 
   useEffect(() => {
     let cancelled = false;
-    // Fire all four league fetches at once — independent network round-trips,
-    // each ~1 RTT — and commit each as it lands rather than waiting on the
-    // slowest. A card's skeleton clears the moment its own table arrives.
     for (const league of LEAGUES) {
-      // The *Result variant is required here: supabase-js surfaces query
-      // errors in the resolved value, not as a rejection, so the plain
-      // `fetchLeagueStandings` would hand back `[]` and the card would
-      // announce "Awaiting first kick-off" over a failed read.
-      // withTimeout: a hung read ends as 'unavailable' after 10 s rather
-      // than a skeleton that never resolves.
+      // The *Result variant: supabase-js reports query errors in the resolved
+      // value, so the plain read would hand back [] and the card would claim
+      // "Awaiting first kick-off" over a failed read. withTimeout: a hung read
+      // ends as 'unavailable' after 10 s rather than a skeleton forever.
       withTimeout(fetchLeagueStandingsResult(publicDb, league.id))
         .then((result): LeagueStandingsState =>
           result.ok
@@ -126,8 +97,8 @@ export default function Leagues() {
             : { status: 'unavailable' },
         )
         .catch((err): LeagueStandingsState => {
-          // Belt-and-braces: an unexpected throw (bad client, aborted page
-          // teardown) must not leave the card spinning forever.
+          // An unexpected throw (bad client, page teardown) must not leave
+          // the card loading forever.
           console.warn(`[Leagues] standings fetch threw for ${league.id}:`, err);
           return { status: 'unavailable' };
         })
@@ -144,179 +115,97 @@ export default function Leagues() {
   const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
   return (
-    <div style={{
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
-      <Header />
+    <PageShell>
+      <PageHeader
+        eyebrow="Leagues"
+        title="Four leagues, thirty-two clubs"
+        subtitle="Rocky Inner, Gas/Ice Giants, Outer Reaches and Kuiper Belt each play a home-and-away round robin across the season. The top three of each league qualify for the Celestial Cup; ranks four to six go into the Solar Shield."
+      />
 
-      {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Tables"
-            kicker="II"
-            label="The Four Leagues"
-            title="Four Conferences, Thirty-Two Clubs"
-            subtitle="Rocky Inner, Gas/Ice Giants, Outer Reaches, Kuiper Belt. Each league plays a round-robin home-and-away schedule across the season. The top three from each qualify for the Celestial Cup; ranks four through six fall into the Solar Shield."
+      <div
+        className="isl-leagues-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: space[24],
+        }}
+      >
+        {LEAGUES.map((league) => (
+          <LeagueCard
+            key={league.id}
+            league={league}
+            standings={preSeason
+              ? { status: 'pre-season' }
+              : (standingsByLeague[league.id] ?? { status: 'loading' })}
           />
-        </Container>
-      </section>
+        ))}
+      </div>
 
-      {/* Section II — League grid. */}
-      <section style={{ padding: '0 0 80px' }}>
-        <Container>
-          <div
-            className="isl-leagues-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: 24,
-              marginTop: 24,
-            }}
-          >
-            {LEAGUES.map((league) => (
-              <LeagueCard
-                key={league.id}
-                league={league}
-                standings={preSeason
-                  ? { status: 'pre-season' }
-                  : (standingsByLeague[league.id] ?? { status: 'loading' })}
-              />
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      <Footer />
-
-      {/* Single breakpoint — 2-col grid collapses to 1-col under 900 px so
-          cards don't squish below the readable description width. */}
+      {/* One breakpoint: two columns collapse to one under 900 px so the
+          excerpt keeps a readable line length. */}
       <style>{`
         @media (max-width: 899px) {
-          .isl-leagues-grid { grid-template-columns: 1fr !important; }
+          .isl-leagues-grid { grid-template-columns: minmax(0, 1fr) !important; }
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
 
 interface LeagueCardProps {
   league: League;
-  /**
-   * This league's standings load state, owned by the parent.  The card
-   * renders one of three strips from it — skeleton rows while loading, a
-   * flare-tinted note when the table couldn't be reached, or the real
-   * leaders (falling back to the pre-season placeholder when the league
-   * has genuinely played nothing yet).
-   */
+  /** This league's standings load state, owned by the page. */
   standings: LeagueStandingsState;
 }
 
 /**
- * Single league card.
+ * One league card, the whole of which links to the league page.
  *
- * Layout (top → bottom):
- *   1. Header row     — shortName badge + full league name
- *   2. Body prose     — truncated editorial paragraph
- *   3. Top-N strip    — top CARD_TOP_N clubs with position pipes
- *   4. Footer link    — "View Full Table ►" to /leagues/:id
- *
- * The card itself is a clickable region (`<Link>` wrapping the chrome)
- * so anywhere on the card navigates to the detail page — the footer
- * link is a redundant cue for keyboard / screen-reader users.
- *
- * Standings are passed in from the parent (Leagues) which fetched them
- * in parallel via `fetchLeagueStandings`.  This card renders whichever
- * strip its load state calls for — see LeaderStrip.
+ * Top to bottom: short-name tag and name (h2), the description excerpt,
+ * the current top three, and a "View full table ▸" cue (the card is the
+ * link; the cue tells keyboard and screen-reader users where it goes).
  */
 function LeagueCard({ league, standings }: LeagueCardProps) {
   const excerpt = truncateAtWord(league.description ?? '', CARD_DESCRIPTION_MAX_CHARS);
 
-  // Status note beside the strip heading. Only the two states the reader can
-  // do nothing about get a label; a loaded table needs no annotation.
+  // A note beside the strip heading for the two states the reader cannot
+  // act on; a loaded table needs no annotation. Unavailable is an error, so
+  // it is the one red thing on the card.
   const statusNote =
-    standings.status === 'loading'     ? { text: 'Loading…',    tone: DUST_50 } :
-    standings.status === 'unavailable' ? { text: 'Unavailable', tone: FLARE }   :
+    standings.status === 'loading'     ? { text: 'Loading',     color: color.textSecondary } :
+    standings.status === 'unavailable' ? { text: 'Unavailable', color: color.live } :
     null;
 
   return (
     <Card
       to={`/leagues/${league.id}`}
-      padding={32}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
-        height: '100%',
-      }}
+      style={{ display: 'flex', flexDirection: 'column', gap: space[24], height: '100%' }}
     >
-      {/* Header row — shortName badge + full name.  The badge reads as a
-          publication-section tag; the full name carries the editorial
-          weight beneath it. */}
       <div>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '4px 10px',
-          border: `1px solid ${HAIRLINE}`,
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST,
-          marginBottom: 12,
-        }}>
-          {league.shortName}
-        </div>
-
-        <h3 style={{
-          fontSize: 24,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          lineHeight: 1.15,
-          margin: 0,
-          letterSpacing: '0.01em',
-        }}>
-          {league.name}
-        </h3>
+        <Tag>{league.shortName}</Tag>
+        <h2 style={{ ...type.subheading, margin: 0, marginTop: space[12] }}>{league.name}</h2>
       </div>
 
-      {/* Body prose — truncated description.  Set max-width so very wide
-          card widths (e.g. 1248 / 2 = 624 px) don't stretch the line
-          length past the comfortable reading range. */}
-      <p style={{
-        fontSize: 13,
-        lineHeight: 1.6,
-        color: DUST_70,
-        margin: 0,
-        maxWidth: '54ch',
-      }}>
+      <p style={{ ...type.body, ...tone.secondary, margin: 0, maxWidth: '54ch' }}>
         {excerpt}
       </p>
 
-      {/* Top-N strip — leaders preview.  No table chrome — these rows are
-          a teaser, not a substitute for the full table on the detail
-          page.  Every state fills CARD_TOP_N row slots so the card height
-          stays stable across leagues and across the load. */}
-      <div style={{
-        borderTop: `1px solid ${HAIRLINE}`,
-        paddingTop: 16,
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 12,
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST_70,
-          marginBottom: 12,
-        }}>
-          <span>Current Leaders</span>
-          {statusNote && <span style={{ color: statusNote.tone }}>{statusNote.text}</span>}
+      {/* Leaders preview: a teaser for the full table, not a copy of it.
+          Every state fills CARD_TOP_N slots so the card height is stable. */}
+      <div style={{ borderTop: `1px solid ${color.line}`, paddingTop: space[16] }}>
+        <div
+          style={{
+            ...type.label,
+            ...tone.secondary,
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: space[12],
+            marginBottom: space[12],
+          }}
+        >
+          <span>Current leaders</span>
+          {statusNote && <span style={{ color: statusNote.color }}>{statusNote.text}</span>}
         </div>
 
         <ol
@@ -327,44 +216,41 @@ function LeagueCard({ league, standings }: LeagueCardProps) {
             margin: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            gap: space[8],
           }}
         >
           <LeaderStrip standings={standings} />
         </ol>
       </div>
 
-      {/* Footer link — redundant for sighted users (whole card is clickable)
-          but explicit for keyboard / screen-reader navigation. */}
-      <div style={{
-        marginTop: 'auto',
-        paddingTop: 8,
-        fontSize: 13,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        color: DUST,
-      }}>
-        View Full Table ►
+      <div style={{ ...type.label, ...tone.primary, marginTop: 'auto' }}>
+        View full table <span aria-hidden="true">{glyph.forward}</span>
       </div>
     </Card>
   );
 }
 
+/** The three-column row grid shared by every leader-strip state. */
+const ROW = {
+  ...type.small,
+  ...numeric,
+  display: 'grid',
+  gridTemplateColumns: '32px minmax(0, 1fr) auto',
+  alignItems: 'center',
+  gap: space[12],
+} as const;
+
 /**
- * The contents of one card's leader strip, chosen by load state.  Split out
- * of LeagueCard so each state is a flat early return rather than a nest of
- * ternaries inside JSX — the point of this component is that the four cases
- * stay readable and mutually exclusive.
- *
- * Cases:
+ * The contents of one card's leader strip, chosen by load state. Each state
+ * is a flat early return so the cases stay readable and mutually exclusive:
  *   loading     → CARD_TOP_N skeleton rows (the honest "we don't know yet")
- *   unavailable → one flare-tinted row; the reader can retry by reloading
- *   ready, []   → pre-season placeholders ("Awaiting first kick-off")
- *   ready, rows → the real top CARD_TOP_N leaders
+ *   unavailable → one red row: the table could not be reached
+ *   pre-season  → one line: no table yet
+ *   ready, []   → placeholders ("Awaiting first kick-off")
+ *   ready, rows → the real top CARD_TOP_N, ties shown as "=N"
  *
- * Exported for tests (the page itself needs auth + router + Supabase
- * providers to mount; the strip is the part with the branching).
+ * Exported for tests: the page needs the auth, router and database
+ * providers to mount, and the strip is the part with the branching.
  *
  * @param standings  This league's load state.
  * @returns          The `<li>` children of the card's leader `<ol>`.
@@ -381,12 +267,16 @@ export function LeaderStrip({ standings }: { standings: LeagueStandingsState }) 
   }
 
   if (standings.status === 'unavailable') {
-    return <UnavailableLeaderRow />;
+    return (
+      <li style={{ ...type.small, color: color.live }}>
+        The table could not be reached. Reload to try again.
+      </li>
+    );
   }
 
   if (standings.status === 'pre-season') {
     return (
-      <li style={{ color: DUST_50, fontSize: 13, padding: '8px 0' }}>
+      <li style={{ ...type.small, ...tone.secondary, paddingTop: space[8], paddingBottom: space[8] }}>
         No table yet. The first season has not kicked off.
       </li>
     );
@@ -402,124 +292,58 @@ export function LeaderStrip({ standings }: { standings: LeagueStandingsState }) 
     );
   }
 
+  // Ranks come from the whole table, so a tie across third place reads "=3".
+  const labels = rankLabels(standings.rows, standingsTieKey);
   return (
     <>
-      {standings.rows.slice(0, CARD_TOP_N).map((row) => (
-        <LeaderRow key={row.id} row={row} />
+      {standings.rows.slice(0, CARD_TOP_N).map((row, i) => (
+        <LeaderRow key={row.id} row={row} rank={labels[i] ?? String(row.position)} />
       ))}
     </>
   );
 }
 
-interface LeaderRowProps {
-  // position is stamped on by the parent fetch effect; all other fields
-  // come directly from fetchLeagueStandings so the shape stays in sync
-  // automatically with the canonical Supabase-sourced standings row.
-  row: PositionedStandingsRow;
-}
-
 /**
- * Single leader row inside a league card.
- *
- * Three columns: position numeral (dust qualification pipe), team name
- * (bold), and points (mono numeric, right-aligned).  Plays the same
- * visual chord as a single row of the full standings table without the
- * surrounding chrome.
+ * One leader: rank (success colour: the top three qualify), crest and
+ * club, points.
  */
-function LeaderRow({ row }: LeaderRowProps) {
-  const pos = row.position ?? 0;
-  const points = row.points ?? 0;
+function LeaderRow({ row, rank }: { row: PositionedStandingsRow; rank: string }) {
   return (
-    <li style={{
-      display: 'grid',
-      gridTemplateColumns: 'auto 1fr auto',
-      alignItems: 'center',
-      gap: 12,
-      fontSize: 13,
-    }}>
-      {/* Pipe + position numeral — always dust (these are the leaders,
-          so the relegation flare variant never applies here). */}
-      <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontWeight: 700,
-        color: DUST,
-      }}>
-        <span aria-hidden="true" style={{ color: DUST }}>|</span>
-        <span>{String(pos).padStart(2, '0')}</span>
+    <li style={ROW}>
+      <span style={{ fontWeight: 700, color: color.success }}>{rank}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[8], minWidth: 0, fontWeight: 700 }}>
+        <Crest color={TEAM_COLOR.get(row.id) ?? null} size={16} />
+        <span style={{ overflowWrap: 'anywhere' }}>{row.team ?? '\u2014'}</span>
       </span>
-
-      <span style={{ fontWeight: 700, color: DUST }}>
-        {row.team ?? '—'}
-      </span>
-
-      <span style={{
-        fontWeight: 700,
-        color: DUST,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
-        {points} pts
-      </span>
+      <span style={{ fontWeight: 700 }}>{row.points ?? 0} pts</span>
     </li>
   );
 }
 
-interface PlaceholderLeaderRowProps {
-  position: number;
-}
-
 /**
- * Pre-season placeholder row.  Mirrors the LeaderRow layout but with
- * em-dash glyphs so the card height stays stable before any fixtures
- * have been simulated.  The position numeral is real (rendered with
- * faint-pipe colour) so the row still reads as "slot one / two / three".
+ * Placeholder row for a league that has played nothing yet. Keeps the real
+ * slot number so the strip still reads as "one, two, three".
  */
-function PlaceholderLeaderRow({ position }: PlaceholderLeaderRowProps) {
+function PlaceholderLeaderRow({ position }: { position: number }) {
   return (
-    <li style={{
-      display: 'grid',
-      gridTemplateColumns: 'auto 1fr auto',
-      alignItems: 'center',
-      gap: 12,
-      fontSize: 13,
-      color: DUST_50,
-    }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
-        <span aria-hidden="true" style={{ opacity: 0.4 }}>|</span>
-        <span>{String(position).padStart(2, '0')}</span>
-      </span>
+    <li style={{ ...ROW, ...tone.secondary }}>
+      <span style={{ fontWeight: 700 }}>{position}</span>
       <span style={{ fontStyle: 'italic' }}>Awaiting first kick-off</span>
-      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{'—'} pts</span>
+      <span>{'\u2014'} pts</span>
     </li>
   );
 }
 
 /**
- * Loading row.  Keeps the real position numeral (so the strip still reads as
- * "slot one / two / three") and replaces the club name and points with dust-
- * faint blocks.  Same three-column grid as LeaderRow, so nothing shifts
- * sideways when the table lands.
- *
- * Deliberately NOT the em-dash placeholder: "Awaiting first kick-off" is a
- * claim about the season, and during a fetch we have no basis for it.
+ * Loading row: the real slot number, then faint blocks for the club and
+ * points, on the same grid as LeaderRow so nothing shifts when the table
+ * lands. Not the "Awaiting first kick-off" placeholder: that is a claim
+ * about the season, and during a read we have no basis for it.
  */
 function SkeletonLeaderRow({ position }: { position: number }) {
   return (
-    <li style={{
-      display: 'grid',
-      gridTemplateColumns: 'auto 1fr auto',
-      alignItems: 'center',
-      gap: 12,
-      fontSize: 13,
-      color: DUST_50,
-    }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
-        <span aria-hidden="true" style={{ opacity: 0.4 }}>|</span>
-        <span>{String(position).padStart(2, '0')}</span>
-      </span>
-      {/* Club-name band, narrowing down the strip so three stacked rows read
-          as a list of names rather than a solid block. */}
+    <li style={{ ...ROW, ...tone.secondary }}>
+      <span style={{ fontWeight: 700 }}>{position}</span>
       <Skeleton height={13} width={`${72 - position * 8}%`} />
       <Skeleton height={13} width={48} />
     </li>
@@ -527,35 +351,12 @@ function SkeletonLeaderRow({ position }: { position: number }) {
 }
 
 /**
- * Fetch-failed row.  Says the table couldn't be reached, in flare, and points
- * at the one recovery the reader has.  A retry button would have to live
- * inside the card's <Link>, which nests an interactive control in an anchor —
- * so the reload cue is text, and the card still navigates to the full table
- * (which does its own fetch and may well succeed).
- */
-function UnavailableLeaderRow() {
-  return (
-    <li style={{
-      fontSize: 13,
-      lineHeight: 1.5,
-      color: FLARE,
-      fontStyle: 'italic',
-    }}>
-      The table could not be reached. Reload to try again.
-    </li>
-  );
-}
-
-/**
- * Truncate a string at the nearest word boundary at or before `limit`.
- * Returns the original string unchanged when shorter than the limit.
- * The ellipsis is a single Unicode glyph (…) rather than three dots so
- * it occupies exactly one character cell in the truncated output.
+ * Truncate at the last word boundary at or before `limit`, adding a single
+ * ellipsis glyph. Returns the text unchanged when it is short enough.
  *
- * Edge cases:
- *   - empty / null / undefined → returns ''
- *   - no whitespace before `limit` → returns the hard-truncated slice + …
- *     (rare; only fires on pathological inputs like 320-char single words)
+ * @param text   Source text (empty gives '').
+ * @param limit  Maximum characters before the ellipsis.
+ * @returns      The excerpt.
  */
 function truncateAtWord(text: string, limit: number): string {
   if (!text) return '';
@@ -563,5 +364,5 @@ function truncateAtWord(text: string, limit: number): string {
   const sliced = text.slice(0, limit);
   const lastSpace = sliced.lastIndexOf(' ');
   const cut = lastSpace > 0 ? sliced.slice(0, lastSpace) : sliced;
-  return `${cut}…`;
+  return `${cut}\u2026`;
 }

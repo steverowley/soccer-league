@@ -54,9 +54,9 @@ describe('LeaderStrip — loading', () => {
   it('holds the three leader slots so the card does not resize on arrival', () => {
     const { container } = renderStrip({ status: 'loading' });
     expect(container.querySelectorAll('li')).toHaveLength(3);
-    expect(screen.getByText('01')).toBeTruthy();
-    expect(screen.getByText('02')).toBeTruthy();
-    expect(screen.getByText('03')).toBeTruthy();
+    expect(screen.getByText('1')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy();
   });
 });
 
@@ -89,8 +89,22 @@ describe('LeaderStrip — ready', () => {
     });
     expect(screen.getByText('Mars Athletic')).toBeTruthy();
     expect(screen.getByText('31 pts')).toBeTruthy();
-    expect(screen.getByText('03')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy();
     expect(screen.queryByText(/awaiting first kick-off/i)).toBeNull();
+  });
+
+  it('shows tied leaders as "=N", including a tie across the cut', () => {
+    renderStrip({
+      status: 'ready',
+      rows: [
+        row('a', 'Alpha', 6, 1),
+        row('b', 'Beta', 6, 2),
+        row('c', 'Gamma', 3, 3),
+        row('d', 'Delta', 3, 4),
+      ],
+    });
+    expect(screen.getAllByText('=1')).toHaveLength(2);
+    expect(screen.getByText('=3')).toBeTruthy();
   });
 
   it('caps the strip at the top three even when the full table is passed', () => {
