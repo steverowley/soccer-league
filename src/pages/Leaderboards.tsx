@@ -2,12 +2,11 @@
 // Combined leaderboards page — `/leaderboards` route (bd isl-aah).
 //
 // LAYOUT
-//   Header (global)
-//   I.  Page hero
-//   II. Two boards side-by-side on desktop, stacked on mobile:
+//   PageShell (site header, main column, footer)
+//   PageHeader: eyebrow "Leaderboards", title, intro
+//   Two boards side-by-side on desktop, stacked on mobile:
 //         A.  Top wagerers  — wager_leaderboard view, sorted by net profit
 //         B.  Top idols     — player_idol_score view, sorted by global rank
-//   Footer (shared)
 //
 // DATA SOURCES
 //   - getWagerLeaderboard(db, 50)   — public SQL view; sorted by net_profit DESC
@@ -26,17 +25,16 @@
 
 import { Link } from 'react-router-dom';
 
-import Header from '../components/Header';
-import { COLORS, Container, SectionHeader, Footer } from '../components/Layout';
+import { COLORS, SectionHeader } from '../components/Layout';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard, useSeasonPhase } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
-import { AsyncView, EmptyState } from '../shared/ui';
+import { AsyncView, EmptyState, PageHeader, PageShell } from '../shared/ui';
 import { getWagerLeaderboard } from '@features/betting';
 import type { WagerLeaderboardEntry } from '@features/betting';
 
 // ── Style aliases (mirror Idols.tsx) ───────────────────────────────────────
-const { dust: DUST, abyss: ABYSS, flare: FLARE } = COLORS;
+const { dust: DUST, flare: FLARE } = COLORS;
 const HAIRLINE = COLORS.hairline;
 const DUST_50  = COLORS.dust50;
 const DUST_70  = COLORS.dust70;
@@ -91,30 +89,16 @@ export default function Leaderboards(): JSX.Element {
   const preSeason = phase.status === 'success' && phase.data?.phase === 'pre-season';
 
   return (
-    <div style={{
-      background: ABYSS,
-      color: DUST,
-      minHeight: '100vh',
-    }}>
-      <Header />
+    <PageShell>
+      {/* Page header. */}
+      <PageHeader
+        eyebrow="Leaderboards"
+        title="The Boards"
+        subtitle="Two ledgers: the bettors who've grown a bankroll, the players the cosmos worships.  Different signals, same question: who's ahead."
+      />
 
-      {/* Section I — Page hero. */}
-      <section style={{ padding: '48px 0 16px' }}>
-        <Container>
-          <SectionHeader
-            level={1}
-            pageKicker="Leaderboards"
-            kicker="VII"
-            label="Who's Winning"
-            title="The Boards"
-            subtitle="Two ledgers: the bettors who've grown a bankroll, the players the cosmos worships.  Different signals, same question: who's ahead."
-          />
-        </Container>
-      </section>
-
-      {/* Section II — Two-board grid. */}
+      {/* Two-board grid. */}
       <section style={{ padding: '0 0 80px' }}>
-        <Container>
           <div
             className="isl-leaderboards-grid"
             style={{
@@ -172,11 +156,9 @@ export default function Leaderboards(): JSX.Element {
               .isl-leaderboards-grid { grid-template-columns: 1fr !important; }
             }
           `}</style>
-        </Container>
       </section>
 
-      <Footer />
-    </div>
+    </PageShell>
   );
 }
 
