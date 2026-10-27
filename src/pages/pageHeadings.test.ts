@@ -9,8 +9,13 @@
 // <h1> itself, opens with <SectionHeader level={1}>, or uses a hero component
 // that renders the h1 (listed below). PageHeader (shared/ui, the design
 // language's one page header) always renders the page's h1.
+//
+// A static scan cannot see branches: MatchDetail once passed it while its
+// normal states rendered no h1 (only the not-found branch had one). Pages
+// with state branches are therefore also checked at RUNTIME, one render per
+// state, in the test files listed in RUNTIME_CHECKED (spec section 8).
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -20,6 +25,11 @@ const PAGES_DIR = join(process.cwd(), 'src', 'pages');
 
 /** Components that render the page's h1 themselves. */
 const H1_HEROES = ['<AdminPageHero', '<PageHeader'];
+
+/** Pages with state branches, and the test that renders each state. */
+const RUNTIME_CHECKED: Record<string, string> = {
+  'MatchDetail.tsx': 'MatchDetail.headings.test.tsx',
+};
 
 const pages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('.tsx') && !f.includes('.test.'));
 
@@ -37,6 +47,16 @@ describe('every page has a main heading', () => {
       expect(hasH1, `${file} renders no h1`).toBe(true);
     });
   }
+
+  it('pages with state branches have a runtime test of every state', () => {
+    for (const [page, test] of Object.entries(RUNTIME_CHECKED)) {
+      expect(pages, `${page} is listed but missing`).toContain(page);
+      const path = join(PAGES_DIR, test);
+      expect(existsSync(path), `${test} (runtime heading test for ${page}) is missing`).toBe(true);
+      // The runtime test must actually count h1s.
+      expect(readFileSync(path, 'utf8')).toMatch(/level:\s*1/);
+    }
+  });
 
   it('a page opens with at most one level-1 SectionHeader', () => {
     for (const file of pages) {

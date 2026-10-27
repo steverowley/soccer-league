@@ -1,20 +1,27 @@
 // ── WagerWidget.tsx ─────────────────────────────────────────────────────────
-// Wager placement widget — surfaces on MatchDetail beneath the hero for
-// scheduled matches.
+// Wager placement widget: surfaces on MatchDetail's stake rail and inside
+// the Welcome wizard's first-bet step.
 //
 // Five render branches (all from the same component shell):
 //   1. Match status ≠ scheduled  → "Betting closed" placeholder
 //   2. Loading                    → italic "Tuning in to the bookie…"
 //   3. No odds row in DB          → "Odds not yet posted"
-//   4. Anonymous user             → SignInCta inside the widget
+//   4. Anonymous user             → sign-up link inside the widget
 //   5. Authenticated user         → existing-wager card (if any) +
 //                                   3-side picker + stake input +
 //                                   payout preview + Place CTA
+//
+// On the design language since group 2 (docs/design-language.md): tokens
+// only, no raw sizes or colours (scripts/designTokens.test.ts). The chosen
+// side uses the system's selected state (Lunar Dust fill, Abyss text)
+// instead of the old purple, because purple means the Architect. "Place"
+// is the view's one primary (orange) button, and only once the wager can
+// be placed; the anonymous sign-up link is secondary because the site
+// header already carries the orange Sign up.
 
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { COLORS } from './Layout';
-import { Card } from '../shared/ui';
+import { color, hairline, numeric, size, space, tone, type } from '../shared/design';
+import { Button, Card } from '../shared/ui';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { MIN_BET, canAffordBet } from '../features/auth';
@@ -24,20 +31,11 @@ import {
   placeWager,
 } from '../features/betting';
 
-// ── Local aliases for terser inline styles ──────────────────────────────────
-// ASTRO (action) drives the primary CTAs in this widget; QUANTUM stays the
-// focus / selection cue.  FLARE is reserved for genuine error states:
-// "insufficient credits", form-error message line.  Solar Flare is error-only.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
-
 // ── Stake constants ────────────────────────────────────────────────────────
-// MIN_STAKE — reuses MIN_BET (10) from the auth feature so the form's lower
+// MIN_STAKE: reuses MIN_BET (10) from the auth feature so the form's lower
 // bound matches the API contract.
 const MIN_STAKE = MIN_BET;
-// DEFAULT_STAKE — pre-filled on first render so the form is immediately
+// DEFAULT_STAKE: pre-filled on first render so the form is immediately
 // submittable when the reader has the minimum balance.
 const DEFAULT_STAKE = MIN_STAKE;
 
@@ -76,11 +74,14 @@ interface ExistingWager {
   odds_snapshot: number;
 }
 
+/** Italic small note used by the closed / loading / no-odds branches. */
+const NOTE = { ...type.small, ...tone.secondary, fontStyle: 'italic', margin: 0 } as const;
+
 /**
  * Wager placement widget for a single match.
  *
  * Owns its own auth check + odds fetch + existing-wager fetch.  Caller
- * passes the match row (already loaded by MatchDetail) — we don't re-fetch
+ * passes the match row (already loaded by MatchDetail): we don't re-fetch
  * the match itself, so the widget paints inline as soon as its 2 parallel
  * queries return.
  */
@@ -92,7 +93,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
   const [odds,       setOdds]       = useState<OddsRow | null>(null);
   const [existing,   setExisting]   = useState<ExistingWager | null>(null);
   const [loaded,     setLoaded]     = useState(false);
-  // Re-fetch trigger — incremented after a successful placement so the
+  // Re-fetch trigger: incremented after a successful placement so the
   // existing-wager card flips without a full page reload.
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -131,7 +132,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
   }, [publicDb, db, match?.id, user, isScheduled, refreshKey]);
 
   // Compute the potential payout for the currently-selected side + stake.
-  // Pure derivation — re-runs on every keystroke without any round-trip.
+  // Pure derivation: re-runs on every keystroke without any round-trip.
   const payout = useMemo(() => {
     if (!odds || !side) return 0;
     const oddsValue = odds[`${side}_odds`] ?? 0;
@@ -171,9 +172,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
   if (!isScheduled) {
     return (
       <Shell>
-        <p style={{ color: DUST_70, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
-          {emptyMessageFor(match?.status)}
-        </p>
+        <p style={NOTE}>{emptyMessageFor(match?.status)}</p>
       </Shell>
     );
   }
@@ -181,9 +180,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
   if (!loaded) {
     return (
       <Shell>
-        <p style={{ color: DUST_50, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
-          Tuning in to the bookie…
-        </p>
+        <p style={{ ...NOTE, ...tone.tertiary }}>Tuning in to the bookie…</p>
       </Shell>
     );
   }
@@ -191,7 +188,7 @@ function WagerWidget({ match }: { match: MatchRef }) {
   if (!odds) {
     return (
       <Shell>
-        <p style={{ color: DUST_70, fontStyle: 'italic', fontSize: 13, margin: 0 }}>
+        <p style={NOTE}>
           Odds haven&rsquo;t been posted for this match yet. Check back closer to kickoff.
         </p>
       </Shell>
@@ -201,28 +198,11 @@ function WagerWidget({ match }: { match: MatchRef }) {
   if (!user) {
     return (
       <Shell>
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: DUST_70, margin: '0 0 16px' }}>
+        <p style={{ ...type.small, ...tone.secondary, margin: 0, marginBottom: space[16] }}>
           Sign up to stake credits on this match.  New accounts start
           with 200 Intergalactic Credits.
         </p>
-        <Link
-          to="/login"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            fontSize: 13,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-            color: ABYSS,
-            background: ASTRO,
-            border: `1px solid ${ASTRO}`,
-            padding: '12px 24px',
-            textDecoration: 'none',
-          }}
-        >
-          Sign Up To Bet
-        </Link>
+        <Button to="/login">Sign up to bet</Button>
       </Shell>
     );
   }
@@ -231,21 +211,21 @@ function WagerWidget({ match }: { match: MatchRef }) {
     <Shell>
       {existing && (
         <div style={{
-          padding: '12px 16px',
-          border: `1px solid ${HAIRLINE}`,
-          marginBottom: 24,
+          ...type.label,
+          ...hairline(color.line),
+          padding: `${space[12]}px ${space[16]}px`,
+          marginBottom: space[24],
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'baseline',
-          fontSize: 12,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
+          gap: space[8],
         }}>
           <span>
-            Existing bet: <span style={{ fontWeight: 700 }}>{SIDE_LABEL[existing.team_choice]}</span>
-            {' '}for <span style={{ fontWeight: 700, color: QUANTUM }}>{existing.stake.toLocaleString()}</span>{' '}credits
+            Existing bet: {SIDE_LABEL[existing.team_choice]}
+            {' '}for <span style={numeric}>{existing.stake.toLocaleString()}</span>{' '}credits
           </span>
-          <span style={{ color: DUST_70 }}>
+          <span style={{ ...tone.secondary, ...numeric }}>
             @ {Number(existing.odds_snapshot).toFixed(2)}
           </span>
         </div>
@@ -273,8 +253,8 @@ function WagerWidget({ match }: { match: MatchRef }) {
 }
 
 /**
- * Outer chrome — bordered hairline box + consistent padding so every
- * render branch occupies the same visual footprint.
+ * Outer chrome: a hairline Card so every render branch occupies the same
+ * visual footprint.
  */
 function Shell({ children }: { children: ReactNode }) {
   return (
@@ -291,7 +271,7 @@ function Shell({ children }: { children: ReactNode }) {
 function emptyMessageFor(status: string): string {
   // `live` is the normal in-play state (simulated, revealing on the wall
   // clock); `in_progress` is the brief window while the worker writes rows.
-  // Both are closed to bets — place_wager only accepts `scheduled`.
+  // Both are closed to bets: place_wager only accepts `scheduled`.
   if (status === 'in_progress' || status === 'live') {
     return 'Betting closed: match is in progress.';
   }
@@ -309,13 +289,13 @@ interface SidePickerProps {
 
 /**
  * Three-button side picker.  Each button shows the side label, the team
- * name, and the decimal odds.  Active button paints quantum-outlined.
+ * name, and the decimal odds.  The chosen side takes the selected state.
  */
 function SidePicker({ odds, match, selected, onSelect }: SidePickerProps) {
   const homeName = match.home_team?.name ?? 'Home';
   const awayName = match.away_team?.name ?? 'Away';
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: space[8] }}>
       <SideButton sideKey="home" label={SIDE_LABEL.home} subtitle={homeName}
         oddsValue={odds.home_odds} active={selected === 'home'} onSelect={onSelect} />
       <SideButton sideKey="draw" label={SIDE_LABEL.draw} subtitle="Stalemate"
@@ -336,36 +316,39 @@ interface SideButtonProps {
 }
 
 /**
- * Single button in the side picker.  Three lines: side label (small-caps),
- * team-or-stalemate subtitle, decimal odds in bold.  Active state flips
- * border + background to quantum.
+ * Single button in the side picker.  Three lines: side label, team or
+ * "Stalemate", decimal odds in bold.  The active side is the system's
+ * selected state: Lunar Dust fill with Abyss text (spec section 6, Tag).
  */
 function SideButton({ sideKey, label, subtitle, oddsValue, active, onSelect }: SideButtonProps) {
+  const ink = active ? color.bg : color.text;
   return (
     <button
       type="button"
       onClick={() => onSelect(sideKey)}
+      aria-pressed={active}
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-start',
-        gap: 8,
-        background: active ? COLORS.dustFaint : 'transparent',
-        border: `1px solid ${active ? QUANTUM : HAIRLINE}`,
-        color: DUST,
-        padding: '14px 16px',
+        gap: space[8],
+        minWidth: 0,
+        background: active ? color.text : 'transparent',
+        ...hairline(active ? color.text : color.line),
+        color: ink,
+        padding: `${space[12]}px ${space[12]}px`,
         fontFamily: 'inherit',
         cursor: 'pointer',
         textAlign: 'left',
       }}
     >
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70 }}>
+      <span style={{ ...type.label, color: active ? color.bg : color.textSecondary }}>
         {label}
       </span>
-      <span style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>
+      <span style={{ ...type.small, fontWeight: 700, overflowWrap: 'anywhere' }}>
         {subtitle}
       </span>
-      <span style={{ marginTop: 'auto', fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: active ? QUANTUM : DUST }}>
+      <span style={{ ...numeric, marginTop: 'auto', fontSize: size.subheading, fontWeight: 700, lineHeight: 1.25 }}>
         {Number(oddsValue).toFixed(2)}
       </span>
     </button>
@@ -397,9 +380,9 @@ function StakeForm({
   const submittable = hasSide && hasStake && canAfford && !submitting;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 24, alignItems: 'flex-end' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label htmlFor="wager-stake" style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: space[16], marginTop: space[24], alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space[8], minWidth: 0 }}>
+        <label htmlFor="wager-stake" style={{ ...type.label, ...tone.secondary }}>
           Stake (Credits)
         </label>
         <input
@@ -410,55 +393,55 @@ function StakeForm({
           value={stake}
           onChange={(e) => onStakeChange(Math.max(MIN_STAKE, Number(e.target.value) || MIN_STAKE))}
           style={{
-            background: ABYSS, border: `1px solid ${HAIRLINE}`, color: DUST,
-            fontFamily: 'inherit', fontSize: 16, fontWeight: 700, padding: '10px 12px',
+            ...type.body,
+            ...numeric,
+            ...hairline(color.line),
+            background: color.surfaceRaised,
+            color: color.text,
+            fontFamily: 'inherit',
+            fontWeight: 700,
+            padding: `${space[8]}px ${space[12]}px`,
+            minWidth: 0,
           }}
         />
-        <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: canAfford ? DUST_70 : FLARE }}>
+        <span style={{ ...type.label, color: canAfford ? color.textSecondary : color.live }}>
           {credits.toLocaleString()} credits available
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_70 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space[8], minWidth: 0 }}>
+        <span style={{ ...type.label, ...tone.secondary }}>
           Potential Payout
         </span>
-        <div style={{ fontSize: 22, fontWeight: 700, color: hasSide ? DUST : DUST_50, fontVariantNumeric: 'tabular-nums', padding: '8px 0' }}>
+        <div style={{ ...numeric, fontSize: size.subheading, fontWeight: 700, lineHeight: 1.25, color: hasSide ? color.text : color.textTertiary, padding: `${space[8]}px 0` }}>
           {hasSide ? payout.toLocaleString() : '—'}
         </div>
       </div>
 
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: space[8] }}>
         {formError && (
-          <p role="alert" style={{ color: FLARE, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
+          <p role="alert" style={{ ...type.small, color: color.live, fontStyle: 'italic', margin: 0 }}>
             {formError}
           </p>
         )}
-        <button
-          type="button"
+        <Button
+          variant={submittable ? 'primary' : 'secondary'}
           disabled={!submittable}
           onClick={onPlace}
-          style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
-            color: submittable ? ABYSS : DUST_50,
-            background: submittable ? ASTRO : 'transparent',
-            border: `1px solid ${submittable ? ASTRO : HAIRLINE}`,
-            padding: '14px 24px', cursor: submittable ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
-          }}
+          style={{ width: '100%', whiteSpace: 'normal' }}
         >
           {submitting
             ? 'Placing wager…'
             : hasSide && side
               ? `Place ${stake.toLocaleString()} on ${SIDE_LABEL[side]}`
               : 'Pick a side'}
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
 
-// Memoised: MatchDetail re-renders on every Realtime event; WagerWidget's
+// Memoised: MatchDetail re-renders on every live tick; WagerWidget's
 // props (the match row) change at most once per minute so skipping re-renders
 // eliminates redundant odds/wager sub-tree diffs during live commentary ticks.
 export default memo(WagerWidget);

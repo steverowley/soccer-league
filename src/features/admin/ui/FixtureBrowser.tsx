@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import { LiveBadge } from '@shared/ui';
 import {
   getAdminFixtures, completeMatchManually,
   type AdminFixture,
@@ -195,7 +196,8 @@ export function FixtureBrowser({ db }: { db: IslSupabaseClient }) {
  * and a link to the public match detail page.
  *
  * Status chip colour follows the same semantic mapping used on Matches.tsx:
- *   - in_progress → Quantum purple (live, attention-worthy)
+ *   - live / in_progress → the shared red-dot LiveBadge (red means live,
+ *     docs/design-language.md; this was a purple chip)
  *   - scheduled   → hairline-bordered ghost on transparent (pending)
  *   - completed   → DUST_50 (historical, low urgency)
  */
@@ -210,9 +212,8 @@ function FixtureRow({
   onSuccess:    (matchId: string, homeScore: number, awayScore: number) => void;
   onError:      (msg: string) => void;
 }) {
-  const statusColor =
-    f.status === 'in_progress' ? QUANTUM :
-    f.status === 'completed'   ? DUST_50 : DUST_70;
+  const isLive = f.status === 'in_progress' || f.status === 'live';
+  const statusColor = f.status === 'completed' ? DUST_50 : DUST_70;
 
   const score =
     f.home_score != null && f.away_score != null
@@ -225,9 +226,11 @@ function FixtureRow({
   return (
     <tr style={{ borderBottom: `1px solid ${DUST_FAINT}` }}>
       <td style={{ padding: '10px 12px' }}>
-        <span style={{ ...LABEL_STYLE, color: statusColor }}>
-          {f.status === 'in_progress' ? 'Live' : f.status}
-        </span>
+        {isLive ? (
+          <LiveBadge />
+        ) : (
+          <span style={{ ...LABEL_STYLE, color: statusColor }}>{f.status}</span>
+        )}
       </td>
       <td style={{ ...VALUE_STYLE, padding: '10px 12px', fontSize: 12 }}>
         {f.round ?? '—'}

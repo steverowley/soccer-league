@@ -23,14 +23,6 @@
     "fontSize": 4,
     "letterSpacing": 2
   },
-  "src/components/TeachingStrip.tsx": {
-    "fontSize": 3,
-    "letterSpacing": 2
-  },
-  "src/components/WagerWidget.tsx": {
-    "fontSize": 16,
-    "letterSpacing": 7
-  },
   "src/constants.ts": {
     "colour": 5
   },
@@ -75,9 +67,7 @@
     "colour": 4
   },
   "src/features/match/ui/viewer/MatchViewer.tsx": {
-    "colour": 3,
-    "fontSize": 1,
-    "letterSpacing": 1
+    "colour": 1
   },
   "src/features/match/ui/viewer/MatchViewerDemo.tsx": {
     "fontSize": 5,
@@ -118,12 +108,6 @@
   "src/pages/ManagerDetail.tsx": {
     "letterSpacing": 3,
     "fontSize": 8
-  },
-  "src/pages/MatchDetail.tsx": {
-    "dust": 1,
-    "fontSize": 31,
-    "letterSpacing": 15,
-    "colour": 7
   },
   "src/pages/News.tsx": {
     "colour": 8,

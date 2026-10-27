@@ -55,6 +55,10 @@ const MIGRATED = [
   'src/shared/ui/StatPair.tsx',
   'src/shared/ui/KeyValue.tsx',
   'src/shared/ui/Pip.tsx',
+  // Group 2: the match page and the components only it (or it first) renders.
+  'src/pages/MatchDetail.tsx',
+  'src/components/TeachingStrip.tsx',
+  'src/components/WagerWidget.tsx',
 ];
 
 const root = process.cwd();

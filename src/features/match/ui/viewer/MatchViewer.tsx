@@ -20,7 +20,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { COLORS } from '../../../../components/Layout';
+import { color, hairline } from '../../../../shared/design';
+import { Tag } from '../../../../shared/ui';
 // useReducedMotion is a shared accessibility hook exposed on the entities
 // barrel; the cross-feature import is barrel-only so it satisfies
 // no-restricted-imports.
@@ -428,8 +429,8 @@ export function MatchViewer({
         position: 'relative',
         width: '100%',
         aspectRatio: `${VP.width} / ${VP.height}`,
-        background: COLORS.abyss,
-        border: `1px solid ${COLORS.hairline}`,
+        background: color.bg,
+        ...hairline(color.line),
         boxSizing: 'border-box',
       }}
     >
@@ -449,7 +450,9 @@ export function MatchViewer({
         }}
       />
 
-      {/* In-game camera toggle. */}
+      {/* In-game camera toggle: two filter tags; the active camera takes
+          the selected state (Lunar Dust fill), not purple. The tags sit
+          on an Abyss backing so they stay legible over the pitch. */}
       <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
         <CameraButton label="Pitch" active={cameraMode === 'broadcast'} onClick={() => switchCamera('broadcast')} />
         <CameraButton label="Ball" active={cameraMode === 'follow'} onClick={() => switchCamera('follow')} />
@@ -458,26 +461,14 @@ export function MatchViewer({
   );
 }
 
-/** Small overlay button for the camera toggle, styled in the ISL palette. */
+/**
+ * Overlay toggle for the camera: a design-system Tag in its toggle form
+ * (aria-pressed), selected when that camera is active.
+ */
 function CameraButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      style={{
-        font: 'inherit',
-        fontSize: 11,
-        letterSpacing: '0.02em',
-        padding: '4px 9px',
-        cursor: 'pointer',
-        borderRadius: 2,
-        color: active ? '#fff' : COLORS.dust70,
-        background: active ? COLORS.quantum : 'rgba(17,17,17,0.7)',
-        border: `1px solid ${active ? COLORS.quantum : COLORS.hairline}`,
-      }}
-    >
+    <Tag selected={active} onClick={onClick} style={active ? {} : { background: color.bg }}>
       {label}
-    </button>
+    </Tag>
   );
 }
