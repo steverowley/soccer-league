@@ -18,7 +18,8 @@
 //   Two-column grid (1fr / 360px; one column below 900 px):
 //     LEFT:  the idol board, a DataTable: rank ("=2" for a tie) / player
 //            (name, then position and club with its Crest) / idol score /
-//            heat meter (the score relative to the top score)
+//            heat meter (the score relative to the top score; hidden on a
+//            phone so the table fits without scrolling)
 //     RIGHT: an "On the rise" Card (the top of the board, ranks as ordinals)
 //            and the static "The risk" lore Card
 //
@@ -219,11 +220,15 @@ export default function Idols() {
         </aside>
       </div>
 
-      {/* The board + rail collapse to a single column below 900 px; the rail
-          drops beneath the board. */}
+      {/* The board + rail collapse to a single column below 900 px (the rail
+          drops beneath the board); on a phone the heat column is hidden so
+          rank, player and score fit without scrolling. */}
       <style>{`
         @media (max-width: 899px) {
           .isl-idols-layout { grid-template-columns: minmax(0, 1fr) !important; }
+        }
+        @media (max-width: 599px) {
+          .isl-idols-heat { display: none; }
         }
       `}</style>
     </PageShell>
@@ -240,13 +245,13 @@ export default function Idols() {
 function Board({ rows, topScore }: { rows: IdolBoardRow[]; topScore: number }) {
   const ranks = rankLabels(rows, idolTieKey);
   return (
-    <DataTable caption="The idol board" minWidth={480}>
+    <DataTable caption="The idol board">
       <thead>
         <tr>
-          <th style={dataHead('left', 56)}>#</th>
+          <th style={dataHead('left', 48)}>#</th>
           <th style={dataHead()}>Player</th>
-          <th style={dataHead('right', 112)}>Idol score</th>
-          <th style={dataHead('right', 96)}>Heat</th>
+          <th style={dataHead('right', 80)}>Score</th>
+          <th className="isl-idols-heat" style={dataHead('right', 96)}>Heat</th>
         </tr>
       </thead>
       <tbody>
@@ -317,7 +322,7 @@ function BoardRow({ row, rank, topScore }: { row: IdolBoardRow; rank: string; to
         </div>
       </td>
       <td style={{ ...dataCell('right'), fontWeight: 700 }}>{score.toFixed(0)}</td>
-      <td style={dataCell('right')}>
+      <td className="isl-idols-heat" style={dataCell('right')}>
         <HeatBar level={heatLevel(score, topScore)} />
       </td>
     </tr>

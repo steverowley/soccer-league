@@ -61,7 +61,7 @@ import {
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { listEntities, RelationshipGraph, KindGlyph, kindTier } from '../features/entities';
-import type { Entity } from '../features/entities';
+import type { Entity, KindTier } from '../features/entities';
 
 // ── Entity kind groups ────────────────────────────────────────────────────────
 // Groups are the unit of filtering the user sees: a Tag per group, not per
@@ -76,6 +76,11 @@ const KIND_GROUPS: ReadonlyArray<{
   label: string;
   /** Kinds included in this group. Empty array = no filter (all kinds). */
   kinds: readonly string[];
+  /**
+   * The tier glyph on the group's filter Tag. Omitted for the mixed groups
+   * (World, All), where one glyph would misdescribe the list.
+   */
+  tier?: KindTier;
 }> = [
   // World: the default view. Narratively rich, manageable list size.
   // Excludes players (704) and teams (32+) which have dedicated browse surfaces.
@@ -93,30 +98,35 @@ const KIND_GROUPS: ReadonlyArray<{
   // Officials: referees + governance bodies.
   {
     key:   'officials',
+    tier:  'officials',
     label: 'Officials',
     kinds: ['referee', 'association', 'officials_association'],
   },
   // Media: everyone who broadcasts or writes.
   {
     key:   'media',
+    tier:  'media',
     label: 'Media',
     kinds: ['journalist', 'sports_writer', 'pundit', 'commentator', 'media_company', 'social_media', 'bookie'],
   },
   // Politics: parties, politicians, legacy political_body kinds.
   {
     key:   'politics',
+    tier:  'politics',
     label: 'Politics',
     kinds: ['politician', 'political_party', 'political_body'],
   },
   // Venues: every named physical location in the galaxy.
   {
     key:   'venues',
+    tier:  'place',
     label: 'Venues',
     kinds: ['planet', 'colony', 'stadium', 'training_facility'],
   },
   // Clubs & Staff: teams + their managing staff. Players separate below.
   {
     key:   'clubs',
+    tier:  'club',
     label: 'Clubs & Staff',
     kinds: ['team', 'manager', 'managing_staff'],
   },
@@ -124,6 +134,7 @@ const KIND_GROUPS: ReadonlyArray<{
   // /players/:id page; the graph view is the main value-add here.
   {
     key:   'players',
+    tier:  'player',
     label: 'Players',
     kinds: ['player'],
   },
@@ -292,11 +303,10 @@ export default function World() {
           <div role="group" aria-label="Filter entities by tier" style={{ display: 'flex', gap: space[8], flexWrap: 'wrap', alignItems: 'center' }}>
             {KIND_GROUPS.map((group) => {
               const active = activeGroup === group.key;
-              const first = group.kinds[0];
               return (
                 <Tag key={group.key} selected={active} onClick={() => setActiveGroup(group.key)} style={tagStyle}>
-                  {first != null && (
-                    <KindGlyph tier={kindTier(first)} size={10} {...(active ? { fill: color.bg } : {})} />
+                  {group.tier != null && (
+                    <KindGlyph tier={group.tier} size={10} {...(active ? { fill: color.bg } : {})} />
                   )}
                   {group.label}
                 </Tag>
