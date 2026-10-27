@@ -20,6 +20,7 @@
 //   player glows under a Quantum-Purple halo (the Architect's eye).
 
 import { PITCH_LENGTH, PITCH_WIDTH } from '../../logic/spatial/types';
+import { canvasColor } from '../../../../shared/design';
 import {
   GOALS,
   GOAL_DEPTH,
@@ -38,26 +39,31 @@ import {
 export type ProjectFn = (wx: number, wy: number, wz: number) => Projected;
 
 // ── Palette (ISL tokens — the phosphor monochrome) ────────────────────────────
+// A canvas cannot read CSS variables, so the colours come from `canvasColor`
+// in src/shared/design/tokens.ts: literal values that tokens.test.ts holds
+// equal to their custom properties in tokens.css.
 
 /** Lunar Dust — the phosphor body. */
-const PHOS = '#E3E0D5';
+const PHOS = canvasColor.text;
 /** Galactic Abyss — outline, eyes, and the GK's hollow shirt fill. */
-const ABYSS = '#111111';
+const ABYSS = canvasColor.bg;
 /** Mid phosphor — legs/shorts and antennae stems. */
-const PHOS_DIM = '#9C9A90';
+const PHOS_DIM = canvasColor.figureDim;
 /** Fallback kit shirts when a club has no colour — the study's muted pair. */
-const KIT_HOME_FALLBACK = '#C9603F'; // muted astro terracotta
-const KIT_AWAY_FALLBACK = '#4E7E8C'; // muted slate-cyan
+const KIT_HOME_FALLBACK = canvasColor.kitHome; // muted astro terracotta
+const KIT_AWAY_FALLBACK = canvasColor.kitAway; // muted slate-cyan
 /** Quantum Purple — the focus halo (the Architect's eye on the selected soul). */
-const QUANTUM = '#9A5CF4';
+const QUANTUM = canvasColor.architect;
 
-const SHADOW = 'rgba(0,0,0,0.38)';
-const BALL_COLOR = '#E3E0D5';
+const SHADOW = canvasColor.shadow;
+const BALL_COLOR = canvasColor.text;
+/** The ball's shaded side. */
+const BALL_SHADE = canvasColor.ballShade;
 /** Pitch surface — abyss-toned greens so the phosphor beings carry the light. */
-const GRASS_A = '#131613'; // darker mowing stripe
-const GRASS_B = '#171b17'; // lighter mowing stripe
-const LINE = 'rgba(227,224,213,0.26)';
-const GOAL_LINE = 'rgba(227,224,213,0.5)';
+const GRASS_A = canvasColor.grassA; // darker mowing stripe
+const GRASS_B = canvasColor.grassB; // lighter mowing stripe
+const LINE = canvasColor.line;
+const GOAL_LINE = canvasColor.goalLine;
 
 /** How many vertical mowing stripes to paint across the pitch length. */
 const GRASS_STRIPES = 10;
@@ -709,6 +715,6 @@ export function drawBall(ctx: CanvasRenderingContext2D, project: ProjectFn, b: B
   ell(ctx, gr.x, gr.y, 2.4 * sc * (1 - Math.min(0.6, b.wz * 0.05)), 1.0 * sc);
   ctx.fillStyle = BALL_COLOR;
   circle(ctx, pr.x, pr.y, Math.max(1.2, 1.5 * sc));
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillStyle = BALL_SHADE;
   circle(ctx, pr.x + 0.4 * sc, pr.y + 0.4 * sc, Math.max(0.5, 0.6 * sc));
 }

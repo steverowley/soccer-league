@@ -1,24 +1,25 @@
 // ── features/admin/ui/AdminTabStrip.tsx ──────────────────────────────────────
-// Horizontal sub-nav rendered immediately below the admin page hero.  Pure
-// presentational — owns no state; the URL-sync logic lives in the parent
-// Admin.tsx route file so the chip strip can be embedded elsewhere later
+// Horizontal sub-nav rendered immediately below the admin page header.  Pure
+// presentational: owns no state; the URL-sync logic lives in the parent
+// Admin.tsx route file so the strip can be embedded elsewhere later
 // (e.g. inside an admin modal) without dragging that side-effect in.
 //
-// VISUAL CONTRACT
-//   - Space Mono uppercase labels.
-//   - 44px minimum tap target (touch-friendly without feeling oversized).
-//   - DUST_FAINT chip background + 3px Quantum underline on the active tab.
-//   - Horizontal scroll on narrow viewports (single-row preserved on mobile).
+// VISUAL CONTRACT (docs/design-language.md)
+//   - `label` type (11 px, uppercase, 0.12em), like the site's main nav.
+//   - Inactive tabs in the secondary tone; the active tab in the default
+//     tone with an underline, the same cue the header nav uses for the
+//     current page. (It was a purple bar on a faint fill: purple is kept
+//     for the Architect and keyboard focus.)
+//   - 44 px minimum tap target.
+//   - Horizontal scroll on narrow viewports (single row preserved on mobile).
 
 import type { CSSProperties } from 'react';
-import {
-  ABYSS, HAIRLINE, DUST, DUST_70, DUST_FAINT, QUANTUM,
-} from './primitives';
+import { color, space, type } from '../../../shared/design';
 
 // ── Tab union + descriptors ──────────────────────────────────────────────────
 
 /**
- * Tab identifiers — narrow string union for exhaustive matching downstream.
+ * Tab identifiers: narrow string union for exhaustive matching downstream.
  *
  * Each member maps to one panel component:
  *   - overview   → OverviewPanel        (at-a-glance system stats)
@@ -26,13 +27,14 @@ import {
  *   - fixtures   → FixtureBrowser       (match table + manual completion)
  *   - testing    → TestingPanel         (danger zone + injectors)
  *   - architect  → ArchitectInterventionLog
+ *   - viewer     → MatchViewerDemo      (the pixel-art match viewer)
  */
 export type AdminTab = 'overview' | 'season' | 'fixtures' | 'testing' | 'architect' | 'viewer';
 
 /**
  * Ordered tab descriptors driving the visual strip.  Order matches the
  * mental model: overview first (landing), then operational tabs grouped
- * by frequency-of-use, with architect last as the audit surface.
+ * by frequency-of-use, with architect as the audit surface.
  */
 export const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: 'overview',  label: 'Overview'  },
@@ -49,7 +51,7 @@ export const DEFAULT_ADMIN_TAB: AdminTab = 'overview';
 /**
  * Narrow an arbitrary string (typically `URLSearchParams.get('tab')`) to the
  * `AdminTab` union.  Returns `null` for unknown values so the caller can
- * fall back to the default — never throws, never trusts inbound URL data.
+ * fall back to the default: never throws, never trusts inbound URL data.
  *
  * @param raw  Candidate string (e.g. `?tab=foo`) or `null` if absent.
  * @returns    A valid `AdminTab` id, or `null` for unknown / missing input.
@@ -61,36 +63,37 @@ export function parseAdminTab(raw: string | null): AdminTab | null {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-/** Inline-style for one tab button — extracted to keep the JSX readable. */
+/**
+ * Style for one tab button.
+ *
+ * @param isActive  Whether this tab is the current one.
+ * @returns         Label type; default tone and underline when active.
+ */
 function tabStyle(isActive: boolean): CSSProperties {
   return {
+    ...type.label,
     display: 'inline-flex',
     alignItems: 'center',
     minHeight: 44,
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    color: isActive ? DUST : DUST_70,
-    background: isActive ? DUST_FAINT : 'transparent',
+    paddingLeft: space[12],
+    paddingRight: space[12],
+    color: isActive ? color.text : color.textSecondary,
+    textDecorationLine: isActive ? 'underline' : 'none',
+    textUnderlineOffset: 6,
+    background: 'transparent',
     border: 'none',
-    // 3px Quantum underline on the active tab — same accent as the
-    // AdminButton primary fill, ties the strip to the rest of the admin
-    // design language.
-    borderBottom: isActive ? `3px solid ${QUANTUM}` : '3px solid transparent',
-    padding: '10px 18px',
+    fontFamily: 'inherit',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
-    transition: 'color 0.12s ease, background 0.12s ease',
   };
 }
 
 /**
- * Horizontal sub-nav for the admin dashboard.  Stateless — the parent owns
- * the active tab and URL sync; this component just renders the chip strip
- * and surfaces clicks via `onSelect`.
+ * Horizontal sub-nav for the admin dashboard.  Stateless: the parent owns
+ * the active tab and URL sync; this component renders the strip and
+ * surfaces clicks via `onSelect`.
  *
- * @param active    The currently-active tab id (drives the active chip).
+ * @param active    The currently-active tab id (drives the active tab).
  * @param onSelect  Called with the tab id on click.
  */
 export function AdminTabStrip({
@@ -100,17 +103,19 @@ export function AdminTabStrip({
   onSelect: (id: AdminTab) => void;
 }) {
   return (
-    <div style={{ borderBottom: `1px solid ${HAIRLINE}`, background: ABYSS }}>
+    <div style={{ borderBottom: `1px solid ${color.line}` }}>
       <nav
         aria-label="Admin sections"
         style={{
           display: 'flex',
-          gap: 4,
+          gap: space[4],
           overflowX: 'auto',
           // Hide the scrollbar on the horizontal scroll affordance: the
           // tabs are short labels so users won't scroll often, and the
-          // scrollbar reads as visual noise underneath the active chip.
+          // scrollbar reads as visual noise underneath the active tab.
           scrollbarWidth: 'none',
+          // The first label's text sits on the page's left edge.
+          marginLeft: -space[12],
         }}
         className="isl-admin-tabstrip"
       >

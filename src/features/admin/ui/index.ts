@@ -4,13 +4,18 @@
 // and so future panel additions / renames are a single-file edit.
 //
 // CONTENTS
-//   - The five named panels referenced from `/admin`:
+//   - The named panels referenced from `/admin`:
 //       AdminAccessGate, OverviewPanel, SeasonControlsPanel,
 //       FixtureBrowser,  TestingPanel, ArchitectInterventionLog.
-//   - The shared design tokens + small presentational primitives from
-//     `primitives.tsx` (PanelHeader, button + colour constants, etc.).
-//     Re-exporting them here means panel callers — and the Admin page
-//     shell itself — only need a single import path.
+//   - The shell pieces (tab strip, tab parsing).
+//
+// The panels are built from the design system (src/shared/design tokens and
+// src/shared/ui components). The admin-only look-alikes that used to live
+// in `primitives.tsx` (PanelHeader, StatCell, AdminButton, FilterChip,
+// ActionToast, Skeleton, the colour constants and style objects) were
+// deleted in the design system's last group: SectionHeader, StatBlock,
+// Button, Tag, the global toast, the shared Skeleton and the tokens replace
+// them one for one.
 
 // ── Panels ───────────────────────────────────────────────────────────────────
 export { AdminAccessGate }              from './AdminAccessGate';
@@ -28,35 +33,3 @@ export {
   parseAdminTab,
 } from './AdminTabStrip';
 export type { AdminTab }                from './AdminTabStrip';
-
-// ── Primitives (re-exported for the Admin.tsx shell) ─────────────────────────
-export {
-  // Components
-  PanelHeader,
-  StatCell,
-  AdminButton,
-  FilterChip,
-  ActionToast,
-  Skeleton,
-  // Style constants
-  LABEL_STYLE,
-  VALUE_STYLE,
-  adminSelectStyle,
-  adminInputStyle,
-  // Colour tokens
-  DUST,
-  DUST_50,
-  DUST_70,
-  DUST_FAINT,
-  ABYSS,
-  HAIRLINE,
-  QUANTUM,
-  FLARE,
-  TERRA,
-  PHOBOS,
-  // Helpers + hooks
-  fmtDatetime,
-  useAutoDismissToast,
-} from './primitives';
-
-export type { Toast, ToastKind, AdminButtonVariant } from './primitives';

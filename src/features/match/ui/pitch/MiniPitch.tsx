@@ -21,7 +21,7 @@
 
 import { useMemo } from 'react';
 
-import { COLORS } from '../../../../components/Layout';
+import { color } from '../../../../shared/design';
 import { eventToArchetype } from '../../logic/pitch/archetypes';
 import {
   choreographArchetype,
@@ -184,8 +184,8 @@ export function MiniPitch({
         display:     'inline-block',
         width:       `${width}px`,
         aspectRatio: `${PITCH_VIEWBOX_WIDTH} / ${PITCH_VIEWBOX_HEIGHT}`,
-        background:  COLORS.abyss,
-        border:      `1px solid ${COLORS.hairline}`,
+        background:  color.bg,
+        border:      `1px solid ${color.line}`,
         boxSizing:   'border-box',
         flexShrink:  0,
       }}
@@ -216,9 +216,9 @@ export function MiniPitch({
               cy={p.y * PITCH_VIEWBOX_HEIGHT}
               r={MINI_PLAYER_RADIUS}
               fill={p.side === 'home'
-                ? (homeTeamColor ?? COLORS.dust)
-                : (awayTeamColor ?? COLORS.quantum)}
-              stroke={COLORS.abyss}
+                ? (homeTeamColor ?? color.text)
+                : (awayTeamColor ?? color.architect)}
+              stroke={color.bg}
               strokeWidth={0.25}
             />
           ))}
@@ -230,8 +230,8 @@ export function MiniPitch({
             cx={ball.x * PITCH_VIEWBOX_WIDTH}
             cy={ball.y * PITCH_VIEWBOX_HEIGHT}
             r={MINI_BALL_RADIUS}
-            fill={COLORS.astro}
-            stroke={COLORS.abyss}
+            fill={color.action}
+            stroke={color.bg}
             strokeWidth={0.2}
             style={{ transition: MINI_BALL_TRANSITION }}
           />

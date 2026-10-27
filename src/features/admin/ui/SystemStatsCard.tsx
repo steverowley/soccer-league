@@ -2,30 +2,32 @@
 // "At a glance" landing surface for the admin dashboard.
 //
 // COMPOSITION
-//   - SystemStatsCard: full-bleed 4-cell strip of cross-table aggregates
-//     (users, credits in circulation, open wagers, completed matches).
-//   - OverviewPanel:   the default landing tab — renders the stats strip plus
-//     a short navigational kicker pointing at the other tabs.
+//   - SystemStatsCard: a hairline card of four cross-table aggregates
+//     (users, credits in circulation, open wagers, completed matches), each
+//     a shared StatBlock.
+//   - OverviewPanel:   the default landing tab: renders the stats card plus
+//     a short line pointing at the other tabs.
 //
 // WHY ONE FILE
-//   The stats strip is only used by the overview panel today; if a future
+//   The stats card is only used by the overview panel today; if a future
 //   panel reuses it we can promote the component without restructuring.
+//
+// On the design language (docs/design-language.md) since its last group:
+// shared SectionHeader, Card and StatBlock, no raw style values.
 
 import { useEffect, useState } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import { space, tone, type } from '../../../shared/design';
+import { Card, SectionHeader, StatBlock } from '../../../shared/ui';
 import { getSystemStats, type SystemStats } from '../api/admin';
-import {
-  DUST, DUST_50, HAIRLINE, PHOBOS,
-  LABEL_STYLE, VALUE_STYLE, PanelHeader,
-} from './primitives';
 
 // ── SystemStatsCard ──────────────────────────────────────────────────────────
 
 /**
- * Full-bleed stats bar showing four aggregate metrics.
+ * Hairline card showing four aggregate metrics.
  *
  * All four counts are fetched in parallel inside `getSystemStats` so the
- * cells appear together (no staggered pop-in).  No polling — the row
+ * cells appear together (no staggered pop-in).  No polling: the card
  * refreshes when the admin reloads the page, which keeps DB load near zero
  * on a surface that is rarely open.
  *
@@ -38,7 +40,7 @@ import {
 function SystemStatsCard({ db }: { db: IslSupabaseClient }) {
   const [stats, setStats] = useState<SystemStats | null>(null);
 
-  // Single fetch on mount.  No interval — see file header for rationale.
+  // Single fetch on mount.  No interval: see file header for rationale.
   useEffect(() => {
     getSystemStats(db).then(setStats);
   }, [db]);
@@ -54,58 +56,50 @@ function SystemStatsCard({ db }: { db: IslSupabaseClient }) {
   ];
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        // Four equal columns on desktop; responsive CSS below collapses to
-        // 2-up on mobile so the numbers remain legible without horizontal
-        // scrolling.
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 1,                           // 1-px gap renders as hairline rules between cells
-        background: HAIRLINE,
-        borderBottom: `1px solid ${HAIRLINE}`,
-        marginBottom: 40,
-      }}
-      className="isl-stats-grid"
-    >
-      {cells.map(({ label, value }) => (
-        <div key={label} style={{ background: PHOBOS, padding: '16px 20px' }}>
-          <p style={{ ...LABEL_STYLE, marginBottom: 6 }}>{label}</p>
-          <p style={{ ...VALUE_STYLE, fontSize: 18, fontWeight: 700 }}>{value}</p>
-        </div>
-      ))}
-      <style>{`
-        @media (max-width: 767px) { .isl-stats-grid { grid-template-columns: 1fr 1fr !important; } }
-      `}</style>
-    </div>
+    <Card>
+      <div
+        style={{
+          display: 'grid',
+          // Four across on a desktop, two on a phone: each column needs
+          // about 140 px for the longest label to wrap onto two lines.
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: space[24],
+        }}
+      >
+        {cells.map(({ label, value }) => (
+          <StatBlock key={label} label={label} value={value} />
+        ))}
+      </div>
+    </Card>
   );
 }
 
 // ── OverviewPanel ────────────────────────────────────────────────────────────
 
 /**
- * Default landing panel for `/admin`.  Renders the stats strip plus a short
- * navigational kicker explaining how to move between the rest of the tabs.
+ * Default landing panel for `/admin`.  Renders the stats card plus a short
+ * line explaining what the other tabs hold.
  *
- * Intentionally light — the goal is "you know where you are" rather than
+ * Intentionally light: the goal is "you know where you are" rather than
  * "everything on one screen."  Heavier surfaces (season controls, fixtures,
  * architect log) each get a dedicated tab.
  *
  * @param db  Supabase client forwarded to the embedded SystemStatsCard.
  */
 export function OverviewPanel({ db }: { db: IslSupabaseClient }) {
+  const strong = { ...tone.primary, fontWeight: 700 } as const;
   return (
     <section aria-labelledby="overview-heading">
-      <PanelHeader id="overview-heading" title="At a Glance" />
+      <SectionHeader index="I" label="Overview" title={<span id="overview-heading">At a glance</span>} />
 
       <SystemStatsCard db={db} />
 
-      <p style={{ ...VALUE_STYLE, color: DUST_50, marginTop: 32, maxWidth: 560 }}>
-        Use the tabs above to drive the league: <strong style={{ color: DUST }}>Season</strong> for
-        status + voting controls, <strong style={{ color: DUST }}>Fixtures</strong> for the match
-        table, <strong style={{ color: DUST }}>Roadmap</strong> for the planning board,
-        <strong style={{ color: DUST }}> Testing</strong> for destructive ops, and
-        <strong style={{ color: DUST }}> Architect</strong> for the intervention log.
+      <p style={{ ...type.small, ...tone.secondary, marginTop: space[24], marginBottom: 0, maxWidth: '60ch' }}>
+        Use the tabs above to drive the league: <strong style={strong}>Season</strong> for
+        status and voting controls, <strong style={strong}>Fixtures</strong> for the match
+        table, <strong style={strong}>Testing</strong> for destructive operations,
+        <strong style={strong}> Architect</strong> for the intervention log, and
+        <strong style={strong}> Viewer</strong> for the match viewer.
       </p>
     </section>
   );

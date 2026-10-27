@@ -20,7 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { color, hairline } from '../../../../shared/design';
+import { canvasColor, color, hairline } from '../../../../shared/design';
 import { Tag } from '../../../../shared/ui';
 // useReducedMotion is a shared accessibility hook exposed on the entities
 // barrel; the cross-feature import is barrel-only so it satisfies
@@ -69,9 +69,11 @@ const SELECT_RADIUS = 16;
 /**
  * Canvas backing colour behind the pitch — a green-black a notch darker than
  * Galactic Abyss, from the design-system Match Sprites study, so the abyss-toned
- * grass still reads as a lit surface against its surround.
+ * grass still reads as a lit surface against its surround. From the canvas
+ * palette (`canvasColor`, mirrored in tokens.css): a canvas cannot read CSS
+ * variables.
  */
-const CANVAS_BG = '#0d0f0d';
+const CANVAS_BG = canvasColor.pitchSurround;
 
 /** Which camera is active.  Both share one world model; only the projection differs. */
 type CameraMode = 'broadcast' | 'follow';

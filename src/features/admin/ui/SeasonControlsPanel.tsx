@@ -2,30 +2,60 @@
 // Season status + lifecycle controls for the /admin "Season" tab.
 //
 // LAYOUT
-//   Two-column grid on desktop:
-//     left  → read-only StatCell grid (season name, year, status, dates…)
+//   Two hairline cards side by side on a desktop, stacked on a phone:
+//     left  → read-only StatBlock grid (season name, year, status, dates…)
 //     right → mutation controls (fast-forward, manual enactment, open/close
 //             voting)
-//   Collapses to a single column on mobile via responsive CSS at the bottom.
 //
 // WHY COMBINED
 //   The mutation controls all act on the active season row.  Placing them
 //   in the same panel as the status fields makes the causal relationship
-//   obvious — "this is what the controls will affect."
+//   obvious: "this is what the controls will affect."
+//
+// LOOK (docs/design-language.md)
+//   Shared SectionHeader, SectionPanel, StatBlock, Field and Button. One
+//   primary (orange) button on the view: Fast forward, the action this tab
+//   exists for. The enactment and voting controls are secondary: they were
+//   red "danger" fills, but red means live or went wrong, and the copy
+//   beside each says when it is safe. Outcomes go to the site's toast.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import { color, space, tone, type } from '../../../shared/design';
+import {
+  Button, Field, SectionHeader, SectionPanel, Skeleton, StatBlock, EmptyState,
+  inputStyle, useToast,
+} from '../../../shared/ui';
 import {
   getActiveSeason, setSeasonStatus,
   type AdminSeason,
 } from '../api/admin';
-import {
-  DUST_50, HAIRLINE, PHOBOS, ABYSS, DUST, QUANTUM, TERRA,
-  LABEL_STYLE, VALUE_STYLE,
-  PanelHeader, StatCell, AdminButton, ActionToast, Skeleton,
-  fmtDatetime, useAutoDismissToast,
-  type Toast,
-} from './primitives';
+import { fmtDatetime } from './format';
+
+// ── ControlBlock ─────────────────────────────────────────────────────────────
+
+/**
+ * One control in the Controls card: a label heading, one line of help in
+ * the secondary tone, then the control itself.
+ *
+ * @param title     Short heading (rendered in the label type).
+ * @param help      What the control does and when it is safe.
+ * @param children  The inputs and buttons.
+ */
+function ControlBlock({ title, help, children }: { title: string; help: ReactNode; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+      <h3 style={{ ...type.label, ...tone.primary, margin: 0 }}>{title}</h3>
+      <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>{help}</p>
+      {children}
+    </div>
+  );
+}
+
+/** A hairline rule between control blocks. */
+function Rule() {
+  return <hr style={{ border: 'none', borderTop: `1px solid ${color.line}`, margin: 0, width: '100%' }} />;
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -40,7 +70,8 @@ import {
  *   - Fires the corresponding mutation.
  *   - Re-fetches the season so the on-screen Status field updates without
  *     a manual reload.
- *   - Surfaces a 4-second toast describing the outcome.
+ *   - Shows a toast describing the outcome (the site's global toast, which
+ *     dismisses itself after 4 seconds, as the old admin toast did).
  *
  * Concurrency:
  *   - Open Voting + Close Voting share `votingBusy` so a double-click race
@@ -54,12 +85,12 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
   // ── State ─────────────────────────────────────────────────────────────────
   const [season, setSeason]         = useState<AdminSeason | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [toast, setToast]           = useState<Toast | null>(null);
+  const toast                       = useToast();
   /** Hours-to-rewind input value; defaults to one full day for the common case. */
   const [ffHours, setFfHours]       = useState('24');
   const [ffBusy, setFfBusy]         = useState(false);
   const [enactBusy, setEnactBusy]   = useState(false);
-  /** Shared busy flag for Open/Close voting — see file header. */
+  /** Shared busy flag for Open/Close voting: see file header. */
   const [votingBusy, setVotingBusy] = useState(false);
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -69,19 +100,16 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
       .finally(() => setLoading(false));
   }, [db]);
 
-  useAutoDismissToast(toast, setToast);
-
   // ── Handler: fast-forward scheduled matches ───────────────────────────────
   /**
-   * Parse the hours input, fire the mutation, then re-fetch so the visible
-   * fixture count is consistent with the action's result.  Surfaces a toast
-   * indicating how many rows were shifted (or `0` when no scheduled matches
-   * exist, which is informational rather than an error).
+   * Parse the hours input, fire the mutation, then report how many rows
+   * were shifted (or `0` when no scheduled matches exist, which is
+   * informational rather than an error).
    */
   const onFastForward = async () => {
     const hours = parseFloat(ffHours);
     if (!Number.isFinite(hours) || hours <= 0) {
-      setToast({ kind: 'error', message: 'Enter a positive number of hours.' });
+      toast.error('Enter a positive number of hours.');
       return;
     }
     setFfBusy(true);
@@ -89,15 +117,14 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
       const { fastForwardScheduledMatches } = await import('../api/admin');
       const result = await fastForwardScheduledMatches(db, hours);
       if (result.matchesShifted === 0) {
-        setToast({ kind: 'info', message: 'No scheduled matches found to shift.' });
+        toast.info('No scheduled matches found to shift.');
       } else {
-        setToast({
-          kind: 'success',
-          message: `Shifted ${result.matchesShifted} match${result.matchesShifted === 1 ? '' : 'es'} back by ${hours}h.`,
-        });
+        toast.success(
+          `Shifted ${result.matchesShifted} match${result.matchesShifted === 1 ? '' : 'es'} back by ${hours}h.`,
+        );
       }
     } catch (err) {
-      setToast({ kind: 'error', message: `Fast-forward failed: ${String(err)}` });
+      toast.error(`Fast-forward failed: ${String(err)}`);
     } finally {
       setFfBusy(false);
     }
@@ -115,11 +142,11 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
     setVotingBusy(true);
     try {
       await setSeasonStatus(db, season.id, 'voting');
-      setToast({ kind: 'success', message: 'Voting window opened. Election opens at stamped.' });
+      toast.success('Voting window opened. Election opens at stamped.');
       const fresh = await getActiveSeason(db);
       setSeason(fresh);
     } catch (err) {
-      setToast({ kind: 'error', message: `Open voting failed: ${String(err)}` });
+      toast.error(`Open voting failed: ${String(err)}`);
     } finally {
       setVotingBusy(false);
     }
@@ -135,11 +162,11 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
     setVotingBusy(true);
     try {
       await setSeasonStatus(db, season.id, 'completed');
-      setToast({ kind: 'success', message: 'Voting closed. Season marked completed.' });
+      toast.success('Voting closed. Season marked completed.');
       const fresh = await getActiveSeason(db);
       setSeason(fresh);
     } catch (err) {
-      setToast({ kind: 'error', message: `Close voting failed: ${String(err)}` });
+      toast.error(`Close voting failed: ${String(err)}`);
     } finally {
       setVotingBusy(false);
     }
@@ -148,7 +175,7 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
   // ── Handler: manual enactment ─────────────────────────────────────────────
   /**
    * Force-fire `enactSeasonFocuses` for the active season.  Only enabled
-   * when the season is in `voting` — applying focuses to an `active` season
+   * when the season is in `voting`: applying focuses to an `active` season
    * would corrupt player stats mid-simulation.
    */
   const onEnact = async () => {
@@ -157,14 +184,11 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
     try {
       const { triggerSeasonEnactment } = await import('../api/admin');
       const result = await triggerSeasonEnactment(db, season.id);
-      setToast({
-        kind: 'success',
-        message: `Enactment complete. Enacted: ${result.enacted}, skipped: ${result.skipped}.`,
-      });
+      toast.success(`Enactment complete. Enacted: ${result.enacted}, skipped: ${result.skipped}.`);
       const fresh = await getActiveSeason(db);
       setSeason(fresh);
     } catch (err) {
-      setToast({ kind: 'error', message: `Enactment failed: ${String(err)}` });
+      toast.error(`Enactment failed: ${String(err)}`);
     } finally {
       setEnactBusy(false);
     }
@@ -173,167 +197,131 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <section aria-labelledby="season-heading">
-      <PanelHeader id="season-heading" title="Season Status + Controls" />
+      <SectionHeader index="I" label="Season" title={<span id="season-heading">Status and controls</span>} />
 
       {loading ? (
         <Skeleton height={120} />
       ) : !season ? (
-        <p style={{ ...VALUE_STYLE, color: DUST_50 }}>No active season found.</p>
+        <EmptyState centred={false}>No active season found.</EmptyState>
       ) : (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-            gap: 24,
+            // Side by side from about 760 px of content, stacked below.
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
+            gap: space[24],
+            alignItems: 'start',
           }}
-          className="isl-admin-season-grid"
         >
           {/* ── Status fields ─────────────────────────────────────────────── */}
-          <div style={{
-            background: PHOBOS,
-            border: `1px solid ${HAIRLINE}`,
-            padding: 24,
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '16px 24px',
-          }}>
-            <StatCell label="Season"   value={season.name} />
-            <StatCell label="Year"     value={String(season.year)} />
-            <StatCell label="Status"   value={season.status.toUpperCase()} highlight={
-              season.status === 'active'    ? TERRA :
-              season.status === 'voting'    ? QUANTUM :
-              season.status === 'completed' ? DUST_50 : undefined
-            } />
-            <StatCell label="Duration" value={
-              season.match_duration_seconds != null
-                ? `${season.match_duration_seconds}s / match`
-                : '—'
-            } />
-            <StatCell label="Cadence"  value={
-              season.match_cadence_minutes != null
-                ? `${season.match_cadence_minutes} min`
-                : '—'
-            } />
-            <StatCell label="Min Bet"  value={
-              season.min_bet != null ? `${season.min_bet} IC` : '—'
-            } />
-            <StatCell
-              label="Election Opens"
-              value={season.election_opens_at ? fmtDatetime(season.election_opens_at) : '—'}
-              wide
-            />
-            <StatCell
-              label="Election Closes"
-              value={season.election_closes_at ? fmtDatetime(season.election_closes_at) : '—'}
-              wide
-            />
-          </div>
+          <SectionPanel title="Status">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: `${space[16]}px ${space[24]}px` }}>
+              <StatBlock label="Season"   value={season.name} />
+              <StatBlock label="Year"     value={String(season.year)} />
+              {/* An active season reads as a good state (green); voting and
+                  completed are plain facts. */}
+              <StatBlock
+                label="Status"
+                value={season.status.toUpperCase()}
+                valueTone={season.status === 'active' ? 'success' : 'default'}
+              />
+              <StatBlock label="Duration" value={
+                season.match_duration_seconds != null
+                  ? `${season.match_duration_seconds}s / match`
+                  : '—'
+              } />
+              <StatBlock label="Cadence"  value={
+                season.match_cadence_minutes != null
+                  ? `${season.match_cadence_minutes} min`
+                  : '—'
+              } />
+              <StatBlock label="Min bet"  value={
+                season.min_bet != null ? `${season.min_bet} IC` : '—'
+              } />
+              <StatBlock
+                label="Election opens"
+                value={season.election_opens_at ? fmtDatetime(season.election_opens_at) : '—'}
+                style={{ gridColumn: '1 / -1' }}
+              />
+              <StatBlock
+                label="Election closes"
+                value={season.election_closes_at ? fmtDatetime(season.election_closes_at) : '—'}
+                style={{ gridColumn: '1 / -1' }}
+              />
+            </div>
+          </SectionPanel>
 
           {/* ── Controls ──────────────────────────────────────────────────── */}
-          <div style={{
-            background: PHOBOS,
-            border: `1px solid ${HAIRLINE}`,
-            padding: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 24,
-          }}>
-            {/* Fast-forward ─────────────────────────────────────────────── */}
-            <div>
-              <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Fast-Forward Scheduled Matches</p>
-              <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 14 }}>
-                Subtracts hours from every scheduled match&apos;s kickoff time, making the
-                worker pick them up on its next poll cycle.
-              </p>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="1"
-                  value={ffHours}
-                  onChange={(e) => setFfHours(e.target.value)}
-                  aria-label="Hours to fast-forward"
-                  style={{
-                    width: 80,
-                    padding: '8px 10px',
-                    background: ABYSS,
-                    border: `1px solid ${HAIRLINE}`,
-                    color: DUST,
-                    fontSize: 13,
-                  }}
-                />
-                <span style={{ ...LABEL_STYLE }}>hours</span>
-                <AdminButton onClick={onFastForward} busy={ffBusy} variant="primary">
-                  Fast Forward
-                </AdminButton>
-              </div>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
-
-            {/* Enactment ────────────────────────────────────────────────── */}
-            <div>
-              <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Manual Season Enactment</p>
-              <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 14 }}>
-                Force-fires the focus-enactment pipeline for the active season.
-                Only safe when the season status is <strong style={{ color: QUANTUM }}>voting</strong>.
-              </p>
-              <AdminButton
-                onClick={onEnact}
-                busy={enactBusy}
-                variant="danger"
-                disabled={season.status !== 'voting'}
+          <SectionPanel title="Controls">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+              {/* Fast-forward ─────────────────────────────────────────────── */}
+              <ControlBlock
+                title="Fast-forward scheduled matches"
+                help={<>Subtracts hours from every scheduled match&apos;s kickoff time, making the
+                  worker pick them up on its next poll cycle.</>}
               >
-                Trigger Enactment
-              </AdminButton>
-              {season.status !== 'voting' && (
-                <p style={{ ...LABEL_STYLE, color: DUST_50, marginTop: 8 }}>
-                  Season must be in &apos;voting&apos; status.
-                </p>
-              )}
-            </div>
+                <div style={{ display: 'flex', gap: space[12], alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <Field id="admin-ff-hours" label="Hours" style={{ width: 120 }}>
+                    <input
+                      id="admin-ff-hours"
+                      type="number"
+                      min="0.1"
+                      step="1"
+                      value={ffHours}
+                      onChange={(e) => setFfHours(e.target.value)}
+                      aria-label="Hours to fast-forward"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Button variant="primary" onClick={onFastForward} disabled={ffBusy}>
+                    {ffBusy ? '…' : 'Fast forward'}
+                  </Button>
+                </div>
+              </ControlBlock>
 
-            <div style={{ borderTop: `1px solid ${HAIRLINE}` }} />
+              <Rule />
 
-            {/* Open / Close voting ──────────────────────────────────────── */}
-            <div>
-              <p style={{ ...LABEL_STYLE, marginBottom: 10 }}>Voting Window</p>
-              <p style={{ ...VALUE_STYLE, fontSize: 12, color: DUST_50, marginBottom: 14 }}>
-                Open or close the voting window manually. Only available at the correct season phase.
-              </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <AdminButton
-                  onClick={onOpenVoting}
-                  busy={votingBusy}
-                  variant="primary"
-                  disabled={season.status !== 'active'}
-                >
-                  Open Voting
-                </AdminButton>
-                <AdminButton
-                  onClick={onCloseVoting}
-                  busy={votingBusy}
-                  variant="danger"
-                  disabled={season.status !== 'voting'}
-                >
-                  Close Voting
-                </AdminButton>
-              </div>
-              {season.status === 'completed' && (
-                <p style={{ ...LABEL_STYLE, color: DUST_50, marginTop: 8 }}>Season is completed.</p>
-              )}
+              {/* Enactment ────────────────────────────────────────────────── */}
+              <ControlBlock
+                title="Manual season enactment"
+                help={<>Force-fires the focus-enactment pipeline for the active season.
+                  Only safe when the season status is <strong style={tone.primary}>voting</strong>.</>}
+              >
+                <div>
+                  <Button onClick={onEnact} disabled={enactBusy || season.status !== 'voting'}>
+                    {enactBusy ? '…' : 'Trigger enactment'}
+                  </Button>
+                </div>
+                {season.status !== 'voting' && (
+                  <p style={{ ...type.label, ...tone.secondary, margin: 0 }}>
+                    Season must be in &apos;voting&apos; status.
+                  </p>
+                )}
+              </ControlBlock>
+
+              <Rule />
+
+              {/* Open / Close voting ──────────────────────────────────────── */}
+              <ControlBlock
+                title="Voting window"
+                help="Open or close the voting window manually. Only available at the correct season phase."
+              >
+                <div style={{ display: 'flex', gap: space[8], flexWrap: 'wrap' }}>
+                  <Button onClick={onOpenVoting} disabled={votingBusy || season.status !== 'active'}>
+                    {votingBusy ? '…' : 'Open voting'}
+                  </Button>
+                  <Button onClick={onCloseVoting} disabled={votingBusy || season.status !== 'voting'}>
+                    {votingBusy ? '…' : 'Close voting'}
+                  </Button>
+                </div>
+                {season.status === 'completed' && (
+                  <p style={{ ...type.label, ...tone.secondary, margin: 0 }}>Season is completed.</p>
+                )}
+              </ControlBlock>
             </div>
-          </div>
+          </SectionPanel>
         </div>
       )}
-
-      {toast && <ActionToast toast={toast} />}
-
-      <style>{`
-        @media (max-width: 767px) {
-          .isl-admin-season-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </section>
   );
 }

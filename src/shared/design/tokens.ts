@@ -65,6 +65,72 @@ export const glow = {
   architect: 'var(--isl-glow-architect)',
 } as const;
 
+// ── Canvas palette ──────────────────────────────────────────────────────────
+
+/**
+ * Literal colour values for drawing on a <canvas> (the match viewer's pitch
+ * and figures). WHY literals: a 2D canvas context cannot resolve
+ * `var(--isl-...)`, and the renderer also does arithmetic on the hex values
+ * (cel shading lightens and darkens the phosphor body). Every entry is the
+ * value of the CSS custom property named in `canvasColorVar`, declared in
+ * tokens.css; `tokens.test.ts` parses tokens.css and fails if any value here
+ * drifts from it. Canvas only: page chrome uses `color.*`.
+ */
+export const canvasColor = {
+  /** Lunar Dust: the phosphor body of every figure, and the ball. */
+  text: '#E3E0D5',
+  /** Galactic Abyss: outlines, eyes, the keeper's hollow shirt. */
+  bg: '#111111',
+  /** Quantum Purple: the focus halo on the selected player (the Architect's eye). */
+  architect: '#9A5CF4',
+  /** The viewport behind the pitch. */
+  pitchSurround: '#0d0f0d',
+  /** Darker mowing stripe. */
+  grassA: '#131613',
+  /** Lighter mowing stripe. */
+  grassB: '#171b17',
+  /** Pitch markings. */
+  line: 'rgba(227,224,213,0.26)',
+  /** Goal frames. */
+  goalLine: 'rgba(227,224,213,0.5)',
+  /** Mid phosphor: legs, shorts and antenna stems. */
+  figureDim: '#9C9A90',
+  /** Home shirt when a club has no colour in the data. */
+  kitHome: '#C9603F',
+  /** Away shirt when a club has no colour in the data. */
+  kitAway: '#4E7E8C',
+  /** Ground shadows under figures and the ball. */
+  shadow: 'rgba(0,0,0,0.38)',
+  /** The ball's shaded side. */
+  ballShade: 'rgba(0,0,0,0.25)',
+  /** Phosphor hair shades (terrans only), one per style. */
+  hairShort: '#C6C3B8',
+  hairFlat: '#AEAB9F',
+  hairSpiky: '#94917F',
+  hairLong: '#BBB8AC',
+} as const;
+
+/** The tokens.css custom property each `canvasColor` value mirrors. */
+export const canvasColorVar: Readonly<Record<keyof typeof canvasColor, string>> = {
+  text: '--isl-text',
+  bg: '--isl-bg',
+  architect: '--isl-architect',
+  pitchSurround: '--isl-pitch-surround',
+  grassA: '--isl-pitch-grass-a',
+  grassB: '--isl-pitch-grass-b',
+  line: '--isl-pitch-line',
+  goalLine: '--isl-pitch-goal-line',
+  figureDim: '--isl-pitch-figure-dim',
+  kitHome: '--isl-pitch-kit-home',
+  kitAway: '--isl-pitch-kit-away',
+  shadow: '--isl-pitch-shadow',
+  ballShade: '--isl-pitch-ball-shade',
+  hairShort: '--isl-pitch-hair-short',
+  hairFlat: '--isl-pitch-hair-flat',
+  hairSpiky: '--isl-pitch-hair-spiky',
+  hairLong: '--isl-pitch-hair-long',
+};
+
 // ── Text tones ──────────────────────────────────────────────────────────────
 
 /**

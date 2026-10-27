@@ -14,5 +14,7 @@ export {
   numeric,
   glyph,
   hairline,
+  canvasColor,
+  canvasColorVar,
   type Space,
 } from './tokens';

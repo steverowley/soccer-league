@@ -5,35 +5,39 @@
 //   Every mutation the Cosmic Architect makes (stat bumps, referee
 //   strictness changes, narrative injections) writes one row to
 //   `architect_interventions`.  This panel renders the most-recent rows as a
-//   table so admins can audit the chaos director's activity — "why did this
+//   table so admins can audit the chaos director's activity: "why did this
 //   player suddenly score a hat-trick?" usually has its answer here.
 //
 // WHY READ-ONLY
 //   Interventions are immutable audit records.  Reversing one must be done
-//   via the DB directly (service-role only) — intentional friction so no
+//   via the DB directly (service-role only): intentional friction so no
 //   admin accidentally wipes the Architect's lore.
+//
+// LOOK (docs/design-language.md)
+//   This is Architect content, so the table sits in an `architect` Card
+//   (purple hairline) and the changed field is named in the Architect's
+//   colour: the one place on the admin console purple carries meaning.
+//   The table itself is the shared DataTable.
 
 import { useEffect, useState } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
+import { color, tone } from '../../../shared/design';
+import { Card, DataTable, EmptyState, SectionHeader, Skeleton, dataCell, dataHead } from '../../../shared/ui';
 import {
   getArchitectInterventions,
   type ArchitectIntervention,
 } from '../api/admin';
-import {
-  DUST_50, DUST_FAINT, HAIRLINE, QUANTUM,
-  LABEL_STYLE, VALUE_STYLE,
-  PanelHeader, Skeleton, fmtDatetime,
-} from './primitives';
+import { fmtDatetime } from './format';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Format an `old → new` value pair as a compact, single-line string for the
  * Change column.  Objects are JSON-stringified; primitives are coerced with
- * `String`.  `null` / `undefined` render as an em-dash so the column always
+ * `String`.  `null` / `undefined` render as a dash so the column always
  * shows two arrowed segments even when one side is missing.
  *
- * Kept narrow on purpose — the full payloads remain in the DB, and the table
+ * Kept narrow on purpose: the full payloads remain in the DB, and the table
  * column is intentionally tight so the more-narrative Reason column reads
  * cleanly next to it.
  *
@@ -46,15 +50,17 @@ function diffStr(a: unknown, b: unknown): string {
   return `${fmt(a)} → ${fmt(b)}`;
 }
 
+/** Column headings, in order. */
+const HEADINGS = ['Table', 'Field', 'Change', 'Reason', 'When'] as const;
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 /**
  * Architect intervention log panel.  Renders up to the most recent 50 rows
- * (cap enforced by `getArchitectInterventions`) in a hairline-bordered table,
- * newest-first.
+ * (cap enforced by `getArchitectInterventions`) newest-first.
  *
  * Empty state copy ("The Architect sleeps.") is intentional flavour for the
- * fresh-season case — no interventions yet recorded.
+ * fresh-season case: no interventions yet recorded.
  *
  * @param db  Supabase client supplied by the parent.
  */
@@ -70,59 +76,39 @@ export function ArchitectInterventionLog({ db }: { db: IslSupabaseClient }) {
 
   return (
     <section aria-labelledby="architect-heading">
-      <PanelHeader id="architect-heading" title="Architect Intervention Log" />
+      <SectionHeader index="I" label="Architect" title={<span id="architect-heading">Intervention log</span>} />
 
       {loading ? (
         <Skeleton height={160} />
       ) : rows.length === 0 ? (
-        <p style={{ ...VALUE_STYLE, color: DUST_50 }}>
-          No interventions recorded yet.  The Architect sleeps.
-        </p>
+        <EmptyState centred={false}>No interventions recorded yet.  The Architect sleeps.</EmptyState>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <Card tone="architect" padding={0}>
+          <DataTable caption="Architect interventions, newest first" minWidth={720}>
             <thead>
-              <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                {['Table', 'Field', 'Change', 'Reason', 'When'].map((h) => (
-                  <th key={h} style={{ ...LABEL_STYLE, padding: '8px 12px', textAlign: 'left' }}>
-                    {h}
-                  </th>
+              <tr>
+                {HEADINGS.map((h) => (
+                  <th key={h} scope="col" style={dataHead()}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} style={{ borderBottom: `1px solid ${DUST_FAINT}` }}>
-                  <td style={{ ...VALUE_STYLE, padding: '10px 12px', fontSize: 12 }}>
-                    {row.target_table}
-                  </td>
-                  <td style={{ ...VALUE_STYLE, padding: '10px 12px', fontSize: 12, color: QUANTUM }}>
-                    {row.field ?? '—'}
-                  </td>
-                  <td style={{
-                    ...VALUE_STYLE, padding: '10px 12px', fontSize: 11,
-                    fontVariantNumeric: 'tabular-nums', maxWidth: 220, wordBreak: 'break-all',
-                  }}>
+                <tr key={row.id}>
+                  <td style={dataCell()}>{row.target_table}</td>
+                  <td style={{ ...dataCell(), color: color.architect }}>{row.field ?? '—'}</td>
+                  <td style={{ ...dataCell(), maxWidth: 220, wordBreak: 'break-all' }}>
                     {diffStr(row.old_value, row.new_value)}
                   </td>
-                  <td style={{
-                    ...VALUE_STYLE, padding: '10px 12px', fontSize: 12,
-                    color: DUST_50, maxWidth: 320,
-                  }}>
-                    {row.reason}
-                  </td>
-                  <td style={{
-                    ...VALUE_STYLE, padding: '10px 12px', fontSize: 11,
-                    color: DUST_50, whiteSpace: 'nowrap',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}>
+                  <td style={{ ...dataCell(), ...tone.secondary, maxWidth: 320 }}>{row.reason}</td>
+                  <td style={{ ...dataCell(), ...tone.secondary, whiteSpace: 'nowrap' }}>
                     {fmtDatetime(row.created_at)}
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </DataTable>
+        </Card>
       )}
     </section>
   );

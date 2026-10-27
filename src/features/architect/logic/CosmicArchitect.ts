@@ -15,6 +15,7 @@ import type {
 import { emptyLore } from './loreStore';
 import type { ShadowDistribution } from '../api/shadowDistribution';
 import { CLAUDE_MODEL } from '../../../constants.js';
+import { color } from '../../../shared/design';
 import { rnd, rndI } from '../../../shared/utils/random';
 
 // ── Local shape interfaces ────────────────────────────────────────────────────
@@ -744,7 +745,9 @@ Return ONLY valid JSON. No markdown fencing. No preamble. No trailing text after
         type:            'architect_proclamation',
         name:            'The Architect',
         emoji:           '🌌',
-        color:           '#7C3AED',
+        // The Architect's colour token (CSS variable): feed items carry a
+        // colour the UI paints with, and Architect content is purple.
+        color:           color.architect,
         text: (parsed['proclamation'] as string)
           ? (parsed['proclamation'] as string).charAt(0).toUpperCase() + (parsed['proclamation'] as string).slice(1)
           : parsed['proclamation'],
