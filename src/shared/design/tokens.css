@@ -1,0 +1,85 @@
+/* ── shared/design/tokens.css ─────────────────────────────────────────────────
+ * The ISL design tokens as CSS custom properties: the single source of every
+ * font size, text tone, colour, spacing step and letter spacing the site uses.
+ *
+ * WHY CSS variables (and not only a TS object): the type scale and the page
+ * rhythm have phone values. Declaring them here, with the phone values in ONE
+ * media query, means an inline style that says `fontSize: 'var(--isl-size-
+ * title)'` gets 40 px on a desktop and 30 px on a phone with no JavaScript,
+ * no resize listener and no per-page breakpoint. `tokens.ts` mirrors these
+ * names as typed style presets for the inline-style components.
+ *
+ * Spec: docs/design-language.md (sections 2 to 5). Imported once, in
+ * src/main.tsx, before index.css. Nothing outside src/shared/design may write
+ * a raw font size, colour or letter spacing: scripts/designTokens.test.ts
+ * enforces it.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Type scale (desktop) ────────────────────────────────────────────── */
+  --isl-size-display: 56px;    /* Home hero only */
+  --isl-size-title: 40px;      /* the page's h1 */
+  --isl-size-heading: 28px;    /* section titles (h2) */
+  --isl-size-subheading: 18px; /* card titles, club and player names in lists */
+  --isl-size-score: 48px;      /* scores and big numbers */
+  --isl-size-body: 15px;       /* prose */
+  --isl-size-small: 13px;      /* data, table cells, captions */
+  --isl-size-label: 11px;      /* eyebrows, tags, buttons, table headers; the floor */
+
+  /* ── Tracking: two values only ───────────────────────────────────────── */
+  --isl-tracking-label: 0.12em;   /* uppercase label text */
+  --isl-tracking-heading: 0.02em; /* uppercase headings */
+
+  /* ── Text tones (all at least 4.5:1 on the canvas) ───────────────────── */
+  --isl-text: #E3E0D5;           /* 14.3:1 default */
+  --isl-text-secondary: #A8A69E; /* 7.7:1 labels, meta, captions */
+  --isl-text-tertiary: #8F8D87;  /* 5.7:1 separators, timestamps */
+
+  /* ── Colour by meaning ───────────────────────────────────────────────── */
+  --isl-bg: #111111;              /* canvas */
+  --isl-surface-raised: #1F1F1F;  /* inputs, toasts, menus; never cards */
+  --isl-line: rgba(227, 224, 213, 0.18);       /* card borders, dividers */
+  --isl-line-faint: rgba(227, 224, 213, 0.10); /* row dividers inside tables */
+  --isl-live: #FF4F5E;            /* happening now, or went wrong */
+  --isl-architect: #9A5CF4;       /* the Cosmic Architect; keyboard focus */
+  --isl-action: #FF6637;          /* the one primary action on a view */
+  --isl-success: #A5D6A7;         /* good outcome */
+  --isl-card-yellow: #F5C518;     /* the yellow-card glyph only */
+  --isl-rule-strong: #FFFFFF;     /* the 2 px footer rule only */
+
+  /* ── Glow: the only elevation, on hover and focus ────────────────────── */
+  --isl-glow-text: 0 0 10px rgba(227, 224, 213, 0.75);
+  --isl-glow-outline: 0 0 18px rgba(227, 224, 213, 0.28);
+  --isl-glow-action: 0 0 20px rgba(255, 102, 55, 0.55);
+  --isl-glow-architect: 0 0 6px rgba(154, 92, 244, 0.5);
+
+  /* ── Space: 4, 8, 12, 16, 24, 32, 48, 64 and nothing else ─────────────── */
+  --isl-space-4: 4px;
+  --isl-space-8: 8px;
+  --isl-space-12: 12px;
+  --isl-space-16: 16px;
+  --isl-space-24: 24px;
+  --isl-space-32: 32px;
+  --isl-space-48: 48px;
+  --isl-space-64: 64px;
+
+  /* ── Layout rhythm (phone values below) ──────────────────────────────── */
+  --isl-container: 1248px;  /* max content width */
+  --isl-gutter: 24px;       /* container side padding */
+  --isl-pad-card: 24px;     /* card padding */
+  --isl-gap-section: 48px;  /* between sections on a page */
+}
+
+/* Phone (< 600 px): the one place phone values live. */
+@media (max-width: 599px) {
+  :root {
+    --isl-size-display: 40px;
+    --isl-size-title: 30px;
+    --isl-size-heading: 22px;
+    --isl-size-subheading: 16px;
+    --isl-size-score: 36px;
+    --isl-gutter: 16px;
+    --isl-pad-card: 16px;
+    --isl-gap-section: 32px;
+  }
+}

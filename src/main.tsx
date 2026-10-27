@@ -31,6 +31,9 @@ import { lazy, StrictMode, Suspense, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
+// Design tokens first (CSS custom properties, docs/design-language.md), so
+// index.css and every inline `var(--isl-...)` style can reference them.
+import './shared/design/tokens.css';
 import './index.css';
 
 import ErrorBoundary from './components/ErrorBoundary';
