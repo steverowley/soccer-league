@@ -1,5 +1,5 @@
 // ── ResetPassword.tsx ───────────────────────────────────────────────────────
-// `/reset-password` route — two phases on one page:
+// `/reset-password` route: two phases on one page.
 //
 //   1. REQUEST phase (no recovery JWT in URL):
 //      Render a "send me a reset link" email form. Calls
@@ -14,25 +14,33 @@
 //      submission calls `supabase.auth.updateUser({ password })` and
 //      navigates back to /profile on success.
 //
-// This is the minimum viable forgot-password flow. Email-change and a
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values: a hairline Card around the shared form pieces (Field,
+// FormError) and one primary submit per form. The old purple submit is
+// gone (purple is the Architect and the focus ring, never an action).
+//
+// This is the minimum viable forgot-password flow. Email change and a
 // proper /delete-account surface are tracked separately.
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell } from '../shared/ui';
+import { Button, Card, Field, FormError, PageHeader, PageShell, inputStyle } from '../shared/ui';
+import { space, tone, type } from '../shared/design';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 
-const { dust: DUST, flare: FLARE, quantum: QUANTUM } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
-
-/** Same minimum as Login.tsx; kept in sync via #365 follow-up to centralise. */
+/** Same minimum as Login.tsx; kept in sync via the #365 follow-up to centralise. */
 const MIN_PASSWORD_LENGTH = 10;
 
+/** The form card: a hairline Card at a comfortable form width. */
+const FORM_CARD = { maxWidth: 480 } as const;
+
+/**
+ * Reset-password page.
+ *
+ * @returns The page in its request or update phase.
+ */
 export default function ResetPassword() {
   usePageTitle('Reset Password');
   const db = useSupabase();
@@ -42,11 +50,11 @@ export default function ResetPassword() {
   // ── Recovery-session detection ─────────────────────────────────────────
   // Supabase fires a PASSWORD_RECOVERY auth event when the user lands on
   // a page with a `type=recovery` access token in the URL fragment.
-  // Listen once, then unsubscribe — the rest of the page is form work.
+  // Listen once, then unsubscribe: the rest of the page is form work.
   const [isRecovering, setIsRecovering] = useState(false);
   useEffect(() => {
     // Already in a recovery session if the URL fragment carries the token.
-    // We don't parse the fragment ourselves — Supabase has already
+    // We don't parse the fragment ourselves: Supabase has already
     // processed it by the time React mounts, but we read the flag again
     // through onAuthStateChange so the event-based path also works.
     const { data: { subscription } } = db.auth.onAuthStateChange((event) => {
@@ -70,10 +78,12 @@ export default function ResetPassword() {
             : "Enter the email you signed up with. We'll send a link you can click to set a new password."
         }
       />
-      {isRecovering
-        ? <UpdatePasswordForm onSuccess={() => navigate('/profile', { replace: true })} />
-        : <RequestResetForm requestReset={requestPasswordReset} />
-      }
+      <section aria-label="Password reset">
+        {isRecovering
+          ? <UpdatePasswordForm onSuccess={() => navigate('/profile', { replace: true })} />
+          : <RequestResetForm requestReset={requestPasswordReset} />
+        }
+      </section>
     </PageShell>
   );
 }
@@ -106,25 +116,27 @@ function RequestResetForm({
 
   if (sent) {
     return (
-      <Card>
-        <H>Check your inbox</H>
-        <P>
-          If an account exists for <strong style={{ color: DUST }}>{email}</strong>,
+      <Card style={FORM_CARD}>
+        <h2 style={{ ...type.subheading, margin: 0 }}>Check your inbox</h2>
+        <p style={{ ...type.body, ...tone.secondary, margin: 0, marginTop: space[16] }}>
+          If an account exists for <strong style={tone.primary}>{email}</strong>,
           a reset link is on its way. Click the link to set a new password. The
           link is single-use and expires in 1 hour.
-        </P>
+        </p>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Field label="Email" id="email" type="email" autoComplete="email"
-          value={email} onChange={setEmail} />
-        {error && <ErrorLine>{error}</ErrorLine>}
+    <Card style={FORM_CARD}>
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+        <Field id="email" label="Email">
+          <input id="email" type="email" autoComplete="email" required
+            value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+        </Field>
+        {error && <FormError>{error}</FormError>}
         <SubmitButton busy={busy}>
-          {busy ? 'Sending…' : 'Send reset link'}
+          {busy ? 'Sending\u2026' : 'Send reset link'}
         </SubmitButton>
       </form>
     </Card>
@@ -154,81 +166,26 @@ function UpdatePasswordForm({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <Card>
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Field label="New password" id="new-password" type="password"
-          autoComplete="new-password" value={password} onChange={setPassword}
-          hint={`At least ${MIN_PASSWORD_LENGTH} characters.`} />
-        {error && <ErrorLine>{error}</ErrorLine>}
+    <Card style={FORM_CARD}>
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+        <Field id="new-password" label="New password" hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}>
+          <input id="new-password" type="password" autoComplete="new-password" required
+            value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
+        </Field>
+        {error && <FormError>{error}</FormError>}
         <SubmitButton busy={busy}>
-          {busy ? 'Saving…' : 'Save new password'}
+          {busy ? 'Saving\u2026' : 'Save new password'}
         </SubmitButton>
       </form>
     </Card>
   );
 }
 
-// ── Local presentational helpers (one consumer each, kept inline) ───────────
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, padding: 32, maxWidth: 480, margin: '24px 0' }}>
-      {children}
-    </div>
-  );
-}
-
-function H({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 style={{ fontSize: 14, letterSpacing: '0.18em', textTransform: 'uppercase', margin: '0 0 16px' }}>
-      {children}
-    </h2>
-  );
-}
-
-function P({ children }: { children: React.ReactNode }) {
-  return <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: 0 }}>{children}</p>;
-}
-
-function ErrorLine({ children }: { children: React.ReactNode }) {
-  return (
-    <p role="alert" style={{ color: FLARE, fontSize: 13, fontStyle: 'italic', margin: 0 }}>
-      {children}
-    </p>
-  );
-}
-
+/** The form's one primary action. */
 function SubmitButton({ busy, children }: { busy: boolean; children: React.ReactNode }) {
   return (
-    <button type="submit" disabled={busy} style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
-      color: DUST, background: busy ? 'transparent' : QUANTUM,
-      border: `1px solid ${QUANTUM}`, padding: '14px 24px',
-      cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', marginTop: 8,
-    }}>
+    <Button variant="primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-start', marginTop: space[8] }}>
       {children}
-    </button>
-  );
-}
-
-function Field({ label, id, type, autoComplete, value, onChange, hint }: {
-  label: string; id: string; type: string; autoComplete: string;
-  value: string; onChange: (v: string) => void; hint?: string;
-}) {
-  return (
-    <label htmlFor={id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: DUST_50 }}>
-        {label}
-      </span>
-      <input id={id} type={type} autoComplete={autoComplete} value={value}
-        onChange={(e) => onChange(e.target.value)} required
-        style={{
-          background: 'transparent', border: `1px solid ${HAIRLINE}`, color: DUST,
-          padding: '10px 12px', fontFamily: 'inherit', fontSize: 14,
-        }}
-      />
-      {hint && <span style={{ fontSize: 11, color: DUST_50 }}>{hint}</span>}
-    </label>
+    </Button>
   );
 }

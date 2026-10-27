@@ -79,6 +79,27 @@ const MIGRATED = [
   'src/features/entities/ui/relationshipGraph/RelationshipGraph.tsx',
   'src/features/entities/ui/relationshipGraph/KindGlyph.tsx',
   'src/features/entities/ui/relationshipGraph/kindColor.ts',
+  // Group 5a: account and static pages, the site chrome, the error screens,
+  // toasts, notification settings, and the shared form and prose pieces.
+  'src/pages/Login.tsx',
+  'src/pages/Welcome.tsx',
+  'src/pages/ResetPassword.tsx',
+  'src/pages/Profile.tsx',
+  'src/pages/Training.tsx',
+  'src/pages/Wagers.tsx',
+  'src/pages/Voting.tsx',
+  'src/pages/About.tsx',
+  'src/pages/Privacy.tsx',
+  'src/pages/Terms.tsx',
+  'src/pages/NotFound.tsx',
+  'src/components/Header.tsx',
+  'src/components/Layout.tsx',
+  'src/components/ErrorBoundary.tsx',
+  'src/components/RouteErrorBoundary.tsx',
+  'src/shared/ui/Toast.tsx',
+  'src/shared/ui/Field.tsx',
+  'src/shared/ui/Prose.tsx',
+  'src/features/notifications/ui/NotificationSettings.tsx',
 ];
 
 const root = process.cwd();

@@ -29,9 +29,12 @@
 // • One `role="status"` per toast + a single `aria-live="polite"` region
 //   shared across the viewport so screen readers announce each message
 //   exactly once without preempting urgent navigation.
-// • Visual palette matches the admin ActionToast (TERRA = success,
-//   FLARE = error, PHOBOS = info) so existing admin pages can migrate
-//   without a redesign.
+// • On the design language since group 5a (docs/design-language.md), with
+//   no raw style values: every toast sits on the raised surface (the
+//   spec's surface for things that float) in the default text tone, and
+//   the 1 px border plus the kind label carry the meaning: red (`live`,
+//   "went wrong") for an error, green (`success`) for a confirmation,
+//   the neutral line for info. No fills, no drop shadow.
 
 import {
   createContext,
@@ -44,16 +47,15 @@ import {
   type ReactNode,
 } from 'react';
 
-import { COLORS } from '../../components/Layout';
+import { color, hairline, space, tone, type } from '../design';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
 /**
- * Tone of a toast. Mirrors the admin ActionToast values so existing
- * call-sites can migrate without a wording change:
- *   success → TERRA-NOVA green   (saved / placed / completed)
- *   error   → SOLAR-FLARE red    (failed / rejected)
- *   info    → PHOBOS-ASH neutral (generic notice)
+ * Kind of a toast (the same values as the admin ActionToast):
+ *   success: green border and label (saved / placed / completed)
+ *   error:   red border and label   (failed / rejected)
+ *   info:    neutral line border    (generic notice)
  */
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -231,8 +233,8 @@ export function ToastViewport() {
       aria-atomic="false"
       style={{
         position:      'fixed',
-        bottom:        24,
-        right:         24,
+        bottom:        space[24],
+        right:         space[16],
         display:       'flex',
         flexDirection: 'column',
         gap:           8,
@@ -241,7 +243,7 @@ export function ToastViewport() {
         // block clicks on the underlying content; individual toasts re-
         // enable pointer events so the dismiss button remains clickable.
         pointerEvents: 'none',
-        maxWidth:      'calc(100vw - 48px)',
+        maxWidth:      `calc(100vw - ${space[32]}px)`,
       }}
     >
       {toasts.map((t) => (
@@ -253,62 +255,62 @@ export function ToastViewport() {
 
 // ── ToastItem ──────────────────────────────────────────────────────────────
 
+/** Per-kind border colour and label: the meaning lives here, not in a fill. */
+const KIND: Record<ToastKind, { border: string; label: string; labelColor: string }> = {
+  success: { border: color.success, label: 'Done',  labelColor: color.success },
+  error:   { border: color.live,    label: 'Error', labelColor: color.live },
+  info:    { border: color.line,    label: 'Note',  labelColor: color.textSecondary },
+};
+
 /**
- * One toast row.  Background colour is derived from the kind; the
- * `onDismiss` callback closes the toast early when the user clicks the
- * (×) affordance.
+ * One toast row: raised surface, kind-coloured 1 px border, a kind label
+ * above the message, and a dismiss control. The `onDismiss` callback closes
+ * the toast early when the user presses the (x) control.
  */
 function ToastItem({ toast, onDismiss }: { toast: QueuedToast; onDismiss: () => void }) {
-  // Match the admin ActionToast palette so a side-by-side render is
-  // indistinguishable. ABYSS text on TERRA / FLARE / PHOBOS backgrounds.
-  const bg =
-    toast.kind === 'success' ? COLORS.terraNova :
-    toast.kind === 'error'   ? COLORS.flare     :
-                               COLORS.phobosAsh;
-  // Phobos (info) renders against the dark page bg, so text needs to
-  // be DUST not ABYSS for contrast. Success/error toasts use coloured
-  // bgs that are light enough to need ABYSS text.
-  const fg = toast.kind === 'info' ? COLORS.dust : COLORS.abyss;
-
+  const kind = KIND[toast.kind];
   return (
     <div
       role="status"
+      data-kind={toast.kind}
       style={{
-        background:    bg,
-        border:        `1px solid ${COLORS.hairline}`,
-        padding:       '12px 16px',
+        background:    color.surfaceRaised,
+        ...hairline(kind.border),
+        paddingTop:    space[12],
+        paddingBottom: space[12],
+        paddingLeft:   space[16],
+        paddingRight:  space[8],
         maxWidth:      360,
-        boxShadow:     '0 4px 24px rgba(0,0,0,0.4)',
         display:       'flex',
         alignItems:    'center',
-        gap:           12,
+        gap:           space[12],
         pointerEvents: 'auto',
       }}
     >
-      <p style={{
-        fontSize:   12,
-        fontWeight: 700,
-        color:      fg,
-        margin:     0,
-        flex:       1,
-      }}>
-        {toast.message}
-      </p>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ ...type.label, color: kind.labelColor, margin: 0 }}>{kind.label}</p>
+        <p style={{ ...type.small, ...tone.primary, margin: 0, marginTop: space[4], overflowWrap: 'anywhere' }}>
+          {toast.message}
+        </p>
+      </div>
       <button
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss notification"
         style={{
+          ...type.body,
+          ...tone.secondary,
           background: 'transparent',
-          border:     'none',
-          color:      fg,
-          fontSize:   16,
+          borderWidth: 0,
           lineHeight: 1,
           cursor:     'pointer',
+          minWidth:   32,
+          minHeight:  32,
           padding:    0,
+          fontFamily: 'inherit',
         }}
       >
-        ×
+        {'\u00D7'}
       </button>
     </div>
   );

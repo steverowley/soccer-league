@@ -21,12 +21,19 @@
 //   On toggle:  updateNotificationPreferences({ … }) — single column UPDATE.
 //
 // ERROR DISPLAY
-//   Failures surface as an inline italic line below the controls, mirroring
-//   the existing Profile.tsx aesthetic (FLARE colour for errors).  We never
-//   throw alerts or modal dialogs — the page should never block the user.
+//   Failures surface as an inline FormError below the controls (red,
+//   role="alert"). We never throw alerts or modal dialogs: the page should
+//   never block the user.
+//
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values: a hairline Card, a secondary Enable / Disable Button
+// (the profile page keeps its one primary for Save allegiance), and the
+// shared CheckField rows. The card no longer repeats its own heading: the
+// profile page introduces it with a numbered SectionHeader.
 
 import { useEffect, useRef, useState } from 'react';
-import { COLORS } from '../../../components/Layout';
+import { tone, space, type } from '../../../shared/design';
+import { Button, Card, CheckField, FormError } from '../../../shared/ui';
 import { useSupabase } from '../../../shared/supabase/SupabaseProvider';
 import {
   getNotificationPreferences,
@@ -40,14 +47,6 @@ import {
   type PushUnsupported,
 } from '../logic/registerPush';
 import type { NotificationPreferences } from '../types';
-
-// ── Local style aliases ─────────────────────────────────────────────────────
-// Mirrors the names used in Profile.tsx so the visual treatment matches
-// without re-deriving from the shared palette in two places.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
 
 // ── Copy table ──────────────────────────────────────────────────────────────
 // Per-reason copy for `PushUnsupported.reason`.  Keep these short and
@@ -79,7 +78,7 @@ const PENDING_PREFS: NotificationPreferences = {
  * prefs) from Supabase on mount and writes through the api/ layer on
  * every change.  Parent component does not have to thread props.
  *
- * @returns A JSX subtree styled to match Profile.tsx's other section cards.
+ * @returns A hairline Card with the enrolment control and the opt-in rows.
  */
 export default function NotificationSettings() {
   const db = useSupabase();
@@ -233,12 +232,11 @@ export default function NotificationSettings() {
   };
 
   // ── Unsupported environment branch ───────────────────────────────────────
-  // No controls — we just tell the user why and let them keep using
-  // the rest of the profile page.
+  // No controls: we just tell the user why and let them keep using the
+  // rest of the profile page.
   if (!support.supported) {
     return (
       <Card>
-        <Heading />
         <p style={advisoryStyle}>
           Push notifications {UNSUPPORTED_COPY[support.reason]}
         </p>
@@ -249,28 +247,17 @@ export default function NotificationSettings() {
   // ── Normal (supported) render ────────────────────────────────────────────
   return (
     <Card>
-      <Heading />
-
-      {/* Enable / Disable primary action */}
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+      {/* Enable / Disable: a secondary Button either way. The page's one
+          primary action is Save allegiance above. */}
+      <div style={{ display: 'flex', gap: space[16], alignItems: 'center', flexWrap: 'wrap' }}>
         {enrolled ? (
-          <button
-            type="button"
-            onClick={onDisable}
-            disabled={busy}
-            style={secondaryButtonStyle(busy)}
-          >
-            {busy ? 'Disabling…' : 'Disable Push On This Device'}
-          </button>
+          <Button variant="secondary" onClick={onDisable} disabled={busy}>
+            {busy ? 'Disabling\u2026' : 'Disable push on this device'}
+          </Button>
         ) : (
-          <button
-            type="button"
-            onClick={onEnable}
-            disabled={busy}
-            style={primaryButtonStyle(busy)}
-          >
-            {busy ? 'Enabling…' : 'Enable Push On This Device'}
-          </button>
+          <Button variant="secondary" onClick={onEnable} disabled={busy}>
+            {busy ? 'Enabling\u2026' : 'Enable push on this device'}
+          </Button>
         )}
 
         <span style={advisoryStyle}>
@@ -280,187 +267,43 @@ export default function NotificationSettings() {
         </span>
       </div>
 
-      {/* Per-event opt-in toggles — only meaningful when enrolled */}
-      <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <ToggleRow
+      {/* Per-event opt-in toggles: only meaningful when enrolled. */}
+      <div style={{ marginTop: space[24], display: 'flex', flexDirection: 'column', gap: space[12] }}>
+        <CheckField
           id="notify-favourite-team"
-          label="Notify me when my favourite club plays"
           hint="Set a favourite club on this page to receive a push 1 minute before kick-off."
           checked={prefs.notify_favourite_team}
           disabled={!enrolled || busy}
           onChange={(next) => onTogglePref('notify_favourite_team', next)}
-        />
-        <ToggleRow
+        >
+          Notify me when my favourite club plays
+        </CheckField>
+        <CheckField
           id="notify-all-matches"
-          label="Notify me for every match across the cosmos"
-          hint="Warning: there can be 4–6 matches per day across the league."
+          hint="Heads up: there can be 4 to 6 matches per day across the league."
           checked={prefs.notify_all_matches}
           disabled={!enrolled || busy}
           onChange={(next) => onTogglePref('notify_all_matches', next)}
-        />
+        >
+          Notify me for every match across the cosmos
+        </CheckField>
       </div>
 
       {error && (
-        <p role="alert" style={{ ...advisoryStyle, color: FLARE, marginTop: 16 }}>
-          {error}
-        </p>
+        <div style={{ marginTop: space[16] }}>
+          <FormError>{error}</FormError>
+        </div>
       )}
     </Card>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Presentational subcomponents — kept inline because they are private to this
-// surface.  If a second consumer ever appears, lift them into Layout.tsx.
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
- * Outer bordered card.  Mirrors the AccountSummary card on Profile.tsx
- * so the section reads as part of the same page rather than a bolted-on
- * widget.
- */
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      border: `1px solid ${HAIRLINE}`,
-      padding: 32,
-      marginTop: 24,
-      background: ABYSS,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-/**
- * Card heading.  Uses the same small-caps label treatment as Profile's
- * SummaryCell labels.
- */
-function Heading() {
-  return (
-    <div>
-      <div style={{
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-        marginBottom: 6,
-      }}>
-        Push Notifications
-      </div>
-      <div style={{
-        fontSize: 22,
-        fontWeight: 700,
-        color: DUST,
-      }}>
-        Match-Start Alerts
-      </div>
-    </div>
-  );
-}
-
-/**
- * Single label + checkbox row.  Stacks label + hint on the left, control
- * on the right.  The whole row is rendered as a `<label>` so clicking
- * anywhere on the label toggles the checkbox — important on touch
- * targets where the checkbox itself is small.
- */
-function ToggleRow({ id, label, hint, checked, disabled, onChange }: {
-  id: string;
-  label: string;
-  hint: string;
-  checked: boolean;
-  disabled: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 12,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-      }}
-    >
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{
-          marginTop: 4,
-          accentColor: QUANTUM,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-        }}
-      />
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 14, color: DUST }}>{label}</span>
-        <span style={{ fontSize: 12, color: DUST_50, fontStyle: 'italic' }}>{hint}</span>
-      </span>
-    </label>
-  );
-}
-
-// ── Style helpers ───────────────────────────────────────────────────────────
-// Local because they reference local colour aliases.  Lifted into helpers
-// so the enable / disable button shells stay one-liners in the JSX.
-
-/**
- * Primary CTA style (Enable) — Astro-orange fill with dark text, matches
- * Profile.tsx's Save Allegiance button.
- */
-function primaryButtonStyle(busy: boolean): React.CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 13,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.12em',
-    color: busy ? DUST : ABYSS,
-    background: busy ? 'transparent' : ASTRO,
-    border: `1px solid ${ASTRO}`,
-    padding: '12px 24px',
-    cursor: busy ? 'wait' : 'pointer',
-    fontFamily: 'inherit',
-  };
-}
-
-/**
- * Secondary CTA style (Disable) — ABYSS fill with DUST border, mirrors
- * Profile.tsx's Sign Out button so the destructive-ish action reads
- * the same across the page.
- */
-function secondaryButtonStyle(busy: boolean): React.CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 13,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.12em',
-    color: DUST,
-    background: ABYSS,
-    border: `1px solid ${DUST}`,
-    padding: '12px 24px',
-    cursor: busy ? 'wait' : 'pointer',
-    fontFamily: 'inherit',
-  };
-}
-
-/**
- * Italic advisory line style.  Identical typography across the
- * "supported but not enrolled" hint and the error display so the
- * card's vertical rhythm stays steady.
+ * Advisory line: the "supported but not enrolled" hint and the unsupported
+ * explanation. Small type, secondary tone.
  */
 const advisoryStyle: React.CSSProperties = {
-  color: DUST_70,
-  fontSize: 13,
-  fontStyle: 'italic',
+  ...type.small,
+  ...tone.secondary,
   margin: 0,
 };

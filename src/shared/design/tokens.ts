@@ -118,6 +118,8 @@ export const layout = {
   cardPad: 'var(--isl-pad-card)',
   /** Gap between sections on a page: 48 px, 32 px on a phone. */
   sectionGap: 'var(--isl-gap-section)',
+  /** Max reading width of prose (70 characters): legal pages, long copy. */
+  measure: 'var(--isl-measure)',
 } as const;
 
 // ── Type ────────────────────────────────────────────────────────────────────

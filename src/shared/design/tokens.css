@@ -68,6 +68,7 @@
   --isl-gutter: 24px;       /* container side padding */
   --isl-pad-card: 24px;     /* card padding */
   --isl-gap-section: 48px;  /* between sections on a page */
+  --isl-measure: 70ch;      /* max reading width of prose */
 }
 
 /* Phone (< 600 px): the one place phone values live. */

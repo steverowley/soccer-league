@@ -1,30 +1,48 @@
-// ── Training.jsx ────────────────────────────────────────────────────────────
-// Training clicker page — `/training` route, rebuilt in PR 7.
+// ── Training.tsx ────────────────────────────────────────────────────────────
+// Training clicker page: the `/training` route.
 //
 // Layout:
 //   PageShell (site header, main column, footer)
-//   PageHeader:             eyebrow "Training", title, intro prose
-//   Auth / team guard:      anonymous / no-team CTAs short-circuit
-//   I.   Roster picker      radio strip listing the user's club's players
-//   Clicker widget:         XP bar + click button + cooldown countdown +
-//                              session-cap state for the selected player
+//   PageHeader:          eyebrow "Training", title, intro prose
+//   Auth / team guard:   anonymous / no-team Cards short-circuit the page
+//   I.  Roster           a grid of toggle cards listing the club's players
+//   II. Now training     the selected player: StatBlocks, the XP bar, the
+//                        click button (the page's one primary action),
+//                        cooldown and session-cap status
+//
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values (scripts/designTokens.test.ts): hairline Cards, numbered
+// SectionHeaders, StatBlocks for the figures (tabular), a green success Tag
+// for a stat bump, red only for a click that genuinely failed (a database
+// error), and the shared Loading / Error / Empty states.
 //
 // Data sources:
-//   - getPlayersForTeam(db, teamId)        — roster for the picker
-//   - getPlayerLifetimeXp(db, playerId)    — current XP for the bar
-//   - recordClick(db, userId, playerId)    — write a click + update XP
+//   - getPlayersForTeam(db, teamId): roster for the picker
+//   - getPlayerLifetimeXp(db, playerId): current XP for the bar
+//   - recordClick(db, userId, playerId): write a click and update XP
 //
 // Design pillars served:
-//   - Fan-driven collective agency: every click adds to a player's
-//     lifetime XP — your contribution composes with every other fan's
-//     into a single visible number.
-//   - Hidden mechanics: XP threshold for the next stat bump is shown
-//     as a bar, not as raw numbers.  The user knows progress but not
-//     the precise formula.
+//   - Fan-driven collective agency: every click adds to a player's lifetime
+//     XP; your contribution composes with every other fan's into a single
+//     visible number.
+//   - Hidden mechanics: XP for the next stat bump is shown as a bar and a
+//     count, not as the formula behind it.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { COLORS, SectionHeader, PrimaryButton } from '../components/Layout';
-import { PageHeader, PageShell } from '../shared/ui';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  SectionHeader,
+  StatBlock,
+  Tag,
+  toRoman,
+} from '../shared/ui';
+import { color, glow, glyph, hairline, numeric, space, tone, type } from '../shared/design';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import {
@@ -38,62 +56,60 @@ import {
   recordClick,
 } from '../features/training';
 import { getPlayersForTeam } from '../features/match';
-
-// ── Local aliases for terser inline styles ──────────────────────────────────
-// ASTRO (action) drives the click button — the loud call to action in the
-// training facility.  TERRA_NOVA (confirmation) borders the stat-bump toast —
-// a stat threshold cross is the most positive event here, so a confirmation-
-// green pip reads correctly.  FLARE stays for the error-reason text under the
-// click button.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, terraNova: TERRA_NOVA, astro: ASTRO } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50 = COLORS.dust50;
-const DUST_70 = COLORS.dust70;
+import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 // ── Widget constants ───────────────────────────────────────────────────────
-// COOLDOWN_TICK_MS — how often the cooldown countdown re-renders while a
-// cooldown is active.  100 ms keeps the displayed seconds smooth without
-// burning CPU.  Mechanical effect: nothing — the cooldown evaluation
-// itself uses real wall-clock differences, the interval just drives the
-// re-render so the displayed countdown decrements.
+// COOLDOWN_TICK_MS: how often the cooldown countdown re-renders while a
+// cooldown is active. 100 ms keeps the displayed seconds smooth without
+// burning CPU. The cooldown itself uses real wall-clock differences; the
+// interval only drives the re-render.
 const COOLDOWN_TICK_MS = 100;
 
-// BUMP_TOAST_MS — how long the "Stat bumped!" toast stays visible after a
-// click that crosses a stat threshold.  2.5 s is long enough to read,
-// short enough that a steady clicker still sees the next bump's toast.
+// BUMP_TOAST_MS: how long the "Stat bumped" tag stays after a click that
+// crosses a stat threshold. 2.5 s is long enough to read, short enough that
+// a steady clicker still sees the next bump's tag.
 const BUMP_TOAST_MS = 2500;
+
+/** A roster row as this page reads it. */
+interface TrainingPlayer {
+  id: string;
+  name: string;
+  position?: string | null;
+  jersey_number?: number | null;
+  starter?: boolean | null;
+}
+
+/** The signed-in user (only the id is read). */
+interface TrainingUser {
+  id: string;
+}
 
 /**
  * Training page.
  *
- * Same three auth states as Voting:
- *   - anonymous           → "Sign up to train" CTA
- *   - signed-in + no team → "Pick a favourite team" CTA
- *   - signed-in + team    → roster picker + clicker widget
+ * Three auth states, as on Voting:
+ *   - anonymous            a "Sign up to train" Card
+ *   - signed in, no team   a "Pick a favourite club" Card
+ *   - signed in with team  roster picker and clicker
  *
- * Loads the user's club roster on mount.  Selects the first starter as
- * the default training target; the user can switch via the radio strip.
- * XP for the selected player is fetched fresh on every switch so the
- * bar always reflects the canonical lifetime total.
+ * Loads the user's club roster on mount and selects the first starter as
+ * the default training target. XP for the selected player is fetched fresh
+ * on every switch so the bar reflects the canonical lifetime total.
  *
- * @returns {JSX.Element}
+ * @returns The page.
  */
-import { usePageTitle } from '../shared/hooks/usePageTitle';
-
 export default function Training() {
   usePageTitle('Training Facility');
   const publicDb = usePublicReadClient();
   const { user, profile } = useAuth();
   const teamId = profile?.favourite_team_id ?? null;
 
-  const [players, setPlayers] = useState<any[]>([]);
-  const [selectedId, setSelectedId] = useState<any>(null);
+  const [players, setPlayers] = useState<TrainingPlayer[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<boolean>(false);
-  const [loadError, setLoadError] = useState<any>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
-  // Load roster when the user + team are known.  Re-running auth's
-  // useAuth() in the next route ensures the listed players stay
-  // canonical.
+  // Load the roster when the user and team are known.
   useEffect(() => {
     if (!teamId) return undefined;
     let cancelled = false;
@@ -103,12 +119,12 @@ export default function Training() {
     getPlayersForTeam(publicDb, teamId)
       .then((rows) => {
         if (cancelled) return;
-        setPlayers(rows);
+        const list = rows as unknown as TrainingPlayer[];
+        setPlayers(list);
         // Default to the first starter so the widget paints on first
-        // render; falls back to the first non-starter if the roster
-        // is entirely bench (shouldn't happen with real seed data
-        // but the defensive path costs nothing).
-        const firstStarter = rows.find((p) => p.starter) ?? rows[0] ?? null;
+        // render; falls back to the first player if the roster is entirely
+        // bench (defensive; real seed data always has starters).
+        const firstStarter = list.find((p) => p.starter) ?? list[0] ?? null;
         setSelectedId(firstStarter?.id ?? null);
         setLoaded(true);
       })
@@ -128,323 +144,206 @@ export default function Training() {
     [players, selectedId],
   );
 
+  const ready = user != null && teamId != null && loaded && loadError == null && players.length > 0;
+  let n = 0;
+
   return (
     <PageShell>
-      {/* Page header. */}
       <PageHeader
         eyebrow="Training"
         title="Train Your Idols"
-        subtitle="Each click adds XP to the player you&rsquo;ve picked.  Cross enough XP and a stat bumps: small enough that no single fan can singlehandedly elevate a player, large enough that a community can."
+        subtitle="Each click adds XP to the player you've picked. Cross enough XP and a stat bumps: small enough that no single fan can single-handedly elevate a player, large enough that a community can."
       />
 
-      {/* Auth / team guard, then the roster picker and clicker. */}
-      <section style={{ padding: '0 0 48px' }}>
-          {!user && <SignInCta />}
-          {user && !teamId && <PickTeamCta />}
+      {!user && <SignInCta />}
+      {user && !teamId && <PickTeamCta />}
 
-          {user && teamId && loadError && (
-            <p
-              style={{
-                ...(undefined as any),
-                color: FLARE,
-                fontStyle: 'italic',
-                fontSize: 13,
-                marginTop: 24,
-              }}
-            >
-              Training unavailable. The facility is dark.
-            </p>
-          )}
-          {user && teamId && !loaded && !loadError && (
-            <p
-              style={{
-                ...(undefined as any),
-                color: DUST_50,
-                fontStyle: 'italic',
-                fontSize: 13,
-                marginTop: 24,
-              }}
-            >
-              Opening the training facility…
-            </p>
-          )}
-          {user && teamId && loaded && !loadError && players.length === 0 && (
-            <p
-              style={{
-                ...(undefined as any),
-                color: DUST_50,
-                fontStyle: 'italic',
-                fontSize: 13,
-                marginTop: 24,
-              }}
-            >
-              Your club has no players on the books.
-            </p>
-          )}
-          {user && teamId && loaded && !loadError && players.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 48, marginTop: 32 }}>
-              <RosterPicker players={players} selectedId={selectedId} onSelect={setSelectedId} />
-              {selected && (
-                <ClickerWidget
-                  key={selected.id /* reset internal state on player switch */}
-                  user={user}
-                  player={selected}
-                />
-              )}
-            </div>
-          )}
-      </section>
+      {user && teamId && loadError != null && (
+        <ErrorState what="the training facility" />
+      )}
+      {user && teamId && !loaded && loadError == null && (
+        <LoadingState label="Opening the training facility" />
+      )}
+      {user && teamId && loaded && loadError == null && players.length === 0 && (
+        <EmptyState centred={false}>Your club has no players on the books.</EmptyState>
+      )}
+
+      {ready && (
+        <section>
+          <SectionHeader
+            index={toRoman(++n)}
+            label="Roster"
+            title="Pick a player"
+            subtitle="Starters are listed first. Switch any time: clicks belong to whichever player is selected when you press the button."
+          />
+          <RosterPicker players={players} selectedId={selectedId} onSelect={setSelectedId} />
+        </section>
+      )}
+      {ready && selected && user && (
+        <section>
+          <SectionHeader index={toRoman(++n)} label="Now training" title={selected.name} />
+          <ClickerWidget
+            key={selected.id /* reset internal state on player switch */}
+            user={user}
+            player={selected}
+          />
+        </section>
+      )}
     </PageShell>
   );
 }
 
 /**
- * Anonymous-user CTA shown above the training UI when no user is
- * signed in.  Mirrors the Voting page's SignInCta — single primary
- * CTA to /login.
+ * Anonymous-user Card: one primary action, to /login. The header's own
+ * Sign up is secondary, so this is the view's only orange button.
  *
- * @returns {JSX.Element}
+ * @returns The Card.
  */
 function SignInCta(): React.ReactElement {
   return (
-    <div
-      style={{
-        ...(undefined as any),
-        border: `1px solid ${HAIRLINE}`,
-        padding: 32,
-        marginTop: 24,
-        maxWidth: 640,
-      }}
-    >
-      <h3
-        style={{
-          ...(undefined as any),
-          fontSize: 22,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          margin: 0,
-          letterSpacing: '0.01em',
-        }}
-      >
-        Sign Up To Train
-      </h3>
-      <p
-        style={{
-          ...(undefined as any),
-          fontSize: 14,
-          lineHeight: 1.7,
-          color: DUST_70,
-          margin: '16px 0 24px',
-        }}
-      >
+    <Card style={{ maxWidth: 640 }}>
+      <h2 style={{ ...type.subheading, margin: 0 }}>Sign up to train</h2>
+      <p style={{ ...type.body, ...tone.secondary, margin: 0, marginTop: space[12], marginBottom: space[24] }}>
         Sign up to claim a free account, pick the club you&rsquo;ll back, and start clicking to
         develop their players.
       </p>
-      <PrimaryButton to="/login">Sign Up</PrimaryButton>
-    </div>
+      <Button variant="primary" to="/login">Sign up</Button>
+    </Card>
   );
 }
 
 /**
- * No-favourite-team CTA shown when the user is signed in but hasn't
- * chosen a club.  Drops them straight into /profile.
+ * No-favourite-club Card: the user is signed in but hasn't chosen a club.
+ * Sends them to /profile.
  *
- * @returns {JSX.Element}
+ * @returns The Card.
  */
 function PickTeamCta(): React.ReactElement {
   return (
-    <div
-      style={{
-        ...(undefined as any),
-        border: `1px solid ${HAIRLINE}`,
-        padding: 32,
-        marginTop: 24,
-        maxWidth: 640,
-      }}
-    >
-      <h3
-        style={{
-          ...(undefined as any),
-          fontSize: 22,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          margin: 0,
-          letterSpacing: '0.01em',
-        }}
-      >
-        Pick A Favourite Club
-      </h3>
-      <p
-        style={{
-          ...(undefined as any),
-          fontSize: 14,
-          lineHeight: 1.7,
-          color: DUST_70,
-          margin: '16px 0 24px',
-        }}
-      >
-        Training is per-club. Pick a side first; the training facility will then list your players
+    <Card style={{ maxWidth: 640 }}>
+      <h2 style={{ ...type.subheading, margin: 0 }}>Pick a favourite club</h2>
+      <p style={{ ...type.body, ...tone.secondary, margin: 0, marginTop: space[12], marginBottom: space[24] }}>
+        Training is per club. Pick a side first; the training facility will then list your players
         to develop.
       </p>
-      <PrimaryButton to="/profile">Open Profile</PrimaryButton>
-    </div>
+      <Button variant="primary" to="/profile">Open profile</Button>
+    </Card>
   );
 }
 
 /**
- * Roster picker — a responsive grid of radio buttons listing every
- * player on the user's club, starters first.  Selected button gets
- * the dust-faint background (same active-state affordance as the
- * filter chips elsewhere) plus a flare-glow border.
+ * Roster picker: a responsive grid of toggle cards listing every player on
+ * the user's club, starters first. The selected card has the full text
+ * tone border and the outline glow (aria-pressed for assistive tech).
  *
- * @param {object} props
- * @param {Array<object>} props.players
- * @param {string | null} props.selectedId
- * @param {(id: string) => void} props.onSelect
+ * @param players     The club's roster.
+ * @param selectedId  The selected player's id.
+ * @param onSelect    Select a player.
  */
 function RosterPicker({
   players,
   selectedId,
   onSelect,
 }: {
-  players: any[];
+  players: TrainingPlayer[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
   return (
-    <div>
-      <SectionHeader
-        kicker="I"
-        label="The Roster"
-        title="Pick A Player"
-        subtitle="Starters are listed first.  Switch any time: clicks belong to whichever player is selected when you press the button."
-      />
-      <div
-        className="isl-roster-picker"
-        style={{
-          ...(undefined as any),
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 8,
-          marginTop: 24,
-        }}
-      >
-        {players.map((p: any) => {
-          const isSelected = p.id === selectedId;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => onSelect(p.id)}
-              style={{
-                ...(undefined as any),
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-                alignItems: 'flex-start',
-                textAlign: 'left',
-                background: isSelected ? COLORS.dustFaint : 'transparent',
-                border: `1px solid ${isSelected ? DUST : HAIRLINE}`,
-                color: DUST,
-                padding: '12px 14px',
-                fontFamily: 'inherit',
-                cursor: 'pointer',
-              }}
-            >
-              <span
-                style={{
-                  ...(undefined as any),
-                  fontSize: 11,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: DUST_70,
-                }}
-              >
-                {p.starter ? '★ ' : ''}#{p.jersey_number ?? '—'} • {p.position ?? '—'}
-              </span>
-              <span
-                style={{
-                  ...(undefined as any),
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.2,
-                }}
-              >
-                {p.name}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 4 → 3 → 2 → 1 collapse cascade keeps the picker readable
-          across viewport sizes. */}
-      <style>{`
-        @media (max-width: 1199px) {
-          .isl-roster-picker { grid-template-columns: repeat(3, 1fr) !important; }
-        }
-        @media (max-width: 899px) {
-          .isl-roster-picker { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 599px) {
-          .isl-roster-picker { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 100%), 1fr))',
+        gap: space[8],
+      }}
+    >
+      {players.map((p) => {
+        const isSelected = p.id === selectedId;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            aria-pressed={isSelected}
+            onClick={() => onSelect(p.id)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: space[4],
+              alignItems: 'flex-start',
+              textAlign: 'left',
+              background: 'transparent',
+              ...hairline(isSelected ? color.text : color.line),
+              boxShadow: isSelected ? glow.outline : 'none',
+              color: color.text,
+              padding: space[12],
+              minHeight: 44,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              minWidth: 0,
+            }}
+          >
+            <span style={{ ...type.label, ...tone.secondary, ...numeric }}>
+              {p.starter ? 'Starter ' : ''}#{p.jersey_number ?? '\u2014'} {glyph.middot} {p.position ?? '\u2014'}
+            </span>
+            <span style={{ ...type.small, fontWeight: 700, overflowWrap: 'anywhere' }}>{p.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
+/** A failed click: the copy, and whether it is a real error (red) or a notice. */
+interface ClickProblem {
+  text: string;
+  isError: boolean;
+}
+
 /**
- * Clicker widget — XP bar + click button + cooldown countdown + session
- * cap status for a single player.  Resets entirely when the parent
- * passes a new player (via React's key prop), so cooldown / session
- * state is per-player from the widget's perspective.
+ * Clicker widget: XP figures, the progress bar, the click button and its
+ * status for a single player. Resets entirely when the parent passes a new
+ * player (via React's key prop), so cooldown and session state are per
+ * player from the widget's perspective.
  *
  * Click flow:
  *   1. Read lifetime XP on mount (and on every successful click).
  *   2. Optimistically increment the displayed XP by XP_PER_CLICK.
- *   3. Issue recordClick.  On failure, roll back the optimistic delta
- *      AND surface the reason (cooldown, session cap, db error).
- *   4. On success, refetch the canonical XP so any concurrent fan's
- *      writes are reflected immediately.
+ *   3. Issue recordClick. On failure, roll back the optimistic delta AND
+ *      surface the reason (cooldown, session cap, db error).
+ *   4. On success, take the canonical XP from the server so any
+ *      concurrent fan's writes are reflected immediately.
  *
- * @param {object} props
- * @param {object} props.user
- * @param {object} props.player
+ * @param user    The signed-in user.
+ * @param player  The selected player.
  */
-function ClickerWidget({ user, player }: { user: any; player: any }) {
-  // Read the Supabase client at the top level — calling useSupabase()
-  // inside a useEffect would violate the rules of hooks.  The widget
-  // remounts on player switch (parent passes a fresh key) so the
-  // captured `db` reference is fine for the widget's lifetime.
+function ClickerWidget({ user, player }: { user: TrainingUser; player: TrainingPlayer }) {
+  // Read the Supabase client at the top level: calling useSupabase() inside
+  // a useEffect would violate the rules of hooks. The widget remounts on
+  // player switch, so the captured `db` is fine for the widget's lifetime.
   const db = useSupabase();
 
   const [lifetimeXp, setLifetimeXp] = useState<number>(0);
   const [loaded, setLoaded] = useState<boolean>(false);
 
-  // Cooldown end timestamp (ms-since-epoch).  null when no cooldown
-  // is active.  Updated on every click; the displayed countdown
-  // re-renders on the COOLDOWN_TICK_MS interval below.
-  const [cooldownEndMs, setCooldownEndMs] = useState<any>(null);
-  // Lazy initialiser: `useState(Date.now())` would call Date.now() on every
-  // render (React discards the value after the first), which is an impure
-  // call during render. The thunk form calls it exactly once, on mount.
+  // Cooldown end timestamp (ms since epoch); null when no cooldown is
+  // active. The displayed countdown re-renders on COOLDOWN_TICK_MS.
+  const [cooldownEndMs, setCooldownEndMs] = useState<number | null>(null);
+  // Lazy initialiser: the thunk calls Date.now() exactly once, on mount,
+  // rather than on every render.
   const [now, setNow] = useState(() => Date.now());
 
-  // Per-widget bump toast.  Persisted in state because we want the
-  // toast to fade after BUMP_TOAST_MS regardless of further clicks.
-  const [bumpToast, setBumpToast] = useState<any>(null);
+  // Per-widget bump notice, faded after BUMP_TOAST_MS regardless of
+  // further clicks.
+  const [bumpToast, setBumpToast] = useState<string | null>(null);
 
-  // Soft error surface — same row that displays "Cooldown" or
-  // "Session cap reached" etc.
-  const [errorReason, setErrorReason] = useState<any>(null);
+  // Why the last click did not land (cooldown, session cap, db error).
+  const [problem, setProblem] = useState<ClickProblem | null>(null);
 
   // In-flight click guard so a double-tap can't queue two writes.
   const inFlight = useRef(false);
 
-  // Initial fetch + refetch on player change.  The widget remounts on
-  // player switch (parent passes a fresh key), so this useEffect fires
-  // once per mount.
+  // Initial fetch. The widget remounts on player switch (fresh key), so
+  // this effect fires once per mount.
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
@@ -463,32 +362,27 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
     };
   }, [db, player.id]);
 
-  // Tick the wall-clock display while a cooldown is active.  Stops as
-  // soon as cooldown clears so we don't keep re-rendering after the
-  // button unlocks.
+  // Tick the wall-clock display while a cooldown is active. Stops as soon
+  // as the cooldown clears.
   useEffect(() => {
     if (!cooldownEndMs) return undefined;
     const id = setInterval(() => setNow(Date.now()), COOLDOWN_TICK_MS);
     return () => clearInterval(id);
   }, [cooldownEndMs]);
 
-  // Fade the bump toast after BUMP_TOAST_MS.  Cleared on the next
-  // successful bump so a long clicking streak keeps surfacing the
-  // most recent threshold cross.
+  // Fade the bump notice after BUMP_TOAST_MS.
   useEffect(() => {
     if (!bumpToast) return undefined;
     const id = setTimeout(() => setBumpToast(null), BUMP_TOAST_MS);
     return () => clearTimeout(id);
   }, [bumpToast]);
 
-  /**
-   * Issue a single click — optimistic write, rolls back on failure.
-   */
+  /** Issue a single click: optimistic write, rolled back on failure. */
   const onClick = async () => {
     if (inFlight.current) return;
     if (cooldownEndMs && cooldownEndMs > Date.now()) return;
     inFlight.current = true;
-    setErrorReason(null);
+    setProblem(null);
 
     // Optimistic XP increment.
     const optimisticXp = lifetimeXp + XP_PER_CLICK;
@@ -497,7 +391,7 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
     try {
       const result = await recordClick(db, user.id, player.id);
       if (result.success) {
-        // Set cooldown end + canonical XP from the server response.
+        // Cooldown end and canonical XP from the server response.
         setCooldownEndMs(Date.now() + DEFAULT_COOLDOWN_MS);
         if (result.newTotalXp !== undefined) setLifetimeXp(result.newTotalXp);
         if (result.statBumped) {
@@ -509,12 +403,12 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
         if (result.reason === 'cooldown' && result.msRemaining) {
           setCooldownEndMs(Date.now() + result.msRemaining);
         }
-        setErrorReason(humanizeReason(result.reason));
+        setProblem(humanizeReason(result.reason));
       }
     } catch (err) {
       console.warn('[Training] recordClick threw:', err);
       setLifetimeXp(lifetimeXp);
-      setErrorReason('Click did not register. Try again.');
+      setProblem({ text: 'Click did not register. Try again.', isError: true });
     } finally {
       inFlight.current = false;
     }
@@ -529,191 +423,95 @@ function ClickerWidget({ user, player }: { user: any; player: any }) {
   const locked = cooldownMs > 0;
 
   return (
-    <div
-      style={{
-        ...(undefined as any),
-        border: `1px solid ${HAIRLINE}`,
-        padding: 32,
-        display: 'grid',
-        gridTemplateColumns: '1fr 280px',
-        gap: 32,
-        alignItems: 'flex-start',
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <span
-          style={{
-            ...(undefined as any),
-            fontSize: 11,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: DUST_70,
-          }}
-        >
-          Now Training
-        </span>
-        <h3
-          style={{
-            ...(undefined as any),
-            fontSize: 28,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            margin: 0,
-            letterSpacing: '0.01em',
-          }}
-        >
-          {player.name}
-        </h3>
-        <span
-          style={{
-            ...(undefined as any),
-            fontSize: 11,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: DUST_70,
-          }}
-        >
-          #{player.jersey_number ?? '—'} • {player.position ?? '—'} • {bumps} stat bumps earned
-        </span>
+    <Card>
+      <div style={{ ...type.label, ...tone.secondary, ...numeric }}>
+        #{player.jersey_number ?? '\u2014'} {glyph.middot} {player.position ?? '\u2014'}
+      </div>
 
-        {/* XP progress bar towards the next stat bump.  Numeric labels
-            stay below the bar so they remain readable when the fill
-            is narrow. */}
-        <div style={{ marginTop: 8 }}>
-          <div
-            style={{
-              ...(undefined as any),
-              height: 10,
-              background: COLORS.dustFaint,
-              border: `1px solid ${HAIRLINE}`,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                ...(undefined as any),
-                width: `${pct}%`,
-                height: '100%',
-                background: DUST,
-                transition: 'width 0.18s ease',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              ...(undefined as any),
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'baseline',
-              marginTop: 8,
-              fontSize: 11,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: DUST_70,
-            }}
-          >
-            <span>{loaded ? `${carried}/${nextNeeded} XP` : 'Loading XP…'}</span>
-            <span>{xpToGo > 0 ? `${xpToGo} XP to next bump` : 'Ready'}</span>
-          </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[24], marginTop: space[16] }}>
+        <StatBlock label="Stat bumps earned" value={bumps.toLocaleString()} />
+        <StatBlock label="Lifetime XP" value={loaded ? lifetimeXp.toLocaleString() : '\u2014'} />
+        <StatBlock label="To next bump" value={xpToGo > 0 ? `${xpToGo.toLocaleString()} XP` : 'Ready'} />
+      </div>
+
+      {/* XP progress towards the next stat bump. The figures sit below the
+          bar so they stay readable when the fill is narrow. */}
+      <div style={{ marginTop: space[24] }}>
+        <div
+          role="progressbar"
+          aria-label="XP towards the next stat bump"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+          style={{ height: space[8], ...hairline(color.line), overflow: 'hidden' }}
+        >
+          <div style={{ width: `${pct}%`, height: '100%', background: color.text, transition: 'width 0.18s ease' }} />
+        </div>
+        <div style={{ ...type.small, ...tone.secondary, ...numeric, marginTop: space[8] }}>
+          {loaded ? `${carried} / ${nextNeeded} XP this bump` : 'Loading XP\u2026'}
         </div>
       </div>
 
-      {/* Right column — click button + status. */}
+      {/* The click: the page's one primary action. */}
       <div
         style={{
-          ...(undefined as any),
+          marginTop: space[24],
+          paddingTop: space[24],
+          borderTop: `1px solid ${color.lineFaint}`,
           display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          borderLeft: `1px solid ${HAIRLINE}`,
-          paddingLeft: 24,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: space[16],
         }}
       >
-        <button
-          type="button"
-          disabled={locked}
-          onClick={onClick}
-          style={{
-            ...(undefined as any),
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-            color: locked ? DUST : ABYSS,
-            background: locked ? 'transparent' : ASTRO,
-            border: `1px solid ${locked ? HAIRLINE : ASTRO}`,
-            padding: '20px 24px',
-            cursor: locked ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
+        <Button variant="primary" disabled={locked} onClick={onClick} style={numeric}>
           {locked ? `Cooldown ${(cooldownMs / 1000).toFixed(1)}s` : `Click for +${XP_PER_CLICK} XP`}
-        </button>
-        <span
-          style={{
-            ...(undefined as any),
-            fontSize: 11,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: errorReason ? FLARE : DUST_70,
-          }}
-        >
-          {errorReason ?? `Session cap: ${SESSION_MAX_CLICKS} clicks / hour`}
-        </span>
-        {bumpToast && (
-          // Terra Nova border + text — confirmation green for a
-          // successful stat-threshold cross.  Reads as "the void
-          // approves" rather than just "something happened".
-          <span
-            style={{
-              ...(undefined as any),
-              fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: TERRA_NOVA,
-              border: `1px solid ${TERRA_NOVA}`,
-              padding: '8px 12px',
-            }}
-          >
-            {bumpToast}
+        </Button>
+        {problem == null ? (
+          <span style={{ ...type.small, ...tone.secondary }}>
+            Session cap: {SESSION_MAX_CLICKS} clicks an hour
           </span>
+        ) : problem.isError ? (
+          <span role="alert" style={{ ...type.small, color: color.live }}>{problem.text}</span>
+        ) : (
+          <span role="status" style={{ ...type.small, ...tone.secondary }}>{problem.text}</span>
         )}
+        {/* A stat-threshold cross is the best thing that happens here:
+            the success tone. */}
+        {bumpToast && <Tag tone="success">{bumpToast}</Tag>}
       </div>
-    </div>
+    </Card>
   );
 }
 
 /**
- * Map a recordClick failure `reason` to a short human label.  Each
- * reason has a distinct cause, so each gets its own copy rather than
- * a generic "click failed".
+ * Map a recordClick failure `reason` to a short line. Cooldown and the
+ * session cap are the rules working (a notice, secondary tone); a database
+ * hiccup or a refusal is a real failure (red).
  *
- * @param {string | undefined} reason
- * @returns {string}
+ * @param reason  The failure reason from recordClick.
+ * @returns       The copy and whether it is an error.
  */
-function humanizeReason(reason: string | undefined) {
+function humanizeReason(reason: string | undefined): ClickProblem {
   switch (reason) {
     case 'cooldown':
-      return 'Cooldown active. Wait a moment.';
+      return { text: 'Cooldown active. Wait a moment.', isError: false };
     case 'session_cap':
-      return 'Session cap reached. Try again later.';
+      return { text: 'Session cap reached. Try again later.', isError: false };
     case 'db_error':
-      return 'Database hiccup. Try again.';
+      return { text: 'Database hiccup. Try again.', isError: true };
     case 'not_allowed':
-      return 'Click not allowed right now.';
+      return { text: 'Click not allowed right now.', isError: true };
     default:
-      return 'Click did not register.';
+      return { text: 'Click did not register.', isError: true };
   }
 }
 
 /**
- * Prettify a snake_case training-stat key for the bump toast.
+ * Prettify a snake_case training-stat key for the bump notice.
  *
- * @param {string} key
- * @returns {string}
+ * @param key  The stat key.
+ * @returns    "Shooting Power" for "shooting_power".
  */
 function prettyStat(key: string) {
   return (key ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

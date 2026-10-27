@@ -90,3 +90,5 @@ export { StatBlock, type StatTone } from './StatBlock';
 export { FormPip, FormStrip, type FormResult } from './FormStrip';
 export { DataTable, dataCell, dataHead } from './DataTable';
 export { FactGrid, FactRows } from './FactList';
+export { Field, CheckField, FormError, inputStyle } from './Field';
+export { Prose, ProseSection, Paragraph, TextLink } from './Prose';

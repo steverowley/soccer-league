@@ -1,40 +1,48 @@
 // ── Login.tsx ───────────────────────────────────────────────────────────────
-// Auth gateway — `/login` route, rebuilt in PR 8.
+// Auth gateway: the `/login` route.
 //
 // Layout:
 //   PageShell (site header, main column, footer)
 //   PageHeader: eyebrow "Account", title, intro prose
-//   Card with mode toggle: Log In / Sign Up tabs above a single form
+//   Card: a Log in / Sign up toggle (two Tags) above a single form
 //
-// Combined form (rather than two routes) because Log In and Sign Up
-// share 80 % of the same fields and the toggle reads better than
-// "Don't have an account? Sign up here" navigation.
+// Combined form (rather than two routes) because Log In and Sign Up share
+// most of the same fields and the toggle reads better than "Don't have an
+// account? Sign up here" navigation.
 //
-// On success: redirects to / (Home) via React Router's useNavigate.
-// AuthProvider already exposes signIn / signUp helpers that wrap
-// Supabase's email + password flows; this page is pure presentation +
-// validation.
+// On the design language since group 5a (docs/design-language.md), with no
+// raw style values (scripts/designTokens.test.ts): the shared form pieces
+// (Field, CheckField, FormError in src/shared/ui/Field.tsx), exactly one
+// primary Button (the submit, the view's one orange action, now that the
+// header's Sign up is secondary), and tertiary text links for the
+// secondary actions (forgot password, try again).
+//
+// On success: redirects via React Router's useNavigate. AuthProvider
+// exposes signIn / signUp helpers that wrap Supabase's email and password
+// flows; this page is presentation and validation only.
 
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { COLORS } from '../components/Layout';
-import { PageHeader, PageShell } from '../shared/ui';
+import {
+  Button,
+  Card,
+  CheckField,
+  Field,
+  FormError,
+  LoadingState,
+  PageHeader,
+  PageShell,
+  Tag,
+  TextLink,
+  inputStyle,
+} from '../shared/ui';
+import { space, tone, type } from '../shared/design';
 import { useAuth } from '../features/auth';
-
-// ── Local aliases for terser inline styles ──────────────────────────────────
-// ASTRO (action) drives the Log In / Create Account submit button — the loud
-// call to action on this page.  QUANTUM stays the focus colour.  FLARE is
-// retained for the form-error message line where validation failures (bad
-// email, short password, auth API error) surface.
-const { dust: DUST, abyss: ABYSS, flare: FLARE, quantum: QUANTUM, astro: ASTRO } = COLORS;
-const HAIRLINE = COLORS.hairline;
-const DUST_50  = COLORS.dust50;
-const DUST_70  = COLORS.dust70;
+import { usePageTitle } from '../shared/hooks/usePageTitle';
 
 // ── Mode sentinels ─────────────────────────────────────────────────────────
-// MODE_LOGIN / MODE_SIGNUP — string ids for the two-tab toggle.  Plain
-// string literals (not Symbol) so they survive React state diffing
-// cleanly.
+// MODE_LOGIN / MODE_SIGNUP: string ids for the two-way toggle. Plain string
+// literals (not Symbol) so they survive React state diffing cleanly.
 const MODE_LOGIN  = 'login';
 const MODE_SIGNUP = 'signup';
 
@@ -53,9 +61,9 @@ const MIN_USERNAME_LENGTH = 3;
 const MAX_USERNAME_LENGTH = 32;
 /**
  * Mirror of the reserved-word list in migration 0057's trigger
- * (enforce_username_policy). Kept in lockstep manually — when the
+ * (enforce_username_policy). Kept in lockstep manually: when the
  * server-side list grows, copy the additions here so the UI rejects
- * the same names without a round-trip. Names compared lower-case +
+ * the same names without a round-trip. Names compared lower-case and
  * trimmed.
  */
 const RESERVED_USERNAMES = new Set<string>([
@@ -67,16 +75,19 @@ const RESERVED_USERNAMES = new Set<string>([
   'deleted', 'deleted user', '[deleted]',
 ]);
 
-/**
- * Login + signup page.
- *
- * Renders a single card with a mode toggle.  Login mode collects
- * email + password; signup mode adds a username field above them.
- * Already-signed-in users are redirected to /profile via
- * <Navigate /> on render (cheaper than an effect).
- */
-import { usePageTitle } from '../shared/hooks/usePageTitle';
+/** The form card: a hairline Card at a comfortable form width. */
+const FORM_CARD = { maxWidth: 480 } as const;
 
+/**
+ * Login and signup page.
+ *
+ * Renders a single card with a mode toggle. Login mode collects email and
+ * password; signup mode adds a username field above them. Already-signed-in
+ * users are redirected to /profile via <Navigate /> on render (cheaper than
+ * an effect).
+ *
+ * @returns The page.
+ */
 export default function Login() {
   usePageTitle('Sign In');
   const { user, signIn, signUp, loading } = useAuth();
@@ -105,17 +116,13 @@ export default function Login() {
     setBusy(false);
   }, [mode]);
 
-  // Authenticated users have no business on /login.  Redirect to
-  // /profile.  Done as a render-time <Navigate> rather than a useEffect
-  // navigate so the redirect happens before the form ever paints.
+  // Authenticated users have no business on /login. Redirect to /profile,
+  // as a render-time <Navigate> rather than a useEffect navigate so the
+  // redirect happens before the form ever paints.
   if (loading) {
     return (
       <Shell>
-        <p style={{
-          color: DUST_50, fontStyle: 'italic', fontSize: 13, marginTop: 24,
-        }}>
-          Checking the void for an active session…
-        </p>
+        <LoadingState label="Checking the void for an active session" />
       </Shell>
     );
   }
@@ -130,39 +137,34 @@ export default function Login() {
   if (pendingConfirmEmail) {
     return (
       <Shell>
-        <div style={{ border: `1px solid ${HAIRLINE}`, padding: 32, maxWidth: 480, marginTop: 24 }}>
-          <h2 style={{ fontSize: 14, letterSpacing: '0.18em', textTransform: 'uppercase', margin: '0 0 16px' }}>
-            Check your inbox
-          </h2>
-          <p style={{ color: DUST_70, fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
+        <Card style={FORM_CARD}>
+          <h2 style={{ ...type.subheading, margin: 0 }}>Check your inbox</h2>
+          <p style={{ ...type.body, ...tone.secondary, margin: 0, marginTop: space[16] }}>
             We sent a confirmation link to{' '}
-            <strong style={{ color: DUST }}>{pendingConfirmEmail}</strong>.
+            <strong style={tone.primary}>{pendingConfirmEmail}</strong>.
             Click the link to verify your account and complete sign-up. The
             link is single-use and expires in 24 hours.
           </p>
-          <p style={{ color: DUST_50, fontSize: 12, lineHeight: 1.6, margin: 0 }}>
-            Wrong email?{' '}
-            <button onClick={() => setPendingConfirmEmail(null)} style={{
-              background: 'none', border: 'none', color: DUST, textDecoration: 'underline',
-              cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0,
-            }}>Try again</button>.
-          </p>
-        </div>
+          <div style={{ marginTop: space[16], display: 'flex', alignItems: 'center', gap: space[12], flexWrap: 'wrap' }}>
+            <span style={{ ...type.small, ...tone.secondary }}>Wrong email?</span>
+            <Button variant="tertiary" onClick={() => setPendingConfirmEmail(null)}>Try again</Button>
+          </div>
+        </Card>
       </Shell>
     );
   }
 
   /**
-   * Submit the form.  Routes the call through signIn or signUp based
-   * on the active mode.  On success: navigate to /.  On failure:
-   * surface the error string returned by the auth helper.
+   * Submit the form. Routes the call through signIn or signUp based on the
+   * active mode. On success: navigate on. On failure: surface the error
+   * string returned by the auth helper.
    */
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
-    // Client-side guard rails — the API will reject these too, but a
-    // local check saves a round-trip and a jarring error toast.
+    // Client-side guard rails: the API will reject these too, but a local
+    // check saves a round-trip and a jarring error.
     if (!email || !password) {
       setError('Email and password are required.');
       return;
@@ -179,10 +181,10 @@ export default function Login() {
       setError(`Username must be ${MAX_USERNAME_LENGTH} characters or fewer.`);
       return;
     }
-    // Reserved-name check (#401). Mirror of the server-side trigger so
-    // we reject before the round-trip. Server still enforces the same
-    // list; a determined attacker bypassing the client gets the same
-    // 23514 from Postgres.
+    // Reserved-name check (#401). Mirror of the server-side trigger so we
+    // reject before the round-trip. The server still enforces the same
+    // list; a determined attacker bypassing the client gets the same 23514
+    // from Postgres.
     if (mode === MODE_SIGNUP && RESERVED_USERNAMES.has(username.trim().toLowerCase())) {
       setError(`"${username}" is reserved. Pick another.`);
       return;
@@ -197,13 +199,13 @@ export default function Login() {
       if (mode === MODE_LOGIN) {
         const err = await signIn(email, password);
         if (err) { setError(err); return; }
-        // Returning logins go straight home — they already picked allegiance
-        // long ago, so the welcome wizard would self-redirect to / anyway.
+        // Returning logins go straight home: they picked allegiance long
+        // ago, so the welcome wizard would self-redirect to / anyway.
         navigate('/', { replace: true });
         return;
       }
 
-      // Signup branch — handle the discriminated SignUpResult from
+      // Signup branch: handle the discriminated SignUpResult from
       // AuthProvider so the user sees the correct next step instead of
       // being silently dropped at / (the pre-#365 bug).
       const result = await signUp(email, password, username);
@@ -215,10 +217,10 @@ export default function Login() {
         setPendingConfirmEmail(result.email);
         return;
       }
-      // result.kind === 'session' — signed in immediately. Send first-time
-      // users to /welcome so they pick favourite club + player. Welcome.tsx
-      // self-redirects users with favourite_team_id already set, so the
-      // wizard is one-shot.
+      // result.kind === 'session': signed in immediately. Send first-time
+      // users to /welcome so they pick a favourite club and player.
+      // Welcome.tsx self-redirects users with favourite_team_id already
+      // set, so the wizard is one-shot.
       navigate('/welcome', { replace: true });
     } catch (err) {
       console.warn('[Login] submit threw:', err);
@@ -228,165 +230,111 @@ export default function Login() {
     }
   };
 
+  const signingUp = mode === MODE_SIGNUP;
+
   return (
     <Shell>
-      <div style={{
-        border: `1px solid ${HAIRLINE}`,
-        padding: 32,
-        maxWidth: 480,
-        marginTop: 24,
-      }}>
-        {/* Mode toggle — two tabs.  Active tab uses dust-faint
-            background; the inactive tab is hairline-bordered text. */}
-        <div style={{
-          display: 'flex',
-          gap: 0,
-          border: `1px solid ${HAIRLINE}`,
-          marginBottom: 24,
-        }}>
-          <ModeTab
-            label="Log In"
-            active={mode === MODE_LOGIN}
+      <Card style={FORM_CARD}>
+        {/* Mode toggle: two toggle Tags (the selected one is the Lunar Dust
+            fill), each a 44 px target. */}
+        <div role="group" aria-label="Log in or sign up" style={{ display: 'flex', gap: space[8], marginBottom: space[24] }}>
+          <Tag
+            selected={mode === MODE_LOGIN}
             onClick={() => setMode(MODE_LOGIN)}
-          />
-          <ModeTab
-            label="Sign Up"
-            active={mode === MODE_SIGNUP}
+            style={{ minHeight: 44, flex: 1, justifyContent: 'center' }}
+          >
+            Log in
+          </Tag>
+          <Tag
+            selected={signingUp}
             onClick={() => setMode(MODE_SIGNUP)}
-          />
+            style={{ minHeight: 44, flex: 1, justifyContent: 'center' }}
+          >
+            Sign up
+          </Tag>
         </div>
 
-        <form onSubmit={onSubmit} style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}>
-          {mode === MODE_SIGNUP && (
-            <Field
-              label="Username"
-              id="username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(v) => setUsername(v)}
-              hint={`At least ${MIN_USERNAME_LENGTH} characters.`}
-            />
-          )}
-          <Field
-            label="Email"
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(v) => setEmail(v)}
-          />
-          <Field
-            label="Password"
-            id="password"
-            type="password"
-            autoComplete={mode === MODE_LOGIN ? 'current-password' : 'new-password'}
-            value={password}
-            onChange={(v) => setPassword(v)}
-            hint={mode === MODE_SIGNUP ? `At least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
-          />
-
-          {/* 18+ age attestation — required for signup per Terms of Service.
-              Renders as a single checkbox row above the submit button. */}
-          {mode === MODE_SIGNUP && (
-            <label style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 10,
-              fontSize: 12,
-              color: DUST_70,
-              cursor: 'pointer',
-              lineHeight: 1.5,
-            }}>
+        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+          {signingUp && (
+            <Field id="username" label="Username" hint={`At least ${MIN_USERNAME_LENGTH} characters.`}>
               <input
-                type="checkbox"
-                checked={ageConfirmed}
-                onChange={(e) => setAgeConfirmed(e.target.checked)}
-                style={{ marginTop: 3, accentColor: QUANTUM }}
+                id="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                style={inputStyle}
               />
-              <span>
-                I am at least 18 years old and accept the{' '}
-                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: DUST, textDecoration: 'underline' }}>
-                  Terms
-                </a>{' '}and{' '}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: DUST, textDecoration: 'underline' }}>
-                  Privacy Policy
-                </a>.
-              </span>
-            </label>
+            </Field>
           )}
-
-          {error && (
-            <p role="alert" style={{
-              color: FLARE,
-              fontSize: 13,
-              fontStyle: 'italic',
-              margin: 0,
-            }}>
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 14,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-              color: busy ? DUST : ABYSS,
-              background: busy ? 'transparent' : ASTRO,
-              border: `1px solid ${ASTRO}`,
-              padding: '14px 24px',
-              cursor: busy ? 'wait' : 'pointer',
-              fontFamily: 'inherit',
-              marginTop: 8,
-            }}
+          <Field id="email" label="Email">
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+          <Field
+            id="password"
+            label="Password"
+            hint={signingUp ? `At least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
           >
-            {busy
-              ? (mode === MODE_LOGIN ? 'Signing in…' : 'Creating account…')
-              : (mode === MODE_LOGIN ? 'Log In' : 'Create Account')}
-          </button>
+            <input
+              id="password"
+              type="password"
+              autoComplete={signingUp ? 'new-password' : 'current-password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
 
-          {mode === MODE_SIGNUP && (
-            <p style={{
-              fontSize: 11,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: DUST_70,
-              margin: 0,
-            }}>
+          {/* 18+ age attestation: required for signup per the Terms. The
+              links open in a new tab so a half-filled form survives. */}
+          {signingUp && (
+            <CheckField id="age-confirm" checked={ageConfirmed} onChange={setAgeConfirmed}>
+              I am at least 18 years old and accept the{' '}
+              <TextLink to="/terms" newTab>Terms</TextLink> and{' '}
+              <TextLink to="/privacy" newTab>Privacy Policy</TextLink>.
+            </CheckField>
+          )}
+
+          {error && <FormError>{error}</FormError>}
+
+          <Button variant="primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-start', marginTop: space[8] }}>
+            {busy
+              ? (signingUp ? 'Creating account\u2026' : 'Signing in\u2026')
+              : (signingUp ? 'Create account' : 'Log in')}
+          </Button>
+
+          {signingUp && (
+            <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
               200 starting credits granted on first sign-in.
             </p>
           )}
 
-          {/* Forgot-password link — login mode only. Routes to the two-phase
-              ResetPassword page (request email → set new password). */}
-          {mode === MODE_LOGIN && (
-            <p style={{ fontSize: 12, color: DUST_50, margin: 0 }}>
-              <a href="/reset-password" style={{ color: DUST, textDecoration: 'underline' }}>
-                Forgot password?
-              </a>
+          {/* Forgot password (login mode only): the two-phase ResetPassword
+              page (request email, then set a new password). */}
+          {!signingUp && (
+            <p style={{ ...type.small, margin: 0 }}>
+              <TextLink to="/reset-password">Forgot password?</TextLink>
             </p>
           )}
         </form>
-      </div>
+      </Card>
     </Shell>
   );
 }
 
 /**
- * Page shell: PageShell + the shared PageHeader, common to the loading,
- * check-your-inbox and form states.  Extracted so the render branches
- * can't drift on the header copy, and each renders exactly one h1.
+ * Page shell: PageShell and the shared PageHeader, common to the loading,
+ * check-your-inbox and form states. Extracted so the render branches can't
+ * drift on the header copy, and each renders exactly one h1.
+ *
+ * @param children  The state's body.
  */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -394,100 +342,9 @@ function Shell({ children }: { children: React.ReactNode }) {
       <PageHeader
         eyebrow="Account"
         title="Step Into The Void"
-        subtitle="Claim a username, pick a club, place bets, vote on focuses, train players.  Every account starts with 200 Intergalactic Credits."
+        subtitle="Claim a username, pick a club, place bets, vote on focuses, train players. Every account starts with 200 Intergalactic Credits."
       />
-      <section>{children}</section>
+      <section aria-label="Account">{children}</section>
     </PageShell>
-  );
-}
-
-interface ModeTabProps {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-/**
- * Single tab in the Log In / Sign Up toggle.  Renders as a button
- * inside the toggle's bordered shell so the active tab has a
- * background fill without breaking the surrounding border.
- */
-function ModeTab({ label, active, onClick }: ModeTabProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        background: active ? COLORS.dustFaint : 'transparent',
-        border: 'none',
-        color: DUST,
-        padding: '12px 16px',
-        fontFamily: 'inherit',
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        cursor: 'pointer',
-        borderRight: `1px solid ${HAIRLINE}`,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-interface FieldProps {
-  label: string;
-  id: string;
-  type: string;
-  autoComplete?: string | undefined;
-  value: string;
-  onChange: (v: string) => void;
-  hint?: string | undefined;
-}
-
-/**
- * Labelled form field.  Renders a small-caps label tied to its input
- * via `htmlFor` + `id` (WCAG 2.5 label association), the input itself,
- * and an optional faint hint line below.
- */
-function Field({ label, id, type, autoComplete, value, onChange, hint }: FieldProps) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <label htmlFor={id} style={{
-        fontSize: 11,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: DUST_70,
-      }}>
-        {label}
-      </label>
-      <input
-        id={id}
-        type={type}
-        autoComplete={autoComplete}
-        value={value}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-        style={{
-          background: ABYSS,
-          border: `1px solid ${HAIRLINE}`,
-          color: DUST,
-          fontFamily: 'inherit',
-          fontSize: 14,
-          padding: '10px 12px',
-        }}
-      />
-      {hint && (
-        <span style={{
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: DUST_50,
-        }}>
-          {hint}
-        </span>
-      )}
-    </div>
   );
 }
