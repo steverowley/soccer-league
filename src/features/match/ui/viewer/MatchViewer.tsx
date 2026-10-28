@@ -7,12 +7,26 @@
 //   • own the <canvas>, the requestAnimationFrame loop, and the camera state;
 //   • map real wall-clock time → game-second (season pacing) and sample the
 //     interpolated positions for this instant;
-//   • derive each dude's gait/facing/phase, depth-sort, and draw.
+//   • derive each dude's gait/facing/phase, depth-sort, and draw;
+//   • place the ball (at the carrier's feet, gliding over jumps, with a trail
+//     when it travels fast) and say who has it in a caption under the pitch.
 //
 // CHUNKY-PIXEL RENDERING
-//   The backing store is a fixed low resolution (320×208); CSS stretches it with
-//   `image-rendering: pixelated` for the retro look and a tiny fill rate.  The
-//   projection tuning is calibrated to this size.
+//   The backing store is a fixed low resolution, twice the original 320×208
+//   art (PIXEL_SCALE in render.ts); CSS stretches it with `image-rendering:
+//   pixelated` and the context draws with image smoothing off, so the pixel
+//   style stays while the figures are crisper.  The projection is expressed as
+//   fractions of the viewport, and every sprite size is in units of the depth
+//   scale, which the component multiplies by PIXEL_SCALE.
+//
+// CAMERAS
+//   A phone-sized viewer (under PHONE_VIEWER_MAX_PX wide) opens on the Ball
+//   camera, a wider one on the Pitch; once the viewer picks a camera with the
+//   buttons, resizing no longer changes it.
+//
+// KITS
+//   Never straight from `teams.color`: resolveKits (logic/viewer/kits.ts)
+//   applies the legibility, clash and keeper rules to the two club colours.
 //
 // REST STATE
 //   Before kickoff or for a legacy match with no frames, every dude stands at its
@@ -20,7 +34,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { canvasColor, color, hairline } from '../../../../shared/design';
+import { canvasColor, color, hairline, space, tone, type } from '../../../../shared/design';
 import { Tag } from '../../../../shared/ui';
 // useReducedMotion is a shared accessibility hook exposed on the entities
 // barrel; the cross-feature import is barrel-only so it satisfies
@@ -33,38 +47,64 @@ import { PITCH_LENGTH, PITCH_WIDTH } from '../../logic/spatial/types';
 import {
   advancePhase,
   animStateFromSpeed,
+  ballAtFeet,
+  cameraForWidth,
   clampFollowCenter,
   computePose,
   followAnchor,
+  glideBall,
   makeAppearance,
   pickNearestId,
   projectBroadcast,
   projectFollow,
+  pushTrail,
   realToGameSeconds,
+  resolveKits,
   sampleFrames,
   separatePositions,
   smoothFollowCenter,
   STATIC_POSE,
+  trailToDraw,
   type Appearance,
+  type BallGlide,
+  type BallPoint,
+  type CameraMode,
   type HitTarget,
+  type Projected,
+  type SampledBall,
   type ScreenPoint,
+  type TrailPoint,
   type Viewport,
 } from '../../logic/viewer';
-import { drawBall, drawDude, drawPitch, type DudeRender, type ProjectFn } from './render';
+import { drawBall, drawDude, drawPitch, PIXEL_SCALE, type DudeRender, type ProjectFn } from './render';
+import { ThrottledAnnouncer } from './ThrottledAnnouncer';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
+/** The original art's canvas size: the aspect ratio and the 1x pixel grid. */
+const BASE_VP: Viewport = { width: 320, height: 208 };
+
 /**
- * Fixed canvas backing-store size.  Small on purpose (chunky pixels + cheap fill
- * rate); the projection numbers in logic/viewer are calibrated to this size.
+ * Fixed canvas backing-store size: the original art at PIXEL_SCALE (640×416).
+ * Still small on purpose (chunky pixels, cheap fill rate); the projection in
+ * logic/viewer is expressed as fractions of the viewport, so it scales.
  */
-const VP: Viewport = { width: 320, height: 208 };
+const VP: Viewport = { width: BASE_VP.width * PIXEL_SCALE, height: BASE_VP.height * PIXEL_SCALE };
 
 /** Velocity (game m/s) above which we flip a dude's facing — avoids jitter at rest. */
 const FACE_FLIP_SPEED = 0.4;
 
 /** Click selection radius in backing-store pixels (a click within this of a dude selects it). */
-const SELECT_RADIUS = 16;
+const SELECT_RADIUS = 16 * PIXEL_SCALE;
+
+/**
+ * Screen readers hear who has the ball at most this often (ms): the caption
+ * changes with every touch, which would be a stream of announcements.
+ */
+const ANNOUNCE_EVERY_MS = 8000;
+
+/** A game-clock step larger than this (seconds), or any step back, is a seek: snap, no glide or trail. */
+const SEEK_GAME_SEC = 5;
 
 /**
  * Canvas backing colour behind the pitch — a green-black a notch darker than
@@ -75,16 +115,22 @@ const SELECT_RADIUS = 16;
  */
 const CANVAS_BG = canvasColor.pitchSurround;
 
-/** Which camera is active.  Both share one world model; only the projection differs. */
-type CameraMode = 'broadcast' | 'follow';
+/** Scale a projected point's depth scale into backing-store sprite units. */
+function atScale(p: Projected): Projected {
+  return { x: p.x, y: p.y, sc: p.sc * PIXEL_SCALE };
+}
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
 /** Minimal player info the viewer needs: a stable id (to match frames + seed the look) and position. */
 export interface MatchViewerPlayer {
   id: string;
-  /** Two-letter position (GK/DF/MF/FW); only GK is special-cased (the hollow figure). */
+  /** Two-letter position (GK/DF/MF/FW); only GK is special-cased (the keeper kit). */
   position: string;
+  /** Display name for the "on the ball" caption, when known. */
+  name?: string;
+  /** Shirt number (`players.jersey_number`), when known; else the slot order is used. */
+  number?: number | null;
 }
 
 /** Props for <MatchViewer>. */
@@ -103,7 +149,7 @@ export interface MatchViewerProps {
    *  pad with synthetic ids. */
   homePlayers: readonly MatchViewerPlayer[];
   awayPlayers: readonly MatchViewerPlayer[];
-  /** Club kit colours for the shirt accent (null ⇒ the side's muted fallback). */
+  /** Club colours (null ⇒ the side's muted fallback); resolveKits turns them into kits. */
   homeColor?: string | null;
   awayColor?: string | null;
   /** Names + scores for the screen-reader label. */
@@ -131,13 +177,13 @@ interface DudeSpec {
   /** Formation home position in metres (used for the rest state / missing frames). */
   homeX: number;
   homeY: number;
-  /** Which side the player is on — picks the fallback shirt when `kit` is null. */
+  /** Which side the player is on (picks his kit from resolveKits). */
   team: 'home' | 'away';
-  /** Club shirt colour, or null for the side's muted fallback (see render.ts). */
-  kit: string | null;
-  /** Goalkeepers render as the hollow (abyss-filled) figure. */
+  /** Goalkeepers wear their side's keeper kit. */
   gk: boolean;
-  /** Squad number printed on the chest (slot order: GK #1, then 2–11, bench 12+). */
+  /** Display name for the caption, when known. */
+  name: string | null;
+  /** Squad number printed on the chest: his shirt number, else slot order (1–11, bench 12+). */
   number: number;
   /** Deterministic appearance. */
   appearance: Appearance;
@@ -148,34 +194,38 @@ interface DudeSpec {
 }
 
 /**
- * Resolve the dude specs for one side: the starting XI (one per formation slot,
- * slot 0 = GK) plus any bench players supplied beyond the slot count.  Each gets
- * a metre-space home position (bench players have none — they sit off the pitch
- * until subbed on), its side + club kit colour + GK flag (which drive the shirt),
- * a slot-order squad number (GK #1 — football convention; real `jersey_number`
- * plumbing can replace this without touching the renderer), and a deterministic
- * appearance keyed by player id.  Empty slots in a short XI get synthetic ids so
- * the pitch is always full.
+ * Resolve the dude specs for one side: the starting XI (one per formation slot)
+ * plus any bench players supplied beyond the slot count.  Each gets a
+ * metre-space home position (bench players have none: they sit off the pitch
+ * until subbed on), its side, a keeper flag, his shirt number (slot order when
+ * the roster has none) and a deterministic appearance keyed by player id.
+ * Empty slots in a short XI get synthetic ids so the pitch is always full.
+ *
+ * WHO KEEPS GOAL: the player whose position is GK, not slot 0.  The match
+ * page orders the XI by rating (the engine's order), so slot 0 is often a
+ * forward; marking slot 0 dressed a forward as the keeper.  Slot 0 is only
+ * the fallback when no starter is listed as a GK (synthetic or short squads).
  */
 function buildSide(
   side: 'home' | 'away',
   formation: FormationKey,
   players: readonly MatchViewerPlayer[],
-  teamColor: string | null,
 ): DudeSpec[] {
   const slots = getFormationSlots(formation, side);
   const faceDefault = side === 'home' ? 1 : -1;
+  const starterHasGk = players.slice(0, slots.length).some((p) => p.position === 'GK');
   // Starters: one dude per formation slot, keyed by the XI ids in slot order.
   const starters: DudeSpec[] = slots.map((slot, i) => {
-    const id = players[i]?.id ?? `${side}-${i}`;
+    const p = players[i];
+    const id = p?.id ?? `${side}-${i}`;
     return {
       id,
       homeX: slot.x * PITCH_LENGTH,
       homeY: slot.y * PITCH_WIDTH,
       team: side,
-      kit: teamColor,
-      gk: i === 0,
-      number: i + 1,
+      gk: starterHasGk ? p?.position === 'GK' : i === 0,
+      name: p?.name ?? null,
+      number: p?.number ?? i + 1,
       appearance: makeAppearance(id),
       faceDefault,
       bench: false,
@@ -189,9 +239,9 @@ function buildSide(
     homeX: PITCH_LENGTH / 2,
     homeY: PITCH_WIDTH / 2,
     team: side,
-    kit: teamColor,
     gk: p.position === 'GK',
-    number: slots.length + i + 1,
+    name: p.name ?? null,
+    number: p.number ?? slots.length + i + 1,
     appearance: makeAppearance(p.id),
     faceDefault,
     bench: true,
@@ -203,8 +253,9 @@ function buildSide(
 
 /**
  * Canvas match viewer.  Replays the spatial engine's frames as animated pixel-art
- * dudes under a switchable broadcast / follow camera.  Renders a static formation
- * rest state when there are no frames yet.
+ * dudes under a switchable broadcast / follow camera, with a caption under the
+ * pitch naming the player on the ball.  Renders a static formation rest state
+ * when there are no frames yet.
  */
 export function MatchViewer({
   frames,
@@ -224,8 +275,15 @@ export function MatchViewer({
   onSelectPlayer,
 }: MatchViewerProps) {
   const reducedMotion = useReducedMotion();
-  const [cameraMode, setCameraMode] = useState<CameraMode>('broadcast');
+  // First guess from the window (no flash on a phone); the ResizeObserver
+  // below corrects it from the viewer's real width until the viewer chooses.
+  const [cameraMode, setCameraMode] = useState<CameraMode>(() =>
+    typeof window === 'undefined' ? 'broadcast' : cameraForWidth(window.innerWidth),
+  );
+  /** True once the viewer pressed a camera button: resizing no longer switches. */
+  const cameraChosenRef = useRef(false);
 
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   /** Per-dude animation phase, persisted across frames. */
   const phaseRef = useRef<Map<string, number>>(new Map());
@@ -242,6 +300,20 @@ export function MatchViewer({
   }, [selectedPlayerId]);
   /** Per-frame screen anchors for click hit-testing (rebuilt every frame). */
   const hitTargetsRef = useRef<HitTarget[]>([]);
+  /** Where the ball was drawn last frame, the glide in progress, and its recent path. */
+  const ballShownRef = useRef<BallPoint | null>(null);
+  const ballGlideRef = useRef<BallGlide | null>(null);
+  const trailRef = useRef<TrailPoint[]>([]);
+  /** Game second of the last frame (detects seeks and restarts). */
+  const lastGameSecRef = useRef<number | null>(null);
+
+  /**
+   * Who has the ball, for the caption: a player id, 'loose' while nobody
+   * does, or null before there is any match data.  Set from the render loop
+   * only when it changes.
+   */
+  const [carrierKey, setCarrierKey] = useState<string | null>(null);
+  const carrierKeyRef = useRef<string | null>(null);
 
   // Kickoff anchor in epoch ms — parsed once so a same-string re-render is stable.
   const anchorMs = useMemo<number | null>(() => {
@@ -250,16 +322,34 @@ export function MatchViewer({
     return Number.isNaN(t) ? null : t;
   }, [scheduledAt]);
 
-  // Resolve the 22 dude specs once per match shape.  The shirt is the kit
-  // accent — each side's club colour (muted fallbacks when absent) — and the
-  // keeper is the hollow figure; everything else stays phosphor (see render.ts).
+  // Both sides' kits under the legibility, clash and keeper rules.
+  const kits = useMemo(() => resolveKits(homeColor, awayColor), [homeColor, awayColor]);
+
+  // Resolve the 22 dude specs once per match shape.
   const dudeSpecs = useMemo<DudeSpec[]>(
     () => [
-      ...buildSide('home', homeFormation, homePlayers, homeColor ?? null),
-      ...buildSide('away', awayFormation, awayPlayers, awayColor ?? null),
+      ...buildSide('home', homeFormation, homePlayers),
+      ...buildSide('away', awayFormation, awayPlayers),
     ],
-    [homeFormation, awayFormation, homePlayers, awayPlayers, homeColor, awayColor],
+    [homeFormation, awayFormation, homePlayers, awayPlayers],
   );
+
+  // Phone-sized viewers open on the Ball camera, wider ones on the Pitch,
+  // until the viewer picks one.
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver((entries) => {
+      if (cameraChosenRef.current) return;
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width <= 0) return;
+      const mode = cameraForWidth(width);
+      if (mode === 'follow') followCenterRef.current = null;
+      setCameraMode(mode);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Bake the broadcast pitch once (the static layer never moves under that camera).
   useEffect(() => {
@@ -272,7 +362,7 @@ export function MatchViewer({
     offCtx.imageSmoothingEnabled = false;
     offCtx.fillStyle = CANVAS_BG;
     offCtx.fillRect(0, 0, VP.width, VP.height);
-    drawPitch(offCtx, (wx, wy, wz) => projectBroadcast(wx, wy, wz, VP));
+    drawPitch(offCtx, (wx, wy, wz) => atScale(projectBroadcast(wx, wy, wz, VP)));
     bakedPitchRef.current = off;
   }, []);
 
@@ -299,30 +389,9 @@ export function MatchViewer({
       const elapsedRealSec = anchorMs != null ? (Date.now() - anchorMs) / 1000 : 0;
       const gameSec = realToGameSeconds(elapsedRealSec, durationSeconds);
       const sampled = sampleFrames(frames, gameSec);
-
-      const ballWx = sampled.ball ? sampled.ball.x : PITCH_LENGTH / 2;
-      const ballWy = sampled.ball ? sampled.ball.y : PITCH_WIDTH / 2;
-
-      // Pick the projection for the active camera.
-      let project: ProjectFn;
-      if (cameraMode === 'follow') {
-        const target = clampFollowCenter(followAnchor(ballWx, ballWy, VP), VP);
-        const prev = followCenterRef.current;
-        const center = prev ? smoothFollowCenter(prev, target, dt) : target;
-        followCenterRef.current = center;
-        project = (wx, wy, wz) => projectFollow(wx, wy, wz, VP, center);
-      } else {
-        project = (wx, wy, wz) => projectBroadcast(wx, wy, wz, VP);
-      }
-
-      // Background + pitch (blit the baked layer under broadcast; redraw under follow).
-      ctx.fillStyle = CANVAS_BG;
-      ctx.fillRect(0, 0, VP.width, VP.height);
-      if (cameraMode === 'broadcast' && bakedPitchRef.current) {
-        ctx.drawImage(bakedPitchRef.current, 0, 0);
-      } else {
-        drawPitch(ctx, project);
-      }
+      const prevGameSec = lastGameSecRef.current;
+      const seek = prevGameSec == null || gameSec < prevGameSec || gameSec - prevGameSec > SEEK_GAME_SEC;
+      lastGameSecRef.current = gameSec;
 
       // Pass 1 — resolve each dude's true world position + gait/facing/phase.
       // Position lives in a mutable `pos` object so the separation pass can nudge
@@ -337,7 +406,9 @@ export function MatchViewer({
         const s = sampled.players.get(spec.id);
         if (!s && (playing || spec.bench)) return [];
         const pos = { x: s ? s.x : spec.homeX, y: s ? s.y : spec.homeY };
-        const gameSpeed = s ? Math.hypot(s.vx, s.vy) : 0;
+        const vx = s ? s.vx : 0;
+        const vy = s ? s.vy : 0;
+        const gameSpeed = Math.hypot(vx, vy);
         const state = reducedMotion ? 'idle' : animStateFromSpeed(gameSpeed);
 
         // Advance phase (seeded random on first sight so the crowd doesn't march in sync).
@@ -350,12 +421,62 @@ export function MatchViewer({
         if (s && Math.abs(s.vx) > FACE_FLIP_SPEED) face = s.vx > 0 ? 1 : -1;
         faceRef.current.set(spec.id, face);
 
-        return [{ spec, pos, state, phase, face }];
+        return [{ spec, pos, vx, vy, state, phase, face }];
       });
 
       // De-overlap (VISUAL ONLY) — spread sprites that the real positions stack on
       // top of each other so the pitch stays legible; the match data is untouched.
       separatePositions(pending.map((p) => p.pos));
+
+      // The ball.  With an owner it sits at his DRAWN feet (after the nudge
+      // above), so it never drifts off a dribbler; otherwise it is the sampled
+      // point, at the height the replay gives (0 when it has none).  A jump
+      // (the owner changed between snapshots) becomes a short glide.
+      const sb = sampled.ball;
+      const ownerId = sb?.ownerId ?? null;
+      const owner = ownerId != null ? pending.find((p) => p.spec.id === ownerId) : undefined;
+      const target: BallPoint = owner
+        ? ballAtFeet({ x: owner.pos.x, y: owner.pos.y, vx: owner.vx, vy: owner.vy }, owner.face)
+        : { x: sb ? sb.x : PITCH_LENGTH / 2, y: sb ? sb.y : PITCH_WIDTH / 2, z: sb ? Math.max(0, sb.z) : 0 };
+      const step = glideBall(ballShownRef.current, target, ballGlideRef.current, now, !reducedMotion && !seek);
+      const ball = step.shown;
+      ballShownRef.current = ball;
+      ballGlideRef.current = step.glide;
+      let trail: TrailPoint[] = [];
+      if (reducedMotion || seek) {
+        trailRef.current = [];
+      } else {
+        trailRef.current = pushTrail(trailRef.current, { ...ball, t: gameSec });
+        trail = trailToDraw(trailRef.current).slice(0, -1);
+      }
+
+      // Caption: who has it (only when that changes, so React renders rarely).
+      const key = !sampled.hasData ? null : owner ? owner.spec.id : 'loose';
+      if (key !== carrierKeyRef.current) {
+        carrierKeyRef.current = key;
+        setCarrierKey(key);
+      }
+
+      // Pick the projection for the active camera (it follows the drawn ball).
+      let project: ProjectFn;
+      if (cameraMode === 'follow') {
+        const target2 = clampFollowCenter(followAnchor(ball.x, ball.y, VP), VP);
+        const prev = followCenterRef.current;
+        const center = prev ? smoothFollowCenter(prev, target2, dt) : target2;
+        followCenterRef.current = center;
+        project = (wx, wy, wz) => atScale(projectFollow(wx, wy, wz, VP, center));
+      } else {
+        project = (wx, wy, wz) => atScale(projectBroadcast(wx, wy, wz, VP));
+      }
+
+      // Background + pitch (blit the baked layer under broadcast; redraw under follow).
+      ctx.fillStyle = CANVAS_BG;
+      ctx.fillRect(0, 0, VP.width, VP.height);
+      if (cameraMode === 'broadcast' && bakedPitchRef.current) {
+        ctx.drawImage(bakedPitchRef.current, 0, 0);
+      } else {
+        drawPitch(ctx, project);
+      }
 
       // Pass 2 — project the (possibly nudged) position, record a hit anchor for
       // click selection, and build the render record (highlight/dim by selection).
@@ -368,40 +489,41 @@ export function MatchViewer({
         const isSelected = selectedId != null && p.spec.id === selectedId;
         // Anchor the click target at mid-body (above the feet) so clicking the torso/head registers.
         hitTargets.push({ id: p.spec.id, sx: proj.x, sy: proj.y - 6 * sc });
+        const side = kits[p.spec.team];
         return {
           wx: p.pos.x,
           wy: p.pos.y,
           pose,
           appearance: p.spec.appearance,
-          team: p.spec.team,
-          kit: p.spec.kit,
-          gk: p.spec.gk,
+          kit: p.spec.gk ? side.keeper : side.outfield,
           number: p.spec.number,
           face: p.face,
           highlighted: isSelected,
           dimmed: selectedId != null && !isSelected,
+          carrier: owner != null && p === owner,
         };
       });
       hitTargetsRef.current = hitTargets;
 
-      // Depth-sort dudes + ball back-to-front by world y (far touchline first).
-      const order: Array<{ k: number; dude: DudeRender | null }> = dudes.map((d) => ({ k: d.wy, dude: d }));
-      order.push({ k: ballWy + 0.05, dude: null });
-      order.sort((a, b) => a.k - b.k);
-      for (const o of order) {
-        if (o.dude) drawDude(ctx, project, o.dude);
-        else drawBall(ctx, project, { wx: ballWx, wy: ballWy, wz: 0 });
-      }
+      // Dudes back-to-front by world y (far touchline first), then the ball
+      // over everyone: in a crowd (a corner, a penalty) a figure in front
+      // would otherwise hide it, and finding the ball matters more than the
+      // occlusion.  Its dark outline keeps it separate from a body behind it.
+      dudes.sort((a, b) => a.wy - b.wy);
+      for (const d of dudes) drawDude(ctx, project, d);
+      drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail });
 
       raf = requestAnimationFrame(loop);
     };
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [frames, anchorMs, durationSeconds, dudeSpecs, cameraMode, reducedMotion]);
+  }, [frames, anchorMs, durationSeconds, dudeSpecs, kits, cameraMode, reducedMotion]);
 
-  // Switching camera resets the follow centre so it snaps to the ball cleanly.
+  // Switching camera resets the follow centre so it snaps to the ball cleanly,
+  // and records the choice so resizing no longer overrides it.
   const switchCamera = (mode: CameraMode): void => {
+    cameraChosenRef.current = true;
     if (mode === 'follow') followCenterRef.current = null;
     setCameraMode(mode);
   };
@@ -425,42 +547,78 @@ export function MatchViewer({
       ? `Match pitch view. ${homeTeamName} ${homeScore}, ${awayTeamName} ${awayScore}.`
       : 'Match pitch view.';
 
-  return (
-    <div
-      style={{
-        position: 'relative',
-        width: '100%',
-        aspectRatio: `${VP.width} / ${VP.height}`,
-        background: color.bg,
-        ...hairline(color.line),
-        boxSizing: 'border-box',
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        width={VP.width}
-        height={VP.height}
-        role="img"
-        aria-label={ariaLabel}
-        onClick={onSelectPlayer ? (e) => selectAt(e.clientX, e.clientY) : undefined}
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'block',
-          imageRendering: 'pixelated',
-          cursor: onSelectPlayer ? 'pointer' : 'default',
-        }}
-      />
+  // The caption under the pitch.
+  const carrier = carrierKey != null && carrierKey !== 'loose' ? dudeSpecs.find((d) => d.id === carrierKey) ?? null : null;
+  const carrierClub = carrier ? (carrier.team === 'home' ? homeTeamName : awayTeamName) : undefined;
+  const announcement = carrier ? carrierSentence(carrier, carrierClub) : '';
 
-      {/* In-game camera toggle: two filter tags; the active camera takes
-          the selected state (Lunar Dust fill), not purple. The tags sit
-          on an Abyss backing so they stay legible over the pitch. */}
-      <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
-        <CameraButton label="Pitch" active={cameraMode === 'broadcast'} onClick={() => switchCamera('broadcast')} />
-        <CameraButton label="Ball" active={cameraMode === 'follow'} onClick={() => switchCamera('follow')} />
+  return (
+    <div>
+      <div
+        ref={boxRef}
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: `${BASE_VP.width} / ${BASE_VP.height}`,
+          background: color.bg,
+          ...hairline(color.line),
+          boxSizing: 'border-box',
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={VP.width}
+          height={VP.height}
+          role="img"
+          aria-label={ariaLabel}
+          onClick={onSelectPlayer ? (e) => selectAt(e.clientX, e.clientY) : undefined}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            imageRendering: 'pixelated',
+            cursor: onSelectPlayer ? 'pointer' : 'default',
+          }}
+        />
+
+        {/* In-game camera toggle: two filter tags; the active camera takes
+            the selected state (Lunar Dust fill), not purple. The tags sit
+            on an Abyss backing so they stay legible over the pitch. */}
+        <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
+          <CameraButton label="Pitch" active={cameraMode === 'broadcast'} onClick={() => switchCamera('broadcast')} />
+          <CameraButton label="Ball" active={cameraMode === 'follow'} onClick={() => switchCamera('follow')} />
+        </div>
       </div>
+
+      {/* Who has the ball.  The visible line follows every touch and is
+          hidden from screen readers; the polite live region beside it is
+          updated at most every ANNOUNCE_EVERY_MS so they are not flooded. */}
+      <p
+        aria-hidden="true"
+        style={{ margin: 0, marginTop: space[8], display: 'flex', gap: space[8], alignItems: 'baseline', flexWrap: 'wrap', minWidth: 0 }}
+      >
+        <span style={{ ...type.label, ...tone.tertiary }}>On the ball</span>
+        {carrier ? (
+          <>
+            <span style={{ ...type.body, ...tone.primary, fontWeight: 700 }}>{carrier.number}</span>
+            <span style={{ ...type.body, ...tone.primary }}>{carrier.name ?? `Number ${carrier.number}`}</span>
+            {carrierClub && <span style={{ ...type.small, ...tone.secondary }}>{carrierClub}</span>}
+          </>
+        ) : (
+          <span style={{ ...type.body, ...tone.secondary }}>{carrierKey === 'loose' ? 'Loose ball' : '\u00a0'}</span>
+        )}
+      </p>
+      <ThrottledAnnouncer text={announcement} everyMs={ANNOUNCE_EVERY_MS} />
     </div>
   );
+}
+
+/**
+ * The spoken form of the caption: "On the ball: 7 Rhea Voss, Mercury Runners".
+ */
+function carrierSentence(spec: DudeSpec, club: string | undefined): string {
+  const who = spec.name ? `${spec.number} ${spec.name}` : `number ${spec.number}`;
+  return club ? `On the ball: ${who}, ${club}.` : `On the ball: ${who}.`;
 }
 
 /**

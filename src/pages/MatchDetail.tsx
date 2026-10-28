@@ -1503,11 +1503,14 @@ function prettifyEventType(key: string): string {
 /**
  * One player row from getMatch's nested `teams.players` join.  Narrow on purpose
  * so the loose (Json-nested) `getMatch` return narrows cleanly at this seam:
- * only the viewer's needs (id + position) and the engine-aligned ordering keys
- * (starter, overall_rating) are modelled.
+ * only the viewer's needs (id, position, and the name and shirt number for
+ * its "on the ball" caption) and the engine-aligned ordering keys (starter,
+ * overall_rating) are modelled.
  */
 interface MatchPlayerRow {
   id: string;
+  name?: string | null;
+  jersey_number?: number | null;
   position: string;
   starter: boolean;
   overall_rating: number | null;
@@ -1554,9 +1557,18 @@ function pickSquad(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
   return sorted.slice(0, 16); // 11 starters (slot order) + up to 5 bench
 }
 
-/** Map a roster row to the minimal { id, position } shape the viewer consumes. */
+/**
+ * Map a roster row to the shape the viewer consumes: id and position (the
+ * keeper kit goes to the GK), plus the name and shirt number its "on the
+ * ball" caption and chest numbers show.
+ */
 function toViewerPlayer(p: MatchPlayerRow): MatchViewerPlayer {
-  return { id: p.id, position: p.position };
+  return {
+    id: p.id,
+    position: p.position,
+    ...(p.name ? { name: p.name } : {}),
+    ...(typeof p.jersey_number === 'number' ? { number: p.jersey_number } : {}),
+  };
 }
 
 /**

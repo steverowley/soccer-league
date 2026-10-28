@@ -75,19 +75,29 @@
    * literal values from `canvasColor` in tokens.ts. They are declared here
    * as well so this file stays the one place every colour is documented;
    * src/shared/design/tokens.test.ts fails if the two ever disagree. The
-   * figures also use --isl-text (phosphor body, ball), --isl-bg (outline,
-   * eyes, the keeper's hollow shirt) and --isl-architect (the focus halo).
+   * figures also use --isl-text (phosphor heads and arms), --isl-bg (outlines,
+   * eyes, the ball's outline) and --isl-architect (the focus halo).
    * Canvas only: never use these in page chrome. */
   --isl-pitch-surround: #0d0f0d;              /* the viewport behind the pitch */
   --isl-pitch-grass-a: #131613;               /* darker mowing stripe */
   --isl-pitch-grass-b: #171b17;               /* lighter mowing stripe */
   --isl-pitch-line: rgba(227,224,213,0.26);   /* pitch markings */
   --isl-pitch-goal-line: rgba(227,224,213,0.5); /* goal frames */
-  --isl-pitch-figure-dim: #9C9A90;            /* legs, shorts, antenna stems */
+  --isl-pitch-figure-dim: #9C9A90;            /* antenna stems (shorts wear the kit) */
   --isl-pitch-kit-home: #C9603F;              /* home shirt when a club has no colour */
   --isl-pitch-kit-away: #4E7E8C;              /* away shirt when a club has no colour */
   --isl-pitch-shadow: rgba(0,0,0,0.38);       /* ground shadows */
   --isl-pitch-ball-shade: rgba(0,0,0,0.25);   /* the ball's shaded side */
+  --isl-pitch-ball: #B6FF1A;                  /* the ball: hi-vis lime, no club wears it */
+  --isl-pitch-change-blue: #2B6CD4;           /* change kits for a clashing away side */
+  --isl-pitch-change-red: #D62839;
+  --isl-pitch-change-green: #2BB673;
+  --isl-pitch-change-gold: #F2C14E;
+  --isl-pitch-keeper-yellow: #FFD23F;         /* keeper kits (never dark, never hollow) */
+  --isl-pitch-keeper-pink: #FF5FA2;
+  --isl-pitch-keeper-teal: #21C4A6;
+  --isl-pitch-keeper-orange: #FF8C1A;
+  --isl-pitch-keeper-blue: #5B8CFF;
   --isl-pitch-hair-short: #C6C3B8;            /* phosphor hair shades (terrans) */
   --isl-pitch-hair-flat: #AEAB9F;
   --isl-pitch-hair-spiky: #94917F;
