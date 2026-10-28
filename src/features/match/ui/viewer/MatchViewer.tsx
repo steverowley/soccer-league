@@ -61,6 +61,7 @@ import {
   makeTrackLookup,
   noAnimations,
   pickNearestId,
+  pitchLabelFor,
   projectBroadcast,
   projectFollow,
   pushTrail,
@@ -658,8 +659,10 @@ export function MatchViewer({
       drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail, trailKind: anims.trail, heldLift });
 
       // Labels last, over everything: the event's (GOAL, CORNER...) and REPLAY.
+      // A replay keeps only its outcome labels (pitchLabelFor).
       const labelPx = labelPxFor(cssWidthRef.current, VP.width);
-      if (anims.label) drawPitchLabel(ctx, VP, anims.label, 'top', labelPx);
+      const pitchLabel = pitchLabelFor(anims.label, inReplay);
+      if (pitchLabel) drawPitchLabel(ctx, VP, pitchLabel, 'top', labelPx);
       if (inReplay) drawPitchLabel(ctx, VP, 'REPLAY', 'corner', labelPx);
 
       raf = requestAnimationFrame(loop);

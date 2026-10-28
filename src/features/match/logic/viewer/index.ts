@@ -115,6 +115,7 @@ export {
   actionBody,
   kickLegAt,
   noAnimations,
+  pitchLabelFor,
 } from './actionAnim';
 export type {
   ActionBody,

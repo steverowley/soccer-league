@@ -18,6 +18,7 @@ import {
   kickLegAt,
   type AnimLookup,
   type AnimQuery,
+  pitchLabelFor,
 } from './actionAnim';
 
 const DT = 0.1;
@@ -346,6 +347,22 @@ describe('actionBody', () => {
         const b = actionBody({ kind, t, contact: 0.3, toZ: 1 });
         for (const v of [b.tilt, b.lift, b.kickLeg, b.scaleX, b.scaleY]) expect(Number.isFinite(v), `${kind} ${t}`).toBe(true);
       }
+    }
+  });
+});
+
+describe('pitchLabelFor', () => {
+  it('passes every label through in live play', () => {
+    expect(pitchLabelFor('CORNER', false)).toBe('CORNER');
+    expect(pitchLabelFor('GOAL', false)).toBe('GOAL');
+    expect(pitchLabelFor(null, false)).toBeNull();
+  });
+
+  it('keeps only outcome labels during a replay, never a restart label', () => {
+    expect(pitchLabelFor('GOAL', true)).toBe('GOAL');
+    expect(pitchLabelFor('OFFSIDE', true)).toBe('OFFSIDE');
+    for (const restart of ['CORNER', 'FREE KICK', 'THROW-IN', 'GOAL KICK', 'PENALTY', 'KICK-OFF']) {
+      expect(pitchLabelFor(restart, true)).toBeNull();
     }
   });
 });

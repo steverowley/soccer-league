@@ -298,6 +298,23 @@ export function netPoint(crossed: { x: number; y: number; z: number }, goalX: nu
 }
 
 /** An empty result (no track, or nothing on). */
+/**
+ * The pitch label to draw, given whether a slow-motion replay is showing.
+ *
+ * A replay shows the build-up to a goal or a chance, which often began with
+ * a set piece; drawing its CORNER or FREE KICK label beside REPLAY reads as
+ * though play is about to restart.  So during a replay only the moment's own
+ * outcome labels (GOAL, OFFSIDE) are shown; restart labels belong to live
+ * play.
+ *
+ * @param label     The label `activeAnimations` chose, or null.
+ * @param inReplay  True while a slow-motion replay is on screen.
+ */
+export function pitchLabelFor(label: string | null, inReplay: boolean): string | null {
+  if (label == null || !inReplay) return label;
+  return label === 'GOAL' || label === 'OFFSIDE' ? label : null;
+}
+
 export function noAnimations(): ActiveAnimations {
   return { poses: new Map(), overlays: [], label: null, trail: null, ballHeld: null, sub: null, focus: null, ballInNet: null };
 }
