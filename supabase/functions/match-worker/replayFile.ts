@@ -34,6 +34,17 @@
 //   the stored events and score. There is deliberately no path that rebuilds a
 //   replay from `matches.sim_seed`: a later engine change would make the
 //   regenerated replay disagree with the recorded result.
+//
+// FORMAT v3 (docs/match-viewer.md, section 2B)
+//   Since v3 the replay is RECORDED BY THE SIMULATION FUNCTION on Vercel
+//   while it simulates (players every 0.5 s, the ball as keyframes; encoder in
+//   src/features/match/logic/replay/replayV3.ts) and arrives here already
+//   gzipped (remoteSim.ts `replay`); `uploadReplayBody` stores those bytes
+//   unchanged.  Building it here would mean shipping and parsing a result
+//   about four times larger on the edge's ~2 s CPU budget (measured in the
+//   doc).  The v2 builder below remains the fallback when a response carries
+//   no replay (an older function deployment, or a replay that failed to
+//   build), and Season 1's v2 files stay as they are.
 
 import type { PositionFrame } from './spatial/types.ts';
 
@@ -261,6 +272,35 @@ export async function uploadReplay(
   });
   if (error) throw new Error(`replay upload failed: ${error.message}`);
   return { ...encoded, path, frames: file.frames.length, roster: file.roster.length };
+}
+
+/** What {@link uploadReplayBody} stored. */
+export interface UploadedReplayBody {
+  path: string;
+  gzipBytes: number;
+}
+
+/**
+ * Upload a replay file that is already built and gzipped (the v3 replay the
+ * simulation function recorded; see FORMAT v3 in the header).  Same bucket,
+ * path, content type and cache policy as {@link uploadReplay}.
+ *
+ * @throws Error when the bytes are not gzip or the upload is rejected.
+ */
+export async function uploadReplayBody(
+  storage: ReplayStorage,
+  matchId: string,
+  body: Uint8Array,
+): Promise<UploadedReplayBody> {
+  if (body.length < 2 || body[0] !== 0x1f || body[1] !== 0x8b) throw new Error('replay body is not gzip');
+  const path = replayObjectPath(matchId);
+  const { error } = await storage.from(REPLAY_BUCKET).upload(path, body, {
+    contentType: REPLAY_CONTENT_TYPE,
+    upsert: true,
+    cacheControl: String(REPLAY_CACHE_SECONDS),
+  });
+  if (error) throw new Error(`replay upload failed: ${error.message}`);
+  return { path, gzipBytes: body.length };
 }
 
 /**

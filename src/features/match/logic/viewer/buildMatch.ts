@@ -11,6 +11,8 @@ import {
   type SpatialTeamInput,
 } from '../spatial/simulateSpatialMatch';
 import type { PositionFrame } from '../spatial/types';
+import { createReplayRecorder } from '../replay/recorder';
+import { trackToSnapshots } from '../replay/snapshots';
 
 /** Minimal per-player descriptor the viewer needs (structurally a MatchViewerPlayer). */
 export interface ViewerRosterPlayer {
@@ -96,7 +98,8 @@ export function assembleMatch(
   awayPlayers: ViewerRosterPlayer[];
   finalScore: [number, number];
 } {
-  const result = simulateSpatialMatch(homeInput, awayInput, { ...DEFAULT_CONFIG, seed });
+  const recorder = createReplayRecorder();
+  const result = simulateSpatialMatch(homeInput, awayInput, { ...DEFAULT_CONFIG, seed, onTick: recorder.onTick });
   const first = result.frames[0];
 
   // Recover {position, name} for a rendered id from the team's input players.
@@ -127,7 +130,10 @@ export function assembleMatch(
   const awayFrame = first ? first.players.slice(11, 22) : [];
 
   return {
-    frames: framesToSnapshots(result.frames),
+    // The same v3 snapshots a stored replay decodes to (players every 0.5 s,
+    // the ball replayed from its keyframes), so the demo shows what the
+    // match page shows.  `framesToSnapshots` remains for 2 s engine frames.
+    frames: trackToSnapshots(recorder.track()),
     homePlayers: [...roster(homeInput, homeFrame, true), ...benchRoster(homeInput)],
     awayPlayers: [...roster(awayInput, awayFrame, true), ...benchRoster(awayInput)],
     finalScore: result.finalScore,

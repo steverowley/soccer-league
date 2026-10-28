@@ -34,12 +34,24 @@
 //   (scripts/measure-sim-payload.ts).  The worker gunzips it and carries on
 //   with the very object an in-process simulation would have returned.
 //
+//   Plus one extra field, SIM_REPLAY_FIELD: the match's v3 replay file
+//   (docs/match-viewer.md section 2B; logic/replay/replayV3.ts), already
+//   JSON-encoded and gzipped, as base64.  It is recorded here, during the
+//   simulation, because the worker cannot afford to: a replay with players
+//   every 0.5 s and every ball keyframe would mean shipping and parsing a
+//   result about four times larger on the edge's ~2 s CPU budget, while
+//   here it costs one observer per tick and one gzip.  The worker strips the
+//   field before using the result and uploads the bytes unchanged; an older
+//   worker ignores it and builds its v2 replay from `frames` as before.
+//
 // DETERMINISM
 //   The engine receives the ORIGINAL parsed JSON (the schema only gates it), so
 //   for the same inputs and seed the result is byte-identical to an in-process
 //   run; simulateFunction.test.ts hashes both to prove it.
 
 import { simulateSpatialMatch, type SpatialTeamInput } from '../logic/spatial/simulateSpatialMatch';
+import { createReplayRecorder } from '../logic/replay/recorder';
+import { encodeReplayV3 } from '../logic/replay/replayV3';
 import {
   MAX_SIMULATE_REQUEST_BYTES,
   simulateRequestSchema,
@@ -67,6 +79,26 @@ export const SIM_RESULT_CONTENT_TYPE = 'application/gzip';
 
 /** Header carrying the engine's wall time for the match, in ms. */
 export const SIM_MS_HEADER = 'X-Sim-Ms';
+
+/**
+ * Result field carrying the gzipped v3 replay file as base64 (see RESPONSE in
+ * the header).  Must match SIM_REPLAY_FIELD in
+ * supabase/functions/match-worker/remoteSim.ts.
+ */
+export const SIM_REPLAY_FIELD = 'replayGzipBase64';
+
+/** Header carrying the time spent recording, encoding and gzipping the replay, in ms. */
+export const SIM_REPLAY_MS_HEADER = 'X-Replay-Ms';
+
+/** Base64 of bytes, in chunks (a spread of 300 KB would overflow the stack). */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
 
 export interface SimulateFunctionDeps {
   /** fetch used for the ticket RPC (injected by tests). */
@@ -188,13 +220,29 @@ export async function handleSimulateRequest(
   const input = body as { home: SpatialTeamInput; away: SpatialTeamInput; seed: number };
   const t0 = performance.now();
   let encoded: Uint8Array;
+  let ms: number;
+  let replayMs = -1;
   try {
-    const result = simulateSpatialMatch(input.home, input.away, { seed: input.seed });
-    encoded = await gzipText(JSON.stringify(result));
+    // The recorder only observes (spatial/types.ts SimConfig.onTick), so the
+    // result is byte-identical to a run without it.
+    const recorder = createReplayRecorder();
+    const result = simulateSpatialMatch(input.home, input.away, { seed: input.seed, onTick: recorder.onTick });
+    ms = Math.round(performance.now() - t0);
+    // The replay is cosmetic: if it cannot be built the match still counts,
+    // and the worker falls back to its v2 replay from `frames`.
+    let replayField: Record<string, string> = {};
+    try {
+      const r0 = performance.now();
+      const replay = await gzipText(JSON.stringify(encodeReplayV3(ticket.data.matchId, recorder.track())));
+      replayField = { [SIM_REPLAY_FIELD]: bytesToBase64(replay) };
+      replayMs = Math.round(performance.now() - r0);
+    } catch (err) {
+      console.warn('[simulate] replay not built:', (err as Error)?.message ?? err);
+    }
+    encoded = await gzipText(JSON.stringify({ ...result, ...replayField }));
   } catch (err) {
     return json(500, { error: `simulation failed: ${(err as Error)?.message ?? String(err)}` });
   }
-  const ms = Math.round(performance.now() - t0);
 
   return new Response(encoded as BodyInit, {
     status: 200,
@@ -202,6 +250,7 @@ export async function handleSimulateRequest(
       'Content-Type':  SIM_RESULT_CONTENT_TYPE,
       'Cache-Control': 'no-store',
       [SIM_MS_HEADER]: String(ms),
+      [SIM_REPLAY_MS_HEADER]: String(replayMs),
     },
   });
 }

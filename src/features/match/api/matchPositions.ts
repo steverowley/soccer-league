@@ -39,9 +39,20 @@
 // VOLUME
 //   ~2 800 frames per 90-minute match.  The replay file is about 0.2 MB
 //   gzipped (about 0.85 MB of JSON once decompressed), a single request.
+//
+// FORMAT v3 (docs/match-viewer.md, section 2B)
+//   Replays recorded since v3 hold every player every 0.5 s and the ball as
+//   keyframes at each discontinuity in its motion (logic/replay/replayV3.ts).
+//   They decode to the same `PositionSnapshot[]`, one per 0.5 s frame, with
+//   two additive fields: `tSec` (the frame's exact game time) and
+//   `ballTrack` (the match's ball keyframes, one object shared by every
+//   frame), which `sampleFrames` replays with the engine's own ball physics.
+//   v2 files decode exactly as before (no `tSec`, no `ballTrack`).
 
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import type { BallTrack } from '../logic/replay/ballTrack';
+import type { ReplayFileV3 } from '../logic/replay/replayV3';
 
 // ── Replay files in Storage ──────────────────────────────────────────────────
 
@@ -128,6 +139,48 @@ const ReplayFileSchema = z.object({
   ),
 });
 
+/** A finite number array (checked in one pass; zod per element is slow at
+ *  the size of a v3 file, about 700 000 numbers). */
+function isNumberArray(v: unknown): v is number[] {
+  if (!Array.isArray(v)) return false;
+  for (const n of v) if (typeof n !== 'number' || !Number.isFinite(n)) return false;
+  return true;
+}
+
+const NumberArray = z.custom<number[]>(isNumberArray, 'expected an array of finite numbers');
+
+/**
+ * A v3 replay file (logic/replay/replayV3.ts): players every 0.5 s as
+ * delta-coded runs per roster member, the ball as keyframe columns.
+ */
+const ReplayFileV3Schema = z.object({
+  format: z.literal('isl-replay'),
+  v: z.literal(3),
+  matchId: z.string(),
+  roster: RosterSchema,
+  dt: z.number().positive(),
+  every: z.number().positive(),
+  frames: z.number().int().nonnegative(),
+  end: z.number().int().nonnegative(),
+  players: z.array(
+    z.object({
+      s: z.array(z.tuple([z.number().int(), z.number().int()])),
+      x: NumberArray,
+      y: NumberArray,
+    }),
+  ),
+  ball: z.object({
+    t: NumberArray,
+    x: NumberArray,
+    y: NumberArray,
+    z: NumberArray,
+    vx: NumberArray,
+    vy: NumberArray,
+    vz: NumberArray,
+    o: NumberArray,
+  }),
+});
+
 /**
  * A single sampled instant of the match.
  * `minute` + `second` together identify the in-game clock position.
@@ -150,6 +203,17 @@ export interface PositionSnapshot {
     players: Array<{ id: string; x: number; y: number; hasBall: boolean }>;
     ball: { x: number; y: number; ownerId: string | null };
   };
+  /**
+   * v3 only: the frame's exact game time in seconds (frames are 0.5 s apart,
+   * so `minute`/`second` alone repeat).  Absent on v2 and table frames.
+   */
+  tSec?: number;
+  /**
+   * v3 only: the whole match's ball keyframes, the SAME object on every
+   * frame of the match.  `sampleFrames` replays it with the engine's ball
+   * physics.  Absent on v2 and table frames.
+   */
+  ballTrack?: BallTrack;
 }
 
 // ── Decoding ─────────────────────────────────────────────────────────────────
@@ -340,6 +404,22 @@ async function loadReplayFile(
   } catch (err) {
     console.error('[getMatchPositions] replay could not be decoded:', (err as Error)?.message ?? err);
     return { kind: 'failed' };
+  }
+
+  const v3 = ReplayFileV3Schema.safeParse(parsedJson);
+  if (v3.success) {
+    // Loaded on demand: keeps the v3 decoder (and the ball physics it
+    // replays with) out of the entry chunk this module sits in.
+    const [{ decodeReplayV3 }, { trackToSnapshots }] = await Promise.all([
+      import('../logic/replay/replayV3'),
+      import('../logic/replay/snapshots'),
+    ]);
+    const track = decodeReplayV3(v3.data as ReplayFileV3);
+    if (!track) {
+      console.warn('[getMatchPositions] v3 replay file is inconsistent, ignored; match', matchId);
+      return { kind: 'failed' };
+    }
+    return { kind: 'found', rows: trackToSnapshots(track) };
   }
 
   const file = ReplayFileSchema.safeParse(parsedJson);
