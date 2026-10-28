@@ -120,9 +120,6 @@ function atScale(p: Projected): Projected {
   return { x: p.x, y: p.y, sc: p.sc * PIXEL_SCALE };
 }
 
-/** The ball as sampled, with the height the replay may carry (absent in v2 replays). */
-type SampledBallWithHeight = SampledBall & { z?: number };
-
 // ── Public types ─────────────────────────────────────────────────────────────
 
 /** Minimal player info the viewer needs: a stable id (to match frames + seed the look) and position. */
@@ -435,12 +432,12 @@ export function MatchViewer({
       // above), so it never drifts off a dribbler; otherwise it is the sampled
       // point, at the height the replay gives (0 when it has none).  A jump
       // (the owner changed between snapshots) becomes a short glide.
-      const sb = sampled.ball as SampledBallWithHeight | null;
+      const sb = sampled.ball;
       const ownerId = sb?.ownerId ?? null;
       const owner = ownerId != null ? pending.find((p) => p.spec.id === ownerId) : undefined;
       const target: BallPoint = owner
         ? ballAtFeet({ x: owner.pos.x, y: owner.pos.y, vx: owner.vx, vy: owner.vy }, owner.face)
-        : { x: sb ? sb.x : PITCH_LENGTH / 2, y: sb ? sb.y : PITCH_WIDTH / 2, z: sb ? Math.max(0, sb.z ?? 0) : 0 };
+        : { x: sb ? sb.x : PITCH_LENGTH / 2, y: sb ? sb.y : PITCH_WIDTH / 2, z: sb ? Math.max(0, sb.z) : 0 };
       const step = glideBall(ballShownRef.current, target, ballGlideRef.current, now, !reducedMotion && !seek);
       const ball = step.shown;
       ballShownRef.current = ball;
