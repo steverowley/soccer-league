@@ -99,7 +99,9 @@ export function assembleMatch(
   finalScore: [number, number];
 } {
   const recorder = createReplayRecorder();
-  const result = simulateSpatialMatch(homeInput, awayInput, { ...DEFAULT_CONFIG, seed, onTick: recorder.onTick });
+  const result = simulateSpatialMatch(homeInput, awayInput, {
+    ...DEFAULT_CONFIG, seed, onTick: recorder.onTick, observer: recorder.observer,
+  });
   const first = result.frames[0];
 
   // Recover {position, name} for a rendered id from the team's input players.
@@ -131,9 +133,10 @@ export function assembleMatch(
 
   return {
     // The same v3 snapshots a stored replay decodes to (players every 0.5 s,
-    // the ball replayed from its keyframes), so the demo shows what the
-    // match page shows.  `framesToSnapshots` remains for 2 s engine frames.
-    frames: trackToSnapshots(recorder.track()),
+    // the ball replayed from its keyframes, the action track), so the demo
+    // shows what the match page shows.  `framesToSnapshots` remains for 2 s
+    // engine frames.
+    frames: trackToSnapshots(recorder.track(result.events)),
     homePlayers: [...roster(homeInput, homeFrame, true), ...benchRoster(homeInput)],
     awayPlayers: [...roster(awayInput, awayFrame, true), ...benchRoster(awayInput)],
     finalScore: result.finalScore,

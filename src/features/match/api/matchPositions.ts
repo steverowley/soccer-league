@@ -48,10 +48,15 @@
 //   `ballTrack` (the match's ball keyframes, one object shared by every
 //   frame), which `sampleFrames` replays with the engine's own ball physics.
 //   v2 files decode exactly as before (no `tSec`, no `ballTrack`).
+//   A v3 file may also carry `actions` (every kick, tackle, foul, dive,
+//   restart...); it decodes to `actionTrack`, again one object shared by
+//   every frame.  Older v3 files have none, and a malformed one is dropped
+//   rather than failing the replay (it is cosmetic).
 
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { BallTrack } from '../logic/replay/ballTrack';
+import type { ActionTrack } from '../logic/replay/actions';
 import type { ReplayFileV3 } from '../logic/replay/replayV3';
 
 // ── Replay files in Storage ──────────────────────────────────────────────────
@@ -179,6 +184,9 @@ const ReplayFileV3Schema = z.object({
     vz: NumberArray,
     o: NumberArray,
   }),
+  // Validated column by column in the decoder (logic/replay/actionTrack.ts),
+  // which drops a malformed track instead of failing the whole replay.
+  actions: z.unknown().optional(),
 });
 
 /**
@@ -214,6 +222,13 @@ export interface PositionSnapshot {
    * physics.  Absent on v2 and table frames.
    */
   ballTrack?: BallTrack;
+  /**
+   * v3 with actions only: the match's action track (every kick, tackle,
+   * foul, dive, restart, goal...; logic/replay/actions.ts), the SAME object
+   * on every frame of the match.  Absent on v2, table frames and v3 files
+   * written before actions were recorded.
+   */
+  actionTrack?: ActionTrack;
 }
 
 // ── Decoding ─────────────────────────────────────────────────────────────────

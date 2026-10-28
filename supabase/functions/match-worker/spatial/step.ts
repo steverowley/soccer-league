@@ -124,6 +124,19 @@ function trace(world: SimWorld, kind: string, p: SimPlayer | null, data: Record<
   });
 }
 
+/** Tell the read-only observer (SimConfig.observer), if any, of the kick
+ *  just set on the ball. */
+function observeKick(world: SimWorld): void {
+  const o = world.observer;
+  if (o !== null && o.kick !== undefined && world.ball.kick !== null) o.kick(world.ball.kick, world);
+}
+
+/** Tell the read-only observer, if any, that keeper `k` has just committed to a dive. */
+function observeDive(world: SimWorld, k: SimPlayer): void {
+  const o = world.observer;
+  if (o !== null && o.dive !== undefined) o.dive(k, world);
+}
+
 /**
  * For traces only: the opponent outfielder nearest the realised line of a
  * shot at the strike (distance off the line, distance from the ball, and
@@ -326,6 +339,7 @@ function launch(world: SimWorld, p: SimPlayer, kind: KickKind, vel: Vec2, vz: nu
   p.noTouchUntil = world.clockSec + KICKER_LOCK;
   p.holds = 0;
   newBallPath(world, p);
+  observeKick(world);
 }
 
 /**
@@ -373,6 +387,7 @@ function execute(
           const ys = [GOAL_Y_MIN + 1.2, PITCH_WIDTH / 2, GOAL_Y_MAX - 1.2];
           const i = softPick(k.rng, [0, -0.0005, 0], 0.001, world.flags.utilitySoftness);
           k.dive = { at: vec(gx, ys[i]!), z: 0.6 };
+          observeDive(world, k);
           trace(world, 'keeper_guess', k, { y: r2(ys[i]!) });
         }
       }
@@ -795,6 +810,7 @@ function resolveLunge(world: SimWorld, d: SimPlayer, events: SimEvent[], minute:
     }
     b.vz = 0;
     b.kick = { kind: 'poke', side: d.side, playerId: d.id, from: b.pos, tSec: now, targetId: null, aim: b.pos, resolved: true, woodwork: false };
+    observeKick(world);
     b.offsideFor = null;
     touched(world, d);
     newBallPath(world, d);
@@ -1144,6 +1160,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     if (shotLive && kick!.side !== p.side) resolveShot(world, events, minute, onTarget ? 'save' : 'shot', p);
     passEnd(world, 'lost');
     b.kick = { kind: 'parry', side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
+    observeKick(world);
     touched(world, p);
     p.noTouchUntil = now + 0.4;
     newBallPath(world, p);
@@ -1168,6 +1185,7 @@ function touchBall(world: SimWorld, p: SimPlayer, at: Vec2, z: number, closeD: n
     if (shotLive) resolveShot(world, events, minute, 'shot');
     passEnd(world, kick && kick.side === p.side ? 'complete' : 'lost');
     b.kick = { kind: 'deflection', side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
+    observeKick(world);
     touched(world, p);
     newBallPath(world, p);
     trace(world, 'block', p, { speed: r2(speed), edge: r2(edge), out: r2(len(b.vel)), kick: kick ? kick.kind : null });
@@ -1568,6 +1586,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     if (k && !k.dive && now >= k.reactUntil && ballThreatens(world, side)) {
       readShot(k, world);
       const kd = k.dive as SimPlayer['dive'];
+      if (kd) observeDive(world, k);
       if (kd) trace(world, 'dive', k, { kx: r2(k.pos.x), ky: r2(k.pos.y), vx: r2(k.vel.x), vy: r2(k.vel.y), toY: r2(kd.at.y), z: r2(kd.z) });
     }
   }

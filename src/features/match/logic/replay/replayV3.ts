@@ -28,7 +28,14 @@
 //                x, y  centimetres (delta coded like the players),
 //                z  centimetres; vx, vy, vz  centimetres per second,
 //                o  roster index of the owner, -1 when loose
+//     actions: (optional, since the action track) every kick, dive, restart,
+//              tackle, interception, foul, goal, woodwork, offside and
+//              substitution at its exact tick, as columns per kind
+//              (actionTrack.ts has the layout).  Files written before it
+//              have none and decode without an action track.
 //   }
+//   The roster also holds any player named only by an action (an empty run
+//   list), so every action's player has an index.
 //   Columns of small deltas are what gzip compresses well: a full match is
 //   about 0.33 MB gzipped against 0.2 to 0.32 MB for v2's 2 s frames.
 //
@@ -37,6 +44,9 @@
 
 import { BALL_SCALE, type BallKey } from './ballTrack';
 import type { ReplayTrack, TrackPlayer } from './recorder';
+import {
+  type ReplayV3Actions, decodeActions, encodeActions, replayRoster, toActionTrack,
+} from './actionTrack';
 
 /** Format tag shared with every replay file. */
 export const REPLAY_FORMAT = 'isl-replay';
@@ -75,6 +85,8 @@ export interface ReplayFileV3 {
   end: number;
   players: ReplayV3Player[];
   ball: ReplayV3Ball;
+  /** The action track (absent in files written before it was recorded). */
+  actions?: ReplayV3Actions;
 }
 
 /** Delta-code a run: the first value as is, then each change. */
@@ -102,16 +114,9 @@ function q(n: number, scale: number): number {
  * @returns        The payload to JSON-encode and gzip.
  */
 export function encodeReplayV3(matchId: string, track: ReplayTrack): ReplayFileV3 {
-  const roster: string[] = [];
+  const roster = replayRoster(track);
   const index = new Map<string, number>();
-  for (const frame of track.frames) {
-    for (const p of frame) {
-      if (!index.has(p.id)) {
-        index.set(p.id, roster.length);
-        roster.push(p.id);
-      }
-    }
-  }
+  roster.forEach((id, i) => index.set(id, i));
 
   // Per roster member: the frames he is on, his coordinates in them.
   const runs: Array<Array<[number, number]>> = roster.map(() => []);
@@ -165,6 +170,7 @@ export function encodeReplayV3(matchId: string, track: ReplayTrack): ReplayFileV
     end: track.ball.endTick,
     players,
     ball,
+    ...(track.actions ? { actions: encodeActions(toActionTrack(track.actions, roster, track.dtSec)) } : {}),
   };
 }
 
@@ -221,10 +227,15 @@ export function decodeReplayV3(file: ReplayFileV3): ReplayTrack | null {
   }
   if (n === 0) return null;
 
+  // The action track is cosmetic: a malformed one is dropped, not fatal.
+  const actions = file.actions === undefined ? null : decodeActions(file.actions, roster);
+
   return {
     dtSec: file.dt,
     everySec: file.every,
     frames,
     ball: { dtSec: file.dt, keys, endTick: file.end },
+    roster: roster.slice(),
+    ...(actions ? { actions } : {}),
   };
 }
