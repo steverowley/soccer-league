@@ -11,13 +11,24 @@
 //   Every being is a Lunar-Dust phosphor figure on Galactic Abyss.  The chunky
 //   big-headed Tiny-Terraces silhouette carries the charm; variety comes from
 //   SPECIES (head shape, eye configuration, antennae, mandibles), build and
-//   phosphor-tone hair — never from hue.  The KIT SHIRT is the single rationed
-//   accent: each side's torso wears its club colour (muted fallbacks when a
-//   club has none), which is what separates the teams at broadcast scale — the
-//   pure-phosphor accent mode shipped first and the sides were too hard to tell
-//   apart.  The goalkeeper is the hollow (abyss-filled) figure.  Squad numbers
-//   in Space Mono are the brand's data motif on every chest, and the selected
-//   player glows under a Quantum-Purple halo (the Architect's eye).
+//   phosphor-tone hair, never from hue.  Squad numbers in Space Mono are the
+//   brand's data motif on every chest, and the selected player glows under a
+//   Quantum-Purple halo (the Architect's eye).
+//
+// READABILITY (docs/match-viewer.md, sections 2C and 3)
+//   - KITS: shirt AND shorts wear the kit colour, and a small ground marker
+//     in the team colour sits under every player.  The colours come from
+//     logic/viewer/kits.ts (one legibility rule, one clash rule, a keeper kit
+//     per side), never straight from `teams.color`.
+//   - KEEPERS wear a bright keeper kit with long sleeves over their team's
+//     marker.  Nothing is drawn as a dark or hollow figure: the old hollow
+//     keeper read as a referee in black, and there is no referee.
+//   - THE BALL has its own hi-vis colour, a dark outline, a ground shadow that
+//     separates from it as it rises, and a short fading trail when it travels
+//     fast.  The player on the ball stands in a ring in his team colour.
+//   - TWO X: the canvas backing store is twice the old 320 x 208; every size
+//     and line here is multiplied by PIXEL_SCALE, so the proportions and the
+//     chunky pixels are those of the 1x art, only crisper.
 
 import { PITCH_LENGTH, PITCH_WIDTH } from '../../logic/spatial/types';
 import { canvasColor } from '../../../../shared/design';
@@ -30,6 +41,7 @@ import {
   type Appearance,
   type EyeKind,
   type GoalSpec,
+  type Kit,
   type Marking,
   type Pose,
   type Projected,
@@ -38,25 +50,33 @@ import {
 /** Maps a world point (metres + height) to screen space under the active camera. */
 export type ProjectFn = (wx: number, wy: number, wz: number) => Projected;
 
+/**
+ * Backing-store pixels per pixel of the original 320 x 208 art.  The component
+ * multiplies the projection's depth scale `sc` by this, so every sprite size
+ * expressed in `sc` units scales with it; the few absolute sizes below (line
+ * widths, minimum sizes) multiply by it directly.
+ */
+export const PIXEL_SCALE = 2;
+/** Short alias for the absolute sizes in this file. */
+const PX = PIXEL_SCALE;
+
 // ── Palette (ISL tokens — the phosphor monochrome) ────────────────────────────
 // A canvas cannot read CSS variables, so the colours come from `canvasColor`
 // in src/shared/design/tokens.ts: literal values that tokens.test.ts holds
 // equal to their custom properties in tokens.css.
 
-/** Lunar Dust — the phosphor body. */
+/** Lunar Dust — the phosphor body (heads and outfield arms). */
 const PHOS = canvasColor.text;
-/** Galactic Abyss — outline, eyes, and the GK's hollow shirt fill. */
+/** Galactic Abyss — eyes, head outlines and the ball's outline. */
 const ABYSS = canvasColor.bg;
-/** Mid phosphor — legs/shorts and antennae stems. */
+/** Mid phosphor — antennae stems. */
 const PHOS_DIM = canvasColor.figureDim;
-/** Fallback kit shirts when a club has no colour — the study's muted pair. */
-const KIT_HOME_FALLBACK = canvasColor.kitHome; // muted astro terracotta
-const KIT_AWAY_FALLBACK = canvasColor.kitAway; // muted slate-cyan
 /** Quantum Purple — the focus halo (the Architect's eye on the selected soul). */
 const QUANTUM = canvasColor.architect;
 
 const SHADOW = canvasColor.shadow;
-const BALL_COLOR = canvasColor.text;
+/** The ball: hi-vis lime, measured against every kit in kits.test.ts. */
+const BALL_COLOR = canvasColor.ball;
 /** The ball's shaded side. */
 const BALL_SHADE = canvasColor.ballShade;
 /** Pitch surface — abyss-toned greens so the phosphor beings carry the light. */
@@ -71,6 +91,23 @@ const GRASS_STRIPES = 10;
 /** How far a dimmed (non-selected) dude fades when another player is in focus. */
 const DIM_ALPHA = 0.32;
 
+/** Ground marker half-axes under every player, in `sc` units. */
+const MARKER_RX = 3.6;
+const MARKER_RY = 1.45;
+/** Opacity of the ground marker (a disc of team colour under the feet). */
+const MARKER_ALPHA = 0.85;
+/** Carrier ring half-axes, in `sc` units: between the marker and the focus halo. */
+const RING_RX = 5.3;
+const RING_RY = 2.15;
+
+/**
+ * Ball radius in `sc` units.  At the far touchline under the Pitch camera
+ * (sc 0.9 x PIXEL_SCALE) the filled ball is 2.1 x 0.9 x 2 x 2 = 7.6 backing
+ * pixels across plus the outline; on a 356 px wide phone viewer (640 backing
+ * pixels) that is 4.2 CSS px before the outline, 5.2 with it.
+ */
+export const BALL_RADIUS = 2.1;
+
 // ── A drawable dude / ball ──────────────────────────────────────────────────────
 
 /** Everything the renderer needs to draw one player this frame. */
@@ -82,18 +119,16 @@ export interface DudeRender {
   pose: Pose;
   /** Deterministic appearance (species/build/hair). */
   appearance: Appearance;
-  /** Which side the player is on — picks the fallback shirt when `kit` is null. */
-  team: 'home' | 'away';
-  /** Club shirt colour, or null to use the side's muted fallback. */
-  kit: string | null;
-  /** Goalkeepers render as the hollow (abyss-filled, phosphor-outlined) figure. */
-  gk: boolean;
+  /** What this figure wears (from resolveKits: outfield or keeper kit of his side). */
+  kit: Kit;
   /** Squad number printed on the chest (the brand's data motif). */
   number: number;
   /** Facing: +1 right, −1 left. */
   face: number;
   /** Draw the Quantum focus halo under this dude (the clicked player). */
   highlighted?: boolean;
+  /** He has the ball: draw a ring in his team colour under him. */
+  carrier?: boolean;
   /** Fade this dude back (a different player is selected) so the focus stands out. */
   dimmed?: boolean;
 }
@@ -102,7 +137,10 @@ export interface DudeRender {
 export interface BallRender {
   wx: number;
   wy: number;
+  /** Height above the grass in metres (0 when the replay has no height). */
   wz: number;
+  /** Recent positions, oldest first, when the ball is travelling fast (else empty). */
+  trail?: ReadonlyArray<{ x: number; y: number; z: number }>;
 }
 
 // ── Low-level pixel helpers ─────────────────────────────────────────────────────
@@ -203,18 +241,6 @@ function shade(hex: string, amt: number): string {
 }
 
 /**
- * True when a hex colour is light enough that abyss (dark) digits read on it.
- * Rec. 709 relative-luminance weights; the 0.55 threshold splits the phosphor
- * dust tones (light → abyss digits) from typical saturated club colours
- * (dark → phosphor digits).  Unparseable strings count as dark.
- */
-function isLight(hex: string): boolean {
-  const c = parseHex(hex);
-  if (!c) return false;
-  return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255 > 0.55;
-}
-
-/**
  * Cel shading: a flat shadow band on the right + bottom of a box and a small
  * highlight on the top-left — the two-step lighting that makes the phosphor
  * figures read as solid pictograms instead of flat fills.
@@ -288,7 +314,7 @@ function drawMarking(ctx: CanvasRenderingContext2D, project: ProjectFn, m: Marki
     case 'spot': {
       const p = project(m.x, m.y, 0);
       ctx.fillStyle = LINE;
-      circle(ctx, p.x, p.y, 1.1);
+      circle(ctx, p.x, p.y, 1.1 * PX);
       break;
     }
   }
@@ -298,7 +324,7 @@ function drawMarking(ctx: CanvasRenderingContext2D, project: ProjectFn, m: Marki
 function drawGoal(ctx: CanvasRenderingContext2D, project: ProjectFn, goal: GoalSpec): void {
   const depth = GOAL_DEPTH * goal.depthDir;
   ctx.strokeStyle = GOAL_LINE;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = PX;
   const post = (y: number): void => {
     const foot = project(goal.x, y, 0);
     const top = project(goal.x, y, goal.height);
@@ -346,7 +372,7 @@ export function drawPitch(ctx: CanvasRenderingContext2D, project: ProjectFn): vo
     ctx.fill();
   }
 
-  ctx.lineWidth = 1;
+  ctx.lineWidth = PX;
   ctx.strokeStyle = LINE;
   for (const m of PITCH_MARKINGS) drawMarking(ctx, project, m);
   for (const goal of GOALS) drawGoal(ctx, project, goal);
@@ -380,7 +406,7 @@ function drawAntennae(
   u: number,
 ): void {
   if (kind === 'none') return;
-  const aw = Math.max(1, 0.7 * u);
+  const aw = Math.max(PX, 0.7 * u);
   const len = w * 0.5;
   const x1 = hx + w * 0.26;
   const x2 = hx + w * 0.74;
@@ -392,8 +418,8 @@ function drawAntennae(
     rect(ctx, x1 - aw / 2, hy - len, aw, len);
     rect(ctx, x2 - aw / 2, hy - len, aw, len);
     ctx.fillStyle = PHOS;
-    circle(ctx, x1, hy - len, Math.max(1.2, aw * 1.1));
-    circle(ctx, x2, hy - len, Math.max(1.2, aw * 1.1));
+    circle(ctx, x1, hy - len, Math.max(1.2 * PX, aw * 1.1));
+    circle(ctx, x2, hy - len, Math.max(1.2 * PX, aw * 1.1));
   }
 }
 
@@ -445,7 +471,7 @@ function drawEyes(
   face: number,
 ): void {
   ctx.fillStyle = ABYSS;
-  const ew = Math.max(1.6, 1.15 * u);
+  const ew = Math.max(1.6 * PX, 1.15 * u);
   const ey = hy + h * 0.52;
   const fx = face * w * 0.05;
   const eye = (x: number, y: number, sw: number, sh: number): void =>
@@ -453,7 +479,7 @@ function drawEyes(
   switch (kind) {
     case 'one': {
       // The cyclops: one big central eye.
-      const s = Math.max(3, w * 0.36);
+      const s = Math.max(3 * PX, w * 0.36);
       eye(cxp + fx, ey, s, s);
       return;
     }
@@ -528,7 +554,7 @@ function drawHead(
   const headBottomY = headY + head;
   const hx = cxp - w / 2;
   const hy = headBottomY - hgt;
-  const ol = Math.max(1, 0.8 * u);
+  const ol = Math.max(PX, 0.8 * u);
 
   // Long-hair backing framing the face behind the head.
   if (a.hair && a.style === 'long') {
@@ -568,6 +594,7 @@ function drawArmJointed(
   w: number,
   color: string,
   o: number,
+  outline: string,
 ): void {
   const ex = sx + Math.cos(upperAngle) * upperLen;
   const ey = sy + Math.sin(upperAngle) * upperLen;
@@ -576,7 +603,7 @@ function drawArmJointed(
   const hy = ey + Math.sin(ta) * foreLen;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.strokeStyle = ABYSS;
+  ctx.strokeStyle = outline;
   ctx.lineWidth = w + 2 * o;
   ctx.beginPath();
   ctx.moveTo(sx, sy);
@@ -590,8 +617,8 @@ function drawArmJointed(
   ctx.lineTo(ex, ey);
   ctx.lineTo(hx, hy);
   ctx.stroke();
-  const hs = Math.max(1.5, w * 1.05);
-  ctx.fillStyle = ABYSS;
+  const hs = Math.max(1.5 * PX, w * 1.05);
+  ctx.fillStyle = outline;
   ctx.fillRect(Math.round(hx - hs / 2 - o), Math.round(hy - hs / 2 - o), Math.round(hs + 2 * o), Math.round(hs + 2 * o));
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(hx - hs / 2), Math.round(hy - hs / 2), Math.round(hs), Math.round(hs));
@@ -599,12 +626,14 @@ function drawArmJointed(
 
 /**
  * Draw one phosphor being at its world position, posed for this frame.  Drawn
- * from the feet up: halo → shadow → legs → nub arms → shirt → number → head.
- * Distant players shrink via the projection's depth scale.
+ * from the feet up: halo -> carrier ring -> ground marker -> shadow -> legs ->
+ * nub arms -> shirt -> number -> head.  Distant players shrink via the
+ * projection's depth scale.
  */
 export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: DudeRender): void {
   const pr = project(d.wx, d.wy, 0);
   const sc = pr.sc;
+  const kit = d.kit;
 
   // Quantum focus halo (drawn first, under the dude) marks the clicked player —
   // the one place the accent colour appears on the pitch, with a soft glow.
@@ -613,7 +642,7 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
     ctx.shadowColor = QUANTUM;
     ctx.shadowBlur = 8 * sc;
     ctx.strokeStyle = QUANTUM;
-    ctx.lineWidth = Math.max(1, 1.2 * sc);
+    ctx.lineWidth = Math.max(PX, 1.2 * sc);
     ctx.beginPath();
     ctx.ellipse(pr.x, pr.y, 6.2 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -627,19 +656,35 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
     ctx.globalAlpha = DIM_ALPHA;
   }
 
+  // The player on the ball stands in a ring of his team colour, over a dark
+  // under-stroke so the ring reads on both grass stripes.
+  if (d.carrier) {
+    ctx.lineWidth = Math.max(PX, 1.6 * sc);
+    ctx.strokeStyle = kit.outline;
+    ctx.beginPath();
+    ctx.ellipse(pr.x, pr.y, RING_RX * sc, RING_RY * sc, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(PX * 0.6, 1.0 * sc);
+    ctx.strokeStyle = kit.marker;
+    ctx.stroke();
+  }
+
+  // Ground marker: a disc of team colour under every player (keepers too, so
+  // a keeper in his keeper kit still reads as part of his side).
+  ctx.save();
+  ctx.globalAlpha *= MARKER_ALPHA;
+  ctx.fillStyle = kit.marker;
+  ell(ctx, pr.x, pr.y, MARKER_RX * sc, MARKER_RY * sc);
+  ctx.restore();
+
   const { hop, h, scaleX: sx0, scaleY: sy0 } = d.pose;
   const a = d.appearance;
   const u = sc;
   const feetY = pr.y - hop;
 
-  // Shirt = the kit accent: the club colour (or the side's muted fallback),
-  // the one place team colour appears on a sprite.  The GK is the hollow
-  // figure instead.
-  const shirt = d.kit ?? (d.team === 'away' ? KIT_AWAY_FALLBACK : KIT_HOME_FALLBACK);
-
   // Grounding shadow (no hop), shrinking as the body rises.
   ctx.fillStyle = SHADOW;
-  ell(ctx, pr.x, pr.y, 4.0 * sc * (1 - 0.28 * h), 1.6 * sc * (1 - 0.28 * h));
+  ell(ctx, pr.x, pr.y, 2.8 * sc * (1 - 0.28 * h), 1.1 * sc * (1 - 0.28 * h));
 
   // Terraces silhouette: BIG head, short chunky body, stubby legs.
   const buildW = a.build === 'stocky' ? 1.14 : 0.95;
@@ -652,49 +697,42 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
   const legTop = feetY - legH;
   const bodyTop = legTop - bodyH;
   const headY = bodyTop - head * 0.86;
+  const ol = Math.max(PX, 0.8 * u);
 
-  // Legs / shorts — dust-shadow value, cel-shaded; they scissor on the swing.
-  const shortsCol = d.gk ? shade(PHOS, -0.42) : PHOS_DIM;
+  // Legs / shorts in the kit colour, outlined and cel-shaded; they scissor on
+  // the swing.
   const { swing } = d.pose;
   const lx1 = pr.x - gap - legW / 2 + swing;
   const lx2 = pr.x + gap - legW / 2 - swing;
-  ctx.fillStyle = shortsCol;
-  rect(ctx, lx1, legTop, legW, legH);
-  celShade(ctx, lx1, legTop, legW, legH, shortsCol);
-  ctx.fillStyle = shortsCol;
-  rect(ctx, lx2, legTop, legW, legH);
-  celShade(ctx, lx2, legTop, legW, legH, shortsCol);
-
-  // Nub arms (the locked `limbs: nub` config): fixed stubby bent limbs splayed
-  // slightly down-and-out — no swing, the calm on-2s idle read.
-  const upperLen = bodyH * 0.5;
-  const foreLen = bodyH * 0.46;
-  const armW = Math.max(1, legW * 0.9);
-  const shoulderY = bodyTop + bodyH * 0.18;
-  const sleeve = d.gk ? shade(PHOS, -0.2) : PHOS;
-  const ol = Math.max(1, 0.8 * u);
-  drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, Math.PI / 2 + 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, sleeve, ol);
-  drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, Math.PI / 2 - 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, sleeve, ol);
-
-  // Torso — the shirt.  GK = hollow phosphor (abyss fill, phosphor outline);
-  // outfielders wear their side's phosphor tone, cel-shaded.
-  if (d.gk) {
-    obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, ABYSS, PHOS, ol);
-  } else {
-    obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, shirt, shade(shirt, -0.5), ol);
-    celShade(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, shirt);
+  for (const lx of [lx1, lx2]) {
+    obox(ctx, lx, legTop, legW, legH, kit.shorts, kit.outline, ol * 0.6);
+    celShade(ctx, lx, legTop, legW, legH, kit.shorts);
   }
 
-  // Squad number on the chest, in the brand's mono.  Digit colour is picked
-  // by shirt luminance so the number stays legible on ANY club colour: abyss
-  // digits on light shirts, phosphor digits on dark shirts (and on the GK's
-  // hollow abyss shirt).  Skipped when the sprite is too small to read.
-  if (sc > 1.0) {
-    const fs = Math.max(4, Math.round(bodyH * 0.4));
+  // Nub arms (the locked `limbs: nub` config): fixed stubby bent limbs splayed
+  // slightly down-and-out — no swing, the calm on-2s idle read.  Outfield arms
+  // are phosphor; a keeper's are his kit's long sleeves.
+  const upperLen = bodyH * 0.5;
+  const foreLen = bodyH * 0.46;
+  const armW = Math.max(PX, legW * 0.9);
+  const shoulderY = bodyTop + bodyH * 0.18;
+  const armOutline = kit.sleeves === PHOS ? ABYSS : kit.outline;
+  drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, Math.PI / 2 + 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
+  drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, Math.PI / 2 - 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
+
+  // Torso: the shirt, outlined in the kit's deep shade and cel-shaded.
+  obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, kit.shirt, kit.outline, ol);
+  celShade(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, kit.shirt);
+
+  // Squad number on the chest, in the brand's mono, in whichever of abyss or
+  // phosphor contrasts more with the shirt (kits.ts picks it).  Skipped when
+  // the sprite is too small to read.
+  if (sc > PX) {
+    const fs = Math.max(4 * PX, Math.round(bodyH * 0.4));
     ctx.font = `700 ${fs}px "Space Mono", monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = d.gk ? PHOS : (isLight(shirt) ? ABYSS : PHOS);
+    ctx.fillStyle = kit.digits;
     ctx.fillText(String(d.number), pr.x, bodyTop + bodyH * 0.52);
   }
 
@@ -706,15 +744,52 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
 
 // ── Ball ─────────────────────────────────────────────────────────────────────
 
-/** Draw the ball with a grounding shadow that detaches as the ball gains height. */
+/**
+ * Draw the ball: a fading trail when it travels fast, a ground shadow that
+ * stays on the grass and shrinks and fades as the ball rises (so the gap
+ * between them shows the height), then the ball itself in its own colour with
+ * a dark outline and a shaded side.
+ */
 export function drawBall(ctx: CanvasRenderingContext2D, project: ProjectFn, b: BallRender): void {
   const pr = project(b.wx, b.wy, b.wz);
   const sc = pr.sc;
+  const r = BALL_RADIUS * sc;
+  const outline = Math.max(PX * 0.5, 0.55 * sc);
+
+  // Trail: segments from oldest to newest, thicker and more opaque toward
+  // the ball.
+  const trail = b.trail ?? [];
+  if (trail.length > 1) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = BALL_COLOR;
+    const pts = [...trail.map((q) => project(q.x, q.y, q.z)), pr];
+    for (let i = 1; i < pts.length; i++) {
+      const f = i / (pts.length - 1);
+      ctx.globalAlpha = 0.06 + 0.4 * f * f;
+      ctx.lineWidth = Math.max(PX * 0.5, r * (0.5 + 0.9 * f));
+      ctx.beginPath();
+      ctx.moveTo(pts[i - 1]!.x, pts[i - 1]!.y);
+      ctx.lineTo(pts[i]!.x, pts[i]!.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Ground shadow: under the ball on the grass; smaller and fainter with height.
   const gr = project(b.wx, b.wy, 0);
+  const lift = Math.min(1, Math.max(0, b.wz) / 4);
+  ctx.save();
+  ctx.globalAlpha *= 1 - 0.55 * lift;
   ctx.fillStyle = SHADOW;
-  ell(ctx, gr.x, gr.y, 2.4 * sc * (1 - Math.min(0.6, b.wz * 0.05)), 1.0 * sc);
+  ell(ctx, gr.x, gr.y + 0.3 * sc, 2.6 * sc * (1 - 0.4 * lift), 1.1 * sc * (1 - 0.4 * lift));
+  ctx.restore();
+
+  // The ball: outline, body, shaded side.
+  ctx.fillStyle = ABYSS;
+  circle(ctx, pr.x, pr.y, r + outline);
   ctx.fillStyle = BALL_COLOR;
-  circle(ctx, pr.x, pr.y, Math.max(1.2, 1.5 * sc));
+  circle(ctx, pr.x, pr.y, r);
   ctx.fillStyle = BALL_SHADE;
-  circle(ctx, pr.x + 0.4 * sc, pr.y + 0.4 * sc, Math.max(0.5, 0.6 * sc));
+  circle(ctx, pr.x + 0.5 * sc, pr.y + 0.5 * sc, r * 0.5);
 }

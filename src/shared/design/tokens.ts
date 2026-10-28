@@ -77,9 +77,9 @@ export const glow = {
  * drifts from it. Canvas only: page chrome uses `color.*`.
  */
 export const canvasColor = {
-  /** Lunar Dust: the phosphor body of every figure, and the ball. */
+  /** Lunar Dust: the phosphor body of every figure (heads, arms). */
   text: '#E3E0D5',
-  /** Galactic Abyss: outlines, eyes, the keeper's hollow shirt. */
+  /** Galactic Abyss: outlines, eyes, the ball's outline. */
   bg: '#111111',
   /** Quantum Purple: the focus halo on the selected player (the Architect's eye). */
   architect: '#9A5CF4',
@@ -103,6 +103,22 @@ export const canvasColor = {
   shadow: 'rgba(0,0,0,0.38)',
   /** The ball's shaded side. */
   ballShade: 'rgba(0,0,0,0.25)',
+  /**
+   * The ball: hi-vis lime, the one hue no club wears, so it reads at a
+   * glance against the figures, every kit and the grass (kits.ts tests it).
+   */
+  ball: '#B6FF1A',
+  /** Change kits: an away side whose colour clashes wears the most distinct of these. */
+  changeBlue: '#2B6CD4',
+  changeRed: '#D62839',
+  changeGreen: '#2BB673',
+  changeGold: '#F2C14E',
+  /** Keeper kits: each keeper wears the one most distinct from both teams. */
+  keeperYellow: '#FFD23F',
+  keeperPink: '#FF5FA2',
+  keeperTeal: '#21C4A6',
+  keeperOrange: '#FF8C1A',
+  keeperBlue: '#5B8CFF',
   /** Phosphor hair shades (terrans only), one per style. */
   hairShort: '#C6C3B8',
   hairFlat: '#AEAB9F',
@@ -125,6 +141,16 @@ export const canvasColorVar: Readonly<Record<keyof typeof canvasColor, string>> 
   kitAway: '--isl-pitch-kit-away',
   shadow: '--isl-pitch-shadow',
   ballShade: '--isl-pitch-ball-shade',
+  ball: '--isl-pitch-ball',
+  changeBlue: '--isl-pitch-change-blue',
+  changeRed: '--isl-pitch-change-red',
+  changeGreen: '--isl-pitch-change-green',
+  changeGold: '--isl-pitch-change-gold',
+  keeperYellow: '--isl-pitch-keeper-yellow',
+  keeperPink: '--isl-pitch-keeper-pink',
+  keeperTeal: '--isl-pitch-keeper-teal',
+  keeperOrange: '--isl-pitch-keeper-orange',
+  keeperBlue: '--isl-pitch-keeper-blue',
   hairShort: '--isl-pitch-hair-short',
   hairFlat: '--isl-pitch-hair-flat',
   hairSpiky: '--isl-pitch-hair-spiky',

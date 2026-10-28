@@ -11,6 +11,8 @@ import {
   followAnchor,
   clampFollowCenter,
   smoothFollowCenter,
+  cameraForWidth,
+  PHONE_VIEWER_MAX_PX,
   type Viewport,
 } from './projection';
 
@@ -92,5 +94,26 @@ describe('smoothFollowCenter', () => {
     expect(step.x).toBeLessThan(target.x); // partial step, not a snap
     const big = smoothFollowCenter(prev, target, 10);
     expect(big.x).toBeCloseTo(target.x, 1); // a long dt nearly arrives
+  });
+});
+
+describe('cameraForWidth', () => {
+  it('opens a phone-sized viewer on the Ball camera and a wide one on the Pitch', () => {
+    expect(cameraForWidth(356)).toBe('follow');
+    expect(cameraForWidth(PHONE_VIEWER_MAX_PX - 1)).toBe('follow');
+    expect(cameraForWidth(PHONE_VIEWER_MAX_PX)).toBe('broadcast');
+    expect(cameraForWidth(794)).toBe('broadcast');
+  });
+
+  it('defaults to the Pitch when the width is unknown', () => {
+    expect(cameraForWidth(0)).toBe('broadcast');
+  });
+
+  it('the projection is resolution independent, so 2x backing keeps every proportion', () => {
+    const a = projectBroadcast(30, 20, 1, VP);
+    const b = projectBroadcast(30, 20, 1, { width: VP.width * 2, height: VP.height * 2 });
+    expect(b.x).toBeCloseTo(a.x * 2, 6);
+    expect(b.y).toBeCloseTo(a.y * 2, 6);
+    expect(b.sc).toBeCloseTo(a.sc, 6);
   });
 });

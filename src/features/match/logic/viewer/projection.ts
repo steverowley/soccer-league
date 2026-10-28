@@ -132,6 +132,28 @@ export function smoothFollowCenter(
   };
 }
 
+// ── Which camera opens ───────────────────────────────────────────────────────
+
+/** The two cameras.  Both share one world model; only the projection differs. */
+export type CameraMode = 'broadcast' | 'follow';
+
+/**
+ * A viewer narrower than this (CSS px) opens on the Ball (follow) camera: on a
+ * phone the whole pitch is about 356 px wide and a figure about 14 px tall, so
+ * the zoomed camera is the readable default.  Wider viewers open on the Pitch.
+ */
+export const PHONE_VIEWER_MAX_PX = 600;
+
+/**
+ * The camera a viewer of this on-screen width opens on.
+ *
+ * @param cssWidth  The viewer's rendered width in CSS px (0 or less: unknown).
+ * @returns         'follow' on a phone-sized viewer, else 'broadcast'.
+ */
+export function cameraForWidth(cssWidth: number): CameraMode {
+  return cssWidth > 0 && cssWidth < PHONE_VIEWER_MAX_PX ? 'follow' : 'broadcast';
+}
+
 /**
  * Project a world point under the follow camera: take the broadcast projection,
  * then zoom around the (clamped, smoothed) centre so the ball sits near the

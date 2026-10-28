@@ -10,7 +10,10 @@ export {
   followAnchor,
   clampFollowCenter,
   smoothFollowCenter,
+  PHONE_VIEWER_MAX_PX,
+  cameraForWidth,
 } from './projection';
+export type { CameraMode } from './projection';
 export type { Viewport, Projected, ScreenPoint } from './projection';
 
 export {
@@ -69,6 +72,36 @@ export type {
   EyeKind,
   AntennaKind,
 } from './appearance';
+
+export {
+  CHANGE_KITS,
+  CLASH_MIN_DE,
+  FIGURE_MIN_DE,
+  GRASS_MIN_CONTRAST,
+  KEEPER_KITS,
+  KEEPER_MIN_DE,
+  KEEPER_MIN_GRASS_CONTRAST,
+  KIT_REFERENCE,
+  contrastRatio,
+  deltaE,
+  isLegibleKit,
+  legibleKit,
+  resolveKits,
+} from './kits';
+export type { Kit, SideKits, MatchKits } from './kits';
+
+export {
+  FEET_OFFSET_M,
+  GLIDE_GAP_M,
+  GLIDE_MS,
+  TRAIL_GAME_SEC,
+  TRAIL_MIN_MPS,
+  ballAtFeet,
+  glideBall,
+  pushTrail,
+  trailToDraw,
+} from './ball';
+export type { BallPoint, BallGlide, GlideStep, TrailPoint } from './ball';
 
 export { pickNearestId } from './hitTest';
 export type { HitTarget } from './hitTest';
