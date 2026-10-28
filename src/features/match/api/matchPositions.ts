@@ -52,8 +52,7 @@
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { BallTrack } from '../logic/replay/ballTrack';
-import { decodeReplayV3, type ReplayFileV3 } from '../logic/replay/replayV3';
-import { trackToSnapshots } from '../logic/replay/snapshots';
+import type { ReplayFileV3 } from '../logic/replay/replayV3';
 
 // ── Replay files in Storage ──────────────────────────────────────────────────
 
@@ -409,6 +408,12 @@ async function loadReplayFile(
 
   const v3 = ReplayFileV3Schema.safeParse(parsedJson);
   if (v3.success) {
+    // Loaded on demand: keeps the v3 decoder (and the ball physics it
+    // replays with) out of the entry chunk this module sits in.
+    const [{ decodeReplayV3 }, { trackToSnapshots }] = await Promise.all([
+      import('../logic/replay/replayV3'),
+      import('../logic/replay/snapshots'),
+    ]);
     const track = decodeReplayV3(v3.data as ReplayFileV3);
     if (!track) {
       console.warn('[getMatchPositions] v3 replay file is inconsistent, ignored; match', matchId);
