@@ -66,14 +66,23 @@ const TARGET: Record<string, readonly [number, number]> = {
 /**
  * Metrics the engine does not yet reach, the measured reason, and the
  * regression band asserted instead (it contains the target band).
- * Measured at 80 matches: saves 4.6 (SE 0.3), tackles 49 (1.1),
- * interceptions 38 (0.7), corners 6.3 (0.3), offsides 1.6 (0.13).
+ * Measured at 80 matches: tackles 49 (1.1), interceptions 38 (0.7),
+ * corners 6.3 (0.3), offsides 1.6 (0.13).
  * Passes (975, SE 7) reached their band in the fourth calibration pass and
  * left this list.
+ *
+ * Saves were re-measured at 264 matches (this fixture plus 240 extra seeds):
+ * 3.46 per match (SE 0.13, per-match SD about 2.0). The old regression band
+ * [4, 8] sat above the engine's real mean and only passed because these 24
+ * seeds happened to land at 4.25; the penalty-keeper fix (#736) moved two of
+ * them and exposed it. The floor is now the measured mean less 2.5 SE of a
+ * 24-match batch (3.46 - 2.5 x 0.41 = 2.4, rounded to 2.5), the same
+ * tolerance the target bands use. The target stays 5 to 8: closing this gap
+ * is engine work (#708), by behaviour, never by moving the target.
  */
 const KNOWN_GAPS: Record<string, { band: readonly [number, number]; cause: string }> = {
   saves: {
-    band: [4, 8],
+    band: [2.5, 8],
     cause: 'on-target shots convert at about 40% (target about 33%): the deep block fills the box but chances in behind a holding line are still clear',
   },
   tackles: {
