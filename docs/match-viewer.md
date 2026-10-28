@@ -1,6 +1,6 @@
 # Match viewer: following the ball, the players, the keepers and the referee
 
-Status: proposal (2026-10-28). Owner feedback: "it's hard to follow the ball
+Status: agreed (2026-10-28). Owner chose: no referee. Owner feedback: "it's hard to follow the ball
 and the players, I think the ref gets lost, and the goalkeepers come out of
 goal".
 
@@ -95,25 +95,19 @@ slightly).
   figure colour) and one clash rule (when two kits look alike, the away
   side changes to a contrasting kit). Both rules computed from the colour,
   tested against all 32 clubs and every pairing.
-- **Keepers:** a keeper kit per side, different from both teams.
+- **Keepers:** a keeper kit per side, different from both teams and never
+  dark or hollow (section 3).
 - **Sharper:** draw at twice the resolution (640 x 416) so the pixel style
   stays but figures are crisp; phones open on the Ball camera (zoomed on the
   play) and can switch to the whole pitch.
 
-## 3. The referee (owner decision)
+## 3. The referee: none (owner decision)
 
-Either:
-
-1. **Add a referee to the simulation.** He moves the way real referees do
-   (the diagonal system: near the play, 10 to 25 m from the ball, out of the
-   passing lanes, ahead of counter-attacks), is recorded in the replay and
-   drawn in black. At first he does not influence any decision, so match
-   results do not change; later his position could decide what he sees.
-2. **No referee.** Only change the keeper's look so nothing reads as one.
-
-Recommendation: 1. It answers what fans expect to see, it is simulated rather
-than painted on, and it opens the door to fouls being judged from where the
-referee actually is.
+The simulation has no referee and will not get one. Instead, nothing on the
+pitch may read as one: no figure is drawn in black or as a dark hollow
+figure. Keepers wear a keeper kit per side, chosen to differ from both
+teams, the grass and the figure colour, so a keeper always reads as part of
+his team. Tested: every keeper kit against every club pairing.
 
 ## 4. How it is checked
 
