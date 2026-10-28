@@ -95,6 +95,24 @@ describe('activeAnimations: windows', () => {
     expect(activeAnimations(track({ kind: 'kick', tick: tick(10), by: 1, kick: 'dribble' }), q(10.1)).poses.size).toBe(0);
   });
 
+  it('a set piece delivered as a shot strikes and trails as a shot; a throw stays a throw', () => {
+    const fk = { kind: 'kick', tick: tick(10), by: 1, kick: 'freekick', delivery: 'shot' } as unknown as ReplayAction;
+    const a = activeAnimations(track(fk), q(after(10, 60)));
+    expect(a.poses.get(1)?.kind).toBe('shot');
+    expect(a.trail).toBe('shot');
+    const corner = { kind: 'kick', tick: tick(10), by: 1, kick: 'corner', delivery: 'cross' } as unknown as ReplayAction;
+    expect(activeAnimations(track(corner), q(after(10, 60))).trail).toBe('cross');
+    const thrown = { kind: 'kick', tick: tick(10), by: 1, kick: 'throw', delivery: 'pass' } as unknown as ReplayAction;
+    expect(activeAnimations(track(thrown), q(after(10, 60))).poses.get(1)?.kind).toBe('throw');
+  });
+
+  it('an unknown player (index -1) animates nobody and breaks nothing', () => {
+    const t = track({ kind: 'tackle', tick: tick(30), by: -1, from: 15 }, { kind: 'sub', tick: tick(30), on: -1, off: 4 });
+    const a = activeAnimations(t, q(after(30, 150)), lookup);
+    expect(a.poses.get(15)?.kind).toBe('stumble');
+    expect(a.sub).toEqual({ on: -1, off: 4 });
+  });
+
   it('a later touch ends the previous kick\'s trail style', () => {
     const t = track(
       { kind: 'kick', tick: tick(10), by: 1, kick: 'cross' },

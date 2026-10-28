@@ -377,7 +377,10 @@ export function MatchViewer({
   const events = useMemo(() => {
     const track = actionTrackOf(frames);
     if (!track) return null;
-    const roster = rosterFromFrames(frames);
+    // The recorder ships the union roster on the track; a track without
+    // one names the frames' roster, rebuilt from the frames.
+    const shipped = (track as typeof track & { roster?: readonly string[] }).roster;
+    const roster = shipped && shipped.length > 0 ? shipped : rosterFromFrames(frames);
     const sideById = new Map<string, TeamSide>(dudeSpecs.map((d) => [d.id, d.team]));
     const lookup = makeTrackLookup(frames, roster, (id) => sideById.get(id) ?? null);
     const indexById = new Map<string, number>(roster.map((id, i) => [id, i]));

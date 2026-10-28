@@ -368,13 +368,19 @@ export function activeAnimations(
     }
     switch (a.kind) {
       case 'kick': {
-        const pose = KICK_POSE[a.kick];
+        // A restart's taking kick is labelled with the restart (corner, free
+        // kick...); when the recorder also gives its delivery (a free kick
+        // struck as a shot, a corner as a cross), that decides the strike
+        // and the trail.  A throw stays a throw.
+        const delivery = (a as typeof a & { delivery?: KickKind }).delivery;
+        const struck = a.kick === 'throw' ? 'throw' : (delivery ?? a.kick);
+        const pose = KICK_POSE[struck];
         const pre = pose === 'kick' || pose === 'shot' ? PRE_MS.kick : 0;
         if (pose) {
           const t = within(sec, kickMs(pose), pre);
           if (t != null) setPose(a.by, { kind: pose, t, contact: pre / (pre + kickMs(pose)) });
         }
-        const trail = KICK_TRAIL[a.kick];
+        const trail = KICK_TRAIL[delivery ?? a.kick];
         if (trail && sec <= now) trailKick = { sec, kind: trail };
         if (a.kick === 'through' && sec <= now) {
           const meet = lookup.receptionAfter?.(sec);

@@ -96,6 +96,15 @@ describe('scheduleReplays: chances', () => {
     expect(w!.segEnd).toBeCloseTo(2000.6 + REPLAY_POST_SEC);
   });
 
+  it('a free kick struck at goal (delivery: shot) and saved counts as a shot', () => {
+    const t = track(
+      { kind: 'kick', tick: tick(2000), by: 9, kick: 'freekick', delivery: 'shot' } as unknown as ReplayAction,
+      { kind: 'dive', tick: tick(2000.6), by: 0, x: 104.5, y: 30, z: 0.8, outcome: 'save' },
+      corner(2002, 2030),
+    );
+    expect(scheduleReplays(t, DURATION)[0]?.kind).toBe('save');
+  });
+
   it('a dive with no shot before it (a cross claimed) is not a save to replay', () => {
     const t = track(
       { kind: 'kick', tick: tick(2000), by: 9, kick: 'cross' },
