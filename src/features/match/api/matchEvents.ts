@@ -75,13 +75,15 @@ export interface LiveMatchRow {
 
 /**
  * Fallback duration when no season_config row exists for the match's season.
- * 600 s (10 minutes real time → 90 game minutes ≈ 6.7 real seconds per game
- * minute) is the production default seeded by migration 0013.  Using the same
- * default here means the viewer paces correctly even if the season_config
- * row was somehow deleted — a worst-case visual regression rather than a
- * blank page.
+ * 1200 s (20 real minutes for 90 game minutes, 4.5x, about 13.3 real seconds
+ * per game minute) is the production default since migration 0098; the
+ * owner chose it over 600 s (9x), at which a pass was on screen for about
+ * 0.15 s.  Using the same default here means the viewer paces correctly even
+ * if the season_config row was somehow deleted: a worst-case visual
+ * regression rather than a blank page.  Must equal the worker's and the
+ * rollover's copies (matchDuration.test.ts).
  */
-export const DEFAULT_MATCH_DURATION_SECONDS = 600;
+export const DEFAULT_MATCH_DURATION_SECONDS = 1200;
 
 // ── Match metadata ────────────────────────────────────────────────────────────
 

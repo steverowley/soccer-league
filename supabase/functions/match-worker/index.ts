@@ -120,13 +120,13 @@ const EVENT_INSERT_BATCH_SIZE = 500; // Insert up to 500 events per Supabase cal
 /**
  * Fallback reveal window (seconds) when a season has no `season_config` row.
  *
- * Mirrors the 600 s seeded by migration 0013 and the browser-side
- * DEFAULT_MATCH_DURATION_SECONDS, so a season created without config still
- * paces at ten real minutes per 90 simulated ones rather than finalising a
- * match the instant it is simulated.  (Seasons 2 and 3 in production were both
+ * Mirrors the 1200 s season_config default (migration 0098) and the
+ * browser-side DEFAULT_MATCH_DURATION_SECONDS, so a season created without
+ * config still paces at twenty real minutes per 90 simulated ones rather than
+ * finalising a match the instant it is simulated.  (Seasons 2 and 3 in production were both
  * created without a config row — the rollover path never wrote one.)
  */
-const DEFAULT_MATCH_DURATION_SECONDS = 600;
+const DEFAULT_MATCH_DURATION_SECONDS = 1200;
 
 /**
  * Most `live` matches one finalizer pass will publish.  The pass runs every

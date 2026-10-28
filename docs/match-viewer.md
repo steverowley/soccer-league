@@ -180,6 +180,105 @@ figure. Keepers wear a keeper kit per side, chosen to differ from both
 teams, the grass and the figure colour, so a keeper always reads as part of
 his team. Tested: every keeper kit against every club pairing.
 
+## 5. Events on the pitch (agreed, 2026-10-28)
+
+Owner feedback after sections 1 to 4 shipped: "the difficulty seeing what is
+happening is also due to a lack of animations for fouls, tackles, shots,
+passes, free kicks, throw-ins, corners, goal kicks: all the events".
+
+### What is missing
+
+- **The viewer knows nothing about events.** It draws every figure in one of
+  three gaits (idle, walk, run, from its speed) and the ball. A pass, a
+  tackle, a foul and a shot all look like figures near a moving ball.
+- **The events exist, but not where the viewer can use them.** The engine
+  emits every pass, tackle, interception, foul (with card), shot, save,
+  woodwork, offside, ball out (throw, corner, goal kick), restart and
+  substitution, and knows each kick's kind (`KickKind`: pass, through,
+  cross, long, clear, shot, throw, goal kick, corner, free kick, penalty,
+  kick-off) and each keeper dive (target and height). The database keeps
+  only the notable ones (about 60 a match, no passes, throw-ins or goal
+  kicks), timed to the minute.
+- **The match plays at 9x.** A 90-minute match is revealed over 600 s, so a
+  20 m pass is on screen for about 0.15 s and a kick lasts about 33 ms (two
+  frames). Animations timed in match seconds would be invisible.
+
+### The design
+
+**A. An action track in the replay (format v3, additive).** The recorder
+(already on Vercel) writes `actions`: one entry per engine action, at its
+exact tick, as compact tuples:
+
+| kind | fields |
+|---|---|
+| kick | tick, kicker, KickKind |
+| tackle / interception | tick, winner, loser |
+| foul | tick, offender, victim, card (none, yellow, red) |
+| dive | tick, keeper, target x, y, z, outcome (save, catch, beaten) |
+| restart | tick, kind (throw, corner, goal kick, free kick, penalty, kick-off), taker, spot, ready tick |
+| goal / woodwork / offside / substitution | tick, player(s) |
+
+Old v3 files without `actions` still play (no animations). About 1,500
+actions a match; target under 30 KB gzip extra.
+
+**B. Animations timed in screen time.** Each action starts at its exact
+moment in the match, but plays for a fixed real-time length (about 250 to
+600 ms) whatever the match speed, so it is always visible. Poses are drawn
+by the existing sprite code:
+
+| action | what you see |
+|---|---|
+| pass, cross, long ball, clearance | kicking pose (leg back, then through); a trail coloured by kind |
+| shot | stronger strike pose, longer and brighter trail; a flash at the frame on woodwork |
+| through ball | the trail ends in a small target mark where the runner meets it |
+| tackle | the winner slides in (low, stretched, dust puff); the loser stumbles |
+| interception | a stretching lunge into the ball's path |
+| foul | the victim falls and lies briefly; a whistle mark over the spot |
+| card | a yellow or red card held up above the offender |
+| keeper | a dive along the line toward the ball, a catch (arms up, ball held) or a parry |
+| throw-in | ball held over the head, both arms, then the throw |
+| corner, free kick, goal kick, penalty | during the stoppage: the ball placed on its spot with a marker, the taker standing over it, and a label on the pitch ("CORNER", "FREE KICK", "THROW-IN", "GOAL KICK", "PENALTY") |
+| goal | net ripple, the scorer celebrates (arms up, hop), team-mates gather; "GOAL" label |
+| offside | a flag mark on the line and "OFFSIDE" |
+| substitution | arrows at the touchline and the two names under the pitch |
+
+Labels use the design system's label style on the canvas; red only for a
+red card, purple only for the Architect.
+
+The contract is `src/features/match/logic/replay/actions.ts` (types and the
+`actionsBetween` lookup); the recorder writes it, the viewer reads it.
+
+**C. Speed (owner decision: both).**
+
+- **20-minute matches.** A match is revealed over 1200 s instead of 600 s:
+  4.5x instead of 9x, so a 20 m pass is on screen for about 0.3 s. Migration
+  0098 sets the `season_config` default and moves Season 1 (applied between
+  matchdays, nothing live). The browser, rollover and worker fallbacks are
+  held equal by `matchDuration.test.ts`. With the 15-minute stagger, two
+  matches can be live at once; the read cache serves them both.
+- **Slow-motion replays.** After a goal, a save, a shot off the woodwork or
+  a near miss, the viewer replays the build-up during the stoppage that
+  follows, slower than real time, then cuts back to live before the
+  restart is taken:
+
+| moment | replayed | speed | fits in the stoppage |
+|---|---|---|---|
+| goal | the last 8 game seconds before the ball crossed the line | 0.5x (16 s) | kick-off pause, 60 game s = 13.3 s real at 4.5x; trimmed to fit |
+| save, woodwork, shot just wide | the last 5 game seconds | 0.75x (6.7 s) | corner or goal-kick pause, 26 to 32 game s = 5.8 to 7.1 s real |
+
+  The replay is labelled "REPLAY" on the pitch, uses the Ball camera, never
+  runs into live play (it ends at the restart's ready tick at the latest)
+  and is skipped under reduced motion. The live clock, score and
+  commentary carry on underneath.
+
+### How it is checked
+
+The action track matches the engine's own event list one-for-one on full
+matches (counts per kind and ticks); size measured. Every animation has a
+test on the drawing calls (a recording context), and a contact sheet of
+each action frozen mid-animation at 390 and 1440 px, picked from a real
+replay. Fingerprint unchanged (recording only).
+
 ## 4. How it is checked
 
 - Engine: fingerprint and benchmark in the PR, distributions within bands, a
