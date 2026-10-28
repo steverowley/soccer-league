@@ -9,7 +9,9 @@ import type { ActionTrack } from '../replay/actions';
 import type { ReplayTrack } from '../replay/recorder';
 import { decodeReplayV3, encodeReplayV3 } from '../replay/replayV3';
 import { trackToSnapshots } from '../replay/snapshots';
-import { actionTrackOf, findReception, makeTrackLookup, rosterFromFrames } from './trackLookup';
+import { GOAL_Y_MIN } from '../spatial/types';
+import { GOAL_HEIGHT } from './geometry';
+import { FRAME_HIT_M, actionTrackOf, distanceToFrame, findFrameHit, findReception, makeTrackLookup, rosterFromFrames } from './trackLookup';
 
 /** Three players, then the second replaced by a substitute (engine order keeps the slot). */
 const REPLAY: ReplayTrack = {
@@ -62,6 +64,37 @@ describe('actionTrackOf', () => {
 
 describe('lookups', () => {
   const snaps = trackToSnapshots(REPLAY);
+  it('distanceToFrame: zero on a post or the bar, large in open play', () => {
+    expect(distanceToFrame({ x: 105, y: GOAL_Y_MIN, z: 1 })).toBeCloseTo(0);
+    expect(distanceToFrame({ x: 0, y: 34, z: GOAL_HEIGHT })).toBeCloseTo(0);
+    expect(distanceToFrame({ x: 105, y: 34, z: 1 })).toBeGreaterThan(FRAME_HIT_M); // in the middle of the goal mouth
+    expect(distanceToFrame({ x: 80, y: 34, z: 0 })).toBeGreaterThan(20);
+  });
+
+  it('findFrameHit: none when the ball never went near a frame', () => {
+    expect(findFrameHit(snaps, 1.4)).toBeNull();
+  });
+
+  it('findFrameHit: finds the moment and place the ball was at a post, before the event', () => {
+    const atPost: ReplayTrack = {
+      ...REPLAY,
+      ball: {
+        dtSec: 0.1,
+        endTick: 15,
+        keys: [
+          { tick: 0, x: 90, y: 34, z: 0, vx: 0, vy: 0, vz: 0, ownerId: null },
+          { tick: 5, x: 104.9, y: GOAL_Y_MIN, z: 0, vx: 0, vy: 0, vz: 0, ownerId: null },
+          { tick: 7, x: 95, y: 34, z: 0, vx: 0, vy: 0, vz: 0, ownerId: null },
+        ],
+      },
+    };
+    const hit = findFrameHit(trackToSnapshots(atPost), 1.4);
+    expect(hit).not.toBeNull();
+    expect(hit!.sec).toBeGreaterThan(0.45);
+    expect(hit!.sec).toBeLessThan(0.7);
+    expect(hit!.x).toBeCloseTo(104.9);
+  });
+
   it('findReception: where and when the ball is next owned', () => {
     const meet = findReception(snaps, 0);
     expect(meet).not.toBeNull();

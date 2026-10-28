@@ -17,8 +17,9 @@
 
 import type { PositionSnapshot } from '../../api/matchPositions';
 import type { ActionTrack } from '../replay/actions';
-import type { TeamSide } from '../spatial/types';
-import type { AnimLookup } from './actionAnim';
+import { GOAL_Y_MAX, GOAL_Y_MIN, PITCH_LENGTH, type TeamSide } from '../spatial/types';
+import { WOODWORK_SEARCH_SEC, type AnimLookup } from './actionAnim';
+import { GOAL_HEIGHT } from './geometry';
 import { sampleFrames } from './playback';
 
 /** How far ahead (game s) to look for the player who met a through ball. */
@@ -71,12 +72,55 @@ export function findReception(
 }
 
 /**
+ * Distance (m) from a ball position to the nearer goal's frame: either
+ * post (from the grass to the bar) or the crossbar.
+ */
+export function distanceToFrame(b: { x: number; y: number; z: number }): number {
+  const gx = b.x < PITCH_LENGTH / 2 ? 0 : PITCH_LENGTH;
+  const dx = b.x - gx;
+  const z = Math.min(GOAL_HEIGHT, Math.max(0, b.z));
+  const post = Math.min(Math.hypot(dx, b.y - GOAL_Y_MIN, b.z - z), Math.hypot(dx, b.y - GOAL_Y_MAX, b.z - z));
+  const y = Math.min(GOAL_Y_MAX, Math.max(GOAL_Y_MIN, b.y));
+  const bar = Math.hypot(dx, b.y - y, b.z - GOAL_HEIGHT);
+  return Math.min(post, bar);
+}
+
+/** A ball this close to the frame (m) is taken to have struck it. */
+export const FRAME_HIT_M = 1;
+/** Sampling step (game s) of the frame-hit search: one engine tick. */
+export const FRAME_STEP_SEC = 0.1;
+
+/**
+ * Where and when the ball came closest to a goal frame in the
+ * WOODWORK_SEARCH_SEC before `sec` (sampled every FRAME_STEP_SEC), when
+ * that is within FRAME_HIT_M; else null.
+ */
+export function findFrameHit(
+  frames: PositionSnapshot[],
+  sec: number,
+): { x: number; y: number; z: number; sec: number } | null {
+  let best: { x: number; y: number; z: number; sec: number } | null = null;
+  let bestD = FRAME_HIT_M;
+  for (let s = sec; s >= Math.max(0, sec - WOODWORK_SEARCH_SEC); s -= FRAME_STEP_SEC) {
+    const ball = sampleFrames(frames, s).ball;
+    if (!ball) continue;
+    const d = distanceToFrame(ball);
+    if (d <= bestD) {
+      bestD = d;
+      best = { x: ball.x, y: ball.y, z: ball.z, sec: s };
+    }
+  }
+  return best;
+}
+
+
+/**
  * The replay lookups for actionAnim and replaySchedule over one match's
  * frames, memoised by game second (the same few moments are asked about on
  * every animation frame).
  *
  * @param frames  Decoded frames.
- * @param roster  Union roster (rosterFromFrames).
+ * @param roster  Union roster (the track's own, else rosterFromFrames).
  * @param sideOf  Side of a player id (from the squads), null when unknown.
  */
 export function makeTrackLookup(
@@ -86,7 +130,16 @@ export function makeTrackLookup(
 ): Required<AnimLookup> {
   const balls = new Map<number, { x: number; y: number; z: number } | null>();
   const meets = new Map<number, { x: number; y: number; sec: number } | null>();
+  const hits = new Map<number, { x: number; y: number; z: number; sec: number } | null>();
   return {
+    frameHitBefore(sec) {
+      let h = hits.get(sec);
+      if (h === undefined) {
+        h = findFrameHit(frames, sec);
+        hits.set(sec, h);
+      }
+      return h;
+    },
     ballAt(sec) {
       let b = balls.get(sec);
       if (b === undefined) {

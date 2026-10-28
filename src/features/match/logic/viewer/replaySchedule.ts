@@ -76,9 +76,11 @@ export interface ReplayWindow {
   rate: number;
 }
 
-/** Where the ball was at a game second, for the "just wide" test. */
+/** Where the ball was at a game second, for the "just wide" test, and where it met the frame. */
 export interface ReplayLookup {
   ballAt?(sec: number): { x: number; y: number; z: number } | null;
+  /** Where and when the ball struck a frame before a woodwork event (emitted later, at the shot's resolution). */
+  frameHitBefore?(sec: number): { x: number; y: number; z: number; sec: number } | null;
 }
 
 /** Live game seconds per real second for a season's match duration (1 when unpaced). */
@@ -184,7 +186,9 @@ export function scheduleReplays(
     }
     if (a.kind === 'woodwork') {
       const s = stoppageAfter(track, i);
-      if (s) offer(s.restartIndex, 'woodwork', sec, s.endSec);
+      // The replay ends just after the ball met the frame, not at the event.
+      const hit = lookup.frameHitBefore?.(sec) ?? null;
+      if (s) offer(s.restartIndex, 'woodwork', hit ? hit.sec : sec, s.endSec);
       return;
     }
     if (a.kind === 'dive' && (a.outcome === 'save' || a.outcome === 'catch')) {

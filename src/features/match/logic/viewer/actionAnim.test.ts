@@ -278,6 +278,14 @@ describe('activeAnimations: windows', () => {
     expect(activeAnimations(t, q(after(80, ANIM_MS.woodwork + 10)), lookup).overlays).toEqual([]);
   });
 
+  it('woodwork flashes where and when the ball met the frame, before the (later) woodwork event', () => {
+    const hitLookup: AnimLookup = { ...lookup, frameHitBefore: (sec) => ({ x: 105, y: 30.3, z: 1, sec: sec - 2.5 }) };
+    const t = track({ kind: 'woodwork', tick: tick(80), by: 9 });
+    const at = activeAnimations(t, q(after(77.5, 100)), hitLookup).overlays.find((o) => o.kind === 'woodwork');
+    expect(at).toMatchObject({ kind: 'woodwork', x: 105, y: 30.3, z: 1 });
+    expect(activeAnimations(t, q(after(77.5, ANIM_MS.woodwork + 10)), hitLookup).overlays).toEqual([]);
+  });
+
   it('offside: a flag mark on the line and the OFFSIDE label', () => {
     const t = track({ kind: 'offside', tick: tick(90), by: 10, x: 80, y: 22 });
     const a = activeAnimations(t, q(after(90, 300)));

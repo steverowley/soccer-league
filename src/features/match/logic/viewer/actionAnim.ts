@@ -166,6 +166,12 @@ export interface ActiveAnimations {
   ballInNet: { x: number; y: number; z: number } | null;
 }
 
+/**
+ * How far after the frame was struck (game s) a woodwork action can come:
+ * its event is emitted when the shot is resolved, after the rebound.
+ */
+export const WOODWORK_SEARCH_SEC = 4;
+
 /** What the caller knows about the replay, for the marks that need it. */
 export interface AnimLookup {
   /** Where the ball was at a game second (null when unknown). */
@@ -174,6 +180,12 @@ export interface AnimLookup {
   receptionAfter?(sec: number): { x: number; y: number; sec: number } | null;
   /** Which side a roster index plays for (null when unknown). */
   sideOf?(player: number): TeamSide | null;
+  /**
+   * Where and when the ball came closest to a goal frame in the
+   * WOODWORK_SEARCH_SEC before `sec` (the woodwork event is only emitted
+   * when the shot is resolved, after the rebound), or null.
+   */
+  frameHitBefore?(sec: number): { x: number; y: number; z: number; sec: number } | null;
 }
 
 /** The instant being drawn. */
@@ -347,9 +359,10 @@ export function activeAnimations(
   };
 
   // The window to scan: long enough back for the longest animation (and a
-  // restart's whole pause), a little ahead for the wind-ups.
+  // restart's whole pause), ahead for the wind-ups and for a woodwork event
+  // that is emitted after the frame was struck.
   const back = Math.max((MAX_AFTER_MS / 1000) * rate, RESTART_LOOKBACK_SEC);
-  const ahead = (MAX_PRE_MS / 1000) * rate;
+  const ahead = Math.max((MAX_PRE_MS / 1000) * rate, WOODWORK_SEARCH_SEC);
   const fromSec = now - back;
   const actions = actionsBetween(track, fromSec, now + ahead);
   const firstIndex = firstActionAtOrAfter(track, Math.ceil(fromSec / dt - 1e-9));
@@ -453,9 +466,12 @@ export function activeAnimations(
         break;
       }
       case 'woodwork': {
-        const t = within(sec, ANIM_MS.woodwork);
+        // Flash where and when the ball met the frame; the event itself
+        // comes later, when the shot is resolved.
+        const hit = lookup.frameHitBefore?.(sec) ?? null;
+        const t = within(hit ? hit.sec : sec, ANIM_MS.woodwork);
         if (motion && t != null) {
-          const ball = lookup.ballAt?.(sec);
+          const ball = hit ?? lookup.ballAt?.(sec);
           if (ball) out.overlays.push({ kind: 'woodwork', x: ball.x, y: ball.y, z: ball.z, t });
         }
         break;
