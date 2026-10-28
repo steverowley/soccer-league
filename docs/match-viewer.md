@@ -339,6 +339,33 @@ The contract is `src/features/match/logic/replay/actions.ts` (types and the
   and is skipped under reduced motion. The live clock, score and
   commentary carry on underneath.
 
+#### As built (viewer)
+
+- `logic/viewer/actionAnim.ts` answers "what is animating at this game
+  second, at this playback rate": poses by roster index, pitch marks, the
+  one label (GOAL over OFFSIDE over a restart's), the trail style, a held
+  ball. Durations are real milliseconds (`ANIM_MS`: kick 340, shot 460,
+  slide 560, fall 1300, card 1800, dive 650, celebration 1900, GOAL label
+  2400, substitution 3500); kicks, slides and lunges wind up 100 to 140 ms
+  before contact. A restart's spot and label last from the ball going dead
+  to its ready tick (or its kick), at least 900 ms. After a goal the Ball
+  camera stays on the scorer and the ball is drawn in the net while he
+  celebrates (the engine has already put it on the centre spot).
+- `logic/viewer/replaySchedule.ts`: goal replays start 1.6 s real after
+  the goal (the label and celebration first), chance replays 0.8 s after
+  the save, frame or miss; all end 0.5 s real before the restart's ready
+  tick and are trimmed from the start to fit; under 2.5 s real, none. A
+  save needs a shot in the 3 game s before the dive; "just wide" is a shot
+  out for a goal kick or corner within 4 game s, crossing the goal line
+  within 3 m of a post. One replay per stoppage (goal, woodwork, save,
+  wide in that order).
+- Reduced motion: no poses, dust, ripple, flash, styled trail or replays;
+  labels, cards, spot, whistle, target, offside flag and substitution
+  arrows still show.
+- Colours: `canvasColor.cardYellow` / `cardRed` are the page's card-yellow
+  and live tokens; the rest (`flag`, `trail*`, `labelPanel`, `dust`,
+  `net`, `subOn` = success) are mirrored in `tokens.css`.
+
 ### How it is checked
 
 The action track matches the engine's own event list one-for-one on full

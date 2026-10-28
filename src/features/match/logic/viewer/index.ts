@@ -106,6 +106,34 @@ export type { BallPoint, BallGlide, GlideStep, TrailPoint } from './ball';
 export { pickNearestId } from './hitTest';
 export type { HitTarget } from './hitTest';
 
+export {
+  ANIM_MS,
+  PRE_MS,
+  RESTART_LABEL,
+  REST_BODY,
+  activeAnimations,
+  actionBody,
+  kickLegAt,
+  noAnimations,
+  pitchLabelFor,
+} from './actionAnim';
+export type {
+  ActionBody,
+  ActionPose,
+  ActiveAnimations,
+  AnimLookup,
+  AnimQuery,
+  ArmPreset,
+  Overlay,
+  PoseKind,
+  TrailKind,
+} from './actionAnim';
+
+export { liveRate, replayAt, scheduleReplays } from './replaySchedule';
+export type { ReplayKind, ReplayMoment, ReplayWindow } from './replaySchedule';
+
+export { actionTrackOf, findReception, makeTrackLookup, rosterFromFrames } from './trackLookup';
+
 export type { ViewerMatch, ViewerRosterPlayer } from './buildMatch';
 export { generateDemoMatch } from './demoMatch';
 export { simulateMatchFromTeams } from './realMatch';

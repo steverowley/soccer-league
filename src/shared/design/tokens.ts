@@ -124,6 +124,28 @@ export const canvasColor = {
   hairFlat: '#AEAB9F',
   hairSpiky: '#94917F',
   hairLong: '#BBB8AC',
+  /**
+   * Event overlays (docs/match-viewer.md section 5). The card colours ARE
+   * the page tokens: yellow is the yellow-card glyph, red is live/red card
+   * (and is used for nothing else on the pitch).
+   */
+  cardYellow: '#F5C518',
+  cardRed: '#FF4F5E',
+  /** A substitute coming on: the success green, as an arrow at the touchline. */
+  subOn: '#A5D6A7',
+  /** The flag mark on the offside line. */
+  flag: '#FFB238',
+  /** Ball trails by kind of kick (a pass keeps the ball's own lime). */
+  trailCross: '#7FD6FF',
+  trailLong: '#F2C14E',
+  trailClear: '#C9C6BB',
+  trailShot: '#FFFFFF',
+  /** The backing panel behind a pitch label (abyss, nearly opaque). */
+  labelPanel: 'rgba(17,17,17,0.86)',
+  /** A dust puff under a slide tackle. */
+  dust: 'rgba(227,224,213,0.42)',
+  /** The net rippling after a goal. */
+  net: 'rgba(227,224,213,0.7)',
 } as const;
 
 /** The tokens.css custom property each `canvasColor` value mirrors. */
@@ -155,6 +177,17 @@ export const canvasColorVar: Readonly<Record<keyof typeof canvasColor, string>> 
   hairFlat: '--isl-pitch-hair-flat',
   hairSpiky: '--isl-pitch-hair-spiky',
   hairLong: '--isl-pitch-hair-long',
+  cardYellow: '--isl-card-yellow',
+  cardRed: '--isl-live',
+  subOn: '--isl-success',
+  flag: '--isl-pitch-flag',
+  trailCross: '--isl-pitch-trail-cross',
+  trailLong: '--isl-pitch-trail-long',
+  trailClear: '--isl-pitch-trail-clear',
+  trailShot: '--isl-pitch-trail-shot',
+  labelPanel: '--isl-pitch-label-panel',
+  dust: '--isl-pitch-dust',
+  net: '--isl-pitch-net',
 };
 
 // ── Text tones ──────────────────────────────────────────────────────────────

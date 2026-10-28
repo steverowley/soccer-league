@@ -45,6 +45,9 @@ import {
   type Marking,
   type Pose,
   type Projected,
+  type ActionBody,
+  type ArmPreset,
+  type TrailKind,
 } from '../../logic/viewer';
 
 /** Maps a world point (metres + height) to screen space under the active camera. */
@@ -108,6 +111,21 @@ const RING_RY = 2.15;
  */
 export const BALL_RADIUS = 2.1;
 
+/**
+ * How the ball's trail is drawn for each kind of kick (docs/match-viewer.md
+ * section 5B): a pass and a through ball keep the ball's lime, a cross,
+ * long ball and clearance have their own colours, a shot is white, wider,
+ * brighter and glows.
+ */
+export const TRAIL_STYLE: Readonly<Record<TrailKind, { color: string; width: number; alpha: number; glow: boolean }>> = {
+  pass: { color: BALL_COLOR, width: 1, alpha: 1, glow: false },
+  through: { color: BALL_COLOR, width: 1, alpha: 1.15, glow: false },
+  cross: { color: canvasColor.trailCross, width: 1.1, alpha: 1.15, glow: false },
+  long: { color: canvasColor.trailLong, width: 1.1, alpha: 1.1, glow: false },
+  clear: { color: canvasColor.trailClear, width: 1.2, alpha: 0.9, glow: false },
+  shot: { color: canvasColor.trailShot, width: 1.6, alpha: 1.5, glow: true },
+};
+
 // ── A drawable dude / ball ──────────────────────────────────────────────────────
 
 /** Everything the renderer needs to draw one player this frame. */
@@ -131,6 +149,8 @@ export interface DudeRender {
   carrier?: boolean;
   /** Fade this dude back (a different player is selected) so the focus stands out. */
   dimmed?: boolean;
+  /** An event animation (kick, slide, fall, dive...) from actionBody; absent = his gait only. */
+  act?: ActionBody | null;
 }
 
 /** Everything the renderer needs to draw the ball this frame. */
@@ -141,7 +161,14 @@ export interface BallRender {
   wz: number;
   /** Recent positions, oldest first, when the ball is travelling fast (else empty). */
   trail?: ReadonlyArray<{ x: number; y: number; z: number }>;
+  /** The kind of the kick in flight, which styles the trail (absent = the ball's own lime). */
+  trailKind?: TrailKind | null;
+  /** A held ball: drawn this many sprite (`sc`) units above the holder's feet at (wx, wy). */
+  heldLift?: number | null;
 }
+
+/** Sprite units per metre of height on a figure (an 11.5-unit figure is about 1.8 m). */
+export const SPRITE_UNITS_PER_M = 6.4;
 
 // ── Low-level pixel helpers ─────────────────────────────────────────────────────
 
@@ -677,14 +704,27 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
   ell(ctx, pr.x, pr.y, MARKER_RX * sc, MARKER_RY * sc);
   ctx.restore();
 
-  const { hop, h, scaleX: sx0, scaleY: sy0 } = d.pose;
+  const { hop, h, scaleX: sx0p, scaleY: sy0p } = d.pose;
+  const act = d.act;
+  const sx0 = sx0p * (act ? act.scaleX : 1);
+  const sy0 = sy0p * (act ? act.scaleY : 1);
   const a = d.appearance;
   const u = sc;
-  const feetY = pr.y - hop;
+  const feetY = pr.y - hop - (act ? act.lift * sc : 0);
 
   // Grounding shadow (no hop), shrinking as the body rises.
   ctx.fillStyle = SHADOW;
   ell(ctx, pr.x, pr.y, 2.8 * sc * (1 - 0.28 * h), 1.1 * sc * (1 - 0.28 * h));
+
+  // An event animation leans the whole body about the feet (a slide, a
+  // fall, a dive), toward the way he faces when the tilt is positive.
+  const tilted = act != null && act.tilt !== 0;
+  if (tilted) {
+    ctx.save();
+    ctx.translate(pr.x, feetY);
+    ctx.rotate(act.tilt * d.face);
+    ctx.translate(-pr.x, -feetY);
+  }
 
   // Terraces silhouette: BIG head, short chunky body, stubby legs.
   const buildW = a.build === 'stocky' ? 1.14 : 0.95;
@@ -700,25 +740,44 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
   const ol = Math.max(PX, 0.8 * u);
 
   // Legs / shorts in the kit colour, outlined and cel-shaded; they scissor on
-  // the swing.
+  // the swing.  In a kick the FRONT leg (the side he faces) is drawn back,
+  // then swung through and lifted.
   const { swing } = d.pose;
   const lx1 = pr.x - gap - legW / 2 + swing;
   const lx2 = pr.x + gap - legW / 2 - swing;
-  for (const lx of [lx1, lx2]) {
-    obox(ctx, lx, legTop, legW, legH, kit.shorts, kit.outline, ol * 0.6);
-    celShade(ctx, lx, legTop, legW, legH, kit.shorts);
+  const kick = act ? act.kickLeg : 0;
+  const frontIsRight = d.face >= 0;
+  for (const [i, lx] of [lx1, lx2].entries()) {
+    const front = (i === 1) === frontIsRight;
+    const kx = front ? kick * legW * 1.1 * d.face : 0;
+    const ky = front ? Math.abs(kick) * legH * 0.45 : 0;
+    obox(ctx, lx + kx, legTop - ky, legW, legH, kit.shorts, kit.outline, ol * 0.6);
+    celShade(ctx, lx + kx, legTop - ky, legW, legH, kit.shorts);
   }
 
-  // Nub arms (the locked `limbs: nub` config): fixed stubby bent limbs splayed
-  // slightly down-and-out, no swing: the calm on-2s idle read.  Outfield arms
-  // are phosphor; a keeper's are his kit's long sleeves.
+  // Arms.  At rest, the nub arms (the locked `limbs: nub` config): fixed
+  // stubby bent limbs splayed slightly down-and-out, no swing, the calm
+  // on-2s idle read.  An event animation raises or spreads them (armAngles).
+  // Outfield arms are phosphor; a keeper's are his kit's long sleeves.
   const upperLen = bodyH * 0.5;
   const foreLen = bodyH * 0.46;
   const armW = Math.max(PX, legW * 0.9);
   const shoulderY = bodyTop + bodyH * 0.18;
   const armOutline = kit.sleeves === PHOS ? ABYSS : kit.outline;
-  drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, Math.PI / 2 + 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
-  drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, Math.PI / 2 - 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
+  const arms = act ? act.arms : 'rest';
+  if (arms === 'rest') {
+    drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, Math.PI / 2 + 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
+    drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, Math.PI / 2 - 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
+  } else {
+    const [right, left] = armAngles(arms, d.face);
+    // Raised arms are longer and bend in at the elbow so the hands clear
+    // the big head (a throw-in's hands meet over it, a celebration's spread).
+    const raised = arms === 'up' || arms === 'overhead';
+    const reach = arms === 'overhead' ? 1.45 : raised ? 1.25 : 0.8;
+    const bend = arms === 'overhead' ? 0.95 : 0;
+    drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, right, -bend, upperLen * reach, foreLen * reach, armW, kit.sleeves, ol, armOutline);
+    drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, left, bend, upperLen * reach, foreLen * reach, armW, kit.sleeves, ol, armOutline);
+  }
 
   // Torso: the shirt, outlined in the kit's deep shade and cel-shaded.
   obox(ctx, pr.x - bodyW / 2, bodyTop, bodyW, bodyH, kit.shirt, kit.outline, ol);
@@ -738,8 +797,34 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
 
   drawHead(ctx, pr.x, headY, head, u, d.face, a);
 
+  if (tilted) ctx.restore();
   // Restore the alpha we lowered for a dimmed (non-selected) dude.
   if (dimmed) ctx.restore();
+}
+
+/**
+ * Upper-arm angles (canvas radians, 0 = right, PI/2 = down) for an arm
+ * preset, as [right shoulder, left shoulder].  'forward' and 'back' follow
+ * the way he faces.
+ */
+export function armAngles(arms: ArmPreset, face: number): [number, number] {
+  const fwd = face >= 0 ? -0.15 : Math.PI + 0.15;
+  const back = face >= 0 ? Math.PI - 0.7 : 0.7;
+  switch (arms) {
+    case 'up':
+      return [-Math.PI / 2 + 0.4, -Math.PI / 2 - 0.4];
+    case 'out':
+      return [-0.2, Math.PI + 0.2];
+    case 'overhead':
+      // Out from the shoulders; the forearms bend back in to meet over the head.
+      return [-Math.PI / 2 + 0.5, -Math.PI / 2 - 0.5];
+    case 'forward':
+      return [fwd, fwd];
+    case 'back':
+      return [back, back];
+    case 'rest':
+      return [Math.PI / 2 + 0.3, Math.PI / 2 - 0.3];
+  }
 }
 
 // ── Ball ─────────────────────────────────────────────────────────────────────
@@ -751,23 +836,32 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
  * a dark outline and a shaded side.
  */
 export function drawBall(ctx: CanvasRenderingContext2D, project: ProjectFn, b: BallRender): void {
-  const pr = project(b.wx, b.wy, b.wz);
+  // A held ball (a throw-in over the head, a keeper's catch) is placed on
+  // the holder's sprite, `heldLift` sprite units above his feet.
+  const gr = project(b.wx, b.wy, 0);
+  const pr = b.heldLift != null ? { x: gr.x, y: gr.y - b.heldLift * gr.sc, sc: gr.sc } : project(b.wx, b.wy, b.wz);
   const sc = pr.sc;
   const r = BALL_RADIUS * sc;
   const outline = Math.max(PX * 0.5, 0.55 * sc);
 
   // Trail: segments from oldest to newest, thicker and more opaque toward
-  // the ball.
+  // the ball, coloured by the kind of kick in flight (TRAIL_STYLE): a shot
+  // is wider and brighter, with a glow.
   const trail = b.trail ?? [];
   if (trail.length > 1) {
+    const style = TRAIL_STYLE[b.trailKind ?? 'pass'];
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.strokeStyle = BALL_COLOR;
+    ctx.strokeStyle = style.color;
+    if (style.glow) {
+      ctx.shadowColor = style.color;
+      ctx.shadowBlur = 4 * PX;
+    }
     const pts = [...trail.map((q) => project(q.x, q.y, q.z)), pr];
     for (let i = 1; i < pts.length; i++) {
       const f = i / (pts.length - 1);
-      ctx.globalAlpha = 0.1 + 0.55 * f * f;
-      ctx.lineWidth = Math.max(PX * 0.5, r * (0.5 + 0.9 * f));
+      ctx.globalAlpha = Math.min(1, (0.1 + 0.55 * f * f) * style.alpha);
+      ctx.lineWidth = Math.max(PX * 0.5, r * (0.5 + 0.9 * f) * style.width);
       ctx.beginPath();
       ctx.moveTo(pts[i - 1]!.x, pts[i - 1]!.y);
       ctx.lineTo(pts[i]!.x, pts[i]!.y);
@@ -777,8 +871,7 @@ export function drawBall(ctx: CanvasRenderingContext2D, project: ProjectFn, b: B
   }
 
   // Ground shadow: under the ball on the grass; smaller and fainter with height.
-  const gr = project(b.wx, b.wy, 0);
-  const lift = Math.min(1, Math.max(0, b.wz) / 4);
+  const lift = b.heldLift != null ? 0.6 : Math.min(1, Math.max(0, b.wz) / 4);
   ctx.save();
   ctx.globalAlpha *= 1 - 0.55 * lift;
   ctx.fillStyle = SHADOW;
