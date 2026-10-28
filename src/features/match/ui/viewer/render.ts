@@ -65,11 +65,11 @@ const PX = PIXEL_SCALE;
 // in src/shared/design/tokens.ts: literal values that tokens.test.ts holds
 // equal to their custom properties in tokens.css.
 
-/** Lunar Dust — the phosphor body (heads and outfield arms). */
+/** Lunar Dust: the phosphor body (heads and outfield arms). */
 const PHOS = canvasColor.text;
-/** Galactic Abyss — eyes, head outlines and the ball's outline. */
+/** Galactic Abyss: eyes, head outlines and the ball's outline. */
 const ABYSS = canvasColor.bg;
-/** Mid phosphor — antennae stems. */
+/** Mid phosphor: antennae stems. */
 const PHOS_DIM = canvasColor.figureDim;
 /** Quantum Purple — the focus halo (the Architect's eye on the selected soul). */
 const QUANTUM = canvasColor.architect;
@@ -710,7 +710,7 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
   }
 
   // Nub arms (the locked `limbs: nub` config): fixed stubby bent limbs splayed
-  // slightly down-and-out — no swing, the calm on-2s idle read.  Outfield arms
+  // slightly down-and-out, no swing: the calm on-2s idle read.  Outfield arms
   // are phosphor; a keeper's are his kit's long sleeves.
   const upperLen = bodyH * 0.5;
   const foreLen = bodyH * 0.46;
@@ -766,7 +766,7 @@ export function drawBall(ctx: CanvasRenderingContext2D, project: ProjectFn, b: B
     const pts = [...trail.map((q) => project(q.x, q.y, q.z)), pr];
     for (let i = 1; i < pts.length; i++) {
       const f = i / (pts.length - 1);
-      ctx.globalAlpha = 0.06 + 0.4 * f * f;
+      ctx.globalAlpha = 0.1 + 0.55 * f * f;
       ctx.lineWidth = Math.max(PX * 0.5, r * (0.5 + 0.9 * f));
       ctx.beginPath();
       ctx.moveTo(pts[i - 1]!.x, pts[i - 1]!.y);

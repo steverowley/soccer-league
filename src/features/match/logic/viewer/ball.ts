@@ -114,13 +114,19 @@ export interface TrailPoint extends BallPoint {
 }
 
 /** How much game time the trail covers. */
-export const TRAIL_GAME_SEC = 0.45;
+export const TRAIL_GAME_SEC = 0.6;
 /** Ball speed (game m/s) at which the trail appears: faster than any dribble. */
 export const TRAIL_MIN_MPS = 9;
 
+/** Most points the history ever holds (a trail window at a very high frame rate). */
+export const TRAIL_MAX_POINTS = 48;
+
 /**
  * Append this frame's ball point and drop points older than the trail window.
- * A step back in game time (a restart) or a long gap clears the history.
+ * A step back in game time (a restart) or a long gap clears the history, and
+ * a frame at the same game time (before kickoff, after the final whistle)
+ * replaces the newest point instead of adding one, so the history stays
+ * bounded however long the clock stands still.
  *
  * @returns The new history (the input array is not modified).
  */
@@ -128,8 +134,9 @@ export function pushTrail(history: readonly TrailPoint[], p: TrailPoint): TrailP
   const last = history[history.length - 1];
   if (last && (p.t < last.t || p.t - last.t > 2)) return [p];
   const out = history.filter((q) => p.t - q.t <= TRAIL_GAME_SEC);
+  if (last && p.t === last.t) out.pop();
   out.push(p);
-  return out;
+  return out.length > TRAIL_MAX_POINTS ? out.slice(out.length - TRAIL_MAX_POINTS) : out;
 }
 
 /**

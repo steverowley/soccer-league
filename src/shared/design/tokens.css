@@ -83,7 +83,7 @@
   --isl-pitch-grass-b: #171b17;               /* lighter mowing stripe */
   --isl-pitch-line: rgba(227,224,213,0.26);   /* pitch markings */
   --isl-pitch-goal-line: rgba(227,224,213,0.5); /* goal frames */
-  --isl-pitch-figure-dim: #9C9A90;            /* legs, shorts, antenna stems */
+  --isl-pitch-figure-dim: #9C9A90;            /* antenna stems (shorts wear the kit) */
   --isl-pitch-kit-home: #C9603F;              /* home shirt when a club has no colour */
   --isl-pitch-kit-away: #4E7E8C;              /* away shirt when a club has no colour */
   --isl-pitch-shadow: rgba(0,0,0,0.38);       /* ground shadows */

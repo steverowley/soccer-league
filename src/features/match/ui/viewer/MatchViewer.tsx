@@ -32,7 +32,7 @@
 //   Before kickoff or for a legacy match with no frames, every dude stands at its
 //   formation home position (idle bob); the ball sits on the centre spot.
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { canvasColor, color, hairline, space, tone, type } from '../../../../shared/design';
 import { Tag } from '../../../../shared/ui';
@@ -77,6 +77,7 @@ import {
   type Viewport,
 } from '../../logic/viewer';
 import { drawBall, drawDude, drawPitch, PIXEL_SCALE, type DudeRender, type ProjectFn } from './render';
+import { ThrottledAnnouncer } from './ThrottledAnnouncer';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -131,6 +132,8 @@ export interface MatchViewerPlayer {
   position: string;
   /** Display name for the "on the ball" caption, when known. */
   name?: string;
+  /** Shirt number (`players.jersey_number`), when known; else the slot order is used. */
+  number?: number | null;
 }
 
 /** Props for <MatchViewer>. */
@@ -183,7 +186,7 @@ interface DudeSpec {
   gk: boolean;
   /** Display name for the caption, when known. */
   name: string | null;
-  /** Squad number printed on the chest (slot order: GK #1, then 2–11, bench 12+). */
+  /** Squad number printed on the chest: his shirt number, else slot order (1–11, bench 12+). */
   number: number;
   /** Deterministic appearance. */
   appearance: Appearance;
@@ -194,14 +197,17 @@ interface DudeSpec {
 }
 
 /**
- * Resolve the dude specs for one side: the starting XI (one per formation slot,
- * slot 0 = GK) plus any bench players supplied beyond the slot count.  Each gets
- * a metre-space home position (bench players have none — they sit off the pitch
- * until subbed on), its side + GK flag (which pick the kit),
- * a slot-order squad number (GK #1 — football convention; real `jersey_number`
- * plumbing can replace this without touching the renderer), and a deterministic
- * appearance keyed by player id.  Empty slots in a short XI get synthetic ids so
- * the pitch is always full.
+ * Resolve the dude specs for one side: the starting XI (one per formation slot)
+ * plus any bench players supplied beyond the slot count.  Each gets a
+ * metre-space home position (bench players have none: they sit off the pitch
+ * until subbed on), its side, a keeper flag, his shirt number (slot order when
+ * the roster has none) and a deterministic appearance keyed by player id.
+ * Empty slots in a short XI get synthetic ids so the pitch is always full.
+ *
+ * WHO KEEPS GOAL: the player whose position is GK, not slot 0.  The match
+ * page orders the XI by rating (the engine's order), so slot 0 is often a
+ * forward; marking slot 0 dressed a forward as the keeper.  Slot 0 is only
+ * the fallback when no starter is listed as a GK (synthetic or short squads).
  */
 function buildSide(
   side: 'home' | 'away',
@@ -210,17 +216,19 @@ function buildSide(
 ): DudeSpec[] {
   const slots = getFormationSlots(formation, side);
   const faceDefault = side === 'home' ? 1 : -1;
+  const starterHasGk = players.slice(0, slots.length).some((p) => p.position === 'GK');
   // Starters: one dude per formation slot, keyed by the XI ids in slot order.
   const starters: DudeSpec[] = slots.map((slot, i) => {
-    const id = players[i]?.id ?? `${side}-${i}`;
+    const p = players[i];
+    const id = p?.id ?? `${side}-${i}`;
     return {
       id,
       homeX: slot.x * PITCH_LENGTH,
       homeY: slot.y * PITCH_WIDTH,
       team: side,
-      gk: i === 0,
-      name: players[i]?.name ?? null,
-      number: i + 1,
+      gk: starterHasGk ? p?.position === 'GK' : i === 0,
+      name: p?.name ?? null,
+      number: p?.number ?? i + 1,
       appearance: makeAppearance(id),
       faceDefault,
       bench: false,
@@ -236,7 +244,7 @@ function buildSide(
     team: side,
     gk: p.position === 'GK',
     name: p.name ?? null,
-    number: slots.length + i + 1,
+    number: p.number ?? slots.length + i + 1,
     appearance: makeAppearance(p.id),
     faceDefault,
     bench: true,
@@ -500,14 +508,13 @@ export function MatchViewer({
       });
       hitTargetsRef.current = hitTargets;
 
-      // Depth-sort dudes + ball back-to-front by world y (far touchline first).
-      const order: Array<{ k: number; dude: DudeRender | null }> = dudes.map((d) => ({ k: d.wy, dude: d }));
-      order.push({ k: ball.y + 0.05, dude: null });
-      order.sort((a, b) => a.k - b.k);
-      for (const o of order) {
-        if (o.dude) drawDude(ctx, project, o.dude);
-        else drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail });
-      }
+      // Dudes back-to-front by world y (far touchline first), then the ball
+      // over everyone: in a crowd (a corner, a penalty) a figure in front
+      // would otherwise hide it, and finding the ball matters more than the
+      // occlusion.  Its dark outline keeps it separate from a body behind it.
+      dudes.sort((a, b) => a.wy - b.wy);
+      for (const d of dudes) drawDude(ctx, project, d);
+      drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail });
 
       raf = requestAnimationFrame(loop);
     };
@@ -615,45 +622,6 @@ export function MatchViewer({
 function carrierSentence(spec: DudeSpec, club: string | undefined): string {
   const who = spec.name ? `${spec.number} ${spec.name}` : `number ${spec.number}`;
   return club ? `On the ball: ${who}, ${club}.` : `On the ball: ${who}.`;
-}
-
-/** Visually hidden but read by screen readers (the standard sr-only pattern). */
-function srOnly(): CSSProperties {
-  return {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    padding: 0,
-    margin: -1,
-    overflow: 'hidden',
-    clip: 'rect(0, 0, 0, 0)',
-    whiteSpace: 'nowrap',
-    border: 0,
-  };
-}
-
-/**
- * A polite live region that passes `text` on at most once per `everyMs`: a
- * change inside the window is held and the latest value is announced when
- * the window ends (a trailing throttle), and an empty text is never announced.
- */
-function ThrottledAnnouncer({ text, everyMs }: { text: string; everyMs: number }) {
-  const [spoken, setSpoken] = useState('');
-  const lastAtRef = useRef(Number.NEGATIVE_INFINITY);
-  useEffect(() => {
-    if (!text) return undefined;
-    const wait = Math.max(0, lastAtRef.current + everyMs - performance.now());
-    const handle = setTimeout(() => {
-      lastAtRef.current = performance.now();
-      setSpoken(text);
-    }, wait);
-    return () => clearTimeout(handle);
-  }, [text, everyMs]);
-  return (
-    <span aria-live="polite" style={srOnly()}>
-      {spoken}
-    </span>
-  );
 }
 
 /**

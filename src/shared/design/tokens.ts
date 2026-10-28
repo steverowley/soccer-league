@@ -93,7 +93,7 @@ export const canvasColor = {
   line: 'rgba(227,224,213,0.26)',
   /** Goal frames. */
   goalLine: 'rgba(227,224,213,0.5)',
-  /** Mid phosphor: legs, shorts and antenna stems. */
+  /** Mid phosphor: antenna stems (shorts now wear the kit colour). */
   figureDim: '#9C9A90',
   /** Home shirt when a club has no colour in the data. */
   kitHome: '#C9603F',

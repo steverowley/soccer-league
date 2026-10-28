@@ -7,6 +7,7 @@ import {
   GLIDE_GAP_M,
   GLIDE_MS,
   TRAIL_GAME_SEC,
+  TRAIL_MAX_POINTS,
   ballAtFeet,
   glideBall,
   pushTrail,
@@ -96,6 +97,14 @@ describe('trail', () => {
   it('is absent while dribbling or still', () => {
     expect(trailToDraw(run(6))).toEqual([]);
     expect(trailToDraw(run(0))).toEqual([]);
+  });
+
+  it('stays bounded while the clock stands still (before kickoff, after full time)', () => {
+    let h: TrailPoint[] = [];
+    for (let i = 0; i < 10_000; i++) h = pushTrail(h, { t: 0, x: 52.5, y: 34, z: 0 });
+    expect(h).toHaveLength(1);
+    for (let i = 0; i < 10_000; i++) h = pushTrail(h, { t: 1 + i * 1e-6, x: 52.5, y: 34, z: 0 });
+    expect(h.length).toBeLessThanOrEqual(TRAIL_MAX_POINTS);
   });
 
   it('clears on a restart (time goes backwards) or a long gap', () => {
