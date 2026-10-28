@@ -1,11 +1,12 @@
 # Engine fingerprint baseline: npx tsx scripts/engine-fingerprint.ts on main 3cf93c1 (before any CPU optimisation).
 # One SHA-256 per case over the canonical serialized result (score, events, frames, phases, traces). Check with --check.
+# Regenerated for the penalty-keeper fix (docs/match-viewer.md 2A): squad-mars-v-europa and squad-pluto-v-ceres changed (both have a penalty); the other 13 cases are unchanged.
 squad-earth-v-jupiter              00472e71082437d94e46a4d4f847cbcbdcee24c338451f15852cd860b1b0abfd  score=0-1 events=1474 frames=2756 traces=0
 squad-ceres-v-mars                 123b9a8d90547c1de4ac686bc770dc33c7be1b6f31e064d1738865cafec4f06e  score=0-1 events=1215 frames=2776 traces=0
 squad-europa-v-pluto               564a33ebb5348b33a37eac0599fb29b2698dc5463539ea96ee4062621492d684  score=2-1 events=1371 frames=2781 traces=0
 squad-jupiter-v-earth              84a723a891b44bfbd422ef1eab3da2f5bfe6d04f3a33ace3d7fb09f6ec642e54  score=1-1 events=1427 frames=2769 traces=0
-squad-mars-v-europa                fc43ea806a5f0616e57939aca52ea09e5a1e4fa657b996978f52257025c956a7  score=1-2 events=1186 frames=2801 traces=0
-squad-pluto-v-ceres                5ad4a4e0b67f556a80a46f284d5a04562668ac8739494305089def2bddc37224  score=1-0 events=1347 frames=2796 traces=0
+squad-mars-v-europa                f19d1d4c9edcea1a7152af1832c6e700f2b15458bf332f9b9597fe17258cb1af  score=1-3 events=1205 frames=2781 traces=0
+squad-pluto-v-ceres                6b3bd31f1353e29eee9e7b47d9cacc8b2e598e2e0caf222cc037a703a0c06fe6  score=2-0 events=1363 frames=2799 traces=0
 fixture-70-v-70                    9daa515c05d54138ad78787a4cdd63d2164eba1c1ad579de4a8bba6bf0fa57ed  score=1-1 events=1262 frames=2779 traces=0
 fixture-72-v-68                    636bed8640b41dc3308c81eafa010eaa6f9caa058c7873d421ea370e33bb210a  score=2-1 events=1245 frames=2801 traces=0
 direct343-v-possession451          32ab7e388c2563ea277630656f4f4c0e0ee7f9b0726798177bfc91fdf871a88f  score=2-2 events=1210 frames=2781 traces=0

@@ -111,7 +111,15 @@ export function restartTarget(p: SimPlayer, world: SimWorld): Vec2 {
       return shapePoint(p, world);
     }
     case 'penalty': {
-      if (p.role === 'GK' && !attacking) return vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+      if (p.role === 'GK') {
+        // The defending keeper goes to his line.  The TAKING side's keeper
+        // holds his own shape point and never crosses into the other half:
+        // he used to fall through to the edge-of-the-box rule below and run
+        // the length of the pitch (about 80 m) for every penalty his side
+        // took (docs/match-viewer.md, section 2A).
+        if (!attacking) return vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+        return inOwnHalf(p.side, shapePoint(p, world));
+      }
       const edge = gxAtt - toward * (PENALTY_AREA_DEPTH + 2);
       const i = (p.side === 'home' ? world.home : world.away).indexOf(p);
       return vec(edge, 18 + ((i * 3.3) % 32) + (attacking ? 0 : 1.6));
@@ -149,6 +157,22 @@ export function restartTarget(p: SimPlayer, world: SimWorld): Vec2 {
       return clampIn(pt);
     }
   }
+}
+
+/** Margin (m) a keeper keeps from the halfway line when held in his own half. */
+const OWN_HALF_MARGIN = 1;
+
+/**
+ * Clamp a point into `side`'s own half, short of the halfway line.
+ *
+ * @param side  The side whose half it is.
+ * @param pt    The point.
+ * @returns     The point, moved back along x if it was past the margin.
+ */
+export function inOwnHalf(side: TeamSide, pt: Vec2): Vec2 {
+  const half = PITCH_LENGTH / 2;
+  if (defendingGoalX(side) === 0) return pt.x > half - OWN_HALF_MARGIN ? vec(half - OWN_HALF_MARGIN, pt.y) : pt;
+  return pt.x < half + OWN_HALF_MARGIN ? vec(half + OWN_HALF_MARGIN, pt.y) : pt;
 }
 
 /** Box positions for corners: attackers attack zones, defenders mark them. */
