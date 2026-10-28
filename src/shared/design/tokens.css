@@ -102,6 +102,16 @@
   --isl-pitch-hair-flat: #AEAB9F;
   --isl-pitch-hair-spiky: #94917F;
   --isl-pitch-hair-long: #BBB8AC;
+  /* Event overlays (cards reuse --isl-card-yellow and --isl-live, a
+     substitute's arrow --isl-success). */
+  --isl-pitch-flag: #FFB238;                  /* the flag mark on the offside line */
+  --isl-pitch-trail-cross: #7FD6FF;           /* ball trails by kind of kick */
+  --isl-pitch-trail-long: #F2C14E;
+  --isl-pitch-trail-clear: #C9C6BB;
+  --isl-pitch-trail-shot: #FFFFFF;
+  --isl-pitch-label-panel: rgba(17,17,17,0.86); /* panel behind a pitch label */
+  --isl-pitch-dust: rgba(227,224,213,0.42);   /* dust puff under a slide tackle */
+  --isl-pitch-net: rgba(227,224,213,0.7);     /* the net rippling after a goal */
 }
 
 /* Phone (< 600 px): the one place phone values live. */
