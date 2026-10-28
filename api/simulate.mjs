@@ -2268,6 +2268,14 @@ function trace(world, kind, p, data) {
     data
   });
 }
+function observeKick(world) {
+  const o = world.observer;
+  if (o !== null && o.kick !== void 0 && world.ball.kick !== null) o.kick(world.ball.kick, world);
+}
+function observeDive(world, k) {
+  const o = world.observer;
+  if (o !== null && o.dive !== void 0) o.dive(k, world);
+}
 function laneTrace(world, shooter, vel) {
   const from = world.ball.pos;
   const to = add(from, scale(vel, 1.2));
@@ -2419,6 +2427,7 @@ function launch(world, p, kind, vel, vz, aim, targetId) {
   p.noTouchUntil = world.clockSec + KICKER_LOCK;
   p.holds = 0;
   newBallPath(world, p);
+  observeKick(world);
 }
 function execute(world, p, action, events, minute, restart) {
   const b = world.ball;
@@ -2464,6 +2473,7 @@ function execute(world, p, action, events, minute, restart) {
           const ys = [GOAL_Y_MIN + 1.2, PITCH_WIDTH / 2, GOAL_Y_MAX - 1.2];
           const i = softPick(k.rng, [0, -5e-4, 0], 1e-3, world.flags.utilitySoftness);
           k.dive = { at: vec(gx, ys[i]), z: 0.6 };
+          observeDive(world, k);
           trace(world, "keeper_guess", k, { y: r2(ys[i]) });
         }
       }
@@ -2752,6 +2762,7 @@ function resolveLunge(world, d, events, minute) {
     }
     b.vz = 0;
     b.kick = { kind: "poke", side: d.side, playerId: d.id, from: b.pos, tSec: now, targetId: null, aim: b.pos, resolved: true, woodwork: false };
+    observeKick(world);
     b.offsideFor = null;
     touched(world, d);
     newBallPath(world, d);
@@ -3012,6 +3023,7 @@ function touchBall(world, p, at, z, closeD, events, minute) {
     if (shotLive && kick.side !== p.side) resolveShot(world, events, minute, onTarget ? "save" : "shot", p);
     passEnd(world, "lost");
     b.kick = { kind: "parry", side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
+    observeKick(world);
     touched(world, p);
     p.noTouchUntil = now + 0.4;
     newBallPath(world, p);
@@ -3038,6 +3050,7 @@ function touchBall(world, p, at, z, closeD, events, minute) {
     if (shotLive) resolveShot(world, events, minute, "shot");
     passEnd(world, kick && kick.side === p.side ? "complete" : "lost");
     b.kick = { kind: "deflection", side: p.side, playerId: p.id, from: at, tSec: now, targetId: null, aim: at, resolved: true, woodwork: false };
+    observeKick(world);
     touched(world, p);
     newBallPath(world, p);
     trace(world, "block", p, { speed: r2(speed), edge: r2(edge), out: r2(len(b.vel)), kick: kick ? kick.kind : null });
@@ -3366,6 +3379,7 @@ function step(world, dt) {
     if (k && !k.dive && now >= k.reactUntil && ballThreatens(world, side)) {
       readShot(k, world);
       const kd = k.dive;
+      if (kd) observeDive(world, k);
       if (kd) trace(world, "dive", k, { kx: r2(k.pos.x), ky: r2(k.pos.y), vx: r2(k.vel.x), vy: r2(k.vel.y), toY: r2(kd.at.y), z: r2(kd.z) });
     }
   }
@@ -3762,6 +3776,7 @@ function buildWorld(home, away, cfg, flags) {
     lastShot: null,
     flags,
     trace: cfg.trace ?? null,
+    observer: cfg.observer ?? null,
     dtSec: cfg.dtSec,
     tactics: { home: makeTactics(modelFor(home, flags)), away: makeTactics(modelFor(away, flags)) }
   };
@@ -3830,6 +3845,291 @@ function bodyAt(k) {
   return { pos: vec(k.x, k.y), vel: vec(k.vx, k.vy), z: k.z, vz: k.vz };
 }
 
+// src/features/match/logic/replay/actionTrack.ts
+var ACTION_SPOT_SCALE = 100;
+var ACTION_ORDER = {
+  sub: 0,
+  foul: 1,
+  tackle: 2,
+  interception: 3,
+  offside: 4,
+  dive: 5,
+  kick: 6,
+  woodwork: 7,
+  goal: 8,
+  restart: 9
+};
+function sortActions(actions) {
+  return actions.slice().sort((a, b) => a.tick - b.tick || ACTION_ORDER[a.kind] - ACTION_ORDER[b.kind]);
+}
+function playersOf(a) {
+  switch (a.kind) {
+    case "tackle":
+      return [a.by, a.from];
+    case "foul":
+      return [a.by, a.on];
+    case "sub":
+      return [a.on, a.off];
+    default:
+      return [a.by];
+  }
+}
+function unionRoster(frames, actions = []) {
+  const roster = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add2 = (id) => {
+    if (id !== null && !seen.has(id)) {
+      seen.add(id);
+      roster.push(id);
+    }
+  };
+  for (const frame of frames) for (const p of frame) add2(p.id);
+  for (const a of actions) for (const id of playersOf(a)) add2(id);
+  return roster;
+}
+function replayRoster(track) {
+  return track.roster ? track.roster.slice() : unionRoster(track.frames, track.actions);
+}
+function toActionTrack(actions, roster, dtSec) {
+  const index = /* @__PURE__ */ new Map();
+  roster.forEach((id, i) => index.set(id, i));
+  const ix = (id) => id === null ? -1 : index.get(id) ?? -1;
+  const out = actions.map((a) => {
+    switch (a.kind) {
+      case "tackle":
+        return { ...a, by: ix(a.by), from: ix(a.from) };
+      case "foul":
+        return { ...a, by: ix(a.by), on: ix(a.on) };
+      case "sub":
+        return { ...a, on: ix(a.on), off: ix(a.off) };
+      default:
+        return { ...a, by: ix(a.by) };
+    }
+  });
+  return { dtSec, actions: sortActions(out), roster };
+}
+function cm(n) {
+  return Math.round(n * ACTION_SPOT_SCALE) + 0;
+}
+function deltaTicks(t) {
+  for (let i = t.length - 1; i > 0; i--) t[i] = t[i] - t[i - 1];
+}
+function encodeActions(track) {
+  const f = {
+    kick: { t: [], p: [], k: [], d: [] },
+    tackle: { t: [], p: [], q: [] },
+    interception: { t: [], p: [] },
+    foul: { t: [], p: [], q: [], c: [] },
+    dive: { t: [], p: [], x: [], y: [], z: [], o: [] },
+    restart: { t: [], p: [], k: [], x: [], y: [], r: [] },
+    goal: { t: [], p: [], s: [] },
+    woodwork: { t: [], p: [] },
+    offside: { t: [], p: [], x: [], y: [] },
+    sub: { t: [], p: [], q: [] }
+  };
+  for (const a of track.actions) {
+    switch (a.kind) {
+      case "kick":
+        f.kick.t.push(a.tick);
+        f.kick.p.push(a.by);
+        f.kick.k.push(a.kick);
+        f.kick.d.push(a.delivery ?? "");
+        break;
+      case "tackle":
+        f.tackle.t.push(a.tick);
+        f.tackle.p.push(a.by);
+        f.tackle.q.push(a.from);
+        break;
+      case "interception":
+        f.interception.t.push(a.tick);
+        f.interception.p.push(a.by);
+        break;
+      case "foul":
+        f.foul.t.push(a.tick);
+        f.foul.p.push(a.by);
+        f.foul.q.push(a.on);
+        f.foul.c.push(a.card);
+        break;
+      case "dive":
+        f.dive.t.push(a.tick);
+        f.dive.p.push(a.by);
+        f.dive.x.push(cm(a.x));
+        f.dive.y.push(cm(a.y));
+        f.dive.z.push(cm(a.z));
+        f.dive.o.push(a.outcome);
+        break;
+      case "restart":
+        f.restart.t.push(a.tick);
+        f.restart.p.push(a.by);
+        f.restart.k.push(a.restart);
+        f.restart.x.push(cm(a.x));
+        f.restart.y.push(cm(a.y));
+        f.restart.r.push(a.readyTick - a.tick);
+        break;
+      case "goal":
+        f.goal.t.push(a.tick);
+        f.goal.p.push(a.by);
+        f.goal.s.push(a.side);
+        break;
+      case "woodwork":
+        f.woodwork.t.push(a.tick);
+        f.woodwork.p.push(a.by);
+        break;
+      case "offside":
+        f.offside.t.push(a.tick);
+        f.offside.p.push(a.by);
+        f.offside.x.push(cm(a.x));
+        f.offside.y.push(cm(a.y));
+        break;
+      case "sub":
+        f.sub.t.push(a.tick);
+        f.sub.p.push(a.on);
+        f.sub.q.push(a.off);
+        break;
+    }
+  }
+  for (const col of Object.values(f)) deltaTicks(col.t);
+  return f;
+}
+
+// src/features/match/logic/replay/actionRecorder.ts
+var RESTART_KICK = {
+  kickoff: "kickoff",
+  throw: "throw",
+  corner: "corner",
+  goalkick: "goalkick",
+  freekick: "freekick",
+  penalty: "penalty"
+};
+var TICK_EPS = 1e-6;
+function createActionRecorder() {
+  const recorded = [];
+  let dtSec = 0.1;
+  const open2 = /* @__PURE__ */ new Map();
+  let lastRestart = null;
+  let pending = null;
+  const offsideSpot = /* @__PURE__ */ new Map();
+  const goalTouch = /* @__PURE__ */ new Map();
+  let goalsSeen = 0;
+  let lastBallZ = 0;
+  const tickOf = (world) => Math.round(world.clockSec / world.dtSec);
+  const settle2 = (keeperId, outcome) => {
+    const d = open2.get(keeperId);
+    if (!d) return;
+    d.action.outcome = outcome;
+    open2.delete(keeperId);
+  };
+  const findPlayer = (world, id) => {
+    for (const p of world.home) if (p.id === id) return p;
+    for (const p of world.away) if (p.id === id) return p;
+    return void 0;
+  };
+  const kick = (k, world) => {
+    const tick = tickOf(world);
+    let label = k.kind;
+    let delivery = null;
+    if (pending !== null && world.restart === null && k.playerId === pending.r.takerId) {
+      const as = RESTART_KICK[pending.r.kind];
+      if (as !== void 0 && as !== k.kind) {
+        label = as;
+        delivery = k.kind;
+      }
+      pending = null;
+    }
+    recorded.push(delivery === null ? { kind: "kick", tick, by: k.playerId, kick: label } : { kind: "kick", tick, by: k.playerId, kick: label, delivery });
+    if (k.kind === "parry" || k.kind === "deflection") {
+      const p = findPlayer(world, k.playerId);
+      if (p && p.role === "GK") {
+        if (open2.has(p.id)) settle2(p.id, "save");
+        else recorded.push({ kind: "dive", tick, by: p.id, x: k.from.x, y: k.from.y, z: world.ball.z, outcome: "save" });
+      }
+    }
+  };
+  const dive = (k, world) => {
+    const d = k.dive;
+    if (d === null) return;
+    settle2(k.id, "beaten");
+    const action = { kind: "dive", tick: tickOf(world), by: k.id, x: d.at.x, y: d.at.y, z: d.z, outcome: "beaten" };
+    recorded.push(action);
+    open2.set(k.id, { action, ref: d });
+  };
+  const onTick = (world) => {
+    const tick = tickOf(world);
+    if (tick === 0) dtSec = world.dtSec;
+    const r = world.restart;
+    if (r !== null && r !== lastRestart) {
+      const action = {
+        kind: "restart",
+        tick,
+        restart: r.kind,
+        by: r.takerId,
+        x: r.spot.x,
+        y: r.spot.y,
+        readyTick: Math.max(tick + 1, Math.ceil(r.readyAt / world.dtSec - TICK_EPS))
+      };
+      recorded.push(action);
+      pending = { r, action };
+      if (r.kind === "freekick" && r.indirect) offsideSpot.set(tick, { x: r.spot.x, y: r.spot.y });
+      if (r.kind === "keeper") {
+        if (open2.has(r.takerId)) settle2(r.takerId, "catch");
+        else recorded.push({ kind: "dive", tick, by: r.takerId, x: r.spot.x, y: r.spot.y, z: lastBallZ, outcome: "catch" });
+      }
+    }
+    lastRestart = r;
+    if (pending !== null && r === pending.r && pending.action.by !== r.takerId) pending.action.by = r.takerId;
+    for (const [id, d] of open2) {
+      if (world.ball.ownerId === id) {
+        settle2(id, "catch");
+        continue;
+      }
+      const p = findPlayer(world, id);
+      if (!p || p.dive !== d.ref) settle2(id, "beaten");
+    }
+    const goals = world.score[0] + world.score[1];
+    if (goals !== goalsSeen) {
+      goalTouch.set(tick, world.ball.lastTouchId);
+      goalsSeen = goals;
+    }
+    lastBallZ = world.ball.z;
+  };
+  const actions = (events) => {
+    const out = recorded.slice();
+    for (const e of events) {
+      const tick = Math.round(e.tSec / dtSec);
+      const by = e.playerId ?? null;
+      switch (e.type) {
+        case "tackle":
+          out.push({ kind: "tackle", tick, by, from: e.otherId ?? null });
+          break;
+        case "interception":
+          out.push({ kind: "interception", tick, by });
+          break;
+        case "foul":
+          out.push({ kind: "foul", tick, by, on: e.otherId ?? null, card: e.card ?? "none" });
+          break;
+        case "goal":
+          out.push({ kind: "goal", tick, by: by ?? goalTouch.get(tick) ?? null, side: e.side ?? "home" });
+          break;
+        case "woodwork":
+          out.push({ kind: "woodwork", tick, by });
+          break;
+        case "offside": {
+          const at = offsideSpot.get(tick) ?? { x: 0, y: 0 };
+          out.push({ kind: "offside", tick, by, x: at.x, y: at.y });
+          break;
+        }
+        case "substitution":
+          out.push({ kind: "sub", tick, on: by, off: e.otherId ?? null });
+          break;
+        default:
+          break;
+      }
+    }
+    return sortActions(out);
+  };
+  return { onTick, observer: { kick, dive }, actions };
+}
+
 // src/features/match/logic/replay/recorder.ts
 var REPLAY_PLAYER_EVERY_SEC = 0.5;
 function createReplayRecorder(everySec = REPLAY_PLAYER_EVERY_SEC) {
@@ -3840,7 +4140,9 @@ function createReplayRecorder(everySec = REPLAY_PLAYER_EVERY_SEC) {
   let ticksPerFrame = 0;
   let pred = null;
   let predOwner = null;
+  const acts = createActionRecorder();
   const onTick = (world) => {
+    acts.onTick(world);
     tick += 1;
     if (tick === 0) {
       dtSec = world.dtSec;
@@ -3877,13 +4179,14 @@ function createReplayRecorder(everySec = REPLAY_PLAYER_EVERY_SEC) {
       predOwner = b.ownerId;
     }
   };
-  const track = () => ({
+  const track = (events) => ({
     dtSec,
     everySec,
     frames,
-    ball: { dtSec, keys, endTick: Math.max(0, tick) }
+    ball: { dtSec, keys, endTick: Math.max(0, tick) },
+    ...events ? { actions: acts.actions(events) } : {}
   });
-  return { onTick, track };
+  return { onTick, observer: acts.observer, track };
 }
 
 // src/features/match/logic/replay/replayV3.ts
@@ -3898,16 +4201,9 @@ function q(n, scale2) {
   return Math.round(n * scale2) + 0;
 }
 function encodeReplayV3(matchId, track) {
-  const roster = [];
+  const roster = replayRoster(track);
   const index = /* @__PURE__ */ new Map();
-  for (const frame of track.frames) {
-    for (const p of frame) {
-      if (!index.has(p.id)) {
-        index.set(p.id, roster.length);
-        roster.push(p.id);
-      }
-    }
-  }
+  roster.forEach((id, i) => index.set(id, i));
   const runs = roster.map(() => []);
   const xs = roster.map(() => []);
   const ys = roster.map(() => []);
@@ -3956,7 +4252,8 @@ function encodeReplayV3(matchId, track) {
     frames: track.frames.length,
     end: track.ball.endTick,
     players,
-    ball
+    ball,
+    ...track.actions ? { actions: encodeActions(toActionTrack(track.actions, roster, track.dtSec)) } : {}
   };
 }
 
@@ -10184,12 +10481,16 @@ async function handleSimulateRequest(request, deps = defaultSimulateFunctionDeps
   let replayMs = -1;
   try {
     const recorder = createReplayRecorder();
-    const result = simulateSpatialMatch(input.home, input.away, { seed: input.seed, onTick: recorder.onTick });
+    const result = simulateSpatialMatch(input.home, input.away, {
+      seed: input.seed,
+      onTick: recorder.onTick,
+      observer: recorder.observer
+    });
     ms = Math.round(performance.now() - t0);
     let replayField = {};
     try {
       const r0 = performance.now();
-      const replay = await gzipText(JSON.stringify(encodeReplayV3(ticket.data.matchId, recorder.track())));
+      const replay = await gzipText(JSON.stringify(encodeReplayV3(ticket.data.matchId, recorder.track(result.events))));
       replayField = { [SIM_REPLAY_FIELD]: bytesToBase64(replay) };
       replayMs = Math.round(performance.now() - r0);
     } catch (err) {

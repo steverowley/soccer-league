@@ -223,17 +223,19 @@ export async function handleSimulateRequest(
   let ms: number;
   let replayMs = -1;
   try {
-    // The recorder only observes (spatial/types.ts SimConfig.onTick), so the
-    // result is byte-identical to a run without it.
+    // The recorder only observes (spatial/types.ts SimConfig.onTick and
+    // SimConfig.observer), so the result is byte-identical to a run without it.
     const recorder = createReplayRecorder();
-    const result = simulateSpatialMatch(input.home, input.away, { seed: input.seed, onTick: recorder.onTick });
+    const result = simulateSpatialMatch(input.home, input.away, {
+      seed: input.seed, onTick: recorder.onTick, observer: recorder.observer,
+    });
     ms = Math.round(performance.now() - t0);
     // The replay is cosmetic: if it cannot be built the match still counts,
     // and the worker falls back to its v2 replay from `frames`.
     let replayField: Record<string, string> = {};
     try {
       const r0 = performance.now();
-      const replay = await gzipText(JSON.stringify(encodeReplayV3(ticket.data.matchId, recorder.track())));
+      const replay = await gzipText(JSON.stringify(encodeReplayV3(ticket.data.matchId, recorder.track(result.events))));
       replayField = { [SIM_REPLAY_FIELD]: bytesToBase64(replay) };
       replayMs = Math.round(performance.now() - r0);
     } catch (err) {

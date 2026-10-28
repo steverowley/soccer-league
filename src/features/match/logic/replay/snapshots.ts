@@ -8,7 +8,10 @@
 //     (the ball sampled from the track at that instant), for any consumer
 //     that reads a frame directly;
 //   - `ballTrack`: the whole match's ball keyframes, ONE object shared by
-//     every snapshot, which `sampleFrames` replays with the engine's physics.
+//     every snapshot, which `sampleFrames` replays with the engine's physics;
+//   - `actionTrack`: the match's action track (kicks, tackles, fouls, dives,
+//     restarts...; replay/actions.ts), ONE object shared by every snapshot,
+//     when the track has actions (absent for files written before them).
 //
 // Used by the replay-file decoder (api/matchPositions.ts) and by the local
 // demo path (viewer/buildMatch.ts), so both hand the viewer the same thing.
@@ -16,14 +19,17 @@
 import type { PositionSnapshot } from '../../api/matchPositions';
 import { sampleBallTrack } from './ballTrack';
 import type { ReplayTrack } from './recorder';
+import { replayRoster, toActionTrack } from './actionTrack';
 
 /**
  * Convert a replay track into time-sorted viewer snapshots.
  *
  * @param track  A recorded or decoded v3 track.
- * @returns      One snapshot per player frame, sharing the ball track.
+ * @returns      One snapshot per player frame, sharing the ball track and
+ *               the action track.
  */
 export function trackToSnapshots(track: ReplayTrack): PositionSnapshot[] {
+  const actionTrack = track.actions ? toActionTrack(track.actions, replayRoster(track), track.dtSec) : null;
   const out: PositionSnapshot[] = new Array<PositionSnapshot>(track.frames.length);
   for (let i = 0; i < track.frames.length; i++) {
     // Whole ticks, so the frame time is exactly a tick time (0.5 = 5 x 0.1).
@@ -36,6 +42,7 @@ export function trackToSnapshots(track: ReplayTrack): PositionSnapshot[] {
       second: Math.floor(tSec % 60),
       tSec,
       ballTrack: track.ball,
+      ...(actionTrack ? { actionTrack } : {}),
       snapshots: {
         players: track.frames[i]!.map((p) => ({ id: p.id, x: p.x, y: p.y, hasBall: p.id === owner })),
         ball: { x: ball.x, y: ball.y, ownerId: owner },

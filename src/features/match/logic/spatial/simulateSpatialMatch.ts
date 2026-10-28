@@ -247,6 +247,7 @@ function buildWorld(home: SpatialTeamInput, away: SpatialTeamInput, cfg: SimConf
     lastShot: null,
     flags,
     trace: cfg.trace ?? null,
+    observer: cfg.observer ?? null,
     dtSec: cfg.dtSec,
     tactics: { home: makeTactics(modelFor(home, flags)), away: makeTactics(modelFor(away, flags)) },
   };

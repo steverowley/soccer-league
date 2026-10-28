@@ -377,6 +377,23 @@ export interface TraceRecord {
   data: Record<string, number | string | boolean | null>;
 }
 
+/**
+ * Read-only observer of the moments that can begin and end inside one tick,
+ * which `SimConfig.onTick` (called once per tick) would miss: a pass touched
+ * by someone else in the tick it is struck, a dive committed and ended by a
+ * catch in the same tick.  The replay recorder builds its action track from
+ * these (features/match/logic/replay/recorder.ts).  Each callback runs
+ * synchronously as the moment happens; it must never mutate the world, and
+ * nothing it does feeds back into the simulation.
+ */
+export interface SimObserver {
+  /** A new KickInfo was set on the ball: every strike, throw, header, poke,
+   *  parry and deflection, as it is made. */
+  kick?: (kick: Readonly<KickInfo>, world: Readonly<SimWorld>) => void;
+  /** A keeper committed to a dive: his `dive` has just been set. */
+  dive?: (keeper: Readonly<SimPlayer>, world: Readonly<SimWorld>) => void;
+}
+
 export interface SimWorld {
   home: SimPlayer[];
   away: SimPlayer[];
@@ -407,6 +424,8 @@ export interface SimWorld {
   readonly flags: EngineFlags;
   /** Optional instrumentation sink. */
   readonly trace: ((r: TraceRecord) => void) | null;
+  /** Optional read-only observer of kicks and dives (SimConfig.observer). */
+  readonly observer: SimObserver | null;
   /** The fixed physics timestep (s) this match runs at. */
   readonly dtSec: number;
   /** Each side's phase of play and the manager's plan (phase.ts). */
@@ -503,6 +522,11 @@ export interface SimConfig {
    * and nothing it does feeds back into the simulation.
    */
   onTick?:      (world: Readonly<SimWorld>) => void;
+  /**
+   * Read-only observer of kicks and keeper dives as they happen, including
+   * the ones that begin and end inside a single tick (see SimObserver).
+   */
+  observer?:    SimObserver;
 }
 
 /** The full output of one simulated match. */

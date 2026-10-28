@@ -63,10 +63,10 @@ for (const [h, a, seed] of PAIRS) {
   const matchId = crypto.randomUUID();
   const req = JSON.stringify({ matchId, ticketId: crypto.randomUUID(), token: 'x'.repeat(64), seed, home, away });
 
-  // What the function sends since v3 (simulateFunction.ts).
+  // What the function sends since v3 (simulateFunction.ts), with the action track.
   const rec = createReplayRecorder();
-  const r = simulateSpatialMatch(home, away, { seed, onTick: rec.onTick });
-  const track: ReplayTrack = rec.track();
+  const r = simulateSpatialMatch(home, away, { seed, onTick: rec.onTick, observer: rec.observer });
+  const track: ReplayTrack = rec.track(r.events);
   const replay = await gzipText(JSON.stringify(encodeReplayV3(matchId, track)));
   const resultJson = JSON.stringify(r);
   const before = await gzipText(resultJson);

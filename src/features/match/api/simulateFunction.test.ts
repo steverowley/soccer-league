@@ -279,11 +279,16 @@ describe('remote simulation equals in-process simulation', () => {
     // The v3 replay recorded during the same simulation, stripped off the
     // result above and handed back as the exact bytes to store.
     expect(remote.replay).not.toBeNull();
-    const file = JSON.parse(await gunzipText(remote.replay!)) as { format: string; v: number; matchId: string; frames: number };
+    const file = JSON.parse(await gunzipText(remote.replay!)) as {
+      format: string; v: number; matchId: string; frames: number; actions?: { kick: { t: number[] }; goal: { t: number[] } };
+    };
     expect(file.format).toBe('isl-replay');
     expect(file.v).toBe(3);
     expect(file.matchId).toBe(MATCH_ID);
     expect(file.frames).toBeGreaterThan(3.9 * local.frames.length);
+    // The action track rides in the same file (docs/match-viewer.md section 5).
+    expect(file.actions!.kick.t.length).toBeGreaterThan(200);
+    expect(file.actions!.goal.t.length).toBe(local.finalScore[0] + local.finalScore[1]);
 
     // The ticket: one row, stored as a hash (never the plain token), now used.
     expect(db.rows.size).toBe(1);

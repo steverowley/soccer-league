@@ -34,7 +34,19 @@ export interface KickAction extends ActionBase {
   kind: 'kick';
   /** Kicker (or thrower). */
   by: number;
+  /**
+   * The kind of kick.  The kick that takes a restart is labelled with the
+   * restart (corner, goalkick, freekick, kickoff, throw, penalty); every
+   * other kick carries the engine's own kind (pass, through, cross, long,
+   * clear, shot, header, poke, parry, deflection).
+   */
   kick: KickKind;
+  /**
+   * Optional (added with the recorder): for a restart's taking kick whose
+   * label differs from the engine's own kind, that kind (a corner delivered
+   * as a `cross`, a free kick struck as a `shot`).  Absent otherwise.
+   */
+  delivery?: KickKind;
 }
 
 /** A challenge that won the ball cleanly from the carrier. */
@@ -62,7 +74,14 @@ export interface FoulAction extends ActionBase {
   card: CardKind;
 }
 
-/** A keeper committing to a dive (or a catch at his body). */
+/**
+ * A keeper committing to a dive (or a catch at his body).  A keeper who
+ * catches or parries without having committed to a dive gets one at the
+ * moment of contact, so every save, catch and parry has its dive.
+ *   save:   he parried or deflected the ball (even if it later went in);
+ *   catch:  he took possession of it;
+ *   beaten: he never touched it (a goal, or the ball past or away from him).
+ */
 export interface DiveAction extends ActionBase {
   kind: 'dive';
   by: number;
@@ -89,7 +108,7 @@ export interface RestartAction extends ActionBase {
 /** A goal (the ball over the line). */
 export interface GoalAction extends ActionBase {
   kind: 'goal';
-  /** The scorer. */
+  /** The scorer; for an own goal, the defender who put it in. */
   by: number;
   /** The side credited with the goal (an own goal credits the other side). */
   side: TeamSide;
@@ -137,6 +156,12 @@ export interface ActionTrack {
   dtSec: number;
   /** Every action, ascending by tick (stable for equal ticks). */
   actions: readonly ReplayAction[];
+  /**
+   * Optional (added with the recorder): the union roster the player indices
+   * refer to (`roster[i]` is a player id, as in the replay file).  Always
+   * set on a decoded or recorded track; an index of -1 means unknown.
+   */
+  roster?: readonly string[];
 }
 
 /**

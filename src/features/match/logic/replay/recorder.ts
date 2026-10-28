@@ -26,12 +26,22 @@
 //   Every `everySec` the position of every player on the pitch (both XIs as
 //   the engine holds them, so a substitute appears from the frame he comes
 //   on and a sent-off man is parked on his touchline as in the engine).
+//
+// ACTIONS
+//   Every kick (with its kind), keeper dive, restart, tackle, interception,
+//   foul, goal, woodwork, offside and substitution at its exact tick
+//   (actionRecorder.ts).  Kicks and dives can begin and end inside one tick,
+//   so they come from the engine's read-only `SimConfig.observer`; pass
+//   `recorder.observer` alongside `onTick`, and the match's events to
+//   `track(events)` once it ends.
 
-import type { SimWorld } from '../spatial/types';
+import type { SimEvent, SimObserver, SimWorld } from '../spatial/types';
 import { stepBall, type BallBody } from '../spatial/ball';
 import {
   type BallKey, type BallTrack, KEY_POS_EPS, KEY_VEL_EPS, bodyAt, quantise,
 } from './ballTrack';
+import { createActionRecorder } from './actionRecorder';
+import type { RecordedAction } from './actionTrack';
 
 /** Default seconds between recorded player frames in a v3 replay. */
 export const REPLAY_PLAYER_EVERY_SEC = 0.5;
@@ -53,12 +63,31 @@ export interface ReplayTrack {
   frames: TrackPlayer[][];
   /** The ball: keyframes replayed with the engine's physics. */
   ball: BallTrack;
+  /**
+   * The action track, players by id, sorted (actionTrack.ts).  Absent when
+   * the match's events were not handed to `track`, and in a decoded file
+   * written before actions were recorded.
+   */
+  actions?: RecordedAction[];
+  /**
+   * The union roster, when decoded from a file (the one its indices used).
+   * A live recording has none; `replayRoster` derives it.
+   */
+  roster?: string[];
 }
 
-/** A recorder: hand `onTick` to the engine, then read `track()`. */
+/** A recorder: hand `onTick` and `observer` to the engine, then read `track(events)`. */
 export interface ReplayRecorder {
   onTick: (world: Readonly<SimWorld>) => void;
-  track: () => ReplayTrack;
+  /** Read-only kick and dive observer (SimConfig.observer). */
+  observer: SimObserver;
+  /**
+   * The recorded track.
+   *
+   * @param events  The match's SimEvent list; with it the track carries its
+   *                actions, without it only players and ball.
+   */
+  track: (events?: readonly SimEvent[]) => ReplayTrack;
 }
 
 /**
@@ -75,8 +104,10 @@ export function createReplayRecorder(everySec: number = REPLAY_PLAYER_EVERY_SEC)
   let ticksPerFrame = 0;
   let pred: BallBody | null = null;
   let predOwner: string | null = null;
+  const acts = createActionRecorder();
 
   const onTick = (world: Readonly<SimWorld>): void => {
+    acts.onTick(world);
     tick += 1;
     if (tick === 0) {
       dtSec = world.dtSec;
@@ -117,12 +148,13 @@ export function createReplayRecorder(everySec: number = REPLAY_PLAYER_EVERY_SEC)
     }
   };
 
-  const track = (): ReplayTrack => ({
+  const track = (events?: readonly SimEvent[]): ReplayTrack => ({
     dtSec,
     everySec,
     frames,
     ball: { dtSec, keys, endTick: Math.max(0, tick) },
+    ...(events ? { actions: acts.actions(events) } : {}),
   });
 
-  return { onTick, track };
+  return { onTick, observer: acts.observer, track };
 }
