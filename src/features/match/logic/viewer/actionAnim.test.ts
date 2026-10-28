@@ -227,6 +227,19 @@ describe('activeAnimations: windows', () => {
     expect(activeAnimations(t, q(after(500, ANIM_MS.goalLabel + 20)), lookup).label).toBeNull();
   });
 
+  it('after a goal the camera stays on the scorer and the ball is drawn in the net while he celebrates', () => {
+    const t = track({ kind: 'goal', tick: tick(500), by: 9, side: 'home' });
+    const a = activeAnimations(t, q(after(500, 400)), lookup);
+    expect(a.focus).toBe(9);
+    expect(a.ballInNet).not.toBeNull();
+    expect(a.ballInNet!.x).toBeGreaterThan(105); // behind the line, in the net
+    expect(a.ballInNet!.y).toBeGreaterThanOrEqual(30.34);
+    expect(a.ballInNet!.y).toBeLessThanOrEqual(37.66);
+    const after1 = activeAnimations(t, q(after(500, ANIM_MS.celebrate + 20)), lookup);
+    expect(after1.focus).toBeNull();
+    expect(after1.ballInNet).toBeNull();
+  });
+
   it('an own goal is not celebrated by the player who put it in', () => {
     const t = track({ kind: 'goal', tick: tick(500), by: 15, side: 'home' });
     expect(activeAnimations(t, q(after(500, 400)), lookup).poses.has(15)).toBe(false);

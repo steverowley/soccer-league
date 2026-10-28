@@ -24,6 +24,9 @@
 //   - trail:    how the ball's trail is styled (by the kind of the last kick).
 //   - ballHeld: a player holding the ball up (throw-in, keeper's catch).
 //   - sub:      the substitution being announced under the pitch.
+//   - focus / ballInNet: after a goal, the scorer the Ball camera stays on
+//               and the ball drawn in the net while he celebrates (the
+//               engine has already put the ball on the centre spot).
 //
 // REDUCED MOTION
 //   No body poses, dust, net ripple, woodwork flash or styled trail; the
@@ -35,7 +38,7 @@
 // player is on) comes through the optional AnimLookup the caller provides.
 
 import { actionsBetween, firstActionAtOrAfter, type ActionTrack, type ReplayAction } from '../replay/actions';
-import { PITCH_LENGTH, type KickKind, type RestartKind, type TeamSide } from '../spatial/types';
+import { GOAL_Y_MAX, GOAL_Y_MIN, PITCH_LENGTH, type KickKind, type RestartKind, type TeamSide } from '../spatial/types';
 
 // ── Timing (milliseconds of REAL time) ───────────────────────────────────────
 
@@ -153,6 +156,14 @@ export interface ActiveAnimations {
   ballHeld: { player: number; z: number } | null;
   /** The substitution to name under the pitch (roster indices). */
   sub: { on: number; off: number } | null;
+  /**
+   * After a goal, the scorer the Ball camera follows during his celebration
+   * (the engine puts the ball on the centre spot at once, so following the
+   * ball would leave the goal and the celebration).
+   */
+  focus: number | null;
+  /** After a goal, where the ball is drawn during the celebration: in the net. */
+  ballInNet: { x: number; y: number; z: number } | null;
 }
 
 /** What the caller knows about the replay, for the marks that need it. */
@@ -261,9 +272,22 @@ function kickMs(pose: PoseKind): number {
 
 // ── The query ────────────────────────────────────────────────────────────────
 
+/** How far behind the goal line (m) a scored ball is drawn, inside the net. */
+export const NET_DEPTH_M = 0.9;
+
+/** The ball's spot in the net: behind the line it crossed, between the posts, under the bar. */
+export function netPoint(crossed: { x: number; y: number; z: number }, goalX: number): { x: number; y: number; z: number } {
+  const out = goalX === 0 ? -NET_DEPTH_M : NET_DEPTH_M;
+  return {
+    x: goalX + out,
+    y: Math.min(GOAL_Y_MAX - 0.3, Math.max(GOAL_Y_MIN + 0.3, crossed.y)),
+    z: Math.min(1.6, Math.max(0, crossed.z)),
+  };
+}
+
 /** An empty result (no track, or nothing on). */
 export function noAnimations(): ActiveAnimations {
-  return { poses: new Map(), overlays: [], label: null, trail: null, ballHeld: null, sub: null };
+  return { poses: new Map(), overlays: [], label: null, trail: null, ballHeld: null, sub: null, focus: null, ballInNet: null };
 }
 
 /** The kick that takes a restart: the first kick after it (nobody else plays the ball in a stoppage). */
@@ -410,11 +434,16 @@ export function activeAnimations(
         const ownGoal = side != null && side !== a.side;
         const tc = within(sec, ANIM_MS.celebrate);
         if (tc != null && !ownGoal) setPose(a.by, { kind: 'celebrate', t: tc, contact: 0 });
-        const tr = within(sec, ANIM_MS.ripple);
-        if (motion && tr != null) {
-          const ball = lookup.ballAt?.(sec);
-          if (ball) out.overlays.push({ kind: 'ripple', goalX: ball.x < PITCH_LENGTH / 2 ? 0 : PITCH_LENGTH, t: tr });
+        // The ball as it crossed the line (a tick before the engine put it
+        // on the centre spot), drawn in the net while the goal is marked.
+        const crossed = tc != null || within(sec, ANIM_MS.ripple) != null ? lookup.ballAt?.(sec - dt) ?? null : null;
+        const goalX = crossed ? (crossed.x < PITCH_LENGTH / 2 ? 0 : PITCH_LENGTH) : null;
+        if (tc != null) {
+          out.focus = a.by;
+          if (crossed && goalX != null) out.ballInNet = netPoint(crossed, goalX);
         }
+        const tr = within(sec, ANIM_MS.ripple);
+        if (motion && tr != null && goalX != null) out.overlays.push({ kind: 'ripple', goalX, t: tr });
         break;
       }
       case 'woodwork': {

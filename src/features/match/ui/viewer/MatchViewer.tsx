@@ -96,6 +96,7 @@ import {
   drawTargetMark,
   drawWhistleMark,
   drawWoodworkFlash,
+  labelPxFor,
 } from './renderEvents';
 import { ThrottledAnnouncer } from './ThrottledAnnouncer';
 
@@ -128,6 +129,9 @@ const SEEK_GAME_SEC = 5;
 
 /** A player only holds the ball up (throw-in, catch) when the ball is within this of him (m). */
 const HELD_BALL_NEAR_M = 4;
+
+/** How far (m) a diving keeper's figure reaches toward his dive target, at full stretch. */
+const DIVE_REACH_M = 1.2;
 
 /**
  * Canvas backing colour behind the pitch — a green-black a notch darker than
@@ -305,6 +309,8 @@ export function MatchViewer({
   );
   /** True once the viewer pressed a camera button: resizing no longer switches. */
   const cameraChosenRef = useRef(false);
+  /** The viewer's width in CSS pixels (sizes the pitch labels; 0 until measured). */
+  const cssWidthRef = useRef(0);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -342,6 +348,8 @@ export function MatchViewer({
   const subKeyRef = useRef<string | null>(null);
   /** True while a slow-motion replay is on screen (a cut snaps the camera). */
   const inReplayRef = useRef(false);
+  /** True while a scored ball is drawn in the net (its start and end are cuts). */
+  const ballInNetRef = useRef(false);
 
   // Kickoff anchor in epoch ms — parsed once so a same-string re-render is stable.
   const anchorMs = useMemo<number | null>(() => {
@@ -383,8 +391,9 @@ export function MatchViewer({
     const el = boxRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver((entries) => {
-      if (cameraChosenRef.current) return;
       const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) cssWidthRef.current = width;
+      if (cameraChosenRef.current) return;
       if (width <= 0) return;
       const mode = cameraForWidth(width);
       if (mode === 'follow') followCenterRef.current = null;
@@ -481,6 +490,18 @@ export function MatchViewer({
         // His event animation, if one is playing (roster index from the track).
         const idx = events?.indexById.get(spec.id) ?? -1;
         const act = idx >= 0 ? anims.poses.get(idx) : undefined;
+        // A diving keeper reaches toward where he committed to (up to
+        // DIVE_REACH_M, out and back over the dive), ahead of his position.
+        if (act?.kind === 'dive' && act.toX != null && act.toY != null) {
+          const dx = act.toX - pos.x;
+          const dy = act.toY - pos.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 0.01) {
+            const k = (Math.min(DIVE_REACH_M, d) * Math.sin(Math.PI * Math.min(1, act.t))) / d;
+            pos.x += dx * k;
+            pos.y += dy * k;
+          }
+        }
 
         return [{ spec, pos, vx, vy, state, phase, face, idx, act }];
       });
@@ -503,15 +524,22 @@ export function MatchViewer({
       const heldLift = holder && anims.ballHeld ? anims.ballHeld.z * SPRITE_UNITS_PER_M : null;
       const target: BallPoint = holder
         ? { x: holder.pos.x, y: holder.pos.y, z: 0 }
-        : owner
-          ? ballAtFeet({ x: owner.pos.x, y: owner.pos.y, vx: owner.vx, vy: owner.vy }, owner.face)
-          : { x: sb ? sb.x : PITCH_LENGTH / 2, y: sb ? sb.y : PITCH_WIDTH / 2, z: sb ? Math.max(0, sb.z) : 0 };
-      const step = glideBall(ballShownRef.current, target, ballGlideRef.current, now, !reducedMotion && !seek);
+        : anims.ballInNet
+          ? anims.ballInNet
+          : owner
+            ? ballAtFeet({ x: owner.pos.x, y: owner.pos.y, vx: owner.vx, vy: owner.vy }, owner.face)
+            : { x: sb ? sb.x : PITCH_LENGTH / 2, y: sb ? sb.y : PITCH_WIDTH / 2, z: sb ? Math.max(0, sb.z) : 0 };
+      // Putting the ball in the net, or taking it back to the centre spot,
+      // is a cut like a seek: no glide across the pitch, no trail.
+      const inNet = anims.ballInNet != null;
+      const snap = seek || inNet !== ballInNetRef.current;
+      ballInNetRef.current = inNet;
+      const step = glideBall(ballShownRef.current, target, ballGlideRef.current, now, !reducedMotion && !snap);
       const ball = step.shown;
       ballShownRef.current = ball;
       ballGlideRef.current = step.glide;
       let trail: TrailPoint[] = [];
-      if (reducedMotion || seek) {
+      if (reducedMotion || snap) {
         trailRef.current = [];
       } else {
         trailRef.current = pushTrail(trailRef.current, { ...ball, t: gameSec });
@@ -533,11 +561,14 @@ export function MatchViewer({
       }
 
       // Pick the projection for the active camera (it follows the drawn
-      // ball).  A replay always runs on the Ball camera.
+      // ball, or the scorer while he celebrates).  A replay always runs on
+      // the Ball camera.
       const follow = cameraMode === 'follow' || inReplay;
+      const focus = anims.focus != null ? pending.find((p) => p.idx === anims.focus) : undefined;
       let project: ProjectFn;
       if (follow) {
-        const target2 = clampFollowCenter(followAnchor(ball.x, ball.y, VP), VP);
+        const anchor = focus ? focus.pos : ball;
+        const target2 = clampFollowCenter(followAnchor(anchor.x, anchor.y, VP), VP);
         const prev = followCenterRef.current;
         const center = prev ? smoothFollowCenter(prev, target2, dt) : target2;
         followCenterRef.current = center;
@@ -570,12 +601,12 @@ export function MatchViewer({
         // Anchor the click target at mid-body (above the feet) so clicking the torso/head registers.
         hitTargets.push({ id: p.spec.id, sx: proj.x, sy: proj.y - 6 * sc });
         const side = kits[p.spec.team];
-        // A keeper dives toward the side of the screen his target is on.
+        // A keeper dives along his line, which runs up and down the screen
+        // under both cameras: his sampled position already travels that
+        // way, so the pose lays him out horizontally toward the pitch (never
+        // back into his own net).
         let face = p.face;
-        if (p.act?.kind === 'dive' && p.act.toX != null && p.act.toY != null) {
-          const to = project(p.act.toX, p.act.toY, 0);
-          if (Math.abs(to.x - proj.x) > sc) face = to.x > proj.x ? 1 : -1;
-        }
+        if (p.act?.kind === 'dive') face = p.pos.x < PITCH_LENGTH / 2 ? 1 : -1;
         return {
           wx: p.pos.x,
           wy: p.pos.y,
@@ -624,8 +655,9 @@ export function MatchViewer({
       drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail, trailKind: anims.trail, heldLift });
 
       // Labels last, over everything: the event's (GOAL, CORNER...) and REPLAY.
-      if (anims.label) drawPitchLabel(ctx, VP, anims.label, 'top');
-      if (inReplay) drawPitchLabel(ctx, VP, 'REPLAY', 'corner');
+      const labelPx = labelPxFor(cssWidthRef.current, VP.width);
+      if (anims.label) drawPitchLabel(ctx, VP, anims.label, 'top', labelPx);
+      if (inReplay) drawPitchLabel(ctx, VP, 'REPLAY', 'corner', labelPx);
 
       raf = requestAnimationFrame(loop);
     };

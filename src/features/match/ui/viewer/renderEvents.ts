@@ -24,6 +24,20 @@ const PX = PIXEL_SCALE;
 
 /** Label text size in backing pixels: the design label (11 px) on a phone-sized canvas. */
 export const LABEL_PX = 10 * PX;
+/** The smallest label size in backing pixels (a wide canvas shows it at about 17 CSS px). */
+export const LABEL_MIN_PX = 6 * PX;
+/** The CSS size a label aims for on screen. */
+const LABEL_TARGET_CSS_PX = 12;
+
+/**
+ * Label size in backing pixels for a canvas shown `cssWidth` CSS pixels
+ * wide: about the design label on a phone, without growing into a banner
+ * on a desktop (the canvas is stretched, so a fixed backing size would).
+ */
+export function labelPxFor(cssWidth: number, vpWidth: number): number {
+  if (!(cssWidth > 0)) return LABEL_PX;
+  return Math.round(Math.min(LABEL_PX, Math.max(LABEL_MIN_PX, (LABEL_TARGET_CSS_PX * vpWidth) / cssWidth)));
+}
 /** The design label's tracking, as a fraction of the size. */
 const LABEL_TRACKING = 0.12;
 /** Space Mono's advance width, as a fraction of the size (monospace). */
@@ -50,8 +64,8 @@ export type LabelPlace = 'top' | 'corner';
  * The width a label's text takes in backing pixels (Space Mono is
  * monospaced, so this needs no text measurement).
  */
-export function labelTextWidth(text: string): number {
-  return text.length * LABEL_PX * (MONO_ADVANCE + LABEL_TRACKING);
+export function labelTextWidth(text: string, sizePx: number = LABEL_PX): number {
+  return text.length * sizePx * (MONO_ADVANCE + LABEL_TRACKING);
 }
 
 /**
@@ -61,10 +75,18 @@ export function labelTextWidth(text: string): number {
  * @param vp     Canvas size (backing pixels).
  * @param text   Upper-case label text.
  * @param place  'top' (centred) or 'corner' (top-left, for REPLAY).
+ * @param size   Text size in backing pixels (labelPxFor).
  */
-export function drawPitchLabel(ctx: CanvasRenderingContext2D, vp: Viewport, text: string, place: LabelPlace = 'top'): void {
-  const w = labelTextWidth(text) + 2 * LABEL_PAD_X;
-  const h = LABEL_PX + 2 * LABEL_PAD_Y;
+export function drawPitchLabel(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  text: string,
+  place: LabelPlace = 'top',
+  size: number = LABEL_PX,
+): void {
+  const k = size / LABEL_PX;
+  const w = labelTextWidth(text, size) + 2 * LABEL_PAD_X * k;
+  const h = size + 2 * LABEL_PAD_Y * k;
   const x = place === 'top' ? Math.round((vp.width - w) / 2) : LABEL_MARGIN;
   const y = LABEL_MARGIN;
   ctx.save();
@@ -73,13 +95,13 @@ export function drawPitchLabel(ctx: CanvasRenderingContext2D, vp: Viewport, text
   ctx.strokeStyle = canvasColor.goalLine;
   ctx.lineWidth = PX * 0.5;
   ctx.strokeRect(x + PX * 0.25, y + PX * 0.25, Math.round(w) - PX * 0.5, Math.round(h) - PX * 0.5);
-  ctx.font = `700 ${LABEL_PX}px "Space Mono", monospace`;
+  ctx.font = `700 ${size}px "Space Mono", monospace`;
   const withSpacing = ctx as CanvasRenderingContext2D & { letterSpacing?: string };
-  if ('letterSpacing' in withSpacing) withSpacing.letterSpacing = `${LABEL_PX * LABEL_TRACKING}px`;
+  if ('letterSpacing' in withSpacing) withSpacing.letterSpacing = `${size * LABEL_TRACKING}px`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = canvasColor.text;
-  ctx.fillText(text, x + LABEL_PAD_X, y + h / 2 + PX * 0.5);
+  ctx.fillText(text, x + LABEL_PAD_X * k, y + h / 2 + PX * 0.5 * k);
   ctx.restore();
 }
 

@@ -770,8 +770,13 @@ export function drawDude(ctx: CanvasRenderingContext2D, project: ProjectFn, d: D
     drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, Math.PI / 2 - 0.3, 0, upperLen * 0.6, foreLen * 0.5, armW, kit.sleeves, ol, armOutline);
   } else {
     const [right, left] = armAngles(arms, d.face);
-    drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, right, 0, upperLen * 0.8, foreLen * 0.75, armW, kit.sleeves, ol, armOutline);
-    drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, left, 0, upperLen * 0.8, foreLen * 0.75, armW, kit.sleeves, ol, armOutline);
+    // Raised arms are longer and bend in at the elbow so the hands clear
+    // the big head (a throw-in's hands meet over it, a celebration's spread).
+    const raised = arms === 'up' || arms === 'overhead';
+    const reach = arms === 'overhead' ? 1.45 : raised ? 1.25 : 0.8;
+    const bend = arms === 'overhead' ? 0.95 : 0;
+    drawArmJointed(ctx, pr.x + bodyW * 0.42, shoulderY, right, -bend, upperLen * reach, foreLen * reach, armW, kit.sleeves, ol, armOutline);
+    drawArmJointed(ctx, pr.x - bodyW * 0.42, shoulderY, left, bend, upperLen * reach, foreLen * reach, armW, kit.sleeves, ol, armOutline);
   }
 
   // Torso: the shirt, outlined in the kit's deep shade and cel-shaded.
@@ -811,7 +816,8 @@ export function armAngles(arms: ArmPreset, face: number): [number, number] {
     case 'out':
       return [-0.2, Math.PI + 0.2];
     case 'overhead':
-      return [-Math.PI / 2 - 0.3, -Math.PI / 2 + 0.3];
+      // Out from the shoulders; the forearms bend back in to meet over the head.
+      return [-Math.PI / 2 + 0.5, -Math.PI / 2 - 0.5];
     case 'forward':
       return [fwd, fwd];
     case 'back':

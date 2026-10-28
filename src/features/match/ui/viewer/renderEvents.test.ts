@@ -10,6 +10,7 @@ import { canvasColor } from '../../../../shared/design';
 import { STATIC_POSE, actionBody, makeAppearance, resolveKits, type Projected, type TrailKind } from '../../logic/viewer';
 import { PIXEL_SCALE, TRAIL_STYLE, armAngles, drawBall, drawDude, type DudeRender, type ProjectFn } from './render';
 import {
+  LABEL_MIN_PX,
   LABEL_PX,
   drawCard,
   drawDust,
@@ -21,6 +22,7 @@ import {
   drawTargetMark,
   drawWhistleMark,
   drawWoodworkFlash,
+  labelPxFor,
   labelTextWidth,
 } from './renderEvents';
 
@@ -199,6 +201,14 @@ describe('drawPitchLabel', () => {
 
   it('the panel fits the text (monospace width with tracking)', () => {
     expect(labelTextWidth('CORNER')).toBeCloseTo(6 * LABEL_PX * 0.72);
+  });
+
+  it('label size: the design label on a phone, not a banner on a desktop', () => {
+    expect((labelPxFor(358, 640) * 358) / 640).toBeCloseTo(11.2, 0); // about 11 CSS px on a phone
+    const desk = labelPxFor(928, 640);
+    expect(desk).toBe(LABEL_MIN_PX);
+    expect((desk * 928) / 640).toBeLessThan(18);
+    expect(labelPxFor(0, 640)).toBe(LABEL_PX);
   });
 });
 
