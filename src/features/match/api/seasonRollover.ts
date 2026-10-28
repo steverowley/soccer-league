@@ -139,12 +139,12 @@ const FIXTURE_BATCH_SIZE = 50;
 
 /**
  * Real-world seconds a new season takes to reveal a 90-minute match.  Mirrors
- * the value migration 0013 seeds for season 1 and the browser-side
- * DEFAULT_MATCH_DURATION_SECONDS, so every season paces identically: 600 s ≈
- * 6.7 real seconds per game minute.  This is the window the worker holds a
- * match at status `live` before publishing its result.
+ * the season_config default (migration 0098) and the browser-side
+ * DEFAULT_MATCH_DURATION_SECONDS, so every season paces identically: 1200 s,
+ * about 13.3 real seconds per game minute.  This is the window the worker
+ * holds a match at status `live` before publishing its result.
  */
-const DEFAULT_MATCH_DURATION_SECONDS = 600;
+const DEFAULT_MATCH_DURATION_SECONDS = 1200;
 
 /**
  * Minimum stake (Intergalactic Credits) for a wager in a new season.  Matches
