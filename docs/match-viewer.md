@@ -221,6 +221,74 @@ exact tick, as compact tuples:
 Old v3 files without `actions` still play (no animations). About 1,500
 actions a match; target under 30 KB gzip extra.
 
+#### As built (action track)
+
+**Where each action comes from.** The replay recorder on Vercel
+(`replay/recorder.ts`, with `replay/actionRecorder.ts`) records the track
+while the match is simulated, read-only, from three sources:
+
+| action | source |
+|---|---|
+| kick | `SimConfig.observer.kick`: a new read-only engine hook (both twins) called wherever a `KickInfo` is set on the ball (every strike, throw, header, poke, parry and deflection). `onTick` alone would miss a pass touched in the tick it was struck. |
+| dive | `SimConfig.observer.dive`: called where a keeper commits (his read of the shot, the penalty guess); target and height from his `dive`. |
+| restart | `onTick`: each new `world.restart` (kind, taker, spot; `readyTick` is `readyAt` rounded up to a tick, at least one after it began). |
+| tackle, interception, foul (+ card), goal, woodwork, offside, substitution | the engine's own `SimEvent` list, one action per event at its exact tick. An own goal's scorer is the last man to touch the ball; an offside sits at the free kick it gave. |
+
+Passes, shots, saves, penalties and balls out are not separate actions:
+they are the kicks, dives and restarts above.
+
+- **Kick kinds.** The kick that takes a restart carries the restart's label
+  (`kickoff`, `throw`, `corner`, `goalkick`, `freekick`, `penalty`); when
+  the engine's own kind differs (a corner delivered as a `cross`, a free
+  kick struck as a `shot`) it is kept in the optional `delivery`. Every
+  other kick carries the engine's kind (`pass`, `through`, `cross`, `long`,
+  `clear`, `shot`, `header`, `poke`, `parry`, `deflection`). A keeper's
+  distribution after a catch keeps the engine's kind.
+- **Dive outcomes.** Settled by what follows the dive: a parry or
+  deflection by him is `save` (even if it then goes in), the ball in his
+  possession is `catch`, the dive ending any other way (a goal, the ball
+  past or away from him) is `beaten`. A keeper who catches or parries
+  without having committed gets a dive at that moment (at the contact
+  point for a parry, at his position for a catch), so every save event has
+  a dive.
+- **Order.** By tick; within a tick sub, foul, tackle, interception,
+  offside, dive, kick, woodwork, goal, restart, then recording order.
+- **Players** are indices into the file's union roster; the decoded
+  `ActionTrack` carries that roster (`roster`, optional in the contract).
+
+**The file.** `actions` holds one object of columns per kind (layout in
+`replay/actionTrack.ts`): ticks delta coded per kind, players as roster
+indices, spots in centimetres, kinds and outcomes as words. The decoder
+checks every column and drops a malformed field without failing the replay.
+It decodes to `PositionSnapshot.actionTrack`, one object shared by every
+frame (like `ballTrack`); v2 files and older v3 files have none. The local
+demo (`assembleMatch`) builds the same track.
+
+**Checked** (`replay/actionTrack.test.ts`, two full real-squad matches, one
+with a penalty, one with an own goal): counts and ticks equal the engine's
+events for every kind; every kick the engine makes (its trace sink is the
+oracle) appears once with its kind; every restart has a taker and a ready
+tick after it began, and its taking kick is labelled; dive outcomes agree
+with what followed (a save has his parry, a catch the ball in his hands,
+every save event a save or catch dive); the match is byte-identical with
+the recorder attached; decode(encode(x)) gives the same track; an old v3
+file and a malformed field still play. Engine fingerprint identical to the
+baseline.
+
+**Measured** (`scripts/measure-replay-size.ts`, six real-squad matches):
+
+| | per match |
+|---|---|
+| actions | 1,457 to 1,868 (mean 1,656) |
+| action track, gzip | 5.7 KB mean, 6.3 KB max (27 KB of JSON) |
+| replay file, gzip | 341 KB mean, 348 KB max (was 335 KB) |
+| simulate response, gzip | 0.66 MB max of Vercel's 4.5 MB cap (raw 4.8 MB: keep the gzip) |
+| recording, laptop | about 4 ms in the callbacks, 4 ms to build and encode |
+
+A 224-match season of replays is about 75 MB; 800 MB of Storage holds
+about 2,400. Engine benchmark median 637 ms before, 617 ms after (noise:
+the hooks are a null check when nothing observes).
+
 **B. Animations timed in screen time.** Each action starts at its exact
 moment in the match, but plays for a fixed real-time length (about 250 to
 600 ms) whatever the match speed, so it is always visible. Poses are drawn
