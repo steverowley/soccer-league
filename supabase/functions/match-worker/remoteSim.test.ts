@@ -9,9 +9,10 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { describe, it, expect, vi } from 'vitest';
 import {
-  mintSimTicket, newTicketToken, sha256Hex, simulateRemotely,
-  DEFAULT_SIM_URL, REMOTE_SIM_TIMEOUT_MS, type SimTicketStore,
+  mintSimTicket, newTicketToken, sha256Hex, simulateRemotely, takeReplay,
+  DEFAULT_SIM_URL, REMOTE_SIM_TIMEOUT_MS, SIM_REPLAY_FIELD, MAX_REPLAY_BYTES, type SimTicketStore,
 } from './remoteSim.ts';
+import { SIM_REPLAY_FIELD as FUNCTION_REPLAY_FIELD } from '../../../src/features/match/api/simulateFunction.ts';
 import type { SpatialTeamInput } from './spatial/simulateSpatialMatch.ts';
 
 const MATCH_ID = '6f1c1a52-6a43-4d0e-9a1f-3b6d5f0c9e21';
@@ -106,5 +107,42 @@ describe('simulateRemotely', () => {
     await expect(simulateRemotely({ url: 'u', fetch: f as unknown as typeof fetch, tickets: failing, matchId: MATCH_ID, home: TEAM, away: TEAM, seed: 1 }))
       .rejects.toThrow('creating sim ticket failed');
     expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe('the replay carried by the response (docs/match-viewer.md 2B)', () => {
+  const replayGz = gz({ format: 'isl-replay', v: 3 });
+  const b64 = Buffer.from(replayGz).toString('base64');
+  const run = (body: unknown) => simulateRemotely({
+    url: 'u', fetch: (async () => new Response(gz(body) as BodyInit, { status: 200 })) as unknown as typeof fetch,
+    tickets: store(), matchId: MATCH_ID, home: TEAM, away: TEAM, seed: 1,
+  });
+
+  it('uses the same field name as the function', () => {
+    expect(SIM_REPLAY_FIELD).toBe(FUNCTION_REPLAY_FIELD);
+  });
+
+  it('strips the replay off the result and returns its exact bytes', async () => {
+    const out = await run({ ...okResult, [SIM_REPLAY_FIELD]: b64 });
+    expect(out.result).toEqual(okResult);
+    expect(SIM_REPLAY_FIELD in out.result).toBe(false);
+    expect(out.replay).toEqual(replayGz);
+  });
+
+  it('gives null (the worker writes v2) when an older function sends none', async () => {
+    expect((await run(okResult)).replay).toBeNull();
+  });
+
+  it('drops, never throws on, a replay that is not gzip or not a string', async () => {
+    for (const bad of [Buffer.from('{"v":3}').toString('base64'), 42, '%%%not base64%%%']) {
+      const out = await run({ ...okResult, [SIM_REPLAY_FIELD]: bad });
+      expect(out.replay).toBeNull();
+      expect(out.result).toEqual(okResult);
+    }
+  });
+
+  it('drops a replay larger than the cap', () => {
+    const big = 'A'.repeat(Math.ceil((MAX_REPLAY_BYTES * 4) / 3) + 100);
+    expect(takeReplay({ [SIM_REPLAY_FIELD]: big })).toBeNull();
   });
 });

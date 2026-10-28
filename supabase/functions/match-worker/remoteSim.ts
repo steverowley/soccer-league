@@ -28,9 +28,25 @@
 // Pure apart from the injected fetch and ticket store, so it runs under
 // vitest (src/features/match/api/simulateFunction.test.ts drives it against
 // the real handler in-process).
+//
+// THE REPLAY (docs/match-viewer.md, section 2B)
+//   The function also records the match's v3 replay file while it simulates
+//   and returns it, gzipped and base64-encoded, in one extra result field
+//   (SIM_REPLAY_FIELD).  This module strips that field, so `result` stays
+//   exactly what the engine returned, and hands the bytes back as `replay`
+//   for replayFile.ts to upload unchanged.  The worker never builds a v3
+//   replay itself: it could not within the edge CPU budget (the doc has the
+//   measurements).  A response without the field (an older deployment) gives
+//   `replay: null` and the worker writes its v2 replay from `frames`.
 
 import type { SpatialTeamInput } from './spatial/simulateSpatialMatch.ts';
 import type { SpatialMatchResult } from './spatial/types.ts';
+
+/**
+ * Result field carrying the gzipped v3 replay as base64.  Must match
+ * SIM_REPLAY_FIELD in src/features/match/api/simulateFunction.ts.
+ */
+export const SIM_REPLAY_FIELD = 'replayGzipBase64';
 
 /** Production endpoint; the worker overrides it with the SIM_URL env var. */
 export const DEFAULT_SIM_URL = 'https://soccer-league-one.vercel.app/api/simulate';
@@ -67,7 +83,20 @@ export interface RemoteSimOutcome {
   totalMs: number;
   /** Size of the gzipped response body. */
   bytes:   number;
+  /**
+   * The match's v3 replay file exactly as it is stored (gzip of its JSON),
+   * or null when the function sent none (an older deployment, or the replay
+   * could not be built): the caller then writes a v2 replay from `frames`.
+   */
+  replay:  Uint8Array | null;
 }
+
+/**
+ * The longest replay accepted from the function (bytes, gzipped).  A v3
+ * replay is about 0.35 MB; anything far larger is not one, and the free
+ * plan's Storage budget assumes at most 0.6 MB a match.
+ */
+export const MAX_REPLAY_BYTES = 2 * 1024 * 1024;
 
 // ── Tickets ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +145,30 @@ function assertSpatialResult(v: unknown): asserts v is SpatialMatchResult {
   if (!ok) throw new Error('remote simulation returned a malformed result');
 }
 
+/**
+ * Take the replay field off a parsed result (so the result is exactly the
+ * engine's) and decode it.  A missing, malformed or oversized replay is
+ * dropped with a warning, never thrown: the replay is cosmetic and the
+ * caller falls back to v2.
+ */
+export function takeReplay(result: Record<string, unknown>): Uint8Array | null {
+  const b64 = result[SIM_REPLAY_FIELD];
+  delete result[SIM_REPLAY_FIELD];
+  if (typeof b64 !== 'string') return null;
+  try {
+    if (b64.length > (MAX_REPLAY_BYTES * 4) / 3 + 4) throw new Error(`replay larger than ${MAX_REPLAY_BYTES} bytes`);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    // gzip magic (RFC 1952): the function sends the file exactly as stored.
+    if (bytes.length < 2 || bytes[0] !== 0x1f || bytes[1] !== 0x8b) throw new Error('replay is not gzip');
+    return bytes;
+  } catch (err) {
+    console.warn('[remoteSim] replay from the function ignored:', (err as Error)?.message ?? err);
+    return null;
+  }
+}
+
 // ── Remote simulation ───────────────────────────────────────────────────────
 
 /**
@@ -155,6 +208,7 @@ export async function simulateRemotely(opts: RemoteSimOptions): Promise<RemoteSi
     throw new Error(`remote simulation body could not be decoded: ${(err as Error)?.message ?? String(err)}`);
   }
   assertSpatialResult(result);
+  const replay = takeReplay(result as unknown as Record<string, unknown>);
 
   const simMsHeader = Number(res.headers.get('x-sim-ms'));
   return {
@@ -162,5 +216,6 @@ export async function simulateRemotely(opts: RemoteSimOptions): Promise<RemoteSi
     simMs:   Number.isFinite(simMsHeader) && res.headers.has('x-sim-ms') ? simMsHeader : null,
     totalMs: Date.now() - t0,
     bytes:   bytes.byteLength,
+    replay,
   };
 }

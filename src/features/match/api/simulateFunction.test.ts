@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import {
   handleSimulateRequest, gunzipText, SIM_RESULT_CONTENT_TYPE, SIM_MS_HEADER,
+  SIM_REPLAY_FIELD, SIM_REPLAY_MS_HEADER,
   SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, type SimulateFunctionDeps,
 } from './simulateFunction';
 import { simulateRequestSchema, MAX_SIMULATE_REQUEST_BYTES } from './simulateRequest.schema';
@@ -275,6 +276,15 @@ describe('remote simulation equals in-process simulation', () => {
     expect(remote.simMs).not.toBeNull();
     expect(remote.bytes).toBeGreaterThan(0);
 
+    // The v3 replay recorded during the same simulation, stripped off the
+    // result above and handed back as the exact bytes to store.
+    expect(remote.replay).not.toBeNull();
+    const file = JSON.parse(await gunzipText(remote.replay!)) as { format: string; v: number; matchId: string; frames: number };
+    expect(file.format).toBe('isl-replay');
+    expect(file.v).toBe(3);
+    expect(file.matchId).toBe(MATCH_ID);
+    expect(file.frames).toBeGreaterThan(3.9 * local.frames.length);
+
     // The ticket: one row, stored as a hash (never the plain token), now used.
     expect(db.rows.size).toBe(1);
     const [row] = [...db.rows.values()];
@@ -295,7 +305,7 @@ describe('remote simulation equals in-process simulation', () => {
     expect(replay.status).toBe(403);
   }, 180_000);
 
-  it('the 200 response is gzip of the result JSON with the engine time header', async () => {
+  it('the 200 response is gzip of the result JSON plus the replay, with the timing headers', async () => {
     const db = fakeTicketDb();
     const ticketId = await db.store.insert({ match_id: MATCH_ID, token_hash: await sha256Hex(TOKEN) });
     const res = await wire(db)(SIM_URL, { method: 'POST', body: JSON.stringify(validBody({ ticketId, seed: 21 })) });
@@ -303,10 +313,13 @@ describe('remote simulation equals in-process simulation', () => {
     expect(res.headers.get('content-type')).toBe(SIM_RESULT_CONTENT_TYPE);
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(Number(res.headers.get(SIM_MS_HEADER))).toBeGreaterThanOrEqual(0);
+    expect(Number(res.headers.get(SIM_REPLAY_MS_HEADER))).toBeGreaterThanOrEqual(0);
     const bytes = new Uint8Array(await res.arrayBuffer());
     expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b]);
-    const text = await gunzipText(bytes);
-    expect(text).toBe(JSON.stringify(simulateSpatialMatch(HOME, AWAY, { seed: 21 })));
+    const sent = JSON.parse(await gunzipText(bytes)) as Record<string, unknown>;
+    expect(typeof sent[SIM_REPLAY_FIELD]).toBe('string');
+    delete sent[SIM_REPLAY_FIELD];
+    expect(JSON.stringify(sent)).toBe(JSON.stringify(simulateSpatialMatch(HOME, AWAY, { seed: 21 })));
     // Vercel caps a response at 4.5 MB: the gzipped result must be far below.
     expect(bytes.byteLength).toBeLessThan(1.5 * 1024 * 1024);
   }, 180_000);

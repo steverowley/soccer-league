@@ -299,6 +299,8 @@ export function simulateSpatialMatch(
   events.push({ tSec: 0, minute: 1, type: 'kickoff' });
 
   let nextFrameAt = 0;
+  const onTick = cfg.onTick ?? null;
+  if (onTick) onTick(world);
   const runTick = (): void => {
     if (world.clockSec >= nextFrameAt) {
       frames.push(sampleFrame(world));
@@ -306,6 +308,7 @@ export function simulateSpatialMatch(
     }
     const tickEvents = step(world, cfg.dtSec);
     if (tickEvents.length > 0) events.push(...tickEvents);
+    if (onTick) onTick(world);
   };
 
   const regulationTicks = Math.round(cfg.matchSeconds / cfg.dtSec);

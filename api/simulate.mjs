@@ -1311,7 +1311,7 @@ function updatePhases(world, ownerSide, dt) {
 }
 function firstLineD(world, side) {
   const ds = [];
-  for (const q of side === "home" ? world.away : world.home) if (!q.sentOff && q.role !== "GK") ds.push(fromOwnGoal(side, q.pos.x));
+  for (const q2 of side === "home" ? world.away : world.home) if (!q2.sentOff && q2.role !== "GK") ds.push(fromOwnGoal(side, q2.pos.x));
   ds.sort((a, b) => a - b);
   return ds[1] ?? 0;
 }
@@ -1327,7 +1327,7 @@ function manageLine(world, side, t, dt) {
   if (carrier) {
     const fwd = side === "home" ? -1 : 1;
     let nearest = Infinity;
-    for (const q of side === "home" ? world.home : world.away) if (!q.sentOff) nearest = Math.min(nearest, dist(q.pos, carrier.pos));
+    for (const q2 of side === "home" ? world.home : world.away) if (!q2.sentOff) nearest = Math.min(nearest, dist(q2.pos, carrier.pos));
     const backward = carrier.vel.x * fwd < -0.8;
     const [up, down] = LINE_STEP[t.plan.lineManagement];
     if (nearest < 3.5 || backward) target = up;
@@ -1336,7 +1336,7 @@ function manageLine(world, side, t, dt) {
   t.lineAdjust += (target - t.lineAdjust) * Math.min(1, dt * 1.2);
 }
 function findIn(world, side, id) {
-  for (const q of side === "home" ? world.home : world.away) if (q.id === id) return q;
+  for (const q2 of side === "home" ? world.home : world.away) if (q2.id === id) return q2;
   return null;
 }
 function lanes(n, lo, hi) {
@@ -1469,7 +1469,7 @@ function blockPoint(p, world) {
 var BLOCK_MID = 0.32;
 var BLOCK_FRONT = 0.55;
 function outletOf(world, side) {
-  for (const q of side === "home" ? world.home : world.away) if (!q.sentOff && q.role === "FW") return q;
+  for (const q2 of side === "home" ? world.home : world.away) if (!q2.sentOff && q2.role === "FW") return q2;
   return null;
 }
 function pressTriggered(world, side, carrier) {
@@ -1904,7 +1904,7 @@ function counterpressVelocity(p, world, ctx, rank) {
     return arrive(p, add(c.pos, scale(normalize(sub(goal2, c.pos)), CP_TIGHT)), CP_BRAKE, 1);
   }
   if (rank === 1) return arrive(p, add(c.pos, scale(normalize(sub(p.pos, c.pos)), 2.2)), CP_BRAKE, 1);
-  const mates = (c.side === "home" ? world.home : world.away).filter((q) => !q.sentOff && q !== c && q.role !== "GK").map((q) => ({ q, d: dist(q.pos, c.pos) })).sort((a, b) => a.d - b.d);
+  const mates = (c.side === "home" ? world.home : world.away).filter((q2) => !q2.sentOff && q2 !== c && q2.role !== "GK").map((q2) => ({ q: q2, d: dist(q2.pos, c.pos) })).sort((a, b) => a.d - b.d);
   const target = mates[Math.min(mates.length - 1, rank - 2)];
   if (!target) return arrive(p, add(c.pos, scale(normalize(sub(p.pos, c.pos)), 4)), 3, 1);
   const goal = vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
@@ -2138,7 +2138,7 @@ function restartTarget(p, world) {
           const goal = vec(attackingGoalX(r.side), PITCH_WIDTH / 2);
           const dGoal = dist(r.spot, goal);
           if (dGoal < 30) {
-            const wallIdx = (p.side === "home" ? world.home : world.away).filter((q) => q.role === "DF").indexOf(p);
+            const wallIdx = (p.side === "home" ? world.home : world.away).filter((q2) => q2.role === "DF").indexOf(p);
             if (wallIdx >= 0 && wallIdx < 3) {
               const dir = normalize(sub(goal, r.spot));
               const perp = vec(-dir.y, dir.x);
@@ -2165,7 +2165,7 @@ function cornerSlot(p, world, attacking) {
     vec(gx + into * 7.5, PITCH_WIDTH / 2),
     vec(gx + into * 16, near ? 40 : 28)
   ];
-  const team = (p.side === "home" ? world.home : world.away).filter((q) => !q.sentOff && q.role !== "GK" && q.id !== r.takerId);
+  const team = (p.side === "home" ? world.home : world.away).filter((q2) => !q2.sentOff && q2.role !== "GK" && q2.id !== r.takerId);
   const orders = cornerOrders(p.side, team);
   const order = orders.attack;
   const idx = order.indexOf(p);
@@ -2189,7 +2189,7 @@ function cornerSlot(p, world, attacking) {
 }
 function cornerOrders(side, team) {
   const c = CORNER_ORDERS[side];
-  if (c.team.length === team.length && c.team.every((q, i) => q === team[i])) return c;
+  if (c.team.length === team.length && c.team.every((q2, i) => q2 === team[i])) return c;
   const fresh = {
     team,
     attack: [...team].sort((a, b) => roleRank(a) - roleRank(b) || a.homePos.y - b.homePos.y),
@@ -3412,7 +3412,7 @@ function step(world, dt) {
     if (hr && ar) {
       const homeFirst = dist(hr.pos, world.ball.pos) <= dist(ar.pos, world.ball.pos);
       const [r1, r22] = homeFirst ? [hr, ar] : [ar, hr];
-      const racing = (q) => q.job === "chase" || q.job === "counterpress";
+      const racing = (q2) => q2.job === "chase" || q2.job === "counterpress";
       if (racing(r1)) considerLunge(world, r1, r22);
       if (racing(r22) && !r1.lunge) considerLunge(world, r22, r1);
     }
@@ -3783,6 +3783,8 @@ function simulateSpatialMatch(home, away, config2 = {}) {
   const frames = [];
   events.push({ tSec: 0, minute: 1, type: "kickoff" });
   let nextFrameAt = 0;
+  const onTick = cfg.onTick ?? null;
+  if (onTick) onTick(world);
   const runTick = () => {
     if (world.clockSec >= nextFrameAt) {
       frames.push(sampleFrame(world));
@@ -3790,6 +3792,7 @@ function simulateSpatialMatch(home, away, config2 = {}) {
     }
     const tickEvents = step(world, cfg.dtSec);
     if (tickEvents.length > 0) events.push(...tickEvents);
+    if (onTick) onTick(world);
   };
   const regulationTicks = Math.round(cfg.matchSeconds / cfg.dtSec);
   for (let i = 0; i < regulationTicks; i++) runTick();
@@ -3804,6 +3807,147 @@ function simulateSpatialMatch(home, away, config2 = {}) {
     events,
     frames,
     phases: { home: world.tactics.home.timeline, away: world.tactics.away.timeline }
+  };
+}
+
+// src/features/match/logic/replay/ballTrack.ts
+var BALL_SCALE = 100;
+var KEY_POS_EPS = 0.02;
+var KEY_VEL_EPS = 0.02;
+function quantise(n) {
+  return Math.round(n * BALL_SCALE) / BALL_SCALE + 0;
+}
+function bodyAt(k) {
+  return { pos: vec(k.x, k.y), vel: vec(k.vx, k.vy), z: k.z, vz: k.vz };
+}
+
+// src/features/match/logic/replay/recorder.ts
+var REPLAY_PLAYER_EVERY_SEC = 0.5;
+function createReplayRecorder(everySec = REPLAY_PLAYER_EVERY_SEC) {
+  const frames = [];
+  const keys = [];
+  let tick = -1;
+  let dtSec = 0;
+  let ticksPerFrame = 0;
+  let pred = null;
+  let predOwner = null;
+  const onTick = (world) => {
+    tick += 1;
+    if (tick === 0) {
+      dtSec = world.dtSec;
+      ticksPerFrame = Math.round(everySec / dtSec);
+      if (ticksPerFrame < 1 || Math.abs(ticksPerFrame * dtSec - everySec) > 1e-9) {
+        throw new Error(`replay frame interval ${everySec} s is not a whole number of ${dtSec} s ticks`);
+      }
+    }
+    if (tick % ticksPerFrame === 0) {
+      const ps = [];
+      for (const p of world.home) ps.push({ id: p.id, x: p.pos.x, y: p.pos.y });
+      for (const p of world.away) ps.push({ id: p.id, x: p.pos.x, y: p.pos.y });
+      frames.push(ps);
+    }
+    const b = world.ball;
+    let key = pred === null || b.ownerId !== predOwner;
+    if (pred && !key) {
+      stepBall(pred, dtSec);
+      key = Math.abs(pred.pos.x - b.pos.x) > KEY_POS_EPS || Math.abs(pred.pos.y - b.pos.y) > KEY_POS_EPS || Math.abs(pred.z - b.z) > KEY_POS_EPS || Math.abs(pred.vel.x - b.vel.x) > KEY_VEL_EPS || Math.abs(pred.vel.y - b.vel.y) > KEY_VEL_EPS || Math.abs(pred.vz - b.vz) > KEY_VEL_EPS;
+    }
+    if (key) {
+      const k = {
+        tick,
+        x: quantise(b.pos.x),
+        y: quantise(b.pos.y),
+        z: quantise(b.z),
+        vx: quantise(b.vel.x),
+        vy: quantise(b.vel.y),
+        vz: quantise(b.vz),
+        ownerId: b.ownerId
+      };
+      keys.push(k);
+      pred = bodyAt(k);
+      predOwner = b.ownerId;
+    }
+  };
+  const track = () => ({
+    dtSec,
+    everySec,
+    frames,
+    ball: { dtSec, keys, endTick: Math.max(0, tick) }
+  });
+  return { onTick, track };
+}
+
+// src/features/match/logic/replay/replayV3.ts
+var REPLAY_FORMAT = "isl-replay";
+var PLAYER_SCALE = 10;
+function deltas(values) {
+  const out = new Array(values.length);
+  for (let i = 0; i < values.length; i++) out[i] = i === 0 ? values[i] : values[i] - values[i - 1];
+  return out;
+}
+function q(n, scale2) {
+  return Math.round(n * scale2) + 0;
+}
+function encodeReplayV3(matchId, track) {
+  const roster = [];
+  const index = /* @__PURE__ */ new Map();
+  for (const frame of track.frames) {
+    for (const p of frame) {
+      if (!index.has(p.id)) {
+        index.set(p.id, roster.length);
+        roster.push(p.id);
+      }
+    }
+  }
+  const runs = roster.map(() => []);
+  const xs = roster.map(() => []);
+  const ys = roster.map(() => []);
+  const last = roster.map(() => -2);
+  track.frames.forEach((frame, fi) => {
+    for (const p of frame) {
+      const j = index.get(p.id);
+      const r = runs[j];
+      if (last[j] === fi - 1 && r.length > 0) r[r.length - 1][1] += 1;
+      else r.push([fi, 1]);
+      last[j] = fi;
+      xs[j].push(q(p.x, PLAYER_SCALE));
+      ys[j].push(q(p.y, PLAYER_SCALE));
+    }
+  });
+  const players = roster.map((_, j) => {
+    const x = [];
+    const y = [];
+    let at = 0;
+    for (const [, count] of runs[j]) {
+      x.push(...deltas(xs[j].slice(at, at + count)));
+      y.push(...deltas(ys[j].slice(at, at + count)));
+      at += count;
+    }
+    return { s: runs[j], x, y };
+  });
+  const keys = track.ball.keys;
+  const owner = (k) => k.ownerId === null ? -1 : index.get(k.ownerId) ?? -1;
+  const ball = {
+    t: deltas(keys.map((k) => k.tick)),
+    x: deltas(keys.map((k) => q(k.x, BALL_SCALE))),
+    y: deltas(keys.map((k) => q(k.y, BALL_SCALE))),
+    z: keys.map((k) => q(k.z, BALL_SCALE)),
+    vx: keys.map((k) => q(k.vx, BALL_SCALE)),
+    vy: keys.map((k) => q(k.vy, BALL_SCALE)),
+    vz: keys.map((k) => q(k.vz, BALL_SCALE)),
+    o: keys.map(owner)
+  };
+  return {
+    format: REPLAY_FORMAT,
+    v: 3,
+    matchId,
+    roster,
+    dt: track.dtSec,
+    every: track.everySec,
+    frames: track.frames.length,
+    end: track.ball.endTick,
+    players,
+    ball
   };
 }
 
@@ -9948,6 +10092,16 @@ var SUPABASE_PUBLISHABLE_KEY = "sb_publishable_bbRGJ2fM9IQ9typ5x_Kwlg_R2gtgasP";
 var TICKET_RPC_TIMEOUT_MS = 1e4;
 var SIM_RESULT_CONTENT_TYPE = "application/gzip";
 var SIM_MS_HEADER = "X-Sim-Ms";
+var SIM_REPLAY_FIELD = "replayGzipBase64";
+var SIM_REPLAY_MS_HEADER = "X-Replay-Ms";
+function bytesToBase64(bytes) {
+  let bin = "";
+  const CHUNK = 32768;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
 var defaultSimulateFunctionDeps = () => ({
   fetch: (input, init) => fetch(input, init),
   supabaseUrl: SUPABASE_URL,
@@ -10017,19 +10171,32 @@ async function handleSimulateRequest(request, deps = defaultSimulateFunctionDeps
   const input = body;
   const t0 = performance.now();
   let encoded;
+  let ms;
+  let replayMs = -1;
   try {
-    const result = simulateSpatialMatch(input.home, input.away, { seed: input.seed });
-    encoded = await gzipText(JSON.stringify(result));
+    const recorder = createReplayRecorder();
+    const result = simulateSpatialMatch(input.home, input.away, { seed: input.seed, onTick: recorder.onTick });
+    ms = Math.round(performance.now() - t0);
+    let replayField = {};
+    try {
+      const r0 = performance.now();
+      const replay = await gzipText(JSON.stringify(encodeReplayV3(ticket.data.matchId, recorder.track())));
+      replayField = { [SIM_REPLAY_FIELD]: bytesToBase64(replay) };
+      replayMs = Math.round(performance.now() - r0);
+    } catch (err) {
+      console.warn("[simulate] replay not built:", err?.message ?? err);
+    }
+    encoded = await gzipText(JSON.stringify({ ...result, ...replayField }));
   } catch (err) {
     return json(500, { error: `simulation failed: ${err?.message ?? String(err)}` });
   }
-  const ms = Math.round(performance.now() - t0);
   return new Response(encoded, {
     status: 200,
     headers: {
       "Content-Type": SIM_RESULT_CONTENT_TYPE,
       "Cache-Control": "no-store",
-      [SIM_MS_HEADER]: String(ms)
+      [SIM_MS_HEADER]: String(ms),
+      [SIM_REPLAY_MS_HEADER]: String(replayMs)
     }
   });
 }

@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it, expect, vi } from 'vitest';
 import { buildApiBundle, API_BUNDLE_PATH } from '../../../../scripts/lib/apiBundle.mjs';
 import { simulateSpatialMatch, type SpatialTeamInput } from '../logic/spatial/simulateSpatialMatch';
-import { gunzipText, SUPABASE_URL } from './simulateFunction';
+import { gunzipText, SUPABASE_URL, SIM_REPLAY_FIELD } from './simulateFunction';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -55,8 +55,12 @@ describe('api/simulate.mjs bundle', () => {
       expect(res.status).toBe(200);
       expect(rpc).toHaveBeenCalledTimes(1);
       expect(String((rpc.mock.calls[0] as unknown as [string])[0])).toBe(`${SUPABASE_URL}/rest/v1/rpc/consume_sim_ticket`);
-      const text = await gunzipText(new Uint8Array(await res.arrayBuffer()));
-      expect(text).toBe(JSON.stringify(simulateSpatialMatch(home, away, { seed: 21 })));
+      const sent = JSON.parse(await gunzipText(new Uint8Array(await res.arrayBuffer()))) as Record<string, unknown>;
+      // The bundle carries the v3 replay recorder: the response holds the
+      // gzipped replay alongside the result, which is otherwise the engine's.
+      expect(typeof sent[SIM_REPLAY_FIELD]).toBe('string');
+      delete sent[SIM_REPLAY_FIELD];
+      expect(JSON.stringify(sent)).toBe(JSON.stringify(simulateSpatialMatch(home, away, { seed: 21 })));
     } finally {
       vi.unstubAllGlobals();
     }

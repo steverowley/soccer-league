@@ -73,7 +73,7 @@ import { adaptSpatialResult, buildPlayerIndex, toSpatialTeamInput, filterNotable
 import { applyTeamTraits } from './spatial/traitModifiers.ts';
 import type { PositionFrame } from './spatial/types.ts';
 import { legalSubminute } from './subminute.ts';
-import { deleteReplays, uploadReplay, REPLAY_BUCKET, type ReplayStorage } from './replayFile.ts';
+import { deleteReplays, uploadReplay, uploadReplayBody, REPLAY_BUCKET, type ReplayStorage } from './replayFile.ts';
 import {
   applyClaimableFilter,
   backstopClaimBudget,
@@ -1264,7 +1264,22 @@ async function processMatch(match: any): Promise<boolean> {
     // Failure is non-fatal, as it was for frames: the replay is cosmetic
     // (viewer only) and the viewer falls back to a static formation.  It is
     // never regenerated from the seed later (docs/mvp-free-tier.md, decision 2).
-    if (positionFrames.length > 0) {
+    //
+    // v3 (docs/match-viewer.md 2B): the simulation function records the
+    // replay (players every 0.5 s, the ball as keyframes) and returns it
+    // gzipped; it is stored byte for byte.  Only when the response carried
+    // none (an older function deployment) is the v2 file built here.
+    if (remoteSim.replay) {
+      try {
+        const stored = await uploadReplayBody(replayStorage, match.id, remoteSim.replay);
+        console.log(
+          `[match-worker] Replay stored: ${REPLAY_BUCKET}/${stored.path}, v3, ` +
+          `${Math.round(stored.gzipBytes / 1024)} KB gzip`,
+        );
+      } catch (err) {
+        console.warn(`[match-worker] replay upload failed for ${match.id}:`, (err as Error)?.message ?? err);
+      }
+    } else if (positionFrames.length > 0) {
       try {
         const startedAt = performance.now();
         const stored = await uploadReplay(replayStorage, match.id, positionFrames);

@@ -496,6 +496,13 @@ export interface SimConfig {
   flags?:       Partial<EngineFlags>;
   /** Instrumentation sink for trace records (scripts only). */
   trace?:       (r: TraceRecord) => void;
+  /**
+   * Read-only observer called with the world once it is set up (clock 0)
+   * and again after every physics step.  It must never mutate the world:
+   * it records (the replay recorder samples the ball and the players here)
+   * and nothing it does feeds back into the simulation.
+   */
+  onTick?:      (world: Readonly<SimWorld>) => void;
 }
 
 /** The full output of one simulated match. */

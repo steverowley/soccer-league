@@ -14,6 +14,7 @@ import {
   gunzipBytes,
   replayObjectPath,
   uploadReplay,
+  uploadReplayBody,
   OFF_PITCH,
   REPLAY_BUCKET,
   REPLAY_CACHE_SECONDS,
@@ -117,6 +118,36 @@ describe('uploadReplay', () => {
   it('throws when Storage rejects the upload, so the caller can log it', async () => {
     const { storage } = fakeStorage({ uploadError: 'Payload too large' });
     await expect(uploadReplay(storage, MATCH_ID, FRAMES)).rejects.toThrow(/Payload too large/);
+  });
+});
+
+describe('uploadReplayBody (the v3 replay the simulation function recorded)', () => {
+  it('stores the given gzip bytes unchanged, at the same path with the same options', async () => {
+    const { storage, uploads } = fakeStorage();
+    const { body } = await encodeReplayFile(buildReplayPayload(MATCH_ID, FRAMES));
+    const stored = await uploadReplayBody(storage, MATCH_ID, body);
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.bucket).toBe(REPLAY_BUCKET);
+    expect(uploads[0]!.path).toBe(replayObjectPath(MATCH_ID));
+    expect(uploads[0]!.body).toBe(body);
+    expect(uploads[0]!.options).toEqual({
+      contentType: REPLAY_CONTENT_TYPE,
+      upsert: true,
+      cacheControl: String(REPLAY_CACHE_SECONDS),
+    });
+    expect(stored).toEqual({ path: replayObjectPath(MATCH_ID), gzipBytes: body.length });
+  });
+
+  it('refuses bytes that are not gzip without calling Storage', async () => {
+    const { storage, uploads } = fakeStorage();
+    await expect(uploadReplayBody(storage, MATCH_ID, new TextEncoder().encode('{"v":3}'))).rejects.toThrow(/not gzip/);
+    expect(uploads).toHaveLength(0);
+  });
+
+  it('throws when Storage rejects the upload', async () => {
+    const { storage } = fakeStorage({ uploadError: 'Payload too large' });
+    const { body } = await encodeReplayFile(buildReplayPayload(MATCH_ID, FRAMES));
+    await expect(uploadReplayBody(storage, MATCH_ID, body)).rejects.toThrow(/Payload too large/);
   });
 });
 
