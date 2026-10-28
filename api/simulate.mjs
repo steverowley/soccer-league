@@ -2114,7 +2114,10 @@ function restartTarget(p, world) {
       return shapePoint(p, world);
     }
     case "penalty": {
-      if (p.role === "GK" && !attacking) return vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+      if (p.role === "GK") {
+        if (!attacking) return vec(defendingGoalX(p.side), PITCH_WIDTH / 2);
+        return inOwnHalf(p.side, shapePoint(p, world));
+      }
       const edge = gxAtt - toward * (PENALTY_AREA_DEPTH + 2);
       const i = (p.side === "home" ? world.home : world.away).indexOf(p);
       return vec(edge, 18 + i * 3.3 % 32 + (attacking ? 0 : 1.6));
@@ -2150,6 +2153,12 @@ function restartTarget(p, world) {
       return clampIn(pt);
     }
   }
+}
+var OWN_HALF_MARGIN = 1;
+function inOwnHalf(side, pt) {
+  const half = PITCH_LENGTH / 2;
+  if (defendingGoalX(side) === 0) return pt.x > half - OWN_HALF_MARGIN ? vec(half - OWN_HALF_MARGIN, pt.y) : pt;
+  return pt.x < half + OWN_HALF_MARGIN ? vec(half + OWN_HALF_MARGIN, pt.y) : pt;
 }
 function cornerSlot(p, world, attacking) {
   const r = world.restart;
