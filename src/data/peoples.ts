@@ -1,17 +1,17 @@
 // ── Peoples of the system ──────────────────────────────────────────────────────
 //
-// WHY: Every player belongs to one of eleven peoples (species). The species is
+// WHY: Every player belongs to one of thirteen peoples (species). The species is
 // CANON: it is written into the player's bio (`entities.meta.profile.species`,
 // with a matching human-readable `race` line) and the match viewer draws him
 // from it. This module is the single source of truth for:
 //
-//   • the eleven species keys (shared by the bio, the seed data and the viewer),
+//   • the thirteen species keys (shared by the bio, the seed data and the viewer),
 //   • how each people is named in a bio's `race` line,
 //   • each club's squad mix (which peoples a club's players are drawn from),
 //   • the deterministic assignment rules (a whole squad at once for the
 //     backfill, or one new player at creation).
 //
-// Owner decision (2026-10-28): the ten non-Terran peoples always existed on
+// Owner decision (2026-10-28): the twelve non-Terran peoples always existed on
 // their own worlds; the colonists found them and taught them football. The
 // lore lives in the private vault (`ISL/Peoples/`); this table mirrors the
 // vault's "Who plays where" and the game's data wins if they ever disagree.
@@ -19,7 +19,7 @@
 // Species changes how a player LOOKS, never how he plays: the engine knows
 // nothing about peoples, and nothing here may be read by the simulation.
 
-/** The eleven peoples, in the order the viewer and the lore list them. */
+/** The thirteen peoples, in the order the viewer and the lore list them. */
 export const SPECIES = [
   'terran',
   'grey',
@@ -32,9 +32,11 @@ export const SPECIES = [
   'android',
   'slyari',
   'fenthrai',
+  'ohmk',
+  'quoo',
 ] as const;
 
-/** One of the eleven peoples. */
+/** One of the thirteen peoples. */
 export type Species = (typeof SPECIES)[number];
 
 /** Type guard for values read from a bio (unknown JSON). */
@@ -65,6 +67,8 @@ export const PEOPLE: Readonly<Record<Species, PeopleInfo>> = {
   android: { name: 'Android', plural: 'Androids', homeworld: 'Mercury' },
   slyari: { name: 'Slyari', plural: 'Slyari', homeworld: 'Titan' },
   fenthrai: { name: 'Fenthrai', plural: 'Fenthrai', homeworld: 'Enceladus' },
+  ohmk: { name: 'Ohm K', plural: 'Ohm K', homeworld: 'Ceres' },
+  quoo: { name: 'Quoo', plural: 'Quoo', homeworld: 'Callisto' },
 };
 
 /** A club's squad mix: players per people out of a 16-player squad. */
@@ -89,27 +93,27 @@ export const SQUAD_MIX: Readonly<Record<string, SquadMix>> = {
   'valles-mariners': { terran: 12, taurid: 2, ignid: 1, synth: 1 },
   'venus-volcanic': { ignid: 9, terran: 6, android: 1 },
   // Gas/Ice Giants League
-  'callisto-wolves': { terran: 7, taurid: 6, dome: 2, cephalid: 1 },
+  'callisto-wolves': { quoo: 8, terran: 5, taurid: 2, dome: 1 },
   'enceladus-geysers': { fenthrai: 9, terran: 5, slyari: 1, cephalid: 1 },
-  'europa-oceanic': { cephalid: 9, terran: 5, fenthrai: 1, dome: 1 },
-  'ganymede-united': { taurid: 9, terran: 6, dome: 1 },
+  'europa-oceanic': { cephalid: 9, terran: 4, fenthrai: 1, dome: 1, quoo: 1 },
+  'ganymede-united': { taurid: 9, terran: 5, dome: 1, quoo: 1 },
   'jupiter-titans': { dome: 7, terran: 7, taurid: 2 },
   'saturn-rings': { terran: 8, slyari: 3, fenthrai: 3, trinocular: 2 },
   'titan-methane': { slyari: 9, terran: 6, fenthrai: 1 },
   'uranus-sidewinders': { trinocular: 10, terran: 5, grey: 1 },
   // Outer Reaches League
   beltway: { terran: 9, synth: 4, android: 2, taurid: 1 },
-  'ceres-miners': { terran: 10, synth: 4, taurid: 2 },
+  'ceres-miners': { ohmk: 8, terran: 6, synth: 1, taurid: 1 },
   'hygiea-united': { terran: 10, synth: 3, grey: 2, android: 1 },
-  'juno-city': { terran: 10, synth: 3, android: 2, trinocular: 1 },
-  'pallas-wanderers': { terran: 9, synth: 4, grey: 2, android: 1 },
+  'juno-city': { terran: 9, synth: 3, android: 2, trinocular: 1, ohmk: 1 },
+  'pallas-wanderers': { terran: 8, synth: 3, grey: 2, android: 1, ohmk: 2 },
   'psyche-metallics': { synth: 10, terran: 5, android: 1 },
   'solar-miners': { terran: 9, android: 3, synth: 3, ignid: 1 },
-  vesta: { terran: 10, synth: 4, android: 2 },
+  vesta: { terran: 9, synth: 3, ohmk: 2, android: 2 },
   // Kuiper Belt League
   'charon-united': { grey: 8, terran: 7, trinocular: 1 },
   'eris-wanderers': { grey: 9, terran: 6, dome: 1 },
-  'haumea-spinners': { grey: 8, terran: 7, cephalid: 1 },
+  'haumea-spinners': { grey: 8, terran: 6, cephalid: 1, quoo: 1 },
   makemake: { grey: 8, terran: 7, synth: 1 },
   'orcus-athletic': { grey: 9, terran: 6, trinocular: 1 },
   'pluto-frost': { grey: 11, terran: 5 },
