@@ -34,6 +34,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import type { Species } from '../../../../data/peoples';
 import { canvasColor, color, hairline, space, tone, type } from '../../../../shared/design';
 import { Tag } from '../../../../shared/ui';
 // useReducedMotion is a shared accessibility hook exposed on the entities
@@ -159,6 +160,12 @@ export interface MatchViewerPlayer {
   name?: string;
   /** Shirt number (`players.jersey_number`), when known; else the slot order is used. */
   number?: number | null;
+  /**
+   * His people, read from his bio (`entities.meta.profile.species`). The
+   * figure is drawn from it; absent (an old bio, a synthetic pad) means Terran.
+   * Looks only: the engine knows nothing about peoples.
+   */
+  species?: Species | null;
 }
 
 /** Props for <MatchViewer>. */
