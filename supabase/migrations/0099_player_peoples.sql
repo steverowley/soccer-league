@@ -1,7 +1,7 @@
 -- 0099_player_peoples.sql
 --
 -- Every player's people (species) becomes canon in his bio. Owner decision
--- (2026-10-28): 11 peoples play in the league, Terrans plus the
+-- (2026-10-28): 13 peoples play in the league, Terrans plus the
 -- peoples who always lived on their own worlds and were taught football by
 -- the colonists. A player's people lives in entities.meta.profile.species,
 -- with a matching human-readable entities.meta.profile.race line; the match
@@ -24,17 +24,19 @@
 -- just those keys when a player has none).
 --
 -- Players covered: 513. Per people:
---   Terrans      258
+--   Terrans      246
 --   Greys         76
 --   Trinoculars   18
---   Synths        39
---   Taurids       27
---   Cephalids     14
+--   Synths        34
+--   Taurids       22
+--   Cephalids     13
 --   Ignids        13
---   Domes         14
+--   Domes         13
 --   Androids      26
 --   Slyari        14
 --   Fenthrai      14
+--   Ohm K         13
+--   Quoo          11
 
 WITH t(team_id, jersey_number, species, race) AS (
   VALUES
@@ -55,37 +57,37 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('beltway', 15, 'terran', 'Human (Belt-adapted)'),
     ('beltway', 16, 'terran', 'Human (Belt-adapted)'),
     ('callisto-wolves', 1, 'terran', 'Human (Callisto-adapted)'),
-    ('callisto-wolves', 2, 'terran', 'Human (Callisto-adapted)'),
-    ('callisto-wolves', 3, 'terran', 'Human (Callisto-adapted)'),
+    ('callisto-wolves', 2, 'taurid', 'Taurid (Ganymede)'),
+    ('callisto-wolves', 3, 'taurid', 'Taurid (Ganymede)'),
     ('callisto-wolves', 4, 'terran', 'Human (Callisto-adapted)'),
     ('callisto-wolves', 5, 'terran', 'Human (Callisto-adapted)'),
     ('callisto-wolves', 6, 'terran', 'Human (Callisto-adapted)'),
     ('callisto-wolves', 7, 'terran', 'Human (Callisto-adapted)'),
-    ('callisto-wolves', 8, 'taurid', 'Taurid (Ganymede)'),
-    ('callisto-wolves', 9, 'taurid', 'Taurid (Ganymede)'),
-    ('callisto-wolves', 10, 'dome', 'Dome (Jupiter)'),
-    ('callisto-wolves', 11, 'dome', 'Dome (Jupiter)'),
-    ('callisto-wolves', 12, 'cephalid', 'Cephalid (Europa)'),
-    ('callisto-wolves', 13, 'taurid', 'Taurid (Ganymede)'),
-    ('callisto-wolves', 14, 'taurid', 'Taurid (Ganymede)'),
-    ('callisto-wolves', 15, 'taurid', 'Taurid (Ganymede)'),
-    ('callisto-wolves', 16, 'taurid', 'Taurid (Ganymede)'),
-    ('ceres-miners', 1, 'terran', 'Human (Belt-adapted)'),
-    ('ceres-miners', 2, 'terran', 'Human (Belt-adapted)'),
-    ('ceres-miners', 3, 'terran', 'Human (Belt-adapted)'),
+    ('callisto-wolves', 8, 'dome', 'Dome (Jupiter)'),
+    ('callisto-wolves', 9, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 10, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 11, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 12, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 13, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 14, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 15, 'quoo', 'Quoo (Callisto)'),
+    ('callisto-wolves', 16, 'quoo', 'Quoo (Callisto)'),
+    ('ceres-miners', 1, 'synth', 'Synth (Psyche)'),
+    ('ceres-miners', 2, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 3, 'taurid', 'Taurid (Ganymede)'),
     ('ceres-miners', 4, 'terran', 'Human (Belt-adapted)'),
     ('ceres-miners', 5, 'terran', 'Human (Belt-adapted)'),
     ('ceres-miners', 6, 'terran', 'Human (Belt-adapted)'),
     ('ceres-miners', 7, 'terran', 'Human (Belt-adapted)'),
     ('ceres-miners', 8, 'terran', 'Human (Belt-adapted)'),
     ('ceres-miners', 9, 'terran', 'Human (Belt-adapted)'),
-    ('ceres-miners', 10, 'synth', 'Synth (Psyche)'),
-    ('ceres-miners', 11, 'synth', 'Synth (Psyche)'),
-    ('ceres-miners', 12, 'taurid', 'Taurid (Ganymede)'),
-    ('ceres-miners', 13, 'taurid', 'Taurid (Ganymede)'),
-    ('ceres-miners', 14, 'terran', 'Human (Belt-adapted)'),
-    ('ceres-miners', 15, 'synth', 'Synth (Psyche)'),
-    ('ceres-miners', 16, 'synth', 'Synth (Psyche)'),
+    ('ceres-miners', 10, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 11, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 12, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 13, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 14, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 15, 'ohmk', 'Ohm K (Ceres)'),
+    ('ceres-miners', 16, 'ohmk', 'Ohm K (Ceres)'),
     ('charon-united', 1, 'grey', 'Grey (Kuiper)'),
     ('charon-united', 2, 'grey', 'Grey (Kuiper)'),
     ('charon-united', 3, 'grey', 'Grey (Kuiper)'),
@@ -153,7 +155,7 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('europa-oceanic', 1, 'terran', 'Human (Europa-adapted)'),
     ('europa-oceanic', 2, 'terran', 'Human (Europa-adapted)'),
     ('europa-oceanic', 3, 'terran', 'Human (Europa-adapted)'),
-    ('europa-oceanic', 4, 'terran', 'Human (Europa-adapted)'),
+    ('europa-oceanic', 4, 'cephalid', 'Cephalid (Europa)'),
     ('europa-oceanic', 5, 'terran', 'Human (Europa-adapted)'),
     ('europa-oceanic', 6, 'cephalid', 'Cephalid (Europa)'),
     ('europa-oceanic', 7, 'cephalid', 'Cephalid (Europa)'),
@@ -163,16 +165,16 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('europa-oceanic', 11, 'cephalid', 'Cephalid (Europa)'),
     ('europa-oceanic', 12, 'cephalid', 'Cephalid (Europa)'),
     ('europa-oceanic', 13, 'cephalid', 'Cephalid (Europa)'),
-    ('europa-oceanic', 14, 'cephalid', 'Cephalid (Europa)'),
-    ('europa-oceanic', 15, 'dome', 'Dome (Jupiter)'),
-    ('europa-oceanic', 16, 'fenthrai', 'Fenthrai (Enceladus)'),
+    ('europa-oceanic', 14, 'dome', 'Dome (Jupiter)'),
+    ('europa-oceanic', 15, 'fenthrai', 'Fenthrai (Enceladus)'),
+    ('europa-oceanic', 16, 'quoo', 'Quoo (Callisto)'),
     ('ganymede-united', 1, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 2, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 3, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 4, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 5, 'taurid', 'Taurid (Ganymede)'),
-    ('ganymede-united', 6, 'taurid', 'Taurid (Ganymede)'),
-    ('ganymede-united', 7, 'dome', 'Dome (Jupiter)'),
+    ('ganymede-united', 6, 'dome', 'Dome (Jupiter)'),
+    ('ganymede-united', 7, 'quoo', 'Quoo (Callisto)'),
     ('ganymede-united', 8, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 9, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 10, 'terran', 'Human (Ganymede-adapted)'),
@@ -180,9 +182,9 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('ganymede-united', 12, 'terran', 'Human (Ganymede-adapted)'),
     ('ganymede-united', 13, 'terran', 'Human (Ganymede-adapted)'),
     ('ganymede-united', 14, 'taurid', 'Taurid (Ganymede)'),
-    ('ganymede-united', 15, 'terran', 'Human (Ganymede-adapted)'),
+    ('ganymede-united', 15, 'taurid', 'Taurid (Ganymede)'),
     ('ganymede-united', 16, 'terran', 'Human (Ganymede-adapted)'),
-    ('haumea-spinners', 1, 'terran', 'Human (Kuiper-adapted)'),
+    ('haumea-spinners', 1, 'grey', 'Grey (Kuiper)'),
     ('haumea-spinners', 2, 'grey', 'Grey (Kuiper)'),
     ('haumea-spinners', 3, 'grey', 'Grey (Kuiper)'),
     ('haumea-spinners', 4, 'terran', 'Human (Kuiper-adapted)'),
@@ -191,8 +193,8 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('haumea-spinners', 7, 'terran', 'Human (Kuiper-adapted)'),
     ('haumea-spinners', 8, 'terran', 'Human (Kuiper-adapted)'),
     ('haumea-spinners', 9, 'terran', 'Human (Kuiper-adapted)'),
-    ('haumea-spinners', 10, 'cephalid', 'Cephalid (Europa)'),
-    ('haumea-spinners', 11, 'grey', 'Grey (Kuiper)'),
+    ('haumea-spinners', 10, 'quoo', 'Quoo (Callisto)'),
+    ('haumea-spinners', 11, 'cephalid', 'Cephalid (Europa)'),
     ('haumea-spinners', 12, 'grey', 'Grey (Kuiper)'),
     ('haumea-spinners', 13, 'grey', 'Grey (Kuiper)'),
     ('haumea-spinners', 14, 'grey', 'Grey (Kuiper)'),
@@ -223,12 +225,12 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('juno-city', 7, 'terran', 'Human (Belt-adapted)'),
     ('juno-city', 8, 'terran', 'Human (Belt-adapted)'),
     ('juno-city', 9, 'terran', 'Human (Belt-adapted)'),
-    ('juno-city', 10, 'synth', 'Synth (Psyche)'),
+    ('juno-city', 10, 'android', 'Android (Mercury)'),
     ('juno-city', 11, 'synth', 'Synth (Psyche)'),
-    ('juno-city', 12, 'android', 'Android (Mercury)'),
+    ('juno-city', 12, 'ohmk', 'Ohm K (Ceres)'),
     ('juno-city', 13, 'android', 'Android (Mercury)'),
-    ('juno-city', 14, 'trinocular', 'Trinocular (Uranus)'),
-    ('juno-city', 15, 'terran', 'Human (Belt-adapted)'),
+    ('juno-city', 14, 'synth', 'Synth (Psyche)'),
+    ('juno-city', 15, 'trinocular', 'Trinocular (Uranus)'),
     ('juno-city', 16, 'synth', 'Synth (Psyche)'),
     ('jupiter-titans', 1, 'terran', 'Human (Jupiter-adapted)'),
     ('jupiter-titans', 2, 'terran', 'Human (Jupiter-adapted)'),
@@ -326,14 +328,14 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('orcus-athletic', 14, 'grey', 'Grey (Kuiper)'),
     ('orcus-athletic', 15, 'grey', 'Grey (Kuiper)'),
     ('orcus-athletic', 16, 'grey', 'Grey (Kuiper)'),
-    ('pallas-wanderers', 1, 'synth', 'Synth (Psyche)'),
-    ('pallas-wanderers', 2, 'android', 'Android (Mercury)'),
-    ('pallas-wanderers', 3, 'synth', 'Synth (Psyche)'),
-    ('pallas-wanderers', 4, 'grey', 'Grey (Kuiper)'),
+    ('pallas-wanderers', 1, 'android', 'Android (Mercury)'),
+    ('pallas-wanderers', 2, 'ohmk', 'Ohm K (Ceres)'),
+    ('pallas-wanderers', 3, 'ohmk', 'Ohm K (Ceres)'),
+    ('pallas-wanderers', 4, 'synth', 'Synth (Psyche)'),
     ('pallas-wanderers', 5, 'grey', 'Grey (Kuiper)'),
     ('pallas-wanderers', 6, 'synth', 'Synth (Psyche)'),
     ('pallas-wanderers', 7, 'synth', 'Synth (Psyche)'),
-    ('pallas-wanderers', 8, 'terran', 'Human (Belt-adapted)'),
+    ('pallas-wanderers', 8, 'grey', 'Grey (Kuiper)'),
     ('pallas-wanderers', 9, 'terran', 'Human (Belt-adapted)'),
     ('pallas-wanderers', 10, 'terran', 'Human (Belt-adapted)'),
     ('pallas-wanderers', 11, 'terran', 'Human (Belt-adapted)'),
@@ -544,12 +546,12 @@ WITH t(team_id, jersey_number, species, race) AS (
     ('vesta', 8, 'terran', 'Human (Belt-adapted)'),
     ('vesta', 9, 'terran', 'Human (Belt-adapted)'),
     ('vesta', 10, 'synth', 'Synth (Psyche)'),
-    ('vesta', 11, 'synth', 'Synth (Psyche)'),
-    ('vesta', 12, 'terran', 'Human (Belt-adapted)'),
+    ('vesta', 11, 'android', 'Android (Mercury)'),
+    ('vesta', 12, 'synth', 'Synth (Psyche)'),
     ('vesta', 13, 'synth', 'Synth (Psyche)'),
-    ('vesta', 14, 'android', 'Android (Mercury)'),
-    ('vesta', 15, 'android', 'Android (Mercury)'),
-    ('vesta', 16, 'synth', 'Synth (Psyche)')
+    ('vesta', 14, 'ohmk', 'Ohm K (Ceres)'),
+    ('vesta', 15, 'ohmk', 'Ohm K (Ceres)'),
+    ('vesta', 16, 'android', 'Android (Mercury)')
 ),
 target AS (
   SELECT p.entity_id, t.species, t.race
