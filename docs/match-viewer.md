@@ -374,6 +374,74 @@ test on the drawing calls (a recording context), and a contact sheet of
 each action frozen mid-animation at 390 and 1440 px, picked from a real
 replay. Fingerprint unchanged (recording only).
 
+## 6. Figures and peoples (agreed, 2026-10-28)
+
+Owner feedback on section 5: the event animations "obscure what is happening"
+and do not fit the brand. After several rounds of sketches he chose the figure
+look, picked the species himself, and decided how they fit the world.
+
+### Decisions
+
+- **Look: Tiny Terraces, "Charming" build.** Pixel-pure figures on one coarse
+  grid (no glows, blur or smooth lines on figures): a big round head about a
+  quarter of the height, eyes that blink and look where he runs, a soft
+  rounded shirt in the club colour, short sturdy legs in Lunar Dust with
+  club-colour socks and little feet, and hands on the arms. A slow breathing
+  bob when standing and a 1 px bounce per step.
+- **Floppy arms, on spring physics.** The charm the owner insists on. Each arm
+  is a damped spring (angle from straight down, plus an elbow) driven by the
+  body: it trails when the player sets off, flings forward when he stops, gets
+  a jolt on each footfall and an impulse on a kick or tackle, and makes a V
+  overhead in a goal celebration (never covering the face). Never a canned
+  loop. Preset "Floppy": stiffness 22, damping 3.4, body coupling 0.9.
+- **Pitch: Galactic Abyss** with hairline Lunar Dust markings (no grass
+  stripes). Club colour appears only on shirts and socks; keepers wear the
+  keeper kit and are never dark or hollow (section 3).
+- **Eleven peoples, the owner's own picks:** Terran, Grey, Trinocular, Synth,
+  Taurid, Cephalid, Ignid, Dome, Android, Slyari, Fenthrai. Peoples change
+  silhouette and eyes only, never hue: heads and features use the Lunar Dust
+  shades (canvas tokens), so the kit stays the only strong colour.
+- **Variation within a people.** No two players look the same: per player,
+  seeded from his id, head size, height, build and head tone vary, plus each
+  people's own details (horn length and curl, 3 to 5 tentacles, visor height
+  and 0 to 2 aerials, flame height, brain size, faceplate and temple light,
+  eye size and spacing). A player always looks the same.
+- **Peoples are canon.** They always lived on their own worlds; the colonists
+  found them and taught them football (owner, 2026-10-28). A player's people
+  is written in his bio (`entities.meta.profile.species`, plus a matching
+  `race` line such as "Cephalid (Europa)") and the viewer reads it from
+  there, never from a hash of his id. New players get a people when they are
+  created. Each club's squad is drawn from its world: the table is
+  `src/data/peoples.ts` (`SQUAD_MIX`), mirrored in the vault.
+- **The engine knows nothing about peoples.** Looks only.
+
+### Build
+
+1. **Data (one PR).** `species` in the player profile schema; a migration
+   writing `species` and `race` into every player's profile from
+   `assignSquadSpecies` (per club, deterministic); the seed content files
+   updated to match; every player-creation path writes
+   `speciesForNewPlayer` and `raceLine` into the new bio; the match page
+   passes each player's species to the viewer (`MatchViewerPlayer.species`).
+   The player page already shows the `race` line.
+2. **Figures (one PR).** The renderer draws the Charming figure with spring
+   arms, the eleven heads with per-player variation, and the Abyss pitch;
+   the event poses (kick, slide tackle, keeper dive, fall, celebration) are
+   redrawn for the new figure. Reference sketch (owner-approved, all eleven
+   heads, physics constants and poses): the owner's OneDrive copy
+   `ISL sketches/species-picker.html`.
+3. **Event language (follow-up PR).** Words move to a log strip under the
+   pitch; on-pitch marks are reduced to hairline rings, a small card glyph
+   and the goal frame flare (sketch `event-language.html`).
+
+### How it is checked
+
+Contact sheets at 390 and 1440 of real replay moments (pass, tackle, foul,
+save, goal) before merge, plus a close-up of all eleven peoples with six
+variants each; tests for the data contract (`src/data/peoples.test.ts`), the
+migration (every player gets a valid species, Terrans keep their race line),
+and the renderer's determinism (same id, same figure).
+
 ## 4. How it is checked
 
 - Engine: fingerprint and benchmark in the PR, distributions within bands, a
