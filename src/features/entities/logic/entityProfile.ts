@@ -11,6 +11,8 @@
 
 import { z } from 'zod';
 
+import { SPECIES } from '../../../data/peoples';
+
 import type { EntityKind } from '../types';
 
 // ── Shared field fragments ──────────────────────────────────────────────────
@@ -29,11 +31,51 @@ const personFields = {
 
 // ── Per-kind profile schemas ────────────────────────────────────────────────
 
-/** Player / youth player. Age, nationality, position, stats live on `players`. */
+/**
+ * A player's people (species), validated against the canonical list in
+ * `src/data/peoples.ts`. CANON: it lives here, in the bio, and nowhere else;
+ * the match viewer draws the player from it and the engine never reads it.
+ */
+const speciesField = z.enum(SPECIES);
+
+/**
+ * Player / youth player, as AUTHORED (content/profiles/*.json, validated by
+ * the seed pipeline before it writes). Age, nationality, position, stats live
+ * on `players`. `species` is required here: every authored player has a
+ * people, and its human-readable `race` line is written to match it
+ * (`raceLine()` in peoples.ts).
+ */
 const playerProfileSchema = z.object({
-  ...personFields,
+  gender: personFields.gender,
+  race: personFields.race,
+  species: speciesField,
+  appearance: personFields.appearance,
+  bio: personFields.bio,
+  personality: personFields.personality,
+  political_leaning: personFields.political_leaning,
+  culture: personFields.culture,
+  achievements: personFields.achievements,
   injuries: z.string(), // current status + notable history, e.g. "Fully fit"
 });
+
+/**
+ * Player profile as READ back from the database. Two shapes are legitimate
+ * there and neither may make a reader throw or drop the player:
+ *
+ *   1. A full authored profile. `species` is optional because rows written
+ *      before the peoples backfill (migration 0099) have none, and an
+ *      unrecognised value reads as absent rather than discarding the bio.
+ *   2. An identity-only profile `{ race, species }`: what a brand-new signing
+ *      gets at creation (`createPlayerEntity` with a species) until someone
+ *      authors the rest of his bio.
+ *
+ * Anything else (a drifted, half-written profile) still fails, and the reader
+ * drops the profile, never the player.
+ */
+const playerProfileReadSchema = z.union([
+  playerProfileSchema.extend({ species: speciesField.optional().catch(undefined) }),
+  z.object({ race: z.string(), species: speciesField }),
+]);
 
 /** Manager. Nationality, style, preferred_formation live on `managers`. */
 const managerProfileSchema = z.object({
@@ -139,6 +181,8 @@ export const PROFILE_SCHEMAS = {
 export type ProfiledKind = keyof typeof PROFILE_SCHEMAS;
 
 export type PlayerProfile = z.infer<typeof playerProfileSchema>;
+/** A player profile as stored: full (species optional) or identity-only. */
+export type StoredPlayerProfile = z.infer<typeof playerProfileReadSchema>;
 export type ManagerProfile = z.infer<typeof managerProfileSchema>;
 export type RefereeProfile = z.infer<typeof refereeProfileSchema>;
 export type JournalistProfile = z.infer<typeof journalistProfileSchema>;
@@ -158,5 +202,17 @@ export function isProfiledKind(kind: string): kind is ProfiledKind {
  * seed pipeline refuses to write a malformed profile.
  */
 export function parseProfile(kind: ProfiledKind, data: unknown): unknown {
+  return PROFILE_SCHEMAS[kind].parse(data);
+}
+
+/**
+ * Validate a profile READ from the database for display. Same as
+ * `parseProfile` for every kind except players, whose stored profiles may
+ * predate the peoples backfill or be a new signing's identity-only
+ * `{ race, species }` (see `playerProfileReadSchema`). Throws ZodError on any
+ * other drift; callers drop the profile, never the entity.
+ */
+export function parseStoredProfile(kind: ProfiledKind, data: unknown): unknown {
+  if (kind === 'player') return playerProfileReadSchema.parse(data);
   return PROFILE_SCHEMAS[kind].parse(data);
 }

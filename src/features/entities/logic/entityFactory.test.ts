@@ -24,6 +24,8 @@ import {
   STRENGTH_MAX,
   STRENGTH_MIN,
 } from './entityFactory';
+import { parseStoredProfile } from './entityProfile';
+import { isSpecies, raceLine, speciesForNewPlayer, SQUAD_MIX } from '../../../data/peoples';
 
 // ── clampStrength ───────────────────────────────────────────────────────────
 
@@ -138,6 +140,45 @@ describe('createPlayerEntity', () => {
       position: 'GK',
       nationality: null,
     });
+  });
+});
+
+describe('createPlayerEntity with a people (species)', () => {
+  it('writes the identity-only profile { race, species } for a non-Terran', () => {
+    const row = createPlayerEntity({
+      name: 'Oru Vass',
+      team_id: 'europa-oceanic',
+      position: 'MF',
+      species: 'cephalid',
+    });
+    expect(row.meta).toEqual({
+      team_id: 'europa-oceanic',
+      position: 'MF',
+      nationality: null,
+      profile: { race: raceLine('cephalid'), species: 'cephalid' },
+    });
+  });
+
+  it('gives a Terran the plain Human race line', () => {
+    const row = createPlayerEntity({ name: 'Ada Kell', team_id: 'earth-united', position: 'GK', species: 'terran' });
+    expect(row.meta['profile']).toEqual({ race: 'Human', species: 'terran' });
+  });
+
+  it('writes the species speciesForNewPlayer picks, and the stored profile reads back', () => {
+    for (const teamId of Object.keys(SQUAD_MIX)) {
+      const species = speciesForNewPlayer(teamId, `new-${teamId}`);
+      const row = createPlayerEntity({ name: 'New Signing', team_id: teamId, position: 'FW', species });
+      const profile = row.meta['profile'] as { race: string; species: string };
+      expect(isSpecies(profile.species)).toBe(true);
+      expect(profile.species).toBe(species);
+      expect(profile.race).toBe(raceLine(species));
+      expect(() => parseStoredProfile('player', profile)).not.toThrow();
+    }
+  });
+
+  it('writes no profile when no species is given', () => {
+    const row = createPlayerEntity({ name: 'Old Path', team_id: 'vesta', position: 'DF', species: null });
+    expect('profile' in row.meta).toBe(false);
   });
 });
 
