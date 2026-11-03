@@ -22,10 +22,9 @@
 //   - focus_enacted  (result record)
 
 import type { IslSupabaseClient } from '@shared/supabase/client';
-import type { Json, TablesUpdate } from '@/types/database';
-import { createPlayerEntity } from '@features/entities';
-import { createPersona, upsertPersona } from '@features/agents';
+import type { TablesUpdate } from '@/types/database';
 import { getTeamTally } from './focuses';
+import { provisionPlayerEntity } from './playerEntity';
 import { pickWinner } from '../logic/tally';
 import {
   enactFocus,
@@ -267,61 +266,17 @@ async function applyMutation(db: IslSupabaseClient, mutation: EnactmentMutation)
         position: string;
       };
 
-      // STEP 2: entity row.  Shape comes from `createPlayerEntity`, the
-      // canonical factory used by every player-creation code path so the
-      // meta object stays bit-identical to the seed migration.
-      const entityPayload = createPlayerEntity({
-        name: newPlayer.name,
-        team_id: newPlayer.team_id,
-        position: newPlayer.position,
-        nationality: null,
-      });
-      // `entityPayload.meta` is typed as Record<string, unknown> but the
-      // generated column type is the recursive `Json` — they're structurally
-      // identical at runtime, narrow with a Json cast at the boundary.
-      const { data: entityRow, error: entityErr } = await db
-        .from('entities')
-        .insert({ ...entityPayload, meta: entityPayload.meta as Json })
-        .select('id, kind, name, display_name, meta')
-        .single();
-
-      if (entityErr || !entityRow) {
-        // Player exists but missing entity — return true so the rest of
-        // enactment proceeds.  The next persona backfill run will detect
-        // and repair.
-        console.warn('[applyMutation:insert_player] entity insert failed:', entityErr?.message);
-        return true;
-      }
-
-      const newEntity = entityRow as {
-        id: string;
-        kind: string;
-        name: string;
-        display_name: string | null;
-        meta: unknown;
-      };
-
-      // STEP 3: link player → entity so future relationship traversals
-      // (the Architect's 1-hop reads, the entity-detail page lookup) find
-      // each other without a name-match fallback.
-      const { error: linkErr } = await db
-        .from('players')
-        .update({ entity_id: newEntity.id })
-        .eq('id', newPlayer.id);
-      if (linkErr) {
-        console.warn('[applyMutation:insert_player] entity link failed:', linkErr.message);
-      }
-
-      // STEP 4: persona seed.  Pure factory — no traits or relationships
-      // exist for a fresh signing yet, so the factory falls back to the
-      // generic player archetype.  Phase 5's enricher will then refresh
-      // the voice from accumulated match memories.
-      const personaPayload = createPersona({
-        entity: newEntity,
-        traits: [],
-        relationships: [],
-      });
-      await upsertPersona(db, personaPayload);
+      // STEPS 2-4: entity row (carrying his people, `speciesForNewPlayer`),
+      // the players.entity_id link and the persona seed. Shared with the
+      // election night replacement so every new player is provisioned the
+      // same way (see ./playerEntity.ts). Best-effort: a failed entity insert
+      // still returns true so the rest of enactment proceeds; the player
+      // exists and plays, and a later backfill can repair the entity.
+      await provisionPlayerEntity(
+        db,
+        { ...newPlayer, nationality: null },
+        'applyMutation:insert_player',
+      );
 
       return true;
     }
