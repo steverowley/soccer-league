@@ -78,7 +78,7 @@ describe('content/profiles: every player has a people', () => {
             expect(p.race).toBe(raceLine(p.species as Species));
           }
           // The authored profile still validates against the (stricter) authoring schema.
-          const { jersey_number: _j, ...profile } = p;
+          const profile = Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'jersey_number'));
           expect(() => parseProfile('player', profile)).not.toThrow();
         }
       });
