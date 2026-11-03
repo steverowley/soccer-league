@@ -21,8 +21,8 @@ const clubIds = Object.values(TEAMS_BY_LEAGUE).flat().map((t) => t.id);
 const ids = (n: number, prefix = 'p') => Array.from({ length: n }, (_, i) => `${prefix}-${String(i).padStart(3, '0')}`);
 
 describe('peoples table', () => {
-  it('has eleven peoples, each named', () => {
-    expect(SPECIES).toHaveLength(11);
+  it('has thirteen peoples, each named', () => {
+    expect(SPECIES).toHaveLength(13);
     for (const s of SPECIES) expect(PEOPLE[s].name.length).toBeGreaterThan(0);
   });
 
