@@ -224,14 +224,6 @@ export function pixelRing(ctx: CanvasRenderingContext2D, cx: number, cy: number,
   }
 }
 
-/** Set an alpha multiplier without save/restore (which would also reset fillStyle). */
-function withAlpha(ctx: CanvasRenderingContext2D, k: number, draw: () => void): void {
-  const ga = ctx.globalAlpha;
-  ctx.globalAlpha = ga * k;
-  draw();
-  ctx.globalAlpha = ga;
-}
-
 // ── The body ──────────────────────────────────────────────────────────────────
 
 /**
@@ -309,19 +301,16 @@ export function drawFigure(ctx: CanvasRenderingContext2D, s: FigureSpec, g: numb
   const bob = run > 0.3 ? (Math.cos(2 * ph) > 0.2 ? 1 : 0) : !act && (s.t * 0.75 + look.seed * 7) % 1 < 0.5 ? 1 : 0;
   const legLen = thighL + shinL * 0.98;
   const baseY = y - lift - legLen;
-  const cr = Math.cos(rot);
-  const sr = Math.sin(rot);
   const lean = 0.16 * run;
   const ur = rot + lean;
-  const cu = Math.cos(ur);
-  const su = Math.sin(ur);
   // Local frame: origin at the hips, x forward (mirrored by face), y down.
-  const put = (i: number, lx: number, ly: number, upper: boolean): void => {
-    const c = upper ? cu : cr;
-    const sn = upper ? su : sr;
-    PT[2 * i] = x + face * (lx * c - ly * sn);
-    PT[2 * i + 1] = baseY + (lx * sn + ly * c);
-  };
+  fX = x;
+  fBaseY = baseY;
+  fFace = face;
+  fCr = Math.cos(rot);
+  fSr = Math.sin(rot);
+  fCu = Math.cos(ur);
+  fSu = Math.sin(ur);
   const hipHalf = (SW / 2 - LEG / 2 - Math.max(0, Math.round(f * 0.4))) * (rot ? 0.3 : 1);
   for (let i = 0; i < 2; i++) {
     const a = i ? a1 : a0;
@@ -329,14 +318,14 @@ export function drawFigure(ctx: CanvasRenderingContext2D, s: FigureSpec, g: numb
     const hx = (i ? 1 : -1) * hipHalf;
     const kx = hx + Math.sin(a) * thighL;
     const ky = Math.cos(a) * thighL;
-    put(3 * i, hx, 0, false);
-    put(3 * i + 1, kx, ky, false);
-    put(3 * i + 2, kx + Math.sin(a - k) * shinL, ky + Math.cos(a - k) * shinL, false);
+    putPt(3 * i, hx, 0, false);
+    putPt(3 * i + 1, kx, ky, false);
+    putPt(3 * i + 2, kx + Math.sin(a - k) * shinL, ky + Math.cos(a - k) * shinL, false);
   }
   const shY = -(shH + torH);
-  put(12, 0, shY - HH / 2 + Math.round(f * 0.3), true);
-  put(13, 0, shY, true);
-  put(14, 0, -shH, false);
+  putPt(12, 0, shY - HH / 2 + Math.round(f * 0.3), true);
+  putPt(13, 0, shY, true);
+  putPt(14, 0, -shH, false);
   // Arms: index 0 the back arm (side -1), 1 the front arm (side +1).
   const arms = s.arms;
   for (let i = 0; i < 2; i++) {
@@ -348,81 +337,119 @@ export function drawFigure(ctx: CanvasRenderingContext2D, s: FigureSpec, g: numb
     const sy = shY + ARM / 2 + Math.round(f * 0.4);
     const ex = sx + side * Math.sin(a) * CHARM.a1 * f;
     const ey = sy + Math.cos(a) * CHARM.a1 * f;
-    put(6 + 3 * i, sx, sy, true);
-    put(7 + 3 * i, ex, ey, true);
-    put(8 + 3 * i, ex + side * Math.sin(a + b) * CHARM.a2 * f, ey + Math.cos(a + b) * CHARM.a2 * f, true);
+    putPt(6 + 3 * i, sx, sy, true);
+    putPt(7 + 3 * i, ex, ey, true);
+    putPt(8 + 3 * i, ex + side * Math.sin(a + b) * CHARM.a2 * f, ey + Math.cos(a + b) * CHARM.a2 * f, true);
   }
   // Rest on the ground: a lying body sits on it, nothing pokes through it.
   let maxY = -1e9;
   for (const i of BODY_POINTS) maxY = Math.max(maxY, PT[2 * i + 1]! + LEG / 2);
-  const shift = lying && lift < 0.5 ? y - maxY : Math.min(0, y - maxY);
-  const floor = y - LEG / 2;
-  const sy = (i: number, b: number): number => Math.min(floor, PT[2 * i + 1]! + shift + b);
-
-  const sock = kit.shirt;
-  const leg = (i: number, b: number): void => {
-    const h = 3 * i;
-    const hx = PT[2 * h]!;
-    const hy = sy(h, b);
-    const kx = PT[2 * h + 2]!;
-    const ky = sy(h + 1, 0);
-    const fx = PT[2 * h + 4]!;
-    const fy = sy(h + 2, 0);
-    pline(ctx, hx, hy, kx, ky, DUST, LEG);
-    const mx = kx + (fx - kx) * 0.35;
-    const my = ky + (fy - ky) * 0.35;
-    pline(ctx, kx, ky, mx, my, DUST, LEG);
-    pline(ctx, mx, my, fx, fy, sock, LEG); // socks in the club colour
-    const fw = Math.max(1, Math.round(f * 0.9));
-    const fh = Math.max(1, Math.round(f * 0.6));
-    px(ctx, fx - LEG / 2 + 0.5 + (face > 0 ? LEG - 1 : -fw + 1) * (rot ? 0 : 1), fy + LEG / 2 - 0.5 - fh + 1, fw, fh, MID);
-  };
-  const arm = (i: number, b: number): void => {
-    const h = 6 + 3 * i;
-    const x0 = PT[2 * h]!;
-    const y0 = sy(h, b);
-    const x1 = PT[2 * h + 2]!;
-    const y1 = sy(h + 1, b);
-    const x2 = PT[2 * h + 4]!;
-    const y2 = sy(h + 2, b);
-    pline(ctx, x0, y0, x1, y1, kit.shirt, ARM); // sleeve
-    pline(ctx, x1, y1, x2, y2, kit.sleeves, ARM); // forearm (a keeper's long sleeve)
-    const hs = ARM + (f > 1.5 ? 1 : 0);
-    px(ctx, x2 - hs / 2 + 0.5, y2 - hs / 2 + 0.5, hs, hs, DUST); // hand
-  };
+  fShift = lying && lift < 0.5 ? y - maxY : Math.min(0, y - maxY);
+  fFloor = y - LEG / 2;
+  fF = f;
+  fLeg = LEG;
+  fArm = ARM;
+  fRot = rot;
+  fKit = kit;
 
   const back = face > 0 ? 1 : 0;
   const front = 1 - back;
   if (Math.abs(ur) < UPRIGHT_MAX_TILT) {
     // Upright: crisp blocks; a lean is a pixel or two at the shoulders.
-    const hipY = Math.min(floor, baseY + shift + bob);
+    const hipY = Math.min(fFloor, baseY + fShift + bob);
     const lx = Math.round(Math.sin(ur) * torH * 0.6);
     const top = Math.round(hipY - shH - torH);
-    leg(back, bob);
-    arm(1, bob);
+    drawLeg(ctx, back, bob);
+    drawArm(ctx, 1, bob);
     const m = Math.max(0, Math.round(f * 0.4));
     px(ctx, x - (SW - 2 * m) / 2 + 0.5, hipY - shH, SW - 2 * m, shH, kit.shorts);
     rrect(ctx, x - SW / 2 + 0.5 + face * lx, top, SW, torH + 1, SW >= 7 ? 2 : 1, kit.shirt);
-    leg(front, bob);
+    drawLeg(ctx, front, bob);
     drawHead(ctx, x + face * lx, top - HH + Math.round(f * 0.3), HW, HH, f, face, look, s.t);
-    arm(0, bob);
+    drawArm(ctx, 0, bob);
     return;
   }
   // Pitched over (a slide, a dive, on the ground): thick strokes along the body.
-  put(15, 0, 0, false);
-  put(16, 0, shY + 1, true);
-  leg(1, 0);
-  leg(0, 0);
+  putPt(15, 0, 0, false);
+  putPt(16, 0, shY + 1, true);
+  drawLeg(ctx, 1, 0);
+  drawLeg(ctx, 0, 0);
   const hipX = PT[30]!;
-  const hipY = sy(15, 0);
+  const hipY = syOf(15, 0);
   const waistX = PT[28]!;
-  const waistY = sy(14, 0);
+  const waistY = syOf(14, 0);
   // Seen side-on, the body is a little thinner than it is wide.
   pline(ctx, hipX, hipY, waistX, waistY, kit.shorts, Math.max(2, Math.round(SW * 0.65)));
-  pline(ctx, waistX, waistY, PT[32]!, sy(16, 0), kit.shirt, Math.max(2, Math.round(SW * 0.8)));
-  drawHead(ctx, PT[24]!, sy(12, 0) - HH / 2, HW, HH, f, face, look, s.t);
-  arm(1, 0);
-  arm(0, 0);
+  pline(ctx, waistX, waistY, PT[32]!, syOf(16, 0), kit.shirt, Math.max(2, Math.round(SW * 0.8)));
+  drawHead(ctx, PT[24]!, syOf(12, 0) - HH / 2, HW, HH, f, face, look, s.t);
+  drawArm(ctx, 1, 0);
+  drawArm(ctx, 0, 0);
+}
+
+// ── Per-figure state for the body helpers (module level: no closures per frame) ──
+
+let fX = 0;
+let fBaseY = 0;
+let fFace = 1;
+let fCr = 1;
+let fSr = 0;
+let fCu = 1;
+let fSu = 0;
+let fShift = 0;
+let fFloor = 0;
+let fF = 1;
+let fLeg = 1;
+let fArm = 1;
+let fRot = 0;
+let fKit: Kit | null = null;
+
+/** Store body point `i` from the hip frame (rotated by the hips' or the upper body's tilt). */
+function putPt(i: number, lx: number, ly: number, upper: boolean): void {
+  const c = upper ? fCu : fCr;
+  const sn = upper ? fSu : fSr;
+  PT[2 * i] = fX + fFace * (lx * c - ly * sn);
+  PT[2 * i + 1] = fBaseY + (lx * sn + ly * c);
+}
+
+/** Point `i`'s y, rested on the grass and bobbed by `b`. */
+function syOf(i: number, b: number): number {
+  return Math.min(fFloor, PT[2 * i + 1]! + fShift + b);
+}
+
+/** One leg: Lunar Dust thigh and shin, a sock in the club colour, a little foot. */
+function drawLeg(ctx: CanvasRenderingContext2D, i: number, b: number): void {
+  const h = 3 * i;
+  const LEG = fLeg;
+  const hx = PT[2 * h]!;
+  const hy = syOf(h, b);
+  const kx = PT[2 * h + 2]!;
+  const ky = syOf(h + 1, 0);
+  const fx = PT[2 * h + 4]!;
+  const fy = syOf(h + 2, 0);
+  pline(ctx, hx, hy, kx, ky, DUST, LEG);
+  const mx = kx + (fx - kx) * 0.35;
+  const my = ky + (fy - ky) * 0.35;
+  pline(ctx, kx, ky, mx, my, DUST, LEG);
+  pline(ctx, mx, my, fx, fy, fKit!.shirt, LEG); // socks in the club colour
+  const fw = Math.max(1, Math.round(fF * 0.9));
+  const fh = Math.max(1, Math.round(fF * 0.6));
+  px(ctx, fx - LEG / 2 + 0.5 + (fFace > 0 ? LEG - 1 : -fw + 1) * (fRot ? 0 : 1), fy + LEG / 2 - 0.5 - fh + 1, fw, fh, MID);
+}
+
+/** One arm: a sleeve in the shirt colour, the forearm (a keeper's long sleeve), a hand. */
+function drawArm(ctx: CanvasRenderingContext2D, i: number, b: number): void {
+  const h = 6 + 3 * i;
+  const ARM = fArm;
+  const x0 = PT[2 * h]!;
+  const y0 = syOf(h, b);
+  const x1 = PT[2 * h + 2]!;
+  const y1 = syOf(h + 1, b);
+  const x2 = PT[2 * h + 4]!;
+  const y2 = syOf(h + 2, b);
+  pline(ctx, x0, y0, x1, y1, fKit!.shirt, ARM);
+  pline(ctx, x1, y1, x2, y2, fKit!.sleeves, ARM);
+  const hs = ARM + (fF > 1.5 ? 1 : 0);
+  px(ctx, x2 - hs / 2 + 0.5, y2 - hs / 2 + 0.5, hs, hs, DUST);
 }
 
 /** The points a lying body rests on: legs, head, shoulders, waist. */
@@ -457,15 +484,18 @@ function twoEyes(ctx: CanvasRenderingContext2D, cx: number, y0: number, W: numbe
   eye(ctx, cx + hLook + g - e / 2 + 0.5, ey, e, e);
 }
 
-/** A flame of columns over the head (Ignid, Fenthrai), flickering with the clock. */
+/**
+ * A flame of one-pixel columns over the head (Ignid, Fenthrai), each
+ * flickering on its own so the edge stays ragged at every size.
+ */
 function flame(ctx: CanvasRenderingContext2D, x0: number, y0: number, W: number, H: number, u: number, height: number, t: number, sd: number, embers: boolean): void {
-  const cols = Math.max(3, Math.round(W / u));
+  const cols = Math.max(3, W);
   for (let i = 0; i < cols; i++) {
     const edge = 1 - Math.abs((i + 0.5) / cols - 0.5) * 1.6;
     const hgt = Math.max(1, Math.round(H * height * edge * (0.55 + 0.45 * Math.abs(Math.sin(t * 9 + i * 1.7 + sd)))));
-    px(ctx, x0 + i * u, y0 - hgt + u, u, hgt, DUST);
-    px(ctx, x0 + i * u, y0 - hgt + u, u, Math.max(1, Math.round(hgt * 0.35)), GLOW);
-    if (embers && (i + Math.floor(t * 10)) % 3 === 0) px(ctx, x0 + i * u, y0 - hgt - u + 1, u, u, MID);
+    px(ctx, x0 + i, y0 - hgt + u, 1, hgt, DUST);
+    px(ctx, x0 + i, y0 - hgt + u, 1, Math.max(1, Math.round(hgt * 0.35)), GLOW);
+    if (embers && (i + Math.floor(t * 10)) % 3 === 0) px(ctx, x0 + i, y0 - hgt - u + 1, 1, u, MID);
   }
 }
 
@@ -543,8 +573,9 @@ export function drawHead(
       W = HW + (u > 1 ? 1 : 0);
       break;
     case 'ohmk':
+      // A small head, but never under 4 x 4 or the metal stops reading as a head.
       W = Math.max(4, HW - u);
-      H = Math.max(3, HH - u);
+      H = Math.max(4, HH - u);
       break;
     default:
       break;
@@ -650,7 +681,10 @@ export function drawHead(
       const DH = H + u;
       px(ctx, dx - (u > 1 ? 1 : 0), bottom - collar, DW + (u > 1 ? 2 : 0), collar, MID);
       const gTop = bottom - collar - DH + 1;
-      withAlpha(ctx, 0.55, () => rrect(ctx, dx, gTop, DW, DH, Math.min(3, c + 1), LIGHT));
+      const ga = ctx.globalAlpha;
+      ctx.globalAlpha = ga * 0.55;
+      rrect(ctx, dx, gTop, DW, DH, Math.min(3, c + 1), LIGHT);
+      ctx.globalAlpha = ga;
       // The glass rim and a highlight.
       px(ctx, dx + 2, gTop, DW - 4, 1, DUST);
       px(ctx, dx, gTop + 2, 1, DH - 3, DUST);
@@ -687,7 +721,10 @@ export function drawHead(
       if (a.templeLight) {
         const front = a.templeFront ? face > 0 : face <= 0;
         const k = 0.5 + 0.5 * Math.sin(t * 4 + sd);
-        withAlpha(ctx, 0.4 + 0.6 * k, () => px(ctx, front ? x0 + W - u : x0, y0 + Math.round(H * 0.25), u, u, GLOW));
+        const ga = ctx.globalAlpha;
+        ctx.globalAlpha = ga * (0.4 + 0.6 * k);
+        px(ctx, front ? x0 + W - u : x0, y0 + Math.round(H * 0.25), u, u, GLOW);
+        ctx.globalAlpha = ga;
       }
       return;
     }

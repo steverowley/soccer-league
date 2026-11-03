@@ -160,10 +160,11 @@ export interface BallRender {
 
 /**
  * Sprite (`sc`) units per metre of height on a figure: a Charming figure is
- * about 14 figure pixels at scale 1, drawn at FIGURE_SCALE, about 1.8 m.
+ * about 14 figure pixels at scale 1 drawn at FIGURE_SCALE, about 1.8 m; a
+ * little less than that so a ball held overhead sits in his hands.
  * Places a held ball (over the head for a throw-in, at the chest for a catch).
  */
-export const SPRITE_UNITS_PER_M = 7;
+export const SPRITE_UNITS_PER_M = 6.6;
 
 // ── Low-level helpers (the ball and the halo keep their round shapes) ────────
 
