@@ -45,7 +45,7 @@ describe('colour measures', () => {
   it('reproduces the measured problems the rules exist for', () => {
     const byId = Object.fromEntries(clubs.map((c) => [c.id, c.color]));
     expect(deltaE(byId['mercury-runners']!, byId['makemake']!)).toBeLessThan(15);
-    expect(contrastRatio(byId['sedna-mariners']!, KIT_REFERENCE.grass)).toBeLessThan(GRASS_MIN_CONTRAST);
+    expect(contrastRatio(byId['sedna-mariners']!, KIT_REFERENCE.pitch)).toBeLessThan(GRASS_MIN_CONTRAST);
     expect(deltaE(byId['vesta']!, KIT_REFERENCE.figure)).toBeLessThan(FIGURE_MIN_DE);
   });
 });
@@ -58,7 +58,7 @@ describe('rule 1: legibility', () => {
 
   it.each(clubs)('$id passes after the rule', ({ color }) => {
     const kit = legibleKit(color, canvasColor.kitHome);
-    expect(contrastRatio(kit, KIT_REFERENCE.grass)).toBeGreaterThanOrEqual(GRASS_MIN_CONTRAST);
+    expect(contrastRatio(kit, KIT_REFERENCE.pitch)).toBeGreaterThanOrEqual(GRASS_MIN_CONTRAST);
     expect(deltaE(kit, KIT_REFERENCE.figure)).toBeGreaterThanOrEqual(FIGURE_MIN_DE);
     expect(deltaE(kit, KIT_REFERENCE.ball)).toBeGreaterThanOrEqual(FIGURE_MIN_DE);
     expect(isLegibleKit(kit)).toBe(true);
@@ -70,7 +70,7 @@ describe('rule 1: legibility', () => {
 
   it('lifts a dark kit and deepens a pale one, keeping the hue family', () => {
     const sedna = legibleKit('#8B0000', canvasColor.kitHome);
-    expect(contrastRatio(sedna, KIT_REFERENCE.grass)).toBeGreaterThan(contrastRatio('#8B0000', KIT_REFERENCE.grass));
+    expect(contrastRatio(sedna, KIT_REFERENCE.pitch)).toBeGreaterThan(contrastRatio('#8B0000', KIT_REFERENCE.pitch));
     expect(parseInt(sedna.slice(1, 3), 16)).toBeGreaterThan(parseInt(sedna.slice(3, 5), 16)); // still red
     const vesta = legibleKit('#C0C0C0', canvasColor.kitHome);
     expect(deltaE(vesta, KIT_REFERENCE.figure)).toBeGreaterThan(deltaE('#C0C0C0', KIT_REFERENCE.figure));
@@ -86,7 +86,7 @@ describe('rule 1: legibility', () => {
   });
 
   it('the ball is distinct from the grass, the figures and every possible kit', () => {
-    expect(contrastRatio(KIT_REFERENCE.ball, KIT_REFERENCE.grass)).toBeGreaterThan(7);
+    expect(contrastRatio(KIT_REFERENCE.ball, KIT_REFERENCE.pitch)).toBeGreaterThan(7);
     expect(deltaE(KIT_REFERENCE.ball, KIT_REFERENCE.figure)).toBeGreaterThan(FIGURE_MIN_DE);
     const kits = [...clubs.map((c) => legibleKit(c.color, canvasColor.kitHome)), ...CHANGE_KITS, ...KEEPER_KITS];
     for (const k of kits) expect(deltaE(KIT_REFERENCE.ball, k), k).toBeGreaterThanOrEqual(FIGURE_MIN_DE);
@@ -119,7 +119,7 @@ describe('rules 2 and 3: every ordered pairing of the 32 clubs', () => {
   it('no keeper is dark or hollow: bright on the grass, kit-coloured sleeves, team marker', () => {
     for (const { k } of pairings) {
       for (const side of [k.home, k.away]) {
-        expect(contrastRatio(side.keeper.shirt, KIT_REFERENCE.grass)).toBeGreaterThanOrEqual(KEEPER_MIN_GRASS_CONTRAST);
+        expect(contrastRatio(side.keeper.shirt, KIT_REFERENCE.pitch)).toBeGreaterThanOrEqual(KEEPER_MIN_GRASS_CONTRAST);
         expect(side.keeper.shorts).toBe(side.keeper.shirt);
         expect(side.keeper.sleeves).toBe(side.keeper.shirt);
         expect(side.keeper.marker).toBe(side.outfield.marker);

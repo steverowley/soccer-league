@@ -1,132 +1,31 @@
 // ── features/match/logic/viewer/appearance.ts ───────────────────────────────
-// Deterministic per-player look for the pixel-art viewer — the "sprite foundry"
-// from the ISL design-system handoff (Match Sprites study, 2026-07).
+// The per-player look of a figure in the match viewer (docs/match-viewer.md
+// section 6, "Figures and peoples").
 //
-// THE PHOSPHOR PICTOGRAM MODEL
-//   Every being on the pitch is a Lunar-Dust phosphor figure on Galactic Abyss —
-//   the brand's monochrome. Variety comes from SILHOUETTE, never from hue:
-//   a SPECIES changes head shape, eye configuration, antennae and mandibles;
-//   BUILD changes torso width; HAIR (phosphor-tone shades only) tops terrans.
-//   This replaced the earlier "silly little men" (skin tones, rainbow hair,
-//   hats) when the design system locked `accent: phosphor`.
+// WHAT DECIDES HOW A PLAYER LOOKS
+//   - His PEOPLE is canon: it comes from his bio (`MatchViewerPlayer.species`,
+//     one of the thirteen keys in src/data/peoples.ts), never from a hash.
+//     No species (an old bio, a synthetic pad) means Terran.
+//   - Everything else is VARIATION within his people, seeded from his id so
+//     no two players look the same and one player always looks the same:
+//     head size, leg length, shoulder width, head tone, and each people's own
+//     details (hair, horns, tentacles, visor, aerials, flame, brain, faceplate,
+//     eye size and spacing...).
 //
-// WHY DETERMINISTIC-FROM-ID
-//   The viewer must render the same person the same way every match, forever,
-//   without needing extra DB columns.  Hashing the player's stable id into a
-//   seeded RNG gives a fixed, varied appearance per player at zero storage
-//   cost.  Callers with richer knowledge (an entity description, an explicit
-//   species) can pass hints that override the random draw — same input, same
-//   sprite, forever.
+// BRAND RULE: peoples never add a hue.  Head tones are Lunar Dust shades from
+// the canvas palette; the club kit stays the only strong colour on a figure.
 //
-// PURE LOGIC: no React, no canvas, no Supabase.  Fully unit-testable.  The
-// only import is the canvas palette (plain string constants).
+// PURE LOGIC: no React, no canvas.  The renderer (ui/viewer/figure.ts) reads
+// the fields; which fields matter depends on the people (each is documented
+// with the peoples that use it).
 
 import { canvasColor } from '../../../../shared/design';
+import { SPECIES, type Species } from '../../../../data/peoples';
 
-// ── Species ───────────────────────────────────────────────────────────────────
+export type { Species };
 
-/** Head silhouettes the renderer knows how to draw. */
-export type HeadShape = 'box' | 'wide' | 'tall' | 'round';
-
-/** Eye configurations the renderer knows how to draw. */
-export type EyeKind = 'two' | 'big' | 'cluster' | 'one' | 'three' | 'high';
-
-/** Antenna silhouettes (drawn above the head). */
-export type AntennaKind = 'none' | 'feeler' | 'orb';
-
-/** The intergalactic species roster. */
-export type Species = 'terran' | 'grey' | 'insectoid' | 'cyclops' | 'trinocular' | 'aurelid';
-
-/** What a species contributes to the silhouette (never a new hue). */
-export interface SpeciesSpec {
-  head: HeadShape;
-  eyes: EyeKind;
-  antennae: AntennaKind;
-  /** Terrans are the only species that grows hair. */
-  hair: boolean;
-  /** Head-size multiplier — greys read big-headed, insectoids slightly small. */
-  headMul: number;
-  /** Insectoids get little mandibles under the chin. */
-  mandible?: boolean;
-}
-
-/**
- * The species table (from the handoff's Sprite Studies).  Each species is a
- * distinct silhouette recipe; the renderer stays monochrome throughout, so the
- * crowd reads as varied even on the austere phosphor palette.
- */
-export const SPECIES: Readonly<Record<Species, SpeciesSpec>> = {
-  terran:     { head: 'box',   eyes: 'two',     antennae: 'none',   hair: true,  headMul: 1.0 },
-  grey:       { head: 'wide',  eyes: 'big',     antennae: 'none',   hair: false, headMul: 1.3 },
-  insectoid:  { head: 'box',   eyes: 'cluster', antennae: 'feeler', hair: false, headMul: 0.95, mandible: true },
-  cyclops:    { head: 'wide',  eyes: 'one',     antennae: 'none',   hair: false, headMul: 1.1 },
-  trinocular: { head: 'tall',  eyes: 'three',   antennae: 'none',   hair: false, headMul: 1.02 },
-  aurelid:    { head: 'round', eyes: 'high',    antennae: 'orb',    hair: false, headMul: 1.06 },
-};
-
-/** Species keys in a fixed order (drives the random species draw). */
-export const SPECIES_KEYS: readonly Species[] = [
-  'terran', 'grey', 'insectoid', 'cyclops', 'trinocular', 'aurelid',
-];
-
-// ── Hair ──────────────────────────────────────────────────────────────────────
-
-/** Hair silhouettes the renderer knows how to draw (terrans only). */
-export type HairStyle = 'bald' | 'short' | 'flat' | 'spiky' | 'long';
-
-/**
- * Weighted bag of hair styles — repeats bias the distribution toward common
- * cuts so a crowd reads as "mostly short, some long, a few bald/spiky".
- */
-const HAIR_STYLE_BAG: readonly HairStyle[] = [
-  'bald', 'short', 'short', 'short', 'flat', 'spiky', 'spiky', 'long', 'long',
-];
-
-/**
- * Phosphor-tone hair shades per style — the variety axis kept IN palette (dust
- * greys, never the old rainbow dyes), per the brand's monochrome rule. The
- * values are the canvas palette's hair tones (`canvasColor` in
- * src/shared/design/tokens.ts, mirrored in tokens.css): the sprite renderer
- * paints them on a <canvas>, which cannot read CSS variables.
- */
-export const HAIR_TONE: Readonly<Record<Exclude<HairStyle, 'bald'>, string>> = {
-  short: canvasColor.hairShort,
-  flat:  canvasColor.hairFlat,
-  spiky: canvasColor.hairSpiky,
-  long:  canvasColor.hairLong,
-};
-
-/** Body build — drives torso width (and reads as a diverse crowd of body types). */
-export type Build = 'slim' | 'stocky';
-
-// ── Descriptor ────────────────────────────────────────────────────────────────
-
-/** The full appearance descriptor the sprite renderer consumes. */
-export interface Appearance {
-  /** Which species silhouette to draw. */
-  species: Species;
-  /** Body build → torso width multiplier in the renderer. */
-  build: Build;
-  /** Hair silhouette (always 'bald' for non-terran species). */
-  style: HairStyle;
-  /** Phosphor-tone hair shade, or null when bald. */
-  hair: string | null;
-}
-
-/**
- * Optional hints for the foundry: explicit fields win over anything parsed from
- * `text`, which wins over the seeded random draw.  `name` (or `id`) seeds the
- * deterministic RNG.
- */
-export interface AppearanceHints {
-  name?: string;
-  id?: string;
-  /** Free text (an entity description) — mined for species/build/hair words. */
-  text?: string;
-  species?: Species;
-  build?: Build;
-  hairStyle?: HairStyle;
-}
+/** The thirteen peoples, in the order the lore and the viewer list them. */
+export const SPECIES_KEYS: readonly Species[] = SPECIES;
 
 // ── Seeded RNG ────────────────────────────────────────────────────────────────
 
@@ -146,7 +45,7 @@ export function hashStringToSeed(s: string): number {
 }
 
 /**
- * mulberry32 — a tiny, fast, well-distributed seeded PRNG.  Returns a function
+ * mulberry32: a tiny, fast, well-distributed seeded PRNG.  Returns a function
  * yielding floats in [0, 1).  Same generator family the spatial engine uses.
  */
 export function mulberry32(seed: number): () => number {
@@ -159,90 +58,192 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-// ── Description parsing ───────────────────────────────────────────────────────
+// ── Variation ranges (owner spec, docs/match-viewer.md section 6) ─────────────
 
-/** Synonym table mapping loose entity-description words to a species. */
-const SPECIES_SYNONYMS: ReadonlyArray<readonly [Species, readonly string[]]> = [
-  ['grey',       ['grey', 'gray', 'little green', 'big-head', 'big head', 'abductor']],
-  ['insectoid',  ['insect', 'bug', 'mantis', 'chitin', 'roach', 'hive', 'drone']],
-  ['cyclops',    ['cyclop', 'one-eyed', 'one eye', 'single eye', 'monocular']],
-  ['trinocular', ['three-eyed', 'three eyes', 'tri-ocular', 'trinocular', 'third eye']],
-  ['aurelid',    ['orb antenna', 'jelly', 'aurelid', 'lantern']],
-  ['terran',     ['human', 'terran', 'earthling']],
-];
+/** Head size multiplier range. */
+export const HEAD_SCALE: readonly [number, number] = [0.88, 1.14];
+/** Leg length multiplier range. */
+export const LEG_SCALE: readonly [number, number] = [0.86, 1.14];
+/** Shoulder width multiplier range. */
+export const SHOULDER_SCALE: readonly [number, number] = [0.94, 1.14];
 
-/** The hints `parseDescription` can extract from free text. */
-export interface ParsedHints {
-  species?: Species;
-  build?: Build;
-  hair?: HairStyle;
+/**
+ * Head tones for every people except the two with their own: Lunar Dust is
+ * twice as likely as each of the two lighter-worn shades.
+ */
+export const HEAD_TONES: readonly string[] = [canvasColor.text, canvasColor.text, canvasColor.figureTone2, canvasColor.figureTone3];
+/** The Quoo's tones: its own shade, twice as likely, or one of the two nearest Lunar Dust shades. */
+export const QUOO_TONES: readonly string[] = [canvasColor.figureQuoo, canvasColor.figureQuoo, canvasColor.figureTone2, canvasColor.figureTone3];
+
+/** Terran hair silhouettes. */
+export type HairStyle = 'bald' | 'short' | 'tuft' | 'long' | 'buzz';
+/** Weighted bag of hair styles (repeats bias the crowd toward short cuts). */
+const HAIR_STYLE_BAG: readonly HairStyle[] = ['short', 'tuft', 'long', 'short', 'buzz', 'bald', 'tuft', 'short'];
+/** Terran hair shades: Lunar Dust shades only, never a dye. */
+export const HAIR_TONES: readonly string[] = [canvasColor.figureMid, canvasColor.figureDark, canvasColor.figureLight];
+
+// ── Descriptor ────────────────────────────────────────────────────────────────
+
+/**
+ * Everything the renderer needs to draw one player's figure.  Numbers are
+ * multipliers or fractions of the head unless noted; every field is always
+ * set (a people ignores the ones that are not its own).
+ */
+export interface Appearance {
+  /** His people (Terran when the bio has none). */
+  species: Species;
+  /** Body proportions: head size, leg length, shoulder width (multipliers). */
+  headScale: number;
+  legScale: number;
+  shoulder: number;
+  /** Head colour: a Lunar Dust shade (canvas token). */
+  tone: string;
+  /** 0..1, offsets his blink, breathing and flicker so a crowd is never in step. */
+  seed: number;
+
+  /** Terran: hair style and its Lunar Dust shade (null when bald). */
+  hairStyle: HairStyle;
+  hairTone: string | null;
+  /** Terran: eye spacing (fraction of head width from the centre) and eye height (fraction of head height). */
+  eyeGap: number;
+  eyeY: number;
+  /** Grey, Trinocular, Slyari, Quoo: eye size multiplier. */
+  eyeScale: number;
+  /** Grey: how sharply the skull tapers to the chin (fraction cut from each side). */
+  chinTaper: number;
+  /** Trinocular: how far the lower eyes sit in from the edge, and the third eye's height. */
+  inset: number;
+  thirdY: number;
+  /** Synth: visor height and position (fractions of head height), 0 to 2 aerials, side bolts. */
+  visorH: number;
+  visorY: number;
+  aerials: 0 | 1 | 2;
+  bolts: boolean;
+  /** Taurid (and the Quoo's horns): horn length multiplier; Taurid horn curl 0 (out) to 1 (in), muzzle width. */
+  hornLen: number;
+  hornCurl: number;
+  muzzleW: number;
+  /** Cephalid: 3 to 5 tentacles, and their length multiplier. */
+  tentacles: number;
+  tentacleLen: number;
+  /** Ignid and Fenthrai: flame height multiplier. */
+  flameH: number;
+  /** Dome: brain size multiplier and collar height (fraction of head height). */
+  brainScale: number;
+  collar: number;
+  /** Android: faceplate height (fraction of head height), seam, temple light and its side. */
+  plateH: number;
+  seam: boolean;
+  templeLight: boolean;
+  templeFront: boolean;
+  /** Slyari: feeler and trunk length multipliers. */
+  feelerLen: number;
+  trunkLen: number;
+  /** Fenthrai: side fin length multiplier. */
+  finLen: number;
+  /** Ohm K: side bolt length and jaw width multipliers. */
+  boltLen: number;
+  jawW: number;
+}
+
+/** Uniform draw in [lo, hi]. */
+function range(r: () => number, [lo, hi]: readonly [number, number]): number {
+  return lo + (hi - lo) * r();
+}
+
+/** One element of a non-empty list. */
+function pick<T>(r: () => number, list: readonly T[]): T {
+  return list[Math.floor(r() * list.length)]!;
 }
 
 /**
- * Pull species/build/hair hints out of a free-text entity description.  Exact
- * species names win, then synonyms; body-shape and hair words map onto the
- * build/style axes.  Anything unmatched is simply absent (the seeded draw
- * fills it in).
+ * The figure for one player.
  *
- * @param text  Any prose (an entity persona line, a scout note, a name).
- * @returns     The hints found — possibly none.
+ * Deterministic: the same id and people always give the same figure.  Every
+ * draw happens in a fixed order whatever the people, so a player's body
+ * (head, legs, shoulders) does not change if his people is corrected later.
+ *
+ * @param id       His stable player id (seeds the variation).
+ * @param species  His people from the bio; absent or null means Terran.
+ * @returns        The appearance the renderer draws.
  */
-export function parseDescription(text: string): ParsedHints {
-  const t = ` ${text.toLowerCase()} `;
-  const out: ParsedHints = {};
-  for (const k of SPECIES_KEYS) {
-    if (t.includes(k)) {
-      out.species = k;
-      break;
-    }
-  }
-  if (!out.species) {
-    for (const [k, words] of SPECIES_SYNONYMS) {
-      if (words.some((w) => t.includes(w))) {
-        out.species = k;
-        break;
-      }
-    }
-  }
-  if (/stock|burly|heavy|broad|brawn|hulk|huge|massive|wide/.test(t)) out.build = 'stocky';
-  else if (/slim|lean|thin|wiry|lanky|tall|spindl/.test(t)) out.build = 'slim';
-  if (/bald|shaven/.test(t)) out.hair = 'bald';
-  else if (/spik|mohawk|crest/.test(t)) out.hair = 'spiky';
-  else if (/long hair|flowing|mane|locks/.test(t)) out.hair = 'long';
-  if (/antenna|antennae|feeler/.test(t) && !out.species) out.species = 'insectoid';
-  return out;
-}
+export function makeAppearance(id: string, species?: Species | null): Appearance {
+  const people: Species = species ?? 'terran';
+  const r = mulberry32(hashStringToSeed(id));
+  const headScale = range(r, HEAD_SCALE);
+  const legScale = range(r, LEG_SCALE);
+  const shoulder = range(r, SHOULDER_SCALE);
+  const toneRoll = r();
+  const seed = r();
+  const hairStyle = pick(r, HAIR_STYLE_BAG);
+  const hairToneRoll = pick(r, HAIR_TONES);
+  const eyeGap = range(r, [0.18, 0.26]);
+  const eyeY = range(r, [0.46, 0.58]);
+  const eyeScale = range(r, [0.85, 1.25]);
+  const chinTaper = range(r, [0.16, 0.3]);
+  const inset = range(r, [0.12, 0.24]);
+  const thirdY = range(r, [0.16, 0.28]);
+  const visorH = range(r, [0.2, 0.36]);
+  const visorY = range(r, [0.3, 0.46]);
+  const aerials = Math.min(2, Math.floor(r() * 3)) as 0 | 1 | 2;
+  const bolts = r() < 0.6;
+  const hornLen = range(r, [0.75, 1.45]);
+  const hornCurl = r();
+  const muzzleW = range(r, [0.45, 0.68]);
+  const tentacles = 3 + Math.min(2, Math.floor(r() * 3));
+  const tentacleLen = range(r, [0.75, 1.35]);
+  const flameH = range(r, [0.8, 1.3]);
+  const brainScale = range(r, [0.8, 1.2]);
+  const collar = range(r, [0.2, 0.36]);
+  const plateH = range(r, [0.34, 0.5]);
+  const seam = r() < 0.6;
+  const templeLight = r() < 0.7;
+  const templeFront = r() < 0.5;
+  const feelerLen = range(r, [0.75, 1.35]);
+  const trunkLen = range(r, [0.8, 1.4]);
+  const finLen = range(r, [0.75, 1.35]);
+  const boltLen = range(r, [0.8, 1.3]);
+  const jawW = range(r, [0.55, 0.85]);
 
-// ── Builder (the sprite foundry) ──────────────────────────────────────────────
-
-/**
- * Build a stable, varied appearance for a player id or entity description.
- *
- * Pass a string (a player UUID — the common case) or hints ({ name, text,
- * species, build, hairStyle }).  Explicit fields beat parsed text beats the
- * seeded random draw, and the RNG draws are ordered (species → build → style)
- * so the mapping is fixed: the same input always yields the same look.
- * Non-terran species are always bald (hair is the terran variety axis).
- *
- * @param desc  Stable player id (UUID), or an AppearanceHints object.
- * @returns     Appearance descriptor for the renderer.
- */
-export function makeAppearance(desc: string | AppearanceHints): Appearance {
-  const hints: AppearanceHints = typeof desc === 'string' ? { name: desc } : desc;
-  const name = hints.name ?? hints.id ?? 'entity';
-  const parsed = hints.text != null ? parseDescription(hints.text) : {};
-  const r = mulberry32(hashStringToSeed(`${name}|${hints.text ?? ''}`));
-
-  const species = hints.species ?? parsed.species ?? SPECIES_KEYS[Math.floor(r() * SPECIES_KEYS.length)]!;
-  const sp = SPECIES[species];
-  const build: Build = hints.build ?? parsed.build ?? (r() < 0.5 ? 'slim' : 'stocky');
-  let style: HairStyle = hints.hairStyle ?? parsed.hair ?? HAIR_STYLE_BAG[Math.floor(r() * HAIR_STYLE_BAG.length)]!;
-  if (!sp.hair) style = 'bald';
+  const tones = people === 'quoo' ? QUOO_TONES : HEAD_TONES;
+  const tone = people === 'ohmk' ? canvasColor.figureMetal : tones[Math.floor(toneRoll * tones.length)]!;
+  const bald = people !== 'terran' || hairStyle === 'bald';
 
   return {
-    species,
-    build,
-    style,
-    hair: style === 'bald' ? null : HAIR_TONE[style],
+    species: people,
+    headScale,
+    legScale,
+    shoulder,
+    tone,
+    seed,
+    hairStyle: people === 'terran' ? hairStyle : 'bald',
+    hairTone: bald ? null : hairToneRoll,
+    eyeGap,
+    eyeY,
+    eyeScale,
+    chinTaper,
+    inset,
+    thirdY,
+    visorH,
+    visorY,
+    aerials,
+    bolts,
+    hornLen,
+    hornCurl,
+    muzzleW,
+    tentacles,
+    tentacleLen,
+    flameH,
+    brainScale,
+    collar,
+    plateH,
+    seam,
+    templeLight,
+    templeFront,
+    feelerLen,
+    trunkLen,
+    finLen,
+    boltLen,
+    jawW,
   };
 }

@@ -49,17 +49,20 @@ import {
   actionBody,
   actionTrackOf,
   activeAnimations,
-  advancePhase,
-  animStateFromSpeed,
+  advanceStride,
   ballAtFeet,
   cameraForWidth,
   clampFollowCenter,
-  computePose,
   followAnchor,
+  footfall,
+  holdArms,
+  kickArms,
   glideBall,
   liveRate,
   makeAppearance,
   makeTrackLookup,
+  newArms,
+  newDrive,
   noAnimations,
   pickNearestId,
   pitchLabelFor,
@@ -70,17 +73,22 @@ import {
   replayAt,
   resolveKits,
   rosterFromFrames,
+  runAmount,
   sampleFrames,
   scheduleReplays,
   separatePositions,
   smoothFollowCenter,
-  STATIC_POSE,
+  stepArms,
+  stepJolt,
   trailToDraw,
+  type ActionBody,
   type Appearance,
+  type ArmState,
   type BallGlide,
   type BallPoint,
   type CameraMode,
   type HitTarget,
+  type PoseKind,
   type Projected,
   type ScreenPoint,
   type TrailPoint,
@@ -114,6 +122,12 @@ const BASE_VP: Viewport = { width: 320, height: 208 };
  */
 const VP: Viewport = { width: BASE_VP.width * PIXEL_SCALE, height: BASE_VP.height * PIXEL_SCALE };
 
+/** Body acceleration (game m/s^2) the arms feel at most, and how much of it (softened: 4.5x play would make it violent). */
+const ARM_ACCEL_MAX = 14;
+const ARM_ACCEL_GAIN = 0.6;
+/** A footfall jolts the arms only when he is running at least this hard (0..1). */
+const JOLT_MIN_RUN = 0.25;
+
 /** Velocity (game m/s) above which we flip a dude's facing — avoids jitter at rest. */
 const FACE_FLIP_SPEED = 0.4;
 
@@ -136,13 +150,11 @@ const HELD_BALL_NEAR_M = 4;
 const DIVE_REACH_M = 1.2;
 
 /**
- * Canvas backing colour behind the pitch — a green-black a notch darker than
- * Galactic Abyss, from the design-system Match Sprites study, so the abyss-toned
- * grass still reads as a lit surface against its surround. From the canvas
- * palette (`canvasColor`, mirrored in tokens.css): a canvas cannot read CSS
- * variables.
+ * The pitch surface and everything around it: Galactic Abyss, the page
+ * background (docs/match-viewer.md section 6), from the canvas palette (a
+ * canvas cannot read CSS variables).
  */
-const CANVAS_BG = canvasColor.pitchSurround;
+const CANVAS_BG = canvasColor.bg;
 
 /** Scale a projected point's depth scale into backing-store sprite units. */
 function atScale(p: Projected): Projected {
@@ -220,7 +232,7 @@ interface DudeSpec {
   name: string | null;
   /** Squad number printed on the chest: his shirt number, else slot order (1–11, bench 12+). */
   number: number;
-  /** Deterministic appearance. */
+  /** His figure: his people (from his bio) and the variation seeded by his id. */
   appearance: Appearance;
   /** Default facing when stationary (home faces +x, away faces −x). */
   faceDefault: number;
@@ -261,7 +273,7 @@ function buildSide(
       gk: starterHasGk ? p?.position === 'GK' : i === 0,
       name: p?.name ?? null,
       number: p?.number ?? i + 1,
-      appearance: makeAppearance(id),
+      appearance: makeAppearance(id, p?.species ?? null),
       faceDefault,
       bench: false,
     };
@@ -277,7 +289,7 @@ function buildSide(
     gk: p.position === 'GK',
     name: p.name ?? null,
     number: p.number ?? slots.length + i + 1,
-    appearance: makeAppearance(p.id),
+    appearance: makeAppearance(p.id, p.species ?? null),
     faceDefault,
     bench: true,
   }));
@@ -324,6 +336,17 @@ export function MatchViewer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   /** Per-dude animation phase, persisted across frames. */
   const phaseRef = useRef<Map<string, number>>(new Map());
+  /** Per-dude spring arms (logic/viewer/arms.ts), persisted across frames. */
+  const armsRef = useRef<Map<string, ArmState>>(new Map());
+  /**
+   * Per-dude motion memory: last frame's velocity and game second (his
+   * acceleration drives the arms) and the pose he was in (a new pose flings them).
+   */
+  const motionRef = useRef<Map<string, { vx: number; sec: number; kind: PoseKind | null; t: number }>>(new Map());
+  /** The viewer's real-time clock in seconds (blinks, breathing); frozen under reduced motion. */
+  const clockRef = useRef(0);
+  /** One scratch drive for every player's arms (mutated, never reallocated). */
+  const driveRef = useRef(newDrive());
   /** Per-dude facing, persisted so a momentarily-stationary dude keeps its last facing. */
   const faceRef = useRef<Map<string, number>>(new Map());
   /** Smoothed follow-camera centre (null ⇒ snap to the ball on the next frame). */
@@ -447,6 +470,9 @@ export function MatchViewer({
       last = now;
       if (dt > 0.05) dt = 0.05;
       const animDt = reducedMotion ? 0 : dt; // freeze decorative motion for reduced-motion users
+      clockRef.current += animDt;
+      const clock = clockRef.current;
+      const drive = driveRef.current;
 
       // Wall-clock → game-second (same compression the commentary feed uses).
       const elapsedRealSec = anchorMs != null ? (Date.now() - anchorMs) / 1000 : 0;
@@ -485,12 +511,12 @@ export function MatchViewer({
         const pos = { x: s ? s.x : spec.homeX, y: s ? s.y : spec.homeY };
         const vx = s ? s.vx : 0;
         const vy = s ? s.vy : 0;
-        const gameSpeed = Math.hypot(vx, vy);
-        const state = reducedMotion ? 'idle' : animStateFromSpeed(gameSpeed);
+        const run = reducedMotion ? 0 : runAmount(Math.hypot(vx, vy));
 
-        // Advance phase (seeded random on first sight so the crowd doesn't march in sync).
+        // Advance the stride in real time (a random start on first sight so
+        // the crowd doesn't march in step).
         const prevPhase = phaseRef.current.get(spec.id) ?? Math.random() * Math.PI * 2;
-        const phase = advancePhase(prevPhase, state, animDt);
+        const phase = advanceStride(prevPhase, run, animDt);
         phaseRef.current.set(spec.id, phase);
 
         // Facing follows horizontal velocity; otherwise it holds.
@@ -501,6 +527,38 @@ export function MatchViewer({
         // His event animation, if one is playing (roster index from the track).
         const idx = events?.indexById.get(spec.id) ?? -1;
         const act = idx >= 0 ? anims.poses.get(idx) : undefined;
+        const body: ActionBody | null = act ? actionBody(act) : null;
+
+        // His floppy arms (docs/match-viewer.md section 6): springs driven by
+        // his acceleration, jolted on each footfall, flung when a pose
+        // begins, held by the pose while it lasts.  Real time throughout.
+        let arms = armsRef.current.get(spec.id);
+        if (!arms) {
+          arms = newArms(spec.appearance.seed);
+          armsRef.current.set(spec.id, arms);
+        }
+        let motion = motionRef.current.get(spec.id);
+        if (!motion) {
+          motion = { vx, sec: gameSec, kind: null, t: 0 };
+          motionRef.current.set(spec.id, motion);
+        }
+        const dSec = gameSec - motion.sec;
+        const ax = !seek && dSec > 1e-6 ? Math.max(-ARM_ACCEL_MAX, Math.min(ARM_ACCEL_MAX, (vx - motion.vx) / dSec)) * ARM_ACCEL_GAIN : 0;
+        if (!reducedMotion) {
+          if (act && body && (act.kind !== motion.kind || act.t < motion.t)) kickArms(arms, body.impulse);
+          if (run > JOLT_MIN_RUN && footfall(prevPhase, phase)) stepJolt(arms);
+          drive.run = run;
+          drive.phase = phase;
+          drive.ax = ax;
+          drive.ay = body?.arms === 'celebrate' ? -30 * Math.cos(clock * 6 + spec.appearance.seed * 9) : 0;
+          drive.t = clock;
+          holdArms(drive, body?.arms);
+          stepArms(arms, animDt, drive);
+        }
+        motion.vx = vx;
+        motion.sec = gameSec;
+        motion.kind = act ? act.kind : null;
+        motion.t = act ? act.t : 0;
         // A diving keeper reaches toward where he committed to (up to
         // DIVE_REACH_M, out and back over the dive), ahead of his position.
         if (act?.kind === 'dive' && act.toX != null && act.toY != null) {
@@ -514,7 +572,7 @@ export function MatchViewer({
           }
         }
 
-        return [{ spec, pos, vx, vy, state, phase, face, idx, act }];
+        return [{ spec, pos, vx, vy, run, phase, face, idx, act, body, arms }];
       });
 
       // De-overlap (VISUAL ONLY) — spread sprites that the real positions stack on
@@ -606,8 +664,6 @@ export function MatchViewer({
         if (p.idx >= 0) byIndex.set(p.idx, p);
         const proj = project(p.pos.x, p.pos.y, 0);
         const sc = proj.sc;
-        // An event animation replaces the gait's bob for its few hundred ms.
-        const pose = reducedMotion || p.act ? STATIC_POSE : computePose(p.phase, p.state, sc);
         const isSelected = selectedId != null && p.spec.id === selectedId;
         // Anchor the click target at mid-body (above the feet) so clicking the torso/head registers.
         hitTargets.push({ id: p.spec.id, sx: proj.x, sy: proj.y - 6 * sc });
@@ -621,15 +677,17 @@ export function MatchViewer({
         return {
           wx: p.pos.x,
           wy: p.pos.y,
-          pose,
+          phase: p.phase,
+          run: p.run,
           appearance: p.spec.appearance,
           kit: p.spec.gk ? side.keeper : side.outfield,
-          number: p.spec.number,
           face,
+          arms: p.arms,
+          t: clock,
           highlighted: isSelected,
           dimmed: selectedId != null && !isSelected,
           carrier: owner != null && p === owner,
-          act: p.act ? actionBody(p.act) : null,
+          act: p.body,
         };
       });
       hitTargetsRef.current = hitTargets;

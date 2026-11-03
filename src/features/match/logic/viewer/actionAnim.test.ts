@@ -139,8 +139,10 @@ describe('activeAnimations: windows', () => {
     expect(a.poses.get(15)?.kind).toBe('stumble');
     expect(a.overlays).toContainEqual(expect.objectContaining({ kind: 'dust', player: 4 }));
     const slide = actionBody({ ...a.poses.get(4)!, t: 0.5 });
-    expect(slide.tilt).toBeLessThan(-0.8); // low and stretched, leaning back
-    expect(slide.kickLeg).toBeGreaterThan(1);
+    expect(slide.tilt).toBeLessThan(-0.8); // feet first, leaning back
+    expect(slide.legs).toBe('slide');
+    expect(slide.lying).toBe(true); // down on the grass
+    expect(slide.impulse).toBeGreaterThan(1); // the arms fling
     expect(activeAnimations(t, q(after(30, ANIM_MS.slide + 20))).poses.size).toBe(0);
   });
 
@@ -154,7 +156,9 @@ describe('activeAnimations: windows', () => {
     const t = track({ kind: 'foul', tick: tick(60), by: 2, on: 18, card: 'yellow' });
     const mid = activeAnimations(t, q(after(60, 600)));
     expect(mid.poses.get(18)?.kind).toBe('fall');
-    expect(actionBody(mid.poses.get(18)!).tilt).toBeGreaterThan(1.3); // lying down
+    const down = actionBody(mid.poses.get(18)!);
+    expect(down.tilt).toBeLessThan(-1.3); // on his back
+    expect(down.lying).toBe(true);
     expect(mid.overlays).toContainEqual(expect.objectContaining({ kind: 'whistle', player: 18 }));
     expect(mid.overlays).toContainEqual(expect.objectContaining({ kind: 'card', player: 2, card: 'yellow' }));
     const late = activeAnimations(t, q(after(60, ANIM_MS.cardDelay + ANIM_MS.card + 20)));
@@ -174,19 +178,19 @@ describe('activeAnimations: windows', () => {
     const dive = activeAnimations(t, q(after(70, 300))).poses.get(0);
     expect(dive).toMatchObject({ kind: 'dive', toX: 1, toY: 30, toZ: 1.5 });
     const body = actionBody(dive!);
-    expect(body.tilt).toBeGreaterThan(1.2); // horizontal
-    expect(body.arms).toBe('overhead');
+    expect(body.tilt).toBeGreaterThan(1.2); // horizontal, toward the ball
+    expect(body.arms).toBe('dive'); // stretched out past his head
     expect(body.lift).toBeGreaterThan(0);
     const caught = activeAnimations(t, q(after(70, ANIM_MS.dive + 300)));
     expect(caught.poses.get(0)?.kind).toBe('catch');
-    expect(actionBody(caught.poses.get(0)!).arms).toBe('up');
+    expect(actionBody(caught.poses.get(0)!).arms).toBe('hug'); // the ball at his chest
     expect(caught.ballHeld?.player).toBe(0);
     expect(activeAnimations(t, q(after(70, ANIM_MS.dive + ANIM_MS.catch + 20))).poses.size).toBe(0);
   });
 
   it('a parry is a parry pose', () => {
     const t = track({ kind: 'kick', tick: tick(70), by: 0, kick: 'parry' });
-    expect(actionBody(activeAnimations(t, q(after(70, 100))).poses.get(0)!).arms).toBe('out');
+    expect(actionBody(activeAnimations(t, q(after(70, 100))).poses.get(0)!).arms).toBe('up');
   });
 
   it('restarts: spot, label and taker for the whole stoppage, gone once taken', () => {
@@ -241,7 +245,7 @@ describe('activeAnimations: windows', () => {
     expect(a.overlays).toContainEqual(expect.objectContaining({ kind: 'ripple', goalX: 105 }));
     expect(a.poses.get(9)?.kind).toBe('celebrate');
     const body = actionBody({ ...a.poses.get(9)!, t: 1 / 6 });
-    expect(body.arms).toBe('up');
+    expect(body.arms).toBe('celebrate'); // the V overhead
     expect(body.lift).toBeGreaterThan(1);
     expect(activeAnimations(t, q(after(500, ANIM_MS.goalLabel + 20)), lookup).label).toBeNull();
   });
@@ -340,13 +344,23 @@ describe('actionBody', () => {
   });
 
   it('every pose returns finite numbers and the rest body is neutral', () => {
-    expect(REST_BODY).toEqual({ tilt: 0, lift: 0, kickLeg: 0, arms: 'rest', scaleX: 1, scaleY: 1 });
+    expect(REST_BODY).toEqual({ tilt: 0, lift: 0, legs: 'gait', kickLeg: 0, arms: 'rest', lying: false, impulse: 0 });
     const kinds = ['kick', 'shot', 'header', 'throwHold', 'throw', 'slide', 'stumble', 'lunge', 'fall', 'dive', 'catch', 'parry', 'celebrate'] as const;
     for (const kind of kinds) {
       for (const t of [0, 0.25, 0.5, 0.75, 1]) {
         const b = actionBody({ kind, t, contact: 0.3, toZ: 1 });
-        for (const v of [b.tilt, b.lift, b.kickLeg, b.scaleX, b.scaleY]) expect(Number.isFinite(v), `${kind} ${t}`).toBe(true);
+        for (const v of [b.tilt, b.lift, b.kickLeg, b.impulse]) expect(Number.isFinite(v), `${kind} ${t}`).toBe(true);
+        expect(b.impulse, `${kind} flings the arms when it begins`).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('a lying pose lies only while the body is well over, and every pose ends upright', () => {
+    for (const kind of ['slide', 'fall', 'dive'] as const) {
+      expect(actionBody({ kind, t: 0.5, contact: 0.18 }).lying, kind).toBe(true);
+      const end = actionBody({ kind, t: 1, contact: 0.18 });
+      expect(end.lying, kind).toBe(false);
+      expect(Math.abs(end.tilt), kind).toBeLessThan(0.05);
     }
   });
 });

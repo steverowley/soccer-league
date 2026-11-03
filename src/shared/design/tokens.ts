@@ -83,18 +83,31 @@ export const canvasColor = {
   bg: '#111111',
   /** Quantum Purple: the focus halo on the selected player (the Architect's eye). */
   architect: '#9A5CF4',
-  /** The viewport behind the pitch. */
-  pitchSurround: '#0d0f0d',
-  /** Darker mowing stripe. */
-  grassA: '#131613',
-  /** Lighter mowing stripe. */
-  grassB: '#171b17',
-  /** Pitch markings. */
-  line: 'rgba(227,224,213,0.26)',
-  /** Goal frames. */
-  goalLine: 'rgba(227,224,213,0.5)',
-  /** Mid phosphor: antenna stems (shorts now wear the kit colour). */
-  figureDim: '#9C9A90',
+  /**
+   * Pitch markings: hairline Lunar Dust on the Galactic Abyss pitch (the
+   * pitch surface itself is `bg`, the page background).
+   */
+  line: 'rgba(227,224,213,0.36)',
+  /** Goal frames: a step brighter than the markings. */
+  goalLine: 'rgba(227,224,213,0.75)',
+  /**
+   * Figure shades (docs/match-viewer.md section 6). Peoples never add a hue:
+   * heads, limbs and features use only these Lunar Dust shades plus `text`
+   * itself, so the club kit stays the one strong colour on a figure.
+   * Two head tones a player can have besides `text`:
+   */
+  figureTone2: '#DAD6C9',
+  figureTone3: '#D0CCBE',
+  /** Feature shades: horns, muzzles and hair (light), feet and seams (mid), faceplates (dark). */
+  figureLight: '#C9C5B8',
+  figureMid: '#8F8C83',
+  figureDark: '#5E5B54',
+  /** Glows and lights on a figure: a synth's visor scan, an ignid's flame tips. */
+  figureGlow: '#FFFFFF',
+  /** The Ohm K's metal head, a darker Lunar Dust shade. */
+  figureMetal: '#A9A597',
+  /** The Quoo's head tone. */
+  figureQuoo: '#D6D2C4',
   /** Home shirt when a club has no colour in the data. */
   kitHome: '#C9603F',
   /** Away shirt when a club has no colour in the data. */
@@ -119,11 +132,6 @@ export const canvasColor = {
   keeperTeal: '#21C4A6',
   keeperOrange: '#FF8C1A',
   keeperBlue: '#5B8CFF',
-  /** Phosphor hair shades (terrans only), one per style. */
-  hairShort: '#C6C3B8',
-  hairFlat: '#AEAB9F',
-  hairSpiky: '#94917F',
-  hairLong: '#BBB8AC',
   /**
    * Event overlays (docs/match-viewer.md section 5). The card colours ARE
    * the page tokens: yellow is the yellow-card glyph, red is live/red card
@@ -153,12 +161,16 @@ export const canvasColorVar: Readonly<Record<keyof typeof canvasColor, string>> 
   text: '--isl-text',
   bg: '--isl-bg',
   architect: '--isl-architect',
-  pitchSurround: '--isl-pitch-surround',
-  grassA: '--isl-pitch-grass-a',
-  grassB: '--isl-pitch-grass-b',
   line: '--isl-pitch-line',
   goalLine: '--isl-pitch-goal-line',
-  figureDim: '--isl-pitch-figure-dim',
+  figureTone2: '--isl-pitch-figure-tone-2',
+  figureTone3: '--isl-pitch-figure-tone-3',
+  figureLight: '--isl-pitch-figure-light',
+  figureMid: '--isl-pitch-figure-mid',
+  figureDark: '--isl-pitch-figure-dark',
+  figureGlow: '--isl-pitch-figure-glow',
+  figureMetal: '--isl-pitch-figure-metal',
+  figureQuoo: '--isl-pitch-figure-quoo',
   kitHome: '--isl-pitch-kit-home',
   kitAway: '--isl-pitch-kit-away',
   shadow: '--isl-pitch-shadow',
@@ -173,10 +185,6 @@ export const canvasColorVar: Readonly<Record<keyof typeof canvasColor, string>> 
   keeperTeal: '--isl-pitch-keeper-teal',
   keeperOrange: '--isl-pitch-keeper-orange',
   keeperBlue: '--isl-pitch-keeper-blue',
-  hairShort: '--isl-pitch-hair-short',
-  hairFlat: '--isl-pitch-hair-flat',
-  hairSpiky: '--isl-pitch-hair-spiky',
-  hairLong: '--isl-pitch-hair-long',
   cardYellow: '--isl-card-yellow',
   cardRed: '--isl-live',
   subOn: '--isl-success',

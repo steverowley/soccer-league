@@ -65,7 +65,7 @@ describe('tokens.ts mirrors tokens.css', () => {
   });
 
   it('fails on a drifted value (the check is not vacuous)', () => {
-    const drifted = rootProperties(css.replace('--isl-pitch-grass-a: #131613', '--isl-pitch-grass-a: #141614'));
-    expect(norm(drifted.get('--isl-pitch-grass-a')!)).not.toBe(norm(canvasColor.grassA));
+    const drifted = rootProperties(css.replace('--isl-pitch-figure-mid: #8F8C83', '--isl-pitch-figure-mid: #908C83'));
+    expect(norm(drifted.get('--isl-pitch-figure-mid')!)).not.toBe(norm(canvasColor.figureMid));
   });
 });

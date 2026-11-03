@@ -16,18 +16,11 @@ export {
 export type { CameraMode } from './projection';
 export type { Viewport, Projected, ScreenPoint } from './projection';
 
-export {
-  WALK_SPEED_MPS,
-  RUN_SPEED_MPS,
-  STEP_RATE,
-  HOP_AMP,
-  SWING_AMP,
-  STATIC_POSE,
-  animStateFromSpeed,
-  advancePhase,
-  computePose,
-} from './animation';
-export type { AnimState, Pose } from './animation';
+export { FULL_RUN_MPS, STANDING, STRIDE_MIN_RUN, advanceStride, footfall, runAmount } from './animation';
+export type { Gait } from './animation';
+
+export { ARM_HOLDS, FLOPPY, REST_ANGLE, REST_BEND, holdArms, kickArms, newArms, newDrive, stepArms, stepJolt } from './arms';
+export type { Arm, ArmDrive, ArmHold, ArmPhysics, ArmState } from './arms';
 
 export {
   PITCH_MARKINGS,
@@ -53,25 +46,18 @@ export {
 export type { SepPoint } from './separation';
 
 export {
-  SPECIES,
+  HAIR_TONES,
+  HEAD_SCALE,
+  HEAD_TONES,
+  LEG_SCALE,
+  QUOO_TONES,
+  SHOULDER_SCALE,
   SPECIES_KEYS,
-  HAIR_TONE,
   hashStringToSeed,
-  mulberry32,
-  parseDescription,
   makeAppearance,
+  mulberry32,
 } from './appearance';
-export type {
-  Appearance,
-  AppearanceHints,
-  HairStyle,
-  Build,
-  Species,
-  SpeciesSpec,
-  HeadShape,
-  EyeKind,
-  AntennaKind,
-} from './appearance';
+export type { Appearance, HairStyle, Species } from './appearance';
 
 export {
   CHANGE_KITS,
@@ -124,6 +110,7 @@ export type {
   AnimLookup,
   AnimQuery,
   ArmPreset,
+  LegPose,
   Overlay,
   PoseKind,
   TrailKind,

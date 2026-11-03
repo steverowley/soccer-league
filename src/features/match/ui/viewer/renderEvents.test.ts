@@ -7,8 +7,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { canvasColor } from '../../../../shared/design';
-import { STATIC_POSE, actionBody, makeAppearance, resolveKits, type Projected, type TrailKind } from '../../logic/viewer';
-import { PIXEL_SCALE, TRAIL_STYLE, armAngles, drawBall, drawDude, type DudeRender, type ProjectFn } from './render';
+import { actionBody, makeAppearance, newArms, resolveKits, type Projected, type TrailKind } from '../../logic/viewer';
+import { PIXEL_SCALE, TRAIL_STYLE, drawBall, drawDude, type DudeRender, type ProjectFn } from './render';
 import {
   LABEL_MIN_PX,
   LABEL_PX,
@@ -213,50 +213,58 @@ describe('drawPitchLabel', () => {
 });
 
 describe('drawDude with an event animation', () => {
-  const base: DudeRender = { wx: 50, wy: 30, pose: STATIC_POSE, appearance: makeAppearance('p1'), kit: kits.home.outfield, number: 7, face: 1 };
-
-  it('a fall leans the whole body about the feet the way he faces', () => {
+  const base: DudeRender = { wx: 50, wy: 30, phase: 0, run: 0, appearance: makeAppearance('p1'), kit: kits.home.outfield, face: 1 };
+  /** Bounding box of the figure's own pixels (not its marker or shadow). */
+  const box = (d: DudeRender) => {
     const { ctx, ops } = recorder();
-    drawDude(ctx, project, { ...base, face: -1, act: actionBody({ kind: 'fall', t: 0.5, contact: 0 }) });
-    const rot = ops.find((o) => o.op === 'rotate');
-    expect(rot).toBeDefined();
-    expect(rot!.args[0] as number).toBeLessThan(-1.3);
-  });
-
-  it('no animation, no rotation (the gait-only figure is unchanged)', () => {
-    const { ctx, ops } = recorder();
-    drawDude(ctx, project, base);
-    expect(ops.some((o) => o.op === 'rotate')).toBe(false);
-  });
-
-  it('a kick swings the front leg forward of where it stands', () => {
-    const legX = (d: DudeRender): number[] => {
-      const { ctx, ops } = recorder();
-      drawDude(ctx, project, d);
-      return ops.filter((o) => o.op === 'fillRect' && o.fill === d.kit.shorts).map((o) => o.args[0] as number);
+    drawDude(ctx, project, d);
+    const rects = ops.filter((o) => o.op === 'fillRect' && o.fill !== d.kit.marker && o.fill !== canvasColor.shadow).map((o) => o.args as number[]);
+    return {
+      x0: Math.min(...rects.map((r) => r[0]!)),
+      x1: Math.max(...rects.map((r) => r[0]! + r[2]!)),
+      y0: Math.min(...rects.map((r) => r[1]!)),
+      y1: Math.max(...rects.map((r) => r[1]! + r[3]!)),
+      feet: ops.filter((o) => o.op === 'fillRect' && o.fill === canvasColor.figureMid).map((o) => o.args[0] as number),
     };
-    const rest = legX(base);
-    const kick = legX({ ...base, act: actionBody({ kind: 'kick', t: 0.45, contact: 0.3 }) });
-    expect(Math.max(...kick)).toBeGreaterThan(Math.max(...rest));
+  };
+
+  it('a fall lays him on the grass: wider than tall, his feet still on the ground', () => {
+    const stand = box(base);
+    const down = box({ ...base, act: actionBody({ kind: 'fall', t: 0.5, contact: 0 }) });
+    expect(stand.y1 - stand.y0).toBeGreaterThan(stand.x1 - stand.x0);
+    expect(down.x1 - down.x0).toBeGreaterThan(down.y1 - down.y0);
+    expect(down.y1).toBeLessThanOrEqual(stand.y1 + PIXEL_SCALE);
   });
 
-  it('arm presets: up is above the shoulders, out is level, rest hangs down', () => {
-    const [ur, ul] = armAngles('up', 1);
-    expect(Math.sin(ur)).toBeLessThan(-0.8);
-    expect(Math.sin(ul)).toBeLessThan(-0.8);
-    const [or] = armAngles('out', 1);
-    expect(Math.abs(Math.sin(or))).toBeLessThan(0.3);
-    expect(Math.sin(armAngles('rest', 1)[0])).toBeGreaterThan(0.9);
-    expect(Math.cos(armAngles('forward', -1)[0])).toBeLessThan(0);
+  it('a slide goes feet first along the grass, and a dive lays the keeper out', () => {
+    const slide = box({ ...base, act: actionBody({ kind: 'slide', t: 0.5, contact: 0.18 }) });
+    expect(slide.y1 - slide.y0).toBeLessThan(box(base).y1 - box(base).y0);
+    const dive = box({ ...base, kit: kits.home.keeper, act: actionBody({ kind: 'dive', t: 0.6, contact: 0, toZ: 0 }) });
+    expect(dive.x1 - dive.x0).toBeGreaterThan(dive.y1 - dive.y0);
   });
 
-  it('a celebration lifts the body off the grass (arms up, hop)', () => {
-    const feetTop = (d: DudeRender): number => {
-      const { ctx, ops } = recorder();
-      drawDude(ctx, project, d);
-      return Math.min(...ops.filter((o) => o.op === 'fillRect' && o.fill === d.kit.shorts).map((o) => o.args[1] as number));
-    };
-    expect(feetTop({ ...base, act: actionBody({ kind: 'celebrate', t: 1 / 6, contact: 0 }) })).toBeLessThan(feetTop(base));
+  it('a kick swings the kicking foot forward of where it stands', () => {
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const rest = box(base).feet;
+    const through = box({ ...base, act: actionBody({ kind: 'kick', t: 0.51, contact: 0.3 }) }).feet;
+    const back = box({ ...base, act: actionBody({ kind: 'kick', t: 0.2, contact: 0.3 }) }).feet;
+    expect(mean(through)).toBeGreaterThan(mean(rest));
+    expect(mean(back)).toBeLessThan(mean(rest));
+  });
+
+  it('the spring arms decide where the hands are: arms out make him wider', () => {
+    const arms = newArms(0.2);
+    arms.back.a = Math.PI / 2;
+    arms.front.a = Math.PI / 2;
+    arms.back.b = 0;
+    arms.front.b = 0;
+    const out = box({ ...base, arms });
+    const rest = box(base);
+    expect(out.x1 - out.x0).toBeGreaterThan(rest.x1 - rest.x0 + 2 * PIXEL_SCALE);
+  });
+
+  it('a celebration lifts the body off the grass (the hop)', () => {
+    expect(box({ ...base, act: actionBody({ kind: 'celebrate', t: 1 / 6, contact: 0 }) }).y1).toBeLessThan(box(base).y1);
   });
 });
 

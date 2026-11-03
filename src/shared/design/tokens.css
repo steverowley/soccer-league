@@ -78,12 +78,17 @@
    * figures also use --isl-text (phosphor heads and arms), --isl-bg (outlines,
    * eyes, the ball's outline) and --isl-architect (the focus halo).
    * Canvas only: never use these in page chrome. */
-  --isl-pitch-surround: #0d0f0d;              /* the viewport behind the pitch */
-  --isl-pitch-grass-a: #131613;               /* darker mowing stripe */
-  --isl-pitch-grass-b: #171b17;               /* lighter mowing stripe */
-  --isl-pitch-line: rgba(227,224,213,0.26);   /* pitch markings */
-  --isl-pitch-goal-line: rgba(227,224,213,0.5); /* goal frames */
-  --isl-pitch-figure-dim: #9C9A90;            /* antenna stems (shorts wear the kit) */
+  --isl-pitch-line: rgba(227,224,213,0.36);   /* hairline markings on the Abyss pitch */
+  --isl-pitch-goal-line: rgba(227,224,213,0.75); /* goal frames, a step brighter */
+  /* Figure shades: peoples never add a hue, only these Lunar Dust shades. */
+  --isl-pitch-figure-tone-2: #DAD6C9;         /* head tones besides --isl-text */
+  --isl-pitch-figure-tone-3: #D0CCBE;
+  --isl-pitch-figure-light: #C9C5B8;          /* horns, muzzles, light hair */
+  --isl-pitch-figure-mid: #8F8C83;            /* feet, seams, mid hair */
+  --isl-pitch-figure-dark: #5E5B54;           /* faceplates, dark hair */
+  --isl-pitch-figure-glow: #FFFFFF;           /* visor scans, flame tips, lights */
+  --isl-pitch-figure-metal: #A9A597;          /* the Ohm K's metal head */
+  --isl-pitch-figure-quoo: #D6D2C4;           /* the Quoo's head tone */
   --isl-pitch-kit-home: #C9603F;              /* home shirt when a club has no colour */
   --isl-pitch-kit-away: #4E7E8C;              /* away shirt when a club has no colour */
   --isl-pitch-shadow: rgba(0,0,0,0.38);       /* ground shadows */
@@ -98,10 +103,6 @@
   --isl-pitch-keeper-teal: #21C4A6;
   --isl-pitch-keeper-orange: #FF8C1A;
   --isl-pitch-keeper-blue: #5B8CFF;
-  --isl-pitch-hair-short: #C6C3B8;            /* phosphor hair shades (terrans) */
-  --isl-pitch-hair-flat: #AEAB9F;
-  --isl-pitch-hair-spiky: #94917F;
-  --isl-pitch-hair-long: #BBB8AC;
   /* Event overlays (cards reuse --isl-card-yellow and --isl-live, a
      substitute's arrow --isl-success). */
   --isl-pitch-flag: #FFB238;                  /* the flag mark on the offside line */

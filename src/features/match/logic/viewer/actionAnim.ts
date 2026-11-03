@@ -544,26 +544,45 @@ export function activeAnimations(
 }
 
 // ── Pose -> body ─────────────────────────────────────────────────────────────
+// What each animation does to the Charming figure (docs/match-viewer.md
+// section 6).  This module says WHAT the body does; the arm springs
+// (arms.ts) and the renderer (ui/viewer/figure.ts) decide how it looks, so
+// the arms stay floppy even inside a pose.
 
-/** Arm positions the sprite code knows. */
-export type ArmPreset = 'rest' | 'up' | 'out' | 'overhead' | 'forward' | 'back';
+/** What a pose asks of the arm springs (arms.ts turns it into a target). */
+export type ArmPreset = 'rest' | 'up' | 'out' | 'overhead' | 'forward' | 'back' | 'hug' | 'dive' | 'celebrate';
 
-/** The numbers the sprite code draws an animated body with. */
+/** The leg pose the renderer draws (from the owner-approved sketch). */
+export type LegPose = 'gait' | 'kick' | 'slide' | 'dive' | 'down' | 'lunge' | 'stumble';
+
+/** The numbers the figure is drawn with during an animation. */
 export interface ActionBody {
-  /** Whole-body rotation about the feet in radians; positive leans the way he faces. */
+  /**
+   * Whole-body rotation about the hips in radians: positive pitches him
+   * forward (the way he faces, a dive), negative back (feet first in a
+   * slide, onto his back in a fall).
+   */
   tilt: number;
-  /** Extra lift of the whole body above the grass, in sprite (`sc`) units. */
+  /** Extra height above the grass, in figure pixels at scale 1 (a hop, a header). */
   lift: number;
-  /** The front leg: -1 drawn back, 0 planted, +1 swung through (can exceed 1 for a shot). */
+  /** Which leg pose to draw. */
+  legs: LegPose;
+  /**
+   * The leg drive.  For 'kick': the kicking leg, -1 drawn back, 0 planted,
+   * above 1 swung through (a shot swings further).  For the other leg poses:
+   * how far into the pose he is, 0 standing to 1 fully in it.
+   */
   kickLeg: number;
+  /** What the arm springs are pulled toward. */
   arms: ArmPreset;
-  /** Body squash and stretch multipliers. */
-  scaleX: number;
-  scaleY: number;
+  /** True while he rests on the grass (a slide, a fall, a full-length dive). */
+  lying: boolean;
+  /** How hard the arms are flung when the pose begins (0: no impulse). */
+  impulse: number;
 }
 
 /** The planted body (no animation). */
-export const REST_BODY: ActionBody = { tilt: 0, lift: 0, kickLeg: 0, arms: 'rest', scaleX: 1, scaleY: 1 };
+export const REST_BODY: ActionBody = { tilt: 0, lift: 0, legs: 'gait', kickLeg: 0, arms: 'rest', lying: false, impulse: 0 };
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 /** Smooth 0..1 ease. */
@@ -591,41 +610,48 @@ export function kickLegAt(t: number, contact: number, strength = 1): number {
  * Turn an animation into body numbers.
  *
  * @param p  The pose (kind, progress, contact point, dive target).
- * @returns  Tilt, lift, front-leg swing, arms and squash for the sprite code.
+ * @returns  Tilt, lift, legs, arms and the arm impulse for the figure.
  */
 export function actionBody(p: ActionPose): ActionBody {
   const t = clamp01(p.t);
   switch (p.kind) {
     case 'kick':
-      return { ...REST_BODY, kickLeg: kickLegAt(t, p.contact), tilt: -0.1 * bell(t), arms: 'rest' };
+      return { ...REST_BODY, legs: 'kick', kickLeg: kickLegAt(t, p.contact), tilt: -0.1 * bell(t), impulse: 0.5 };
     case 'shot':
-      return { ...REST_BODY, kickLeg: kickLegAt(t, p.contact, 1.35), tilt: -0.22 * bell(t), arms: 'out', scaleX: 1.06 };
+      return { ...REST_BODY, legs: 'kick', kickLeg: kickLegAt(t, p.contact, 1.35), tilt: -0.18 * bell(t), arms: 'out', impulse: 1 };
     case 'header':
-      return { ...REST_BODY, lift: 2.4 * bell(t), tilt: 0.25 * bell(t), arms: 'out' };
+      return { ...REST_BODY, lift: 3 * bell(t), tilt: 0.25 * bell(t), arms: 'out', impulse: 0.7 };
     case 'throwHold':
-      return { ...REST_BODY, tilt: -0.12, arms: 'overhead' };
+      return { ...REST_BODY, tilt: -0.12, arms: 'overhead', impulse: 0.4 };
     case 'throw':
-      return { ...REST_BODY, tilt: -0.15 + 0.4 * ease(t / 0.5) * (1 - ease((t - 0.5) / 0.5)), arms: t < 0.3 ? 'overhead' : 'forward' };
+      return { ...REST_BODY, tilt: -0.15 + 0.4 * ease(t / 0.5) * (1 - ease((t - 0.5) / 0.5)), arms: t < 0.3 ? 'overhead' : 'forward', impulse: 0.8 };
     case 'slide': {
-      const k = plateau(t, 0.22, 0.7);
-      return { ...REST_BODY, tilt: -1.05 * k, kickLeg: 1.3 * k, arms: 'back', scaleX: 1 + 0.12 * k };
+      // Feet first along the grass, leaning back on the trailing arm: in
+      // fast, held, then back up.
+      const k = plateau(t, 0.18, 0.75);
+      return { ...REST_BODY, tilt: -0.9 * k, legs: 'slide', kickLeg: k, arms: 'back', lying: k > 0.5, impulse: 1.3 };
     }
     case 'stumble':
-      return { ...REST_BODY, tilt: 0.55 * bell(t), kickLeg: -0.6 * bell(t), arms: 'out' };
+      return { ...REST_BODY, tilt: 0.45 * bell(t), legs: 'stumble', kickLeg: bell(t), arms: 'out', impulse: 0.9 };
     case 'lunge':
-      return { ...REST_BODY, tilt: 0.5 * bell(t), kickLeg: 1.2 * bell(t), arms: 'out', scaleX: 1 + 0.08 * bell(t) };
-    case 'fall':
-      return { ...REST_BODY, tilt: 1.45 * plateau(t, 0.22, 0.82), arms: 'out' };
+      return { ...REST_BODY, tilt: 0.35 * bell(t), legs: 'lunge', kickLeg: bell(t), arms: 'out', impulse: 0.6 };
+    case 'fall': {
+      // Down on his back almost at once, lies there, then gets up.
+      const k = plateau(t, 0.12, 0.85);
+      return { ...REST_BODY, tilt: -1.55 * k, legs: 'down', kickLeg: k, lying: k > 0.5, impulse: 1.5 };
+    }
     case 'dive': {
+      // Full length toward the ball, off the ground first (higher for a high shot).
       const k = plateau(t, 0.28, 0.85);
       const height = Math.min(2.4, Math.max(0, p.toZ ?? 0));
-      return { ...REST_BODY, tilt: 1.35 * k, lift: (1 + 2.6 * height) * bell(Math.min(1, t * 1.15)), arms: 'overhead', scaleX: 1 + 0.15 * k };
+      const air = t < 0.5 ? Math.sin((Math.PI * t) / 0.5) : 0;
+      return { ...REST_BODY, tilt: 1.5 * k, lift: (3 + 3 * height) * air, legs: 'dive', kickLeg: k, arms: t < 0.7 ? 'dive' : 'out', lying: t > 0.45 && t < 0.9, impulse: 1.2 };
     }
     case 'catch':
-      return { ...REST_BODY, arms: 'up' };
+      return { ...REST_BODY, arms: 'hug', impulse: 0.3 };
     case 'parry':
-      return { ...REST_BODY, tilt: 0.3 * bell(t), arms: 'out' };
+      return { ...REST_BODY, tilt: 0.3 * bell(t), arms: 'up', impulse: 0.9 };
     case 'celebrate':
-      return { ...REST_BODY, arms: 'up', lift: 2.6 * Math.abs(Math.sin(Math.PI * 3 * t)) * (1 - 0.4 * t) };
+      return { ...REST_BODY, arms: 'celebrate', lift: 3 * Math.abs(Math.sin(Math.PI * 3 * t)) * (1 - 0.4 * t), impulse: 0.8 };
   }
 }

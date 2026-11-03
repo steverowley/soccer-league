@@ -54,8 +54,8 @@ export const KEEPER_MIN_GRASS_CONTRAST = 4.5;
 
 /** The references every kit is measured against. */
 export const KIT_REFERENCE = {
-  /** The lighter mowing stripe: the worst case for a dark kit. */
-  grass: canvasColor.grassB,
+  /** The pitch surface, Galactic Abyss (docs/match-viewer.md section 6). */
+  pitch: canvasColor.bg,
   /** Lunar Dust: the heads and arms of every figure. */
   figure: canvasColor.text,
   /** The ball. */
@@ -242,7 +242,7 @@ function searchLightness(lab: Lab, from: number, to: number, ok: (hex: string) =
 // ── Rule 1: legibility ────────────────────────────────────────────────────
 
 /** Contrast on the grass is enough. */
-const onGrass = (hex: string): boolean => contrastRatio(hex, KIT_REFERENCE.grass) >= GRASS_MIN_CONTRAST;
+const onGrass = (hex: string): boolean => contrastRatio(hex, KIT_REFERENCE.pitch) >= GRASS_MIN_CONTRAST;
 /** Far enough from the figure colour and the ball. */
 const apartFromFigures = (hex: string): boolean =>
   deltaE(hex, KIT_REFERENCE.figure) >= FIGURE_MIN_DE && deltaE(hex, KIT_REFERENCE.ball) >= FIGURE_MIN_DE;
