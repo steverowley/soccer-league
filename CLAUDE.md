@@ -182,55 +182,11 @@ unexplained mechanics.
 
 ---
 
-## Leagues (4 conferences × 8 teams = 32 teams)
+## Leagues
 
-### Rocky Inner League
-| Club | Location |
-|------|----------|
-| Mercury Runners FC | Mercury |
-| Venus Volcanic SC | Venus |
-| Earth United FC | Earth |
-| Terra Nova SC | Earth |
-| Mars Athletic | Mars |
-| Olympus Mons FC | Mars |
-| Valles Mariners SC | Mars |
-| Solar City FC | Earth Orbital Colony |
-
-### Gas/Ice Giant League
-| Club | Location |
-|------|----------|
-| Jupiter Royals FC | Jupiter |
-| Great Red FC | Jupiter |
-| Saturn Rings United | Saturn |
-| Cassini Explorers FC | Saturn |
-| Uranus Athletic Club | Uranus |
-| Neptune FC Mariners | Neptune |
-| Galilean Giants FC | Jupiter region |
-| Saturn Orbital SC | Saturn orbital colony |
-
-### Asteroid Belt League
-| Club | Location |
-|------|----------|
-| Ceres City FC | Ceres |
-| Vesta United | Vesta |
-| Pallas SC | Pallas |
-| Hygiea Rangers | Hygiea |
-| Beltway FC | Asteroid Belt colony |
-| Solar Miners FC | Asteroid Belt colony |
-| Juno Athletic | Juno |
-| Pallas Rovers FC | Pallas |
-
-### Kuiper Belt League
-| Club | Location |
-|------|----------|
-| Pluto FC Wanderers | Pluto |
-| Eris FC Rebels | Eris |
-| Haumea SC Cyclones | Haumea |
-| Makemake United | Makemake |
-| Sedna FC Mariners | Sedna |
-| Plutino FC Pirates | Plutino Region |
-| Orcus FC Shadows | Orcus |
-| Scattered Disc FC Rangers | Outer Kuiper Belt |
+32 teams across 4 conferences. Source of truth: `src/data/leagueData.ts` (also seeded in
+`supabase/seed.sql`). Don't hardcode the list here — it drifts from the real data and the agent can
+read the source file directly when a task needs it.
 
 ---
 
@@ -310,9 +266,9 @@ simulate matches and tick the galaxy forward.
 
 ### Feature inventory
 
-**11 vertically-sliced features** under `src/features/`. Each exposes its public API through an
-`index.ts` barrel; nothing outside a feature may reach past that barrel. The `{api,logic,ui}/ + types.ts`
-shape is the ideal, not a guarantee — real folders deviate:
+Vertically-sliced features under `src/features/` (one dir per slice, don't hardcode the count here —
+it changes). Each exposes its public API through an `index.ts` barrel; nothing outside a feature may
+reach past that barrel. The `{api,logic,ui}/ + types.ts` shape is the ideal, not a guarantee:
 
 | Feature | Purpose | Notes on shape |
 |---|---|---|
@@ -320,67 +276,31 @@ shape is the ideal, not a guarantee — real folders deviate:
 | **agents** | The **LLM narrative layer**: commentary corpus, snippet retrieval + `composeNarrative`, persona/memory models, a three-tier decision system (`runDecision` → `logic/resolvers/`: reflex / reflection / drama), a voice-coherence guard, and `MemoryWriteListener`. | full shape |
 | **architect** | The Cosmic Architect chaos-director: in-match interference, persistent lore, audited result rewrites (`CosmicArchitect`, `prepareArchitectForMatch`, `LoreStore`). | no `ui/` |
 | **auth** | Accounts (Supabase Auth + `profiles`), credit helpers, app-wide auth context (`AuthProvider`/`useAuth`). | full shape |
-| **betting** | Wager lifecycle: odds, placement, settlement on `match.completed` (`WagerSettlementListener`). | full shape |
+| **betting** | Wager lifecycle: odds, placement, settlement on `match.completed` (`WagerSettlementListener`). Ticket-revenue/fan-support-boost logic (formerly its own `finance` feature) now lives here. | full shape |
 | **entities** | Unified first-class entity model (players, managers, referees, pundits, journalists, owners, media, bookies, planets, political bodies) + traits + relationship graph. | full shape |
-| **finance** | Ticket revenue from present fans + the fan-support stat boost. | no `ui/`, no `types.ts` |
 | **match** | The full fixture lifecycle (largest barrel): simulation, cup draws/seeding, league standings, season lifecycle, idols, team/player reads, the 2D pitch view, and the spatial position-playback layer. | full shape (+ `logic/pitch/`, `logic/spatial/`, `ui/pitch/`) |
 | **notifications** | Web Push subscriptions + per-user notification preferences for `/profile`. | full shape |
 | **training** | Between-match clicker minigame (rate-limited, geometric XP curve). | no `ui/` |
 | **voting** | End-of-season credit-pooled focus voting, enactment, and the Election Night incineration ritual. | no `ui/` |
 
-> Several `ui/` folders were intentionally emptied in the "2026-05 nuke" (architect, training, voting)
-> and will be rebuilt against the new design system. Cross-feature imports must go through the
-> `@features/<name>` barrel alias; `eslint.config.js` `no-restricted-imports` errors on
-> `@features/*/*` deep paths (relaxed for tests).
+> This table lists *why* each feature exists and how it's shaped — things not obvious from the barrel
+> alone. If a feature here no longer exists in `src/features/` (or a new one does), the current
+> directory listing wins; fix this table, don't trust it blindly.
+> Cross-feature imports must go through the `@features/<name>` barrel alias; `eslint.config.js`
+> `no-restricted-imports` errors on `@features/*/*` deep paths (relaxed for tests).
 
 ---
 
 ## Match Simulation
 
-The live engine is the **spatial, agent-based physics engine** — and as of #389 it is the *only* engine.
-The legacy `gameEngine.js` "dice-roller", the `USE_SPATIAL_ENGINE` env switch, and the PATH B fallback
-were all deleted; the worker now runs the spatial sim unconditionally.
-
-### How a match runs
-All matches are simulated server-side by `supabase/functions/match-worker/index.ts`, invoked by a
-`pg_cron` job (`trigger-match-worker`, every minute). On each tick the worker claims due matches
-(optimistic lock), fetches both rosters, runs the spatial engine (`toSpatialTeamInput` → seed derived
-from the match UUID → `simulateSpatialMatch` → `adaptSpatialResult`), then trims the stream to the
-notable beats via `filterNotableEvents` before persisting. It returns `{ events, finalScore, mvp,
-playerStats }`; per-player stats accumulate over the full pre-filter stream, so they stay complete.
-
-### The spatial engine
-It lives in two byte-identical copies — `src/features/match/logic/spatial/` (browser + tests) and
-`supabase/functions/match-worker/spatial/` (the Deno worker, copied because edge functions cannot import
-from `src/`). Both contain `types.ts`, `vec2.ts`, `rng.ts`, `formation.ts`, `steering.ts`,
-`possession.ts`, `step.ts`, `simulateSpatialMatch.ts`, `spatialEventAdapter.ts`.
-
-22 players and a ball move continuously through pitch-metre space (x∈[0,105], y∈[0,68]); events are
-**derived from geometry**, not rolled. Pipeline:
-1. **Formation → world** — players assigned to 11 formation slots (`4-4-2`/`4-5-1`/`3-4-3`/`5-4-1`) by
-   role, mapped to absolute pitch positions. Formation from `managers[0].preferred_formation`.
-2. **Step loop** — fixed-timestep at 10 Hz (`dtSec=0.1`) for 90 minutes (54,000 ticks). Each tick
-   assigns roles, computes Reynolds-style steering (seek/arrive/pursueBall/separation), integrates
-   motion, updates the ball, resolves events.
-3. **Possession brain** (`possession.ts`) — stats → outcomes (shoot/pass/dribble, aim error, tackle &
-   save probabilities).
-4. **Event resolution** (`step.resolveLooseBall`) — goals/saves/corners/throw-ins/tackles emerge from
-   ball motion.
-5. **Adapter** (`spatialEventAdapter.adaptSpatialResult`) — converts emergent events to the
-   `match_events` shape, accumulates per-player stats, computes MVP (`goals×3 + saves×2 + tackles`).
-
-Determinism: `rng.ts` is a seeded mulberry32 generator; the worker derives the seed from the match UUID,
-so a fixture always reproduces the same match — the stored frames, live viewer, and final score can
-never disagree. The Architect's post-simulation rewrites (curse / annul_goal / force_red_card) share
-that guarantee: `matchRng.ts` derives a second, independent stream from the same UUID, so a given set
-of intents always resolves the same way. The intents themselves come from the LLM and remain
-non-deterministic by design.
-
-### Position frames & the 2D viewer
-The engine samples a position frame every 2s and the worker persists them to
-`match_positions` (migration `0061`), keyed by `(match_id, minute, second)` with a `jsonb` snapshot of
-player/ball coordinates (public read, service-role write). The browser reads these via
-`src/features/match/api/matchPositions.ts` for 2D playback.
+The live engine is the **spatial, agent-based physics engine**, the *only* engine since #389, run
+server-side by `supabase/functions/match-worker/index.ts` and invoked every minute by a `pg_cron` job.
+It's fully deterministic (seeded from the match UUID, `rng.ts` mulberry32) — same fixture always
+reproduces the same match. Lives in two byte-identical copies: `src/features/match/logic/spatial/`
+(browser + tests) and `supabase/functions/match-worker/spatial/` (Deno worker, can't import from
+`src/`) — a drift-guard test keeps them in sync. For the pipeline mechanics, read the engine source
+directly (`simulateSpatialMatch.ts`, `step.ts`, `possession.ts`) rather than relying on a prose
+description here — that's exactly the kind of detail that goes stale first.
 
 ---
 
@@ -398,98 +318,42 @@ player/ball coordinates (public read, service-role write). The browser reads the
 
 ## Pages & Routes
 
-Routing is inline in `src/main.tsx` (28 routes, 29 page files in `src/pages/`, all lazy-loaded). Public
-unless noted.
-
-| Route | Page | Notes |
-|---|---|---|
-| `/` | Home | hero + live/upcoming matches + standings |
-| `/leagues`, `/leagues/:leagueId` | Leagues, LeagueDetail | standings |
-| `/teams`, `/teams/:teamId` | Teams, TeamDetail | squad + manager/facility |
-| `/matches`, `/matches/:matchId` | Matches, MatchDetail | schedule; paced LiveCommentary + WagerWidget |
-| `/players/:playerId` | PlayerDetail | profile; raw stats hidden |
-| `/managers/:managerId` | ManagerDetail | profile; coaching stats hidden |
-| `/entities/:entityId` | EntityDetail | persona + snippets |
-| `/news` | News | Galaxy Dispatch feed |
-| `/idols` | Idols | idol leaderboard + movers |
-| `/leaderboards` | Leaderboards | wager + idol leaderboards |
-| `/seasons`, `/seasons/:seasonId` | Seasons, SeasonDetail | season archive |
-| `/voting` | Voting | in-page gated on auth + favourite team |
-| `/training` | Training | in-page gated |
-| `/wagers` | Wagers | **auth-gated** → `/login` |
-| `/profile` | Profile | **auth-gated** → `/login` |
-| `/login` | Login | redirects authed users to `/profile` |
-| `/admin` | Admin | **admin-gated** (client gate + `admin_*` RPC boundary) |
-| `/world`, `/whatif`, `/welcome`, `/about`, `/privacy`, `/terms`, `/reset-password` | World, WhatIf, Welcome, About, Privacy, Terms, ResetPassword | supporting/legal/onboarding |
-| `*` | NotFound | catch-all (pairs with a GitHub Pages `404.html` redirect) |
+Routing is inline in `src/main.tsx`, all pages lazy-loaded under one `Suspense` boundary. Don't
+hardcode the route/page count or an auth/admin-gating table here — `src/main.tsx` already has a
+detailed comment above every `<Route>` explaining what it does and how it's gated, co-located with
+the code that would change it. That's a better source than a copy here ever will be (a prior version
+of this file still said `/whatif` when the route had already moved to `/admin/what-if`).
 
 ---
 
-## Database Schema (40 tables + 9 views + 14 RPC functions, migrations 0000–0073)
+## Database Schema
 
-Source of truth is the generated `src/types/database.ts` (regenerate after every migration).
-
-**Core / entities**: `entities`, `entity_traits`, `entity_relationships`, `entity_memories`,
-`entity_persona`, `entity_snippets`, `leagues`, `teams`, `managers`, `players`
-**Match & competition**: `matches`, `match_events`, `match_player_stats`, `match_lineups`,
-`match_attendance`, `match_odds`, `match_notification_sends`, `match_positions`, `competitions`,
-`competition_teams`
-**Season**: `seasons`, `season_config`, `season_decrees`
-**Narrative & lore**: `architect_lore`, `architect_interventions`, `narratives`,
-`shadow_match_results`, `drama_consequences`
-**Voting**: `focus_options`, `focus_votes`, `focus_enacted`, `incinerations`
-**Betting & finance**: `wagers`, `team_finances`
-**User**: `profiles`, `player_training_log`, `push_subscriptions`, `account_deletions`
-**Ops / config**: `agent_runs`, `app_config`, `claude_sessions`
-
-> The table list above is the generated set as of the audit date; treat `database.ts` as authoritative.
-> The earlier counting drift (`match_positions` etc.) is the reason this section is regenerated, not
-> hand-maintained.
-
-**Views (9)**: `active_watchers_v`, `focus_tally`, `match_referee_v`, `player_idol_movers`,
-`player_idol_score`, `public_profiles`, `team_supporter_count_v`, `wager_leaderboard`, `wager_volume_v`
-
-**RPC functions (14)**: `admin_add_player`, `admin_complete_match`, `admin_fast_forward_matches`,
-`admin_inject_narrative`, `admin_reset_season`, `admin_set_season_status`, `assign_match_referee`,
-`berger_round_robin_fixtures`, `bump_login_streak`, `cast_focus_vote`, `incinerate_player`,
-`place_wager`, `request_account_deletion`, `settle_wager` (note: `cast_focus_vote` ships in migration
-`0072`; regenerate types after it is applied to surface it in `database.ts`).
+Source of truth is the generated `src/types/database.ts` (regenerate after every migration) — read
+it directly rather than relying on a hand-maintained table list here, which drifts (this file was
+already 12 migrations behind at last check).
 
 ---
 
-## Edge Functions (7)
+## Edge Functions
 
-| Function | Purpose | Cron | Model | Writes match data? |
-|---|---|---|---|---|
-| `match-worker` | Claim due matches, run the 90-min spatial sim, persist events + stats + lineups, generate odds, seed cups | every minute | sonnet (in-match architect) | **yes** (service-role) |
-| `shadow-match-worker` | Cheap Poisson alternate-timeline outcomes per upcoming match (engine-independent since #389 dropped its legacy-engine path) | **not scheduled by any migration** (header notes intended hourly) | none | yes (`shadow_match_results`) |
-| `match-notify-worker` | Web-push "match starting" notifications; idempotent | every minute | none | no |
-| `architect-galaxy-tick` | Out-of-match Architect heartbeat → Galaxy Dispatch narratives | every 2h | haiku | no |
-| `drama-tick` | Daily drama narrative (transfer demand, retirement, decree, feud) | daily 07:00 | sonnet | no |
-| `corpus-enricher` | Grow entity voice library (`entity_snippets`); logs token usage | hourly | haiku | no |
-| `account-delete` | GDPR Article 17 erasure (user-JWT phase 1 + service-role phase 2) | HTTP POST | none | no |
-
-The four LLM-spending workers are gated by a shared secret bridging pg_cron and the function
-(migration `0052`). `match-notify-worker` uses its own secret and `--no-verify-jwt`.
+7 functions under `supabase/functions/`. Cron schedule + model per function (verified against
+migrations + `constants.ts`, not hand-guessed): see `docs/edge-functions.md`. Read it when a task
+touches a specific function's timing or model — the schedule lives in `supabase/migrations/`, not in
+the function itself, so it's easy to get wrong from memory.
 
 ---
 
 ## Continuous Integration
 
-Four workflows under `.github/workflows/`:
-- **`deploy.yml`** — on push to `main`, PRs to `main`, and manual dispatch. Jobs: **`quality`** (`npm ci`
-  → `typecheck` → `test`; lint runs last with `continue-on-error: true` and **does not gate**) →
-  `build` → `deploy` (GitHub Pages, `main` only).
-- **`deploy-match-worker.yml`** — deploys the `match-worker` edge function on pushes to `main` touching
-  it; deploys with `--no-verify-jwt`.
-- **`enact-due-seasons.yml`** — scheduled daily (06:00 UTC) + manual dispatch; runs end-of-season focus
-  enactment as a service-role Node job (added in #529/#544). Needs the `SUPABASE_URL` +
-  `SUPABASE_SERVICE_ROLE_KEY` repo secrets.
-- **`setup-branch-protection.yml`** — manual-dispatch helper that (re)applies `main` branch protection
-  (the stale `dev` references were removed in #550).
-
-There is no CodeQL workflow file, though branch protection references `Analyze` checks (CodeQL is likely
-enabled via GitHub's repo-level default setup).
+Workflows under `.github/workflows/`, currently including `deploy.yml` (push/PR to `main` + manual
+dispatch: `quality` job runs `npm ci` → typecheck → test, lint is `continue-on-error` and does not
+gate, then `build` → `deploy` to GitHub Pages), `deploy-match-worker.yml` (deploys the edge function
+on `main` pushes touching it, `--no-verify-jwt`), `enact-due-seasons.yml` (daily 06:00 UTC end-of-season
+focus enactment, needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` secrets), and
+`setup-branch-protection.yml` (manual-dispatch helper). **Don't trust an exact count or list here** —
+`ls .github/workflows/` is one call and this section has already drifted once. There is no CodeQL
+workflow file, though branch protection references `Analyze` checks (likely GitHub's repo-level
+default setup).
 
 ---
 
@@ -584,25 +448,11 @@ or filter directly, e.g. `is:issue is:open label:M2-product-foundation label:P1`
 
 ## Current Implementation Status
 
-> **Last audited: 2026-06-06** against the codebase (a multi-agent ground-truth sweep). Numeric claims
-> in this file reflect that sweep, spot-corrected by the **2026-06-11 production + code deep audit**
-> (whose findings live in `ROADMAP.md` and issues #565–#572). Next full sweep due ~2026-09-06.
+All core systems (auth, betting, voting, training, cup tournaments, entities, season lifecycle,
+notifications, admin, Cosmic Architect, spatial match engine) are wired and have test coverage.
 
-All core systems are wired and tested:
-- **Infrastructure** — strict TypeScript, 11-feature layout, event bus, generated typed client, GitHub
-  Pages deploy. **~1,337 Vitest tests** (the legacy `gameEngine.smoke.test.ts` was removed with the
-  engine in #389; the seed-divergence test was de-flaked in #541).
-- **Match simulation** — live spatial engine + 2D position viewer (the legacy `gameEngine.js` engine and
-  its PATH B fallback were deleted in #389).
-- **Cosmic Architect** — interference layers, persistent lore, Galaxy Dispatch (galaxy-tick + drama-tick).
-- **Auth & profiles**, **Betting** (odds + settlement), **Focus voting & enactment** (+ Election Night),
-  **Training** (clicker), **Cup tournaments** (Celestial Cup + Solar Shield), **Entity system**
-  (graph + referees), **Season lifecycle**, **Fan support & finance**, **Notifications** (web push),
-  **Admin dashboard** — all live.
-
-**Known drift / cleanup:** the spatial engine is duplicated between `src/` and the
-Deno worker (a runtime constraint — a drift-guard test guards the twins, #547/#554/#560; residual
-divergence under investigation in #561); ~210 pre-existing ESLint errors, 205 of them
-`@typescript-eslint/no-explicit-any` (lint is informationally-gated until cleared, #407). **Verified
-production gaps (2026-06-11):** no season-rollover path exists (#568) and cup fixtures are seeded with
-unreachable in-universe dates (#569) — Season 1 is stuck in `voting` until those land.
+For what's actually live, in progress, or known-broken right now: **GitHub Issues is the source of
+truth** (see "Task tracking" above), not a snapshot here. A prose status paragraph in this file goes
+stale the moment a PR merges — the previous version of this section was ~4 months and ~130 PRs out of
+date when last checked (2026-10-23) and still claimed to be current. If you need current drift/known-gaps
+info, check `ROADMAP.md` and open issues, not this file.
