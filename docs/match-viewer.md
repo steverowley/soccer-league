@@ -397,8 +397,9 @@ look, picked the species himself, and decided how they fit the world.
 - **Pitch: Galactic Abyss** with hairline Lunar Dust markings (no grass
   stripes). Club colour appears only on shirts and socks; keepers wear the
   keeper kit and are never dark or hollow (section 3).
-- **Eleven peoples, the owner's own picks:** Terran, Grey, Trinocular, Synth,
-  Taurid, Cephalid, Ignid, Dome, Android, Slyari, Fenthrai. Peoples change
+- **Thirteen peoples, the owner's own picks** (eleven first, then the Ohm K
+  and the Quoo): Terran, Grey, Trinocular, Synth,
+  Taurid, Cephalid, Ignid, Dome, Android, Slyari, Fenthrai, Ohm K, Quoo. Peoples change
   silhouette and eyes only, never hue: heads and features use the Lunar Dust
   shades (canvas tokens), so the kit stays the only strong colour.
 - **Variation within a people.** No two players look the same: per player,
@@ -425,7 +426,7 @@ look, picked the species himself, and decided how they fit the world.
    passes each player's species to the viewer (`MatchViewerPlayer.species`).
    The player page already shows the `race` line.
 2. **Figures (one PR).** The renderer draws the Charming figure with spring
-   arms, the eleven heads with per-player variation, and the Abyss pitch;
+   arms, the thirteen heads with per-player variation, and the Abyss pitch;
    the event poses (kick, slide tackle, keeper dive, fall, celebration) are
    redrawn for the new figure. Reference sketch (owner-approved, all eleven
    heads, physics constants and poses): the owner's OneDrive copy
@@ -434,10 +435,47 @@ look, picked the species himself, and decided how they fit the world.
    pitch; on-pitch marks are reduced to hairline rings, a small card glyph
    and the goal frame flare (sketch `event-language.html`).
 
+#### As built (figures)
+
+- `ui/viewer/figure.ts` draws the Charming figure and the heads, ported from
+  the sketch. Everything snaps to the 1x art grid (two backing pixels a
+  figure pixel on the 640 x 416 canvas); lines are stepped pixel runs; there
+  are no strokes, arcs or blur on a figure (`render.test.ts` checks every
+  people). A figure is about 13 art pixels tall on the Pitch camera and about
+  28 on the Ball camera. Squad numbers are no longer printed on the chest:
+  the shirt is too small at this size, and the caption under the pitch names
+  the player on the ball with his number.
+- `logic/viewer/arms.ts`: two damped springs per player, preset Floppy
+  (K 22, D 3.4, G 0.9, kick 10, footfall jolt 2.2), stepped in real seconds
+  with substeps of at most 1/120 s. Driven by his acceleration along the
+  screen, a jolt on each footfall, an impulse when a pose begins (a pass 0.5,
+  a shot 1, a slide 1.3, a fall 1.5) and the pose's hold (throw-in overhead,
+  catch at the chest, dive, the celebration's V). Seeded jitter, so a capture
+  is reproducible; no allocation per step. Frozen under reduced motion.
+- `logic/viewer/appearance.ts`: `makeAppearance(id, species)`. Head size
+  0.88 to 1.14, legs 0.86 to 1.14, shoulders 0.94 to 1.14, a head tone from
+  the Lunar Dust shades (`text` twice as likely as `figureTone2` and
+  `figureTone3`; the Ohm K always `figureMetal`, the Quoo from its own
+  shades) and each people's details. The draws come in a fixed order, so a
+  corrected people does not change a player's body.
+- `logic/viewer/actionAnim.ts` keeps the event timing; `actionBody` now says
+  what a pose does to the figure (tilt about the hips, lift, leg pose, arm
+  hold, lying on the grass, arm impulse). A slide is feet first along the
+  grass leaning back on the trailing arm; a fall lies on his back; a dive
+  lays the keeper out toward the ball.
+- The pitch is the page background (`canvasColor.bg`) with markings in
+  `canvasColor.line` and goal frames in `canvasColor.goalLine`, both stepped
+  hairlines on the art grid. The kit legibility rule now measures against
+  that surface. The grass, surround, old hair and antenna tokens are gone;
+  the figure shades are `figureTone2`, `figureTone3`, `figureLight`,
+  `figureMid`, `figureDark`, `figureGlow`, `figureMetal` and `figureQuoo`.
+- Cost: 24 figures, the pitch and the ball draw in 0.6 to 0.9 ms a frame on
+  the laptop and about 3.2 ms with Chrome's CPU throttled 4x.
+
 ### How it is checked
 
 Contact sheets at 390 and 1440 of real replay moments (pass, tackle, foul,
-save, goal) before merge, plus a close-up of all eleven peoples with six
+save, goal) before merge, plus a close-up of all thirteen peoples with six
 variants each; tests for the data contract (`src/data/peoples.test.ts`), the
 migration (every player gets a valid species, Terrans keep their race line),
 and the renderer's determinism (same id, same figure).

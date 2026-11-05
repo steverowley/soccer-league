@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { canvasColor } from '../../../../shared/design';
-import { STATIC_POSE, makeAppearance, resolveKits, type Kit, type Projected } from '../../logic/viewer';
+import { SPECIES_KEYS, makeAppearance, resolveKits, type Kit, type Projected } from '../../logic/viewer';
 import { BALL_RADIUS, PIXEL_SCALE, drawBall, drawDude, type DudeRender, type ProjectFn } from './render';
 
 /** One recorded drawing operation with the context state it ran under. */
@@ -71,23 +71,26 @@ function recorder(): { ctx: CanvasRenderingContext2D; ops: Op[] } {
 const project: ProjectFn = (wx, wy, wz): Projected => ({ x: wx * 6, y: wy * 6 - wz * 4, sc: 0.9 * PIXEL_SCALE });
 
 function dude(kit: Kit, extra: Partial<DudeRender> = {}): DudeRender {
-  return { wx: 50, wy: 30, pose: STATIC_POSE, appearance: makeAppearance('p1'), kit, number: 1, face: 1, ...extra };
+  return { wx: 50, wy: 30, phase: 0, run: 0, appearance: makeAppearance('p1'), kit, face: 1, ...extra };
 }
 
 const kits = resolveKits('#556B2F', '#A9A9A9');
 
+/** The figure's own fills (not the marker, its shadow or the carrier ring). */
+const figureFills = (ops: Op[], kit: Kit): Op[] =>
+  ops.filter((o) => o.op === 'fillRect' && o.fill !== kit.marker && o.fill !== kit.outline && o.fill !== canvasColor.shadow);
+
 describe('drawDude', () => {
-  it('draws a keeper in his keeper kit (shirt, shorts, sleeves), not as a hollow abyss figure', () => {
+  it('draws a keeper in his keeper kit (shirt, shorts, socks, long sleeves), not as a hollow abyss figure', () => {
     const { ctx, ops } = recorder();
     drawDude(ctx, project, dude(kits.home.keeper));
     const k = kits.home.keeper;
-    // The torso and shorts are filled boxes in the keeper colour...
     const kitFills = ops.filter((o) => o.op === 'fillRect' && o.fill === k.shirt);
     expect(kitFills.length).toBeGreaterThanOrEqual(3);
-    // ...his sleeves are stroked in it...
-    expect(ops.some((o) => o.op === 'stroke' && o.stroke === k.sleeves)).toBe(true);
-    // ...and no abyss box covers his torso (the old keeper was an abyss torso
-    // in a phosphor outline: the referee in black).
+    // His forearms are his kit's long sleeves.
+    expect(ops.some((o) => o.op === 'fillRect' && o.fill === k.sleeves)).toBe(true);
+    // No abyss box covers his torso (the old keeper was an abyss torso in a
+    // phosphor outline: the referee in black).
     const area = (o: Op) => (o.args[2] ?? 0) * (o.args[3] ?? 0);
     const torso = kitFills.reduce((a, b) => (area(b) > area(a) ? b : a));
     const [tx, ty, tw, th] = torso.args as [number, number, number, number];
@@ -103,17 +106,21 @@ describe('drawDude', () => {
     for (const kit of [kits.home.outfield, kits.home.keeper]) {
       const { ctx, ops } = recorder();
       drawDude(ctx, project, dude(kit));
-      expect(ops.some((o) => o.op === 'ellipse' && o.fill === kits.home.outfield.marker)).toBe(true);
+      expect(ops.some((o) => o.op === 'fillRect' && o.fill === kits.home.outfield.marker && o.alpha < 1)).toBe(true);
     }
   });
 
   it('rings the carrier in his team colour', () => {
+    // Opaque fills in the team colour: his shirt and socks, plus the ring.
+    const ring = (ops: Op[]) => ops.filter((o) => o.op === 'fillRect' && o.fill === kits.away.outfield.marker && o.alpha === 1).length;
     const { ctx, ops } = recorder();
     drawDude(ctx, project, dude(kits.away.outfield, { carrier: true }));
-    expect(ops.some((o) => o.op === 'stroke' && o.stroke === kits.away.outfield.marker)).toBe(true);
     const plain = recorder();
     drawDude(plain.ctx, project, dude(kits.away.outfield));
-    expect(plain.ops.some((o) => o.op === 'stroke' && o.stroke === kits.away.outfield.marker)).toBe(false);
+    expect(ring(ops)).toBeGreaterThan(ring(plain.ops) + 3);
+    // ...edged in the kit's deep shade.
+    expect(ops.some((o) => o.op === 'fillRect' && o.fill === kits.away.outfield.outline)).toBe(true);
+    expect(plain.ops.some((o) => o.op === 'fillRect' && o.fill === kits.away.outfield.outline)).toBe(false);
   });
 
   it('keeps the Architect halo on the selected player and dims the others', () => {
@@ -123,6 +130,46 @@ describe('drawDude', () => {
     const dim = recorder();
     drawDude(dim.ctx, project, dude(kits.home.outfield, { dimmed: true }));
     expect(dim.ops.filter((o) => o.op === 'fillRect').every((o) => o.alpha < 0.5)).toBe(true);
+  });
+
+  it('is pixel-pure: whole art pixels only, no strokes, arcs or smooth shapes', () => {
+    for (const sp of SPECIES_KEYS) {
+      const { ctx, ops } = recorder();
+      drawDude(ctx, project, dude(kits.home.outfield, { appearance: makeAppearance(`px-${sp}`, sp), run: 0.8, phase: 1.3, t: 2.2 }));
+      expect(ops.filter((o) => o.op !== 'fillRect'), sp).toHaveLength(0);
+      for (const o of ops) for (const v of o.args) expect(v % PIXEL_SCALE, `${sp} ${o.op} ${o.args.join(',')}`).toBe(0);
+    }
+  });
+
+  it('draws every one of the thirteen peoples, in Lunar Dust shades and the kit only', () => {
+    const kit = kits.home.outfield;
+    const allowed = new Set<string>([
+      canvasColor.text, canvasColor.bg, canvasColor.figureTone2, canvasColor.figureTone3, canvasColor.figureLight,
+      canvasColor.figureMid, canvasColor.figureDark, canvasColor.figureGlow, canvasColor.figureMetal, canvasColor.figureQuoo,
+      kit.shirt, kit.shorts, kit.sleeves,
+    ]);
+    const shapes = new Set<string>();
+    for (const sp of SPECIES_KEYS) {
+      const { ctx, ops } = recorder();
+      drawDude(ctx, project, dude(kit, { appearance: makeAppearance('same-player', sp), t: 0.5 }));
+      const fills = figureFills(ops, kit);
+      expect(fills.length, sp).toBeGreaterThan(10);
+      for (const o of fills) expect(allowed.has(o.fill), `${sp} draws ${o.fill}`).toBe(true);
+      shapes.add(JSON.stringify(fills.map((o) => [o.fill, ...o.args])));
+    }
+    // Thirteen different heads on the same body.
+    expect(shapes.size).toBe(SPECIES_KEYS.length);
+  });
+
+  it('same player, same figure; a different player of the same people differs', () => {
+    const draw = (id: string) => {
+      const { ctx, ops } = recorder();
+      drawDude(ctx, project, dude(kits.home.outfield, { appearance: makeAppearance(id, 'taurid'), t: 1 }));
+      return JSON.stringify(ops);
+    };
+    expect(draw('player-a')).toBe(draw('player-a'));
+    const others = new Set(['player-a', 'player-b', 'player-c', 'player-d', 'player-e'].map(draw));
+    expect(others.size).toBeGreaterThan(3);
   });
 });
 

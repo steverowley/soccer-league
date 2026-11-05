@@ -41,7 +41,7 @@ import { canvasColor } from '../../../../shared/design';
 
 // ── Thresholds ────────────────────────────────────────────────────────────
 
-/** Minimum WCAG contrast of a kit against the lighter grass stripe. */
+/** Minimum WCAG contrast of a kit against the pitch (named for the grass it was first measured on). */
 export const GRASS_MIN_CONTRAST = 3;
 /** Minimum CIE76 dE of a kit from the figure colour (heads, arms) and the ball. */
 export const FIGURE_MIN_DE = 25;
@@ -49,13 +49,13 @@ export const FIGURE_MIN_DE = 25;
 export const CLASH_MIN_DE = 35;
 /** Minimum CIE76 dE between a keeper kit and both outfield kits. */
 export const KEEPER_MIN_DE = 40;
-/** Keepers are never dark: minimum WCAG contrast of a keeper kit on the grass. */
+/** Keepers are never dark: minimum WCAG contrast of a keeper kit on the pitch. */
 export const KEEPER_MIN_GRASS_CONTRAST = 4.5;
 
 /** The references every kit is measured against. */
 export const KIT_REFERENCE = {
-  /** The lighter mowing stripe: the worst case for a dark kit. */
-  grass: canvasColor.grassB,
+  /** The pitch surface, Galactic Abyss (docs/match-viewer.md section 6). */
+  pitch: canvasColor.bg,
   /** Lunar Dust: the heads and arms of every figure. */
   figure: canvasColor.text,
   /** The ball. */
@@ -242,7 +242,7 @@ function searchLightness(lab: Lab, from: number, to: number, ok: (hex: string) =
 // ── Rule 1: legibility ────────────────────────────────────────────────────
 
 /** Contrast on the grass is enough. */
-const onGrass = (hex: string): boolean => contrastRatio(hex, KIT_REFERENCE.grass) >= GRASS_MIN_CONTRAST;
+const onGrass = (hex: string): boolean => contrastRatio(hex, KIT_REFERENCE.pitch) >= GRASS_MIN_CONTRAST;
 /** Far enough from the figure colour and the ball. */
 const apartFromFigures = (hex: string): boolean =>
   deltaE(hex, KIT_REFERENCE.figure) >= FIGURE_MIN_DE && deltaE(hex, KIT_REFERENCE.ball) >= FIGURE_MIN_DE;
