@@ -58,6 +58,7 @@ import {
   type TeammateNameSeed,
 } from '../logic/replacementPlayer';
 import { buildArrivalNarrative } from '../logic/arrivalNarrative';
+import { provisionPlayerEntity } from './playerEntity';
 import {
   parseActivePlayerRows,
   parseIdolRankRows,
@@ -393,6 +394,22 @@ export async function runElectionNight(
       if (insertResult.error) throw new Error(insertResult.error.message);
       const newPlayerId = insertResult.data?.id;
       if (!newPlayerId) throw new Error('replacement insert returned no id');
+
+      // Give the replacement his entity, his people and a persona, exactly as
+      // an enacted signing gets them (./playerEntity.ts). Without it he would
+      // have no bio, no voice and no people for the match viewer to draw.
+      // Best-effort: a failure is logged and the ceremony continues.
+      await provisionPlayerEntity(
+        db,
+        {
+          id:          newPlayerId,
+          name:        replacement.name,
+          team_id:     replacement.team_id,
+          position:    replacement.position,
+          nationality: replacement.nationality,
+        },
+        'runElectionNight:replacement',
+      );
 
       // Link the new player back to the audit row.  RLS allows
       // authenticated users to UPDATE incinerations columns they own; if

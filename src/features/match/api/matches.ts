@@ -85,12 +85,12 @@ export async function getMatch(db: PublicReadClient, matchId: string) {
         *,
         stadium:entities!teams_stadium_entity_id_fkey (name),
         managers (id, name, preferred_formation, style),
-        players (id, name, position, starter, jersey_number, overall_rating)
+        players (id, name, position, starter, jersey_number, overall_rating, entity_id)
       ),
       away_team:teams!matches_away_team_id_fkey (
         *,
         managers (id, name, preferred_formation, style),
-        players (id, name, position, starter, jersey_number, overall_rating)
+        players (id, name, position, starter, jersey_number, overall_rating, entity_id)
       ),
       match_player_stats (
         *,

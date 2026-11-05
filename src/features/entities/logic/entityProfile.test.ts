@@ -5,11 +5,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { isProfiledKind, parseProfile, PROFILE_SCHEMAS } from './entityProfile';
+import { SPECIES } from '../../../data/peoples';
+
+import { isProfiledKind, parseProfile, parseStoredProfile, PROFILE_SCHEMAS } from './entityProfile';
 
 const validPlayer = {
   gender: 'Male',
   race: 'Human',
+  species: 'terran',
   appearance: 'Tall',
   bio: 'A player.',
   personality: 'Calm.',
@@ -82,6 +85,53 @@ describe('parseProfile', () => {
       playing_philosophy: 'x',
     };
     expect(() => parseProfile('manager', manager)).toThrow();
+  });
+});
+
+describe('player profile species (authoring)', () => {
+  it('accepts every one of the canonical peoples', () => {
+    for (const species of SPECIES) {
+      expect(() => parseProfile('player', { ...validPlayer, species })).not.toThrow();
+    }
+  });
+
+  it('requires species on an authored player profile', () => {
+    const { species: _species, ...noSpecies } = validPlayer;
+    expect(() => parseProfile('player', noSpecies)).toThrow();
+  });
+
+  it('rejects a species that is not one of the peoples', () => {
+    expect(() => parseProfile('player', { ...validPlayer, species: 'martian' })).toThrow();
+  });
+});
+
+describe('parseStoredProfile (profiles read back from the database)', () => {
+  it('accepts a full profile written before the peoples backfill (no species)', () => {
+    const { species: _species, ...preBackfill } = validPlayer;
+    const out = parseStoredProfile('player', preBackfill) as Record<string, unknown>;
+    expect(out['bio']).toBe('A player.');
+    expect(out['species']).toBeUndefined();
+  });
+
+  it('keeps the bio but drops an unrecognised species on a full profile', () => {
+    const out = parseStoredProfile('player', { ...validPlayer, species: 'martian' }) as Record<string, unknown>;
+    expect(out['bio']).toBe('A player.');
+    expect(out['species']).toBeUndefined();
+  });
+
+  it('accepts a new signing\'s identity-only profile { race, species }', () => {
+    const out = parseStoredProfile('player', { race: 'Cephalid (Europa)', species: 'cephalid' });
+    expect(out).toEqual({ race: 'Cephalid (Europa)', species: 'cephalid' });
+  });
+
+  it('still rejects a drifted profile that is neither shape', () => {
+    expect(() => parseStoredProfile('player', { bio: 'incomplete' })).toThrow();
+    expect(() => parseStoredProfile('player', { race: 'Grey (Kuiper)', species: 'martian' })).toThrow();
+  });
+
+  it('validates other kinds exactly like parseProfile', () => {
+    expect(() => parseStoredProfile('team', validTeam)).not.toThrow();
+    expect(() => parseStoredProfile('team', { history: 'x' })).toThrow();
   });
 });
 

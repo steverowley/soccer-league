@@ -25,6 +25,7 @@
 //     assigns it. This keeps the factories deterministic and test-friendly.
 //   - It does not mutate inputs. Every function returns a fresh object.
 
+import { raceLine, type Species } from '../../../data/peoples';
 import type {
   Entity,
   EntityKind,
@@ -149,16 +150,25 @@ export function createEntity(opts: CreateEntityOptions): EntityInsert {
  * `0002_entities.sql` so that entities produced by the migration and
  * entities produced by application code are indistinguishable downstream.
  *
+ * A player's people is CANON and lives in his bio (`meta.profile.species`,
+ * with the matching human-readable `meta.profile.race` line). Every path that
+ * creates a player passes `species` (normally `speciesForNewPlayer(team_id,
+ * playerId)` from `src/data/peoples.ts`), so a new signing starts with the
+ * identity-only profile `{ race, species }` that profile readers accept
+ * (`parseStoredProfile`). Omit it only where no player id exists yet.
+ *
  * @param opts.name         Player's full name.
  * @param opts.team_id      Team slug (FK to teams.id).
  * @param opts.position     Pitch position ('GK', 'DEF', 'MID', 'FWD').
  * @param opts.nationality  Optional nationality string.
+ * @param opts.species      Optional people; writes `meta.profile`.
  */
 export function createPlayerEntity(opts: {
   name: string;
   team_id: string;
   position: string;
   nationality?: string | null;
+  species?: Species | null;
 }): EntityInsert {
   return createEntity({
     kind: 'player',
@@ -167,6 +177,7 @@ export function createPlayerEntity(opts: {
       team_id: opts.team_id,
       position: opts.position,
       nationality: opts.nationality ?? null,
+      ...(opts.species ? { profile: { race: raceLine(opts.species), species: opts.species } } : {}),
     },
   });
 }

@@ -60,6 +60,30 @@ describe('getEntityProfile', () => {
     warn.mockRestore();
   });
 
+  it('returns a profile written before the peoples backfill (no species)', async () => {
+    const db = makeDb({ data: { kind: 'player', meta: { profile: validPlayerProfile } }, error: null });
+    const res = await getEntityProfile(db, 'abc');
+    expect(res?.profile['race']).toBe('Human');
+    expect(res?.profile['species']).toBeUndefined();
+  });
+
+  it('returns a full profile with its species after the backfill', async () => {
+    const profile = { ...validPlayerProfile, race: 'Grey (Kuiper)', species: 'grey' };
+    const db = makeDb({ data: { kind: 'player', meta: { profile } }, error: null });
+    const res = await getEntityProfile(db, 'abc');
+    expect(res?.profile['species']).toBe('grey');
+    expect(res?.profile['bio']).toBe('A player.');
+  });
+
+  it('returns a new signing\'s identity-only profile { race, species }', async () => {
+    const db = makeDb({
+      data: { kind: 'player', meta: { profile: { race: 'Taurid (Ganymede)', species: 'taurid' } } },
+      error: null,
+    });
+    const res = await getEntityProfile(db, 'abc');
+    expect(res?.profile).toEqual({ race: 'Taurid (Ganymede)', species: 'taurid' });
+  });
+
   it('returns null on a query error', async () => {
     const db = makeDb({ data: null, error: { message: 'boom' } });
     expect(await getEntityProfile(db, 'abc')).toBeNull();

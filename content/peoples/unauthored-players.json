@@ -1,0 +1,6 @@
+{
+  "about": "Players in the league with no authored profile in content/profiles (signings made before creation assigned a people). Each gets his people by the same rule a new signing gets at creation: speciesForNewPlayer(team_id, player_id). Used by scripts/assign-peoples.ts --sql.",
+  "players": [
+    { "player_id": "b03a1dd1-67b5-4ddf-b410-f8334ace0834", "team_id": "earth-united", "jersey_number": 17 }
+  ]
+}

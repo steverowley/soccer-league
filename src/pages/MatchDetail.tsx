@@ -61,6 +61,8 @@ import {
   type MatchEventRow,
 } from '../features/match';
 import { getMatchPositions, type PositionSnapshot } from '@features/match';
+import { getPlayerSpeciesByEntityId } from '../features/entities';
+import { isSpecies, type Species } from '../data/peoples';
 import TeachingStrip from '../components/TeachingStrip';
 import {
   Card,
@@ -1507,13 +1509,15 @@ function prettifyEventType(key: string): string {
  * its "on the ball" caption) and the engine-aligned ordering keys (starter,
  * overall_rating) are modelled.
  */
-interface MatchPlayerRow {
+export interface MatchPlayerRow {
   id: string;
   name?: string | null;
   jersey_number?: number | null;
   position: string;
   starter: boolean;
   overall_rating: number | null;
+  /** His entity; the key to his people (species) in his bio. */
+  entity_id?: string | null;
 }
 
 /**
@@ -1545,7 +1549,7 @@ function narrowFormation(raw: unknown): SupportedFormation {
  * @param players  Full roster array from getMatch.
  * @returns        Up to 16 players: the XI in slot order, then the bench.
  */
-function pickSquad(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
+export function pickSquad(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
   // Stable sort: clone first because Array.prototype.sort mutates.
   const sorted = [...players].sort((a, b) => {
     if (a.starter !== b.starter) return a.starter ? -1 : 1;
@@ -1559,16 +1563,59 @@ function pickSquad(players: readonly MatchPlayerRow[]): MatchPlayerRow[] {
 
 /**
  * Map a roster row to the shape the viewer consumes: id and position (the
- * keeper kit goes to the GK), plus the name and shirt number its "on the
- * ball" caption and chest numbers show.
+ * keeper kit goes to the GK), the name and shirt number its "on the ball"
+ * caption and chest numbers show, and his people (species) from his bio.
+ *
+ * @param p                The roster row.
+ * @param speciesByEntity  People per entity id, from ONE batched read
+ *                         (`getPlayerSpeciesByEntityId`). A player with no
+ *                         entity, no species in his bio or an unknown one
+ *                         gets null and the viewer falls back.
  */
-function toViewerPlayer(p: MatchPlayerRow): MatchViewerPlayer {
+export function toViewerPlayer(
+  p: MatchPlayerRow,
+  speciesByEntity?: ReadonlyMap<string, Species | null>,
+): MatchViewerPlayer {
+  const species = p.entity_id ? speciesByEntity?.get(p.entity_id) : undefined;
   return {
     id: p.id,
     position: p.position,
     ...(p.name ? { name: p.name } : {}),
     ...(typeof p.jersey_number === 'number' ? { number: p.jersey_number } : {}),
+    species: isSpecies(species) ? species : null,
   };
+}
+
+/**
+ * The entity ids of both match squads (the players the viewer can draw), for
+ * the single batched species read.
+ *
+ * @param home  Home roster from getMatch.
+ * @param away  Away roster from getMatch.
+ * @returns     Entity ids of the picked squads (nulls skipped).
+ */
+export function squadEntityIds(
+  home: readonly MatchPlayerRow[],
+  away: readonly MatchPlayerRow[],
+): string[] {
+  return [...pickSquad(home), ...pickSquad(away)]
+    .map((p) => p.entity_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
+
+/** The loose getMatch return, narrowed to what the pitch panel reads. */
+interface PitchMatchRow {
+  scheduled_at?: string | null;
+  home_team?: {
+    color?: string | null;
+    managers?: Array<{ preferred_formation?: string | null }> | null;
+    players?: MatchPlayerRow[] | null;
+  } | null;
+  away_team?: {
+    color?: string | null;
+    managers?: Array<{ preferred_formation?: string | null }> | null;
+    players?: MatchPlayerRow[] | null;
+  } | null;
 }
 
 /**
@@ -1638,31 +1685,31 @@ function MatchPitchPanel({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: clear stale frames before re-fetching for the new matchId
     setPositionFrames([]);
     setScheduledAt(null);
+    // Narrow the loose getMatch return; each branch is independently optional
+    // so a half-joined row still produces a renderable rest state.
+    const matchP = getMatch(publicDb, matchId).then((m) => (m ?? {}) as PitchMatchRow);
+    // Each squad player's people, in ONE request for both squads once the
+    // rosters are known (never one per player). Supplementary: on failure
+    // the viewer simply draws without species.
+    const speciesP = matchP
+      .then((m) =>
+        getPlayerSpeciesByEntityId(
+          publicDb,
+          squadEntityIds(m.home_team?.players ?? [], m.away_team?.players ?? []),
+        ),
+      )
+      .catch(() => new Map<string, Species | null>());
     Promise.all([
-      getMatch(publicDb, matchId),
+      matchP,
       getMatchPositions(db, matchId),
       getMatchDurationSeconds(publicDb, matchId),
+      speciesP,
     ])
-      .then(([m, posRows, durSeconds]) => {
+      .then(([matchRow, posRows, durSeconds, speciesByEntity]) => {
         if (cancelled) return;
         setPositionFrames(posRows);
         setDuration(durSeconds);
 
-        // Narrow the loose getMatch return; each branch is independently optional
-        // so a half-joined row still produces a renderable rest state.
-        const matchRow = (m ?? {}) as {
-          scheduled_at?: string | null;
-          home_team?: {
-            color?: string | null;
-            managers?: Array<{ preferred_formation?: string | null }> | null;
-            players?: MatchPlayerRow[] | null;
-          } | null;
-          away_team?: {
-            color?: string | null;
-            managers?: Array<{ preferred_formation?: string | null }> | null;
-            players?: MatchPlayerRow[] | null;
-          } | null;
-        };
         const homeTeam = matchRow.home_team ?? null;
         const awayTeam = matchRow.away_team ?? null;
 
@@ -1675,8 +1722,8 @@ function MatchPitchPanel({
           homeColor: homeTeam?.color ?? null,
           awayColor: awayTeam?.color ?? null,
           // Engine-aligned ordering so commentary + viewer name the same XI.
-          homePlayers: pickSquad(homeTeam?.players ?? []).map(toViewerPlayer),
-          awayPlayers: pickSquad(awayTeam?.players ?? []).map(toViewerPlayer),
+          homePlayers: pickSquad(homeTeam?.players ?? []).map((p) => toViewerPlayer(p, speciesByEntity)),
+          awayPlayers: pickSquad(awayTeam?.players ?? []).map((p) => toViewerPlayer(p, speciesByEntity)),
         });
       })
       .catch((err) => {

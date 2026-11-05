@@ -55,6 +55,11 @@ export type { ChronicleEvent, ChronicleQuery } from './api/chronicle';
 export { getEntityProfile } from './api/entityProfiles';
 export type { EntityProfileResult } from './api/entityProfiles';
 
+// ── API — players' peoples (entities.meta.profile.species) ─────────────────
+// One batched public read of a match's squads' species for the match viewer.
+export { getPlayerSpeciesByEntityId } from './api/playerSpecies';
+export { parsePlayerSpeciesRows } from './api/playerSpecies.schema';
+
 // ── API — relationship graph fetch (issue isl-szm) ─────────────────────────
 // Zod-validated helpers that feed the relationship-graph viewer:
 // `getEntity` for the seed row, `getEntityRelationships` for the union of one
