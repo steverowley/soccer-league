@@ -58,6 +58,7 @@ import {
   createPlayerEntity,
   createTrait,
 } from '../src/features/entities/logic/entityFactory';
+import { speciesForNewPlayer } from '../src/data/peoples';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -248,11 +249,15 @@ async function processPlayer(
   // Using the shared factory guarantees the meta shape matches what the
   // seed migration inserted, so the Architect doesn't see two flavours
   // of player entity in its context window.
+  // His people (species) is canon in his bio: a player who reaches this
+  // backfill has no authored profile, so he gets the creation rule,
+  // speciesForNewPlayer(team_id, player id), like any new signing.
   const insertRow = createPlayerEntity({
     name: row.name,
     team_id: row.team_id,
     position: row.position ?? 'UNK',
     nationality: row.nationality,
+    species: speciesForNewPlayer(row.team_id, row.id),
   });
 
   if (flags.dryRun) {

@@ -10,7 +10,7 @@
 
 import type { PublicReadClient } from '@shared/supabase/publicReadClient';
 
-import { isProfiledKind, parseProfile, type ProfiledKind } from '../logic/entityProfile';
+import { isProfiledKind, parseStoredProfile, type ProfiledKind } from '../logic/entityProfile';
 
 /** A validated profile plus the entity kind it was validated against. */
 export interface EntityProfileResult {
@@ -43,7 +43,7 @@ export async function getEntityProfile(
   if (raw == null || !isProfiledKind(kind)) return null;
 
   try {
-    const profile = parseProfile(kind, raw) as Record<string, unknown>;
+    const profile = parseStoredProfile(kind, raw) as Record<string, unknown>;
     return { kind, profile };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
