@@ -53,16 +53,16 @@ interface EventStripProps {
  * @returns An aria-hidden grid of exactly EVENT_STRIP_ROWS rows.
  */
 export function EventStrip({ rows, nameOf, clubOf, reducedMotion }: EventStripProps) {
-  // The newest row's cells, so a new row can fade in.
-  const newestRef = useRef<Array<HTMLSpanElement | null>>([]);
+  // A new newest row fades in (its cells carry data-newest).
+  const gridRef = useRef<HTMLDivElement | null>(null);
   const newestKey = rows[0]?.key ?? null;
   const shownKeyRef = useRef<string | null>(newestKey);
   useEffect(() => {
     if (newestKey == null || newestKey === shownKeyRef.current) return;
     shownKeyRef.current = newestKey;
-    if (reducedMotion) return;
-    for (const el of newestRef.current) {
-      if (el && typeof el.animate === 'function') el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: 'ease-out' });
+    if (reducedMotion || !gridRef.current) return;
+    for (const el of Array.from(gridRef.current.querySelectorAll<HTMLElement>('[data-newest]'))) {
+      if (typeof el.animate === 'function') el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: 'ease-out' });
     }
   }, [newestKey, reducedMotion]);
 
@@ -70,9 +70,7 @@ export function EventStrip({ rows, nameOf, clubOf, reducedMotion }: EventStripPr
   for (let i = 0; i < EVENT_STRIP_ROWS; i++) {
     const row = rows[i];
     const rowTone = TONES[Math.min(i, TONES.length - 1)]!;
-    const ref = (k: number) => (el: HTMLSpanElement | null) => {
-      if (i === 0) newestRef.current[k] = el;
-    };
+    const newest = i === 0 ? { 'data-newest': '' } : {};
     if (!row) {
       // An empty row keeps its height (the who column's line).
       cells.push(
@@ -87,14 +85,14 @@ export function EventStrip({ rows, nameOf, clubOf, reducedMotion }: EventStripPr
     const card = row.kind === 'yellow' ? color.cardYellow : row.kind === 'red' ? color.live : null;
     const goal = row.kind === 'goal' || row.kind === 'ownGoal';
     cells.push(
-      <span key={`${row.key}-c`} ref={ref(0)} style={clockStyle(rowTone)}>
+      <span key={`${row.key}-c`} {...newest} style={clockStyle(rowTone)}>
         {replayClock(row.sec)}
       </span>,
-      <span key={`${row.key}-l`} ref={ref(1)} style={labelStyle(rowTone)}>
+      <span key={`${row.key}-l`} {...newest} style={labelStyle(rowTone)}>
         {card && <span style={swatchStyle(card)} />}
         {EVENT_LABEL[row.kind]}
       </span>,
-      <span key={`${row.key}-w`} ref={ref(2)} style={whoStyle(rowTone, goal)}>
+      <span key={`${row.key}-w`} {...newest} style={whoStyle(rowTone, goal)}>
         {eventRowText(row, nameOf, clubOf)}
       </span>,
     );
@@ -102,6 +100,7 @@ export function EventStrip({ rows, nameOf, clubOf, reducedMotion }: EventStripPr
 
   return (
     <div
+      ref={gridRef}
       aria-hidden="true"
       data-testid="event-strip"
       style={{

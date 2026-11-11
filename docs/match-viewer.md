@@ -294,24 +294,28 @@ moment in the match, but plays for a fixed real-time length (about 250 to
 600 ms) whatever the match speed, so it is always visible. Poses are drawn
 by the existing sprite code:
 
+Rows marked *superseded* no longer apply: section 7 moved the words under
+the pitch and cut the decoration (history kept as agreed).
+
 | action | what you see |
 |---|---|
-| pass, cross, long ball, clearance | kicking pose (leg back, then through); a trail coloured by kind |
-| shot | stronger strike pose, longer and brighter trail; a flash at the frame on woodwork |
-| through ball | the trail ends in a small target mark where the runner meets it |
-| tackle | the winner slides in (low, stretched, dust puff); the loser stumbles |
+| pass, cross, long ball, clearance | kicking pose (leg back, then through); ~~a trail coloured by kind~~ *superseded (7): the plain ball trail* |
+| shot | stronger strike pose; ~~longer and brighter trail; a flash at the frame on woodwork~~ *superseded (7): the goal lights up on woodwork* |
+| through ball | ~~the trail ends in a small target mark where the runner meets it~~ *superseded (7): no mark* |
+| tackle | the winner slides in, the loser stumbles; ~~dust puff~~ *superseded (7): a hairline ring round the winner* |
 | interception | a stretching lunge into the ball's path |
-| foul | the victim falls and lies briefly; a whistle mark over the spot |
-| card | a yellow or red card held up above the offender |
+| foul | the victim falls and lies briefly; ~~a whistle mark over the spot~~ *superseded (7): a hairline ring round him* |
+| card | ~~a yellow or red card held up above the offender~~ *superseded (7): a small card glyph beside him, and a row in the strip* |
 | keeper | a dive along the line toward the ball, a catch (arms up, ball held) or a parry |
 | throw-in | ball held over the head, both arms, then the throw |
-| corner, free kick, goal kick, penalty | during the stoppage: the ball placed on its spot with a marker, the taker standing over it, and a label on the pitch ("CORNER", "FREE KICK", "THROW-IN", "GOAL KICK", "PENALTY") |
-| goal | net ripple, the scorer celebrates (arms up, hop), team-mates gather; "GOAL" label |
-| offside | a flag mark on the line and "OFFSIDE" |
-| substitution | arrows at the touchline and the two names under the pitch |
+| corner, free kick, goal kick, penalty | during the stoppage: the ball placed on its spot with a marker, the taker standing over it; ~~a label on the pitch~~ *superseded (7): the label is a row in the strip* |
+| goal | the scorer celebrates (arms up), team-mates gather; ~~net ripple, hop, "GOAL" label~~ *superseded (7): the goal lights up, GOAL row in the strip* |
+| offside | ~~a flag mark on the line and "OFFSIDE"~~ *superseded (7): a row in the strip* |
+| substitution | ~~arrows at the touchline~~ and the two names under the pitch (*7: a row in the strip*) |
 
-Labels use the design system's label style on the canvas; red only for a
-red card, purple only for the Architect.
+~~Labels use the design system's label style on the canvas;~~ *superseded
+(7): no words on the canvas.* Red only for a red card, purple only for the
+Architect.
 
 The contract is `src/features/match/logic/replay/actions.ts` (types and the
 `actionsBetween` lookup); the recorder writes it, the viewer reads it.
@@ -334,7 +338,8 @@ The contract is `src/features/match/logic/replay/actions.ts` (types and the
 | goal | the last 8 game seconds before the ball crossed the line | 0.5x (16 s) | kick-off pause, 60 game s = 13.3 s real at 4.5x; trimmed to fit |
 | save, woodwork, shot just wide | the last 5 game seconds | 0.75x (6.7 s) | corner or goal-kick pause, 26 to 32 game s = 5.8 to 7.1 s real |
 
-  The replay is labelled "REPLAY" on the pitch, uses the Ball camera, never
+  The replay is labelled "REPLAY" on the pitch (*superseded (7): a Replay
+  Tag over the canvas*), uses the Ball camera, never
   runs into live play (it ends at the restart's ready tick at the latest)
   and is skipped under reduced motion. The live clock, score and
   commentary carry on underneath.
@@ -361,10 +366,10 @@ The contract is `src/features/match/logic/replay/actions.ts` (types and the
   wide in that order).
 - Reduced motion: no poses, dust, ripple, flash, styled trail or replays;
   labels, cards, spot, whistle, target, offside flag and substitution
-  arrows still show.
+  arrows still show. *Superseded (7): see "Event strip (as built)".*
 - Colours: `canvasColor.cardYellow` / `cardRed` are the page's card-yellow
-  and live tokens; the rest (`flag`, `trail*`, `labelPanel`, `dust`,
-  `net`, `subOn` = success) are mirrored in `tokens.css`.
+  and live tokens; ~~the rest (`flag`, `trail*`, `labelPanel`, `dust`,
+  `net`, `subOn` = success) are mirrored in `tokens.css`~~ *(deleted in 7)*.
 
 ### How it is checked
 
@@ -433,7 +438,7 @@ look, picked the species himself, and decided how they fit the world.
    `ISL sketches/species-picker.html`.
 3. **Event language (follow-up PR).** Words move to a log strip under the
    pitch; on-pitch marks are reduced to hairline rings, a small card glyph
-   and the goal frame flare (sketch `event-language.html`).
+   and the goal frame flare (sketch `event-language.html`). Built: section 7.
 
 #### As built (figures)
 
@@ -479,6 +484,121 @@ save, goal) before merge, plus a close-up of all thirteen peoples with six
 variants each; tests for the data contract (`src/data/peoples.test.ts`), the
 migration (every player gets a valid species, Terrans keep their race line),
 and the renderer's determinism (same id, same figure).
+
+## 7. Event strip (as built)
+
+Owner feedback on section 5: the event animations "don't fit the brand and
+obscure what is happening". Section 6 step 3 is this change: words move to
+a strip under the pitch, and what stays on the pitch is hairline Lunar Dust.
+The figures, their poses (kick, slide, fall, dive, catch, throw-in hold,
+celebration) and the floppy arms are unchanged, except that the
+celebration no longer hops.
+
+### What moved off the pitch
+
+Every canvas label (GOAL, CORNER, FREE KICK, THROW-IN, GOAL KICK, PENALTY,
+OFFSIDE, REPLAY) is gone. The event is a row in the strip; a slow-motion
+replay shows the design system's `Tag` reading "Replay" over the top-left
+of the canvas, where the camera toggles' twin sits.
+
+Cut with them: the coloured ball trails by kind of kick (the ball keeps its
+plain trail in its own colour), dust puffs, the net ripple, the whistle
+mark, the through-ball target, the offside flag, the substitution arrows,
+cards held up over players and the celebration hop. Their tokens (`trail*`,
+`flag`, `labelPanel`, `dust`, `net`, `subOn`) are deleted from `tokens.ts`
+and `tokens.css`, and the code that drew them is deleted with its tests.
+
+### The strip
+
+`ui/viewer/EventStrip.tsx` under the canvas, above the "On the ball" line.
+Rows come from `logic/viewer/eventLog.ts`, a pure function of the action
+track (`buildEventLog` once per match, `eventRowsAt(log, liveSec)` per
+frame), tested on synthetic tracks and on a real-squad match decoded from
+its replay file.
+
+- **Layout.** Always three rows high (empty rows hold their height), so the
+  page never jumps. One grid: clock, label, who. The clock and the label
+  never shrink; the who truncates with an ellipsis rather than wrap on a
+  390 px phone. The "On the ball" line is one line too now (name, then
+  club, truncate).
+- **Type.** Clock in `type.small` with tabular figures, in the replay's own
+  format (`replayClock`: minute'second", the minute counted from 1 as in
+  the frames, so 21:34 played is 22'34"); label in `type.label`; who in
+  `type.body`, names with shirt numbers ("17 Talus wins it from 10 Cruz",
+  "4 Kovacs on 11 Osei", "9 Gush Li"; "Number 7" when a name is missing).
+- **Emphasis by brightness.** Newest row `tone.primary`, then secondary,
+  then tertiary. A GOAL row's names are bold (weight only). The one colour
+  in the strip is a card row's swatch (card yellow, or live red).
+- **Motion.** A new row fades in over 150 ms, no slide; none under reduced
+  motion.
+- **Time.** The strip follows the LIVE clock: a slow-motion replay does not
+  re-log the moments it shows.
+- **Accessibility.** The strip is `aria-hidden`; goals and red cards are
+  announced once each through a polite live region
+  ("Goal in minute 22: 9 Gush Li, Mars Athletic."), and the ones already on
+  the strip when the viewer opens are not.
+- **Old replays.** v2 and older v3 files have no action track: no strip, the
+  "On the ball" line as before.
+
+### Which actions get a row
+
+| row | when | who |
+|---|---|---|
+| GOAL / OWN GOAL | the ball over the line | the scorer |
+| SAVE / PARRY / CATCH | a keeper's dive that answered a shot (`shots.ts`: a shot in the 3 game s before; the same rule as the slow-motion replays); PARRY when his next touch is a parry; dropped when the ball goes in within 2 game s (the GOAL row covers it) | keeper from shooter |
+| WOODWORK | when the ball met the frame (found in the ball track; the engine's event comes later) | the shooter |
+| WIDE | a shot that goes out for a goal kick within 4 game s with nobody touching it | the shooter |
+| TACKLE | the tackle | winner wins it from loser |
+| INTERCEPTION | the interception | who |
+| FOUL, then YELLOW CARD / RED CARD | the foul; the card is its own row at the same clock, above it | offender on victim; the offender |
+| OFFSIDE | the offside (its FREE KICK row sits above it) | who |
+| FREE KICK, PENALTY, CORNER, THROW-IN, GOAL KICK | when the ball goes dead | the taker |
+| KICK-OFF | when it is TAKEN (logged when the restart began it would push the GOAL row down the moment the goal went in) | the taker |
+| SUBSTITUTION | the change | on, off, club |
+
+Passes, dribbles and clearances are not logged: the "On the ball" line
+already follows possession and a row per pass would churn the strip. A
+keeper's own release gets no row. Same-tick rows keep the action track's
+order (section 5 "Order"), with a card right after its foul and a WIDE
+before the goal kick it caused; the strip shows the newest first. A real
+match gives about 200 rows (196 in the harness match) against about 1,650
+actions.
+
+### What remains on the pitch
+
+All hairline, all Lunar Dust, timed in real milliseconds (`ANIM_MS`):
+
+- **The restart spot**, unchanged: a ring and cross where the ball is
+  placed, from the ball going dead until the restart is taken.
+- **A ring round the player at the centre** of a tackle (the winner), a
+  foul (the man fouled) or a save of a shot (the keeper): a stepped pixel
+  ellipse on the grass well outside the carrier ring, fading over 700 ms.
+  Its far half is drawn behind the figures and its near half in depth
+  order among them, so it shows in a crowd but never crosses a face.
+- **A card glyph** beside the offender's head for the card's 1.8 s, a few
+  art pixels in the card colour edged in Abyss, on whichever side covers no
+  other player (`cardGlyphRect`).
+- **The goal lights up** for 1 s after a goal and when a shot strikes the
+  frame: the frame and the back of the net drawn in full Lunar Dust over
+  the usual `goalLine`, fading back. It replaces the net ripple and the
+  woodwork flash.
+
+Under reduced motion there are no poses or replays; the spot, ring, card
+glyph and lit goal still show for their windows, without fading.
+
+### How it is checked
+
+`eventLog.test.ts` (every row rule on synthetic tracks; on a real-squad
+match decoded from its replay file: one row per goal, foul, card, tackle
+and substitution, the own goal named, time order, real roster indices, the
+GOAL row on top until the kick-off is taken, the clock equal to the
+frames' own minute and second), `EventStrip.test.tsx` (three rows always,
+tones, the swatch the only colour, truncation), `actionAnim.test.ts` and
+`renderEvents.test.ts` (each mark's window, colour and place; no words
+and no other hue on the pitch). Before and after captures at 390 and 1440
+px of open play, a tackle, a foul, a card, a corner, a save, woodwork, a
+goal, its replay and a substitution, plus an 8 s phone clip around a goal,
+from a local harness over a real-squad replay.
 
 ## 4. How it is checked
 

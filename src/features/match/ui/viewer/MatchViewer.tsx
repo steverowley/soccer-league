@@ -9,7 +9,9 @@
 //     interpolated positions for this instant;
 //   • derive each dude's gait/facing/phase, depth-sort, and draw;
 //   • place the ball (at the carrier's feet, gliding over jumps, with a trail
-//     when it travels fast) and say who has it in a caption under the pitch.
+//     when it travels fast) and say who has it in a caption under the pitch;
+//   • the event layer (docs/match-viewer.md sections 5 and 7): poses and the
+//     few hairline marks on the pitch, and the event strip of words under it.
 //
 // CHUNKY-PIXEL RENDERING
 //   The backing store is a fixed low resolution, twice the original 320×208

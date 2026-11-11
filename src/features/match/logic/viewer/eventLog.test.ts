@@ -203,8 +203,7 @@ describe('replayClock', () => {
 
 const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function squad(i: number): SpatialTeamInput {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const t = (squads as any[])[i];
+  const t = (squads as Array<{ id: string; f: string; s: string; gm: unknown; ps: unknown[][] }>)[i]!;
   const players = (t.ps as unknown[][]).map((p, j) => ({
     id: uuidFor(i * 100 + j), name: String(p[0]), position: String(p[1]), starter: Boolean(p[2]), team_id: t.id,
     attacking: Number(p[3]), defending: Number(p[4]), mental: Number(p[5]), athletic: Number(p[6]), technical: Number(p[7]),
