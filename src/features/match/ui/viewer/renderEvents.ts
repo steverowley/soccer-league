@@ -1,111 +1,29 @@
 // ── features/match/ui/viewer/renderEvents.ts ────────────────────────────────
-// Canvas drawing for the event layer (docs/match-viewer.md section 5B): the
-// marks on the pitch (restart spot, dust puff, whistle mark, card, net
-// ripple, woodwork flash, through-ball target, offside flag, substitution
-// arrows) and the pitch labels (GOAL, CORNER, REPLAY...).
+// Canvas drawing for the few event marks left on the pitch
+// (docs/match-viewer.md section 7): the restart spot, a hairline ring round
+// the player at the centre of a tackle, foul or save, a small card glyph
+// beside the offender, and the goal frame flaring after a goal or a shot off
+// the woodwork.  Everything else an event says is WORDS, and words belong in
+// the event strip under the pitch (EventStrip.tsx), not on it.
 //
 // Like render.ts, every function takes the context and the active camera's
 // `project` closure and knows nothing about React or timing: the WHEN lives
 // in logic/viewer/actionAnim.ts (each mark arrives with its progress `t`,
-// 0..1 through its real-time window) and the replay scheduler.
+// 0..1 through its real-time window).
 //
-// COLOURS only from `canvasColor` (mirrored in tokens.css): red ONLY for a
-// red card (the live token), the card-yellow token for a yellow card,
-// purple never (it belongs to the Architect).  LABELS use the design
-// system's label style: Space Mono 700, uppercase, 0.12em tracking, on an
-// abyss panel with a hairline, radius 0.
+// BRAND: hairline Lunar Dust on the Abyss pitch, emphasis by brightness, no
+// new hues.  The one colour is the card glyph's (the card-yellow token, or
+// the live red for a red card), because there it means something.
 
 import { canvasColor } from '../../../../shared/design';
-import { GOALS, GOAL_DEPTH, type Viewport } from '../../logic/viewer';
-import { PITCH_LENGTH, PITCH_WIDTH } from '../../logic/spatial/types';
-import { PIXEL_SCALE, type ProjectFn } from './render';
+import { GOALS } from '../../logic/viewer';
+import { PITCH_LENGTH } from '../../logic/spatial/types';
+import { pixelRing, px, resetFill, setGrid } from './figure';
+import { PIXEL_SCALE, drawGoalFrame, drawGoalNet, type ProjectFn } from './render';
 
 const PX = PIXEL_SCALE;
 
-/** Label text size in backing pixels: the design label (11 px) on a phone-sized canvas. */
-export const LABEL_PX = 10 * PX;
-/** The smallest label size in backing pixels (a wide canvas shows it at about 17 CSS px). */
-export const LABEL_MIN_PX = 6 * PX;
-/** The CSS size a label aims for on screen. */
-const LABEL_TARGET_CSS_PX = 12;
-
-/**
- * Label size in backing pixels for a canvas shown `cssWidth` CSS pixels
- * wide: about the design label on a phone, without growing into a banner
- * on a desktop (the canvas is stretched, so a fixed backing size would).
- */
-export function labelPxFor(cssWidth: number, vpWidth: number): number {
-  if (!(cssWidth > 0)) return LABEL_PX;
-  return Math.round(Math.min(LABEL_PX, Math.max(LABEL_MIN_PX, (LABEL_TARGET_CSS_PX * vpWidth) / cssWidth)));
-}
-/** The design label's tracking, as a fraction of the size. */
-const LABEL_TRACKING = 0.12;
-/** Space Mono's advance width, as a fraction of the size (monospace). */
-const MONO_ADVANCE = 0.6;
-/** Label panel padding, in backing pixels. */
-const LABEL_PAD_X = 6 * PX;
-const LABEL_PAD_Y = 3 * PX;
-/** Distance of a top label from the canvas edge. */
-const LABEL_MARGIN = 6 * PX;
-
-/** Fade in over the first part of a window and out over the last. */
-function fade(t: number, inFrac = 0.12, outFrac = 0.25): number {
-  if (t < inFrac) return t / inFrac;
-  if (t > 1 - outFrac) return Math.max(0, (1 - t) / outFrac);
-  return 1;
-}
-
-// ── Labels ───────────────────────────────────────────────────────────────────
-
-/** Where a label sits: centred at the top, or in the top-left corner (REPLAY). */
-export type LabelPlace = 'top' | 'corner';
-
-/**
- * The width a label's text takes in backing pixels (Space Mono is
- * monospaced, so this needs no text measurement).
- */
-export function labelTextWidth(text: string, sizePx: number = LABEL_PX): number {
-  return text.length * sizePx * (MONO_ADVANCE + LABEL_TRACKING);
-}
-
-/**
- * Draw a pitch label in the design system's label style.
- *
- * @param ctx    Canvas context.
- * @param vp     Canvas size (backing pixels).
- * @param text   Upper-case label text.
- * @param place  'top' (centred) or 'corner' (top-left, for REPLAY).
- * @param size   Text size in backing pixels (labelPxFor).
- */
-export function drawPitchLabel(
-  ctx: CanvasRenderingContext2D,
-  vp: Viewport,
-  text: string,
-  place: LabelPlace = 'top',
-  size: number = LABEL_PX,
-): void {
-  const k = size / LABEL_PX;
-  const w = labelTextWidth(text, size) + 2 * LABEL_PAD_X * k;
-  const h = size + 2 * LABEL_PAD_Y * k;
-  const x = place === 'top' ? Math.round((vp.width - w) / 2) : LABEL_MARGIN;
-  const y = LABEL_MARGIN;
-  ctx.save();
-  ctx.fillStyle = canvasColor.labelPanel;
-  ctx.fillRect(x, y, Math.round(w), Math.round(h));
-  ctx.strokeStyle = canvasColor.goalLine;
-  ctx.lineWidth = PX * 0.5;
-  ctx.strokeRect(x + PX * 0.25, y + PX * 0.25, Math.round(w) - PX * 0.5, Math.round(h) - PX * 0.5);
-  ctx.font = `700 ${size}px "Space Mono", monospace`;
-  const withSpacing = ctx as CanvasRenderingContext2D & { letterSpacing?: string };
-  if ('letterSpacing' in withSpacing) withSpacing.letterSpacing = `${size * LABEL_TRACKING}px`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = canvasColor.text;
-  ctx.fillText(text, x + LABEL_PAD_X * k, y + h / 2 + PX * 0.5 * k);
-  ctx.restore();
-}
-
-// ── Marks tied to a place ────────────────────────────────────────────────────
+// ── The restart spot ─────────────────────────────────────────────────────────
 
 /** A restart's spot: a ring with a cross on the grass where the ball is placed. */
 export function drawSpotMarker(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, y: number): void {
@@ -127,195 +45,172 @@ export function drawSpotMarker(ctx: CanvasRenderingContext2D, project: ProjectFn
   ctx.restore();
 }
 
-/** The net of the goal on line `goalX` rippling after a goal (t: 0..1). */
-export function drawNetRipple(ctx: CanvasRenderingContext2D, project: ProjectFn, goalX: number, t: number): void {
-  const goal = GOALS.find((g) => Math.abs(g.x - goalX) < 1) ?? GOALS[goalX < PITCH_LENGTH / 2 ? 0 : 1];
-  if (!goal) return;
-  const amp = 0.55 * (1 - t);
-  const strands = 9;
-  ctx.save();
-  ctx.strokeStyle = canvasColor.net;
-  ctx.lineWidth = PX * 0.5;
-  ctx.globalAlpha = fade(t, 0.05, 0.4);
-  for (let i = 0; i <= strands; i++) {
-    const y = goal.y0 + ((goal.y1 - goal.y0) * i) / strands;
-    const bulge = amp * Math.sin(t * Math.PI * 6 + i * 0.9);
-    const back = project(goal.x + (GOAL_DEPTH + bulge) * goal.depthDir, y, goal.height * 0.5);
-    const top = project(goal.x, y, goal.height);
-    const foot = project(goal.x + GOAL_DEPTH * goal.depthDir, y, 0);
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(back.x, back.y);
-    ctx.lineTo(foot.x, foot.y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
+// ── The ring round a player ──────────────────────────────────────────────────
 
-/** A flash where a shot struck the frame (t: 0..1). */
-export function drawWoodworkFlash(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, y: number, z: number, t: number): void {
-  const p = project(x, y, Math.max(0, z));
-  const sc = p.sc;
-  const r0 = 2 * sc;
-  const r1 = (4 + 6 * t) * sc;
-  ctx.save();
-  ctx.strokeStyle = canvasColor.trailShot;
-  ctx.lineWidth = Math.max(PX * 0.5, 0.9 * sc);
-  ctx.globalAlpha = 1 - t;
-  ctx.beginPath();
-  for (let k = 0; k < 8; k++) {
-    const a = (k * Math.PI) / 4;
-    ctx.moveTo(p.x + Math.cos(a) * r0, p.y + Math.sin(a) * r0);
-    ctx.lineTo(p.x + Math.cos(a) * r1, p.y + Math.sin(a) * r1);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
+/**
+ * Ring half-axes in art pixels per unit of art-space depth scale: well
+ * outside the carrier ring (5.3 x 2.15, render.ts), so it never hides it and
+ * reaches past a crowd of figures, and on the grass round his feet, so it
+ * never crosses his face.
+ */
+export const EVENT_RING_RX = 9;
+export const EVENT_RING_RY = 3.6;
+/** The ring's opacity when it appears (it fades to nothing over its window). */
+const RING_ALPHA = 0.9;
 
-/** Where a through ball is met: a small target mark in the ball's colour. */
-export function drawTargetMark(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, y: number, t: number): void {
+/**
+ * Which part of the ring to draw.  It lies on the grass, so its far half
+ * goes behind the figures standing in it and its near half in front of
+ * them (the caller draws the near half in depth order, before the figures
+ * nearer the camera): in a crowd at a foul the ring stays visible without
+ * ever being drawn over a face.
+ */
+export type RingPart = 'back' | 'front' | 'whole';
+
+/**
+ * A hairline Lunar Dust ring on the grass round a player's feet, so the eye
+ * finds the tackle, foul or save the strip has just named.
+ *
+ * @param x      His drawn position (metres), across.
+ * @param y      His drawn position (metres), along.
+ * @param t      Progress 0..1 through the ring's real-time window.
+ * @param still  Reduced motion: no fade, the ring shows whole for its window.
+ * @param part   The far half, the near half, or both.
+ */
+export function drawEventRing(
+  ctx: CanvasRenderingContext2D,
+  project: ProjectFn,
+  x: number,
+  y: number,
+  t: number,
+  still = false,
+  part: RingPart = 'whole',
+): void {
   const p = project(x, y, 0);
-  const sc = p.sc;
+  const as = p.sc / PX;
+  const cx = p.x / PX;
+  const cy = p.y / PX;
+  const rx = EVENT_RING_RX * as;
+  const ry = EVENT_RING_RY * as;
   ctx.save();
-  ctx.strokeStyle = canvasColor.ball;
-  ctx.lineWidth = Math.max(PX * 0.5, 0.6 * sc);
-  ctx.globalAlpha = 0.9 * fade(t, 0.1, 0.2);
-  ctx.beginPath();
-  ctx.ellipse(p.x, p.y, 3.2 * sc, 1.3 * sc, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(p.x - 1.6 * sc, p.y - 0.65 * sc);
-  ctx.lineTo(p.x + 1.6 * sc, p.y + 0.65 * sc);
-  ctx.moveTo(p.x + 1.6 * sc, p.y - 0.65 * sc);
-  ctx.lineTo(p.x - 1.6 * sc, p.y + 0.65 * sc);
-  ctx.stroke();
+  ctx.globalAlpha *= RING_ALPHA * (still ? 1 : 1 - Math.min(1, Math.max(0, t)));
+  if (part !== 'whole') {
+    // Keep the rows above (back) or from (front) his feet's row.
+    const split = Math.round(cy) * PX;
+    const left = (cx - rx - 2) * PX;
+    const width = (2 * rx + 4) * PX;
+    const top = (cy - ry - 2) * PX;
+    const bottom = (cy + ry + 2) * PX;
+    ctx.beginPath();
+    if (part === 'back') ctx.rect(left, top, width, split - top);
+    else ctx.rect(left, split, width, bottom - split);
+    ctx.clip();
+  }
+  resetFill();
+  setGrid(PX);
+  pixelRing(ctx, cx, cy, rx, ry, canvasColor.text);
+  resetFill();
   ctx.restore();
+}
+
+// ── The card glyph beside the offender ───────────────────────────────────────
+
+/** A figure on screen, in art pixels: his feet and his art-space depth scale. */
+export interface FigureAt {
+  x: number;
+  y: number;
+  as: number;
+}
+
+/** A rectangle in art pixels. */
+export interface ArtRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Half-width and height of a standing figure's box, in art pixels per unit of depth scale (arms at rest included). */
+const FIGURE_HALF_W = 4.5;
+const FIGURE_H = 14;
+/** The glyph's inner edge sits this far from his centre (clear of his head and resting arms). */
+const GLYPH_OFFSET = 5.5;
+/** Its top sits this far above his feet (beside his head). */
+const GLYPH_TOP = 12;
+
+/** The box a standing figure takes, in art pixels. */
+export function figureBox(f: FigureAt): ArtRect {
+  return { x: f.x - FIGURE_HALF_W * f.as, y: f.y - FIGURE_H * f.as, w: 2 * FIGURE_HALF_W * f.as, h: FIGURE_H * f.as };
+}
+
+/** Area two rectangles share. */
+export function overlapArea(a: ArtRect, b: ArtRect): number {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
 }
 
 /**
- * Offside: a dashed line across the pitch at the offending player's x and
- * a flag raised on the near touchline there.
+ * Where the card glyph goes: a few art pixels beside the offender's head,
+ * on the side where it covers no other player (the right first, else the
+ * left, else whichever covers less).  Never over his own head.
+ *
+ * @param him     The offender.
+ * @param others  Every other figure on screen.
+ * @returns       The glyph's rectangle in art pixels (outline included).
  */
-export function drawOffsideMark(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, t: number): void {
-  const a = project(x, 0, 0);
-  const b = project(x, PITCH_WIDTH, 0);
+export function cardGlyphRect(him: FigureAt, others: readonly FigureAt[]): ArtRect {
+  const w = Math.max(2, Math.round(1.5 * him.as));
+  const h = Math.round(w * 1.4) + 1;
+  const top = Math.round(him.y - GLYPH_TOP * him.as);
+  const right: ArtRect = { x: Math.round(him.x + GLYPH_OFFSET * him.as), y: top, w: w + 2, h: h + 2 };
+  const left: ArtRect = { x: Math.round(him.x - GLYPH_OFFSET * him.as) - (w + 2), y: top, w: w + 2, h: h + 2 };
+  const cost = (r: ArtRect): number => others.reduce((sum, o) => sum + overlapArea(r, figureBox(o)), 0);
+  const cr = cost(right);
+  if (cr === 0) return right;
+  const cl = cost(left);
+  return cl < cr ? left : right;
+}
+
+/**
+ * The card glyph: a small card in its card colour (the card-yellow token,
+ * or the live red), edged in Abyss so it reads on any kit.
+ *
+ * @param rect   From cardGlyphRect (art pixels, outline included).
+ * @param t      Progress 0..1 through its window (it fades in and out briefly).
+ * @param still  Reduced motion: no fade.
+ */
+export function drawCardGlyph(ctx: CanvasRenderingContext2D, rect: ArtRect, card: 'yellow' | 'red', t: number, still = false): void {
   ctx.save();
-  ctx.globalAlpha = fade(t);
-  ctx.strokeStyle = canvasColor.flag;
-  ctx.lineWidth = PX * 0.5;
-  ctx.setLineDash([3 * PX, 2 * PX]);
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  // The flag on the near touchline, just outside the line.
-  const foot = project(x, PITCH_WIDTH + 1, 0);
-  const top = project(x, PITCH_WIDTH + 1, 2);
-  const sc = foot.sc;
-  ctx.strokeStyle = canvasColor.text;
-  ctx.lineWidth = Math.max(PX * 0.5, 0.6 * sc);
-  ctx.beginPath();
-  ctx.moveTo(foot.x, foot.y);
-  ctx.lineTo(top.x, top.y);
-  ctx.stroke();
-  ctx.fillStyle = canvasColor.flag;
-  ctx.fillRect(Math.round(top.x), Math.round(top.y), Math.round(4 * sc), Math.round(3 * sc));
+  if (!still) ctx.globalAlpha *= t < 0.06 ? t / 0.06 : t > 0.9 ? Math.max(0, (1 - t) / 0.1) : 1;
+  resetFill();
+  setGrid(PX);
+  px(ctx, rect.x, rect.y, rect.w, rect.h, canvasColor.bg);
+  px(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, card === 'red' ? canvasColor.cardRed : canvasColor.cardYellow);
+  resetFill();
   ctx.restore();
 }
 
-/** A substitution: an arrow in (success green) and an arrow out (phosphor) at the halfway touchline. */
-export function drawSubArrows(ctx: CanvasRenderingContext2D, project: ProjectFn, t: number): void {
-  const at = project(PITCH_LENGTH / 2, PITCH_WIDTH + 1.5, 0);
-  const sc = at.sc;
-  const s = 2.6 * sc;
-  const gapX = 3.2 * sc;
+// ── The goal frame flare ─────────────────────────────────────────────────────
+
+/**
+ * The goal on line `goalX` lit up: its frame drawn in full Lunar Dust over
+ * its usual `goalLine`, with the back of the net, fading back over the
+ * flare's window.  Emphasis by brightness, hairlines only, after a goal and
+ * when a shot strikes the frame.
+ *
+ * @param t      Progress 0..1 through the flare's real-time window.
+ * @param still  Reduced motion: no fade, the frame is bright for the window.
+ */
+export function drawGoalFlare(ctx: CanvasRenderingContext2D, project: ProjectFn, goalX: number, t: number, still = false): void {
+  const goal = GOALS.find((g) => Math.abs(g.x - goalX) < 1) ?? GOALS[goalX < PITCH_LENGTH / 2 ? 0 : 1];
+  if (!goal) return;
   ctx.save();
-  ctx.globalAlpha = fade(t, 0.08, 0.2);
-  const arrow = (cx: number, up: boolean, fill: string): void => {
-    const dir = up ? -1 : 1;
-    const tipY = at.y - 3 * sc + dir * s;
-    ctx.fillStyle = canvasColor.bg;
-    ctx.beginPath();
-    ctx.moveTo(cx, tipY + dir * 0.6 * sc);
-    ctx.lineTo(cx - s - 0.6 * sc, at.y - 3 * sc - dir * 0.4 * sc);
-    ctx.lineTo(cx + s + 0.6 * sc, at.y - 3 * sc - dir * 0.4 * sc);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = fill;
-    ctx.beginPath();
-    ctx.moveTo(cx, tipY);
-    ctx.lineTo(cx - s, at.y - 3 * sc);
-    ctx.lineTo(cx + s, at.y - 3 * sc);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillRect(Math.round(cx - 0.6 * sc), Math.round(at.y - 3 * sc - (up ? 0 : 2.4 * sc)), Math.round(1.2 * sc), Math.round(2.4 * sc));
-  };
-  arrow(at.x - gapX, true, canvasColor.subOn);
-  arrow(at.x + gapX, false, canvasColor.text);
-  ctx.restore();
-}
-
-// ── Marks tied to a player (drawn where his figure is drawn) ───────────────────
-
-/** Dust kicked up by a slide tackle at the tackler's feet (t: 0..1). */
-export function drawDust(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, y: number, face: number, t: number): void {
-  const p = project(x, y, 0);
-  const sc = p.sc;
-  ctx.save();
-  ctx.fillStyle = canvasColor.dust;
-  ctx.globalAlpha = 1 - t;
-  for (let k = 0; k < 4; k++) {
-    const off = (-1.5 - k * 1.6) * face * sc * (0.6 + t);
-    const r = (1.1 + 0.5 * k) * sc * (0.7 + 0.8 * t);
-    ctx.beginPath();
-    ctx.ellipse(p.x + off, p.y - (0.4 + 0.5 * k) * sc * t, r, r * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-/** Height of a mark above a player's feet, in sprite units (just over his head). */
-const OVER_HEAD = 15;
-
-/** The whistle mark over a fouled player: sound arcs either side of a dot. */
-export function drawWhistleMark(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, y: number, t: number): void {
-  const p = project(x, y, 0);
-  const sc = p.sc;
-  const cy = p.y - OVER_HEAD * sc;
-  ctx.save();
-  ctx.globalAlpha = fade(t, 0.08, 0.3);
-  ctx.fillStyle = canvasColor.text;
-  ctx.beginPath();
-  ctx.arc(p.x, cy, 0.9 * sc, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = canvasColor.text;
-  ctx.lineWidth = Math.max(PX * 0.5, 0.5 * sc);
-  for (const r of [2, 3.4]) {
-    ctx.beginPath();
-    ctx.arc(p.x, cy, r * sc, -0.6, 0.6);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(p.x, cy, r * sc, Math.PI - 0.6, Math.PI + 0.6);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-/** A card held up over the offender: yellow (the card-yellow token) or red (the live token). */
-export function drawCard(ctx: CanvasRenderingContext2D, project: ProjectFn, x: number, y: number, card: 'yellow' | 'red', t: number): void {
-  const p = project(x, y, 0);
-  const sc = p.sc;
-  const pop = t < 0.1 ? 0.6 + 4 * t : 1;
-  const w = 3.2 * sc * pop;
-  const h = 4.4 * sc * pop;
-  const cx = p.x;
-  const top = p.y - (OVER_HEAD + 4) * sc;
-  ctx.save();
-  ctx.globalAlpha = fade(t, 0.05, 0.15);
-  ctx.fillStyle = canvasColor.bg;
-  ctx.fillRect(Math.round(cx - w / 2 - PX * 0.5), Math.round(top - PX * 0.5), Math.round(w + PX), Math.round(h + PX));
-  ctx.fillStyle = card === 'red' ? canvasColor.cardRed : canvasColor.cardYellow;
-  ctx.fillRect(Math.round(cx - w / 2), Math.round(top), Math.round(w), Math.round(h));
+  ctx.globalAlpha *= still ? 1 : 1 - Math.min(1, Math.max(0, t)) ** 2;
+  resetFill();
+  setGrid(PX);
+  drawGoalFrame(ctx, project, goal, canvasColor.text);
+  drawGoalNet(ctx, project, goal, canvasColor.text);
+  resetFill();
   ctx.restore();
 }

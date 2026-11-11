@@ -29,8 +29,9 @@
 // PURE: the caller passes where the ball was (for "just wide") as a lookup.
 
 import { type ActionTrack, type ReplayAction } from '../replay/actions';
-import { GOAL_Y_MAX, GOAL_Y_MIN, PITCH_LENGTH, type KickKind } from '../spatial/types';
+import { GOAL_Y_MAX, GOAL_Y_MIN, PITCH_LENGTH } from '../spatial/types';
 import { TOTAL_GAME_SECONDS } from './playback';
+import { isShotKick, shotBefore } from './shots';
 
 /** What a replay is of. */
 export type ReplayKind = 'goal' | 'woodwork' | 'save' | 'wide';
@@ -49,8 +50,6 @@ export const REPLAY_MIN_REAL_SEC = 2.5;
 export const JUST_WIDE_M = 3;
 /** A stoppage must begin within this many game seconds of the moment. */
 export const STOPPAGE_WITHIN_SEC = 8;
-/** A dive is a save of a shot struck at most this long before it (game s). */
-const SHOT_BEFORE_DIVE_SEC = 3;
 /** A miss goes out at most this long after the shot (game s). */
 const WIDE_WITHIN_SEC = 4;
 /** Touches this soon after the moment are part of it (a parry, a deflection off the frame). */
@@ -86,13 +85,6 @@ export interface ReplayLookup {
 /** Live game seconds per real second for a season's match duration (1 when unpaced). */
 export function liveRate(durationSeconds: number): number {
   return durationSeconds > 0 ? TOTAL_GAME_SECONDS / durationSeconds : 1;
-}
-
-/** A shot at goal: a shot, a penalty, a header, or a set piece delivered as a shot. */
-function isShotKick(a: ReplayAction): boolean {
-  if (a.kind !== 'kick') return false;
-  const k = (a as typeof a & { delivery?: KickKind }).delivery ?? a.kick;
-  return k === 'shot' || k === 'penalty' || k === 'header';
 }
 
 /** True for an action that means play is live again (not a part of the moment's own touches). */
@@ -192,14 +184,7 @@ export function scheduleReplays(
       return;
     }
     if (a.kind === 'dive' && (a.outcome === 'save' || a.outcome === 'catch')) {
-      let shot = false;
-      for (let j = i - 1; j >= 0 && sec - acts[j]!.tick * dt <= SHOT_BEFORE_DIVE_SEC; j--) {
-        if (isShotKick(acts[j]!)) {
-          shot = true;
-          break;
-        }
-      }
-      if (!shot) return;
+      if (!shotBefore(track, i)) return;
       const s = stoppageAfter(track, i);
       if (s) offer(s.restartIndex, 'save', sec, s.endSec);
       return;

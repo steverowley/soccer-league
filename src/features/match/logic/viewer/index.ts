@@ -95,13 +95,11 @@ export type { HitTarget } from './hitTest';
 export {
   ANIM_MS,
   PRE_MS,
-  RESTART_LABEL,
   REST_BODY,
   activeAnimations,
   actionBody,
   kickLegAt,
   noAnimations,
-  pitchLabelFor,
 } from './actionAnim';
 export type {
   ActionBody,
@@ -113,13 +111,25 @@ export type {
   LegPose,
   Overlay,
   PoseKind,
-  TrailKind,
 } from './actionAnim';
+
+export {
+  EVENT_LABEL,
+  EVENT_STRIP_ROWS,
+  buildEventLog,
+  eventRowText,
+  eventRowsAt,
+  replayClock,
+  replayMinute,
+} from './eventLog';
+export type { EventLogLookup, EventRow, EventRowKind } from './eventLog';
+
+export { SHOT_BEFORE_DIVE_SEC, isShotKick, shotBefore } from './shots';
 
 export { liveRate, replayAt, scheduleReplays } from './replaySchedule';
 export type { ReplayKind, ReplayMoment, ReplayWindow } from './replaySchedule';
 
-export { actionTrackOf, findReception, makeTrackLookup, rosterFromFrames } from './trackLookup';
+export { actionTrackOf, makeTrackLookup, rosterFromFrames } from './trackLookup';
 
 export type { ViewerMatch, ViewerRosterPlayer } from './buildMatch';
 export { generateDemoMatch } from './demoMatch';

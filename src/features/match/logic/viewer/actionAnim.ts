@@ -1,5 +1,5 @@
 // ── features/match/logic/viewer/actionAnim.ts ───────────────────────────────
-// Event animations in SCREEN time (docs/match-viewer.md section 5B): given the
+// Event animations in SCREEN time (docs/match-viewer.md sections 5B and 7): given the
 // replay's action track, the game second being drawn and how fast the match
 // is playing, which poses and pitch overlays are showing right now.
 //
@@ -16,22 +16,22 @@
 //   - poses:    per-player body overrides (kick, slide, fall, dive, catch...),
 //               keyed by ROSTER INDEX like the action track; actionBody()
 //               turns one into the numbers the sprite code draws with.
-//   - overlays: marks drawn on the pitch (restart spot, dust, whistle, card,
-//               net ripple, woodwork flash, through-ball target, offside
-//               flag, substitution arrows).  Marks tied to a player name him;
-//               marks tied to a place carry metres.
-//   - label:    the one pitch label showing (GOAL, OFFSIDE, CORNER...).
-//   - trail:    how the ball's trail is styled (by the kind of the last kick).
+//   - overlays: the few hairline marks left on the pitch (section 7): the
+//               restart spot, a ring round the player at the centre of a
+//               tackle, foul or save, a small card glyph beside the
+//               offender, and the goal frame flaring after a goal or a shot
+//               off the woodwork.  Marks tied to a player name him; marks
+//               tied to a place carry metres.  Words are not drawn on the
+//               pitch: they belong to the event strip under it (eventLog.ts).
 //   - ballHeld: a player holding the ball up (throw-in, keeper's catch).
-//   - sub:      the substitution being announced under the pitch.
 //   - focus / ballInNet: after a goal, the scorer the Ball camera stays on
 //               and the ball drawn in the net while he celebrates (the
 //               engine has already put the ball on the centre spot).
 //
 // REDUCED MOTION
-//   No body poses, dust, net ripple, woodwork flash or styled trail; the
-//   labels, cards, spot markers, whistle mark, target mark, offside flag and
-//   substitution arrows still show (they are information, not motion).
+//   No body poses and no held ball; the spot, the rings, the card glyph and
+//   the frame flare still show for their windows (they are information),
+//   drawn without fading.
 //
 // PURE: no React, no canvas.  Anything that needs the replay itself (where
 // the ball was at a moment, where a through ball was met, which side a
@@ -39,6 +39,7 @@
 
 import { actionsBetween, firstActionAtOrAfter, type ActionTrack, type ReplayAction } from '../replay/actions';
 import { GOAL_Y_MAX, GOAL_Y_MIN, PITCH_LENGTH, type KickKind, type RestartKind, type TeamSide } from '../spatial/types';
+import { shotBefore } from './shots';
 
 // ── Timing (milliseconds of REAL time) ───────────────────────────────────────
 
@@ -54,20 +55,15 @@ export const ANIM_MS = {
   stumble: 520,
   lunge: 420,
   fall: 1300,
-  whistle: 1000,
   card: 1800,
   dive: 650,
   catch: 900,
   celebrate: 1900,
-  goalLabel: 2400,
-  ripple: 1000,
-  woodwork: 450,
-  offside: 1600,
-  sub: 3500,
-  /** The styled trail and the through-ball target stay at least this long. */
-  trail: 900,
-  dust: 450,
-  /** A restart's label and spot show at least this long, even for a quick restart. */
+  /** The hairline ring round the player at the centre of a tackle, foul or save fades over this long. */
+  ring: 700,
+  /** The goal frame is drawn brighter this long after a goal or a shot off the woodwork. */
+  flare: 1000,
+  /** A restart's spot shows at least this long, even for a quick restart. */
   restartMin: 900,
   /** A card is raised this long after the foul (once the victim is falling). */
   cardDelay: 300,
@@ -82,7 +78,7 @@ export const PRE_MS = { kick: 140, slide: 120, lunge: 100 } as const;
  * effect to Rollup and could keep this module in the entry chunk.  The test
  * holds it equal to the largest duration.
  */
-export const MAX_AFTER_MS = 3500;
+export const MAX_AFTER_MS = 1900;
 /** The longest wind-up (bounds the look-ahead); held equal by the test too. */
 export const MAX_PRE_MS = 140;
 
@@ -91,9 +87,6 @@ export const MAX_PRE_MS = 140;
  * pause in the engine is the kick-off after a goal, 60 game seconds.
  */
 export const RESTART_LOOKBACK_SEC = 90;
-
-/** A styled trail outlives its real-time minimum while the ball is still on this flight (game s). */
-const TRAIL_FLIGHT_SEC = 2.5;
 
 /** Height (m) at which a held ball is drawn: over the head for a throw, at the chest for a catch. */
 export const HELD_OVERHEAD_M = 2.2;
@@ -130,32 +123,22 @@ export interface ActionPose {
   toZ?: number;
 }
 
-/** How the ball's trail is drawn, by the kind of the last kick. */
-export type TrailKind = 'pass' | 'through' | 'cross' | 'long' | 'clear' | 'shot';
-
-/** A mark on the pitch. `t` is progress 0..1 through its real-time window. */
+/**
+ * A mark on the pitch (hairline, Lunar Dust; the card glyph in its card
+ * colour).  `t` is progress 0..1 through its real-time window.
+ */
 export type Overlay =
   | { kind: 'spot'; x: number; y: number; restart: RestartKind }
-  | { kind: 'dust'; player: number; t: number }
-  | { kind: 'whistle'; player: number; t: number }
+  | { kind: 'ring'; player: number; t: number }
   | { kind: 'card'; player: number; card: 'yellow' | 'red'; t: number }
-  | { kind: 'ripple'; goalX: number; t: number }
-  | { kind: 'woodwork'; x: number; y: number; z: number; t: number }
-  | { kind: 'target'; x: number; y: number; t: number }
-  | { kind: 'offside'; x: number; y: number; t: number }
-  | { kind: 'subArrows'; t: number };
+  | { kind: 'flare'; goalX: number; t: number };
 
 /** Everything showing at one instant. */
 export interface ActiveAnimations {
   poses: Map<number, ActionPose>;
   overlays: Overlay[];
-  /** The pitch label in the design system's label style, or null. */
-  label: string | null;
-  trail: TrailKind | null;
   /** A player holding the ball up, and the height to draw it at. */
   ballHeld: { player: number; z: number } | null;
-  /** The substitution to name under the pitch (roster indices). */
-  sub: { on: number; off: number } | null;
   /**
    * After a goal, the scorer the Ball camera follows during his celebration
    * (the engine puts the ball on the centre spot at once, so following the
@@ -176,8 +159,6 @@ export const WOODWORK_SEARCH_SEC = 4;
 export interface AnimLookup {
   /** Where the ball was at a game second (null when unknown). */
   ballAt?(sec: number): { x: number; y: number; z: number } | null;
-  /** Where the ball kicked at `sec` was next controlled (a through ball's meeting point). */
-  receptionAfter?(sec: number): { x: number; y: number; sec: number } | null;
   /** Which side a roster index plays for (null when unknown). */
   sideOf?(player: number): TeamSide | null;
   /**
@@ -196,22 +177,6 @@ export interface AnimQuery {
   rate: number;
   reducedMotion: boolean;
 }
-
-// ── Labels ───────────────────────────────────────────────────────────────────
-
-/** The pitch label for each restart ('keeper' is the keeper's own release: no label). */
-export const RESTART_LABEL: Readonly<Record<RestartKind, string | null>> = {
-  kickoff: 'KICK-OFF',
-  throw: 'THROW-IN',
-  corner: 'CORNER',
-  goalkick: 'GOAL KICK',
-  freekick: 'FREE KICK',
-  penalty: 'PENALTY',
-  keeper: null,
-};
-
-/** Label priority: a higher one replaces a lower one showing at the same time. */
-const LABEL_RANK = { restart: 1, offside: 2, goal: 3 } as const;
 
 // ── Kick kinds ───────────────────────────────────────────────────────────────
 
@@ -234,27 +199,6 @@ const KICK_POSE: Readonly<Record<KickKind, PoseKind | null>> = {
   parry: 'parry',
   deflection: null,
   poke: 'kick',
-};
-
-/** The trail style for each kick kind (null: the trail is not restyled). */
-const KICK_TRAIL: Readonly<Record<KickKind, TrailKind | null>> = {
-  pass: 'pass',
-  through: 'through',
-  cross: 'cross',
-  long: 'long',
-  clear: 'clear',
-  shot: 'shot',
-  throw: 'pass',
-  goalkick: 'long',
-  corner: 'cross',
-  freekick: 'long',
-  penalty: 'shot',
-  kickoff: 'pass',
-  dribble: null,
-  header: 'pass',
-  parry: null,
-  deflection: null,
-  poke: 'pass',
 };
 
 /** Pose priority: a higher one wins over a lower one on the same player; ties go to the later action. */
@@ -298,25 +242,8 @@ export function netPoint(crossed: { x: number; y: number; z: number }, goalX: nu
 }
 
 /** An empty result (no track, or nothing on). */
-/**
- * The pitch label to draw, given whether a slow-motion replay is showing.
- *
- * A replay shows the build-up to a goal or a chance, which often began with
- * a set piece; drawing its CORNER or FREE KICK label beside REPLAY reads as
- * though play is about to restart.  So during a replay only the moment's own
- * outcome labels (GOAL, OFFSIDE) are shown; restart labels belong to live
- * play.
- *
- * @param label     The label `activeAnimations` chose, or null.
- * @param inReplay  True while a slow-motion replay is on screen.
- */
-export function pitchLabelFor(label: string | null, inReplay: boolean): string | null {
-  if (label == null || !inReplay) return label;
-  return label === 'GOAL' || label === 'OFFSIDE' ? label : null;
-}
-
 export function noAnimations(): ActiveAnimations {
-  return { poses: new Map(), overlays: [], label: null, trail: null, ballHeld: null, sub: null, focus: null, ballInNet: null };
+  return { poses: new Map(), overlays: [], ballHeld: null, focus: null, ballInNet: null };
 }
 
 /** The kick that takes a restart: the first kick after it (nobody else plays the ball in a stoppage). */
@@ -336,8 +263,8 @@ function restartTakenAt(track: ActionTrack, from: number, tick: number): number 
  * @param q       The game second on screen, the playback rate (game s per
  *                real s) and the reduced-motion preference.
  * @param lookup  Optional replay lookups for the marks that need positions.
- * @returns       Poses by roster index, pitch overlays, the label, the trail
- *                style, a held ball and the substitution being announced.
+ * @returns       Poses by roster index, the pitch marks, a held ball, and
+ *                after a goal the scorer to follow and the ball in the net.
  */
 export function activeAnimations(
   track: ActionTrack | null | undefined,
@@ -361,18 +288,22 @@ export function activeAnimations(
     poseRank.set(player, rank);
     out.poses.set(player, pose);
   };
-  let labelRank = 0;
-  const setLabel = (text: string | null, rank: number): void => {
-    if (text == null || rank < labelRank) return;
-    labelRank = rank;
-    out.label = text;
-  };
   /** Progress through [start, start + ms] in real time, or null when outside it. */
   const within = (startSec: number, ms: number, preMs = 0): number | null => {
     const age = realSince(startSec) * 1000 + preMs;
     const len = ms + preMs;
     if (age < 0 || age >= len) return null;
     return age / len;
+  };
+  /** A hairline ring round a player for ANIM_MS.ring from `startSec`. */
+  const ring = (player: number, startSec: number): void => {
+    const t = within(startSec, ANIM_MS.ring);
+    if (t != null) out.overlays.push({ kind: 'ring', player, t });
+  };
+  /** The frame of the goal nearest `x` flaring for ANIM_MS.flare from `startSec`. */
+  const flare = (x: number, startSec: number): void => {
+    const t = within(startSec, ANIM_MS.flare);
+    if (t != null) out.overlays.push({ kind: 'flare', goalX: x < PITCH_LENGTH / 2 ? 0 : PITCH_LENGTH, t });
   };
 
   // The window to scan: long enough back for the longest animation (and a
@@ -386,38 +317,22 @@ export function activeAnimations(
 
   // The latest restart before now is the one on show (a newer one replaces it).
   let lastRestart: { a: Extract<ReplayAction, { kind: 'restart' }>; index: number } | null = null;
-  // The latest trail-carrying kick, and whether play moved on after it.
-  let trailKick: { sec: number; kind: TrailKind } | null = null;
 
   actions.forEach((a, k) => {
     const sec = a.tick * dt;
     const index = firstIndex + k;
-    if (sec <= now && a.kind !== 'restart' && trailKick && a.kind !== 'dive') {
-      // Any later touch ends the previous kick's flight (its trail style).
-      trailKick = null;
-    }
     switch (a.kind) {
       case 'kick': {
         // A restart's taking kick is labelled with the restart (corner, free
         // kick...); when the recorder also gives its delivery (a free kick
-        // struck as a shot, a corner as a cross), that decides the strike
-        // and the trail.  A throw stays a throw.
-        const delivery = (a as typeof a & { delivery?: KickKind }).delivery;
-        const struck = a.kick === 'throw' ? 'throw' : (delivery ?? a.kick);
+        // struck as a shot, a corner as a cross), that decides the strike.
+        // A throw stays a throw.
+        const struck = a.kick === 'throw' ? 'throw' : (a.delivery ?? a.kick);
         const pose = KICK_POSE[struck];
         const pre = pose === 'kick' || pose === 'shot' ? PRE_MS.kick : 0;
         if (pose) {
           const t = within(sec, kickMs(pose), pre);
           if (t != null) setPose(a.by, { kind: pose, t, contact: pre / (pre + kickMs(pose)) });
-        }
-        const trail = KICK_TRAIL[delivery ?? a.kick];
-        if (trail && sec <= now) trailKick = { sec, kind: trail };
-        if (a.kick === 'through' && sec <= now) {
-          const meet = lookup.receptionAfter?.(sec);
-          if (meet) {
-            const endSec = Math.max(meet.sec, sec + (ANIM_MS.trail / 1000) * rate);
-            if (now <= endSec) out.overlays.push({ kind: 'target', x: meet.x, y: meet.y, t: (now - sec) / (endSec - sec) });
-          }
         }
         break;
       }
@@ -426,8 +341,7 @@ export function activeAnimations(
         if (t != null) setPose(a.by, { kind: 'slide', t, contact: PRE_MS.slide / (PRE_MS.slide + ANIM_MS.slide) });
         const ts = within(sec, ANIM_MS.stumble);
         if (ts != null) setPose(a.from, { kind: 'stumble', t: ts, contact: 0 });
-        const td = within(sec, ANIM_MS.dust);
-        if (motion && td != null) out.overlays.push({ kind: 'dust', player: a.by, t: td });
+        ring(a.by, sec);
         break;
       }
       case 'interception': {
@@ -440,8 +354,8 @@ export function activeAnimations(
         if (tl != null) setPose(a.by, { kind: 'lunge', t: tl, contact: PRE_MS.lunge / (PRE_MS.lunge + ANIM_MS.lunge) });
         const tf = within(sec, ANIM_MS.fall);
         if (tf != null) setPose(a.on, { kind: 'fall', t: tf, contact: 0 });
-        const tw = within(sec, ANIM_MS.whistle);
-        if (tw != null) out.overlays.push({ kind: 'whistle', player: a.on, t: tw });
+        // The ring finds the man who went down; the card glyph the offender.
+        ring(a.on, sec);
         if (a.card !== 'none') {
           const tc = within(sec + (ANIM_MS.cardDelay / 1000) * rate, ANIM_MS.card);
           if (tc != null) out.overlays.push({ kind: 'card', player: a.by, card: a.card, t: tc });
@@ -458,62 +372,41 @@ export function activeAnimations(
             if (motion) out.ballHeld = { player: a.by, z: HELD_CHEST_M };
           }
         }
+        // A save of a shot (the same rule as the strip's SAVE row): ring the keeper.
+        if (a.outcome !== 'beaten' && shotBefore(track, index)) ring(a.by, sec);
         break;
       }
       case 'restart':
         if (sec <= now) lastRestart = { a, index };
         break;
       case 'goal': {
-        const tl = within(sec, ANIM_MS.goalLabel);
-        if (tl != null) setLabel('GOAL', LABEL_RANK.goal);
         const side = lookup.sideOf?.(a.by) ?? null;
         const ownGoal = side != null && side !== a.side;
         const tc = within(sec, ANIM_MS.celebrate);
         if (tc != null && !ownGoal) setPose(a.by, { kind: 'celebrate', t: tc, contact: 0 });
         // The ball as it crossed the line (a tick before the engine put it
-        // on the centre spot), drawn in the net while the goal is marked.
-        const crossed = tc != null || within(sec, ANIM_MS.ripple) != null ? lookup.ballAt?.(sec - dt) ?? null : null;
-        const goalX = crossed ? (crossed.x < PITCH_LENGTH / 2 ? 0 : PITCH_LENGTH) : null;
+        // on the centre spot), drawn in the net while the scorer celebrates.
+        const crossed = tc != null || within(sec, ANIM_MS.flare) != null ? lookup.ballAt?.(sec - dt) ?? null : null;
         if (tc != null) {
           out.focus = a.by;
-          if (crossed && goalX != null) out.ballInNet = netPoint(crossed, goalX);
+          if (crossed) out.ballInNet = netPoint(crossed, crossed.x < PITCH_LENGTH / 2 ? 0 : PITCH_LENGTH);
         }
-        const tr = within(sec, ANIM_MS.ripple);
-        if (motion && tr != null && goalX != null) out.overlays.push({ kind: 'ripple', goalX, t: tr });
+        if (crossed) flare(crossed.x, sec);
         break;
       }
       case 'woodwork': {
-        // Flash where and when the ball met the frame; the event itself
-        // comes later, when the shot is resolved.
+        // The frame flares when the ball met it; the event itself comes
+        // later, when the shot is resolved.
         const hit = lookup.frameHitBefore?.(sec) ?? null;
-        const t = within(hit ? hit.sec : sec, ANIM_MS.woodwork);
-        if (motion && t != null) {
-          const ball = hit ?? lookup.ballAt?.(sec);
-          if (ball) out.overlays.push({ kind: 'woodwork', x: ball.x, y: ball.y, z: ball.z, t });
-        }
-        break;
-      }
-      case 'offside': {
-        const t = within(sec, ANIM_MS.offside);
-        if (t != null) {
-          out.overlays.push({ kind: 'offside', x: a.x, y: a.y, t });
-          setLabel('OFFSIDE', LABEL_RANK.offside);
-        }
-        break;
-      }
-      case 'sub': {
-        const t = within(sec, ANIM_MS.sub);
-        if (t != null) {
-          out.overlays.push({ kind: 'subArrows', t });
-          out.sub = { on: a.on, off: a.off };
-        }
+        const ball = hit ?? lookup.ballAt?.(sec) ?? null;
+        if (ball) flare(ball.x, hit ? hit.sec : sec);
         break;
       }
     }
   });
 
-  // The restart in progress: its spot, its label, and a throw-in taker
-  // lifting the ball over his head as the pause runs out.
+  // The restart in progress: its spot, and a throw-in taker lifting the
+  // ball over his head as the pause runs out.
   if (lastRestart) {
     const { a, index } = lastRestart as { a: Extract<ReplayAction, { kind: 'restart' }>; index: number };
     const start = a.tick * dt;
@@ -523,7 +416,6 @@ export function activeAnimations(
     if (taken != null) end = Math.min(end, Math.max(taken * dt, minEnd));
     if (now >= start && now < end) {
       out.overlays.push({ kind: 'spot', x: a.x, y: a.y, restart: a.restart });
-      setLabel(RESTART_LABEL[a.restart], LABEL_RANK.restart);
       if (a.restart === 'throw') {
         const holdFrom = Math.max(start, end - (ANIM_MS.throwHold / 1000) * rate);
         if (now >= holdFrom) {
@@ -532,13 +424,6 @@ export function activeAnimations(
         }
       }
     }
-  }
-
-  // The trail style: the last kick's kind while its flight lasts.
-  const tk = trailKick as { sec: number; kind: TrailKind } | null;
-  if (motion && tk) {
-    const realAge = realSince(tk.sec) * 1000;
-    if (realAge < ANIM_MS.trail || now - tk.sec < TRAIL_FLIGHT_SEC) out.trail = tk.kind;
   }
   return out;
 }
@@ -652,6 +537,7 @@ export function actionBody(p: ActionPose): ActionBody {
     case 'parry':
       return { ...REST_BODY, tilt: 0.3 * bell(t), arms: 'up', impulse: 0.9 };
     case 'celebrate':
-      return { ...REST_BODY, arms: 'celebrate', lift: 3 * Math.abs(Math.sin(Math.PI * 3 * t)) * (1 - 0.4 * t), impulse: 0.8 };
+      // Arms up in a V, feet on the grass: the hop was cut (section 7).
+      return { ...REST_BODY, arms: 'celebrate', impulse: 0.8 };
   }
 }

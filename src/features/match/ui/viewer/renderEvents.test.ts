@@ -1,29 +1,24 @@
 // ── features/match/ui/viewer/renderEvents.test.ts ───────────────────────────
-// The event layer against a recording 2D context (like render.test.ts):
-// what each mark is drawn with.  Guards the colour rules of
-// docs/match-viewer.md section 5B (red only for a red card, the card-yellow
-// token for a yellow, never the Architect's purple), the label style, and
-// the new body poses and trail styles in render.ts.
+// The few event marks left on the pitch (docs/match-viewer.md section 7)
+// against a recording 2D context (like render.test.ts): hairline Lunar Dust
+// for the spot, the ring and the frame flare; the card colour only on the
+// card glyph, which sits beside the offender's head and off other players;
+// plus the event poses and the plain ball trail in render.ts.
 
 import { describe, expect, it } from 'vitest';
 import { canvasColor } from '../../../../shared/design';
-import { actionBody, makeAppearance, newArms, resolveKits, type Projected, type TrailKind } from '../../logic/viewer';
-import { PIXEL_SCALE, TRAIL_STYLE, drawBall, drawDude, type DudeRender, type ProjectFn } from './render';
+import { actionBody, makeAppearance, newArms, resolveKits, type Projected } from '../../logic/viewer';
+import { PIXEL_SCALE, drawBall, drawDude, type DudeRender, type ProjectFn } from './render';
 import {
-  LABEL_MIN_PX,
-  LABEL_PX,
-  drawCard,
-  drawDust,
-  drawNetRipple,
-  drawOffsideMark,
-  drawPitchLabel,
+  EVENT_RING_RX,
+  cardGlyphRect,
+  drawCardGlyph,
+  drawEventRing,
+  drawGoalFlare,
   drawSpotMarker,
-  drawSubArrows,
-  drawTargetMark,
-  drawWhistleMark,
-  drawWoodworkFlash,
-  labelPxFor,
-  labelTextWidth,
+  figureBox,
+  overlapArea,
+  type FigureAt,
 } from './renderEvents';
 
 /** One recorded drawing operation with the context state it ran under. */
@@ -46,7 +41,6 @@ class Recorder {
   shadowColor = '';
   shadowBlur = 0;
   font = '';
-  letterSpacing = '0px';
   textAlign = 'start';
   textBaseline = 'alphabetic';
   readonly ops: Op[] = [];
@@ -68,6 +62,8 @@ class Recorder {
   rotate(...a: number[]): void { this.rec('rotate', a); }
   translate(...a: number[]): void { this.rec('translate', a); }
   setLineDash(...a: unknown[]): void { this.rec('setLineDash', a); }
+  rect(...a: number[]): void { this.rec('rect', a); }
+  clip(): void { this.rec('clip'); }
   beginPath(): void {}
   closePath(): void {}
   moveTo(): void {}
@@ -76,139 +72,114 @@ class Recorder {
   roundRect(): void {}
 }
 
-function recorder(): { ctx: CanvasRenderingContext2D; ops: Op[]; r: Recorder } {
+function recorder(): { ctx: CanvasRenderingContext2D; ops: Op[] } {
   const r = new Recorder();
-  return { ctx: r as unknown as CanvasRenderingContext2D, ops: r.ops, r };
+  return { ctx: r as unknown as CanvasRenderingContext2D, ops: r.ops };
 }
 
 const project: ProjectFn = (wx, wy, wz): Projected => ({ x: wx * 6, y: wy * 6 - wz * 4, sc: 1.2 * PIXEL_SCALE });
-const VP = { width: 640, height: 416 };
 const kits = resolveKits('#556B2F', '#A9A9A9');
 
 /** Every colour any op was drawn in. */
 const colours = (ops: Op[]): Set<string> => new Set(ops.flatMap((o) => [o.fill, o.stroke]).filter(Boolean));
 
-describe('cards', () => {
-  it('a yellow card uses the card-yellow token, a red card the live/red token', () => {
-    const y = recorder();
-    drawCard(y.ctx, project, 50, 30, 'yellow', 0.5);
-    expect(y.ops.some((o) => o.op === 'fillRect' && o.fill === canvasColor.cardYellow)).toBe(true);
-    expect(colours(y.ops).has(canvasColor.cardRed)).toBe(false);
-    const r = recorder();
-    drawCard(r.ctx, project, 50, 30, 'red', 0.5);
-    expect(r.ops.some((o) => o.op === 'fillRect' && o.fill === canvasColor.cardRed)).toBe(true);
-    expect(colours(r.ops).has(canvasColor.cardYellow)).toBe(false);
-  });
-
-  it('the card tokens are the page tokens', () => {
-    expect(canvasColor.cardYellow).toBe('#F5C518');
-    expect(canvasColor.cardRed).toBe('#FF4F5E');
-  });
-
-  it('is held above the offender\'s head', () => {
-    const { ctx, ops } = recorder();
-    drawCard(ctx, project, 50, 30, 'yellow', 0.5);
-    const card = ops.find((o) => o.op === 'fillRect' && o.fill === canvasColor.cardYellow)!;
-    expect((card.args[1] as number) + (card.args[3] as number)).toBeLessThan(project(50, 30, 0).y - 12 * project(50, 30, 0).sc);
-  });
-});
-
-describe('no red or purple outside a red card', () => {
-  it('every other event mark avoids the red-card colour and the Architect purple', () => {
-    const { ctx, ops } = recorder();
-    drawSpotMarker(ctx, project, 105, 0);
-    drawDust(ctx, project, 50, 30, 1, 0.3);
-    drawWhistleMark(ctx, project, 50, 30, 0.4);
-    drawNetRipple(ctx, project, 105, 0.3);
-    drawWoodworkFlash(ctx, project, 105, 30, 2.4, 0.2);
-    drawTargetMark(ctx, project, 80, 20, 0.5);
-    drawOffsideMark(ctx, project, 80, 0.5);
-    drawSubArrows(ctx, project, 0.5);
-    drawPitchLabel(ctx, VP, 'CORNER');
-    const used = colours(ops);
-    expect(used.has(canvasColor.cardRed)).toBe(false);
-    expect(used.has(canvasColor.architect)).toBe(false);
-  });
-});
-
-describe('marks', () => {
-  it('the restart spot is a phosphor ring on the grass', () => {
+describe('the marks left on the pitch are hairline Lunar Dust', () => {
+  it('the restart spot is a Lunar Dust ring on the grass', () => {
     const { ctx, ops } = recorder();
     drawSpotMarker(ctx, project, 105, 0);
     expect(ops.some((o) => o.op === 'stroke' && o.stroke === canvasColor.text)).toBe(true);
   });
 
-  it('the through-ball target is in the ball colour', () => {
-    const { ctx, ops } = recorder();
-    drawTargetMark(ctx, project, 80, 20, 0.5);
-    expect(ops.filter((o) => o.op === 'stroke').every((o) => o.stroke === canvasColor.ball)).toBe(true);
+  it('the event ring: Lunar Dust pixels round his feet, fading to nothing over its window', () => {
+    const at = (t: number, still = false) => {
+      const { ctx, ops } = recorder();
+      drawEventRing(ctx, project, 50, 30, t, still);
+      return ops.filter((o) => o.op === 'fillRect');
+    };
+    const ring = at(0);
+    expect(ring.length).toBeGreaterThan(8);
+    expect(ring.every((o) => o.fill === canvasColor.text)).toBe(true);
+    // On the grass, round the feet: never above them by more than its own half-height (so never over a face).
+    const feet = project(50, 30, 0);
+    const as = feet.sc / PIXEL_SCALE;
+    for (const o of ring) {
+      const [x, y] = o.args as number[];
+      expect(y!).toBeGreaterThan(feet.y - 4 * as * PIXEL_SCALE);
+      expect(Math.abs(x! - feet.x)).toBeLessThanOrEqual((EVENT_RING_RX * as + 1) * PIXEL_SCALE);
+    }
+    expect(at(0.5)[0]!.alpha).toBeLessThan(ring[0]!.alpha);
+    expect(at(1).every((o) => o.alpha === 0)).toBe(true);
+    // Reduced motion: still, whole for its window.
+    expect(at(0.9, true)[0]!.alpha).toBe(ring[0]!.alpha);
   });
 
-  it('offside: a dashed line in the flag colour and a flag on the touchline', () => {
-    const { ctx, ops } = recorder();
-    drawOffsideMark(ctx, project, 80, 0.5);
-    expect(ops.some((o) => o.op === 'setLineDash' && (o.args[0] as number[]).length > 0)).toBe(true);
-    expect(ops.some((o) => o.op === 'fillRect' && o.fill === canvasColor.flag)).toBe(true);
+  it('the ring splits at his feet into a far half (behind the figures) and a near half (in front)', () => {
+    const half = (part: 'back' | 'front') => {
+      const { ctx, ops } = recorder();
+      drawEventRing(ctx, project, 50, 30, 0, false, part);
+      return ops;
+    };
+    const feetY = project(50, 30, 0).y;
+    const clipOf = (ops: Op[]) => ops.find((o) => o.op === 'rect')!.args as number[];
+    const back = clipOf(half('back'));
+    const front = clipOf(half('front'));
+    expect(back[1]! + back[3]!).toBeCloseTo(feetY, 0); // the far half ends at his feet
+    expect(front[1]).toBeCloseTo(feetY, 0); // the near half starts there
+    expect(half('back').some((o) => o.op === 'clip')).toBe(true);
   });
 
-  it('substitution arrows: on in the success green, off in phosphor', () => {
+  it('the goal frame flare redraws the frame in full Lunar Dust and fades back', () => {
     const { ctx, ops } = recorder();
-    drawSubArrows(ctx, project, 0.5);
-    const fills = ops.filter((o) => o.op === 'fill').map((o) => o.fill);
-    expect(fills).toContain(canvasColor.subOn);
-    expect(fills).toContain(canvasColor.text);
+    drawGoalFlare(ctx, project, 105, 0);
+    const rects = ops.filter((o) => o.op === 'fillRect');
+    expect(rects.length).toBeGreaterThanOrEqual(3);
+    expect(rects.every((o) => o.fill === canvasColor.text && o.alpha === 1)).toBe(true);
+    // Only the right-hand goal: every pixel sits near x = 105 m.
+    expect(rects.every((o) => (o.args[0] as number) > 100 * 6 - 20)).toBe(true);
+    const late = recorder();
+    drawGoalFlare(late.ctx, project, 105, 1);
+    expect(late.ops.filter((o) => o.op === 'fillRect').every((o) => o.alpha === 0)).toBe(true);
   });
 
-  it('dust, ripple, flash and whistle draw in their tokens and fade out by t = 1', () => {
-    const d = recorder();
-    drawDust(d.ctx, project, 50, 30, 1, 0.5);
-    expect(d.ops.some((o) => o.op === 'fill' && o.fill === canvasColor.dust)).toBe(true);
-    const n = recorder();
-    drawNetRipple(n.ctx, project, 0, 0.5);
-    expect(n.ops.some((o) => o.op === 'stroke' && o.stroke === canvasColor.net)).toBe(true);
-    const f = recorder();
-    drawWoodworkFlash(f.ctx, project, 105, 30, 2.4, 1);
-    expect(f.ops.filter((o) => o.op === 'stroke').every((o) => o.alpha === 0)).toBe(true);
-    const w = recorder();
-    drawWhistleMark(w.ctx, project, 50, 30, 0.5);
-    expect(w.ops.some((o) => o.op === 'stroke' && o.stroke === canvasColor.text)).toBe(true);
+  it('no red, purple or new hue outside the card glyph', () => {
+    const { ctx, ops } = recorder();
+    drawSpotMarker(ctx, project, 105, 0);
+    drawEventRing(ctx, project, 50, 30, 0.2);
+    drawGoalFlare(ctx, project, 0, 0.2);
+    expect([...colours(ops)]).toEqual([canvasColor.text]);
   });
 });
 
-describe('drawPitchLabel', () => {
-  it('draws the label style: Space Mono 700, tracked, phosphor on an abyss panel with a hairline', () => {
-    const { ctx, ops, r } = recorder();
-    drawPitchLabel(ctx, VP, 'FREE KICK');
-    const text = ops.find((o) => o.op === 'fillText')!;
-    expect(text.args[0]).toBe('FREE KICK');
-    expect(text.fill).toBe(canvasColor.text);
-    expect(ops[0]).toMatchObject({ op: 'fillRect', fill: canvasColor.labelPanel });
-    expect(ops.some((o) => o.op === 'strokeRect')).toBe(true);
-    // The recorder does not restore font or tracking, so they read as set.
-    expect(r.font).toBe(`700 ${LABEL_PX}px "Space Mono", monospace`);
-    expect(r.letterSpacing).toBe(`${LABEL_PX * 0.12}px`);
+describe('the card glyph', () => {
+  const him: FigureAt = { x: 160, y: 100, as: 1.2 };
+
+  it('is a card in the card-yellow token or the live red, edged in Abyss', () => {
+    const rect = cardGlyphRect(him, []);
+    const y = recorder();
+    drawCardGlyph(y.ctx, rect, 'yellow', 0.5);
+    expect(y.ops.map((o) => o.fill)).toEqual([canvasColor.bg, canvasColor.cardYellow]);
+    const r = recorder();
+    drawCardGlyph(r.ctx, rect, 'red', 0.5);
+    expect(r.ops.map((o) => o.fill)).toEqual([canvasColor.bg, canvasColor.cardRed]);
+    expect(canvasColor.cardYellow).toBe('#F5C518');
+    expect(canvasColor.cardRed).toBe('#FF4F5E');
   });
 
-  it('centres a top label and puts REPLAY in the corner', () => {
-    const top = recorder();
-    drawPitchLabel(top.ctx, VP, 'GOAL', 'top');
-    const panel = top.ops[0]!.args as number[];
-    expect(panel[0]! + panel[2]! / 2).toBeCloseTo(VP.width / 2, 0);
-    const corner = recorder();
-    drawPitchLabel(corner.ctx, VP, 'REPLAY', 'corner');
-    expect((corner.ops[0]!.args as number[])[0]).toBeLessThan(20);
+  it('sits beside his head, never over it', () => {
+    const rect = cardGlyphRect(him, []);
+    const head = { x: him.x - 3 * him.as, y: him.y - 14 * him.as, w: 6 * him.as, h: 7 * him.as };
+    expect(overlapArea(rect, head)).toBe(0);
+    expect(rect.y + rect.h).toBeLessThan(him.y - 4 * him.as); // up at head height, not at his feet
+    expect(rect.w).toBeLessThanOrEqual(6); // a few art pixels
   });
 
-  it('the panel fits the text (monospace width with tracking)', () => {
-    expect(labelTextWidth('CORNER')).toBeCloseTo(6 * LABEL_PX * 0.72);
-  });
-
-  it('label size: the design label on a phone, not a banner on a desktop', () => {
-    expect((labelPxFor(358, 640) * 358) / 640).toBeCloseTo(11.2, 0); // about 11 CSS px on a phone
-    const desk = labelPxFor(928, 640);
-    expect(desk).toBe(LABEL_MIN_PX);
-    expect((desk * 928) / 640).toBeLessThan(18);
-    expect(labelPxFor(0, 640)).toBe(LABEL_PX);
+  it('moves to the side where it covers no other player', () => {
+    const right = cardGlyphRect(him, []);
+    expect(right.x).toBeGreaterThan(him.x);
+    const neighbour: FigureAt = { x: him.x + 9 * him.as, y: him.y, as: him.as };
+    const moved = cardGlyphRect(him, [neighbour]);
+    expect(moved.x).toBeLessThan(him.x);
+    expect(overlapArea(moved, figureBox(neighbour))).toBe(0);
   });
 });
 
@@ -263,30 +234,25 @@ describe('drawDude with an event animation', () => {
     expect(out.x1 - out.x0).toBeGreaterThan(rest.x1 - rest.x0 + 2 * PIXEL_SCALE);
   });
 
-  it('a celebration lifts the body off the grass (the hop)', () => {
-    expect(box({ ...base, act: actionBody({ kind: 'celebrate', t: 1 / 6, contact: 0 }) }).y1).toBeLessThan(box(base).y1);
+  it('a celebration keeps his feet on the grass (no hop)', () => {
+    for (const t of [1 / 6, 0.5]) {
+      expect(box({ ...base, act: actionBody({ kind: 'celebrate', t, contact: 0 }) }).y1).toBe(box(base).y1);
+    }
   });
 });
 
-describe('drawBall trail styles and a held ball', () => {
-  const trail = [
-    { x: 40, y: 30, z: 0 },
-    { x: 44, y: 30, z: 0.5 },
-    { x: 48, y: 30, z: 0.8 },
-  ];
-  it('styles the trail by the kick kind; a shot is wider, white and glows', () => {
-    const strokes = (trailKind: TrailKind | null) => {
-      const { ctx, ops } = recorder();
-      drawBall(ctx, project, { wx: 50, wy: 30, wz: 1, trail, trailKind });
-      return ops.filter((o) => o.op === 'stroke');
-    };
-    expect(strokes('cross').every((o) => o.stroke === canvasColor.trailCross)).toBe(true);
-    expect(strokes('long').every((o) => o.stroke === canvasColor.trailLong)).toBe(true);
-    expect(strokes('clear').every((o) => o.stroke === canvasColor.trailClear)).toBe(true);
-    expect(strokes('shot').every((o) => o.stroke === canvasColor.trailShot)).toBe(true);
-    expect(strokes(null).every((o) => o.stroke === canvasColor.ball)).toBe(true);
-    expect(TRAIL_STYLE.shot.width).toBeGreaterThan(TRAIL_STYLE.pass.width);
-    expect(TRAIL_STYLE.shot.glow).toBe(true);
+describe('drawBall: the plain trail and a held ball', () => {
+  it('the trail is the ball\'s own colour, no glow, whatever the kick', () => {
+    const { ctx, ops, } = recorder();
+    const trail = [
+      { x: 40, y: 30, z: 0 },
+      { x: 44, y: 30, z: 0.5 },
+      { x: 48, y: 30, z: 0.8 },
+    ];
+    drawBall(ctx, project, { wx: 50, wy: 30, wz: 1, trail });
+    const strokes = ops.filter((o) => o.op === 'stroke');
+    expect(strokes.length).toBe(3);
+    expect(strokes.every((o) => o.stroke === canvasColor.ball)).toBe(true);
   });
 
   it('a held ball sits on the holder\'s sprite, above his feet', () => {
