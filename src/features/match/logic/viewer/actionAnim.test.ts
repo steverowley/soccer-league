@@ -1,9 +1,10 @@
 // ── features/match/logic/viewer/actionAnim.test.ts ──────────────────────────
-// The event animations (docs/match-viewer.md section 5B): every action kind
-// produces its pose or mark inside its window and nothing after it; the
-// windows are REAL time, so they last the same on screen at any match
-// speed; reduced motion keeps the information (labels, cards, marks) and
-// drops the motion.
+// The event animations (docs/match-viewer.md sections 5B and 7): every
+// action kind produces its pose or hairline mark inside its window and
+// nothing after it; the windows are REAL time, so they last the same on
+// screen at any match speed; nothing writes words on the pitch (the event
+// strip does, eventLog.ts); reduced motion keeps the marks and drops the
+// motion.
 
 import { describe, expect, it } from 'vitest';
 import type { ActionTrack, ReplayAction } from '../replay/actions';
@@ -18,7 +19,6 @@ import {
   kickLegAt,
   type AnimLookup,
   type AnimQuery,
-  pitchLabelFor,
 } from './actionAnim';
 
 const DT = 0.1;
@@ -36,7 +36,6 @@ const q = (gameSec: number, rate = LIVE, reducedMotion = false): AnimQuery => ({
 
 const lookup: AnimLookup = {
   ballAt: () => ({ x: 104, y: 33, z: 1.2 }),
-  receptionAfter: (sec) => ({ x: 80, y: 20, sec: sec + 1.5 }),
   sideOf: (p) => (p < 11 ? 'home' : 'away'),
 };
 
@@ -45,7 +44,6 @@ describe('activeAnimations: windows', () => {
     const a = activeAnimations(null, q(100));
     expect(a.poses.size).toBe(0);
     expect(a.overlays).toEqual([]);
-    expect(a.label).toBeNull();
   });
 
   it('the lookback covers the longest animation and the wind-up covers the longest pre-roll', () => {
@@ -72,37 +70,24 @@ describe('activeAnimations: windows', () => {
     }
   });
 
-  it('a shot is a stronger strike than a pass and styles the trail as a shot', () => {
+  it('a shot is a stronger strike than a pass, and neither marks the pitch', () => {
     const shot = track({ kind: 'kick', tick: tick(50), by: 9, kick: 'shot' });
     const pass = track({ kind: 'kick', tick: tick(50), by: 9, kick: 'pass' });
     const at = (tr: ActionTrack) => activeAnimations(tr, q(after(50, 80)));
     expect(at(shot).poses.get(9)?.kind).toBe('shot');
-    expect(at(shot).trail).toBe('shot');
-    expect(at(pass).trail).toBe('pass');
+    expect(at(shot).overlays).toEqual([]);
+    expect(at(pass).overlays).toEqual([]);
     const peak = (tr: ActionTrack) => Math.max(...[0.3, 0.4, 0.5, 0.6].map((f) => actionBody({ ...at(tr).poses.get(9)!, t: f }).kickLeg));
     expect(peak(shot)).toBeGreaterThan(peak(pass));
   });
 
-  it('every kick kind gets its trail style; a dribble touch neither poses nor restyles', () => {
-    const style = (kick: Extract<ReplayAction, { kind: 'kick' }>['kick']) =>
-      activeAnimations(track({ kind: 'kick', tick: tick(10), by: 1, kick }), q(after(10, 50))).trail;
-    expect(style('cross')).toBe('cross');
-    expect(style('corner')).toBe('cross');
-    expect(style('long')).toBe('long');
-    expect(style('clear')).toBe('clear');
-    expect(style('through')).toBe('through');
-    expect(style('penalty')).toBe('shot');
-    expect(style('dribble')).toBeNull();
+  it('a dribble touch does not pose', () => {
     expect(activeAnimations(track({ kind: 'kick', tick: tick(10), by: 1, kick: 'dribble' }), q(10.1)).poses.size).toBe(0);
   });
 
-  it('a set piece delivered as a shot strikes and trails as a shot; a throw stays a throw', () => {
+  it('a set piece delivered as a shot strikes as a shot; a throw stays a throw', () => {
     const fk = { kind: 'kick', tick: tick(10), by: 1, kick: 'freekick', delivery: 'shot' } as unknown as ReplayAction;
-    const a = activeAnimations(track(fk), q(after(10, 60)));
-    expect(a.poses.get(1)?.kind).toBe('shot');
-    expect(a.trail).toBe('shot');
-    const corner = { kind: 'kick', tick: tick(10), by: 1, kick: 'corner', delivery: 'cross' } as unknown as ReplayAction;
-    expect(activeAnimations(track(corner), q(after(10, 60))).trail).toBe('cross');
+    expect(activeAnimations(track(fk), q(after(10, 60))).poses.get(1)?.kind).toBe('shot');
     const thrown = { kind: 'kick', tick: tick(10), by: 1, kick: 'throw', delivery: 'pass' } as unknown as ReplayAction;
     expect(activeAnimations(track(thrown), q(after(10, 60))).poses.get(1)?.kind).toBe('throw');
   });
@@ -111,33 +96,15 @@ describe('activeAnimations: windows', () => {
     const t = track({ kind: 'tackle', tick: tick(30), by: -1, from: 15 }, { kind: 'sub', tick: tick(30), on: -1, off: 4 });
     const a = activeAnimations(t, q(after(30, 150)), lookup);
     expect(a.poses.get(15)?.kind).toBe('stumble');
-    expect(a.sub).toEqual({ on: -1, off: 4 });
   });
 
-  it('a later touch ends the previous kick\'s trail style', () => {
-    const t = track(
-      { kind: 'kick', tick: tick(10), by: 1, kick: 'cross' },
-      { kind: 'interception', tick: tick(11), by: 14 },
-    );
-    expect(activeAnimations(t, q(10.5)).trail).toBe('cross');
-    expect(activeAnimations(t, q(11.2)).trail).toBeNull();
-  });
-
-  it('a through ball marks where the runner meets it, then the mark goes', () => {
-    const t = track({ kind: 'kick', tick: tick(20), by: 5, kick: 'through' });
-    const on = activeAnimations(t, q(20.5), lookup).overlays.find((o) => o.kind === 'target');
-    expect(on).toMatchObject({ kind: 'target', x: 80, y: 20 });
-    // Until he meets it or the real-time minimum, whichever is later.
-    expect(activeAnimations(t, q(after(20, ANIM_MS.trail - 50)), lookup).overlays.some((o) => o.kind === 'target')).toBe(true);
-    expect(activeAnimations(t, q(after(20, ANIM_MS.trail + 50)), lookup).overlays.some((o) => o.kind === 'target')).toBe(false);
-  });
-
-  it('a tackle: the winner slides (with dust), the loser stumbles', () => {
+  it('a tackle: the winner slides inside a hairline ring, the loser stumbles', () => {
     const t = track({ kind: 'tackle', tick: tick(30), by: 4, from: 15 });
     const a = activeAnimations(t, q(after(30, 150)));
     expect(a.poses.get(4)?.kind).toBe('slide');
     expect(a.poses.get(15)?.kind).toBe('stumble');
-    expect(a.overlays).toContainEqual(expect.objectContaining({ kind: 'dust', player: 4 }));
+    expect(a.overlays).toEqual([expect.objectContaining({ kind: 'ring', player: 4 })]);
+    expect(activeAnimations(t, q(after(30, ANIM_MS.ring + 10))).overlays).toEqual([]);
     const slide = actionBody({ ...a.poses.get(4)!, t: 0.5 });
     expect(slide.tilt).toBeLessThan(-0.8); // feet first, leaning back
     expect(slide.legs).toBe('slide');
@@ -152,15 +119,16 @@ describe('activeAnimations: windows', () => {
     expect(activeAnimations(t, q(after(40, ANIM_MS.lunge + 10))).poses.has(7)).toBe(false);
   });
 
-  it('a foul: the victim falls and lies, a whistle mark, and the card over the offender', () => {
+  it('a foul: the victim falls and lies inside a ring, and the card glyph goes to the offender', () => {
     const t = track({ kind: 'foul', tick: tick(60), by: 2, on: 18, card: 'yellow' });
     const mid = activeAnimations(t, q(after(60, 600)));
     expect(mid.poses.get(18)?.kind).toBe('fall');
     const down = actionBody(mid.poses.get(18)!);
     expect(down.tilt).toBeLessThan(-1.3); // on his back
     expect(down.lying).toBe(true);
-    expect(mid.overlays).toContainEqual(expect.objectContaining({ kind: 'whistle', player: 18 }));
+    expect(activeAnimations(t, q(after(60, 300))).overlays).toContainEqual(expect.objectContaining({ kind: 'ring', player: 18 }));
     expect(mid.overlays).toContainEqual(expect.objectContaining({ kind: 'card', player: 2, card: 'yellow' }));
+    expect(activeAnimations(t, q(after(60, ANIM_MS.ring + 20))).overlays.some((o) => o.kind === 'ring')).toBe(false);
     const late = activeAnimations(t, q(after(60, ANIM_MS.cardDelay + ANIM_MS.card + 20)));
     expect(late.overlays.some((o) => o.kind === 'card')).toBe(false);
     expect(late.poses.has(18)).toBe(false);
@@ -188,39 +156,45 @@ describe('activeAnimations: windows', () => {
     expect(activeAnimations(t, q(after(70, ANIM_MS.dive + ANIM_MS.catch + 20))).poses.size).toBe(0);
   });
 
+  it('a save of a shot rings the keeper; a dive at a cross does not', () => {
+    const saved = track(
+      { kind: 'kick', tick: tick(68), by: 9, kick: 'shot' },
+      { kind: 'dive', tick: tick(70), by: 0, x: 1, y: 30, z: 1.5, outcome: 'save' },
+    );
+    expect(activeAnimations(saved, q(after(70, 200))).overlays).toContainEqual(expect.objectContaining({ kind: 'ring', player: 0 }));
+    const claimed = track(
+      { kind: 'kick', tick: tick(68), by: 9, kick: 'cross' },
+      { kind: 'dive', tick: tick(70), by: 0, x: 1, y: 30, z: 1.5, outcome: 'catch' },
+    );
+    expect(activeAnimations(claimed, q(after(70, 200))).overlays.some((o) => o.kind === 'ring')).toBe(false);
+    const beaten = track(
+      { kind: 'kick', tick: tick(68), by: 9, kick: 'shot' },
+      { kind: 'dive', tick: tick(70), by: 0, x: 1, y: 30, z: 1.5, outcome: 'beaten' },
+    );
+    expect(activeAnimations(beaten, q(after(70, 200))).overlays.some((o) => o.kind === 'ring')).toBe(false);
+  });
+
   it('a parry is a parry pose', () => {
     const t = track({ kind: 'kick', tick: tick(70), by: 0, kick: 'parry' });
     expect(actionBody(activeAnimations(t, q(after(70, 100))).poses.get(0)!).arms).toBe('up');
   });
 
-  it('restarts: spot, label and taker for the whole stoppage, gone once taken', () => {
-    const labels: Array<[Extract<ReplayAction, { kind: 'restart' }>['restart'], string | null]> = [
-      ['corner', 'CORNER'],
-      ['freekick', 'FREE KICK'],
-      ['throw', 'THROW-IN'],
-      ['goalkick', 'GOAL KICK'],
-      ['penalty', 'PENALTY'],
-      ['kickoff', 'KICK-OFF'],
-      ['keeper', null],
-    ];
-    for (const [restart, label] of labels) {
+  it('restarts: the spot marker for the whole stoppage, gone once taken', () => {
+    const kinds: Array<Extract<ReplayAction, { kind: 'restart' }>['restart']> = ['corner', 'freekick', 'throw', 'goalkick', 'penalty', 'kickoff', 'keeper'];
+    for (const restart of kinds) {
       const t = track(
         { kind: 'restart', tick: tick(200), restart, by: 6, x: 105, y: 0, readyTick: tick(228) },
         { kind: 'kick', tick: tick(229), by: 6, kick: 'corner' },
       );
-      const during = activeAnimations(t, q(215));
-      expect(during.label, restart).toBe(label);
-      expect(during.overlays).toContainEqual({ kind: 'spot', x: 105, y: 0, restart });
-      const taken = activeAnimations(t, q(229.5));
-      expect(taken.label).toBeNull();
-      expect(taken.overlays.some((o) => o.kind === 'spot')).toBe(false);
+      expect(activeAnimations(t, q(215)).overlays, restart).toEqual([{ kind: 'spot', x: 105, y: 0, restart }]);
+      expect(activeAnimations(t, q(229.5)).overlays.some((o) => o.kind === 'spot')).toBe(false);
     }
   });
 
-  it('a quick restart still shows its label for a real-time minimum', () => {
+  it('a quick restart still shows its spot for a real-time minimum', () => {
     const t = track({ kind: 'restart', tick: tick(200), restart: 'throw', by: 6, x: 40, y: 68, readyTick: tick(200.5) });
-    expect(activeAnimations(t, q(after(200, ANIM_MS.restartMin - 50))).label).toBe('THROW-IN');
-    expect(activeAnimations(t, q(after(200, ANIM_MS.restartMin + 50))).label).toBeNull();
+    expect(activeAnimations(t, q(after(200, ANIM_MS.restartMin - 50))).overlays.some((o) => o.kind === 'spot')).toBe(true);
+    expect(activeAnimations(t, q(after(200, ANIM_MS.restartMin + 50))).overlays.some((o) => o.kind === 'spot')).toBe(false);
   });
 
   it('a throw-in: the ball over the head with both arms, then the throw', () => {
@@ -238,16 +212,17 @@ describe('activeAnimations: windows', () => {
     expect(actionBody(thrown.poses.get(8)!).arms).toBe('forward');
   });
 
-  it('a goal: GOAL label, the net ripples, the scorer celebrates (arms up, hop)', () => {
+  it('a goal: the goal frame flares and the scorer celebrates (arms up, feet on the grass)', () => {
     const t = track({ kind: 'goal', tick: tick(500), by: 9, side: 'home' });
     const a = activeAnimations(t, q(after(500, 400)), lookup);
-    expect(a.label).toBe('GOAL');
-    expect(a.overlays).toContainEqual(expect.objectContaining({ kind: 'ripple', goalX: 105 }));
+    expect(a.overlays).toEqual([expect.objectContaining({ kind: 'flare', goalX: 105 })]);
     expect(a.poses.get(9)?.kind).toBe('celebrate');
-    const body = actionBody({ ...a.poses.get(9)!, t: 1 / 6 });
-    expect(body.arms).toBe('celebrate'); // the V overhead
-    expect(body.lift).toBeGreaterThan(1);
-    expect(activeAnimations(t, q(after(500, ANIM_MS.goalLabel + 20)), lookup).label).toBeNull();
+    for (const f of [1 / 6, 0.5, 0.9]) {
+      const body = actionBody({ ...a.poses.get(9)!, t: f });
+      expect(body.arms).toBe('celebrate'); // the V overhead
+      expect(body.lift).toBe(0); // no hop
+    }
+    expect(activeAnimations(t, q(after(500, ANIM_MS.flare + 20)), lookup).overlays).toEqual([]);
   });
 
   it('after a goal the camera stays on the scorer and the ball is drawn in the net while he celebrates', () => {
@@ -268,71 +243,45 @@ describe('activeAnimations: windows', () => {
     expect(activeAnimations(t, q(after(500, 400)), lookup).poses.has(15)).toBe(false);
   });
 
-  it('the GOAL label outranks the kick-off restart that follows it', () => {
+  it('woodwork flares the frame of the goal the ball struck', () => {
+    const t = track({ kind: 'woodwork', tick: tick(80), by: 9 });
+    expect(activeAnimations(t, q(after(80, 100)), lookup).overlays).toEqual([expect.objectContaining({ kind: 'flare', goalX: 105 })]);
+    expect(activeAnimations(t, q(after(80, ANIM_MS.flare + 10)), lookup).overlays).toEqual([]);
+  });
+
+  it('woodwork flares when the ball met the frame, before the (later) woodwork event', () => {
+    const hitLookup: AnimLookup = { ...lookup, frameHitBefore: (sec) => ({ x: 0.2, y: 30.3, z: 1, sec: sec - 2.5 }) };
+    const t = track({ kind: 'woodwork', tick: tick(80), by: 9 });
+    expect(activeAnimations(t, q(after(77.5, 100)), hitLookup).overlays).toEqual([expect.objectContaining({ kind: 'flare', goalX: 0 })]);
+    expect(activeAnimations(t, q(after(77.5, ANIM_MS.flare + 10)), hitLookup).overlays).toEqual([]);
+  });
+
+  it('offside, a substitution, an interception and a pass put nothing on the pitch (the strip names them)', () => {
     const t = track(
-      { kind: 'goal', tick: tick(500), by: 9, side: 'home' },
-      { kind: 'restart', tick: tick(500.5), restart: 'kickoff', by: 20, x: 52.5, y: 34, readyTick: tick(560) },
+      { kind: 'offside', tick: tick(90), by: 10, x: 80, y: 22 },
+      { kind: 'sub', tick: tick(90), on: 23, off: 4 },
+      { kind: 'interception', tick: tick(90), by: 7 },
+      { kind: 'kick', tick: tick(90), by: 3, kick: 'through' },
     );
-    expect(activeAnimations(t, q(after(500, 500))).label).toBe('GOAL');
-    expect(activeAnimations(t, q(after(500, ANIM_MS.goalLabel + 200))).label).toBe('KICK-OFF');
-  });
-
-  it('woodwork flashes where the ball struck the frame', () => {
-    const t = track({ kind: 'woodwork', tick: tick(80), by: 9 });
-    expect(activeAnimations(t, q(after(80, 100)), lookup).overlays).toContainEqual(expect.objectContaining({ kind: 'woodwork', x: 104 }));
-    expect(activeAnimations(t, q(after(80, ANIM_MS.woodwork + 10)), lookup).overlays).toEqual([]);
-  });
-
-  it('woodwork flashes where and when the ball met the frame, before the (later) woodwork event', () => {
-    const hitLookup: AnimLookup = { ...lookup, frameHitBefore: (sec) => ({ x: 105, y: 30.3, z: 1, sec: sec - 2.5 }) };
-    const t = track({ kind: 'woodwork', tick: tick(80), by: 9 });
-    const at = activeAnimations(t, q(after(77.5, 100)), hitLookup).overlays.find((o) => o.kind === 'woodwork');
-    expect(at).toMatchObject({ kind: 'woodwork', x: 105, y: 30.3, z: 1 });
-    expect(activeAnimations(t, q(after(77.5, ANIM_MS.woodwork + 10)), hitLookup).overlays).toEqual([]);
-  });
-
-  it('offside: a flag mark on the line and the OFFSIDE label', () => {
-    const t = track({ kind: 'offside', tick: tick(90), by: 10, x: 80, y: 22 });
-    const a = activeAnimations(t, q(after(90, 300)));
-    expect(a.label).toBe('OFFSIDE');
-    expect(a.overlays).toContainEqual(expect.objectContaining({ kind: 'offside', x: 80, y: 22 }));
-    expect(activeAnimations(t, q(after(90, ANIM_MS.offside + 10))).label).toBeNull();
-  });
-
-  it('a substitution: arrows and the two players to name, for its real-time window', () => {
-    const t = track({ kind: 'sub', tick: tick(3300), on: 23, off: 4 });
-    const a = activeAnimations(t, q(after(3300, 1000)));
-    expect(a.sub).toEqual({ on: 23, off: 4 });
-    expect(a.overlays.some((o) => o.kind === 'subArrows')).toBe(true);
-    expect(activeAnimations(t, q(after(3300, ANIM_MS.sub + 10))).sub).toBeNull();
+    expect(activeAnimations(t, q(after(90, 300)), lookup).overlays).toEqual([]);
   });
 });
 
 describe('activeAnimations: reduced motion', () => {
-  it('drops poses, dust, ripple, flash, held ball and trail styling, keeps labels, cards and marks', () => {
+  it('drops poses and the held ball, keeps the ring, card glyph and frame flare', () => {
     const t = track(
       { kind: 'tackle', tick: tick(10), by: 4, from: 15 },
       { kind: 'foul', tick: tick(10), by: 2, on: 18, card: 'yellow' },
       { kind: 'kick', tick: tick(10), by: 9, kick: 'shot' },
       { kind: 'goal', tick: tick(10.2), by: 9, side: 'home' },
-      { kind: 'woodwork', tick: tick(10.1), by: 9 },
-      { kind: 'offside', tick: tick(10), by: 10, x: 80, y: 22 },
-      { kind: 'sub', tick: tick(10), on: 23, off: 4 },
     );
     const a = activeAnimations(t, q(after(10.2, 400), LIVE, true), lookup);
     expect(a.poses.size).toBe(0);
-    expect(a.trail).toBeNull();
     expect(a.ballHeld).toBeNull();
     const kinds = a.overlays.map((o) => o.kind);
-    expect(kinds).not.toContain('dust');
-    expect(kinds).not.toContain('ripple');
-    expect(kinds).not.toContain('woodwork');
+    expect(kinds).toContain('ring');
     expect(kinds).toContain('card');
-    expect(kinds).toContain('whistle');
-    expect(kinds).toContain('offside');
-    expect(kinds).toContain('subArrows');
-    expect(a.label).toBe('GOAL');
-    expect(a.sub).toEqual({ on: 23, off: 4 });
+    expect(kinds).toContain('flare');
   });
 });
 
@@ -361,22 +310,6 @@ describe('actionBody', () => {
       const end = actionBody({ kind, t: 1, contact: 0.18 });
       expect(end.lying, kind).toBe(false);
       expect(Math.abs(end.tilt), kind).toBeLessThan(0.05);
-    }
-  });
-});
-
-describe('pitchLabelFor', () => {
-  it('passes every label through in live play', () => {
-    expect(pitchLabelFor('CORNER', false)).toBe('CORNER');
-    expect(pitchLabelFor('GOAL', false)).toBe('GOAL');
-    expect(pitchLabelFor(null, false)).toBeNull();
-  });
-
-  it('keeps only outcome labels during a replay, never a restart label', () => {
-    expect(pitchLabelFor('GOAL', true)).toBe('GOAL');
-    expect(pitchLabelFor('OFFSIDE', true)).toBe('OFFSIDE');
-    for (const restart of ['CORNER', 'FREE KICK', 'THROW-IN', 'GOAL KICK', 'PENALTY', 'KICK-OFF']) {
-      expect(pitchLabelFor(restart, true)).toBeNull();
     }
   });
 });

@@ -11,7 +11,7 @@ import { decodeReplayV3, encodeReplayV3 } from '../replay/replayV3';
 import { trackToSnapshots } from '../replay/snapshots';
 import { GOAL_Y_MIN } from '../spatial/types';
 import { GOAL_HEIGHT } from './geometry';
-import { FRAME_HIT_M, actionTrackOf, distanceToFrame, findFrameHit, findReception, makeTrackLookup, rosterFromFrames } from './trackLookup';
+import { FRAME_HIT_M, actionTrackOf, distanceToFrame, findFrameHit, makeTrackLookup, rosterFromFrames } from './trackLookup';
 
 /** Three players, then the second replaced by a substitute (engine order keeps the slot). */
 const REPLAY: ReplayTrack = {
@@ -95,19 +95,11 @@ describe('lookups', () => {
     expect(hit!.x).toBeCloseTo(104.9);
   });
 
-  it('findReception: where and when the ball is next owned', () => {
-    const meet = findReception(snaps, 0);
-    expect(meet).not.toBeNull();
-    expect(meet!.sec).toBeGreaterThanOrEqual(0.6);
-    expect(meet!.x).toBeCloseTo(30);
-  });
-
-  it('makeTrackLookup: ball position, reception and side by roster index', () => {
+  it('makeTrackLookup: ball position and side by roster index', () => {
     const roster = rosterFromFrames(snaps);
     const look = makeTrackLookup(snaps, roster, (id) => (id.startsWith('a') ? 'away' : 'home'));
     expect(look.ballAt(0)?.x).toBeCloseTo(12);
     expect(look.ballAt(0)).toBe(look.ballAt(0)); // memoised
-    expect(look.receptionAfter(0)?.x).toBeCloseTo(30);
     expect(look.sideOf(2)).toBe('away');
     expect(look.sideOf(3)).toBe('home');
     expect(look.sideOf(99)).toBeNull();

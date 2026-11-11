@@ -37,7 +37,6 @@ import {
   type Kit,
   type Marking,
   type Projected,
-  type TrailKind,
 } from '../../logic/viewer';
 import { drawFigure, pixelEllipse, pixelRing, pline, px, resetFill, setGrid } from './figure';
 
@@ -99,21 +98,6 @@ const RING_RY = 2.15;
  */
 export const BALL_RADIUS = 2.1;
 
-/**
- * How the ball's trail is drawn for each kind of kick (docs/match-viewer.md
- * section 5B): a pass and a through ball keep the ball's lime, a cross,
- * long ball and clearance have their own colours, a shot is white, wider,
- * brighter and glows.
- */
-export const TRAIL_STYLE: Readonly<Record<TrailKind, { color: string; width: number; alpha: number; glow: boolean }>> = {
-  pass: { color: BALL_COLOR, width: 1, alpha: 1, glow: false },
-  through: { color: BALL_COLOR, width: 1, alpha: 1.15, glow: false },
-  cross: { color: canvasColor.trailCross, width: 1.1, alpha: 1.15, glow: false },
-  long: { color: canvasColor.trailLong, width: 1.1, alpha: 1.1, glow: false },
-  clear: { color: canvasColor.trailClear, width: 1.2, alpha: 0.9, glow: false },
-  shot: { color: canvasColor.trailShot, width: 1.6, alpha: 1.5, glow: true },
-};
-
 // ── A drawable figure / ball ──────────────────────────────────────────────────
 
 /** Everything the renderer needs to draw one player this frame. */
@@ -152,8 +136,6 @@ export interface BallRender {
   wz: number;
   /** Recent positions, oldest first, when the ball is travelling fast (else empty). */
   trail?: ReadonlyArray<{ x: number; y: number; z: number }>;
-  /** The kind of the kick in flight, which styles the trail (absent = the ball's own lime). */
-  trailKind?: TrailKind | null;
   /** A held ball: drawn this many sprite (`sc`) units above the holder's feet at (wx, wy). */
   heldLift?: number | null;
 }
@@ -244,12 +226,34 @@ function drawMarking(ctx: CanvasRenderingContext2D, project: ProjectFn, m: Marki
   }
 }
 
-/** Draw a goal frame: posts, crossbar, and a short net depth off the line, a step brighter than the markings. */
-function drawGoal(ctx: CanvasRenderingContext2D, project: ProjectFn, goal: GoalSpec): void {
+/**
+ * Draw a goal frame: posts, crossbar, and a short net depth off the line, as
+ * stepped hairlines on the art grid.  The pitch draws it in `goalLine`, a
+ * step brighter than the markings; the goal-frame flare (renderEvents.ts)
+ * draws it again in full Lunar Dust over that.
+ *
+ * @param col  The hairline colour (a `canvasColor` token).
+ */
+export function drawGoalFrame(ctx: CanvasRenderingContext2D, project: ProjectFn, goal: GoalSpec, col: string = GOAL_LINE): void {
   const back = goal.x + GOAL_DEPTH * goal.depthDir;
-  hairPath(ctx, project, [[goal.x, goal.y0, 0], [goal.x, goal.y0, goal.height], [goal.x, goal.y1, goal.height], [goal.x, goal.y1, 0]], GOAL_LINE, false);
-  hairPath(ctx, project, [[goal.x, goal.y0, goal.height], [back, goal.y0, goal.height]], GOAL_LINE, false);
-  hairPath(ctx, project, [[goal.x, goal.y1, goal.height], [back, goal.y1, goal.height]], GOAL_LINE, false);
+  hairPath(ctx, project, [[goal.x, goal.y0, 0], [goal.x, goal.y0, goal.height], [goal.x, goal.y1, goal.height], [goal.x, goal.y1, 0]], col, false);
+  hairPath(ctx, project, [[goal.x, goal.y0, goal.height], [back, goal.y0, goal.height]], col, false);
+  hairPath(ctx, project, [[goal.x, goal.y1, goal.height], [back, goal.y1, goal.height]], col, false);
+}
+
+/**
+ * The back of a goal's net: the rear posts and bar and the two ground lines
+ * back from the posts.  Not part of the resting pitch (it would clutter the
+ * hairline goal); the goal-frame flare draws it with the frame so the whole
+ * goal lights up for a moment.
+ *
+ * @param col  The hairline colour (a `canvasColor` token).
+ */
+export function drawGoalNet(ctx: CanvasRenderingContext2D, project: ProjectFn, goal: GoalSpec, col: string): void {
+  const back = goal.x + GOAL_DEPTH * goal.depthDir;
+  hairPath(ctx, project, [[back, goal.y0, 0], [back, goal.y0, goal.height], [back, goal.y1, goal.height], [back, goal.y1, 0]], col, false);
+  hairPath(ctx, project, [[goal.x, goal.y0, 0], [back, goal.y0, 0]], col, false);
+  hairPath(ctx, project, [[goal.x, goal.y1, 0], [back, goal.y1, 0]], col, false);
 }
 
 /**
@@ -262,7 +266,7 @@ export function drawPitch(ctx: CanvasRenderingContext2D, project: ProjectFn): vo
   resetFill();
   setGrid(PX);
   for (const m of PITCH_MARKINGS) drawMarking(ctx, project, m);
-  for (const goal of GOALS) drawGoal(ctx, project, goal);
+  for (const goal of GOALS) drawGoalFrame(ctx, project, goal);
   resetFill();
 }
 
@@ -357,23 +361,18 @@ export function drawBall(ctx: CanvasRenderingContext2D, project: ProjectFn, b: B
   const outline = Math.max(PX * 0.5, 0.55 * sc);
 
   // Trail: segments from oldest to newest, thicker and more opaque toward
-  // the ball, coloured by the kind of kick in flight (TRAIL_STYLE): a shot
-  // is wider and brighter, with a glow.
+  // the ball, in the ball's own colour whatever the kick (the coloured
+  // trails by kind of kick were cut, docs/match-viewer.md section 7).
   const trail = b.trail ?? [];
   if (trail.length > 1) {
-    const style = TRAIL_STYLE[b.trailKind ?? 'pass'];
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.strokeStyle = style.color;
-    if (style.glow) {
-      ctx.shadowColor = style.color;
-      ctx.shadowBlur = 4 * PX;
-    }
+    ctx.strokeStyle = BALL_COLOR;
     const pts = [...trail.map((q) => project(q.x, q.y, q.z)), pr];
     for (let i = 1; i < pts.length; i++) {
       const f = i / (pts.length - 1);
-      ctx.globalAlpha = Math.min(1, (0.1 + 0.55 * f * f) * style.alpha);
-      ctx.lineWidth = Math.max(PX * 0.5, r * (0.5 + 0.9 * f) * style.width);
+      ctx.globalAlpha = 0.1 + 0.55 * f * f;
+      ctx.lineWidth = Math.max(PX * 0.5, r * (0.5 + 0.9 * f));
       ctx.beginPath();
       ctx.moveTo(pts[i - 1]!.x, pts[i - 1]!.y);
       ctx.lineTo(pts[i]!.x, pts[i]!.y);

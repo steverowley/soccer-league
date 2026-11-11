@@ -32,7 +32,7 @@
 //   Before kickoff or for a legacy match with no frames, every dude stands at its
 //   formation home position (idle bob); the ball sits on the centre spot.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import type { Species } from '../../../../data/peoples';
 import { canvasColor, color, hairline, space, tone, type } from '../../../../shared/design';
@@ -51,8 +51,10 @@ import {
   activeAnimations,
   advanceStride,
   ballAtFeet,
+  buildEventLog,
   cameraForWidth,
   clampFollowCenter,
+  eventRowsAt,
   followAnchor,
   footfall,
   holdArms,
@@ -65,11 +67,11 @@ import {
   newDrive,
   noAnimations,
   pickNearestId,
-  pitchLabelFor,
   projectBroadcast,
   projectFollow,
   pushTrail,
   realToGameSeconds,
+  replayMinute,
   replayAt,
   resolveKits,
   rosterFromFrames,
@@ -87,6 +89,7 @@ import {
   type BallGlide,
   type BallPoint,
   type CameraMode,
+  type EventRow,
   type HitTarget,
   type PoseKind,
   type Projected,
@@ -95,19 +98,8 @@ import {
   type Viewport,
 } from '../../logic/viewer';
 import { drawBall, drawDude, drawPitch, PIXEL_SCALE, SPRITE_UNITS_PER_M, type DudeRender, type ProjectFn } from './render';
-import {
-  drawCard,
-  drawDust,
-  drawNetRipple,
-  drawOffsideMark,
-  drawPitchLabel,
-  drawSpotMarker,
-  drawSubArrows,
-  drawTargetMark,
-  drawWhistleMark,
-  drawWoodworkFlash,
-  labelPxFor,
-} from './renderEvents';
+import { EventStrip } from './EventStrip';
+import { cardGlyphRect, drawCardGlyph, drawEventRing, drawGoalFlare, drawSpotMarker, type FigureAt } from './renderEvents';
 import { ThrottledAnnouncer } from './ThrottledAnnouncer';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -139,6 +131,8 @@ const SELECT_RADIUS = 16 * PIXEL_SCALE;
  * changes with every touch, which would be a stream of announcements.
  */
 const ANNOUNCE_EVERY_MS = 8000;
+/** Goals and red cards from the event strip are announced at most this often (ms). */
+const ANNOUNCE_EVENT_EVERY_MS = 1500;
 
 /** A game-clock step larger than this (seconds), or any step back, is a seek: snap, no glide or trail. */
 const SEEK_GAME_SEC = 5;
@@ -329,8 +323,6 @@ export function MatchViewer({
   );
   /** True once the viewer pressed a camera button: resizing no longer switches. */
   const cameraChosenRef = useRef(false);
-  /** The viewer's width in CSS pixels (sizes the pitch labels; 0 until measured). */
-  const cssWidthRef = useRef(0);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -374,11 +366,20 @@ export function MatchViewer({
    */
   const [carrierKey, setCarrierKey] = useState<string | null>(null);
   const carrierKeyRef = useRef<string | null>(null);
-  /** The substitution named under the pitch ("onId|offId"), set only when it changes. */
-  const [subKey, setSubKey] = useState<string | null>(null);
-  const subKeyRef = useRef<string | null>(null);
-  /** True while a slow-motion replay is on screen (a cut snaps the camera). */
+  /**
+   * The event strip's rows (newest first), following LIVE match time: a
+   * slow-motion replay does not re-log the moments it shows.  Set from the
+   * render loop only when the rows change.
+   */
+  const [stripRows, setStripRows] = useState<readonly EventRow[]>([]);
+  const stripKeyRef = useRef('');
+  /** Goal and red-card rows already seen (announced once each; those on screen at load are not). */
+  const seenRowsRef = useRef<Set<string> | null>(null);
+  /** The latest goal or red card to announce to screen readers. */
+  const [eventAnnouncement, setEventAnnouncement] = useState<{ row: EventRow } | null>(null);
+  /** True while a slow-motion replay is on screen (a cut snaps the camera; the Replay tag shows). */
   const inReplayRef = useRef(false);
+  const [inReplayShown, setInReplayShown] = useState(false);
   /** True while a scored ball is drawn in the net (its start and end are cuts). */
   const ballInNetRef = useRef(false);
 
@@ -416,7 +417,9 @@ export function MatchViewer({
     const lookup = makeTrackLookup(frames, roster, (id) => sideById.get(id) ?? null);
     const indexById = new Map<string, number>(roster.map((id, i) => [id, i]));
     const replays = reducedMotion ? [] : scheduleReplays(track, durationSeconds, lookup);
-    return { track, roster, lookup, indexById, replays };
+    // The event strip's rows for the whole match (docs/match-viewer.md section 7).
+    const log = buildEventLog(track, lookup);
+    return { track, roster, lookup, indexById, replays, log };
   }, [frames, dudeSpecs, durationSeconds, reducedMotion]);
 
   // Phone-sized viewers open on the Ball camera, wider ones on the Pitch,
@@ -426,7 +429,6 @@ export function MatchViewer({
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      if (width > 0) cssWidthRef.current = width;
       if (cameraChosenRef.current) return;
       if (width <= 0) return;
       const mode = cameraForWidth(width);
@@ -486,6 +488,27 @@ export function MatchViewer({
       if (inReplay !== inReplayRef.current) {
         inReplayRef.current = inReplay;
         followCenterRef.current = null; // a cut: snap the camera
+        setInReplayShown(inReplay);
+      }
+
+      // The event strip follows the LIVE clock (a replay does not re-log).
+      if (events) {
+        const rows = eventRowsAt(events.log, liveSec);
+        const rowsKey = rows.map((r) => r.key).join('|');
+        if (rowsKey !== stripKeyRef.current) {
+          stripKeyRef.current = rowsKey;
+          setStripRows(rows);
+          // Goals and red cards are announced once each, as they happen;
+          // the ones already on the strip when the viewer opens are not.
+          const seen = seenRowsRef.current;
+          if (!seen) {
+            seenRowsRef.current = new Set(rows.map((r) => r.key));
+          } else {
+            const fresh = rows.find((r) => !seen.has(r.key) && (r.kind === 'goal' || r.kind === 'ownGoal' || r.kind === 'red'));
+            for (const r of rows) seen.add(r.key);
+            if (fresh) setEventAnnouncement({ row: fresh });
+          }
+        }
       }
       const sampled = sampleFrames(frames, gameSec);
       const prevGameSec = lastGameSecRef.current;
@@ -621,13 +644,6 @@ export function MatchViewer({
         carrierKeyRef.current = key;
         setCarrierKey(key);
       }
-      // The substitution being announced under the pitch (roster ids).
-      const subIds = anims.sub && events ? [events.roster[anims.sub.on], events.roster[anims.sub.off]] : null;
-      const sk = subIds && subIds[0] != null && subIds[1] != null ? `${subIds[0]}|${subIds[1]}` : null;
-      if (sk !== subKeyRef.current) {
-        subKeyRef.current = sk;
-        setSubKey(sk);
-      }
 
       // Pick the projection for the active camera (it follows the drawn
       // ball, or the scorer while he celebrates).  A replay always runs on
@@ -660,10 +676,13 @@ export function MatchViewer({
       const selectedId = selectedIdRef.current;
       const hitTargets: HitTarget[] = [];
       const byIndex = new Map<number, (typeof pending)[number]>();
+      /** Every figure on screen in art pixels, by roster index (-1: unknown), for the card glyph. */
+      const figures: Array<FigureAt & { idx: number }> = [];
       const dudes: DudeRender[] = pending.map((p) => {
         if (p.idx >= 0) byIndex.set(p.idx, p);
         const proj = project(p.pos.x, p.pos.y, 0);
         const sc = proj.sc;
+        figures.push({ idx: p.idx, x: proj.x / PIXEL_SCALE, y: proj.y / PIXEL_SCALE, as: sc / PIXEL_SCALE });
         const isSelected = selectedId != null && p.spec.id === selectedId;
         // Anchor the click target at mid-body (above the feet) so clicking the torso/head registers.
         hitTargets.push({ id: p.spec.id, sx: proj.x, sy: proj.y - 6 * sc });
@@ -692,43 +711,58 @@ export function MatchViewer({
       });
       hitTargetsRef.current = hitTargets;
 
-      // Event marks on the grass and the goal (under the figures).
+      // Event marks on the grass and the goal frame (under the figures):
+      // the restart spot, the hairline ring round the player at the centre
+      // of a tackle, foul or save, and the frame flaring after a goal or a
+      // shot off the woodwork.  Hairline Lunar Dust; no words on the pitch.
       for (const o of anims.overlays) {
         if (o.kind === 'spot') drawSpotMarker(ctx, project, o.x, o.y);
-        else if (o.kind === 'target') drawTargetMark(ctx, project, o.x, o.y, o.t);
-        else if (o.kind === 'offside') drawOffsideMark(ctx, project, o.x, o.t);
-        else if (o.kind === 'ripple') drawNetRipple(ctx, project, o.goalX, o.t);
-        else if (o.kind === 'subArrows') drawSubArrows(ctx, project, o.t);
+        else if (o.kind === 'flare') drawGoalFlare(ctx, project, o.goalX, o.t, reducedMotion);
+        else if (o.kind === 'ring') {
+          const p = byIndex.get(o.player);
+          if (p) drawEventRing(ctx, project, p.pos.x, p.pos.y, o.t, reducedMotion, 'back');
+        }
       }
+      // The rings' near halves, drawn in depth order among the figures below.
+      const nearRings = anims.overlays
+        .flatMap((o) => {
+          if (o.kind !== 'ring') return [];
+          const p = byIndex.get(o.player);
+          return p ? [{ x: p.pos.x, y: p.pos.y, t: o.t }] : [];
+        })
+        .sort((a, b) => a.y - b.y);
 
       // Dudes back-to-front by world y (far touchline first), then the ball
       // over everyone: in a crowd (a corner, a penalty) a figure in front
       // would otherwise hide it, and finding the ball matters more than the
       // occlusion.  Its dark outline keeps it separate from a body behind it.
       dudes.sort((a, b) => a.wy - b.wy);
-      for (const d of dudes) drawDude(ctx, project, d);
-
-      // Event marks tied to a player (where his figure is drawn) and in the air.
-      for (const o of anims.overlays) {
-        if (o.kind === 'dust' || o.kind === 'whistle' || o.kind === 'card') {
-          const p = byIndex.get(o.player);
-          if (!p) continue;
-          if (o.kind === 'dust') drawDust(ctx, project, p.pos.x, p.pos.y, p.face, o.t);
-          else if (o.kind === 'whistle') drawWhistleMark(ctx, project, p.pos.x, p.pos.y, o.t);
-          else drawCard(ctx, project, p.pos.x, p.pos.y, o.card, o.t);
-        } else if (o.kind === 'woodwork') {
-          drawWoodworkFlash(ctx, project, o.x, o.y, o.z, o.t);
+      let ringAt = 0;
+      for (const d of dudes) {
+        // A ring's near half goes in front of the figures standing in it and
+        // behind the ones nearer the camera.
+        while (ringAt < nearRings.length && nearRings[ringAt]!.y < d.wy) {
+          const r = nearRings[ringAt++]!;
+          drawEventRing(ctx, project, r.x, r.y, r.t, reducedMotion, 'front');
         }
+        drawDude(ctx, project, d);
+      }
+      while (ringAt < nearRings.length) {
+        const r = nearRings[ringAt++]!;
+        drawEventRing(ctx, project, r.x, r.y, r.t, reducedMotion, 'front');
       }
 
-      drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail, trailKind: anims.trail, heldLift });
+      // The card glyph beside the offender's head, on the side where it
+      // covers no other player (over the figures, so his own kit never hides it).
+      for (const o of anims.overlays) {
+        if (o.kind !== 'card') continue;
+        const him = figures.find((f) => f.idx === o.player);
+        if (!him) continue;
+        const rect = cardGlyphRect(him, figures.filter((f) => f !== him));
+        drawCardGlyph(ctx, rect, o.card, o.t, reducedMotion);
+      }
 
-      // Labels last, over everything: the event's (GOAL, CORNER...) and REPLAY.
-      // A replay keeps only its outcome labels (pitchLabelFor).
-      const labelPx = labelPxFor(cssWidthRef.current, VP.width);
-      const pitchLabel = pitchLabelFor(anims.label, inReplay);
-      if (pitchLabel) drawPitchLabel(ctx, VP, pitchLabel, 'top', labelPx);
-      if (inReplay) drawPitchLabel(ctx, VP, 'REPLAY', 'corner', labelPx);
+      drawBall(ctx, project, { wx: ball.x, wy: ball.y, wz: ball.z, trail, heldLift });
 
       raf = requestAnimationFrame(loop);
     };
@@ -768,11 +802,23 @@ export function MatchViewer({
   const carrier = carrierKey != null && carrierKey !== 'loose' ? dudeSpecs.find((d) => d.id === carrierKey) ?? null : null;
   const carrierClub = carrier ? (carrier.team === 'home' ? homeTeamName : awayTeamName) : undefined;
   const announcement = carrier ? carrierSentence(carrier, carrierClub) : '';
-  // A substitution in progress takes the caption line for a few seconds.
-  const subPair = subKey ? subKey.split('|').map((id) => dudeSpecs.find((d) => d.id === id) ?? null) : null;
-  const subOn = subPair?.[0] ?? null;
-  const subOff = subPair?.[1] ?? null;
-  const subClub = subOn ? (subOn.team === 'home' ? homeTeamName : awayTeamName) : undefined;
+
+  // The event strip names players by roster index: his shirt number and
+  // name, else "Number 7"; a substitution also names his club.
+  const specById = new Map(dudeSpecs.map((d) => [d.id, d]));
+  const specOf = (player: number): DudeSpec | null => {
+    const id = events?.roster[player];
+    return id != null ? specById.get(id) ?? null : null;
+  };
+  const nameOf = (player: number): string => {
+    const spec = specOf(player);
+    return spec ? stripName(spec) : 'Unknown player';
+  };
+  const clubOf = (player: number): string | undefined => {
+    const spec = specOf(player);
+    return spec ? (spec.team === 'home' ? homeTeamName : awayTeamName) : undefined;
+  };
+  const eventSpoken = eventAnnouncement ? eventSentence(eventAnnouncement.row, nameOf, clubOf) : '';
 
   return (
     <div>
@@ -803,6 +849,14 @@ export function MatchViewer({
           }}
         />
 
+        {/* A slow-motion replay is on: the design system's Tag, top left,
+            where the camera toggles' twin would sit. */}
+        {inReplayShown && (
+          <div style={{ position: 'absolute', top: space[8], left: space[8], pointerEvents: 'none' }}>
+            <Tag style={{ background: color.bg }}>Replay</Tag>
+          </div>
+        )}
+
         {/* In-game camera toggle: two filter tags; the active camera takes
             the selected state (Lunar Dust fill), not purple. The tags sit
             on an Abyss backing so they stay legible over the pitch. */}
@@ -812,24 +866,27 @@ export function MatchViewer({
         </div>
       </div>
 
+      {/* The event strip (docs/match-viewer.md section 7): the last three
+          notable moments in words, newest on top.  Only for a replay with an
+          action track; older replays keep just the caption below. */}
+      {events && <EventStrip rows={stripRows} nameOf={nameOf} clubOf={clubOf} reducedMotion={reducedMotion} />}
+      <ThrottledAnnouncer text={eventSpoken} everyMs={ANNOUNCE_EVENT_EVERY_MS} />
+
       {/* Who has the ball.  The visible line follows every touch and is
           hidden from screen readers; the polite live region beside it is
-          updated at most every ANNOUNCE_EVERY_MS so they are not flooded. */}
+          updated at most every ANNOUNCE_EVERY_MS so they are not flooded.
+          One line always (the page must not jump as the ball moves): the
+          name, then the club, truncate rather than wrap on a phone. */}
       <p
         aria-hidden="true"
-        style={{ margin: 0, marginTop: space[8], display: 'flex', gap: space[8], alignItems: 'baseline', flexWrap: 'wrap', minWidth: 0 }}
+        style={{ margin: 0, marginTop: space[8], display: 'flex', gap: space[8], alignItems: 'baseline', flexWrap: 'nowrap', minWidth: 0, whiteSpace: 'nowrap' }}
       >
-        <span style={{ ...type.label, ...tone.tertiary }}>{subOn && subOff ? 'Substitution' : 'On the ball'}</span>
-        {subOn && subOff ? (
+        <span style={{ ...type.label, ...tone.tertiary, flexShrink: 0 }}>On the ball</span>
+        {carrier ? (
           <>
-            <span style={{ ...type.body, ...tone.primary }}>{`${dudeName(subOn)} on, ${dudeName(subOff)} off`}</span>
-            {subClub && <span style={{ ...type.small, ...tone.secondary }}>{subClub}</span>}
-          </>
-        ) : carrier ? (
-          <>
-            <span style={{ ...type.body, ...tone.primary, fontWeight: 700 }}>{carrier.number}</span>
-            <span style={{ ...type.body, ...tone.primary }}>{carrier.name ?? `Number ${carrier.number}`}</span>
-            {carrierClub && <span style={{ ...type.small, ...tone.secondary }}>{carrierClub}</span>}
+            <span style={{ ...type.body, ...tone.primary, fontWeight: 700, flexShrink: 0 }}>{carrier.number}</span>
+            <span style={{ ...type.body, ...tone.primary, ...truncate() }}>{carrier.name ?? `Number ${carrier.number}`}</span>
+            {carrierClub && <span style={{ ...type.small, ...tone.secondary, ...truncate(), flexShrink: 100 }}>{carrierClub}</span>}
           </>
         ) : (
           <span style={{ ...type.body, ...tone.secondary }}>{carrierKey === 'loose' ? 'Loose ball' : '\u00a0'}</span>
@@ -848,9 +905,25 @@ function carrierSentence(spec: DudeSpec, club: string | undefined): string {
   return club ? `On the ball: ${who}, ${club}.` : `On the ball: ${who}.`;
 }
 
-/** A player's caption name: his name, else "Number 7". */
-function dudeName(spec: DudeSpec): string {
-  return spec.name ?? `Number ${spec.number}`;
+/** A flex item that shrinks and ends in an ellipsis instead of wrapping. */
+function truncate(): CSSProperties {
+  return { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' };
+}
+
+/** A player as the event strip names him: "17 Talus", else "Number 7". */
+function stripName(spec: DudeSpec): string {
+  return spec.name ? `${spec.number} ${spec.name}` : `Number ${spec.number}`;
+}
+
+/**
+ * The spoken form of a goal or red-card row: "Goal in minute 22: 9 Gush Li,
+ * Mars Athletic." (the minute as the strip's clock counts it).
+ */
+function eventSentence(row: EventRow, nameOf: (player: number) => string, clubOf: (player: number) => string | undefined): string {
+  const minute = replayMinute(row.sec);
+  const what = row.kind === 'red' ? 'Red card' : row.kind === 'ownGoal' ? 'Own goal' : 'Goal';
+  const club = clubOf(row.who);
+  return `${what} in minute ${minute}: ${nameOf(row.who)}${club ? `, ${club}` : ''}.`;
 }
 
 /**
