@@ -136,3 +136,30 @@ describe('StandingsTable design language', () => {
     expect(reds).toEqual([]);
   });
 });
+
+describe('StandingsTable followed club', () => {
+  const rows = [
+    row({ id: 'earth-united', position: 1, team: 'Earth United' }),
+    row({ id: 'other', position: 2, team: 'Other FC' }),
+  ];
+
+  it("highlights only the fan's club and names it for screen readers", () => {
+    const { container, getByText } = render(
+      <MemoryRouter>
+        <StandingsTable rows={rows as never} highlightTeamId="earth-united" />
+      </MemoryRouter>,
+    );
+    const marked = container.querySelectorAll('tr[data-followed]');
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.textContent).toContain('Earth United');
+    expect(getByText('Your club:', { exact: false })).toBeTruthy();
+    // Not colour alone: the first cell carries a solid edge as well as the wash.
+    expect((marked[0]!.firstElementChild as HTMLElement).style.boxShadow).toContain('inset');
+  });
+
+  it('highlights nothing for a signed-out fan', () => {
+    const { container, queryByText } = renderTable(rows);
+    expect(container.querySelectorAll('tr[data-followed]')).toHaveLength(0);
+    expect(queryByText('Your club:', { exact: false })).toBeNull();
+  });
+});

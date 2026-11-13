@@ -17,6 +17,7 @@
 
 import { Link, useParams } from 'react-router-dom';
 import StandingsTable from '../components/StandingsTable';
+import { useAuth } from '../features/auth';
 import { LeagueRollOfHonour } from '../components/LoreHistory';
 import { getLeagueLore } from '../data/lore';
 import { LEAGUES, TEAMS_BY_LEAGUE } from '../data/leagueData';
@@ -54,6 +55,8 @@ function crumbName(name: string): string {
 export default function LeagueDetail() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const publicDb = usePublicReadClient();
+  // The fan's club, highlighted in the standings (null when signed out).
+  const followedTeamId = useAuth().profile?.favourite_team_id ?? null;
   const league = LEAGUES.find((l) => l.id === leagueId);
 
   // The *Result variant: a failed read is an error state, not an empty
@@ -115,7 +118,7 @@ export default function LeagueDetail() {
           />
         ) : (
           <AsyncView state={standings} what="the table" loading="Loading the table">
-            {(rows) => <StandingsTable rows={rows} />}
+            {(rows) => <StandingsTable rows={rows} highlightTeamId={followedTeamId} />}
           </AsyncView>
         )}
       </section>

@@ -30,16 +30,17 @@ shield crest and square corners.
   sentence-case headings, larger reading text. Elegant, but literary rather
   than sport.
 
-## Still to do from the Broadcast direction
+## Broadcast components (done)
 
-Component work the type swap alone does not give (the specimen showed them):
+The type swap alone did not give the direction's signature pieces; these
+followed it: the ScoreBug behind featured and match scores, the club-colour
+band on the club page header (`PageHeader accent`), and the followed club's
+row highlighted in standings. All are on `/dev/components`.
 
-1. A score bug behind live and final scores.
-2. The club colour as a band down the club page header.
-3. The followed club's row highlighted in standings tables.
+## Next
 
-Then the primitives backlog on `/dev/components` (Stack, Text, Grid, ...)
-and page layouts, one group per PR, club and match pages first.
+The primitives backlog on `/dev/components` (Stack, Text, Grid, ...) and
+page layouts, one group per PR, club and match pages first.
 
 ## Trialling a future direction
 

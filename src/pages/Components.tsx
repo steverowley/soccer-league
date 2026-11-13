@@ -27,6 +27,7 @@
 
 import { useState } from 'react';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
+import StandingsTable from '../components/StandingsTable';
 import { color, space, tone, type } from '../shared/design';
 import {
   BackLink,
@@ -55,6 +56,7 @@ import {
   SectionHeader,
   SectionPanel,
   Skeleton,
+  ScoreBug,
   StatBlock,
   Tag,
   TextLink,
@@ -68,6 +70,13 @@ import {
 // Not exported: this page's own layout, built from tokens like any page.
 
 /** One component's entry: name, one-line purpose, a live example. */
+/** Three illustrative standings rows for the followed-club example (not live data). */
+const SAMPLE_STANDINGS = [
+  { id: 'mercury-runners', position: 1, team: 'Mercury Runners', played: 6, wins: 5, draws: 1, loses: 0, gd: 9, points: 16, form: ['W', 'W', 'D'] as Array<'W' | 'D' | 'L'> },
+  { id: 'earth-united', position: 2, team: 'Earth United', played: 6, wins: 4, draws: 1, loses: 1, gd: 5, points: 13, form: ['W', 'L', 'W'] as Array<'W' | 'D' | 'L'> },
+  { id: 'venus-volcanic', position: 3, team: 'Venus Volcanic', played: 6, wins: 2, draws: 2, loses: 2, gd: 0, points: 8, form: ['D', 'D', 'L'] as Array<'W' | 'D' | 'L'> },
+];
+
 function Entry({
   name,
   purpose,
@@ -217,14 +226,14 @@ export default function Components() {
       </Category>
 
       <Category index="II" label="Container" subtitle="The hairline box, and the box with a header strip.">
-        <Entry name="Card" purpose="The hairline box. Tones carry meaning: default, architect, live.">
+        <Entry name="Card" purpose="The tone-step box, no outline. Tones carry meaning: architect and live add their coloured outline.">
           <Row label="Tones">
             <Card tone="default" padding={12} style={{ minWidth: 120 }}><span style={{ ...type.small }}>Default</span></Card>
             <Card tone="architect" padding={12} style={{ minWidth: 120 }}><span style={{ ...type.small, color: color.architect }}>Architect</span></Card>
             <Card tone="live" padding={12} style={{ minWidth: 120 }}><span style={{ ...type.small, color: color.live }}>Live</span></Card>
           </Row>
         </Entry>
-        <Entry name="SectionPanel" purpose="A hairline panel with an uppercase header strip: title left, optional meta right.">
+        <Entry name="SectionPanel" purpose="A card-surface panel with an uppercase header strip: title left, optional meta right.">
           <div style={{ width: '100%' }}>
             <SectionPanel title="Upcoming fixtures" meta="Next 48h">
               <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>The panel body: a list, prose or a footer.</p>
@@ -249,7 +258,7 @@ export default function Components() {
           <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
             This page&apos;s own header, at the top, is a live instance. Not re-rendered here: a second
             <code>&lt;h1&gt;</code> on one page breaks the one-heading rule
-            (<code>src/pages/pageHeadings.test.ts</code>).
+            (<code>src/pages/pageHeadings.test.ts</code>). Pass <code>accent</code> (a club colour) on club pages for the club band down the left edge: see any club page.
           </p>
         </Entry>
         <Entry name="SectionHeader" purpose="The h2 that opens a page section: numeral, label, title, optional action.">
@@ -262,6 +271,12 @@ export default function Components() {
             <StatBlock label="Position" value="2nd" />
             <StatBlock label="Record" value="W4 D1 L1" valueTone="success" />
             <StatBlock label="Minute" value="73'" valueTone="live" />
+          </Row>
+        </Entry>
+        <Entry name="ScoreBug" purpose="The score as a broadcast graphic: condensed figures on the raised block. Home and the match page.">
+          <Row label="States">
+            <ScoreBug home={2} away={1} />
+            <ScoreBug home="–" away="–" />
           </Row>
         </Entry>
         <Entry name="Tag" purpose="Hairline label for categories, filters and statuses. selected flips the fill.">
@@ -371,6 +386,11 @@ export default function Components() {
       </Category>
 
       <Category index="VII" label="Table & List" subtitle="The one table look, and the two ways a page lists facts.">
+        <Entry name="StandingsTable: followed club" purpose="A signed-in fan's club gets a wash of its colour and a solid edge. Here Earth United is followed.">
+          <div style={{ width: '100%' }}>
+            <StandingsTable rows={SAMPLE_STANDINGS} highlightTeamId="earth-united" />
+          </div>
+        </Entry>
         <Entry name="DataTable / dataHead / dataCell" purpose="label headers, small cells, faint row rules, tabular numbers.">
           <div style={{ width: '100%' }}>
             <DataTable caption="Example standings">
