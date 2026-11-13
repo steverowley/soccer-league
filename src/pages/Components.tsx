@@ -1,5 +1,5 @@
 // ── Components.tsx ──────────────────────────────────────────────────────────
-// `/dev/components` — internal design-system reference, not in fan nav.
+// `/dev/components`: the internal design-system reference, not in fan nav.
 //
 // WHY: modelled on Meta's Astryx library (astryx.atmeta.com/components): one
 // page that browses every shared/ui primitive, grouped by purpose, each with
@@ -8,21 +8,22 @@
 // page at a time; this is the same idea sized to what ISL actually has.
 //
 // Every example below renders the REAL component from shared/ui on the
-// REAL tokens (src/shared/design) — never a mocked look-alike — so this page
+// REAL tokens (src/shared/design), never a mocked look-alike, so this page
 // drifts the moment a component's own style changes, which is the point: a
 // stale screenshot cannot happen here.
 //
 // Dev-only: reachable at /dev/components by direct URL, not linked from the
 // site header or footer. It still obeys every house rule (PageHeader owns
-// the one h1, no raw style values — scripts/designTokens.test.ts scans this
+// the one h1, no raw style values: scripts/designTokens.test.ts scans this
 // file like any other) because it is as much a candidate for drift as any
 // fan page, and because showing a borrowed hack here would teach it to the
 // next builder who copies this page as a template.
 //
 // Scope: a live swatch per shared/ui export (docs/design-language.md
-// section 6), grouped the way Astryx groups its 150+ components, plus a
-// closing "Gaps" section naming the Astryx categories ISL has nothing in
-// yet — so the page doubles as the system's own backlog.
+// section 6), grouped the way Astryx groups its components, plus a closing
+// Backlog table of hand-built patterns ranked by repetition
+// (scripts/ui-audit.mjs). Components.coverage.test.ts fails if a shared/ui
+// export is missing from the shelf, so the page cannot go stale.
 
 import { useState } from 'react';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
@@ -41,6 +42,7 @@ import {
   FactRows,
   Field,
   FormError,
+  FormPip,
   FormStrip,
   LiveBadge,
   LoadingState,
@@ -51,6 +53,7 @@ import {
   Paragraph,
   ProseSection,
   SectionHeader,
+  SectionPanel,
   Skeleton,
   StatBlock,
   Tag,
@@ -167,6 +170,24 @@ function CheckFieldDemo() {
 
 const SAMPLE_FORM: Array<'W' | 'D' | 'L'> = ['W', 'W', 'D', 'L', 'W'];
 
+/**
+ * Snapshot of `node scripts/ui-audit.mjs`, in its order: what to build next,
+ * ranked by how many hand-built copies exist. Re-run the script after each
+ * component lands (and its copies are migrated) and update these rows.
+ */
+const BACKLOG: ReadonlyArray<{ name: string; copies: number; files: number; below: boolean; note: string }> = [
+  { name: 'Stack', copies: 249, files: 35, below: false, note: 'Inline flex rows and columns with a gap token (the gaps already use only space 8, 12, 16, 24)' },
+  { name: 'Text / Label', copies: 61, files: 26, below: false, note: 'Inline eyebrow and meta labels: label type in a muted tone' },
+  { name: 'Grid', copies: 42, files: 23, below: false, note: 'Inline auto-fit and fixed-column grids' },
+  { name: 'Divider', copies: 35, files: 17, below: false, note: 'Hand-drawn hairline rules between blocks' },
+  { name: 'FilterStrip', copies: 19, files: 12, below: false, note: 'Rows of toggle Tags and pressed buttons used as filters, each with its own selected state' },
+  { name: 'Select', copies: 9, files: 3, below: false, note: 'Native selects styled one by one (Profile, admin)' },
+  { name: 'NumberInput / DateInput', copies: 7, files: 5, below: false, note: 'Number, date and range inputs, mostly admin' },
+  { name: 'ProgressBar', copies: 3, files: 3, below: false, note: 'Percentage-width fill bars (Voting, Training, the viewer)' },
+  { name: 'Tooltip', copies: 5, files: 2, below: true, note: 'Below the bar: native title attributes are enough for now' },
+  { name: 'Dialog', copies: 1, files: 1, below: true, note: 'Below the bar: one modal (delete account). Build it when a second appears' },
+];
+
 export default function Components() {
   usePageTitle('Design system');
   return (
@@ -203,6 +224,13 @@ export default function Components() {
             <Card tone="live" padding={12} style={{ minWidth: 120 }}><span style={{ ...type.small, color: color.live }}>Live</span></Card>
           </Row>
         </Entry>
+        <Entry name="SectionPanel" purpose="A hairline panel with an uppercase header strip: title left, optional meta right.">
+          <div style={{ width: '100%' }}>
+            <SectionPanel title="Upcoming fixtures" meta="Next 48h">
+              <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>The panel body: a list, prose or a footer.</p>
+            </SectionPanel>
+          </div>
+        </Entry>
         <Entry name="PageShell" purpose="Header, flex-grow main column, footer. This page is one.">
           <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
             Every route is <code>&lt;PageShell&gt;&lt;PageHeader /&gt;...sections...&lt;/PageShell&gt;</code>. See
@@ -219,7 +247,7 @@ export default function Components() {
       >
         <Entry name="PageHeader" purpose="Every page's h1, back link, crumbs, crest and meta row.">
           <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
-            This page's own header, at the top, is a live instance. Not re-rendered here: a second
+            This page&apos;s own header, at the top, is a live instance. Not re-rendered here: a second
             <code>&lt;h1&gt;</code> on one page breaks the one-heading rule
             (<code>src/pages/pageHeadings.test.ts</code>).
           </p>
@@ -299,7 +327,15 @@ export default function Components() {
           </div>
         </Entry>
         <Entry name="FormPip / FormStrip" purpose="Recent results as a row of W/D/L tiles. Red never means a result.">
-          <FormStrip form={SAMPLE_FORM} slots={5} />
+          <Row label="FormPip (one result)">
+            <FormPip result="W" />
+            <FormPip result="D" />
+            <FormPip result="L" />
+            <FormPip result={null} />
+          </Row>
+          <Row label="FormStrip (5 slots, two unplayed)">
+            <FormStrip form={SAMPLE_FORM.slice(0, 3)} slots={5} />
+          </Row>
         </Entry>
       </Category>
 
@@ -375,33 +411,35 @@ export default function Components() {
         </Entry>
       </Category>
 
-      <Category
-        index="VIII"
-        label="Gaps"
-        subtitle="Astryx categories with nothing (or very little) in ISL yet. Not a build queue, a backlog."
-      >
-        <Entry name="Overlay" purpose="Dialog, Drawer, Popover, Tooltip, CommandPalette, Lightbox: none exist. Toast is the only overlay primitive today.">
-          <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
-            Every confirm-before-delete and settings drawer currently hand-rolls its own markup.
-          </p>
-        </Entry>
-        <Entry name="Layout" purpose="AppShell, Grid, Stack, Divider, ScrollableArea: PageShell covers the page frame; nothing names a reusable grid or stack.">
-          <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
-            Shelf and Row above are this page's own throwaway layout helpers, which is exactly the
-            kind of thing a shared Stack/Grid would absorb.
-          </p>
-        </Entry>
-        <Entry name="Navigation" purpose="SideNav, TopNavMegaMenu, Pagination, Stepper, TabList: Header.tsx hand-rolls the top nav; no pagination primitive exists anywhere lists paginate.">
-          <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
-            Worth a pass once a list page actually needs paging.
-          </p>
-        </Entry>
-        <Entry name="Form Controls" purpose="Selector, DateInput, NumberInput, Switch, TextArea: only text input, checkbox and the raw inputStyle token exist.">
-          <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
-            Admin and Voting forms build selects and date pickers ad hoc today.
-          </p>
-        </Entry>
-      </Category>
+      <section>
+        <SectionHeader
+          index="VIII"
+          label="Backlog"
+          subtitle="Hand-built patterns that repeat across src/ today, counted by scripts/ui-audit.mjs outside shared/ui. A pattern earns a component at three or more copies; build from the top."
+        />
+        <DataTable caption="Design system backlog, ranked by repetition" minWidth={640}>
+          <thead>
+            <tr>
+              <th style={dataHead('left', 40)}>#</th>
+              <th style={dataHead()}>Candidate</th>
+              <th style={dataHead('right')}>Copies</th>
+              <th style={dataHead('right')}>Files</th>
+              <th style={dataHead()}>What it replaces</th>
+            </tr>
+          </thead>
+          <tbody>
+            {BACKLOG.map((row, i) => (
+              <tr key={row.name}>
+                <td style={{ ...dataCell(), ...tone.secondary }}>{row.below ? '' : String(i + 1)}</td>
+                <td style={{ ...dataCell(), ...(row.below ? tone.secondary : tone.primary) }}>{row.name}</td>
+                <td style={dataCell('right')}>{row.copies}</td>
+                <td style={dataCell('right')}>{row.files}</td>
+                <td style={{ ...dataCell(), ...tone.secondary }}>{row.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      </section>
     </PageShell>
   );
 }
