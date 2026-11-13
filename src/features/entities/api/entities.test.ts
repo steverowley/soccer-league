@@ -37,6 +37,7 @@ function makeDb(result: MockResult) {
     limit(...a: unknown[])  { record('limit', a);  return builder; },
     eq(...a: unknown[])     { record('eq', a);     return builder; },
     in(...a: unknown[])     { record('in', a);     return builder; },
+    not(...a: unknown[])    { record('not', a);    return builder; },
     then(resolve: (v: MockResult) => unknown) { return resolve(result); },
   };
 
@@ -101,6 +102,12 @@ describe('getRecentNarratives', () => {
     await getRecentNarratives(db, 20, undefined, ['journalist_report', 'sports_writer_column']);
     expect(calls.filter((c) => c.method === 'in').map((c) => c.args)).toEqual([['kind', ['journalist_report', 'sports_writer_column']]]);
     expect(calls.filter((c) => c.method === 'eq')).toHaveLength(0);
+  });
+
+  it('leaves excluded kinds out on the server, so they do not use up the page', async () => {
+    const { db, calls } = makeDb({ data: [], error: null });
+    await getRecentNarratives(db, 20, undefined, undefined, ['architect_whisper', 'chaos_whisper']);
+    expect(calls.filter((c) => c.method === 'not').map((c) => c.args)).toEqual([['kind', 'in', '(architect_whisper,chaos_whisper)']]);
   });
 
   it('keeps the author (actor_entity_id) for the byline, null when absent', async () => {

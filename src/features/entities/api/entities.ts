@@ -30,6 +30,8 @@ import { parseNarrativeRows } from './entities.schema';
  * @param kind    Optional kind filter ('architect_whisper', 'pundit_takes',
  *                'balance_whisper', etc.), or a list of kinds (one desk on
  *                /news spans several).  When omitted, all kinds match.
+ * @param excludeKinds  Kinds to leave out (the /news feed leaves the cosmic
+ *                voices to their own panel, so they do not use up its page).
  * @returns       Array of Narrative rows, newest first. An empty array means
  *                the wire is genuinely empty for this filter.
  * @throws        On a query error. This used to warn-log and return `[]`,
@@ -43,6 +45,7 @@ export async function getRecentNarratives(
   limit = 50,
   source?: string,
   kind?: string | readonly string[],
+  excludeKinds?: readonly string[],
 ): Promise<Narrative[]> {
   let query = db
     .from('narratives')
@@ -57,6 +60,9 @@ export async function getRecentNarratives(
     query = query.eq('kind', kind);
   } else if (kind && kind.length > 0) {
     query = query.in('kind', [...kind]);
+  }
+  if (excludeKinds && excludeKinds.length > 0) {
+    query = query.not('kind', 'in', `(${excludeKinds.join(',')})`);
   }
 
   const { data, error } = await query;

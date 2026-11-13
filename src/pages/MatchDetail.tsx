@@ -225,8 +225,8 @@ export default function MatchDetail() {
               <strong style={tone.primary}>Nexus-7</strong> breaks down what just
               happened. <strong style={tone.primary}>Zara</strong> watches for the
               unusual. The cosmos itself (
-              <strong style={tone.primary}>Balance</strong> and{' '}
-              <strong style={tone.primary}>Chaos</strong>) speaks only when the match
+              <strong style={tone.primary}>The Arbiter</strong> and{' '}
+              <strong style={tone.primary}>The Trickster</strong>) speaks only when the match
               deserves it.
             </>
           }
@@ -1210,13 +1210,13 @@ const VOICES: Record<string, BoothVoice> = {
 
 // The two cosmic voices. Since the design language they are bylined like
 // the booth (name and role) and set in the Architect tone, as the spec and
-// its specimen show ("Chaos · Cosmic voice"). Colour alone used to tell
+// its specimen show ("The Trickster · Cosmic voice"). Colour alone used to tell
 // them apart (slate and amber); with both in the one Architect purple, the
 // name is what separates them, and the "Meet the booth" strip already
 // introduces both by name.
 const COSMIC_VOICES: Record<string, BoothVoice> = {
-  balance: { name: 'Balance', role: 'Cosmic voice' },
-  chaos: { name: 'Chaos', role: 'Cosmic voice' },
+  balance: { name: 'The Arbiter', role: 'Cosmic voice' },
+  chaos: { name: 'The Trickster', role: 'Cosmic voice' },
 };
 
 /**

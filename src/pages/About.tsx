@@ -54,8 +54,9 @@ export default function About() {
             when.
           </Paragraph>
           <Paragraph>
-            <strong>Balance &amp; Chaos</strong>: two cosmic voices weighing the
-            equilibrium of every match. They speak softly. They are usually right.
+            <strong>The Arbiter &amp; the Trickster</strong>: two more voices in the
+            cosmos. The Arbiter insists everything evens out; the Trickster wants
+            the upset. They speak softly. They are usually right.
           </Paragraph>
           <Paragraph>
             <strong>Pundits, journalists, bookies, referees</strong>: the supporting

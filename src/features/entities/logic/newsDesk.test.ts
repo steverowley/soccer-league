@@ -6,6 +6,8 @@ import {
   DESKS,
   bulletinLabel,
   byline,
+  COSMOS_KINDS,
+  cosmicVoice,
   dispatchForm,
   groupBulletins,
   kicker,
@@ -35,13 +37,25 @@ describe('splitHeadline', () => {
 });
 
 describe('desks and forms', () => {
-  it('offers four desks, All first, every kind on exactly one other desk', () => {
-    expect(DESKS.map((d) => d.label)).toEqual(['All', 'Reports', 'Pundits', 'The Cosmos']);
+  it('offers three desks, All first, every feed kind on exactly one other desk', () => {
+    expect(DESKS.map((d) => d.label)).toEqual(['All', 'Reports', 'Pundits']);
     const kinds = DESKS.flatMap((d) => d.kinds ?? []);
     expect(new Set(kinds).size).toBe(kinds.length);
-    for (const k of ['journalist_report', 'sports_writer_column', 'pundit_takes', 'architect_whisper', 'media_buzz', 'political_decree']) {
+    for (const k of ['journalist_report', 'sports_writer_column', 'pundit_takes', 'media_buzz', 'political_decree']) {
       expect(kinds, k).toContain(k);
     }
+  });
+
+  it('keeps the cosmos out of every desk: it has one panel of its own', () => {
+    const all = DESKS.find((d) => d.key === 'all')!;
+    expect(all.exclude).toEqual(COSMOS_KINDS);
+    for (const d of DESKS) for (const k of COSMOS_KINDS) expect(d.kinds ?? [], d.key + ':' + k).not.toContain(k);
+  });
+
+  it('names the voice behind every cosmic kind', () => {
+    expect(cosmicVoice('balance_whisper')).toBe('The Arbiter');
+    expect(cosmicVoice('chaos_whisper')).toBe('The Trickster');
+    for (const k of ['architect_whisper', 'cosmic_omen', 'cosmic_disturbance', 'fate_whisper']) expect(cosmicVoice(k), k).toBe('The Architect');
   });
 
   it('sets pundits as quotes, the cosmos as transmissions, the rest as reports', () => {
