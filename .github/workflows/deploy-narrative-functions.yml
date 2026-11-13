@@ -41,6 +41,7 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/architect-galaxy-tick/**'
+      - 'supabase/functions/_shared/**'
       - 'supabase/functions/drama-tick/**'
       - 'supabase/functions/corpus-enricher/**'
       - '.github/workflows/deploy-narrative-functions.yml'
