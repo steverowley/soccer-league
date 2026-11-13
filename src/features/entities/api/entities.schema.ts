@@ -59,6 +59,10 @@ export const NarrativeSchema = z.object({
   source:             NarrativeSourceSchema,
   created_at:         z.string(),
   acknowledged_by:    z.array(z.string()).nullable().transform((v) => v ?? []),
+  // The entity that filed or spoke the line (a journalist, pundit, sports
+  // writer or cosmic voice). Null for the Architect's own reflections and
+  // for rows written before the column existed, so it is optional here.
+  actor_entity_id:    z.string().nullable().optional().transform((v) => v ?? null),
 });
 
 export type ZodNarrative = z.infer<typeof NarrativeSchema>;

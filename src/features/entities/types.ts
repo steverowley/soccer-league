@@ -105,4 +105,6 @@ export interface Narrative {
   source: 'architect' | 'match' | 'scheduled' | 'manual';
   created_at: string;
   acknowledged_by: string[];
+  /** Who filed it (entities.id): the byline on /news. Null when unattributed. */
+  actor_entity_id?: string | null;
 }
