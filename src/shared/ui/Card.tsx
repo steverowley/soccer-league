@@ -25,9 +25,9 @@ import { color, glow, hairline, layout } from '../design';
 export type CardTone = 'default' | 'architect' | 'live';
 
 const TONE: Record<CardTone, CSSProperties> = {
-  default:   hairline(color.line),
-  architect: { ...hairline(color.architect), boxShadow: glow.architect },
-  live:      hairline(color.live),
+  default:   { ...hairline(color.cardEdge), background: color.cardFill },
+  architect: { ...hairline(color.architect), boxShadow: glow.architect, background: 'transparent' },
+  live:      { ...hairline(color.live), background: 'transparent' },
 };
 
 interface CardProps {
@@ -78,7 +78,6 @@ export function Card({
 }: CardProps) {
   const composed: CSSProperties = {
     ...TONE[tone],
-    background: 'transparent',
     padding: padding ?? layout.cardPad,
     ...(to != null ? { color: color.text, textDecoration: 'none', display: 'block' } : null),
     ...style,

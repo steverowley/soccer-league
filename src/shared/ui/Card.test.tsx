@@ -8,14 +8,16 @@ import { describe, expect, it } from 'vitest';
 import { Card } from './Card';
 
 describe('Card', () => {
-  it('renders children in a 1 px line box with no fill and the card padding token', () => {
+  it('renders children in a 1 px box on the card-surface tokens and the card padding token', () => {
     const { getByText, container } = render(<Card>hello</Card>);
     expect(getByText('hello')).toBeTruthy();
     const root = container.firstChild as HTMLElement;
     expect(root.style.borderWidth).toBe('1px');
     expect(root.style.borderStyle).toBe('solid');
-    expect(root.style.borderColor).toBe('var(--isl-line)');
-    expect(root.style.background).toBe('transparent');
+    // Today these resolve to the structural line and no fill (tokens.test.ts
+    // holds the defaults); a design-direction preview may swap them.
+    expect(root.style.borderColor).toBe('var(--isl-card-edge)');
+    expect(root.style.background).toBe('var(--isl-card-fill)');
     expect(root.style.padding).toBe('var(--isl-pad-card)');
   });
 
