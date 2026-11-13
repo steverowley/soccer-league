@@ -14,7 +14,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 
 import { color, hairline, space, tone, type } from '../../../../shared/design';
-import { Button, SectionHeader, inputStyle } from '../../../../shared/ui';
+import { Button, inputStyle, SectionHeader, Stack } from '../../../../shared/ui';
 import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 import { getTeams, getTeam } from '../../api/teams';
 import {
@@ -154,7 +154,7 @@ export function MatchViewerDemo() {
 
       {/* Matchup picker */}
       {teams.length >= 2 && (
-        <div style={{ display: 'flex', gap: space[8], alignItems: 'center', flexWrap: 'wrap', marginBottom: space[16] }}>
+        <Stack direction="row" gap={8} align="center" wrap style={{ marginBottom: space[16] }}>
           <select
             value={homeId}
             onChange={(e) => setHomeId(e.target.value)}
@@ -179,10 +179,10 @@ export function MatchViewerDemo() {
           <Button variant="primary" onClick={() => setSeed((s) => s + 1)} disabled={loading}>
             {loading ? 'Simulating…' : 'Kick off'}
           </Button>
-        </div>
+        </Stack>
       )}
 
-      <div style={{ display: 'flex', gap: space[16], alignItems: 'stretch', flexWrap: 'wrap' }}>
+      <Stack direction="row" gap={16} align="stretch" wrap>
         {/* Pitch */}
         <div style={{ flex: '2 1 460px', minWidth: 0 }}>
           {match ? (
@@ -223,7 +223,7 @@ export function MatchViewerDemo() {
         <div style={{ flex: '1 1 240px', minWidth: 0 }}>
           <PlayerThoughtsPanel playerId={selectedPlayerId} />
         </div>
-      </div>
+      </Stack>
     </section>
   );
 }

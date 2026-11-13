@@ -43,6 +43,8 @@ import { withTimeout, isTimeoutError } from '../shared/hooks/useAsyncData';
 import {
   Card,
   Crest,
+  dataCell,
+  dataHead,
   DataTable,
   EmptyState,
   ErrorState,
@@ -53,10 +55,9 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
-  dataCell,
-  dataHead,
   toRoman,
 } from '../shared/ui';
 import { color, numeric, space, tone, type } from '../shared/design';
@@ -401,13 +402,13 @@ function PlayerDossier({ profile }: { profile: Record<string, unknown> }) {
   ).filter(([, v]) => v.length > 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+    <Stack gap={32}>
       {bio && <p style={{ ...type.body, ...tone.primary, margin: 0, maxWidth: '70ch' }}>{bio}</p>}
       {facts.length > 0 && <FactGrid facts={facts} minColumn={180} />}
       {achievements.length > 0 && (
         <FactRows label="Achievements" items={achievements.map((a) => ({ key: a, content: a }))} />
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -669,11 +670,11 @@ function CardGlyph({ kind }: { kind: 'yellow' | 'red' }) {
  */
 function NarrativeList({ rows }: { rows: NarrativeMention[] }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+    <Stack gap={12}>
       {rows.map((n) => (
         <NarrativeCard key={n.id} narrative={n} />
       ))}
-    </div>
+    </Stack>
   );
 }
 
@@ -690,17 +691,17 @@ function NarrativeCard({ narrative }: { narrative: NarrativeMention }) {
   const isPundit = narrative.kind === 'pundit_takes';
   return (
     <Card>
-      <article style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
-        <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: space[12] }}>
+      <Stack as="article" gap={12}>
+        <Stack as="header" direction="row" gap={12} align="center" justify="space-between" wrap>
           <Tag>{prettifyKind(narrative.kind)}</Tag>
           <span style={{ ...type.label, ...tone.tertiary }}>
             {formatRelativeTime(narrative.created_at)}
           </span>
-        </header>
+        </Stack>
         <p style={{ ...type.body, ...tone.primary, fontStyle: isPundit ? 'italic' : 'normal', margin: 0, maxWidth: '70ch' }}>
           {isPundit ? `\u201C${narrative.summary}\u201D` : narrative.summary}
         </p>
-      </article>
+      </Stack>
     </Card>
   );
 }

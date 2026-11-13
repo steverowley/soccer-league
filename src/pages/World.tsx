@@ -56,6 +56,7 @@ import {
   LoadingState,
   PageHeader,
   PageShell,
+  Stack,
   Tag,
 } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
@@ -272,9 +273,9 @@ export default function World() {
         subtitle="Clubs, players, officials, the booth, the betting syndicate, and the unseen hand that moves them all. Search the galaxy or pick a tier below, then select an entity to trace its web of relationships."
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+      <Stack gap={24}>
         {/* ── Toolbar: search box + group filter Tags. */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[12], flexWrap: 'wrap' }}>
+        <Stack direction="row" gap={12} align="flex-start" wrap>
           <input
             type="text"
             value={search}
@@ -300,7 +301,7 @@ export default function World() {
             }}
           />
 
-          <div role="group" aria-label="Filter entities by tier" style={{ display: 'flex', gap: space[8], flexWrap: 'wrap', alignItems: 'center' }}>
+          <Stack role="group" aria-label="Filter entities by tier" direction="row" gap={8} align="center" wrap>
             {KIND_GROUPS.map((group) => {
               const active = activeGroup === group.key;
               return (
@@ -312,8 +313,8 @@ export default function World() {
                 </Tag>
               );
             })}
-          </div>
-        </div>
+          </Stack>
+        </Stack>
 
         {/* ── Two-column shell: graph (left) + picker rail (right). */}
         <div
@@ -437,7 +438,7 @@ export default function World() {
             </Card>
           </aside>
         </div>
-      </div>
+      </Stack>
 
       {/* The shell collapses to a single column on tablet/phone; the rail
           drops below the graph and stops sticking. */}

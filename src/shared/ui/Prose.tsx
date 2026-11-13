@@ -23,8 +23,9 @@
 
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { color, layout, space, tone, type } from '../design';
+import { color, layout, tone, type } from '../design';
 import { SectionHeader } from './SectionHeader';
+import { Stack } from './Stack';
 
 /**
  * The prose column.
@@ -68,7 +69,7 @@ export function ProseSection({ index, title, children }: ProseSectionProps) {
   return (
     <section>
       <SectionHeader index={index} label={title} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>{children}</div>
+      <Stack gap={16}>{children}</Stack>
     </section>
   );
 }

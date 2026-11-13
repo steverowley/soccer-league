@@ -53,13 +53,14 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  inputStyle,
   LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
-  inputStyle,
   toRoman,
   useToast,
 } from '../shared/ui';
@@ -374,7 +375,7 @@ export default function Voting() {
             }}
           >
             {/* LEFT: one decree Card per tier. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: space[24], minWidth: 0 }}>
+            <Stack gap={24} style={{ minWidth: 0 }}>
               {TIERS.map((tier) => (
                 <DecreeCard
                   key={tier.key}
@@ -387,7 +388,7 @@ export default function Voting() {
                   onVote={onVote}
                 />
               ))}
-            </div>
+            </Stack>
 
             {/* RIGHT: sticky rail with this visit's casts and the balances. */}
             <aside className="isl-voting-rail" aria-label="Your ballot" style={{ position: 'sticky', top: space[24] }}>
@@ -400,7 +401,7 @@ export default function Voting() {
                       credits to pool them with your club.
                     </p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+                    <Stack gap={12}>
                       {committedThisSession.map((c) => (
                         <div key={c.optionId} style={RAIL_ROW}>
                           <span style={tone.secondary}>{c.label}</span>
@@ -409,7 +410,7 @@ export default function Voting() {
                           </span>
                         </div>
                       ))}
-                    </div>
+                    </Stack>
                   )}
                 </div>
                 <div
@@ -561,7 +562,7 @@ function DecreeCard({
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: space[24], minWidth: 0 }}>
       {/* Top row: numeral, label and title on the left, min stake on the right. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: space[24] }}>
+      <Stack direction="row" gap={24} align="flex-start" justify="space-between" wrap>
         <div style={{ minWidth: 0, flex: '1 1 280px' }}>
           <div style={{ ...type.label, ...tone.secondary }}>
             {tier.index} {glyph.middot} {tier.label}
@@ -570,7 +571,7 @@ function DecreeCard({
           <p style={{ ...type.body, ...tone.secondary, margin: 0, marginTop: space[8] }}>{tier.desc}</p>
         </div>
         <StatBlock label="Min. stake" value={`${tier.minStake} IC`} style={{ flex: 'none' }} />
-      </div>
+      </Stack>
 
       {options.length === 0 ? (
         <EmptyState centred={false} style={{ padding: 0 }}>
@@ -683,12 +684,12 @@ function OptionRow({ option, tally, tierTotal, selected, onSelect }: OptionRowPr
         minWidth: 0,
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: space[16], width: '100%' }}>
+      <Stack as="span" direction="row" gap={16} align="baseline" justify="space-between" style={{ width: '100%' }}>
         <span style={{ ...type.subheading, overflowWrap: 'anywhere' }}>{option.label}</span>
         <span style={{ ...type.subheading, ...numeric, color: selected ? color.text : color.textSecondary }}>
           {pct}%
         </span>
-      </span>
+      </Stack>
       {option.description && (
         <span style={{ ...type.small, ...tone.secondary }}>{option.description}</span>
       )}

@@ -54,6 +54,7 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
   toRoman,
@@ -402,7 +403,7 @@ function ManagerDossier({ index, dossier }: { index: string; dossier: DossierDat
   return (
     <section>
       <SectionHeader index={index} label="Profile" title="Dossier" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+      <Stack gap={32}>
         {(bio || history) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[16], maxWidth: '70ch' }}>
             {bio && <p style={{ ...type.body, ...tone.primary, margin: 0 }}>{bio}</p>}
@@ -413,7 +414,7 @@ function ManagerDossier({ index, dossier }: { index: string; dossier: DossierDat
         {achievements.length > 0 && (
           <FactRows label="Achievements" items={achievements.map((a) => ({ key: a, content: a }))} />
         )}
-      </div>
+      </Stack>
     </section>
   );
 }
@@ -455,12 +456,12 @@ function TacticalBio({ index, tactics }: { index: string; tactics: TacticsData }
   return (
     <section>
       <SectionHeader index={index} label="Dugout" title="Tactical philosophy" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+      <Stack gap={24}>
         {styleLabel && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>
+          <Stack direction="row" gap={8} align="center" wrap>
             <span style={{ ...type.label, ...tone.secondary }}>Style</span>
             <Tag>{styleLabel}</Tag>
-          </div>
+          </Stack>
         )}
         {philosophy && (
           <blockquote style={{ ...type.body, ...tone.primary, fontStyle: 'italic', margin: 0, maxWidth: '70ch' }}>
@@ -468,7 +469,7 @@ function TacticalBio({ index, tactics }: { index: string; tactics: TacticsData }
           </blockquote>
         )}
         {model && <GameModelCards model={model} />}
-      </div>
+      </Stack>
     </section>
   );
 }
@@ -506,9 +507,9 @@ function GameModelCards({ model }: { model: GameModelView }): JSX.Element {
             {g.triggers && g.triggers.length > 0 && (
               <div>
                 <div style={{ ...type.label, ...tone.secondary }}>Presses on</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[8], marginTop: space[8] }}>
+                <Stack direction="row" gap={8} wrap style={{ marginTop: space[8] }}>
                   {g.triggers.map((t) => <Tag key={t}>{t}</Tag>)}
-                </div>
+                </Stack>
               </div>
             )}
           </Card>

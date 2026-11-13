@@ -75,6 +75,7 @@ import {
   PageShell,
   ScoreBug,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
 } from '../shared/ui';
@@ -208,7 +209,7 @@ export default function MatchDetail() {
 
       {/* The scoreboard and the booth intro read as one block, so they sit
           closer than the section gap. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+      <Stack gap={24}>
         <Scoreboard match={match} watcherCount={watcherCount} revealed={revealed} />
 
         {/* First-match teaching strip, "Meet the booth" (#379). One-time
@@ -230,7 +231,7 @@ export default function MatchDetail() {
             </>
           }
         />
-      </div>
+      </Stack>
 
       {/* Section I: the match. Pitch, booth and record on the left, the
           stake rail on the right. */}
@@ -245,9 +246,9 @@ export default function MatchDetail() {
             alignItems: 'start',
           }}
         >
-          <div
+          <Stack
             className="match-col-l"
-            style={{ display: 'flex', flexDirection: 'column', gap: space[24], minWidth: 0 }}
+            gap={24} style={{ minWidth: 0 }}
           >
             {status === 'cancelled' ? (
               <EmptyState centred={false}>
@@ -256,7 +257,7 @@ export default function MatchDetail() {
             ) : (
               <MatchTheatre match={match} onRevealed={setRevealed} />
             )}
-          </div>
+          </Stack>
 
           {/* Sticky stake rail. WagerWidget owns its odds fetch and placement. */}
           <aside
@@ -467,9 +468,9 @@ function Scoreboard({
       className="match-board"
       style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}
     >
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <Stack direction="row" justify="center">
         <StatusCue status={status} revealed={revealed} />
-      </div>
+      </Stack>
 
       {/* minmax(0, 1fr): the name columns may shrink below their content
           width, so a long name wraps instead of being clipped (390 px). */}
@@ -567,7 +568,7 @@ function TeamScoreBlock({
   crestColor: string | null;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: space[12], minWidth: 0 }}>
+    <Stack gap={12} align="center" style={{ minWidth: 0 }}>
       <Crest color={crestColor} size={40} />
       <p
         lang="en"
@@ -586,7 +587,7 @@ function TeamScoreBlock({
         {side}
         {location && <> {glyph.middot} {location}</>}
       </p>
-    </div>
+    </Stack>
   );
 }
 
@@ -1107,20 +1108,14 @@ export function LiveCommentary({
     <>
       {/* COMMENTARY FEED. */}
       <Card>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            gap: space[16],
-            flexWrap: 'wrap',
-          }}
+        <Stack
+          direction="row" gap={16} align="baseline" justify="space-between" wrap
         >
           <h3 style={{ ...type.subheading, margin: 0 }}>The booth</h3>
           <span style={{ ...type.label, ...tone.secondary }}>
             Vox {glyph.middot} Nexus-7 {glyph.middot} Zara
           </span>
-        </div>
+        </Stack>
 
         {/* State line: "Live Feed" plus the minute, or "The Replay". Neutral
             text: the scoreboard's LiveBadge is the page's live cue. */}

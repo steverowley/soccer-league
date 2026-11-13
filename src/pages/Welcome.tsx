@@ -41,6 +41,7 @@ import {
   LoadingState,
   PageHeader,
   PageShell,
+  Stack,
   StatBlock,
   Tag,
 } from '../shared/ui';
@@ -184,7 +185,7 @@ function PickClubStep({
       <StepImage src="/img/step-02-pick-club" alt="Pick your club" />
 
       {/* League filter: toggle Tags, 44 px targets. */}
-      <div role="group" aria-label="League" style={{ display: 'flex', gap: space[8], flexWrap: 'wrap' }}>
+      <Stack role="group" aria-label="League" direction="row" gap={8} wrap>
         {LEAGUES.map((l) => (
           <Tag
             key={l.id}
@@ -195,7 +196,7 @@ function PickClubStep({
             {l.shortName}
           </Tag>
         ))}
-      </div>
+      </Stack>
 
       <div style={GRID}>
         {teams.map((team) => (
@@ -205,10 +206,10 @@ function PickClubStep({
             disabled={busy !== null}
             dimmed={busy !== null && busy !== team.id}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: space[12] }}>
+            <Stack as="span" direction="row" gap={12} align="center">
               <Crest color={team.color} size={24} />
               <span style={{ ...type.subheading, overflowWrap: 'anywhere' }}>{team.name}</span>
-            </span>
+            </Stack>
             <span style={{ ...type.small, ...tone.secondary }}>{team.location}</span>
             {busy === team.id && <span style={{ ...type.label, ...tone.secondary }}>Saving{'\u2026'}</span>}
           </PickCard>
@@ -343,7 +344,7 @@ function StarterBetStep({
       )}
 
       {!loading && nextMatch && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+        <Stack gap={16}>
           <div>
             <div style={{ ...type.label, ...tone.secondary }}>Your next match</div>
             <div style={{ ...type.subheading, marginTop: space[8], overflowWrap: 'anywhere' }}>
@@ -369,7 +370,7 @@ function StarterBetStep({
             Your credits ride on every wager, and at season&rsquo;s end you&rsquo;ll pool
             what&rsquo;s left with other fans to vote on your club&rsquo;s future.
           </p>
-        </div>
+        </Stack>
       )}
 
       <SkipFooter onSkip={onDone} label="Done, take me home" />
@@ -415,9 +416,9 @@ function Shell({
         {...(subtitle ? { subtitle } : {})}
         {...(meta ? { meta } : {})}
       />
-      <section aria-label="Onboarding" style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+      <Stack aria-label="Onboarding" as="section" gap={24}>
         {children}
-      </section>
+      </Stack>
     </PageShell>
   );
 }

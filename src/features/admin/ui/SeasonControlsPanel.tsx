@@ -23,8 +23,16 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { color, space, tone, type } from '../../../shared/design';
 import {
-  Button, Field, SectionHeader, SectionPanel, Skeleton, StatBlock, EmptyState,
-  inputStyle, useToast,
+  Button,
+  EmptyState,
+  Field,
+  inputStyle,
+  SectionHeader,
+  SectionPanel,
+  Skeleton,
+  Stack,
+  StatBlock,
+  useToast,
 } from '../../../shared/ui';
 import {
   getActiveSeason, setSeasonStatus,
@@ -44,11 +52,11 @@ import { fmtDatetime } from './format';
  */
 function ControlBlock({ title, help, children }: { title: string; help: ReactNode; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+    <Stack gap={12}>
       <h3 style={{ ...type.label, ...tone.primary, margin: 0 }}>{title}</h3>
       <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>{help}</p>
       {children}
-    </div>
+    </Stack>
   );
 }
 
@@ -253,14 +261,14 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
 
           {/* ── Controls ──────────────────────────────────────────────────── */}
           <SectionPanel title="Controls">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+            <Stack gap={24}>
               {/* Fast-forward ─────────────────────────────────────────────── */}
               <ControlBlock
                 title="Fast-forward scheduled matches"
                 help={<>Subtracts hours from every scheduled match&apos;s kickoff time, making the
                   worker pick them up on its next poll cycle.</>}
               >
-                <div style={{ display: 'flex', gap: space[12], alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <Stack direction="row" gap={12} align="flex-end" wrap>
                   <Field id="admin-ff-hours" label="Hours" style={{ width: 120 }}>
                     <input
                       id="admin-ff-hours"
@@ -276,7 +284,7 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
                   <Button variant="primary" onClick={onFastForward} disabled={ffBusy}>
                     {ffBusy ? '…' : 'Fast forward'}
                   </Button>
-                </div>
+                </Stack>
               </ControlBlock>
 
               <Rule />
@@ -306,19 +314,19 @@ export function SeasonControlsPanel({ db }: { db: IslSupabaseClient }) {
                 title="Voting window"
                 help="Open or close the voting window manually. Only available at the correct season phase."
               >
-                <div style={{ display: 'flex', gap: space[8], flexWrap: 'wrap' }}>
+                <Stack direction="row" gap={8} wrap>
                   <Button onClick={onOpenVoting} disabled={votingBusy || season.status !== 'active'}>
                     {votingBusy ? '…' : 'Open voting'}
                   </Button>
                   <Button onClick={onCloseVoting} disabled={votingBusy || season.status !== 'voting'}>
                     {votingBusy ? '…' : 'Close voting'}
                   </Button>
-                </div>
+                </Stack>
                 {season.status === 'completed' && (
                   <p style={{ ...type.label, ...tone.secondary, margin: 0 }}>Season is completed.</p>
                 )}
               </ControlBlock>
-            </div>
+            </Stack>
           </SectionPanel>
         </div>
       )}

@@ -29,8 +29,19 @@ import { useCallback, useEffect, useState } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { space, tone, type } from '../../../shared/design';
 import {
-  Button, DataTable, EmptyState, LiveBadge, SectionHeader, Skeleton, Tag, TextLink,
-  dataCell, dataHead, inputStyle, useToast,
+  Button,
+  dataCell,
+  dataHead,
+  DataTable,
+  EmptyState,
+  inputStyle,
+  LiveBadge,
+  SectionHeader,
+  Skeleton,
+  Stack,
+  Tag,
+  TextLink,
+  useToast,
 } from '../../../shared/ui';
 import {
   getAdminFixtures, completeMatchManually,
@@ -138,7 +149,7 @@ export function FixtureBrowser({ db }: { db: IslSupabaseClient }) {
       <SectionHeader index="I" label="Fixtures" title={<span id="fixture-heading">Fixture browser</span>} />
 
       {/* Filter strip ────────────────────────────────────────────────────── */}
-      <div role="group" aria-label="Filter by status" style={{ display: 'flex', gap: space[8], marginBottom: space[24], flexWrap: 'wrap' }}>
+      <Stack role="group" aria-label="Filter by status" direction="row" gap={8} wrap style={{ marginBottom: space[24] }}>
         {FIXTURE_FILTERS.map(({ id, label }) => (
           <Tag
             key={id}
@@ -149,7 +160,7 @@ export function FixtureBrowser({ db }: { db: IslSupabaseClient }) {
             {label}
           </Tag>
         ))}
-      </div>
+      </Stack>
 
       {loading ? (
         <Skeleton height={200} />
@@ -246,12 +257,12 @@ function FixtureRow({
         {f.scheduled_at ? fmtDatetime(f.scheduled_at) : '—'}
       </td>
       <td style={{ ...dataCell(), whiteSpace: 'nowrap' }}>
-        <div style={{ display: 'flex', gap: space[12], alignItems: 'center' }}>
+        <Stack direction="row" gap={12} align="center">
           <TextLink to={`/matches/${f.id}`}>View ↗</TextLink>
           {isCompletable && !editing && (
             <Button onClick={onEditOpen}>Complete…</Button>
           )}
-        </div>
+        </Stack>
       </td>
     </tr>
   );
@@ -316,7 +327,7 @@ function CompletionEditor({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', gap: space[8], alignItems: 'center' }}>
+    <Stack direction="row" gap={8} align="center">
       <input
         type="number"
         min={0}
@@ -338,6 +349,6 @@ function CompletionEditor({
       />
       <Button variant="primary" onClick={onSave} disabled={busy}>{busy ? '…' : 'Save'}</Button>
       <Button onClick={onCancel} disabled={busy}>Cancel</Button>
-    </div>
+    </Stack>
   );
 }

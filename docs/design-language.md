@@ -159,6 +159,14 @@ admin console's own primitives (`PanelHeader`, `StatCell`, `AdminButton`,
 - **Crest**: the club shield silhouette in the club colour; sizes 16, 24, 40,
   64. Used wherever a club is named in a list, table or header.
 - **StatBlock**: label over value. Replaces HeroStat, StatPair, KeyValue.
+- **Stack**: every flex row and column. Props: `direction` (`column`
+  default, or `row`), `gap` (a spacing step, or `section` for the gap
+  between page sections), `align`, `justify`, `wrap`, `as` (the element:
+  `section`, `nav`, `form`, `ul` and so on, for semantics). Layout only:
+  `style` takes margins, widths and `flex`, never colour, type, borders or
+  padding (a box that has those is a Card). Never hand-write `display:
+  'flex'` on a plain element; the audit (`scripts/ui-audit.mjs`) counts any
+  that appear. A Card or Link laying out its own children keeps its style.
 - **ScoreBug**: a score as a broadcast graphic: the two figures in `score`
   type on the raised surface, a tertiary middot between. Accessible name
   "2 to 1" ("No score yet" before kick-off). Every featured or match score

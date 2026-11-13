@@ -32,6 +32,8 @@ import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import {
   Button,
   Crest,
+  dataCell,
+  dataHead,
   DataTable,
   EmptyState,
   ErrorState,
@@ -39,10 +41,9 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
-  dataCell,
-  dataHead,
   toRoman,
 } from '../shared/ui';
 import { color, numeric, space, tone } from '../shared/design';
@@ -319,7 +320,7 @@ function FilterStrip({ active, onChange, counts, totalCount }: { active: string;
   };
 
   return (
-    <div role="group" aria-label="Filter by status" style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+    <Stack role="group" aria-label="Filter by status" direction="row" gap={8} wrap>
       {FILTER_ORDER.map((key) => (
         <Tag
           key={key}
@@ -330,7 +331,7 @@ function FilterStrip({ active, onChange, counts, totalCount }: { active: string;
           {labelFor(key)}
         </Tag>
       ))}
-    </div>
+    </Stack>
   );
 }
 

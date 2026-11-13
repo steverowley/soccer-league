@@ -44,22 +44,23 @@ import {
   Button,
   Card,
   Crest,
+  dataCell,
+  dataHead,
   DataTable,
   EmptyState,
   ErrorState,
   FactGrid,
   FactRows,
+  type FormResult,
   FormStrip,
   LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
-  dataCell,
-  dataHead,
   toRoman,
-  type FormResult,
 } from '../shared/ui';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
@@ -527,20 +528,20 @@ function NextFixtureCard({ match }: { match: UpcomingMatch }) {
   const detail = [match.round ?? null, formatKickoff(match.scheduled_at), match.stadium ?? null]
     .filter((x): x is string => Boolean(x));
   const side = (club: { id: string; name: string } | null) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: space[12], minWidth: 0 }}>
+    <Stack direction="row" gap={12} align="center" style={{ minWidth: 0 }}>
       <Crest color={club ? TEAM_COLOR.get(club.id) ?? null : null} size={24} />
       <span style={{ ...type.small, fontWeight: 700, overflowWrap: 'anywhere' }}>{club?.name ?? DASH}</span>
-    </div>
+    </Stack>
   );
 
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
       <RailTitle>Next fixture</RailTitle>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[8] }}>
+      <Stack gap={8}>
         {side(match.home_team)}
         <span style={{ ...type.label, ...tone.tertiary }}>v</span>
         {side(match.away_team)}
-      </div>
+      </Stack>
       {detail.length > 0 && (
         <div style={{ ...type.label, ...tone.secondary }}>{detail.join(` ${glyph.middot} `)}</div>
       )}
@@ -561,10 +562,10 @@ function NextFixtureCard({ match }: { match: UpcomingMatch }) {
 function FormCard({ form }: { form: FormResult[] }) {
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[12] }}>
+      <Stack direction="row" gap={12} align="center" justify="space-between" wrap>
         <RailTitle>Form</RailTitle>
         <FormStrip form={form} slots={5} />
-      </div>
+      </Stack>
       <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>{formProse(form)}</p>
     </Card>
   );
@@ -640,10 +641,10 @@ function ManagerCard({ manager }: { manager: LiveManager }) {
         <div style={{ ...type.label, ...tone.secondary }}>{manager.nationality}</div>
       )}
       {styleLabel && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>
+        <Stack direction="row" gap={8} align="center" wrap>
           <span style={{ ...type.label, ...tone.secondary }}>Philosophy</span>
           <Tag>{styleLabel}</Tag>
-        </div>
+        </Stack>
       )}
       {manager.id && (
         <Button variant="tertiary" to={`/managers/${manager.id}`} style={{ alignSelf: 'flex-start' }}>
@@ -691,7 +692,7 @@ function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
   const achievements = list('achievements');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+    <Stack gap={32}>
       {(history || culture) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[16], maxWidth: '70ch' }}>
           {history && <p style={{ ...type.body, ...tone.primary, margin: 0 }}>{history}</p>}
@@ -702,7 +703,7 @@ function ClubDossier({ profile }: { profile: Record<string, unknown> }) {
       {achievements.length > 0 && (
         <FactRows label="Achievements" items={achievements.map((a) => ({ key: a, content: a }))} />
       )}
-    </div>
+    </Stack>
   );
 }
 

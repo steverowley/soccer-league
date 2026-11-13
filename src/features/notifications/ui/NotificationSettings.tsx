@@ -33,7 +33,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { tone, space, type } from '../../../shared/design';
-import { Button, Card, CheckField, FormError } from '../../../shared/ui';
+import { Button, Card, CheckField, FormError, Stack } from '../../../shared/ui';
 import { useSupabase } from '../../../shared/supabase/SupabaseProvider';
 import {
   getNotificationPreferences,
@@ -249,7 +249,7 @@ export default function NotificationSettings() {
     <Card>
       {/* Enable / Disable: a secondary Button either way. The page's one
           primary action is Save allegiance above. */}
-      <div style={{ display: 'flex', gap: space[16], alignItems: 'center', flexWrap: 'wrap' }}>
+      <Stack direction="row" gap={16} align="center" wrap>
         {enrolled ? (
           <Button variant="secondary" onClick={onDisable} disabled={busy}>
             {busy ? 'Disabling\u2026' : 'Disable push on this device'}
@@ -265,10 +265,10 @@ export default function NotificationSettings() {
             ? 'This device will alert you 1 minute before kick-off.'
             : 'We will ask your browser for permission, then enrol this device.'}
         </span>
-      </div>
+      </Stack>
 
       {/* Per-event opt-in toggles: only meaningful when enrolled. */}
-      <div style={{ marginTop: space[24], display: 'flex', flexDirection: 'column', gap: space[12] }}>
+      <Stack gap={12} style={{ marginTop: space[24] }}>
         <CheckField
           id="notify-favourite-team"
           hint="Set a favourite club on this page to receive a push 1 minute before kick-off."
@@ -287,7 +287,7 @@ export default function NotificationSettings() {
         >
           Notify me for every match across the cosmos
         </CheckField>
-      </div>
+      </Stack>
 
       {error && (
         <div style={{ marginTop: space[16] }}>

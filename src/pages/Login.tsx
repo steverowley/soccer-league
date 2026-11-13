@@ -29,12 +29,13 @@ import {
   CheckField,
   Field,
   FormError,
+  inputStyle,
   LoadingState,
   PageHeader,
   PageShell,
+  Stack,
   Tag,
   TextLink,
-  inputStyle,
 } from '../shared/ui';
 import { space, tone, type } from '../shared/design';
 import { useAuth } from '../features/auth';
@@ -145,10 +146,10 @@ export default function Login() {
             Click the link to verify your account and complete sign-up. The
             link is single-use and expires in 24 hours.
           </p>
-          <div style={{ marginTop: space[16], display: 'flex', alignItems: 'center', gap: space[12], flexWrap: 'wrap' }}>
+          <Stack direction="row" gap={12} align="center" wrap style={{ marginTop: space[16] }}>
             <span style={{ ...type.small, ...tone.secondary }}>Wrong email?</span>
             <Button variant="tertiary" onClick={() => setPendingConfirmEmail(null)}>Try again</Button>
-          </div>
+          </Stack>
         </Card>
       </Shell>
     );
@@ -237,7 +238,7 @@ export default function Login() {
       <Card style={FORM_CARD}>
         {/* Mode toggle: two toggle Tags (the selected one is the Lunar Dust
             fill), each a 44 px target. */}
-        <div role="group" aria-label="Log in or sign up" style={{ display: 'flex', gap: space[8], marginBottom: space[24] }}>
+        <Stack role="group" aria-label="Log in or sign up" direction="row" gap={8} style={{ marginBottom: space[24] }}>
           <Tag
             selected={mode === MODE_LOGIN}
             onClick={() => setMode(MODE_LOGIN)}
@@ -252,9 +253,9 @@ export default function Login() {
           >
             Sign up
           </Tag>
-        </div>
+        </Stack>
 
-        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+        <Stack onSubmit={onSubmit} as="form" gap={16}>
           {signingUp && (
             <Field id="username" label="Username" hint={`At least ${MIN_USERNAME_LENGTH} characters.`}>
               <input
@@ -323,7 +324,7 @@ export default function Login() {
               <TextLink to="/reset-password">Forgot password?</TextLink>
             </p>
           )}
-        </form>
+        </Stack>
       </Card>
     </Shell>
   );

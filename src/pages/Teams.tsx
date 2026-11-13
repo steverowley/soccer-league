@@ -37,12 +37,13 @@ import {
   Card,
   Crest,
   EmptyState,
+  type FormResult,
   FormStrip,
   PageHeader,
   PageShell,
+  Stack,
   StatBlock,
   Tag,
-  type FormResult,
 } from '../shared/ui';
 import { placeLabel, rankLabels, standingsTieKey } from '../shared/utils/rankLabels';
 
@@ -177,10 +178,10 @@ export default function Teams() {
         }
       />
 
-      <section aria-label="Clubs" style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+      <Stack aria-label="Clubs" as="section" gap={24}>
         {/* League filter Tags + the visible club count. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>
-          <div role="group" aria-label="Filter clubs by league" style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+        <Stack direction="row" gap={8} align="center" wrap>
+          <Stack role="group" aria-label="Filter clubs by league" direction="row" gap={8} wrap>
             {options.map((o) => (
               <Tag
                 key={o.id}
@@ -191,11 +192,11 @@ export default function Teams() {
                 {o.label}
               </Tag>
             ))}
-          </div>
+          </Stack>
           <span style={{ ...type.label, ...tone.secondary, marginLeft: 'auto' }} aria-live="polite">
             {visibleTeams.length} clubs
           </span>
-        </div>
+        </Stack>
 
         {visibleTeams.length === 0 ? (
           <EmptyState centred={false}>No clubs are registered in this league yet.</EmptyState>
@@ -213,7 +214,7 @@ export default function Teams() {
             ))}
           </div>
         )}
-      </section>
+      </Stack>
 
       {/* 3 -> 2 -> 1 columns so every card keeps a readable width. */}
       <style>{`
@@ -258,13 +259,13 @@ function TeamCard({ team, stats }: TeamCardProps) {
       to={`/teams/${team.id}`}
       style={{ display: 'flex', flexDirection: 'column', gap: space[16], height: '100%', boxSizing: 'border-box' }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[16], minWidth: 0 }}>
+      <Stack direction="row" gap={16} align="center" style={{ minWidth: 0 }}>
         <Crest color={team.color} size={40} />
         <div style={{ minWidth: 0 }}>
           <h2 style={{ ...type.subheading, margin: 0, overflowWrap: 'anywhere' }}>{team.name}</h2>
           <div style={{ ...type.label, ...tone.secondary, marginTop: space[4] }}>{team.leagueName}</div>
         </div>
-      </div>
+      </Stack>
 
       <div
         style={{

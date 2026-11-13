@@ -44,15 +44,16 @@ import { color, glyph, space, tone, type } from '../shared/design';
 import {
   Card,
   Crest,
+  dataCell,
+  dataHead,
   DataTable,
   EmptyState,
   ErrorState,
   LoadingState,
   PageHeader,
   PageShell,
+  Stack,
   StatBlock,
-  dataCell,
-  dataHead,
 } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getIdolBoard } from '../features/match';
@@ -207,7 +208,7 @@ export default function Idols() {
         </section>
 
         {/* RIGHT: side rail. */}
-        <aside style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+        <Stack as="aside" gap={16}>
           {ready && movers.length > 0 && <RiseCard rows={movers} />}
           <Card style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
             <h2 style={{ ...type.subheading, margin: 0 }}>The risk</h2>
@@ -217,7 +218,7 @@ export default function Idols() {
               removed such players from the record mid-match. The board does not warn twice.
             </p>
           </Card>
-        </aside>
+        </Stack>
       </div>
 
       {/* The board + rail collapse to a single column below 900 px (the rail
@@ -306,7 +307,7 @@ function BoardRow({ row, rank, topScore }: { row: IdolBoardRow; rank: string; to
     <tr>
       <td style={{ ...dataCell(), ...tone.secondary, fontWeight: 700 }}>{rank}</td>
       <td style={dataCell()}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: space[4], minWidth: 0 }}>
+        <Stack gap={4} style={{ minWidth: 0 }}>
           {pId ? (
             <Link to={`/players/${pId}`} style={{ ...tone.primary, fontWeight: 700, textDecoration: 'none' }}>
               {name}
@@ -319,7 +320,7 @@ function BoardRow({ row, rank, topScore }: { row: IdolBoardRow; rank: string; to
             <span aria-hidden="true" style={tone.tertiary}>{glyph.middot}</span>
             <ClubLine teamId={row.team_id} name={club} />
           </span>
-        </div>
+        </Stack>
       </td>
       <td style={{ ...dataCell('right'), fontWeight: 700 }}>{score.toFixed(0)}</td>
       <td className="isl-idols-heat" style={dataCell('right')}>
@@ -376,13 +377,13 @@ function RiseCard({ rows }: { rows: IdolBoardRow[] }) {
               <span style={{ ...type.label, ...tone.tertiary, width: 32, flex: 'none' }}>
                 {placeLabel(ranks[idx] ?? String(idx + 1))}
               </span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: space[4], minWidth: 0, flex: 1 }}>
+              <Stack as="span" gap={4} style={{ minWidth: 0, flex: 1 }}>
                 <span style={{ ...type.small, ...tone.primary, fontWeight: 700, overflowWrap: 'anywhere' }}>{name}</span>
                 <span style={{ ...type.label, ...tone.secondary, display: 'inline-flex', alignItems: 'center', gap: space[8] }}>
                   <Crest color={row.team_id ? (TEAM_COLOR.get(row.team_id) ?? null) : null} size={16} />
                   {row.team_name ?? DASH}
                 </span>
-              </span>
+              </Stack>
               <span style={{ ...type.small, ...tone.primary, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                 {scoreOf(row).toFixed(0)}
               </span>

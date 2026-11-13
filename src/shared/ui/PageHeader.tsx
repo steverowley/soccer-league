@@ -27,6 +27,7 @@ import type { ReactNode } from 'react';
 import { color, space, tone, type } from '../design';
 import { BackLink } from './BackLink';
 import { Breadcrumbs, type Crumb } from './Breadcrumbs';
+import { Stack } from './Stack';
 
 interface PageHeaderProps {
   /** The section of the site, e.g. "Leagues". Never a number. */
@@ -132,15 +133,15 @@ export function PageHeader({
       )}
 
       {meta != null && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[24], marginTop: space[24] }}>
+        <Stack direction="row" gap={24} wrap style={{ marginTop: space[24] }}>
           {meta}
-        </div>
+        </Stack>
       )}
 
       {actions != null && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[12], marginTop: space[24] }}>
+        <Stack direction="row" gap={12} wrap style={{ marginTop: space[24] }}>
           {actions}
-        </div>
+        </Stack>
       )}
     </header>
   );

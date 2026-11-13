@@ -121,6 +121,7 @@ import {
   type PositionedEdge,
   type PositionedNode,
 } from './useForceLayout';
+import { Stack } from '../../../../shared/ui';
 
 // ── Visual constants ─────────────────────────────────────────────────────────
 // Each constant carries (a) its visible effect and (b) the design intent.
@@ -1041,10 +1042,10 @@ function NodeTooltip({
       aria-hidden="true"
     >
       {/* ── Kind ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[8], marginBottom: space[4] }}>
+      <Stack direction="row" gap={8} align="center" style={{ marginBottom: space[4] }}>
         <KindGlyph kind={kindStr} size={8} clubColor={clubColor} />
         <span style={labelStyle}>{kindStr.replace(/_/g, ' ')}</span>
-      </div>
+      </Stack>
 
       {/* ── Display name ───────────────────────────────────────────── */}
       <div
@@ -1069,12 +1070,12 @@ function NodeTooltip({
             {'\u2192 '}
             {seedName}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: space[8] }}>
+          <Stack direction="row" gap={8} align="baseline">
             <span style={labelStyle}>{humaniseKind(relationshipToSeed.kind)}</span>
             <span style={{ ...type.small, ...tone.primary, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
               {formatStrength(relationshipToSeed.strength)}
             </span>
-          </div>
+          </Stack>
         </div>
       ) : (
         // Second-hop node: no direct edge to the seed, so no strength.
@@ -1085,9 +1086,9 @@ function NodeTooltip({
       {metaRows.length > 0 && (
         <>
           <div style={divider} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space[4] }}>
+          <Stack gap={4}>
             {metaRows.map(({ key, value }) => (
-              <div key={key} style={{ display: 'flex', gap: space[8], alignItems: 'baseline' }}>
+              <Stack key={key} direction="row" gap={8} align="baseline">
                 <span style={{ ...labelStyle, flexShrink: 0, minWidth: 64 }}>
                   {key.replace(/_/g, ' ')}
                 </span>
@@ -1102,9 +1103,9 @@ function NodeTooltip({
                 >
                   {value}
                 </span>
-              </div>
+              </Stack>
             ))}
-          </div>
+          </Stack>
         </>
       )}
 
