@@ -64,6 +64,7 @@ export { BackLink } from './BackLink';
 export { Breadcrumbs, type Crumb } from './Breadcrumbs';
 export { Crest, type CrestSize } from './Crest';
 export { StatBlock, type StatTone } from './StatBlock';
+export { ScoreBug } from './ScoreBug';
 export { FormPip, FormStrip, type FormResult } from './FormStrip';
 export { DataTable, dataCell, dataHead } from './DataTable';
 export { FactGrid, FactRows } from './FactList';

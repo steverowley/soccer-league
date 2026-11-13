@@ -26,6 +26,7 @@
 
 import { Link } from 'react-router-dom';
 import StandingsTable from '../components/StandingsTable';
+import { useAuth } from '../features/auth';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
   AsyncView,
@@ -38,6 +39,7 @@ import {
   LoadingState,
   PageShell,
   PreSeasonState,
+  ScoreBug,
   SectionHeader,
   SectionPanel,
   StatBlock,
@@ -80,6 +82,8 @@ const HERO_BODY  =
 export default function Home() {
   usePageTitle(null);
   const publicDb = usePublicReadClient();
+  // The fan's club, highlighted in the standings (null when signed out).
+  const followedTeamId = useAuth().profile?.favourite_team_id ?? null;
 
   // ── Season phase ──────────────────────────────────────────────────────────
   // Decides between the season view and the pre-season view. A failed read
@@ -213,7 +217,7 @@ export default function Home() {
             action={<Button variant="tertiary" to="/leagues">All leagues</Button>}
           />
           <AsyncView state={standings} what="the table" loading="Loading the table">
-            {(rows) => <StandingsTable rows={rows} />}
+            {(rows) => <StandingsTable rows={rows} highlightTeamId={followedTeamId} />}
           </AsyncView>
         </section>
       )}
@@ -484,8 +488,8 @@ function LiveMatchPanel({ match, live, fallbackUpcoming }: { match: any | null; 
         borderBottom: `1px solid ${color.line}`,
       }}>
         <TeamScoreBlock side="Home" name={homeName} location={homeLoc} color={match.home_team?.color ?? null} />
-        <div style={{ ...type.score, textAlign: 'center', whiteSpace: 'nowrap' }}>
-          {homeScore} <span style={tone.tertiary}>{glyph.middot}</span> {awayScore}
+        <div style={{ textAlign: 'center' }}>
+          <ScoreBug home={homeScore} away={awayScore} />
         </div>
         <TeamScoreBlock side="Away" name={awayName} location={awayLoc} color={match.away_team?.color ?? null} />
       </div>

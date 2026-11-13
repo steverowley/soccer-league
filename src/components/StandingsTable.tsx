@@ -79,16 +79,47 @@ const cell: CSSProperties = {
 const cellLeft:  CSSProperties = { ...cell, textAlign: 'left' };
 const cellRight: CSSProperties = { ...cell, textAlign: 'right' };
 
+/** Hidden from sight, read by screen readers ("Your club" on the followed row). */
+const VISUALLY_HIDDEN: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+};
+
+/**
+ * The followed club's row (Broadcast, docs/design-language.md section 6): a
+ * pale wash of the club colour across the row and a solid club-colour edge
+ * on its first cell, so the row reads at a glance without relying on hue
+ * alone. The club colour is data; a club with none gets the raised surface.
+ *
+ * @param clubColor  The club's colour from leagueData, or null.
+ * @returns          Row and first-cell styles.
+ */
+export function followedRowStyle(clubColor: string | null): { row: CSSProperties; first: CSSProperties } {
+  if (clubColor == null) {
+    return { row: { background: color.surfaceRaised }, first: { boxShadow: `inset ${space[4]}px 0 0 ${color.text}` } };
+  }
+  return {
+    row: { background: `color-mix(in srgb, ${clubColor} 14%, transparent)` },
+    first: { boxShadow: `inset ${space[4]}px 0 0 ${clubColor}` },
+  };
+}
+
 /**
  * League standings table.
  *
  * Columns: # | CLUB | P | W | D | L | GD | FORM | PTS
  *
  * @param rows  Standings rows in table order, each stamped with `position`.
+ * @param highlightTeamId  The signed-in fan's club (profiles.favourite_team_id):
+ *                         that row is highlighted. Null or absent: no highlight.
  * @returns     A horizontally scrollable table (it scrolls inside its own
  *              box on a phone; the page itself never overflows).
  */
-function StandingsTable({ rows }: { rows: StandingsRowData[] }) {
+function StandingsTable({ rows, highlightTeamId = null }: { rows: StandingsRowData[]; highlightTeamId?: string | null }) {
   const cols: Array<{ key: string; label: string; align: 'left' | 'right'; width?: number; sortable?: boolean }> = [
     { key: 'pos',    label: '#',    align: 'left',  width: 48,  sortable: true },
     { key: 'club',   label: 'Club', align: 'left' },
@@ -182,6 +213,7 @@ function StandingsTable({ rows }: { rows: StandingsRowData[] }) {
               row={row}
               rank={rankByRow.get(row) ?? String(row.position ?? '')}
               qualifies={total > QUALIFICATION_COUNT && (row.position ?? 0) <= QUALIFICATION_COUNT}
+              followed={highlightTeamId != null && row.id === highlightTeamId}
             />
           ))}
         </tbody>
@@ -230,17 +262,21 @@ function sortRows(rows: StandingsRowData[], sort: SortState): StandingsRowData[]
 
 /**
  * One standings row: rank (success colour when it qualifies), crest and
- * club, the numbers, the form strip and points.
+ * club, the numbers, the form strip and points. The followed club's row
+ * carries the club-colour highlight (followedRowStyle).
  */
-function StandingsRowComponent({ row, rank, qualifies }: { row: StandingsRowData; rank: string; qualifies: boolean }) {
+function StandingsRowComponent({ row, rank, qualifies, followed }: { row: StandingsRowData; rank: string; qualifies: boolean; followed: boolean }) {
   const name = row.team ?? row.club ?? '\u2014';
-  const crest = <Crest color={row.id ? TEAM_COLOR.get(row.id) ?? null : null} size={16} />;
+  const clubColor = row.id ? TEAM_COLOR.get(row.id) ?? null : null;
+  const crest = <Crest color={clubColor} size={16} />;
+  const mark = followed ? followedRowStyle(clubColor) : null;
   return (
-    <tr>
-      <td style={{ ...cellLeft, fontWeight: 700, color: qualifies ? color.success : color.textSecondary }}>
+    <tr data-followed={followed ? '' : undefined} style={mark?.row}>
+      <td style={{ ...cellLeft, ...mark?.first, fontWeight: 700, color: qualifies ? color.success : color.textSecondary }}>
         {rank}
       </td>
       <td style={{ ...cellLeft, fontWeight: 700 }}>
+        {followed && <span style={VISUALLY_HIDDEN}>Your club: </span>}
         {row.team_link ? (
           <Link
             to={row.team_link}

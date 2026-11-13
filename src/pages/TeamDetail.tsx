@@ -313,6 +313,7 @@ export default function TeamDetail() {
           { label: staticTeam.name },
         ]}
         crest={<Crest color={staticTeam.color} size={64} />}
+        accent={staticTeam.color}
         subtitle={staticTeam.location || undefined}
         meta={
           <>

@@ -45,6 +45,12 @@ interface PageHeaderProps {
   meta?: ReactNode;
   /** Buttons for the page (at most one primary). */
   actions?: ReactNode;
+  /**
+   * The club colour (data, e.g. teams.color), drawn as a band down the
+   * header's left edge: Broadcast's on-screen club identity. Club pages
+   * only; the colour is data, never a token.
+   */
+  accent?: string | null;
 }
 
 /**
@@ -67,16 +73,33 @@ export function PageHeader({
   crest,
   meta,
   actions,
+  accent,
 }: PageHeaderProps) {
   const hasTop = back != null || (crumbs != null && crumbs.length > 0);
+  const banded = accent != null && accent !== '';
   return (
     <header
       style={{
         paddingTop: space[32],
         paddingBottom: space[24],
         borderBottom: `1px solid ${color.line}`,
+        ...(banded ? { position: 'relative', paddingLeft: space[24] } : null),
       }}
     >
+      {banded && (
+        <span
+          aria-hidden="true"
+          data-club-band=""
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: space[32],
+            bottom: space[24],
+            width: space[8],
+            background: accent,
+          }}
+        />
+      )}
       {back && <BackLink to={back.to}>{back.label}</BackLink>}
       {crumbs && crumbs.length > 0 && (
         <div style={{ marginTop: back ? space[8] : 0 }}>

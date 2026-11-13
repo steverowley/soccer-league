@@ -139,6 +139,8 @@ admin console's own primitives (`PanelHeader`, `StatCell`, `AdminButton`,
   (BackLink), `crumbs?`, `crest?`, `meta?` (a row of StatBlocks or Tags),
   `actions?`. Index and detail pages use the same component; detail pages add
   back link, crest and meta. Bottom hairline. Every page has exactly one.
+  `accent?` (club pages only): the club colour as an 8 px band down the
+  header's left edge, Broadcast's on-screen club identity. Decorative.
 - **SectionHeader**: h2 for sections within a page. Props: `index` (Roman
   numeral, numbered I, II, III in page order), `label`, `title?`, `action?`.
 - **Card**: the tone-step box (`card-fill`, no outline). `tone`: default,
@@ -157,6 +159,14 @@ admin console's own primitives (`PanelHeader`, `StatCell`, `AdminButton`,
 - **Crest**: the club shield silhouette in the club colour; sizes 16, 24, 40,
   64. Used wherever a club is named in a list, table or header.
 - **StatBlock**: label over value. Replaces HeroStat, StatPair, KeyValue.
+- **ScoreBug**: a score as a broadcast graphic: the two figures in `score`
+  type on the raised surface, a tertiary middot between. Accessible name
+  "2 to 1" ("No score yet" before kick-off). Every featured or match score
+  uses it; lists of results keep plain `small` figures.
+- **Followed club row**: in standings, the signed-in fan's club
+  (`profiles.favourite_team_id`) gets a 14% wash of its club colour and a
+  solid 4 px club-colour edge on the first cell, plus "Your club" for screen
+  readers, so the mark never relies on hue alone.
 - **DataTable** styles: `label` headers, `small` cells, `line-faint` rows,
   tabular numbers, a Crest beside club names.
 - **EmptyState / LoadingState / ErrorState**: as today. Empty sections are

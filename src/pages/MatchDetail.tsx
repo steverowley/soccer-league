@@ -73,6 +73,7 @@ import {
   LoadingState,
   PageHeader,
   PageShell,
+  ScoreBug,
   SectionHeader,
   StatBlock,
   Tag,
@@ -540,8 +541,8 @@ function ScoreDisplay({ status, home, away }: { status: string; home: number; aw
     return <div style={{ ...type.heading, ...tone.tertiary, ...box }}>v</div>;
   }
   return (
-    <div style={{ ...type.score, ...box }}>
-      {home} <span style={tone.tertiary}>{glyph.middot}</span> {away}
+    <div style={{ ...box, textAlign: 'center' }}>
+      <ScoreBug home={home} away={away} />
     </div>
   );
 }
