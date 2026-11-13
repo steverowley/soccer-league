@@ -36,6 +36,7 @@ function makeDb(result: MockResult) {
     order(...a: unknown[])  { record('order', a);  return builder; },
     limit(...a: unknown[])  { record('limit', a);  return builder; },
     eq(...a: unknown[])     { record('eq', a);     return builder; },
+    in(...a: unknown[])     { record('in', a);     return builder; },
     then(resolve: (v: MockResult) => unknown) { return resolve(result); },
   };
 
@@ -93,6 +94,19 @@ describe('getRecentNarratives', () => {
     await getRecentNarratives(db, 20, 'scheduled', 'daybreak');
     const eqs = calls.filter((c) => c.method === 'eq').map((c) => c.args);
     expect(eqs).toEqual([['source', 'scheduled'], ['kind', 'daybreak']]);
+  });
+
+  it('filters to a list of kinds with one in() (a /news desk spans several kinds)', async () => {
+    const { db, calls } = makeDb({ data: [], error: null });
+    await getRecentNarratives(db, 20, undefined, ['journalist_report', 'sports_writer_column']);
+    expect(calls.filter((c) => c.method === 'in').map((c) => c.args)).toEqual([['kind', ['journalist_report', 'sports_writer_column']]]);
+    expect(calls.filter((c) => c.method === 'eq')).toHaveLength(0);
+  });
+
+  it('keeps the author (actor_entity_id) for the byline, null when absent', async () => {
+    const { db } = makeDb({ data: [row({ actor_entity_id: 'e-1' }), row({ id: 'x2' })], error: null });
+    const rows = await getRecentNarratives(db, 20);
+    expect(rows.map((r) => r.actor_entity_id)).toEqual(['e-1', null]);
   });
 
   it('applies no filters when neither is given', async () => {

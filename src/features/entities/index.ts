@@ -39,6 +39,11 @@ export type {
 
 // ── API (Supabase queries) ─────────────────────────────────────────────────
 export { getRecentNarratives } from './api/entities';
+export {
+  DESKS, REPORT_KINDS, PUNDIT_KINDS, COSMOS_KINDS,
+  bulletinLabel, byline, dispatchForm, groupBulletins, kicker, pickLead, splitHeadline,
+} from './logic/newsDesk';
+export type { Bulletin, Byline, Desk, DispatchForm } from './logic/newsDesk';
 
 // ── API — the Chronicle (structured history log, #575) ─────────────────────
 // Typed, queryable read over the narratives table after migration 0076 promoted

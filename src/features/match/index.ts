@@ -134,7 +134,7 @@ export type {
 // Originally in `src/lib/supabase.ts` as singleton-consuming functions;
 // #387 slices 1 + 2 moved them behind the typed-client DI pattern.
 // Future call sites should import from this barrel.
-export { getMatch, getLiveMatches, getUpcomingMatches } from './api/matches';
+export { getMatch, getLiveMatches, getUpcomingMatches, getRecentResults, type RecentResult } from './api/matches';
 
 // ── Teams + roster reads (#387 slice 4) ───────────────────────────────────
 export { getTeams, getTeam, getPlayersForTeam } from './api/teams';

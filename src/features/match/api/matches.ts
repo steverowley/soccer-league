@@ -181,3 +181,39 @@ export async function getUpcomingMatches(db: PublicReadClient, limit = 6) {
   if (error) throw error;
   return dropInvalidMatchListRows(data ?? [], 'getUpcomingMatches');
 }
+
+/** A finished match as the /news results strip shows it. */
+export interface RecentResult {
+  id: string;
+  home_score: number;
+  away_score: number;
+  played_at: string | null;
+  home_team: { id: string; name: string; color: string | null } | null;
+  away_team: { id: string; name: string; color: string | null } | null;
+}
+
+/**
+ * The latest full-time results across every competition, newest first.
+ * `completed` is only published once a match's real-time reveal window has
+ * closed (migration 0081), so no score here can spoil a live match.
+ *
+ * @param db     The public read client.
+ * @param limit  Maximum rows (default 8: one strip).
+ * @returns      Results with both scores present; rows missing a score are dropped.
+ * @throws       The read error, so the caller can show its error state.
+ */
+export async function getRecentResults(db: PublicReadClient, limit = 8): Promise<RecentResult[]> {
+  const { data, error } = await db
+    .from('matches')
+    .select(`
+      id, home_score, away_score, played_at,
+      home_team:teams!matches_home_team_id_fkey (id, name, color),
+      away_team:teams!matches_away_team_id_fkey (id, name, color)
+    `)
+    .eq('status', 'completed')
+    .order('played_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw error;
+  return ((data ?? []) as unknown as Array<Omit<RecentResult, 'home_score' | 'away_score'> & { home_score: number | null; away_score: number | null }>)
+    .filter((r): r is RecentResult => typeof r.home_score === 'number' && typeof r.away_score === 'number');
+}

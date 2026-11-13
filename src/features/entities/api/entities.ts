@@ -28,7 +28,8 @@ import { parseNarrativeRows } from './entities.schema';
  * @param limit   Maximum number of narratives to return (default 50).
  * @param source  Optional source filter ('architect', 'match', 'scheduled').
  * @param kind    Optional kind filter ('architect_whisper', 'pundit_takes',
- *                'balance_whisper', etc.).  When omitted, all kinds match.
+ *                'balance_whisper', etc.), or a list of kinds (one desk on
+ *                /news spans several).  When omitted, all kinds match.
  * @returns       Array of Narrative rows, newest first. An empty array means
  *                the wire is genuinely empty for this filter.
  * @throws        On a query error. This used to warn-log and return `[]`,
@@ -41,7 +42,7 @@ export async function getRecentNarratives(
   db: PublicReadClient,
   limit = 50,
   source?: string,
-  kind?: string,
+  kind?: string | readonly string[],
 ): Promise<Narrative[]> {
   let query = db
     .from('narratives')
@@ -52,8 +53,10 @@ export async function getRecentNarratives(
   if (source) {
     query = query.eq('source', source);
   }
-  if (kind) {
+  if (typeof kind === 'string') {
     query = query.eq('kind', kind);
+  } else if (kind && kind.length > 0) {
+    query = query.in('kind', [...kind]);
   }
 
   const { data, error } = await query;
