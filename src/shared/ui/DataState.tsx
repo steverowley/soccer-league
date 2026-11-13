@@ -20,7 +20,8 @@ import { EmptyState } from './EmptyState';
 import type { AsyncData } from '../hooks/useAsyncData';
 
 const PANEL: CSSProperties = {
-  ...hairline(color.line),
+  ...hairline(color.cardEdge),
+  background: color.cardFill,
   padding: '28px 24px',
   display: 'flex',
   flexDirection: 'column',
@@ -99,7 +100,7 @@ export function ErrorState({
   onRetry?: (() => void) | undefined;
 }) {
   return (
-    <div role="alert" data-state={timedOut ? 'timeout' : 'error'} style={{ ...PANEL, ...(bare ? { borderWidth: 0, padding: '16px 0' } : null), ...style }}>
+    <div role="alert" data-state={timedOut ? 'timeout' : 'error'} style={{ ...PANEL, ...(bare ? { borderWidth: 0, background: 'transparent', padding: '16px 0' } : null), ...style }}>
       <p style={{ ...KICKER, color: color.live }}>{timedOut ? 'No answer' : 'Signal lost'}</p>
       <p style={{ ...type.body, ...tone.primary, margin: 0 }}>
         {timedOut
@@ -137,7 +138,7 @@ export function PreSeasonState({
 }) {
   const date = formatKickoffDate(startsAt);
   return (
-    <div data-state="pre-season" style={{ ...PANEL, ...(bare ? { borderWidth: 0, padding: 0 } : null), ...style }}>
+    <div data-state="pre-season" style={{ ...PANEL, ...(bare ? { borderWidth: 0, background: 'transparent', padding: 0 } : null), ...style }}>
       <p style={{ ...KICKER, ...tone.secondary }}>Pre-season</p>
       <p style={{ ...type.subheading, margin: 0 }}>
         {seasonName} is coming

@@ -212,7 +212,8 @@ function WagerWidget({ match }: { match: MatchRef }) {
       {existing && (
         <div style={{
           ...type.label,
-          ...hairline(color.line),
+          ...hairline(color.cardEdge),
+          background: color.cardFill,
           padding: `${space[12]}px ${space[16]}px`,
           marginBottom: space[24],
           display: 'flex',

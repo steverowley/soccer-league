@@ -14,8 +14,8 @@ describe('Card', () => {
     const root = container.firstChild as HTMLElement;
     expect(root.style.borderWidth).toBe('1px');
     expect(root.style.borderStyle).toBe('solid');
-    // Today these resolve to the structural line and no fill (tokens.test.ts
-    // holds the defaults); a design-direction preview may swap them.
+    // A tone-step fill with no outline (tokens.test.ts holds the values;
+    // docs/design-language.md section 5).
     expect(root.style.borderColor).toBe('var(--isl-card-edge)');
     expect(root.style.background).toBe('var(--isl-card-fill)');
     expect(root.style.padding).toBe('var(--isl-pad-card)');

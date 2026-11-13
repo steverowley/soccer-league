@@ -35,8 +35,8 @@ body,
      means pages inherit it instead of each re-declaring `fontFamily: 'Space
      Mono, monospace'` inline — those inline copies were removed in this change,
      and the eslint.config.js `no-restricted-syntax` rule blocks new ones.
-     It is read through --isl-font-text (tokens.css) so a design-direction
-     preview can swap it; the fallback keeps Space Mono if the token is absent. */
+     It is read through --isl-font-text (tokens.css), now Space Grotesk; the
+     fallback keeps the site readable if the token is ever absent. */
   font-family: var(--isl-font-text, 'Space Mono', monospace);
 }
 

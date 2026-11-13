@@ -16,39 +16,39 @@
  * ──────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Type scale (desktop) ────────────────────────────────────────────── */
-  --isl-size-display: 56px;    /* Home hero only */
-  --isl-size-title: 40px;      /* the page's h1 */
-  --isl-size-heading: 28px;    /* section titles (h2) */
-  --isl-size-subheading: 18px; /* card titles, club and player names in lists */
-  --isl-size-score: 48px;      /* scores and big numbers */
-  --isl-size-body: 15px;       /* prose */
-  --isl-size-small: 13px;      /* data, table cells, captions */
+  /* ── Type scale (desktop): Broadcast, docs/design-language.md section 2 ── */
+  --isl-size-display: 88px;    /* Home hero only */
+  --isl-size-title: 68px;      /* the page's h1 */
+  --isl-size-heading: 36px;    /* section titles (h2) */
+  --isl-size-subheading: 22px; /* card titles, club and player names in lists */
+  --isl-size-score: 76px;      /* scores and big numbers */
+  --isl-size-body: 16px;       /* prose */
+  --isl-size-small: 14px;      /* data, table cells, captions */
   --isl-size-label: 11px;      /* eyebrows, tags, buttons, table headers; the floor */
 
   /* ── Tracking: two values only ───────────────────────────────────────── */
   --isl-tracking-label: 0.12em;   /* uppercase label text */
-  --isl-tracking-heading: 0.02em; /* uppercase headings */
+  --isl-tracking-heading: 0.01em; /* uppercase condensed headings */
 
-  /* ── Type roles: which face and case each role uses ──────────────────────
-   * Today every role is Space Mono, headings and labels uppercase. They are
-   * variables so a design direction can be previewed site-wide by
-   * overriding them (the html[data-direction] blocks at the end of this
-   * file, switched on by src/shared/design/direction.ts). Fans see these
-   * defaults; nothing changes unless a preview is switched on. */
-  --isl-font-text: 'Space Mono', monospace;   /* interface text, tables, data */
-  --isl-font-prose: var(--isl-font-text);     /* long-form reading (type.body) */
-  --isl-font-heading: var(--isl-font-text);   /* display, title, heading, subheading */
-  --isl-font-label: var(--isl-font-text);     /* eyebrows, tags, buttons, table headers */
-  --isl-font-score: var(--isl-font-text);     /* scores and big numbers */
+  /* ── Type roles: which face, case and weight each role uses ───────────────
+   * Broadcast: the match-night graphics package. A condensed stadium-board
+   * face for headings and scores, Space Grotesk (Space Mono's proportional
+   * sibling) for reading and interface text, Space Mono for the uppercase
+   * labels, like a broadcast's lower thirds. Faces are self-hosted
+   * (index.html). Kept as variables so the roles stay named in one place. */
+  --isl-font-text: 'Space Grotesk', system-ui, sans-serif;            /* interface text, tables, data */
+  --isl-font-prose: var(--isl-font-text);                             /* long-form reading (type.body) */
+  --isl-font-heading: 'Big Shoulders Display', 'Arial Narrow', sans-serif; /* display, title, heading, subheading */
+  --isl-font-label: 'Space Mono', monospace;                          /* eyebrows, tags, buttons, table headers */
+  --isl-font-score: var(--isl-font-heading);                          /* scores and big numbers */
   --isl-case-heading: uppercase;
   --isl-case-label: uppercase;
-  --isl-weight-heading: 700;
+  --isl-weight-heading: 800;
   --isl-weight-label: 700;
 
-  /* ── Card surface: a hairline box, no fill (a direction may swap them) ── */
-  --isl-card-fill: transparent;
-  --isl-card-edge: var(--isl-line);
+  /* ── Card surface: a tone step above the canvas, no outline ──────────── */
+  --isl-card-fill: #171717;   /* the canvas one step lighter; every text tone stays at 4.5:1 or more on it */
+  --isl-card-edge: transparent;
 
   /* ── Text tones (all at least 4.5:1 on the canvas) ───────────────────── */
   --isl-text: #E3E0D5;           /* 14.3:1 default */
@@ -129,90 +129,13 @@
 /* Phone (< 600 px): the one place phone values live. */
 @media (max-width: 599px) {
   :root {
-    --isl-size-display: 40px;
-    --isl-size-title: 30px;
-    --isl-size-heading: 22px;
-    --isl-size-subheading: 16px;
-    --isl-size-score: 36px;
+    --isl-size-display: 56px;
+    --isl-size-title: 46px;
+    --isl-size-heading: 28px;
+    --isl-size-subheading: 18px;
+    --isl-size-score: 54px;
     --isl-gutter: 16px;
     --isl-pad-card: 16px;
     --isl-gap-section: 32px;
   }
-}
-
-/* ── Design direction previews ───────────────────────────────────────────────
- * Opt-in only: html[data-direction] is set by src/shared/design/direction.ts
- * when someone opens the site with ?direction=terminal|broadcast|almanac. No
- * fan sees these unless they follow such a link. They override only type
- * roles, sizes, tracking and the card surface; every colour keeps its meaning
- * (red live, purple Architect, one orange action, club colours as data).
- * Spec of each: docs/design-directions.md. The faces load from Google Fonts
- * only while a preview is on (direction.ts). */
-
-/* A · Refined terminal: Space Grotesk (Space Mono's proportional sibling)
-   for words; Space Mono kept for scores. Sentence case, tone-step cards. */
-html[data-direction="terminal"] {
-  --isl-font-text: 'Space Grotesk', system-ui, sans-serif;
-  --isl-font-score: 'Space Mono', monospace;
-  --isl-case-heading: none;
-  --isl-case-label: none;
-  --isl-weight-heading: 600;
-  --isl-weight-label: 500;
-  --isl-tracking-label: 0em;
-  --isl-tracking-heading: -0.015em;
-  --isl-size-title: 44px;
-  --isl-size-heading: 26px;
-  --isl-size-subheading: 18px;
-  --isl-size-body: 16px;
-  --isl-size-small: 14px;
-  --isl-size-label: 13px;
-  --isl-card-fill: #161616;
-  --isl-card-edge: transparent;
-}
-
-/* B · Broadcast: a condensed stadium-board face for headings and scores,
-   Space Grotesk for reading, Space Mono for the uppercase labels (the
-   lower-thirds of a match-night graphics package). Tone-step cards. */
-html[data-direction="broadcast"] {
-  --isl-font-text: 'Space Grotesk', system-ui, sans-serif;
-  --isl-font-heading: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
-  --isl-font-score: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
-  --isl-font-label: 'Space Mono', monospace;
-  --isl-weight-heading: 800;
-  --isl-tracking-heading: 0.01em;
-  --isl-size-display: 88px;
-  --isl-size-title: 68px;
-  --isl-size-heading: 36px;
-  --isl-size-subheading: 22px;
-  --isl-size-score: 76px;
-  --isl-size-body: 16px;
-  --isl-size-small: 14px;
-  --isl-card-fill: #171717;
-  --isl-card-edge: transparent;
-}
-
-/* C · Almanac: a record-book serif for headings and prose, Space Grotesk
-   for the interface, Space Mono for scores. Sentence-case headings. */
-html[data-direction="almanac"] {
-  --isl-font-text: 'Space Grotesk', system-ui, sans-serif;
-  --isl-font-heading: 'Newsreader', Georgia, serif;
-  --isl-font-prose: 'Newsreader', Georgia, serif;
-  --isl-font-score: 'Space Mono', monospace;
-  --isl-case-heading: none;
-  --isl-weight-heading: 500;
-  --isl-weight-label: 600;
-  --isl-tracking-label: 0.08em;
-  --isl-tracking-heading: -0.015em;
-  --isl-size-title: 56px;
-  --isl-size-heading: 30px;
-  --isl-size-subheading: 20px;
-  --isl-size-body: 18px;
-  --isl-size-small: 14px;
-  --isl-size-label: 12px;
-}
-
-@media (max-width: 599px) {
-  html[data-direction="terminal"] { --isl-size-title: 32px; --isl-size-heading: 21px; --isl-size-subheading: 16px; }
-  html[data-direction="broadcast"] { --isl-size-display: 56px; --isl-size-title: 46px; --isl-size-heading: 28px; --isl-size-subheading: 18px; --isl-size-score: 54px; }
-  html[data-direction="almanac"] { --isl-size-title: 38px; --isl-size-heading: 24px; --isl-size-subheading: 18px; --isl-size-body: 17px; }
 }
