@@ -40,6 +40,7 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/match-worker/**'
+      - 'supabase/functions/_shared/**'
       - '.github/workflows/deploy-match-worker.yml'
 
 # Least-privilege GITHUB_TOKEN: this workflow only needs to read the repo to
