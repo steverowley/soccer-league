@@ -167,7 +167,7 @@ const SeasonDetail = lazy(() => import('./pages/SeasonDetail'));
 // media companies, stadiums, and officials without exposing mechanics.
 const World        = lazy(() => import('./pages/World'));
 // Internal design-system reference (astryx-style component shelf), reachable
-// at /dev/components by direct URL only — never linked from fan nav.
+// at /dev/components by direct URL only, never linked from fan nav.
 const Components   = lazy(() => import('./pages/Components'));
 // Catch-all for any URL matching no route below — renders an on-brand 404
 // instead of a blank content area (#532).
@@ -398,8 +398,8 @@ createRoot(document.getElementById('root')!).render(
               <Route path="welcome"             element={<Welcome />} />
 
               {/* Internal design-system reference, modelled on Astryx's own
-                  component browser. Not linked from the header or footer —
-                  direct URL only — so it never reaches a fan. */}
+                  component browser. Not linked from the header or footer
+                  (direct URL only), so it never reaches a fan. */}
               <Route path="dev/components"      element={<Components />} />
 
               {/* Catch-all (#532). Any URL matching no route above renders the
