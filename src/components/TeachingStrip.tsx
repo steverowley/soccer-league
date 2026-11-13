@@ -3,7 +3,7 @@
 // Lightweight, dismissible info strip used by the first-match teaching
 // surface (#379). Pre-#379 a brand-new visitor landing on /matches/:id
 // saw the live commentary without any explanation of who Vox / Nexus-7 /
-// Zara are, what Balance and Chaos do, or how the betting widget works.
+// Zara are, what the Arbiter and the Trickster do, or how the betting widget works.
 // The audit framed this as a teaching gap: hide the *mechanics*, but
 // introduce the *cast* and the *rituals*.
 //

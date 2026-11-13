@@ -79,14 +79,14 @@ describe('eventHeading', () => {
 });
 
 describe('cosmicVoice', () => {
-  // Balance and Chaos share the Architect tone (spec section 4), so their
+  // The Arbiter and the Trickster share the Architect tone (spec section 4), so their
   // bylines are what tell them apart, as in the spec's specimen
-  // ("Chaos · Cosmic voice").
-  it('bylines Balance and Chaos by name, as cosmic voices', () => {
-    expect(cosmicVoice(row({ voice: 'balance' }, 'cosmic_voice'))).toEqual({ name: 'Balance', role: 'Cosmic voice' });
-    expect(cosmicVoice(row({ voice: 'chaos' }, 'cosmic_voice'))).toEqual({ name: 'Chaos', role: 'Cosmic voice' });
-    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('Balance');
-    expect(eventHeading(row({ voice: 'chaos' }, 'cosmic_voice'))).toBe('Chaos');
+  // ("The Trickster · Cosmic voice").
+  it('bylines the Arbiter and the Trickster by name, as cosmic voices', () => {
+    expect(cosmicVoice(row({ voice: 'balance' }, 'cosmic_voice'))).toEqual({ name: 'The Arbiter', role: 'Cosmic voice' });
+    expect(cosmicVoice(row({ voice: 'chaos' }, 'cosmic_voice'))).toEqual({ name: 'The Trickster', role: 'Cosmic voice' });
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('The Arbiter');
+    expect(eventHeading(row({ voice: 'chaos' }, 'cosmic_voice'))).toBe('The Trickster');
   });
 
   it('only applies to cosmic_voice rows', () => {
@@ -100,7 +100,7 @@ describe('cosmicVoice', () => {
   it('does not let a cosmic row borrow a commentator name', () => {
     expect(eventVoice(row({ voice: 'vox' }, 'cosmic_voice'))?.name).toBe('Captain Vox');
     // ...but the cosmic byline wins in the heading:
-    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('Balance');
+    expect(eventHeading(row({ voice: 'balance' }, 'cosmic_voice'))).toBe('The Arbiter');
   });
 });
 

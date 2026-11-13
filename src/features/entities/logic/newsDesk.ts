@@ -5,7 +5,9 @@
 //   splitHeadline   a dispatch has no headline column: its first sentence
 //                   becomes the headline and the rest the body, the way a
 //                   wire story leads with its point.
-//   DESKS           four reader-facing sections instead of nine raw kinds.
+//   DESKS           three reader-facing sections instead of nine raw kinds.
+//                   The cosmic voices are not a desk: they have one panel
+//                   of their own (cosmicVoice names who is speaking).
 //   pickLead        the lead story is reporting (a report or a column), not
 //                   the newest line of any kind: a one-line cosmic whisper
 //                   is atmosphere, not a front page.
@@ -41,20 +43,45 @@ export function dispatchForm(kind: string): DispatchForm {
   return 'report';
 }
 
-/** A reader-facing section of the desk. `kinds: null` is everything. */
+/**
+ * A reader-facing section of the desk. `kinds: null` is everything except
+ * `exclude` (so a brand-new kind still reaches All rather than vanishing).
+ */
 export interface Desk {
-  key: 'all' | 'reports' | 'pundits' | 'cosmos';
+  key: 'all' | 'reports' | 'pundits';
   label: string;
   kinds: readonly string[] | null;
+  exclude?: readonly string[];
 }
 
-/** The four desks, in filter order. */
+/** The three desks, in filter order. The cosmos is never in the feed. */
 export const DESKS: readonly Desk[] = [
-  { key: 'all', label: 'All', kinds: null },
+  { key: 'all', label: 'All', kinds: null, exclude: COSMOS_KINDS },
   { key: 'reports', label: 'Reports', kinds: REPORT_KINDS },
   { key: 'pundits', label: 'Pundits', kinds: PUNDIT_KINDS },
-  { key: 'cosmos', label: 'The Cosmos', kinds: COSMOS_KINDS },
 ];
+
+// ── The cosmic voices ───────────────────────────────────────────────────────
+// Three voices, one panel (owner, 2026-11-13). The Cosmic Architect (the
+// First Voice, Fate) writes the whispers, omens and disturbances; the Arbiter
+// (Second Voice, internally "balance") and the Trickster (Third Voice,
+// internally "chaos") are separate beings and always named as such.
+
+/** Who speaks a cosmic kind. */
+export type CosmicVoiceName = 'The Architect' | 'The Arbiter' | 'The Trickster';
+
+/**
+ * The voice behind a cosmic kind.
+ *
+ * @param kind  `narratives.kind`.
+ * @returns     The Arbiter or the Trickster for their whispers, otherwise
+ *              the Architect (everything else cosmic is its work).
+ */
+export function cosmicVoice(kind: string): CosmicVoiceName {
+  if (kind === 'balance_whisper') return 'The Arbiter';
+  if (kind === 'chaos_whisper') return 'The Trickster';
+  return 'The Architect';
+}
 
 /** Kicker label per kind (the small uppercase line above a headline). */
 const KICKER: Record<string, string> = {
@@ -65,12 +92,12 @@ const KICKER: Record<string, string> = {
   political_decree: 'Decree',
   pundit_takes: 'Pundit',
   bookie_update: 'The bookmakers',
-  architect_whisper: 'The Architect',
-  cosmic_disturbance: 'Cosmic disturbance',
+  architect_whisper: 'Whisper',
+  cosmic_disturbance: 'Disturbance',
   cosmic_omen: 'Omen',
-  balance_whisper: 'Balance',
-  chaos_whisper: 'Chaos',
-  fate_whisper: 'Fate',
+  balance_whisper: 'The Arbiter',
+  chaos_whisper: 'The Trickster',
+  fate_whisper: 'Whisper',
 };
 
 /**

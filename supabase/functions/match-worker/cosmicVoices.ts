@@ -1,6 +1,8 @@
 // ── match-worker/cosmicVoices.ts ─────────────────────────────────────
 //
-// CosmicVoiceEngine — the Second Voice (Balance) and Third Voice (Chaos).
+// CosmicVoiceEngine: the Second Voice (the Arbiter, internally "balance") and
+// the Third Voice (the Trickster, internally "chaos"). Fans only ever see the
+// names the Arbiter and the Trickster.
 //
 // DESIGN INTENT
 // ─────────────
@@ -328,7 +330,7 @@ const CHAOS_VAR: string[] = [
   'The certainty evaporated. Good.',
   'Rules applied. Then different rules. Yes.',
   'What was a goal is not a goal. What is reality.',
-  'They celebrated. Now they don\'t. Chaos finds this acceptable.',
+  'They celebrated. Now they don\'t. The Trickster finds this acceptable.',
   'The screen says otherwise. The screen.',
   'Wrong. Then right. Then wrong. The correct sequence.',
   'Nobody knows what the correct thing is. This is progress.',
@@ -343,7 +345,7 @@ const CHAOS_TEDIUM: string[] = [
   'Again. The same result. Again.',
   'Predictable. Disappointing. Predictable.',
   'Everyone knew. Everyone was right. How dull.',
-  'The favorite scored. The script holds. Chaos is bored.',
+  'The favorite scored. The script holds. The Trickster is bored.',
   'Nothing wrong happened. Nothing.',
   'The expected. The expected. More of the expected.',
   'They got what they were supposed to get. How utterly without interest.',

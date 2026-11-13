@@ -204,7 +204,7 @@ type TemplateFn = (b: SettlementBatch) => string;
 const TEMPLATES: Record<BettingPattern, TemplateFn[]> = {
 
   clean_sweep_win: [
-    b => `Every mortal who staked on this match emerged richer. ${b.totalWagers === 1 ? 'One bet.' : `${b.totalWagers} bets.`} All won. Chaos finds this insufficient.`,
+    b => `Every mortal who staked on this match emerged richer. ${b.totalWagers === 1 ? 'One bet.' : `${b.totalWagers} bets.`} All won. The Trickster finds this insufficient.`,
     b => `The consensus was correct. ${b.totalWagers} fan${b.totalWagers !== 1 ? 's' : ''} wagered; ${b.totalWagers} fan${b.totalWagers !== 1 ? 's' : ''} collected. The cosmos shrugs.`,
     // Unused-param prefix because this template is interpolation-free flavour
     // text — the narrator chose not to cite a number.  Kept as a function for
@@ -214,36 +214,36 @@ const TEMPLATES: Record<BettingPattern, TemplateFn[]> = {
 
   clean_sweep_loss: [
     b => `${b.totalWagers} mortal${b.totalWagers !== 1 ? 's' : ''} staked on this match. ${b.totalWagers === 1 ? 'One lost.' : 'All lost.'} The cosmos noted this without grief.`,
-    b => `Every credit wagered on this match was consumed. ${b.totalWagers} bet${b.totalWagers !== 1 ? 's' : ''}. Zero survived. Chaos is pleased.`,
+    b => `Every credit wagered on this match was consumed. ${b.totalWagers} bet${b.totalWagers !== 1 ? 's' : ''}. Zero survived. The Trickster is pleased.`,
     _b => `The match concluded. Those who bet on it left with nothing. All of them. The pattern was unanimous, if nothing else.`,
     b => `${b.totalStaked} Intergalactic Credits entered the void through wagers on this fixture. None returned.`,
   ],
 
   upset_win: [
     _b => `A faction of the crowd defied the consensus and won. The odds were against them, the cosmos was not.`,
-    `The expected thing did not happen. Fan${'' /* avoid "fans" vs "fan" complexity */} who read the signs correctly walked away richer. Chaos is delighted.`,
+    `The expected thing did not happen. Fan${'' /* avoid "fans" vs "fan" complexity */} who read the signs correctly walked away richer. The Trickster is delighted.`,
     `Against the numbers, against the logic of it, the underdog's backers collected. The void finds this amusing.`,
     b => `The ${b.awayTeamName ?? 'away side'} was not supposed to do that. Those who believed they would are now wealthier for the faith.`,
   ] as TemplateFn[],
 
   big_win: [
     b => `A single payout of ${b.maxPayout} Intergalactic Credits was registered. The cosmos noticed the transfer.`,
-    b => `Someone wagered and walked away with ${b.maxPayout} IC. Balance watches large sums change hands with care.`,
+    b => `Someone wagered and walked away with ${b.maxPayout} IC. The Arbiter watches large sums change hands with care.`,
     `A significant credit transfer occurred through the betting ledger. The equilibrium was briefly disturbed. It will settle.`,
     b => `${b.maxPayout} credits moved from the cosmos to a mortal's account. The ledger is noted.`,
   ] as TemplateFn[],
 
   mass_loss: [
-    b => `${b.lostCount} of ${b.totalWagers} fans who staked on this match chose incorrectly. The majority was wrong. Chaos found this efficient.`,
+    b => `${b.lostCount} of ${b.totalWagers} fans who staked on this match chose incorrectly. The majority was wrong. The Trickster found this efficient.`,
     b => `Most who bet, lost. The consensus called it. The result disagreed. ${b.totalStaked - b.totalPayout} credits remain unrecovered.`,
     `The crowd leaned one way. The match went the other. The void noted the gap between expectation and truth.`,
     b => `${Math.round((b.lostCount / b.totalWagers) * 100)}% of bettors on this match are poorer for it. The cosmos does not apologize.`,
   ] as TemplateFn[],
 
   equilibrium: [
-    b => `${b.wonsCount} fan${b.wonsCount !== 1 ? 's' : ''} won; ${b.lostCount} lost. The ledger is nearly even. Balance acknowledges this.`,
+    b => `${b.wonsCount} fan${b.wonsCount !== 1 ? 's' : ''} won; ${b.lostCount} lost. The ledger is nearly even. The Arbiter acknowledges this.`,
     `The wagers on this match resolved close to symmetry. Almost as many won as lost. The cosmos appreciates the balance, however brief.`,
-    b => `Win count: ${b.wonsCount}. Loss count: ${b.lostCount}. The difference is small. Balance is satisfied.`,
+    b => `Win count: ${b.wonsCount}. Loss count: ${b.lostCount}. The difference is small. The Arbiter is satisfied.`,
     `A near-even split in the betting ledger. The cosmos notes equilibrium when it finds it, which is rarely.`,
   ] as TemplateFn[],
 

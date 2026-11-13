@@ -10,15 +10,17 @@
 //
 //   PageHeader
 //   Results strip   the latest full-time scores, each linking to its match
-//   Desk filter     All / Reports / Pundits / The Cosmos (four desks, not
+//   Desk filter     All / Reports / Pundits (three desks, not
 //                   nine raw kinds; logic/newsDesk.ts)
 //   Lead story      the newest report or column: first sentence as the
 //                   headline, the rest as the standfirst, and a byline
 //   Bulletins       the rest, grouped by the hour they were filed. Each
 //                   dispatch is set in its form: a report (kicker, headline,
-//                   body, byline), a quote (a pundit's words and who said
-//                   them) or a transmission (the Architect and the cosmic
-//                   voices: short, purple-edged, unsigned by statute)
+//                   body, byline) or a quote (a pundit's words and who
+//                   said them)
+//   The Cosmos      one panel for every cosmic line: the Architect, the
+//                   Arbiter and the Trickster, each named (top of the rail
+//                   on desktop, after the lead on a phone)
 //   Rail            "On the desk" (who filed in this edition, linking to
 //                   their pages) and the standing notice
 //
@@ -51,10 +53,12 @@ import {
 } from '../shared/ui';
 import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import {
+  COSMOS_KINDS,
   DESKS,
   bulletinLabel,
   byline,
   collapseFloodRuns,
+  cosmicVoice,
   dispatchForm,
   entityRoute,
   feedLoadPhase,
@@ -66,7 +70,6 @@ import {
   pickLead,
   splitHeadline,
   type Byline,
-  type CollapsedFeedItem,
   type Desk,
   type FeedItem,
   type SingleFeedItem,
@@ -85,6 +88,8 @@ const PAGE_SIZE = 20;
 const MAX_FEED_ROWS = 200;
 /** Results in the strip: six fit the desktop container without scrolling. */
 const RESULTS_IN_STRIP = 6;
+/** Cosmic transmissions read for the Cosmos panel. */
+const COSMOS_LIMIT = 12;
 /** Contributors listed in the rail. */
 const RAIL_AUTHORS = 8;
 
@@ -119,7 +124,7 @@ export default function News() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-load pattern: reset, fetch, settle
     setLoadError(null);
     setLoaded(false);
-    withTimeout(getRecentNarratives(publicDb, limit, undefined, desk.kinds ?? undefined))
+    withTimeout(getRecentNarratives(publicDb, limit, undefined, desk.kinds ?? undefined, desk.exclude))
       .then((data) => {
         if (cancelled) return undefined;
         setRows(data);
@@ -139,6 +144,7 @@ export default function News() {
   }, [publicDb, desk, limit, attempt]);
 
   const results = useAsyncData(() => getRecentResults(publicDb, RESULTS_IN_STRIP), [publicDb]);
+  const cosmos = useAsyncData(() => getRecentNarratives(publicDb, COSMOS_LIMIT, undefined, COSMOS_KINDS), [publicDb]);
 
   const onDesk = (next: Desk) => {
     setDesk(next);
@@ -152,7 +158,7 @@ export default function News() {
   // Lead only on the All desk: a desk is a filtered list the reader asked for.
   const lead = isAll ? pickLead(rows) : null;
   const rest = lead ? rows.filter((n) => n !== lead) : rows;
-  const items: FeedItem[] = isAll ? collapseFloodRuns(rest) : rest.map((n): FeedItem => ({ type: 'single', narrative: n }));
+  const items: FeedItem[] = rest.map((n): FeedItem => ({ type: 'single', narrative: n }));
   const bulletins = groupBulletins(items, (i) => (i.type === 'single' ? i.narrative.created_at : i.latest.created_at));
   const quiet = isAll ? computeQuiet(rows) : null;
   const now = currentTime();
@@ -201,6 +207,7 @@ export default function News() {
             <>
               {quiet && <QuietWireNotice hours={quiet.hours} />}
               {lead && <LeadStory narrative={lead} by={signed(lead)} />}
+              {isAll && <CosmosPanel state={cosmos} className="isl-cosmos-inline" />}
               {bulletins.map((b) => (
                 <section key={b.key} aria-label={`Bulletin, ${bulletinLabel(b.at, now)}`}>
                   <BulletinHeader label={bulletinLabel(b.at, now)} count={b.items.reduce((n, i) => n + (i.type === 'single' ? 1 : i.count), 0)} />
@@ -209,7 +216,7 @@ export default function News() {
                       <div key={item.type === 'single' ? item.narrative.id : `omens-${item.ids[0]}`} style={i > 0 ? DIVIDED : undefined}>
                         {item.type === 'single'
                           ? <Dispatch narrative={item.narrative} by={signed(item.narrative)} />
-                          : <OmenRun item={item} />}
+                          : null}
                       </div>
                     ))}
                   </Card>
@@ -227,6 +234,7 @@ export default function News() {
         </Stack>
 
         <Stack as="aside" gap={16} className="isl-desk-rail" style={{ position: 'sticky', top: space[24] }}>
+          <CosmosPanel state={cosmos} className="isl-cosmos-rail" />
           {contributors.length > 0 && (
             <RailCard title="On the desk">
               <Stack as="ul" gap={12} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -259,6 +267,10 @@ export default function News() {
         @media (max-width: 899px) {
           .isl-desk { grid-template-columns: minmax(0, 1fr) !important; }
           .isl-desk-rail { position: static !important; }
+          .isl-cosmos-rail { display: none; }
+        }
+        @media (min-width: 900px) {
+          .isl-cosmos-inline { display: none; }
         }
         .isl-results::-webkit-scrollbar, .isl-desks::-webkit-scrollbar { display: none; }
       `}</style>
@@ -355,7 +367,6 @@ function DeskFilter({ active, onChange }: { active: Desk; onChange: (d: Desk) =>
       {DESKS.map((d) => (
         <Tag
           key={d.key}
-          tone={d.key === 'cosmos' ? 'architect' : 'default'}
           selected={active.key === d.key}
           onClick={() => onChange(d)}
           style={{ minHeight: 44, paddingLeft: space[16], paddingRight: space[16], flexShrink: 0, whiteSpace: 'nowrap' }}
@@ -390,23 +401,13 @@ function LeadStory({ narrative, by }: { narrative: Narrative; by: Signed }) {
 }
 
 /**
- * One dispatch in a bulletin, set in its form (report, quote, transmission).
+ * One dispatch in a bulletin, set in its form: a pundit's quote or a report.
+ * (The cosmic voices never reach the feed; they have the Cosmos panel.)
  *
  * @returns The dispatch.
  */
 function Dispatch({ narrative, by }: { narrative: Narrative; by: Signed }) {
-  const form = dispatchForm(narrative.kind);
-  if (form === 'transmission') {
-    return (
-      <article style={TRANSMISSION}>
-        <Stack gap={8}>
-          <span style={{ ...type.label, color: color.architect }}>{kicker(narrative.kind)}</span>
-          <p style={{ ...type.body, ...tone.secondary, fontStyle: 'italic', margin: 0 }}>{narrative.summary}</p>
-        </Stack>
-      </article>
-    );
-  }
-  if (form === 'quote') {
+  if (dispatchForm(narrative.kind) === 'quote') {
     return (
       <article style={ITEM_PAD}>
         <Stack gap={12}>
@@ -432,31 +433,80 @@ function Dispatch({ narrative, by }: { narrative: Narrative; by: Signed }) {
   );
 }
 
+// ── The Cosmos panel ────────────────────────────────────────────────────────
+
+/** Transmissions shown before "Show all". */
+const COSMOS_SHOWN = 4;
+
 /**
- * A run of near-identical pre-match omens, collapsed to the newest and a tally.
+ * Everything the cosmos said, in one place: the Cosmic Architect (whispers,
+ * omens, disturbances), the Arbiter and the Trickster. Each line is headed
+ * by the voice that spoke it; runs of pre-match omens collapse to one line.
+ * Rendered twice (top of the rail on desktop, after the lead on a phone),
+ * with CSS showing one, so a phone reader meets it early.
  *
- * @returns The transmission.
+ * @returns The panel, a quiet loading card, or nothing when the cosmos has
+ *          not spoken (or its read failed: the news is not blocked by it).
  */
-function OmenRun({ item }: { item: CollapsedFeedItem }) {
-  const more = item.count - 1;
+function CosmosPanel({ state, className }: { state: AsyncData<Narrative[]>; className: string }) {
+  const [open, setOpen] = useState(false);
+  if (state.status !== 'success' && state.status !== 'loading') return null;
+  const lines: FeedItem[] = state.status === 'success' ? collapseFloodRuns(state.data ?? []) : [];
+  if (state.status === 'success' && lines.length === 0) return null;
+  const shown = open ? lines : lines.slice(0, COSMOS_SHOWN);
   return (
-    <article style={TRANSMISSION}>
-      <Stack gap={8}>
-        <span style={{ ...type.label, color: color.architect }}>{kicker(item.kind)}</span>
-        <p style={{ ...type.body, ...tone.secondary, fontStyle: 'italic', margin: 0 }}>{item.latest.summary}</p>
-        {more > 0 && (
-          <span style={{ ...type.small, ...tone.tertiary }}>
-            And {more} more {more === 1 ? 'omen' : 'omens'} ahead of the coming fixtures.
-          </span>
-        )}
-      </Stack>
-    </article>
+    <div className={className}>
+      <Card tone="architect">
+        <Stack as="section" aria-label="The Cosmos" gap={16}>
+          <Stack gap={4}>
+            <h2 style={{ ...type.subheading, margin: 0 }}>The Cosmos</h2>
+            <span style={{ ...type.label, ...tone.secondary }}>The Architect, the Arbiter and the Trickster</span>
+          </Stack>
+          {state.status === 'loading' ? (
+            <Stack gap={12}>
+              <Skeleton height={12} width={140} />
+              <Skeleton height={16} width="90%" />
+            </Stack>
+          ) : (
+            <Stack as="ul" gap={16} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {shown.map((item) => {
+                const n = item.type === 'single' ? item.narrative : item.latest;
+                const more = item.type === 'collapsed' ? item.count - 1 : 0;
+                const voice = cosmicVoice(n.kind);
+                const what = kicker(n.kind);
+                return (
+                  <Stack as="li" key={item.type === 'single' ? n.id : `omens-${item.ids[0]}`} gap={4}>
+                    <Stack direction="row" gap={8} align="center" wrap style={type.label}>
+                      <span style={{ color: color.architect }}>{voice}</span>
+                      {what !== voice && <><span aria-hidden="true" style={tone.tertiary}>{glyph.middot}</span><span style={tone.secondary}>{what}</span></>}
+                      <span aria-hidden="true" style={tone.tertiary}>{glyph.middot}</span>
+                      <span style={tone.tertiary}>{formatRelativeTime(n.created_at)}</span>
+                    </Stack>
+                    <p style={{ ...type.small, ...tone.primary, fontStyle: 'italic', margin: 0 }}>{n.summary}</p>
+                    {more > 0 && (
+                      <span style={{ ...type.small, ...tone.tertiary }}>
+                        And {more} more {more === 1 ? 'omen' : 'omens'} ahead of the coming fixtures.
+                      </span>
+                    )}
+                  </Stack>
+                );
+              })}
+            </Stack>
+          )}
+          {lines.length > COSMOS_SHOWN && (
+            <div>
+              <Button variant="tertiary" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+                {open ? 'Show fewer' : `Show all ${lines.length}`}
+              </Button>
+            </div>
+          )}
+        </Stack>
+      </Card>
+    </div>
   );
 }
 
 const ITEM_PAD: CSSProperties = { padding: layout.cardPad };
-/** The Architect's and the cosmic voices' lines: a purple edge, no byline. */
-const TRANSMISSION: CSSProperties = { ...ITEM_PAD, boxShadow: `inset ${space[4]}px 0 0 ${color.architect}` };
 const DIVIDED: CSSProperties = { borderTop: `1px solid ${color.lineFaint}` };
 
 /** "Column · 2h ago" (and "Lead story" first on the lead). */

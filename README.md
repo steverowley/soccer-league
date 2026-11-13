@@ -36,7 +36,7 @@ An announcement will go here when the gates open.
 
 - **A live league**: a double round-robin inside each 8-club league: 14 fixtures per team, 224 across the season. Plus the Celestial Cup (top 3 per league) and the Solar Shield (4th–6th), both single-elimination.
 - **Three commentators**: Captain Vox (bombastic veteran), Nexus-7 (clinical AI analyst), Zara Bloom (ex-striker tactician). Their lines are generated procedurally from a seeded grammar, with Claude as an opt-in override, so the broadcast needs no model and a fixture always replays identically.
-- **Two cosmic voices**: Balance and Chaos. Unnamed, uncredited. They interrupt the broadcast when something feels off. You'll learn to recognise them.
+- **Two cosmic voices**: the Arbiter (who insists everything evens out) and the Trickster (who loves an upset). Unnamed, uncredited. They interrupt the broadcast when something feels off. You'll learn to recognise them.
 - **The Galaxy Dispatch**: a news feed of architect whispers, political shifts, geological events, economic tremors, and wager narratives. The world reacts to itself.
 - **A 2D pitch view**: because matches are simulated in real pitch-space, you can watch the dots move: a replay of where every player and the ball actually were, synced to the commentary clock.
 - **A training facility**: between matches, fans can click together to help individual players develop. Collective effort, geometric XP curve.

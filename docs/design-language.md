@@ -96,7 +96,7 @@ and every inline `rgba(227, 224, 213, x)`). 50% and 40% dust (4.3:1 and
 | Club colour | per club (data) | That club | Its crest, its kit on the pitch | Text, borders, page chrome |
 
 Commentators are told apart by name and role, not colour: Vox, Nexus-7 and
-Zara use the text tones; Balance and Chaos (cosmic voices) use `architect`.
+Zara use the text tones; the Arbiter and the Trickster (cosmic voices) use `architect`.
 News categories are neutral tags, except Architect-related ones (`architect`).
 `#FFD700`, `#4FC3F7`, `#64748B`, `#F59E0B`, `#5DE0A6` and any other value not
 in this table are retired.
