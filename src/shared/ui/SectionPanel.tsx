@@ -46,7 +46,8 @@ export function SectionPanel({
     <div
       className={className}
       style={{
-        ...hairline(color.line),
+        ...hairline(color.cardEdge),
+        background:    color.cardFill,
         padding:       padding ?? layout.cardPad,
         display:       'flex',
         flexDirection: 'column',

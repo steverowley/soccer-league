@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { canvasColor, canvasColorVar, color, glow, layout, size, tracking } from './tokens';
+import { canvasColor, canvasColorVar, color, font, glow, layout, size, tracking, type } from './tokens';
 
 const css = readFileSync(join(process.cwd(), 'src', 'shared', 'design', 'tokens.css'), 'utf8');
 
@@ -41,12 +41,37 @@ describe('tokens.ts mirrors tokens.css', () => {
   });
 
   it('every var() the presets reference is declared', () => {
-    const refs = [color, glow, layout, size, tracking]
+    const refs = [color, glow, layout, size, tracking, font]
       .flatMap((group) => Object.values(group))
       .map((v) => /^var\((--isl-[a-z0-9-]+)\)$/.exec(v)?.[1])
       .filter((v): v is string => v != null);
     expect(refs.length).toBeGreaterThan(20);
     for (const name of refs) expect(props.has(name), `${name} is not declared in tokens.css`).toBe(true);
+  });
+
+  it('the type-role and card defaults are today\'s look (a preview is opt-in, never the default)', () => {
+    // Every role resolves to Space Mono, chrome is uppercase and bold, cards are
+    // a hairline with no fill. html[data-direction] blocks may override these;
+    // the :root defaults that every fan sees must not move.
+    expect(props.get('--isl-font-text')).toBe("'Space Mono', monospace");
+    for (const role of ['prose', 'heading', 'label', 'score']) {
+      expect(props.get(`--isl-font-${role}`), role).toBe('var(--isl-font-text)');
+    }
+    expect(props.get('--isl-case-heading')).toBe('uppercase');
+    expect(props.get('--isl-case-label')).toBe('uppercase');
+    expect(props.get('--isl-weight-heading')).toBe('700');
+    expect(props.get('--isl-weight-label')).toBe('700');
+    expect(props.get('--isl-card-fill')).toBe('transparent');
+    expect(props.get('--isl-card-edge')).toBe('var(--isl-line)');
+  });
+
+  it('the presets read their face, case and weight from the role tokens', () => {
+    expect(type.title.fontFamily).toBe('var(--isl-font-heading)');
+    expect(type.title.textTransform).toBe('var(--isl-case-heading)');
+    expect(type.label.fontFamily).toBe('var(--isl-font-label)');
+    expect(type.label.textTransform).toBe('var(--isl-case-label)');
+    expect(type.score.fontFamily).toBe('var(--isl-font-score)');
+    expect(type.body.fontFamily).toBe('var(--isl-font-prose)');
   });
 
   it('every canvas colour equals its CSS custom property', () => {

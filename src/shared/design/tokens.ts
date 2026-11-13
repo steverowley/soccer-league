@@ -51,6 +51,10 @@ export const color = {
   cardYellow: 'var(--isl-card-yellow)',
   /** The 2 px footer rule and nothing else. */
   ruleStrong: 'var(--isl-rule-strong)',
+  /** Card background: none today (a direction preview may give cards a tone step). */
+  cardFill: 'var(--isl-card-fill)',
+  /** Card border: the structural line today (transparent when a direction fills cards). */
+  cardEdge: 'var(--isl-card-edge)',
 } as const;
 
 /** Hover and focus glows: the only elevation the system allows. */
@@ -253,10 +257,38 @@ export const size = {
   label:      'var(--isl-size-label)',
 } as const;
 
+/**
+ * Which face each type role uses. Today all of them resolve to Space Mono;
+ * they are variables so a design direction can be previewed site-wide
+ * (tokens.css `html[data-direction]`, switched by `direction.ts`).
+ */
+export const font = {
+  /** Interface text, tables and data: inherited from the root. */
+  text:    'var(--isl-font-text)',
+  /** Long-form reading (descriptions, articles, commentary). */
+  prose:   'var(--isl-font-prose)',
+  /** Display, title, heading and subheading. */
+  heading: 'var(--isl-font-heading)',
+  /** Eyebrows, tags, buttons, table headers. */
+  label:   'var(--isl-font-label)',
+  /** Scores and big numbers. */
+  score:   'var(--isl-font-score)',
+} as const;
+
+/** Case and weight of the two chrome roles, as variables for the same reason. */
+const chrome = {
+  headingCase:   'var(--isl-case-heading)',
+  labelCase:     'var(--isl-case-label)',
+  headingWeight: 'var(--isl-weight-heading)',
+  labelWeight:   'var(--isl-weight-label)',
+} as const;
+
 const heading = (fontSize: string, lineHeight: number): CSSProperties => ({
+  fontFamily: font.heading,
   fontSize,
-  fontWeight: 700,
-  textTransform: 'uppercase',
+  // CSS variables are valid for any property; csstype's unions just do not list them.
+  fontWeight: chrome.headingWeight as CSSProperties['fontWeight'],
+  textTransform: chrome.headingCase as CSSProperties['textTransform'],
   letterSpacing: tracking.heading,
   lineHeight,
 });
@@ -277,20 +309,22 @@ export const type = {
   subheading: heading(size.subheading, 1.25),
   /** 48 / 36: scores and big numbers. Tabular figures. */
   score: {
+    fontFamily: font.score,
     fontSize: size.score,
     fontWeight: 700,
     lineHeight: 1,
     fontVariantNumeric: 'tabular-nums',
   },
   /** 15: prose (descriptions, articles, commentary). Sentence case. */
-  body:  { fontSize: size.body, fontWeight: 400, lineHeight: 1.6 },
+  body:  { fontFamily: font.prose, fontSize: size.body, fontWeight: 400, lineHeight: 1.6 },
   /** 13: data, table cells, secondary prose, captions. */
   small: { fontSize: size.small, fontWeight: 400, lineHeight: 1.5 },
   /** 11: eyebrows, kickers, meta, tags, buttons, table headers. */
   label: {
+    fontFamily: font.label,
     fontSize: size.label,
-    fontWeight: 700,
-    textTransform: 'uppercase',
+    fontWeight: chrome.labelWeight as CSSProperties['fontWeight'],
+    textTransform: chrome.labelCase as CSSProperties['textTransform'],
     letterSpacing: tracking.label,
     lineHeight: 1.4,
   },

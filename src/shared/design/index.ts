@@ -10,6 +10,7 @@ export {
   layout,
   tracking,
   size,
+  font,
   type,
   numeric,
   glyph,
