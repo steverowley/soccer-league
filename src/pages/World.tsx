@@ -534,7 +534,8 @@ function GraphPlaceholder({
   return (
     <div
       style={{
-        ...hairline(color.line),
+        ...hairline(color.cardEdge),
+        background: color.cardFill,
         minHeight: GRAPH_HEIGHT,
         display: 'flex',
         alignItems: 'center',

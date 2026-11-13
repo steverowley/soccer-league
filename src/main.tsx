@@ -53,14 +53,6 @@ import {
 import { initSentry } from './shared/observability/sentry';
 initSentry();
 
-// Design-direction preview (opt-in via ?direction=..., see
-// shared/design/direction.ts). Applied before React mounts so the first paint
-// is already in the previewed direction. Null for every normal visit, in
-// which case the switcher chunk below is never requested.
-import { initDirection } from './shared/design/direction';
-const activeDirection = initDirection();
-const DirectionSwitcher = lazy(() => import('./components/DirectionSwitcher'));
-
 // ── Providers ────────────────────────────────────────────────────────────────
 // SupabaseProvider must be outermost (AuthProvider depends on it via
 // useSupabase()).  Both sit OUTSIDE the Router so every route — including
@@ -425,11 +417,6 @@ createRoot(document.getElementById('root')!).render(
             regardless of route. A single mount point — every feature
             calls useToast() to push into the same queue. */}
         <ToastViewport />
-        {activeDirection != null && (
-          <Suspense fallback={null}>
-            <DirectionSwitcher initial={activeDirection} />
-          </Suspense>
-        )}
         </ToastProvider>
       </SupabaseProvider>
     </ErrorBoundary>

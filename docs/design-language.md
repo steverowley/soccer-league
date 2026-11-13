@@ -9,6 +9,11 @@ file wins: that folder is the original brand kit; this is the shipped system.
 Owner decisions (2026-10-27): codify what the site already does rather than
 reverting to the original kit; red means live; body text is 15 px.
 
+Owner decision (2026-11-13): adopt **Broadcast**, chosen over two other
+directions after using all three on the live site (docs/design-directions.md):
+the match-night graphics package. Kept by choice: uppercase tracked labels and
+Roman numeral section indexes.
+
 ## 1. Principles
 
 1. **One system, no local styling.** A page uses tokens and shared
@@ -17,35 +22,48 @@ reverting to the original kit; red means live; body text is 15 px.
 2. **Colour means something or it is not there.** About 90% of every screen
    is Lunar Dust on Galactic Abyss. Each accent has exactly one job (section 4).
 3. **Hierarchy comes from size and weight first, tone second.** Fewer, larger
-   steps beat many small ones.
-4. **Hard-edged and quiet.** Square corners, 1 px hairline boxes, no fills,
-   no shadows. Glow is the only elevation, and only on hover and focus.
+   steps beat many small ones. Headings and scores are set big, in the
+   condensed display face, like a broadcast's on-screen graphics.
+4. **Hard-edged and quiet.** Square corners, no shadows. Cards are a tone step
+   above the canvas with no outline; hairlines are for structure (dividers,
+   table rules) and for controls (inputs, tags, secondary buttons). Glow is
+   the only elevation, and only on hover and focus.
 5. **Phone first.** Every token has a phone value; every component is checked
    at 390 px before desktop.
 
 ## 2. Type
 
-One typeface: Space Mono (regular 400, bold 700, italic for quotes).
+Three faces, each with one job, all self-hosted (`index.html`):
+
+- **Big Shoulders Display** (a condensed stadium-board face, 800): display,
+  page titles, section headings, card titles and scores.
+- **Space Grotesk** (Space Mono's proportional sibling, 400 to 700): body,
+  prose, table cells, data and interface text.
+- **Space Mono** (700, uppercase, tracked): labels, the broadcast's lower
+  thirds: eyebrows, kickers, tags, buttons, table headers, meta.
 
 | Token | Desktop | Phone (< 600 px) | Use | Style |
 |---|---|---|---|---|
-| `display` | 56 | 40 | Home hero only | 700, uppercase, tracking 0.02em, leading 1.05 |
-| `title` | 40 | 30 | Page title (the page's h1) | 700, uppercase, tracking 0.02em, leading 1.1 |
-| `heading` | 28 | 22 | Section title (h2) | 700, uppercase, tracking 0.02em, leading 1.15 |
-| `subheading` | 18 | 16 | Card title, club and player names in lists | 700, uppercase, tracking 0.02em, leading 1.25 |
-| `score` | 48 | 36 | Scores and big numbers | 700, tabular figures, leading 1 |
-| `body` | 15 | 15 | Prose: descriptions, articles, commentary | 400, sentence case, leading 1.6 |
-| `small` | 13 | 13 | Data, table cells, secondary prose, captions | 400 (700 for emphasis), leading 1.5 |
-| `label` | 11 | 11 | Eyebrows, kickers, meta, tags, buttons, table headers | 700, uppercase, tracking 0.12em, leading 1.4 |
+| `display` | 88 | 56 | Home hero only | Big Shoulders 800, uppercase, tracking 0.01em, leading 1.05 |
+| `title` | 68 | 46 | Page title (the page's h1) | Big Shoulders 800, uppercase, tracking 0.01em, leading 1.1 |
+| `heading` | 36 | 28 | Section title (h2) | Big Shoulders 800, uppercase, tracking 0.01em, leading 1.15 |
+| `subheading` | 22 | 18 | Card title, club and player names in lists | Big Shoulders 800, uppercase, tracking 0.01em, leading 1.25 |
+| `score` | 76 | 54 | Scores and big numbers | Big Shoulders 700, tabular figures, leading 1 |
+| `body` | 16 | 16 | Prose: descriptions, articles, commentary | Space Grotesk 400, sentence case, leading 1.6 |
+| `small` | 14 | 14 | Data, table cells, secondary prose, captions | Space Grotesk 400 (700 for emphasis), leading 1.5 |
+| `label` | 11 | 11 | Eyebrows, kickers, meta, tags, buttons, table headers | Space Mono 700, uppercase, tracking 0.12em, leading 1.4 |
 
 Rules:
 - 11 px is the floor. Nothing renders smaller.
-- Two trackings only: 0.12em on uppercase `label` text, 0.02em on uppercase
+- Two trackings only: 0.12em on uppercase `label` text, 0.01em on uppercase
   headings. Body and small text use none.
 - Headings and interface chrome are uppercase, including names used as
   titles (player, manager, club, character pages). Prose, quotes, commentary
   and news headlines are sentence case: they are writing, not chrome.
 - Numbers that line up (tables, scores, stats) use tabular figures.
+- The faces are roles, not literals: `--isl-font-heading`, `--isl-font-text`,
+  `--isl-font-prose`, `--isl-font-label`, `--isl-font-score` in tokens.css,
+  read by the `type.*` presets. Never name a face in a component.
 
 ## 3. Text tones
 
@@ -66,8 +84,9 @@ and every inline `rgba(227, 224, 213, x)`). 50% and 40% dust (4.3:1 and
 | Token | Value | Means | Allowed on | Never on |
 |---|---|---|---|---|
 | `bg` | `#111111` | Canvas | Page background | |
+| `card-fill` | `#171717` | A card: one tone step above the canvas | Card, SectionPanel, error and pre-season panels, graph frames | Inputs, menus (those are `surface-raised`) |
 | `surface-raised` | `#1F1F1F` | Something you type into or that floats | Inputs, toasts, menus | Cards, panels |
-| `line` | Dust at 18% | Structure | Card borders, dividers, table rules | Text |
+| `line` | Dust at 18% | Structure | Dividers, table rules, control and tag outlines | Text, card outlines |
 | `line-faint` | Dust at 10% | Quiet structure | Row dividers inside tables | Text |
 | `live` | `#FF4F5E` | Happening now, or went wrong | Live dot and badge, error messages, red cards | Categories, decoration, ranks |
 | `architect` | `#9A5CF4` | The Cosmic Architect and the cosmic voices; keyboard focus | Architect panels, interventions, cosmic voice lines, focus ring | Links, labels, player pages |
@@ -95,7 +114,10 @@ chrome.
 - Spacing steps: 4, 8, 12, 16, 24, 32, 48, 64 px. Nothing else.
 - Container: max 1248 px; side padding 16 px on phones, 24 px from 600 px.
 - Page rhythm: page header, then 48 px (32 on phones) between sections.
-- Cards: 1 px `line` border, no fill, padding 24 (16 on phones).
+- Cards: `card-fill` (`#171717`), no outline, padding 24 (16 on phones). The
+  Architect and live tones keep their coloured 1 px outline on the canvas,
+  because the outline is their meaning. Every text tone stays at 4.5:1 or
+  more on the card fill.
 - Radius 0 everywhere. Round only: status dots, player avatars.
 - Borders 1 px. 2 px only for the footer rule.
 - Every page sits in a page shell: header, content, footer pinned to the
@@ -119,8 +141,9 @@ admin console's own primitives (`PanelHeader`, `StatCell`, `AdminButton`,
   back link, crest and meta. Bottom hairline. Every page has exactly one.
 - **SectionHeader**: h2 for sections within a page. Props: `index` (Roman
   numeral, numbered I, II, III in page order), `label`, `title?`, `action?`.
-- **Card**: hairline box. `tone`: default, `architect` (Architect content),
-  `live` (a live match).
+- **Card**: the tone-step box (`card-fill`, no outline). `tone`: default,
+  `architect` (Architect content: purple outline and glow), `live` (a live
+  match: red outline).
 - **Button**: `primary` (action fill; one per view), `secondary` (hairline
   outline), `tertiary` (text with a ▸ marker). Uppercase `label` type.
   Minimum 44 px tall on touch.

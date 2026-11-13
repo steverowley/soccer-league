@@ -501,8 +501,8 @@ export function RelationshipGraph({
     position: 'relative',
     width: '100%',
     height,
-    background: 'transparent',
-    ...hairline(color.line),
+    background: color.cardFill,
+    ...hairline(color.cardEdge),
     boxSizing: 'border-box',
   };
 

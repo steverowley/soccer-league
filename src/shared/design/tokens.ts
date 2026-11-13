@@ -51,9 +51,9 @@ export const color = {
   cardYellow: 'var(--isl-card-yellow)',
   /** The 2 px footer rule and nothing else. */
   ruleStrong: 'var(--isl-rule-strong)',
-  /** Card background: none today (a direction preview may give cards a tone step). */
+  /** Card background: the canvas one tone step lighter. */
   cardFill: 'var(--isl-card-fill)',
-  /** Card border: the structural line today (transparent when a direction fills cards). */
+  /** Card border: transparent (a filled card needs no outline). */
   cardEdge: 'var(--isl-card-edge)',
 } as const;
 
@@ -258,9 +258,10 @@ export const size = {
 } as const;
 
 /**
- * Which face each type role uses. Today all of them resolve to Space Mono;
- * they are variables so a design direction can be previewed site-wide
- * (tokens.css `html[data-direction]`, switched by `direction.ts`).
+ * Which face each type role uses (Broadcast, docs/design-language.md
+ * section 2): a condensed display face for headings and scores, Space
+ * Grotesk for text and prose, Space Mono for labels. Variables, so the roles
+ * are named in one place (tokens.css) and the presets never hard-code a face.
  */
 export const font = {
   /** Interface text, tables and data: inherited from the root. */

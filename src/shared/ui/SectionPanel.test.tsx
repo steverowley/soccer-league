@@ -37,7 +37,7 @@ describe('SectionPanel', () => {
     const header = getByText('Title').parentElement as HTMLElement;
     expect(header.tagName).toBe('HEADER');
     expect(header.style.borderBottom).toMatch(/1px solid/);
-    expect(header.style.textTransform).toBe('var(--isl-case-label)'); // uppercase by default (tokens.test.ts)
+    expect(header.style.textTransform).toBe('var(--isl-case-label)'); // uppercase (tokens.test.ts)
     expect(header.style.fontSize).toBe('var(--isl-size-label)');
   });
 

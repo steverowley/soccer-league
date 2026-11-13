@@ -49,20 +49,30 @@ describe('tokens.ts mirrors tokens.css', () => {
     for (const name of refs) expect(props.has(name), `${name} is not declared in tokens.css`).toBe(true);
   });
 
-  it('the type-role and card defaults are today\'s look (a preview is opt-in, never the default)', () => {
-    // Every role resolves to Space Mono, chrome is uppercase and bold, cards are
-    // a hairline with no fill. html[data-direction] blocks may override these;
-    // the :root defaults that every fan sees must not move.
-    expect(props.get('--isl-font-text')).toBe("'Space Mono', monospace");
-    for (const role of ['prose', 'heading', 'label', 'score']) {
-      expect(props.get(`--isl-font-${role}`), role).toBe('var(--isl-font-text)');
-    }
+  it('the type roles and card surface are the adopted Broadcast look', () => {
+    // docs/design-language.md section 2: condensed headings and scores, Space
+    // Grotesk text, Space Mono uppercase labels, tone-step cards with no
+    // outline. Owner kept uppercase labels and Roman numeral section indexes.
+    expect(props.get('--isl-font-text')).toBe("'Space Grotesk', system-ui, sans-serif");
+    expect(props.get('--isl-font-heading')).toBe("'Big Shoulders Display', 'Arial Narrow', sans-serif");
+    expect(props.get('--isl-font-score')).toBe('var(--isl-font-heading)');
+    expect(props.get('--isl-font-label')).toBe("'Space Mono', monospace");
+    expect(props.get('--isl-font-prose')).toBe('var(--isl-font-text)');
     expect(props.get('--isl-case-heading')).toBe('uppercase');
     expect(props.get('--isl-case-label')).toBe('uppercase');
-    expect(props.get('--isl-weight-heading')).toBe('700');
+    expect(props.get('--isl-weight-heading')).toBe('800');
     expect(props.get('--isl-weight-label')).toBe('700');
-    expect(props.get('--isl-card-fill')).toBe('transparent');
-    expect(props.get('--isl-card-edge')).toBe('var(--isl-line)');
+    expect(props.get('--isl-card-fill')).toBe('#171717');
+    expect(props.get('--isl-card-edge')).toBe('transparent');
+  });
+
+  it('the type roles are self-hosted, so no fan request leaves the site for a font', () => {
+    const html = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
+    for (const face of ['Space Mono', 'Space Grotesk', 'Big Shoulders Display']) {
+      expect(html, `${face} has no @font-face in index.html`).toContain(`font-family: '${face}'`);
+    }
+    expect(html).not.toMatch(/fonts\.googleapis|fonts\.gstatic/);
+    expect(css).not.toContain('data-direction'); // the preview blocks went with the choice
   });
 
   it('the presets read their face, case and weight from the role tokens', () => {
