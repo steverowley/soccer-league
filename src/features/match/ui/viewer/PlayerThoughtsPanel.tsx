@@ -18,7 +18,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { color, numeric, space, tone, type } from '../../../../shared/design';
-import { SectionPanel } from '../../../../shared/ui';
+import { SectionPanel, Stack } from '../../../../shared/ui';
 import { usePublicReadClient } from '../../../../shared/supabase/SupabaseProvider';
 import {
   getPersona,
@@ -244,7 +244,7 @@ function Shell({ children }: { children: ReactNode }) {
 function StatBar({ label, value }: { label: string; value: number | null }) {
   const pct = value != null ? Math.max(0, Math.min(100, (value / 99) * 100)) : 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: space[8], marginBottom: space[4] }}>
+    <Stack direction="row" gap={8} align="center" style={{ marginBottom: space[4] }}>
       <div style={{ ...type.small, ...tone.secondary, width: 88, flex: 'none' }}>{label}</div>
       <div style={{ flex: 1, height: 6, background: color.line, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color.text }} />
@@ -252,6 +252,6 @@ function StatBar({ label, value }: { label: string; value: number | null }) {
       <div style={{ ...type.small, ...numeric, ...tone.primary, width: 24, textAlign: 'right', flex: 'none' }}>
         {value ?? '—'}
       </div>
-    </div>
+    </Stack>
   );
 }

@@ -34,6 +34,7 @@ import {
   PageShell,
   PreSeasonState,
   SectionHeader,
+  Stack,
   StatBlock,
 } from '../shared/ui';
 
@@ -183,10 +184,10 @@ function ClubRoster({ teams }: { teams: Team[] }) {
             }}
           >
             <Crest color={team.color} size={24} />
-            <span style={{ display: 'flex', flexDirection: 'column', gap: space[4], minWidth: 0 }}>
+            <Stack as="span" gap={4} style={{ minWidth: 0 }}>
               <span style={{ ...type.subheading, overflowWrap: 'anywhere' }}>{team.name}</span>
               <span style={{ ...type.label, ...tone.secondary }}>{team.location}</span>
-            </span>
+            </Stack>
           </Link>
         ))}
       </div>

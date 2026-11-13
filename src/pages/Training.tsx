@@ -38,6 +38,7 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
   toRoman,
@@ -428,11 +429,11 @@ function ClickerWidget({ user, player }: { user: TrainingUser; player: TrainingP
         #{player.jersey_number ?? '\u2014'} {glyph.middot} {player.position ?? '\u2014'}
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[24], marginTop: space[16] }}>
+      <Stack direction="row" gap={24} wrap style={{ marginTop: space[16] }}>
         <StatBlock label="Stat bumps earned" value={bumps.toLocaleString()} />
         <StatBlock label="Lifetime XP" value={loaded ? lifetimeXp.toLocaleString() : '\u2014'} />
         <StatBlock label="To next bump" value={xpToGo > 0 ? `${xpToGo.toLocaleString()} XP` : 'Ready'} />
-      </div>
+      </Stack>
 
       {/* XP progress towards the next stat bump. The figures sit below the
           bar so they stay readable when the fill is narrow. */}

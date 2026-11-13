@@ -58,6 +58,8 @@ import { Link, useParams } from 'react-router-dom';
 import { color, space, tone, type } from '../shared/design';
 import {
   Crest,
+  dataCell,
+  dataHead,
   DataTable,
   EmptyState,
   FactRows,
@@ -65,10 +67,9 @@ import {
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
-  dataCell,
-  dataHead,
   toRoman,
 } from '../shared/ui';
 import { TEAMS_BY_LEAGUE } from '../data/leagueData';
@@ -470,13 +471,13 @@ export default function EntityDetail() {
             items={snippets.map((s) => ({
               key: s.id,
               content: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: space[8] }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>
+                <Stack gap={8}>
+                  <Stack direction="row" gap={8} align="center" wrap>
                     <Tag>{words(s.kind)}</Tag>
                     {s.mood && <span style={{ ...type.label, ...tone.tertiary }}>{words(s.mood)}</span>}
-                  </div>
+                  </Stack>
                   <span style={{ ...type.body, ...(isAged(s, now) ? tone.secondary : tone.primary) }}>{s.text}</span>
-                </div>
+                </Stack>
               ),
             }))}
           />
@@ -506,10 +507,10 @@ export default function EntityDetail() {
       {entityId && bodyDone && (
         <section>
           <SectionHeader index={nextIndex()} label="Connections" title="Web of influence" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+          <Stack gap={24}>
             {connections.length > 0 && <ConnectionsTable rows={connections} />}
             <RelationshipGraph entityId={entityId} />
-          </div>
+          </Stack>
         </section>
       )}
     </PageShell>

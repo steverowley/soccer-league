@@ -51,6 +51,7 @@ import {
   PageHeader,
   PageShell,
   Skeleton,
+  Stack,
   Tag,
   type TagTone,
 } from '../shared/ui';
@@ -216,7 +217,7 @@ export default function News() {
       <div className="isl-wire" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', gap: space[24], alignItems: 'start' }}>
         {/* LEFT: lead + filters + feed. The filter Tags render in EVERY
             phase, so a filter that empties the feed can always be undone. */}
-        <div aria-busy={phase === 'loading'} style={{ display: 'flex', flexDirection: 'column', gap: space[16], minWidth: 0 }}>
+        <Stack aria-busy={phase === 'loading'} gap={16} style={{ minWidth: 0 }}>
           {phase === 'loading' && (
             <>
               <LoadingState label="Tuning in to the cosmos" style={{ paddingTop: 0, paddingBottom: 0 }} />
@@ -272,15 +273,15 @@ export default function News() {
               )}
 
               {canLoadMore && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: space[16] }}>
+                <Stack direction="row" justify="center" style={{ marginTop: space[16] }}>
                   <Button variant="secondary" onClick={() => setLimit((p) => Math.min(p * 2, MAX_FEED_ROWS))}>
                     Load More
                   </Button>
-                </div>
+                </Stack>
               )}
             </>
           )}
-        </div>
+        </Stack>
 
         {/* RIGHT: sticky rail. */}
         <aside className="isl-wire-rail" style={{ display: 'flex', flexDirection: 'column', gap: space[16], position: 'sticky', top: space[24] }}>
@@ -556,7 +557,7 @@ interface FiltersProps {
 function Filters({ active, onChange }: FiltersProps) {
   const tagStyle: CSSProperties = { minHeight: 44, paddingLeft: space[12], paddingRight: space[12] };
   return (
-    <div role="group" aria-label="Filter dispatches by category" style={{ display: 'flex', gap: space[8], flexWrap: 'wrap' }}>
+    <Stack role="group" aria-label="Filter dispatches by category" direction="row" gap={8} wrap>
       <Tag selected={active === FILTER_ALL} onClick={() => onChange(FILTER_ALL)} style={tagStyle}>
         All
       </Tag>
@@ -571,7 +572,7 @@ function Filters({ active, onChange }: FiltersProps) {
           {kind.label}
         </Tag>
       ))}
-    </div>
+    </Stack>
   );
 }
 

@@ -28,6 +28,7 @@ import { Menu, X } from 'lucide-react';
 import { useAuth } from '../features/auth';
 import { color, glow, glyph, hairline, layout, numeric, space, tone, type } from '../shared/design';
 import { Button } from '../shared/ui/Button';
+import { Stack } from '../shared/ui';
 
 const NAV_LINKS = [
   { label: 'Home',    to: '/'        },
@@ -101,11 +102,11 @@ export default function Header() {
           className="isl-desktop-cluster"
           style={{ display: 'flex', alignItems: 'center', gap: space[16], marginLeft: 'auto', minWidth: 0 }}
         >
-          <nav aria-label="Main" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Stack aria-label="Main" as="nav" direction="row" align="center" wrap>
             {NAV_LINKS.map(({ label, to }) => (
               <NavLink key={to} to={to} active={isActive(to)}>{label}</NavLink>
             ))}
-          </nav>
+          </Stack>
 
           <div style={{ flexShrink: 0 }}>
             {user ? <AccountMenu /> : <Button variant="secondary" to="/login">Sign up</Button>}

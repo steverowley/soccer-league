@@ -24,7 +24,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, Field, FormError, PageHeader, PageShell, inputStyle } from '../shared/ui';
+import { Button, Card, Field, FormError, inputStyle, PageHeader, PageShell, Stack } from '../shared/ui';
 import { space, tone, type } from '../shared/design';
 import { useSupabase } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
@@ -129,7 +129,7 @@ function RequestResetForm({
 
   return (
     <Card style={FORM_CARD}>
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+      <Stack onSubmit={onSubmit} as="form" gap={16}>
         <Field id="email" label="Email">
           <input id="email" type="email" autoComplete="email" required
             value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
@@ -138,7 +138,7 @@ function RequestResetForm({
         <SubmitButton busy={busy}>
           {busy ? 'Sending\u2026' : 'Send reset link'}
         </SubmitButton>
-      </form>
+      </Stack>
     </Card>
   );
 }
@@ -167,7 +167,7 @@ function UpdatePasswordForm({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <Card style={FORM_CARD}>
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: space[16] }}>
+      <Stack onSubmit={onSubmit} as="form" gap={16}>
         <Field id="new-password" label="New password" hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}>
           <input id="new-password" type="password" autoComplete="new-password" required
             value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
@@ -176,7 +176,7 @@ function UpdatePasswordForm({ onSuccess }: { onSuccess: () => void }) {
         <SubmitButton busy={busy}>
           {busy ? 'Saving\u2026' : 'Save new password'}
         </SubmitButton>
-      </form>
+      </Stack>
     </Card>
   );
 }

@@ -42,6 +42,7 @@ import {
   ScoreBug,
   SectionHeader,
   SectionPanel,
+  Stack,
   StatBlock,
 } from '../shared/ui';
 import { color, glyph, layout, numeric, space, tone, type } from '../shared/design';
@@ -137,14 +138,14 @@ export default function Home() {
           instead of guessing which world to paint. The clubs are static
           canon, so they still render. */}
       {(phase.status === 'error' || phase.status === 'timeout') && (
-        <section style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+        <Stack as="section" gap={32}>
           <ErrorState
             what="the league calendar"
             timedOut={phase.status === 'timeout'}
             onRetry={() => { phase.retry(); fixtures.retry(); }}
           />
           <LeagueClubsGrid />
-        </section>
+        </Stack>
       )}
 
       {phase.status === 'loading' && (
@@ -163,7 +164,7 @@ export default function Home() {
             subtitle="Every club is ready. Fixtures appear here once the season is scheduled."
             action={<Button variant="tertiary" to="/teams">All clubs</Button>}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+          <Stack gap={32}>
             <PreSeasonState
               seasonName={phase.data.nextName}
               startsAt={phase.data.startsAt}
@@ -171,7 +172,7 @@ export default function Home() {
             />
             {upcomingMatches.length > 0 && <UpcomingPanel matches={upcomingMatches} />}
             <LeagueClubsGrid />
-          </div>
+          </Stack>
         </section>
       )}
 
@@ -260,12 +261,12 @@ function LeagueClubsGrid() {
           </Link>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginTop: space[16], display: 'flex', flexDirection: 'column', gap: space[8] }}>
             {(TEAMS_BY_LEAGUE[league.id] ?? []).map((team) => (
-              <li key={team.id} style={{ display: 'flex', alignItems: 'center', gap: space[8] }}>
+              <Stack key={team.id} as="li" direction="row" gap={8} align="center">
                 <Crest color={team.color} size={16} />
                 <Link to={`/teams/${team.id}`} style={{ ...type.small, color: color.text, textDecoration: 'none' }}>
                   {team.name}
                 </Link>
-              </li>
+              </Stack>
             ))}
           </ul>
         </Card>
@@ -325,7 +326,7 @@ function Hero({ phase, liveMatchCount }: { phase: SeasonPhase | null; liveMatchC
         </picture>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24], minWidth: 0, justifyContent: 'center' }}>
+      <Stack gap={24} justify="center" style={{ minWidth: 0 }}>
         {/* Season (from the DB) and, only when true, the live badge. */}
         <div style={{
           ...type.label,
@@ -359,7 +360,7 @@ function Hero({ phase, liveMatchCount }: { phase: SeasonPhase | null; liveMatchC
 
         {/* The page's one primary button: a live match when one exists,
             otherwise the fixtures (in season) or the clubs (pre-season). */}
-        <div style={{ display: 'flex', gap: space[12], flexWrap: 'wrap' }}>
+        <Stack direction="row" gap={12} wrap>
           {isLive ? (
             <Button variant="primary" to="/matches">Watch live match</Button>
           ) : phase?.phase === 'pre-season' ? (
@@ -368,7 +369,7 @@ function Hero({ phase, liveMatchCount }: { phase: SeasonPhase | null; liveMatchC
             <Button variant="primary" to="/matches">See fixtures</Button>
           )}
           <Button to="/leagues">Browse leagues</Button>
-        </div>
+        </Stack>
 
         {/* Facts only: club and league counts are static canon; the season
             reads the DB. */}
@@ -385,7 +386,7 @@ function Hero({ phase, liveMatchCount }: { phase: SeasonPhase | null; liveMatchC
             : <StatBlock label="Clubs" value={clubCount} />}
           <StatBlock label="Leagues" value={LEAGUES.length} />
         </div>
-      </div>
+      </Stack>
     </section>
   );
 }
@@ -413,13 +414,13 @@ function LiveMatchPanel({ match, live, fallbackUpcoming }: { match: any | null; 
       return (
         <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: space[16], minHeight: 280 }}>
           <span style={{ ...type.label, ...tone.secondary }}>Next up</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[12] }}>
+          <Stack direction="row" gap={12} align="center" wrap>
             <Crest color={fallbackUpcoming.home_team?.color ?? null} size={24} />
             <h3 style={{ ...type.subheading, margin: 0 }}>{homeName}</h3>
             <span style={{ ...type.label, ...tone.tertiary }}>v</span>
             <Crest color={fallbackUpcoming.away_team?.color ?? null} size={24} />
             <h3 style={{ ...type.subheading, margin: 0 }}>{awayName}</h3>
-          </div>
+          </Stack>
           {ko && (
             <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
               Kick-off {ko.toLocaleString()}
@@ -548,7 +549,7 @@ function GoalsSoFar({ live, homeName, awayName }: { live: LiveScoreView | null; 
  */
 function TeamScoreBlock({ side, name, location, color: clubColor }: { side: string; name: string; location: string; color: string | null }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: space[12], minWidth: 0 }}>
+    <Stack gap={12} align="center" style={{ minWidth: 0 }}>
       <Crest color={clubColor} size={40} />
       <h3 style={{ ...type.subheading, textAlign: 'center', margin: 0, overflowWrap: 'anywhere' }}>
         {name}
@@ -557,7 +558,7 @@ function TeamScoreBlock({ side, name, location, color: clubColor }: { side: stri
         {side}
         {location && <> {glyph.middot} {location}</>}
       </div>
-    </div>
+    </Stack>
   );
 }
 

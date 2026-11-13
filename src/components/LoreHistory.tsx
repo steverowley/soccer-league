@@ -23,7 +23,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { TEAMS_BY_LEAGUE } from '../data/leagueData';
 import { color, size, space, tone, type } from '../shared/design';
-import { Card, Crest, DataTable, StatBlock, dataCell, dataHead } from '../shared/ui';
+import { Card, Crest, dataCell, dataHead, DataTable, Stack, StatBlock } from '../shared/ui';
 import { rankLabels } from '../shared/utils/rankLabels';
 import {
   getClubLore,
@@ -190,14 +190,14 @@ export function ClubHistory({ clubId }: { clubId: string }) {
   const legends = legendsForClub(clubId);
 
   return (
-    <div className="isl-lore" style={{ display: 'flex', flexDirection: 'column', gap: space[32] }}>
+    <Stack className="isl-lore" gap={32}>
       <LoreStyles />
       {archive.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+        <Stack gap={12}>
           {archive.map((t) => (
             <Quote key={t}>{t}</Quote>
           ))}
-        </div>
+        </Stack>
       )}
 
       <div
@@ -223,7 +223,7 @@ export function ClubHistory({ clubId }: { clubId: string }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+      <Stack gap={12}>
         {club.titles.length === 0 && (
           <p style={bodyStyle}>
             No league title in {LAST_PRE_ISL_SEASON - club.joined + 1} seasons before the ISL. Yet.
@@ -232,18 +232,18 @@ export function ClubHistory({ clubId }: { clubId: string }) {
         <YearList label="League champions" years={club.titles} />
         <YearList label={league ? `${league.cup} winners` : 'Cup winners'} years={club.cups} />
         <YearList label="Celestial Cup winners" years={club.celestialCups} />
-      </div>
+      </Stack>
 
       {chants.length > 0 && (
         <div>
           <p style={labelStyle}>From the stands</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space[8] }}>
+          <Stack gap={8}>
             {chants.slice(0, 2).map((t) => (
               <Quote key={t} small>
                 {t}
               </Quote>
             ))}
-          </div>
+          </Stack>
         </div>
       )}
 
@@ -274,7 +274,7 @@ export function ClubHistory({ clubId }: { clubId: string }) {
           </div>
         </div>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -344,14 +344,14 @@ export function LeagueRollOfHonour({ leagueId }: { leagueId: string }) {
   const hasLost = table.some((r) => !isIslClub(r.club));
 
   return (
-    <div className="isl-lore" style={{ display: 'flex', flexDirection: 'column', gap: space[48] }}>
+    <Stack className="isl-lore" gap={48}>
       <LoreStyles />
       {archive.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: space[12] }}>
+        <Stack gap={12}>
           {archive.map((t) => (
             <Quote key={t}>{t}</Quote>
           ))}
-        </div>
+        </Stack>
       )}
 
       <div
@@ -411,6 +411,6 @@ export function LeagueRollOfHonour({ leagueId }: { leagueId: string }) {
           .isl-honours-cols { grid-template-columns: minmax(0, 1fr) !important; }
         }
       `}</style>
-    </div>
+    </Stack>
   );
 }

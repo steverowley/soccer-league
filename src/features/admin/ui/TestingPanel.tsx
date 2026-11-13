@@ -29,8 +29,14 @@ import { useEffect, useState } from 'react';
 import type { IslSupabaseClient } from '@shared/supabase/client';
 import { space, tone, type } from '../../../shared/design';
 import {
-  Button, CheckField, Field, SectionHeader, SectionPanel,
-  inputStyle, useToast,
+  Button,
+  CheckField,
+  Field,
+  inputStyle,
+  SectionHeader,
+  SectionPanel,
+  Stack,
+  useToast,
 } from '../../../shared/ui';
 import {
   resetSeasonResults, injectNarrative, addPlayer, getTeamList,
@@ -175,7 +181,7 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
     <section aria-labelledby="testing-heading">
       <SectionHeader index="I" label="Testing" title={<span id="testing-heading">Testing and data controls</span>} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[24] }}>
+      <Stack gap={24}>
 
         {/* 1. Danger zone ─────────────────────────────────────────────────── */}
         {/* The explicit description of what is deleted prevents accidental use. */}
@@ -306,11 +312,11 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
                 style={inputStyle}
               />
             </Field>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <Stack direction="row" align="flex-end">
               <CheckField id="starter-check" checked={playerStarter} onChange={setPlayerStarter}>
                 Starter
               </CheckField>
-            </div>
+            </Stack>
             <div style={{ gridColumn: '1 / -1' }}>
               {/* Same type="submit" rationale as the narrative form. */}
               <Button type="submit" disabled={playerBlocked}>
@@ -320,7 +326,7 @@ export function TestingPanel({ db }: { db: IslSupabaseClient }) {
           </form>
         </SectionPanel>
 
-      </div>
+      </Stack>
     </section>
   );
 }

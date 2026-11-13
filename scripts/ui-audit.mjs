@@ -21,10 +21,23 @@ import { join, relative } from 'node:path';
 const ROOT = process.cwd();
 const SKIP = ['src/shared/ui/', 'src/shared/design/'];
 
+/**
+ * Inline style objects a Stack could replace outright: display flex, and
+ * every key one Stack expresses (or a layout extra it passes through). Boxes
+ * that also set borders, fills, padding or type are a component's job, not
+ * Stack's, so they are not counted. Plain HTML elements only: a Card or
+ * Link that lays out its own children is that component's styling.
+ */
+const STACK_KEY = '(?:display|flexDirection|gap|alignItems|justifyContent|flexWrap|marginTop|marginBottom|width|minWidth|flex|flexShrink|flexGrow)';
+const PURE_STACK = new RegExp(String.raw`<[a-z][a-z0-9]*\b[^<>]*?style=\{\{\s*(?:${STACK_KEY}\s*:\s*[^,{}]+,?\s*)+\}\}`, 'g');
+function countPureStacks(s) {
+  return (s.match(PURE_STACK) || []).filter((m) => /display:\s*['"]flex['"]/.test(m)).length;
+}
+
 /** Each candidate component and the source patterns it would replace. */
 export const CANDIDATES = [
-  { name: 'Stack', patterns: [/flexDirection:\s*['"]column['"]/g, /display:\s*['"]flex['"][^}]*gap:/g],
-    note: 'Inline flex rows and columns with a gap token' },
+  { name: 'Stack', count: countPureStacks,
+    note: 'Inline flex rows and columns that are layout only' },
   { name: 'Text / Label', patterns: [/\.\.\.type\.label,\s*\.\.\.tone\.(secondary|tertiary)/g],
     note: 'Inline eyebrow and meta labels (label type in a muted tone)' },
   { name: 'Grid', patterns: [/display:\s*['"]grid['"]/g],
@@ -69,8 +82,8 @@ export function audit() {
     let copies = 0;
     const where = new Map();
     for (const [f, s] of files) {
-      let n = 0;
-      for (const re of c.patterns) n += (s.match(re) || []).length;
+      let n = c.count ? c.count(s) : 0;
+      for (const re of c.patterns ?? []) n += (s.match(re) || []).length;
       if (n) { copies += n; where.set(f, n); }
     }
     const top = [...where.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);

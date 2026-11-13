@@ -35,7 +35,7 @@ import {
 } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { usePageTitle } from '../shared/hooks/usePageTitle';
-import { color, glyph, layout, numeric, size, space, tone, type } from '../shared/design';
+import { color, glyph, numeric, size, space, tone, type } from '../shared/design';
 import {
   AsyncView,
   Crest,
@@ -45,6 +45,7 @@ import {
   PageShell,
   PreSeasonState,
   SectionHeader,
+  Stack,
   Tag,
   toRoman,
 } from '../shared/ui';
@@ -199,7 +200,7 @@ export default function Matches() {
         ) : noFixtures ? (
           <EmptyState centred={false}>No fixtures yet. They appear here once the season is drawn.</EmptyState>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: layout.sectionGap }}>
+          <Stack gap="section">
             <StatusFilter
               active={filter}
               onChange={setFilter}
@@ -219,7 +220,7 @@ export default function Matches() {
                 liveScores={liveScores}
               />
             ))}
-          </div>
+          </Stack>
         ))}
       </AsyncView>
 
@@ -286,7 +287,7 @@ function StatusFilter({ active, onChange, counts }: StatusFilterProps) {
   ];
 
   return (
-    <div role="group" aria-label="Filter matches by status" style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+    <Stack role="group" aria-label="Filter matches by status" direction="row" gap={8} wrap>
       {options.map(([key, label]) => (
         <Tag
           key={key}
@@ -297,7 +298,7 @@ function StatusFilter({ active, onChange, counts }: StatusFilterProps) {
           {label}
         </Tag>
       ))}
-    </div>
+    </Stack>
   );
 }
 
@@ -426,10 +427,10 @@ const MatchRowItem = memo(function MatchRowItem({ match, status, live }: MatchRo
           <ScoreBlock status={status} home={homeScore} away={awayScore} />
         </div>
 
-        <div className="isl-mr-away" style={{ display: 'flex', alignItems: 'center', gap: space[8], minWidth: 0 }}>
+        <Stack className="isl-mr-away" direction="row" gap={8} align="center" style={{ minWidth: 0 }}>
           <Crest color={match.away_team?.color ?? null} size={16} />
           <span style={name}>{awayName}</span>
-        </div>
+        </Stack>
 
         {/* Competition and round, then the status cue. */}
         <div className="isl-mr-meta" style={{ ...type.label, ...tone.secondary, textAlign: 'right' }}>

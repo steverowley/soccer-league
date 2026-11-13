@@ -27,7 +27,7 @@ import { usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { getSeasonList, type SeasonSummary } from '../features/match';
 import { useAsyncData } from '../shared/hooks/useAsyncData';
 import { glyph, numeric, space, tone, type } from '../shared/design';
-import { AsyncView, Card, PageHeader, PageShell, PreSeasonState, Tag } from '../shared/ui';
+import { AsyncView, Card, PageHeader, PageShell, PreSeasonState, Stack, Tag } from '../shared/ui';
 
 /**
  * Format a date range for the card. Both endpoints may be null on legacy
@@ -97,12 +97,12 @@ export default function Seasons() {
                         {formatRange(s)}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: space[16] }}>
+                    <Stack direction="row" gap={16} align="center">
                       <Tag>{s.status.replace(/_/g, ' ')}</Tag>
                       <span style={{ ...type.label, ...tone.primary }} aria-hidden="true">
                         Open <span>{glyph.forward}</span>
                       </span>
-                    </div>
+                    </Stack>
                   </Card>
                 </li>
               ))}

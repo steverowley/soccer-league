@@ -36,6 +36,8 @@ import {
   Card,
   CheckField,
   Crest,
+  dataCell,
+  dataHead,
   DataTable,
   EmptyState,
   ErrorState,
@@ -45,24 +47,23 @@ import {
   FormError,
   FormPip,
   FormStrip,
+  inputStyle,
   LiveBadge,
   LoadingState,
   PageHeader,
   PageShell,
+  Paragraph,
   PreSeasonState,
   Prose,
-  Paragraph,
   ProseSection,
+  ScoreBug,
   SectionHeader,
   SectionPanel,
   Skeleton,
-  ScoreBug,
+  Stack,
   StatBlock,
   Tag,
   TextLink,
-  inputStyle,
-  dataCell,
-  dataHead,
   useToast,
 } from '../shared/ui';
 
@@ -148,10 +149,10 @@ function Category({
 /** A labelled row, for packing several small variants into one Entry. */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[8] }}>
+    <Stack gap={8}>
       <div style={{ ...type.label, ...tone.secondary }}>{label}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[8] }}>{children}</div>
-    </div>
+      <Stack direction="row" gap={8} align="center" wrap>{children}</Stack>
+    </Stack>
   );
 }
 
@@ -159,11 +160,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function ToastDemo() {
   const toast = useToast();
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+    <Stack direction="row" gap={8} wrap>
       <Button variant="secondary" onClick={() => toast.success('Saved.')}>Fire success</Button>
       <Button variant="secondary" onClick={() => toast.error('Could not save.')}>Fire error</Button>
       <Button variant="secondary" onClick={() => toast.info('Season 4 starts Friday.')}>Fire info</Button>
-    </div>
+    </Stack>
   );
 }
 
@@ -185,7 +186,6 @@ const SAMPLE_FORM: Array<'W' | 'D' | 'L'> = ['W', 'W', 'D', 'L', 'W'];
  * component lands (and its copies are migrated) and update these rows.
  */
 const BACKLOG: ReadonlyArray<{ name: string; copies: number; files: number; below: boolean; note: string }> = [
-  { name: 'Stack', copies: 249, files: 35, below: false, note: 'Inline flex rows and columns with a gap token (the gaps already use only space 8, 12, 16, 24)' },
   { name: 'Text / Label', copies: 61, files: 26, below: false, note: 'Inline eyebrow and meta labels: label type in a muted tone' },
   { name: 'Grid', copies: 42, files: 23, below: false, note: 'Inline auto-fit and fixed-column grids' },
   { name: 'Divider', copies: 35, files: 17, below: false, note: 'Hand-drawn hairline rules between blocks' },
@@ -239,6 +239,28 @@ export default function Components() {
               <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>The panel body: a list, prose or a footer.</p>
             </SectionPanel>
           </div>
+        </Entry>
+        <Entry name="Stack" purpose="Every flex row and column: direction, an on-scale gap, align, justify, wrap. Layout only; boxes are Card.">
+          <Row label="Column (default)">
+            <Stack gap={8}>
+              <span style={{ ...type.small, background: color.cardFill, padding: space[8] }}>First</span>
+              <span style={{ ...type.small, background: color.cardFill, padding: space[8] }}>Second</span>
+              <span style={{ ...type.small, background: color.cardFill, padding: space[8] }}>Third</span>
+            </Stack>
+          </Row>
+          <Row label="Row, wraps on a phone">
+            <Stack direction="row" gap={12} align="center" wrap>
+              <span style={{ ...type.small, background: color.cardFill, padding: space[8] }}>Earth United</span>
+              <span style={{ ...type.small, background: color.cardFill, padding: space[8] }}>Mars Athletic</span>
+              <span style={{ ...type.small, background: color.cardFill, padding: space[8] }}>Venus Volcanic</span>
+            </Stack>
+          </Row>
+          <Row label="Row, space-between">
+            <Stack direction="row" justify="space-between" align="center" style={{ width: '100%' }}>
+              <span style={{ ...type.subheading }}>Fixtures</span>
+              <span style={{ ...type.label, ...tone.secondary }}>Round IV</span>
+            </Stack>
+          </Row>
         </Entry>
         <Entry name="PageShell" purpose="Header, flex-grow main column, footer. This page is one.">
           <p style={{ ...type.small, ...tone.secondary, margin: 0 }}>
@@ -326,11 +348,11 @@ export default function Components() {
           </div>
         </Entry>
         <Entry name="LoadingState / ErrorState / PreSeasonState" purpose="The three states every async section renders while it waits on Supabase.">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space[12], width: '100%' }}>
+          <Stack gap={12} style={{ width: '100%' }}>
             <LoadingState label="Loading fixtures" />
             <ErrorState what="the fixtures" onRetry={() => {}} />
             <PreSeasonState seasonName="Season 5" detail="Standings will appear once it kicks off." />
-          </div>
+          </Stack>
         </Entry>
         <Entry name="Toast" purpose="App-wide transient confirmation. ToastProvider is already mounted; this fires a real one.">
           <ToastDemo />

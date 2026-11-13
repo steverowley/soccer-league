@@ -20,6 +20,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { color, hairline, space, tone, type } from '../design';
+import { Stack } from './Stack';
 
 /**
  * Style for every text input, number input and select: the raised surface
@@ -127,10 +128,10 @@ export function CheckField({ id, checked, onChange, disabled = false, children, 
           cursor: 'inherit',
         }}
       />
-      <span style={{ display: 'flex', flexDirection: 'column', gap: space[4], minWidth: 0 }}>
+      <Stack as="span" gap={4} style={{ minWidth: 0 }}>
         <span style={{ ...type.small, ...tone.primary }}>{children}</span>
         {hint != null && <span style={{ ...type.small, ...tone.secondary }}>{hint}</span>}
-      </span>
+      </Stack>
     </label>
   );
 }

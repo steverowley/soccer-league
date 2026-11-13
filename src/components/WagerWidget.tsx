@@ -21,7 +21,7 @@
 
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { color, hairline, numeric, size, space, tone, type } from '../shared/design';
-import { Button, Card } from '../shared/ui';
+import { Button, Card, Stack } from '../shared/ui';
 import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabaseProvider';
 import { useAuth } from '../features/auth';
 import { MIN_BET, canAffordBet } from '../features/auth';
@@ -382,7 +382,7 @@ function StakeForm({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: space[16], marginTop: space[24], alignItems: 'flex-end' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[8], minWidth: 0 }}>
+      <Stack gap={8} style={{ minWidth: 0 }}>
         <label htmlFor="wager-stake" style={{ ...type.label, ...tone.secondary }}>
           Stake (Credits)
         </label>
@@ -408,16 +408,16 @@ function StakeForm({
         <span style={{ ...type.label, color: canAfford ? color.textSecondary : color.live }}>
           {credits.toLocaleString()} credits available
         </span>
-      </div>
+      </Stack>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[8], minWidth: 0 }}>
+      <Stack gap={8} style={{ minWidth: 0 }}>
         <span style={{ ...type.label, ...tone.secondary }}>
           Potential Payout
         </span>
         <div style={{ ...numeric, fontSize: size.subheading, fontWeight: 700, lineHeight: 1.25, color: hasSide ? color.text : color.textTertiary, padding: `${space[8]}px 0` }}>
           {hasSide ? payout.toLocaleString() : '—'}
         </div>
-      </div>
+      </Stack>
 
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: space[8] }}>
         {formError && (

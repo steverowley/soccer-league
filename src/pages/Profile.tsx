@@ -40,13 +40,14 @@ import { useSupabase, usePublicReadClient } from '../shared/supabase/SupabasePro
 import {
   Button,
   Field,
+  inputStyle,
   LoadingState,
   PageHeader,
   PageShell,
   SectionHeader,
+  Stack,
   StatBlock,
   Tag,
-  inputStyle,
   toRoman,
   useToast,
 } from '../shared/ui';
@@ -286,9 +287,9 @@ export default function Profile() {
       {earned.length > 0 && (
         <section>
           <SectionHeader index={toRoman(++n)} label="Milestones" />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[8] }}>
+          <Stack direction="row" gap={8} wrap>
             {earned.map((m) => <Tag key={m.days}>{m.label}</Tag>)}
-          </div>
+          </Stack>
         </section>
       )}
 
@@ -374,7 +375,7 @@ export default function Profile() {
           label="Controls"
           title={isAdmin ? 'Administration and exit' : 'Step back into the void'}
         />
-        <div style={{ display: 'flex', gap: space[16], alignItems: 'center', flexWrap: 'wrap' }}>
+        <Stack direction="row" gap={16} align="center" wrap>
           {isAdmin && (
             <Button variant="secondary" to="/admin">
               Admin dashboard
@@ -384,7 +385,7 @@ export default function Profile() {
             Sign out
           </Button>
           <Button variant="tertiary" to="/">Back to home</Button>
-        </div>
+        </Stack>
       </section>
 
       {/* ── Danger zone (#415, GDPR Art. 17) ────────────────────────────
@@ -516,14 +517,14 @@ function DeleteAccountDialog({
             style={inputStyle}
           />
         </Field>
-        <div style={{ display: 'flex', gap: space[16], justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', marginTop: space[24] }}>
+        <Stack direction="row" gap={16} align="center" justify="flex-end" wrap style={{ marginTop: space[24] }}>
           <Button variant="tertiary" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
           <Button variant="secondary" onClick={onConfirm} disabled={!confirmEnabled}>
             {busy ? 'Erasing\u2026' : 'Delete forever'}
           </Button>
-        </div>
+        </Stack>
       </div>
     </div>
   );
