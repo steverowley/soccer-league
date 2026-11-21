@@ -94,21 +94,38 @@ export function readShot(k: SimPlayer, world: SimWorld): void {
   const steps = PATH_SAMPLES * PATH_STRIDE;
   predictPath(ball, steps, world.dtSec, PATH);
   // First sample at or beyond the keeper's x (toward his goal), else the line.
+  // A ball that passes over his head there (a cross or a lofted through ball
+  // dropping in behind him) is read where it first comes back within his
+  // reach, so he goes back for it rather than diving at the spot it sailed
+  // over: reading only where the ball crossed his own position left him
+  // standing under balls that then dropped into the net (a third of open-play
+  // goals were crosses and through balls no keeper ever touched).
   const towardGoal = gx === 0 ? -1 : 1;
   let pt: Vec2 | null = null;
   let z = 0;
+  let over = false;
   for (let i = 0; i < steps; i++) {
     const x = PATH[3 * i]!;
     const y = PATH[3 * i + 1]!;
-    if ((x - k.pos.x) * towardGoal >= 0 || (x - gx) * towardGoal >= 0) {
+    const zi = PATH[3 * i + 2]!;
+    const atLine = (x - gx) * towardGoal >= 0;
+    if (!atLine && (x - k.pos.x) * towardGoal < 0) continue;
+    if (!over && (zi <= KEEPER_TOP || atLine)) {
       pt = vec(k.pos.x, y);
-      z = PATH[3 * i + 2]!;
+      z = zi;
+      break;
+    }
+    over = true;
+    if (zi <= KEEPER_TOP || atLine) {
+      pt = vec(atLine ? gx - towardGoal * 0.3 : x, y);
+      z = zi;
       break;
     }
   }
   if (!pt) return;
   const seen = perceive(k, world, pt, 0.45);
-  k.dive = { at: vec(k.pos.x, Math.max(PENALTY_AREA_Y_MIN, Math.min(PENALTY_AREA_Y_MAX, seen.y))), z: Math.min(GOAL_HEIGHT, z) };
+  const atX = over ? Math.max(Math.min(gx, k.pos.x), Math.min(Math.max(gx, k.pos.x), seen.x)) : k.pos.x;
+  k.dive = { at: vec(atX, Math.max(PENALTY_AREA_Y_MIN, Math.min(PENALTY_AREA_Y_MAX, seen.y))), z: Math.min(GOAL_HEIGHT, z) };
 }
 
 /** Velocity of a diving keeper: straight at the dive point at dive speed. */

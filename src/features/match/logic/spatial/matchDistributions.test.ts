@@ -11,12 +11,31 @@
 //   metric to its real-football band, including the ones that let the #698
 //   tackle flood hide (tackles, passes, corners, throw-ins).
 //
+// MEASURED ON REAL SQUADS
+//   The batch is played between the real ISL clubs as the match worker builds
+//   them (calibration/islFixture.ts: a snapshot of every club's players,
+//   attributes, personalities and manager's game model), on a fixed schedule
+//   of league pairings from all four leagues plus cross-league ties, each pair
+//   played at both grounds.  Until November 2026 it played two IDENTICAL
+//   average-rated sides instead.  Identical sides cancel each other out and
+//   made a different, poorer match than the league plays: on 480 matches
+//   that fixture gave 2.27 goals, 3.80 saves, 0.42 draws and 0.11 penalties a
+//   match, while the same engine on real squads gave 2.88, 6.32, 0.28 and
+//   0.19, and the live league (Season 1, 234 matches) gave 2.99 goals, 6.19
+//   saves and 0.29 draws.  The old fixture's saves, goals, draws and
+//   penalties gaps were properties of the fixture, not of the league; tuning
+//   the engine to close them pushed real-squad goals to 4.0 a match (#765).
+//   Report: docs/reports/real-squads-2026-11-report.txt.
+//
 // HOW THE BANDS ARE ASSERTED
 //   A 24-match batch has sampling error, so a metric passes when the batch is
 //   consistent with its target band within TOLERANCE_SE standard errors (the
 //   standard error is measured from the batch itself: per-match spread for
 //   counts, binomial for shares).  The batch is seeded and the engine is
 //   deterministic, so the result is byte-stable run to run: it cannot flake.
+//   Its 24 matches are matches 0..23 (seeds 1000..1023) of the long batch
+//   `bash scripts/run-batch.sh <prefix> isl 480`, so a 480-match measurement
+//   always contains this test's own batch.
 //
 //   Metrics the engine does not yet reach are listed in KNOWN_GAPS with their
 //   measured root cause and a regression band that CONTAINS the target band,
@@ -26,14 +45,11 @@
 //   delete its KNOWN_GAPS entry so the target band applies.
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  simulateSpatialMatch,
-  type SpatialTeamInput,
-  type SpatialPlayerInput,
-} from './simulateSpatialMatch';
-import type { SimPlayerStats, Role, TraceRecord } from './types';
+import { simulateSpatialMatch } from './simulateSpatialMatch';
+import type { TraceRecord } from './types';
+import { islFixture, islTeam } from '../calibration/islFixture';
 
-/** Full matches in the batch (seeds 1000..1023, equal sides rated 60..80). */
+/** Full matches in the batch (real squads, calibration schedule matches 0..23, seeds 1000..1023). */
 const MATCH_COUNT = 24;
 
 /** Standard errors of slack between the batch value and the target band. */
@@ -64,57 +80,45 @@ const TARGET: Record<string, readonly [number, number]> = {
 };
 
 /**
- * Metrics the engine does not yet reach, the measured reason, and the
- * regression band asserted instead (it contains the target band).
- * Measured at 80 matches: tackles 49 (1.1), interceptions 38 (0.7),
- * corners 6.3 (0.3), offsides 1.6 (0.13).
- * Passes (975, SE 7) reached their band in the fourth calibration pass and
- * left this list.
+ * Metrics the engine does not yet reach on real squads, the measured reason,
+ * and the regression band asserted instead (it contains the target band).
  *
- * Saves were re-measured at 264 matches (this fixture plus 240 extra seeds):
- * 3.46 per match (SE 0.13, per-match SD about 2.0). The old regression band
- * [4, 8] sat above the engine's real mean and only passed because these 24
- * seeds happened to land at 4.25; the penalty-keeper fix (#736) moved two of
- * them and exposed it. The floor is now the measured mean less 2.5 SE of a
- * 24-match batch (3.46 - 2.5 x 0.41 = 2.4, rounded to 2.5), the same
- * tolerance the target bands use. The target stays 5 to 8: closing this gap
- * is engine work (#708), by behaviour, never by moving the target.
+ * Measured at 480 real-squad matches (scripts/run-batch.sh isl 480, seeds
+ * 1000..1479, this test's batch included) on the engine with the keeper
+ * high-ball fix (November 2026), mean (SE): passes 1039 (4.8), tackles 59.7
+ * (0.54), interceptions 35.0 (0.68), corners 7.06 (0.13).  Every other
+ * metric is inside its band at that scale (goals 2.64, 0-0 0.092, saves
+ * 6.29, draws 0.285, penalties 0.196 (SE 0.019), offsides 2.16, throw-ins
+ * 36.4, pass completion 0.862 (SE 0.001)).
+ *
+ * Each band is the measured mean plus (for a metric above its target) or
+ * minus (below it) 2.5 standard errors of a 24-match batch (per-match SD /
+ * sqrt(24)), the tolerance the target bands use; the other bound is the
+ * target's.  Saves left this list: their gap was a property of the old
+ * equal-sides fixture (3.80 a match there over 480 matches, 6.29 on real squads).
  */
 const KNOWN_GAPS: Record<string, { band: readonly [number, number]; cause: string }> = {
-  saves: {
-    band: [2.5, 8],
-    cause: 'on-target shots convert at about 40% (target about 33%): the deep block fills the box but chances in behind a holding line are still clear',
+  passes: {
+    // 1039 + 2.5 x 21.3 (per-match SD 104) = 1092.3.
+    band: [700, 1093],
+    cause: 'real squads keep the ball: completion sits at the top of its band (0.862), so possessions run to more passes than in the old equal-sides fixture (981 passes at 0.812 completion); the carrier still recycles short when the lane ahead is contested (#773)',
   },
   tackles: {
-    band: [25, 60],
+    // 59.7 + 2.5 x 2.43 (per-match SD 11.9) = 65.7.
+    band: [25, 66],
     cause: 'carriers still take touches into a presser before they have settled the ball, and a defender who meets a ball knocked a stride ahead of its man wins it',
   },
   interceptions: {
-    band: [15, 45],
+    // 35.0 + 2.5 x 3.03 (per-match SD 14.8) = 42.6.
+    band: [15, 43],
     cause: 'passes into marked men in a crowded middle third are cut out; passers judge lanes slightly pessimistically yet still play into contested ones under pressure',
   },
   corners: {
-    band: [5, 12],
+    // 7.06 - 2.5 x 0.59 (per-match SD 2.91) = 5.58.
+    band: [5.5, 12],
     cause: 'parries at full stretch and glancing headers now go behind, but blocked shots mostly rebound into the field and few clearances or crosses go out off a defender',
   },
 };
-
-// ── Fixture builders ──────────────────────────────────────────────────────────
-
-function stats(base: number): SimPlayerStats {
-  return {
-    shooting: base, passing: base, dribbling: base, speed: base, stamina: base,
-    tackling: base, positioning: base, goalkeeping: base, vision: base,
-  };
-}
-
-function team(prefix: string, base: number): SpatialTeamInput {
-  const xi: Role[] = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
-  const bench: Role[] = ['GK', 'DF', 'MF', 'MF', 'FW'];
-  const players: SpatialPlayerInput[] = xi.map((role, i) => ({ id: `${prefix}-${i}`, name: `${prefix} ${i}`, role, stats: stats(base) }));
-  const subs: SpatialPlayerInput[] = bench.map((role, i) => ({ id: `${prefix}-sub-${i}`, name: `${prefix} sub ${i}`, role, stats: stats(base) }));
-  return { formation: '4-4-2', players, bench: subs };
-}
 
 // ── Measurement ─────────────────────────────────────────────────────────────
 
@@ -125,7 +129,8 @@ interface Row {
   corners: number; throwIns: number; offsides: number; penalties: number;
 }
 
-function measure(seed: number, base: number): Row {
+function measure(m: number): Row {
+  const f = islFixture(m);
   let inside11 = 0;
   let passesComplete = 0;
   let passesResolved = 0;
@@ -136,7 +141,7 @@ function measure(seed: number, base: number): Row {
       if (r.data['outcome'] === 'complete') passesComplete++;
     }
   };
-  const r = simulateSpatialMatch(team('H', base), team('A', base), { matchSeconds: 90 * 60, frameEverySec: 2, seed, trace });
+  const r = simulateSpatialMatch(islTeam(f.home), islTeam(f.away), { matchSeconds: 90 * 60, frameEverySec: 2, seed: f.seed, trace });
   const n = (t: string): number => r.events.filter((e) => e.type === t).length;
   const goals = r.finalScore[0] + r.finalScore[1];
   const ownGoals = r.events.filter((e) => e.type === 'goal' && !e.playerId).length;
@@ -206,7 +211,7 @@ let SUMMARY: Record<string, { value: number; se: number }> = {};
 describe('emergent engine: section-7 calibration contract', () => {
   beforeAll(() => {
     const rows: Row[] = [];
-    for (let m = 0; m < MATCH_COUNT; m++) rows.push(measure(1000 + m, 60 + (m % 21)));
+    for (let m = 0; m < MATCH_COUNT; m++) rows.push(measure(m));
     SUMMARY = summarise(rows);
   }, 600_000);
 

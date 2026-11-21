@@ -7,6 +7,8 @@
 //   MODE=swap  paired venue swap: seed m plays X(home) v Y(away) and then
 //              Y(home) v X(away), with X and Y of different ratings, so team
 //              strength cancels and only the venue differs within a pair
+//   MODE=isl   real ISL squads (src/features/match/logic/calibration/islFixture.ts),
+//              the calibration contract's fixture; seeds SEED_BASE + m
 //   MODE=str   strength check: an 80-rated side v a 60-rated side, venue
 //              alternating by seed
 //
@@ -14,6 +16,7 @@
 
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { measure, team } from './lib/engineMetrics';
+import { islFixture, islTeam } from '../src/features/match/logic/calibration/islFixture';
 import type { EngineFlags } from '../src/features/match/logic/spatial/types';
 
 const mode = process.env['MODE'] ?? 'std';
@@ -33,6 +36,11 @@ for (let m = shard; m < n; m += shards) {
   if (mode === 'std') {
     const base = 60 + (m % 21);
     rows.push({ ...measure(team('H', base), team('A', base), seed, flags), pair: m, strong: 'none' });
+  } else if (mode === 'isl') {
+    // Real ISL squads on the calibration schedule (the contract test's fixture:
+    // its 24 matches are m = 0..23 with SEED_BASE 1000).
+    const f = islFixture(m, seedBase);
+    rows.push({ ...measure(islTeam(f.home), islTeam(f.away), f.seed, flags), pair: f.pair, strong: 'none', home: f.home, away: f.away });
   } else if (mode === 'swap') {
     const bx = 60 + (m % 21);
     const by = 60 + ((m * 7 + 5) % 21);

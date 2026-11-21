@@ -210,6 +210,25 @@ auto-cross); goal kicks are kicked. Kickoff after goals as now.
 Distributions are the specification too: fitting the goal mean while 92% of
 shots come from point-blank range is a failure (research).
 
+**Measured on real squads (since November 2026).** The contract
+(`matchDistributions.test.ts`) and the calibration batches play the real ISL
+clubs as the match worker builds them: `src/features/match/logic/calibration/`
+holds a snapshot of every club from the live league (players, attributes,
+personalities, managers' game models; `scripts/snapshot-isl-squads.mjs`) and a
+fixed schedule of league pairings from all four leagues plus cross-league
+ties, each pair played at both grounds. Measure with
+`bash scripts/run-batch.sh <prefix> isl 480`; its first 24 matches are the
+test's batch. The contract used to play two identical average-rated sides.
+Identical sides cancel each other out and make a poorer match than the league
+plays (on 480 matches: 2.27 goals, 3.80 saves, 0.42 draws, 0.11 penalties,
+against 2.88, 6.32, 0.28 and 0.19 for the same engine on real squads, and
+2.99 goals, 6.19 saves, 0.29 draws in the live Season 1). Tuning the engine
+to close that fixture's gaps pushed real-squad goals to 4.0 a match (#765),
+so realism is judged on the squads the league actually plays. Target bands
+did not change. The equal-sides fixture is still available as
+`run-batch.sh <prefix> std` for isolating a mechanism, but it is not the
+realism measure. Report: `docs/reports/real-squads-2026-11-report.txt`.
+
 ## 8. Build order
 
 1. Instrumentation scaffolding (trace, ablation flags, calibration report).

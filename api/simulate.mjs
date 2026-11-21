@@ -2013,18 +2013,29 @@ function readShot(k, world) {
   const towardGoal = gx === 0 ? -1 : 1;
   let pt = null;
   let z = 0;
+  let over = false;
   for (let i = 0; i < steps; i++) {
     const x = PATH[3 * i];
     const y = PATH[3 * i + 1];
-    if ((x - k.pos.x) * towardGoal >= 0 || (x - gx) * towardGoal >= 0) {
+    const zi = PATH[3 * i + 2];
+    const atLine = (x - gx) * towardGoal >= 0;
+    if (!atLine && (x - k.pos.x) * towardGoal < 0) continue;
+    if (!over && (zi <= KEEPER_TOP || atLine)) {
       pt = vec(k.pos.x, y);
-      z = PATH[3 * i + 2];
+      z = zi;
+      break;
+    }
+    over = true;
+    if (zi <= KEEPER_TOP || atLine) {
+      pt = vec(atLine ? gx - towardGoal * 0.3 : x, y);
+      z = zi;
       break;
     }
   }
   if (!pt) return;
   const seen = perceive(k, world, pt, 0.45);
-  k.dive = { at: vec(k.pos.x, Math.max(PENALTY_AREA_Y_MIN, Math.min(PENALTY_AREA_Y_MAX, seen.y))), z: Math.min(GOAL_HEIGHT, z) };
+  const atX = over ? Math.max(Math.min(gx, k.pos.x), Math.min(Math.max(gx, k.pos.x), seen.x)) : k.pos.x;
+  k.dive = { at: vec(atX, Math.max(PENALTY_AREA_Y_MIN, Math.min(PENALTY_AREA_Y_MAX, seen.y))), z: Math.min(GOAL_HEIGHT, z) };
 }
 function diveVelocity(k) {
   if (!k.dive) return vec(0, 0);
