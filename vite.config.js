@@ -24,9 +24,34 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
+import { sentryVitePlugin } from '@sentry/bundler-plugins/vite';
+
+// ── Sentry source maps ─────────────────────────────────────────────────────
+// Production stack traces are minified. When the build has a Sentry auth
+// token (a Vercel environment variable, never committed), the build makes
+// HIDDEN source maps (no sourceMappingURL comment in the shipped files),
+// uploads them to the isl-frontend project for this release, then deletes
+// them from dist so they are never served. Without a token (local builds,
+// forks, the Pages workflow) nothing changes: no maps, no upload.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+const sentryRelease = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || undefined;
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Must stay last (Sentry's docs): it reads the final emitted files.
+    sentryAuthToken &&
+      sentryVitePlugin({
+        org: 'rowley-co',
+        project: 'isl-frontend',
+        authToken: sentryAuthToken,
+        ...(sentryRelease ? { release: { name: sentryRelease } } : {}),
+        sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+        // No build telemetry to Sentry from our CI.
+        telemetry: false,
+      }),
+  ].filter(Boolean),
 
   // Host-dependent base — root on Vercel, sub-path on GitHub Pages.
   // See the BASE PATH block above for the full rationale.
@@ -84,6 +109,8 @@ export default defineConfig({
   // Raising `chunkSizeWarningLimit` is the lazy fix; manualChunks is the
   // honest one and gives genuine caching wins.
   build: {
+    // Hidden maps only when they will be uploaded (see Sentry source maps above).
+    sourcemap: sentryAuthToken ? 'hidden' : false,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
