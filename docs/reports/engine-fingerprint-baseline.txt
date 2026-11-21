@@ -1,18 +1,18 @@
 # Engine fingerprint baseline: npx tsx scripts/engine-fingerprint.ts on main 3cf93c1 (before any CPU optimisation).
 # One SHA-256 per case over the canonical serialized result (score, events, frames, phases, traces). Check with --check.
-# Regenerated for the penalty-keeper fix (docs/match-viewer.md 2A): squad-mars-v-europa and squad-pluto-v-ceres changed (both have a penalty); the other 13 cases are unchanged.
-squad-earth-v-jupiter              00472e71082437d94e46a4d4f847cbcbdcee24c338451f15852cd860b1b0abfd  score=0-1 events=1474 frames=2756 traces=0
-squad-ceres-v-mars                 123b9a8d90547c1de4ac686bc770dc33c7be1b6f31e064d1738865cafec4f06e  score=0-1 events=1215 frames=2776 traces=0
-squad-europa-v-pluto               564a33ebb5348b33a37eac0599fb29b2698dc5463539ea96ee4062621492d684  score=2-1 events=1371 frames=2781 traces=0
-squad-jupiter-v-earth              84a723a891b44bfbd422ef1eab3da2f5bfe6d04f3a33ace3d7fb09f6ec642e54  score=1-1 events=1427 frames=2769 traces=0
-squad-mars-v-europa                f19d1d4c9edcea1a7152af1832c6e700f2b15458bf332f9b9597fe17258cb1af  score=1-3 events=1205 frames=2781 traces=0
-squad-pluto-v-ceres                6b3bd31f1353e29eee9e7b47d9cacc8b2e598e2e0caf222cc037a703a0c06fe6  score=2-0 events=1363 frames=2799 traces=0
-fixture-70-v-70                    9daa515c05d54138ad78787a4cdd63d2164eba1c1ad579de4a8bba6bf0fa57ed  score=1-1 events=1262 frames=2779 traces=0
-fixture-72-v-68                    636bed8640b41dc3308c81eafa010eaa6f9caa058c7873d421ea370e33bb210a  score=2-1 events=1245 frames=2801 traces=0
-direct343-v-possession451          32ab7e388c2563ea277630656f4f4c0e0ee7f9b0726798177bfc91fdf871a88f  score=2-2 events=1210 frames=2781 traces=0
-counter541-v-aggressive442         53a3bb12eeaf1788500ff3492221c8ba1ae8f12f232fca3cd170d03f39801287  score=0-3 events=1035 frames=2781 traces=0
-offensive-v-defensive              cf0dffc109cf112bf0c3cf918487d6d8cab45b1303b93d6a67cb1443f876ee16  score=4-1 events=1008 frames=2806 traces=0
-ablations-off                      bce14b00b6285afeb8651b102e1b936b0670b7129cba8f39cf92a8f7d70f9253  score=7-4 events=1199 frames=2866 traces=0
-trace-squad-earth-v-mars           25270226a2adea549a9db15a753e4ea714695fe99f868c4da97f43c9799a8b05  score=5-0 events=1222 frames=56101 traces=7872
-trace-balanced-80-v-60             57cbd9bf996280a102040fd403a437cf74014a8f6050969e5dea77a1163505e5  score=1-1 events=1123 frames=55751 traces=7227
-everytick-squad-pluto-v-jupiter    18621405528df1c8bafb32fa11768fa5efdf1ddd7e03cbd5118210f7d26c1523  score=1-2 events=1279 frames=56001 traces=0
+# Regenerated for the saves change (#739, shots struck with a pass-like error, a placed finish close in, keepers going back for a ball that sails over them): all 15 of 15 cases changed, as expected for a change to every shot.
+squad-earth-v-jupiter              d54c24917c26e2658441f376d201fe2e4139569f27ab93346a1f379fda898d12  score=1-3 events=1297 frames=2801 traces=0
+squad-ceres-v-mars                 00ebe9584509dae802a637e71b290450334354fe9180fd3be5df815c471ea248  score=0-2 events=1165 frames=2749 traces=0
+squad-europa-v-pluto               520684abe64939d86db85b97ed7ac02bfd11e6beb7ea111fab546655a17d3c48  score=4-0 events=1391 frames=2814 traces=0
+squad-jupiter-v-earth              6156104768fb32d5e25a27279b2a8cd8486879f72ef149eda54a0a050c4bcd46  score=3-1 events=1391 frames=2854 traces=0
+squad-mars-v-europa                15ffafb4e3544e8a7c3d435e9e801aa66a25e4e81c6972e96c10aed600e78afe  score=0-6 events=1147 frames=2819 traces=0
+squad-pluto-v-ceres                f18d625eeb7320220cb8f4c9f47b547c752c7e58719b5c73d45ae4d0d99a3797  score=3-1 events=1333 frames=2784 traces=0
+fixture-70-v-70                    cbb19bf020d2069f3496527e22ca336144385cf14e2156fadeeb498f5f2beebe  score=0-0 events=1275 frames=2744 traces=0
+fixture-72-v-68                    aedbb3919fff237fa3233b78f34b8e0ad02f180b12ce6e6f2e1c0b6339db81e7  score=1-0 events=1182 frames=2766 traces=0
+direct343-v-possession451          ccc873c9cc43c8db017ec7854f2264a94ef50e17ff120735806985deff21f979  score=2-3 events=1234 frames=2806 traces=0
+counter541-v-aggressive442         a151047c78298afa965d7651a0b3c29d58baccf99051399ac0b6dba48b3e20f2  score=0-6 events=968 frames=2859 traces=0
+offensive-v-defensive              30282523d1b80a6b31e79ab157110e11be7d215651792926813b448f8155a9a5  score=5-1 events=1002 frames=2816 traces=0
+ablations-off                      e56041e66738038202100cee02efd9a5e7d06a77b3ba73a17abf05467e7fcd24  score=5-6 events=1272 frames=2871 traces=0
+trace-squad-earth-v-mars           6408e83b8f88bff85326bfa4b7b49a5b108fdb6749175032d3ea61bfb14a681c  score=10-0 events=1231 frames=57601 traces=7822
+trace-balanced-80-v-60             56e4186e3c8a51d5e95d1fbd9a14dbfc9ca04bfc7798b79029524319f8f6098a  score=3-0 events=1275 frames=56401 traces=8103
+everytick-squad-pluto-v-jupiter    6371e791877979ba0526f846615c7ce7866ce4f27be987b90336d75c30b2a024  score=2-4 events=1236 frames=56501 traces=0

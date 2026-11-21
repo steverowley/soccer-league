@@ -1,0 +1,117 @@
+SAVES (#739, part of #708): MEASURED REPORT
+branch fix/engine-saves. BEFORE = origin/main 4e5cd6e. AFTER = this branch (engine of cde58d8).
+
+Standard batch = equal 4-4-2 sides rated 60 to 80, seeds 1000+ (scripts/run-batch.sh std,
+scripts/batch-report.ts). Its first 24 seeds are the matchDistributions.test.ts fixture.
+Shot diagnostics from scripts/saves-diag.ts (one row per shot, read from the live world at the
+strike; run with scripts/run-saves-diag.sh <prefix> <n>). Paired tables: the same seeds on
+both engines, SE of each mean and of the per-seed difference.
+
+== 1. WHAT WAS HAPPENING ON THE PITCH (main, 120 matches, 2,170 shots)
+
+a) Shots were struck far less accurately than passes. A shot's execution error was three times
+   a pass's in direction (0.26 rad base) and four times a lofted ball's in lift (4.0 m/s), so
+   the mean direction error of a foot shot was 14 to 15 degrees whatever the range. Of foot
+   shots that were not blocked, 33% from 11 to 18 m and 26% from 18 to 25 m reached the frame,
+   12% from beyond 25 m, and about half of the long-range misses went over the bar. Keepers
+   had almost nothing from distance to save: foot shots from 18 m and beyond gave 0.54 saves
+   a match.
+b) Every finish was a full drive. From 6 m a striker used the same back-lift and power as for a
+   30 m strike, so close-range chances were blazed rather than placed.
+c) Keepers read a high ball only where it crossed their own position. A cross or a lofted
+   through ball that passed over the keeper's head was "read" at the spot it sailed over, he
+   dived there, and the ball dropped in behind him untouched: 65 of 281 goals (23%) were
+   crosses and through balls the keeper never touched.
+
+== 2. BEHAVIOUR CHANGES (no new randomness, no outcome rolls)
+
+1. execution.ts KICK_ERROR.shot: { ang 0.26, lift 4.0 } to { ang 0.136, lift 2.0 }. A shot is a
+   kick at full power: about 1.6 times a pass's direction error (the speed-accuracy trade-off),
+   and the lofted ball's lift error scaled to shot pace times the same 1.6. The shooter's own
+   estimate (evaluate.ts estimateShot) reads the same table, so he knows his own accuracy.
+2. Placed finish (evaluate.ts PLACED_*, possession.ts, step.ts): inside 18 m the carrier also
+   considers placing it with the side of his foot: half the back-lift, 0.75 of the error, 0.75
+   of the speed. It is scored like every other option by his own estimate, never forced.
+3. keeper.ts readShot: a ball that will pass over the keeper's head is read where it first drops
+   back within his reach (or at the line) and he goes back for it, instead of diving at the
+   spot it sailed over.
+
+Diagnosis after (112 matches): foot direction error 6 to 7 degrees; unblocked foot shots on
+target 63% inside 11 m, 45% from 11 to 18 m, 32% from 18 to 25 m, 29% beyond; crosses and
+through balls that beat an untouched keeper fell from 65 of 281 goals to 14 of 268.
+
+== 3. BEFORE / AFTER, STANDARD BATCH (480 matches, paired seeds 1000..1479)
+
+metric                      before           after       paired diff     target
+goals                  2.27 (0.07)     2.71 (0.08)      +0.44 (0.10)     2.4-3
+0-0 share            0.113 (0.014)   0.069 (0.012)    -0.044 (0.019)     0.06-0.1
+shots                 18.75 (0.21)    22.94 (0.23)      +4.19 (0.31)     20-28
+on-target share      0.313 (0.005)   0.336 (0.005)    +0.023 (0.007)     0.3-0.38
+inside-11 share      0.291 (0.005)   0.230 (0.004)    -0.061 (0.006)     0.18-0.32
+saves                  3.80 (0.10)     5.24 (0.12)      +1.43 (0.15)     5-8
+passes               980.58 (3.28)   975.10 (3.41)      -5.47 (3.47)     700-1000
+pass completion      0.812 (0.001)   0.814 (0.001)    +0.002 (0.001)     0.75-0.86
+tackles               49.84 (0.47)    49.53 (0.43)      -0.31 (0.53)     25-45 (gap)
+interceptions         44.36 (0.38)    43.68 (0.38)      -0.68 (0.55)     15-30 (gap)
+fouls                 17.04 (0.18)    16.66 (0.19)      -0.38 (0.25)     18-26
+yellows                3.04 (0.08)     2.95 (0.08)      -0.10 (0.11)     3-4.5
+reds                 0.138 (0.017)   0.100 (0.014)    -0.037 (0.021)     0.05-0.2
+corners                6.63 (0.13)     6.99 (0.13)      +0.36 (0.19)     8-12 (gap)
+throw-ins             42.50 (0.29)    41.29 (0.31)      -1.21 (0.39)     35-50
+offsides               2.04 (0.06)     1.90 (0.06)      -0.14 (0.09)     2-6 (gap)
+penalties            0.110 (0.015)   0.108 (0.014)    -0.002 (0.021)     0.2-0.35
+home win share       0.348 (0.022)   0.331 (0.022)    -0.017 (0.031)     0.37-0.53
+draw share           0.421 (0.023)   0.444 (0.023)    +0.023 (0.032)     0.17-0.33
+away win share       0.231 (0.019)   0.225 (0.019)    -0.006 (0.027)     0.22-0.38
+(on-target, inside-11 and completion are ratios of sums, SE by the delta method)
+
+Saves reach the 5-8 target at scale, so the saves KNOWN_GAPS entry is deleted.
+
+== 4. REAL ISL SQUADS AND MISMATCHES (not in the contract; read before merging)
+
+Real squads (scripts/lib/islSquads, club pairs as in penalty-keeper-batch, 240 matches,
+paired seeds 2000..2239):
+goals                  3.09 (0.11)     4.01 (0.13)      +0.92 (0.16)
+shots                 24.23 (0.38)    29.69 (0.47)      +5.46 (0.48)
+saves                  6.21 (0.17)     7.63 (0.19)      +1.42 (0.24)
+draw share           0.279 (0.029)   0.237 (0.028)    -0.042 (0.040)
+penalties            0.192 (0.027)   0.196 (0.028)    +0.004 (0.039)
+80 v 60 (MODE=str, 240 matches): goals 2.84 to 3.94, saves 4.87 to 6.45, strong side goal
+difference 1.19 to 1.96 a match (record 158W 65D 17L to 197W 37D 6L).
+Live Season 1 for comparison (224 league matches from the read cache): 2.1 to 3.5 goals a
+match by league, 2.96 overall.
+
+So the saves gap is a property of the equal-sides calibration fixture: real squads on main
+already make 6.2 saves a match. Making shots truer lifts saves everywhere, and in matches
+between unequal real squads it also lifts goals by about 30% (3.1 to 4.0 a match).
+
+== 5. PENALTIES (the 24-seed contract test fails; not a behaviour change)
+
+On the test's own fixture at scale (the 480 seeds above include its 24): 0.110 (SE 0.015) on
+main, 0.108 (SE 0.014) after, paired difference -0.002 (SE 0.021). Real squads 0.192 to 0.196.
+The 24 seeds hold 2 penalties on main and 1 after: main passed the band [0.2, 0.35] only by
+seed luck (0.083 + 2.5 SE reaches 0.2; 0.042 + 2.5 SE does not). The engine sits at about 0.11
+on this fixture before and after. Bands, seeds and the test are unchanged: owner's decision.
+
+== 6. COUNTER-PRESS TEST (fails; not a behaviour change)
+
+counterpress.test.ts requires regained-in-6-s share counter-press minus recover > 0.16 on one
+fixed pair of matches. Over 21 pairs (seeds 4100..4141): main 0.140 (SE 0.015), after 0.128
+(SE 0.012); only 29% of pairs clear 0.16 on either engine. Main's test pair gave 0.226, this
+branch's gives 0.124. Threshold untouched: owner's decision.
+
+== 7. OTHER TEST FIXTURES
+
+Seed-picked fixtures re-scanned as their tests instruct: actionTrack penalty 1006 to 1015 and
+own goal 1019 to 1003 (eventLog.test.ts too), sending-off RED_SEED 3 to 1. replayV3.test.ts
+gave player 1 and player 10 the same id; with seed 4242 after this change play froze from the
+46th minute (the engine could not tell its ball carrier apart), so no substitution reached the
+replay. Ids are now zero-padded (unique, as in production).
+
+== 8. COST AND DETERMINISM
+
+bench:engine median, alternating 3 runs each: main 600 / 693 / 607 ms (median 607), after
+647 / 624 / 641 ms (median 641), about +6% (the placed option doubles shot options inside 18 m).
+Fingerprint baseline regenerated: all 15 cases change, as expected for a change to every shot.
+RNG audit (grep rng() <, rngChance, Math.random, Probability( on non-test spatial files): no
+hits apart from a comment in rng.ts; no new rng call in the diff.

@@ -34,7 +34,7 @@ import {
   type CarrierAction,
 } from './possession';
 import {
-  positionValue, pressureAt, sigmoid, estimateShot, beatKeeper, segmentDistance, progressOf, timeToReach, DIVE_ACCEL, shotWindup,
+  positionValue, pressureAt, sigmoid, estimateShot, beatKeeper, segmentDistance, progressOf, timeToReach, DIVE_ACCEL, shotWindup, PLACED_ERROR,
   BLOCK_REACH_BODY, BLOCK_REACH_THROWN, BLOCKER_RANGE,
 } from './evaluate';
 import {
@@ -362,7 +362,8 @@ function execute(
       const T = airTravelTime(action.speed, d);
       const vz = verticalLaunchSpeed(b.z, action.gz, T);
       // A penalty is a placed strike at a still ball: about half the spread.
-      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) }) * (restart === 'penalty' ? 0.5 : 1);
+      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) }) * (restart === 'penalty' ? 0.5 : 1)
+        * (action.placed ? PLACED_ERROR : 1);
       const s = strike(p, world, dir, action.speed, vz, KICK_ERROR.shot, e);
       const kind: KickKind = restart === 'penalty' ? 'penalty' : 'shot';
       launch(world, p, kind, s.vel, s.vz, action.aim, null);
@@ -371,7 +372,7 @@ function execute(
       const k = keeperOf(world, otherSide(p.side));
       trace(world, 'shot', p, {
         kx: k ? r2(k.pos.x) : null, ky: k ? r2(k.pos.y) : null,
-        dist: r2(d), speed: r2(action.speed), aimY: r2(action.aim.y), aimZ: r2(action.gz), est: r2(action.est),
+        dist: r2(d), speed: r2(action.speed), aimY: r2(action.aim.y), aimZ: r2(action.gz), est: r2(action.est), placed: action.placed,
         angErr: r2(s.angErr), errScale: r2(e), pressure: r2(pressure), restart: restart ?? 'open',
         pF: action.parts ? r2(action.parts.f) : null, pB: action.parts ? r2(action.parts.b) : null, pCl: action.parts ? r2(action.parts.c) : null,
         onTarget: headingOnTarget(world, otherSide(p.side)),
@@ -1629,7 +1630,7 @@ export function step(world: SimWorld, dt: number): SimEvent[] {
     }
     if (action.kind === 'shoot') {
       // Back-lift: quicker for good strikers, a touch longer when stretched.
-      const wind = shotWindup(carrier);
+      const wind = shotWindup(carrier, action.placed);
       carrier.windup = { action, at: now + wind };
       // Defenders close enough who see the back-lift (after their reaction
       // time) throw a leg or body into the lane.

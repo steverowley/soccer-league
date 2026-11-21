@@ -26,7 +26,7 @@ import {
 } from './types.ts';
 import {
   positionValue, xgGeom, estimatePass, estimateShot, pressureAt, timeToReach,
-  progressOf, nearestOpponentDist, shotWindup,
+  progressOf, nearestOpponentDist, shotWindup, PLACED_SPEED, PLACED_ERROR, PLACED_RANGE,
 } from './evaluate.ts';
 import { errorScale, perceive } from './execution.ts';
 import { effectiveMaxSpeed, MAX_ACCEL } from './steering.ts';
@@ -69,6 +69,8 @@ const BASE_TEMPERATURE = 0.006;
 /** The carrier's chosen action for this touch. */
 export type CarrierAction =
   | { kind: 'shoot'; aim: Vec2; gz: number; speed: number; utility: number; est: number; chip: boolean;
+      /** Placed with the side of the foot (short back-lift, slower, truer) rather than driven. */
+      placed: boolean;
       /** Estimate components (frame, keeper beaten, lane clear), for traces. */
       parts?: { f: number; b: number; c: number } }
   | { kind: 'pass'; target: SimPlayer; aim: Vec2; speed: number; vz: number; kick: KickKind; utility: number; pC: number; lofted: boolean }
@@ -204,15 +206,20 @@ export function chooseAction(
     const eShot = errorScale(carrier, carrier.stats.shooting, world, { pressure, awkward: 0 });
     const power = 21 + 10 * (carrier.stats.shooting / 100);
     const appetite = shotAppetite(carrier, world);
-    const lead = shotWindup(carrier);
-    for (const gy of SHOT_YS) {
-      for (const gz of SHOT_ZS) {
-        // A placed shot low into the corner is struck a little softer.
-        const speed = gz < 1 ? power * 0.94 : power;
-        // Penalties and free kicks are struck from a set ball (no one closing in).
-        const est = estimateShot(from, side, gy, gz, speed, eShot, keeper, opponents, mode === 'open' ? lead : 0);
-        const u = est.p * appetite + (1 - est.p) * 0.006 - (1 - est.p) * lam * 0.006;
-        options.push({ kind: 'shoot', aim: vec(gx, gy), gz, speed, utility: u, est: est.p, chip: false, parts: { f: est.pFrame, b: est.pBeat, c: est.pClear } });
+    // Close in he can drive it or place it with the side of his foot
+    // (evaluate.ts PLACED_*): judged like any other option.
+    for (const placed of dGoal < PLACED_RANGE ? PLACED_CHOICES : DRIVE_ONLY) {
+      const lead = shotWindup(carrier, placed);
+      const e = placed ? eShot * PLACED_ERROR : eShot;
+      for (const gy of SHOT_YS) {
+        for (const gz of SHOT_ZS) {
+          // A shot low into the corner is struck a little softer.
+          const speed = (gz < 1 ? power * 0.94 : power) * (placed ? PLACED_SPEED : 1);
+          // Penalties and free kicks are struck from a set ball (no one closing in).
+          const est = estimateShot(from, side, gy, gz, speed, e, keeper, opponents, mode === 'open' ? lead : 0);
+          const u = est.p * appetite + (1 - est.p) * 0.006 - (1 - est.p) * lam * 0.006;
+          options.push({ kind: 'shoot', aim: vec(gx, gy), gz, speed, utility: u, est: est.p, chip: false, placed, parts: { f: est.pFrame, b: est.pBeat, c: est.pClear } });
+        }
       }
     }
   }
@@ -408,6 +415,10 @@ function finish(carrier: SimPlayer, world: SimWorld, options: CarrierAction[]): 
 /** Shot target lines across the goal (inside the posts) and heights. */
 const SHOT_YS = [GOAL_Y_MIN + 0.45, GOAL_Y_MIN + 1.7, GOAL_Y_MAX - 1.7, GOAL_Y_MAX - 0.45] as const;
 const SHOT_ZS = [0.25, 1.75] as const;
+
+/** Strike techniques considered: drive or place close in, drive only from range. */
+const PLACED_CHOICES = [false, true] as const;
+const DRIVE_ONLY = [false] as const;
 
 /** Carry directions relative to the line to goal (radians). */
 const CARRY_ANGLES = [0, 0.5, -0.5, 1.05, -1.05, 1.7, -1.7, Math.PI] as const;

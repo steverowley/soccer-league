@@ -38,7 +38,12 @@ function stats(base: number, role: Role): SimPlayerStats {
 function team(prefix: string, base: number): SpatialTeamInput {
   const mk = (role: Role, i: number, tag: string): SpatialPlayerInput => ({
     // Production ids are 36-character UUIDs; the size check needs the same.
-    id: `${prefix}-${tag}-${i}`.padEnd(36, '0'), name: `${prefix} ${tag}${i}`, role, stats: stats(base, role),
+    // Zero-pad the index first: unpadded, player 1 and player 10 shared one
+    // id ('H-s-1' and 'H-s-10' both pad to 'H-s-1000...'), which production
+    // never does. With two players under one id the engine could not tell its
+    // ball carrier apart and, on this seed after #739, play froze from the
+    // 46th minute (no one tired, so no substitutions reached the replay).
+    id: `${prefix}-${tag}-${String(i).padStart(2, '0')}`.padEnd(36, '0'), name: `${prefix} ${tag}${i}`, role, stats: stats(base, role),
   });
   return { formation: '4-4-2', players: XI.map((r, i) => mk(r, i, 's')), bench: BENCH.map((r, i) => mk(r, i, 'b')) };
 }

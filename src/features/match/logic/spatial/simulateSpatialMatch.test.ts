@@ -216,7 +216,8 @@ describe('simulateSpatialMatch — sending-off (red card)', () => {
     // engine's behaviour changes, and then this names the seed to re-find).
     // Re-scanned for the phases-of-play engine (scripts/find-red-seed.ts):
     // the last man no longer takes a man through on goal, so reds are rarer.
-    const RED_SEED = 3;
+    // Re-scanned again for the #739 shooting and keeping change.
+    const RED_SEED = 1;
     const result = simulateSpatialMatch(team('H', 78), team('A', 60), { ...FULL, seed: RED_SEED });
     const redEv = result.events.find((e) => e.type === 'foul' && e.card === 'red' && e.playerId && e.tSec < 4800);
     expect(redEv, `seed ${RED_SEED} no longer has an early red card: re-scan seeds 1-80 for one`).toBeDefined();

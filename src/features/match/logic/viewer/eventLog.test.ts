@@ -223,7 +223,7 @@ describe('a real-squad match decoded from its replay file (the one with an own g
     const away = squad(1);
     homeIds = new Set(home.players.map((p) => p.id));
     const rec = createReplayRecorder();
-    const r = simulateSpatialMatch(home, away, { seed: 1019, onTick: rec.onTick, observer: rec.observer });
+    const r = simulateSpatialMatch(home, away, { seed: 1003, onTick: rec.onTick, observer: rec.observer });
     const file = JSON.parse(JSON.stringify(encodeReplayV3('m1', rec.track(r.events)))) as ReplayFileV3;
     frames = trackToSnapshots(decodeReplayV3(file)!);
     const t = actionTrackOf(frames)!;

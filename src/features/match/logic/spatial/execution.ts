@@ -65,12 +65,25 @@ export interface KickErrorBase {
   readonly lift: number;
 }
 
-/** Error bases by kick family, at an error scale of 1. */
+/**
+ * Error bases by kick family, at an error scale of 1.
+ *
+ * A shot is a kick like any other, struck at full power: kicking studies find
+ * accuracy falls as a kick nears maximal speed (the speed-accuracy trade-off),
+ * by tens of per cent, so a shot's direction error is the pass's times about
+ * 1.6 and its vertical launch error the lofted ball's scaled to shot pace
+ * (about 28 against 20 m/s) times the same 1.6.  The old bases (0.26 rad and
+ * 4.0 m/s, three and four times a pass) sent a typical 15 m strike 4 m wide or
+ * 2.5 m high one time in three: only 19% of foot shots found the frame (real
+ * football about a third) and 25 m drives went over the bar or wide 88% of
+ * the time, so keepers had almost nothing from distance to save
+ * (docs/reports/saves-2026-11-report.txt).
+ */
 export const KICK_ERROR: Readonly<Record<'pass' | 'lofted' | 'cross' | 'shot' | 'header' | 'clear' | 'throw', KickErrorBase>> = {
   pass:   { ang: 0.085, spd: 0.11, lift: 0.0 },
   lofted: { ang: 0.100, spd: 0.11, lift: 0.9 },
   cross:  { ang: 0.110, spd: 0.10, lift: 1.1 },
-  shot:   { ang: 0.26, spd: 0.06, lift: 4.0 },
+  shot:   { ang: 0.136, spd: 0.06, lift: 2.0 },
   header: { ang: 0.170, spd: 0.15, lift: 1.4 },
   clear:  { ang: 0.160, spd: 0.12, lift: 1.5 },
   throw:  { ang: 0.050, spd: 0.08, lift: 0.5 },

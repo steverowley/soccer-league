@@ -123,6 +123,15 @@ crosses the line; a hard shot is parried (loose ball, so **rebounds emerge**), a
 soft one is held. Shots that miss the frame go out; a near miss off a post is
 `woodwork`. Blocks emerge when a defender's body is in the path.
 
+Calibrated in #739 (docs/reports/saves-2026-11-report.txt): a shot's
+execution error is a pass's at full power (direction about 1.6 times a pass,
+the speed-accuracy trade-off), not three times it; close in the shooter can
+also place it with the side of his foot (shorter back-lift, truer, slower),
+judged like any other option; and a keeper reads a ball that will pass over
+his head where it first drops back within his reach and goes back for it,
+instead of diving at the spot it sailed over (crosses and lofted through
+balls used to drop in behind him untouched).
+
 ### 4.6 Off the ball
 
 Off-ball jobs are options scored against each other, so they can lose (the

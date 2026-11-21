@@ -508,7 +508,7 @@ var KICK_ERROR = {
   pass: { ang: 0.085, spd: 0.11, lift: 0 },
   lofted: { ang: 0.1, spd: 0.11, lift: 0.9 },
   cross: { ang: 0.11, spd: 0.1, lift: 1.1 },
-  shot: { ang: 0.26, spd: 0.06, lift: 4 },
+  shot: { ang: 0.136, spd: 0.06, lift: 2 },
   header: { ang: 0.17, spd: 0.15, lift: 1.4 },
   clear: { ang: 0.16, spd: 0.12, lift: 1.5 },
   throw: { ang: 0.05, spd: 0.08, lift: 0.5 }
@@ -766,8 +766,12 @@ function beatKeeper(from, aim, gz, speed, keeper) {
   return sigmoid(best / 0.15);
 }
 var SHOT_WINDUP = 0.34;
-function shotWindup(p) {
-  return SHOT_WINDUP * (1.3 - 0.6 * p.stats.shooting / 100);
+var PLACED_SPEED = 0.75;
+var PLACED_ERROR = 0.75;
+var PLACED_WINDUP = 0.5;
+var PLACED_RANGE = 18;
+function shotWindup(p, placed = false) {
+  return SHOT_WINDUP * (1.3 - 0.6 * p.stats.shooting / 100) * (placed ? PLACED_WINDUP : 1);
 }
 
 // src/features/match/logic/spatial/possession.ts
@@ -872,13 +876,16 @@ function chooseAction(carrier, world, mode = "open", indirect = false, canPass =
     const eShot = errorScale(carrier, carrier.stats.shooting, world, { pressure, awkward: 0 });
     const power = 21 + 10 * (carrier.stats.shooting / 100);
     const appetite = shotAppetite(carrier, world);
-    const lead = shotWindup(carrier);
-    for (const gy of SHOT_YS) {
-      for (const gz of SHOT_ZS) {
-        const speed = gz < 1 ? power * 0.94 : power;
-        const est = estimateShot(from, side, gy, gz, speed, eShot, keeper, opponents, mode === "open" ? lead : 0);
-        const u = est.p * appetite + (1 - est.p) * 6e-3 - (1 - est.p) * lam * 6e-3;
-        options.push({ kind: "shoot", aim: vec(gx, gy), gz, speed, utility: u, est: est.p, chip: false, parts: { f: est.pFrame, b: est.pBeat, c: est.pClear } });
+    for (const placed of dGoal < PLACED_RANGE ? PLACED_CHOICES : DRIVE_ONLY) {
+      const lead = shotWindup(carrier, placed);
+      const e = placed ? eShot * PLACED_ERROR : eShot;
+      for (const gy of SHOT_YS) {
+        for (const gz of SHOT_ZS) {
+          const speed = (gz < 1 ? power * 0.94 : power) * (placed ? PLACED_SPEED : 1);
+          const est = estimateShot(from, side, gy, gz, speed, e, keeper, opponents, mode === "open" ? lead : 0);
+          const u = est.p * appetite + (1 - est.p) * 6e-3 - (1 - est.p) * lam * 6e-3;
+          options.push({ kind: "shoot", aim: vec(gx, gy), gz, speed, utility: u, est: est.p, chip: false, placed, parts: { f: est.pFrame, b: est.pBeat, c: est.pClear } });
+        }
       }
     }
   }
@@ -1082,6 +1089,8 @@ function finish(carrier, world, options) {
 }
 var SHOT_YS = [GOAL_Y_MIN + 0.45, GOAL_Y_MIN + 1.7, GOAL_Y_MAX - 1.7, GOAL_Y_MAX - 0.45];
 var SHOT_ZS = [0.25, 1.75];
+var PLACED_CHOICES = [false, true];
+var DRIVE_ONLY = [false];
 var CARRY_ANGLES = [0, 0.5, -0.5, 1.05, -1.05, 1.7, -1.7, Math.PI];
 function lineRoom(pt, dir) {
   let t = 30;
@@ -2013,18 +2022,29 @@ function readShot(k, world) {
   const towardGoal = gx === 0 ? -1 : 1;
   let pt = null;
   let z = 0;
+  let over = false;
   for (let i = 0; i < steps; i++) {
     const x = PATH[3 * i];
     const y = PATH[3 * i + 1];
-    if ((x - k.pos.x) * towardGoal >= 0 || (x - gx) * towardGoal >= 0) {
+    const zi = PATH[3 * i + 2];
+    const atLine = (x - gx) * towardGoal >= 0;
+    if (!atLine && (x - k.pos.x) * towardGoal < 0) continue;
+    if (!over && (zi <= KEEPER_TOP || atLine)) {
       pt = vec(k.pos.x, y);
-      z = PATH[3 * i + 2];
+      z = zi;
+      break;
+    }
+    over = true;
+    if (zi <= KEEPER_TOP || atLine) {
+      pt = vec(atLine ? gx - towardGoal * 0.3 : x, y);
+      z = zi;
       break;
     }
   }
   if (!pt) return;
   const seen = perceive(k, world, pt, 0.45);
-  k.dive = { at: vec(k.pos.x, Math.max(PENALTY_AREA_Y_MIN, Math.min(PENALTY_AREA_Y_MAX, seen.y))), z: Math.min(GOAL_HEIGHT, z) };
+  const atX = over ? Math.max(Math.min(gx, k.pos.x), Math.min(Math.max(gx, k.pos.x), seen.x)) : k.pos.x;
+  k.dive = { at: vec(atX, Math.max(PENALTY_AREA_Y_MIN, Math.min(PENALTY_AREA_Y_MAX, seen.y))), z: Math.min(GOAL_HEIGHT, z) };
 }
 function diveVelocity(k) {
   if (!k.dive) return vec(0, 0);
@@ -2440,7 +2460,7 @@ function execute(world, p, action, events, minute, restart) {
       const dir = normalize(sub(action.aim, from));
       const T = airTravelTime(action.speed, d);
       const vz = verticalLaunchSpeed(b.z, action.gz, T);
-      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) }) * (restart === "penalty" ? 0.5 : 1);
+      const e = errorScale(p, p.stats.shooting, world, { pressure, awkward: awkwardness(p.vel, dir) }) * (restart === "penalty" ? 0.5 : 1) * (action.placed ? PLACED_ERROR : 1);
       const s = strike(p, world, dir, action.speed, vz, KICK_ERROR.shot, e);
       const kind = restart === "penalty" ? "penalty" : "shot";
       launch(world, p, kind, s.vel, s.vz, action.aim, null);
@@ -2455,6 +2475,7 @@ function execute(world, p, action, events, minute, restart) {
         aimY: r2(action.aim.y),
         aimZ: r2(action.gz),
         est: r2(action.est),
+        placed: action.placed,
         angErr: r2(s.angErr),
         errScale: r2(e),
         pressure: r2(pressure),
@@ -3410,7 +3431,7 @@ function step(world, dt) {
       trace(world, "decide", carrier, { action: action.kind, options, u: r2(action.utility * 1e3), top });
     }
     if (action.kind === "shoot") {
-      const wind = shotWindup(carrier);
+      const wind = shotWindup(carrier, action.placed);
       carrier.windup = { action, at: now + wind };
       for (const o of teamOf(world, otherSide(carrier.side))) {
         if (o.sentOff || o.role === "GK") continue;

@@ -59,10 +59,14 @@ const tickOf = (tSec: number): number => Math.round(tSec / DT);
  * Two real-squad matches chosen for coverage (scanned from seeds 1000 to
  * 1039): one with a penalty (the keeper's committed guess, the penalty
  * kick), one with an own goal (a goal the engine credits to nobody).
+ * Re-scanned for the #739 shooting and keeping change: the first seed with a
+ * penalty and an offside for 4 v 0 (the coverage check needs both), and the
+ * first own goal for 5 v 1 without a penalty in the same match
+ * (eventLog.test.ts uses the same own-goal match).
  */
 const FIXTURES = [
-  { label: 'a match with a penalty', h: 4, a: 0, seed: 1006, penalty: true, ownGoal: false },
-  { label: 'a match with an own goal', h: 5, a: 1, seed: 1019, penalty: false, ownGoal: true },
+  { label: 'a match with a penalty', h: 4, a: 0, seed: 1015, penalty: true, ownGoal: false },
+  { label: 'a match with an own goal', h: 5, a: 1, seed: 1003, penalty: false, ownGoal: true },
 ];
 
 /** A recorded action of one kind. */

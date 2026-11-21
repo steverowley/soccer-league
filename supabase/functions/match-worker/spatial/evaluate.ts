@@ -433,9 +433,29 @@ export function beatKeeper(from: Vec2, aim: Vec2, gz: number, speed: number, kee
 /** Base back-lift time of a shot (s): about 0.3 s for a 70-rated striker. */
 export const SHOT_WINDUP = 0.34;
 
-/** A player's back-lift time (s): quicker for good strikers. */
-export function shotWindup(p: SimPlayer): number {
-  return SHOT_WINDUP * (1.3 - 0.6 * p.stats.shooting / 100);
+/**
+ * Placing it with the side of the foot (design 4.5).  Close in, a striker can
+ * pass the ball into the net with the inside of his foot instead of driving
+ * it with his laces: a shorter swing and a truer contact (the broad inside of
+ * the foot), but a slower ball that gives the keeper longer.  Kicking studies
+ * find the inside-foot kick both more accurate and markedly slower than the
+ * instep drive.  Before this, every finish from 6 m was struck with the same
+ * back-lift and power as a 30 m drive.  It is one more option judged by the
+ * shooter's own estimate, never forced: measured, strikers place most shots
+ * inside 11 m and about four in ten from 11 to 18 m
+ * (docs/reports/saves-2026-11-report.txt).
+ */
+export const PLACED_SPEED = 0.75;
+/** Execution error of a placed shot relative to a drive. */
+export const PLACED_ERROR = 0.75;
+/** Back-lift of a placed shot relative to a drive. */
+export const PLACED_WINDUP = 0.5;
+/** Range (m) inside which a striker considers placing it. */
+export const PLACED_RANGE = 18;
+
+/** A player's back-lift time (s): quicker for good strikers, and for a placed shot. */
+export function shotWindup(p: SimPlayer, placed = false): number {
+  return SHOT_WINDUP * (1.3 - 0.6 * p.stats.shooting / 100) * (placed ? PLACED_WINDUP : 1);
 }
 
 /** Speed of a player's current motion (m/s). */
